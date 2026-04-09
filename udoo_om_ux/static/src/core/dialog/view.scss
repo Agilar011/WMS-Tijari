@@ -1,0 +1,31 @@
+.modal-fs {
+    .modal-body .o_form_sheet_bg {
+        max-width: unset !important;
+    }
+}
+
+.modal-dialog-centered:has(.u_sheet_full),
+.modal-dialog-centered:has(.o_attachment_preview),
+.modal-dialog-centered:has(.o_statusbar_buttons) {
+    align-items: unset;
+}
+
+.modal-body {
+    .o_form_view {
+        height: 100%;
+    }
+
+    .o_attachment_preview {
+        width: 50%;
+    }
+}
+
+.modal-header .z-buttons {
+    .btn {
+        padding-block: 1px;
+
+        &:hover {
+            color: $o-brand-primary;
+        }
+    }
+}

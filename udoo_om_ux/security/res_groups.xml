@@ -1,0 +1,17 @@
+<odoo>
+    <data>
+        <!-- Backend Experience Manager -->
+        <record id="group_omux" model="res.groups">
+            <field name="name">Backend Experience Manager</field>
+            <field name="category_id" ref="base.module_category_usability"/>
+            <field name="comment">Manage the visual experience and navigation settings of the backend interface.</field>
+        </record>
+
+        <!-- System Admin => auto implied UX roles -->
+        <record id="base.group_system" model="res.groups">
+            <field name="implied_ids" eval="[
+                (4, ref('udoo_om_ux.group_omux'))
+            ]"/>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,417 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="udoo_om_ux.OmuxNavBar" t-inherit="web.NavBar" t-inherit-mode="primary">
+        <xpath expr="//DropdownItem[@t-esc='currentApp.name']" position="replace"/>
+        <xpath expr="//nav" position="attributes">
+            <attribute name="t-ref">nav</attribute>
+        </xpath>
+        <xpath expr="//t[@t-call='web.NavBar.AppsMenu']" position="replace">
+            <t t-if="!ue.sidenav and !env.isSmall">
+                <a class="u_navbar_logo d-flex align-items-center me-1" href="/web">
+                    <img t-attf-src="/web/image/res.company/{{ui.cpyId()}}/{{ui.color_scheme == 'dark' ? 'logo_lui': 'logo_dui'}}"/>
+                </a>
+            </t>
+            <div t-if="!isScopedApp" class="d-flex align-items-center" t-ref="menuApps">
+                <t t-call="wub.NavBar.AppsMenu"/>
+                <t t-if="isMobileOS">
+                    <button id="island_toggler" class="btn btn-light d-flex px-1" accesskey="h" t-on-click.prevent="_openAppMenuSidebar">
+                        <i class="ri-lg ri-menu-2-line pe-none"/>
+                        <t t-call="web.NavBar.AppsMenu.Sidebar"/>
+                    </button>
+                </t>
+            </div>
+            <a t-else="" t-att-href="pwa.startUrl" class="o_menu_toggle" t-ref="menuApps">
+                <img t-if="currentApp &amp;&amp; currentApp.webIconData" t-att-src="currentApp.webIconData" class="o_menu_brand_icon d-none d-lg-inline position-absolute start-0 h-100 ps-1 ms-2" t-att-alt="currentApp.name" t-ref="appIcon"/>
+                <span t-if="currentApp" t-esc="currentApp.name" class="o_menu_brand d-none d-md-flex ps-4 pe-0"/>
+            </a>
+            <t t-if="!env.isSmall">
+                <!-- App Brand -->
+                <DropdownItem t-if="!ue.sidenav and currentApp" class="'o_menu_brand ms-2'" t-esc="currentApp.name" 
+                    attrs="{ href: getMenuItemHref(currentApp), 'data-menu-xmlid': currentApp.xmlid, 'data-section': currentApp.id }"
+                    onSelected="() => this.onNavBarDropdownItemSelection(currentApp)"/>
+            </t>
+        </xpath>
+    </t>
+
+    <t t-inherit="web.NavBar.AppsMenu.Sidebar" t-inherit-mode="extension">
+        <xpath expr="//i" position="replace"/>
+    </t>
+
+    <t t-name="wub.NavBar.AppsMenu">
+        <t t-if="!(isMobileOS and env.isSmall) and ue.sidenav">
+            <t t-portal="'.sidenav_content'">
+                <!-- NOTE: currentApp is raw menusData, orderedApps element is processes menusData -->
+                <div t-if="uo.fav_menus?.length and currentApp and !uo.fav_menus.includes(currentApp.xmlid)" class="nav-item">
+                    <t t-call="wub.Sidenav.Item">
+                        <t t-set="app" t-value="currentApp"/>
+                        <t t-set="appsub" t-value="getAppSections(currentApp.id)"/>
+                    </t>
+                </div>
+                <div t-foreach="uo.orderedApps" t-if="!uo.fav_menus?.length or uo.fav_menus.includes(app.xmlid)" 
+                    t-as="app" t-key="app.id" class="nav-item">
+                    <t t-call="wub.Sidenav.Item">
+                        <t t-set="app" t-value="app"/>
+                        <t t-set="appsub" t-value="getAppSections(app.id)"/>
+                    </t>
+                </div>
+            </t>
+            <t t-portal="'.sidenav_footer'">
+                <ul class="nav d-block">
+                    <li t-foreach="uo.recents" t-as="action" t-key="action_index" class="nav-item">
+                        <a t-on-click.synthetic="() => this.openRecentAction(action)" class="nav-link cursor-pointer">
+                            <span t-if="action._p" class="text-truncate" 
+                                t-attf-title="{{action._p}}: {{action.name}}" t-out="action.name"/>
+                            <span t-else="" class="text-truncate" t-att-title="action.name" t-out="action.name"/>
+                        </a>
+                    </li>
+                </ul>
+            </t>
+        </t>
+        <Dropdown menuClass="'o_navbar_apps_menu mh-100 py-0'" beforeOpen="() => this.initIsland()">
+            <button t-att-class="{'d-none': env.isSmall}" id="island_toggler" class="btn d-flex px-1" accesskey="h" title="Workspace">
+                <i class="ri-lg ri-menu-2-line pe-none"/>
+            </button>
+            <t t-set-slot="content">
+
+                <t t-set="fullIsland" t-value="isMobileOS or env.isSmall or uo.ps_full_iland or uState.fullIsland"/>
+
+                <div t-att-scheme="ui.color_scheme" class="island"
+                    t-att-class="{ 'o_wdl': fullIsland, 'o_mbl': isMobileOS }">
+
+                    <t t-set="onAps" t-value="['app', 'all_app'].includes(uState.ui_view)"/>
+                    <t t-set="onBmt" t-value="uState.ui_view == 'space'"/>
+
+                    <div class="island_mask_layout" t-attf-style="{{fullIsland and ownBrandBg ? ownBrandBg : ''}}">
+                        <div class="island_content">
+                            <div t-if="fullIsland and !ownBrandBg" class="island_mask">
+                                <svg width="2560" height="1920" viewBox="0 0 2560 1920" fill="none"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <g>
+                                        <path d="M3020.93 134.455C3124.79 173.824 3164.97 266.778 3110.66 342.074C2627.55 1011.9 1866.31 2517.63 1361.75 2752.01C-681.389 3429.21 -4156.79 2571.47 -2138.3 1425.38C-119.809 279.282 -1553.39 -218.348 -406.211 -990.94C930.008 -1890.85 2560.5 -40.0647 3020.93 134.455Z" fill="url(#paint0_radial_37_453-4)"/>
+                                        <path d="M885.9 -99.2149L1864.74 271.797C1921.14 293.178 1961.34 331.784 1974.23 376.971L2135.2 941.153L2866.18 715.05C2924.72 696.941 2991.39 698.838 3047.8 720.218L4026.64 1091.23C4130.5 1130.6 4170.68 1223.55 4116.37 1298.85L3855.77 1660.16C3833.07 1691.63 3796.05 1716.44 3750.99 1730.38L2473.16 2125.63L2754.29 3110.94C2764.38 3146.29 2756.99 3183.09 2733.43 3214.9L2367.46 3708.79L1208.97 3269.68C1152.56 3248.3 1112.37 3209.7 1099.48 3164.51C816.824 2173.87 718.627 2080.16 290.681 580.294C250.811 440.558 316.198 358.62 338.898 327.148L599.499 -34.1638C653.807 -109.46 782.033 -138.584 885.9 -99.2149Z" fill="url(#paint1_radial_37_453-4)"/>
+                                        <path d="M1597.13 169.785L2575.97 540.797C2632.38 562.177 2672.57 600.783 2685.46 645.97L2846.44 1210.15L3577.41 984.05C3635.96 965.94 3702.63 967.838 3759.03 989.218L4737.87 1360.23C4841.74 1399.6 4881.91 1492.55 4827.6 1567.85L4567 1929.16C4544.3 1960.63 4507.28 1985.44 4462.22 1999.38L3184.4 2394.63L3465.53 3379.94C3475.61 3415.29 3468.23 3452.09 3444.66 3483.9L3078.69 3977.79L1920.2 3538.68C1863.79 3517.3 1823.6 3478.7 1810.71 3433.51L1649.74 2869.33L918.759 3095.43C860.213 3113.54 793.545 3111.64 737.138 3090.26C737.138 3090.26 -278.857 2706.76 -70.6873 2151.46C137.482 1596.17 725.315 1866.25 1311.78 1684.85L1030.38 698.594C1020.45 663.816 1027.43 627.62 1050.13 596.148L1310.73 234.836C1365.04 159.54 1493.27 130.416 1597.13 169.785Z" fill="url(#paint2_radial_37_453-4)"/>
+                                        <path d="M646.599 3987.93L-98.3711 1153.81L4970.66 -538.566L8169.17 3987.93H646.599Z" fill="url(#paint3_radial_114_43-4)"/>
+                                        <path d="M793.654 3742.84L48.6836 908.72L5117.71 -783.656L8316.22 3742.84H793.654Z" fill="url(#paint4_radial_114_43-4)"/>
+                                        <ellipse cx="2396.98" cy="275.232" rx="1699.15" ry="1558.77" fill="url(#paint5_radial_114_43-4)"/>
+                                        <path opacity="0.5" d="M6290.25 3071.54L3745.51 4524.66L283.022 -523.642L4343.26 -4194.7L6290.25 3071.54Z" fill="url(#paint6_radial_114_43-4)"/>
+                                        <path d="M3059.26 767.931C3338.11 1712.5 3585.77 2551.43 3864.61 3496C3891.25 3586.22 3837.42 3706.98 3744.38 3765.74C2803.8 4359.68 -787.932 5319.23 63.3068 2765.51C176.75 2425.18 313.694 2187.12 594.28 2175.25C874.865 2163.39 1279.76 2345.45 1646.71 2313.32C2175.9 2266.99 2044.14 1215.13 2396.11 992.875L2842.57 710.952C2935.61 652.201 3032.62 677.711 3059.26 767.931Z" fill="url(#paint4_radial_37_453-4)"/>
+                                    </g>
+                                    <defs>
+                                        <radialGradient id="paint3_radial_114_43-4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" 
+                                            gradientTransform="translate(2922 2538.48) rotate(-117.986) scale(1898.15 3571.73)">
+                                            <stop stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.822917" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="1" stop-color="var(--color-background-image-base)" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <radialGradient id="paint4_radial_114_43-4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" 
+                                            gradientTransform="translate(3069.05 2293.39) rotate(-117.986) scale(1898.15 3571.73)">
+                                            <stop stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.822917" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="1" stop-color="var(--color-background-image-base)" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <radialGradient id="paint5_radial_114_43-4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" 
+                                            gradientTransform="translate(2994.87 275.232) rotate(118.839) scale(1779.46 2065.6)">
+                                            <stop offset="0.328125" stop-color="var(--color-background-image-accent-1)" stop-opacity="1"/>
+                                            <stop offset="1" stop-color="white" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <radialGradient id="paint6_radial_114_43-4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" 
+                                            gradientTransform="translate(3934.59 656.035) rotate(148.98) scale(1938.73 3648.08)">
+                                            <stop stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.789375" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="1" stop-color="var(--color-background-image-base)" stop-opacity="0"/>
+                                        </radialGradient>
+                                        <radialGradient id="paint0_radial_37_453-4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" 
+                                            gradientTransform="translate(-804.109 -2036.8) rotate(64.9401) scale(6436.87 6304.81)">
+                                            <stop stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.0833333" stop-color="var(--color-background-image-accent-1)"/>
+                                            <stop offset="0.364583" stop-color="var(--color-background-image-accent-2)"/>
+                                            <stop offset="0.658041" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.798521" stop-color="var(--color-background-image-accent-3)"/>
+                                            <stop offset="0.942708" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="1" stop-color="var(--color-background-image-base)"/>
+                                        </radialGradient>
+                                        <radialGradient id="paint1_radial_37_453-4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" 
+                                            gradientTransform="translate(201.6 -1080.02) rotate(64.9401) scale(6436.87 6304.81)">
+                                            <stop stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.0833333" stop-color="var(--color-background-image-accent-4)"/>
+                                            <stop offset="0.333803" stop-color="var(--color-background-image-accent-5)"/>
+                                            <stop offset="0.658041" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.798521" stop-color="var(--color-background-image-accent-3)"/>
+                                            <stop offset="0.942708" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="1" stop-color="var(--color-background-image-base)"/>
+                                        </radialGradient>
+                                        <radialGradient id="paint2_radial_37_453-4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" 
+                                            gradientTransform="translate(912.834 -811.021) rotate(64.9401) scale(6436.87 6304.81)">
+                                            <stop stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.140625" stop-color="var(--color-background-image-accent-6)" stop-opacity="0"/>
+                                            <stop offset="0.333803" stop-color="var(--color-background-image-accent-7)"/>
+                                            <stop offset="0.658041" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.798521" stop-color="var(--color-background-image-accent-3)"/>
+                                            <stop offset="0.942708" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="1" stop-color="var(--color-background-image-base)"/>
+                                        </radialGradient>
+                                        <radialGradient id="paint3_radial_37_453-4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" 
+                                            gradientTransform="translate(1711.41 -1639.11) rotate(64.9401) scale(6436.87 6304.81)">
+                                            <stop stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.0833333" stop-color="var(--color-background-image-accent-1)"/>
+                                            <stop offset="0.333803" stop-color="var(--color-background-image-accent-5)"/>
+                                            <stop offset="0.658041" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.798521" stop-color="var(--color-background-image-accent-3)"/>
+                                            <stop offset="0.942708" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="1" stop-color="var(--color-background-image-base)"/>
+                                        </radialGradient>
+                                        <radialGradient id="paint4_radial_37_453-4" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" 
+                                            gradientTransform="translate(3479.06 -623.459) rotate(113.028) scale(8332.26 4870.62)">
+                                            <stop stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.0833333" stop-color="var(--color-background-image-accent-1)"/>
+                                            <stop offset="0.333803" stop-color="var(--color-background-image-accent-5)"/>
+                                            <stop offset="0.658041" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="0.798521" stop-color="var(--color-background-image-accent-3)"/>
+                                            <stop offset="0.942708" stop-color="var(--color-background-image-base)"/>
+                                            <stop offset="1" stop-color="var(--color-background-image-base)"/>
+                                        </radialGradient>
+                                    </defs>
+                                </svg>
+                            </div>
+                            <div class="island_area">
+                                <div class="apps_switch top">
+                                    <ul t-if="fullIsland and ui.iuiFaced" class="nav nav-segment me-1">
+                                        <li class="nav-item" role="presentation">
+                                            <a class="nav-link active px-2" t-on-click.stop="toggleLaunchpad">
+                                                <i class="ri-arrow-left-line text-dodger"/>
+                                                Close
+                                            </a>
+                                        </li>
+                                    </ul>
+                                    <ul class="nav nav-segment" role="tablist">
+                                        <li class="nav-item" t-att-class="{'order-2': onBmt}" role="presentation">
+                                            <a class="nav-link" data-hotkey="a" data-tab="pick" role="tab" data-bs-toggle="tab" 
+                                                t-on-click.stop="switchSpace" t-att-class="{ 'active': onAps }" t-att-aria-selected="onAps">
+                                                Apps
+                                            </a>
+                                        </li>
+                                        <li class="nav-item" role="presentation">
+                                            <a class="nav-link" data-hotkey="b" data-tab="space" role="tab" data-bs-toggle="tab" 
+                                                t-att-class="{ 'active': onBmt }" t-on-click.stop="switchSpace" t-att-aria-selected="onBmt">
+                                                Workspace
+                                            </a>
+                                        </li>
+                                    </ul>
+                                    <div class="d-flex u_toolkit ms-auto gap-1">
+                                        <button type="button" class="btn px-2" t-on-click="switchColorScheme" title="Switch Scheme">
+                                            <i class="ri-lg ri-contrast-2-line"></i>
+                                        </button>
+                                        <div class="dropdown">
+                                            <button type="button" class="btn px-2" title="Select Language" id="selectLanguageDropdown" 
+                                                data-bs-toggle="dropdown" aria-expanded="false">
+                                                <i class="ri-lg ri-global-line"></i>
+                                            </button>
+                                            <div class="dropdown-menu navbar-dropdown-menu-borderless" aria-labelledby="selectLanguageDropdown">
+                                                <a t-foreach="ui.languages" t-as="lang" t-key="lang[0]" 
+                                                    t-on-click="() => this.switchLang(lang[0])" 
+                                                    t-att-class="{ 'active': lang[0] == user.context.lang }" class="dropdown-item">
+                                                    <span class="text-truncate" t-att-title="lang[1]">
+                                                        <t t-out="lang[1]"/>
+                                                    </span>
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex flex-column rolkit" t-att-class="{ 'd-none': uState.ui_view != 'app' }">
+                                    <div class="apps_switch">
+                                        <div class="island_fn mt-3 mb-2">
+                                            <label class="text-primary fw-bold ms-2">Pinned</label>
+                                            <ul class="nav nav-segment me-1" role="tablist">
+                                                <li class="nav-item" role="presentation">
+                                                    <a class="nav-link active" t-on-click.stop="switchSpace" data-tab="all_app" 
+                                                        data-bs-toggle="tab" role="tab" aria-selected="true">
+                                                        All Apps
+                                                        <i class="ri-arrow-right-line text-dodger"/>
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div t-ref="fav_drag_root" class="island_apps rolkit" role="listbox">
+                                        <div t-foreach="uo.orderedApps" t-as="app" t-key="app.id" 
+                                            t-if="uo.fav_menus.includes(app.xmlid)"
+                                            class="u_app_square u_draggable">
+                                            <t t-call="wub.Island.VerAppNode">
+                                                <t t-set="app" t-value="app"/>
+                                            </t>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex flex-column rolkit" t-att-class="{ 'd-none': uState.ui_view != 'all_app' }">
+                                    <div class="apps_switch">
+                                        <div class="island_fn mt-3 mb-2">
+                                            <label class="text-primary fw-bold ms-2">All Features</label>
+                                            <ul class="nav nav-segment me-1" role="tablist">
+                                                <li class="nav-item" role="presentation">
+                                                    <a class="nav-link active" t-on-click.stop="switchSpace" data-tab="app" 
+                                                        data-bs-toggle="tab" role="tab" aria-selected="true">
+                                                        <i class="ri-arrow-left-line text-dodger"/> Pinned
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <div class="island_all_apps rolkit" role="listbox">
+                                        <t t-foreach="originApps" t-as="app" t-key="app.id">
+                                            <div t-if="fullIsland" class="u_app_square">
+                                                <t t-call="wub.Island.VerAppNode">
+                                                    <t t-set="app" t-value="app"/>
+                                                </t>
+                                            </div>
+                                            <t t-else="" t-call="wub.Island.HozAppNode">
+                                                <t t-set="app" t-value="app"/>
+                                            </t>
+                                        </t>
+                                    </div>
+                                </div>
+                                <div class="island_bookmarks rolkit" role="option" aria-selected="false" 
+                                    t-att-class="{ 'd-none': uState.ui_view != 'space' }">
+                                    <BookmarkPalette t-if="uState.ui_view == 'space'" bus="bmkBus" config="bmkConfig" close="() => {}"/>
+                                </div>
+                                <div class="island_search_bar d-flex align-items-center border-top mt-auto pt-2 mx-3">
+                                    <div class="input-group rounded-3">
+                                        <input class="form-control border-0 p-0 ms-2" placeholder="Search..." type="text" t-ref="autofocus" 
+                                            t-on-input="onSearchExec" aria-expanded="true" aria-autocomplete="list" aria-haspopup="listbox" data-allow-hotkeys="true" />
+                                        <div class="input-group-append p-1 pe-2">
+                                            <span>
+                                                <i class="oi oi-search"></i>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </Dropdown>
+    </t>
+
+    <t t-inherit="web.NavBar.SectionsMenu" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('o_menu_sections')]" position="attributes">
+            <attribute name="t-att-class">{'d-none': uo and uo.ps_auto_hmenu and ue and ue.sidenav }</attribute>
+        </xpath>
+    </t>
+
+    <t t-name="wub.Island.HozAppNode">
+        <DropdownItem class="'p-2'" t-on-contextmenu.prevent="onIslandContext"
+            attrs="{ href: getMenuItemHref(app), 'data-menu-xmlid': app.xmlid, 'data-section': app.id }"
+            onSelected="() => this.onSelectMenu(app)">
+            <img class="ms-1 u_app_icon_sm" t-if="app.webIconData" t-att-src="app.webIconData"/>
+            <span class="ps-3" t-att-title="app.label" t-out="app.label"/>
+        </DropdownItem>
+    </t>
+
+    <t t-name="wub.Island.VerAppNode">
+        <a t-att-id="'result_app_' + app_index" role="option" class="o_app d-block" 
+            t-att-aria-selected="uState.focusix === app_index ? 'true' : 'false'" 
+            t-att-class="{o_focused: isCurrentApp(app)}" t-att-data-menu-xmlid="app.xmlid"
+            t-att-data-appid="app.id" t-att-href="getMenuItemHref(app)"
+            t-on-click.prevent="() => this.onSelectMenu(app)" 
+            t-on-contextmenu.stop.prevent="onIslandContext">
+            <div class="u_app_icon_l2">
+                <div class="u_app_icon_l1">
+                    <img t-if="app.webIconData" class="u_app_icon rounded-3" t-att-src="app.webIconData"/>
+                    <div t-else="" class="u_app_icon position-relative d-flex justify-content-center align-items-center w-75 p-2 rounded-3 ratio ratio-1x1" 
+                        t-attf-style="background-color: {{app.webIcon.backgroundColor}};">
+                        <i t-attf-class="{{app.webIcon.iconClass}} position-relative w-auto h-auto" 
+                            t-attf-style="color: {{app.webIcon.color}};"/>
+                    </div>
+                </div>
+            </div>
+            <div class="u_app_caption w-100 text-center text-truncate mt-2" 
+                t-att-data-tooltip="app.label or app.name" t-esc="app.label or app.name"/>
+        </a>
+    </t>
+
+    <t t-name="wub.Sidenav.Item">
+        <DropdownItem class="{'nav-link':true, 'on': isCurrentApp(app)}"
+            t-on-contextmenu="(e) => this.onShowSubnav(e, appsub, true)"
+            t-on-mouseover="(e) => this.preSubnavTiming(e, appsub)"
+            t-on-mouseleave="onMouseLeaveNavItem"
+            attrs="{ href: getMenuItemHref(app), 'data-menu-xmlid': app.xmlid, 'data-section': app.id }"
+            onSelected="(ev) => this.onSelectMenu(app)">
+
+            <div class="icon text-center d-flex align-items-center justify-content-center">
+                <img t-if="app.webIconData" t-att-src="app.webIconData"/>
+            </div>
+            <span t-out="app.label or app.name" class="nav-title text-truncate ms-3" t-att-title="app.label or app.name"/>
+            <span t-if="appsub.length" class="nav-arrow btn-om om-mask om-mask-blob" t-on-click.stop.prevent="(e) => this.onShowSubnav(e.target, appsub)"/>
+        </DropdownItem>
+    </t>
+
+    <t t-name="wub.Sidenav.2nd">
+        <div t-attf-class="subnav_wrapper d-flex flex-column flex-wrap {{ props.subuid }}" t-if="props.appsub.length">
+            <div class="subnav_section border rounded rolkit px-2 py-1" t-foreach="props.appsub" t-as="section" t-key="section.id">
+                <div class="d-flex align-items-center cursor-pointer subnav_section_header" 
+                    t-attf-data-bs-target="#smm{{section.id}}" 
+                    t-attf-aria-controls="smm{{section.id}}" data-bs-toggle="collapse" aria-expanded="true">
+                    <span t-out="section.name"/>
+                    <i class="ms-auto ri-st text-muted ri-indeterminate-circle-line"/>
+                    <i class="ms-auto ri-st text-dodger ri-add-circle-line"/>
+                </div>
+                <div class="collapse show" t-attf-id="smm{{section.id}}">
+                    <t t-if="!section.childrenTree.length">
+                        <DropdownItem class="'subnav_entry'" 
+                            attrs="{ href: props.getMenuItemHref(section), 'data-menu-xmlid': section.xmlid, 'data-section': section.id }" 
+                            onSelected="() => this.props.onSelectMenu(section)">
+                            <span class="indicator-pill"/>
+                            <span class="text-truncate" t-att-title="section.name" t-out="section.name"/>
+                        </DropdownItem>
+                    </t>
+                    <t t-else="" t-foreach="section.childrenTree" t-as="item" t-key="item.id">
+                        <DropdownItem t-if="!item.childrenTree.length" class="'subnav_entry'" 
+                            attrs="{ href: props.getMenuItemHref(item), 'data-menu-xmlid': item.xmlid, 'data-section': item.id }" 
+                            onSelected="() => this.props.onSelectMenu(item)">
+                            <span class="indicator-pill"/>
+                            <span class="text-truncate" t-att-title="item.name" t-out="item.name"/>
+                        </DropdownItem>
+                        <t t-else="">
+                            <div class="dropdown-menu_group dropdown-header mb-1" t-esc="item.name"/>
+                            <DropdownItem t-foreach="item.childrenTree" t-as="nsub" t-key="nsub.id" class="'subnav_entry'" 
+                                attrs="{ href: props.getMenuItemHref(nsub), 'data-menu-xmlid': nsub.xmlid, 'data-section': nsub.id }" 
+                                onSelected="() => this.props.onSelectMenu(nsub)">
+                                <span class="indicator-pill"/>
+                                <span class="text-truncate" t-att-title="nsub.name" t-out="nsub.name"/>
+                            </DropdownItem>
+                        </t>
+                    </t>
+                </div>
+            </div>
+        </div>
+    </t>
+
+    <t t-name="wub.MenuAppContextMenu">
+        <div class="dropdown-menu show position-relative border-0 shadow-none">
+            <a t-on-click.prevent="appinNewTab" class="dropdown-item" role="button">
+                <i class="ri-md ri-external-link-line text-dodger me-2"/>
+                <span class="text-truncate">Open in new tab</span>
+            </a>
+            <a t-if="contextPinStart()" t-on-click.prevent="unpinFromStart" class="dropdown-item" role="button">
+                <i class="ri-md ri-pushpin-line text-dodger me-2"/>
+                <span class="text-truncate">Unpin from start</span>
+            </a>
+            <a t-elif="true" t-on-click.prevent="pinToStart" class="dropdown-item" role="button">
+                <i class="ri-md ri-pushpin-2-line text-dodger me-2"/>
+                <span class="text-truncate">Pin to start</span>
+            </a>
+            <a t-on-click.prevent="setHomeAction" class="dropdown-item" role="button">
+                <i class="ri-md ri-star-line text-dodger me-2"/>
+                <span class="text-truncate">Set as home action</span>
+            </a>
+            <t t-if="props.widget.uState.ui_view === 'all_app'">
+                <div role="separator" class="dropdown-divider"/>
+                <a t-on-click.prevent="pinThemAllStart" class="dropdown-item" role="button">
+                    <i class="ri-md ri-arrow-go-back-fill text-dodger me-2"/>
+                    <span class="text-truncate">Pin all to start</span>
+                </a>
+            </t>
+        </div>
+    </t>
+</templates>

@@ -1,0 +1,10 @@
+// == Udoo
+// ============================================================================
+$u-island-bg: mix($o-view-background-color, $o-webclient-background-color) !default;
+$u-island-bg: $o-webclient-background-color !default; // Fake for color picker
+
+$u-subnav-header: $o-gray-600 !default;
+
+$u-sidenav-bg: $u-island-bg !default;
+$u-sidenav-app-icon: linear-gradient(315deg, $o-gray-900, $u-sidenav-bg) !default;
+$u-sidenav-app-icon-shadow: -4px -4px 15px $o-gray-900, 2px 2px 1px $o-gray-800 !default;

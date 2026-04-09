@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="remove_light_in_dark" model="ir.asset">
+            <field name="name">[OMUX] Remove Light in Dark Bundle</field>
+            <field name="bundle">web.assets_web_dark</field>
+            <field name="directive">remove</field>
+            <field name="path">udoo_om_ux/static/src/scss/omux/light.scss</field>
+        </record>
+        <record id="uxopt_island_full" model="ir.asset">
+            <field name="name">[OMUX] Backend: Fullscreen Start Menu</field>
+            <field name="bundle">web.assets_backend</field>
+            <field name="directive">append</field>
+            <field name="path">udoo_om_ux/static/src/patch/feature/island_full.js</field>
+            <field name="active" eval="False"/>
+        </record>
+        <record id="uxopt_hide_sidenav" model="ir.asset">
+            <field name="name">[OMUX] Backend: Hide Sidebar Navigation</field>
+            <field name="bundle">web.assets_backend</field>
+            <field name="directive">append</field>
+            <field name="path">udoo_om_ux/static/src/patch/feature/hide_sidenav.js</field>
+            <field name="active" eval="False"/>
+        </record>
+        <record id="uxopt_island_bg" model="ir.asset">
+            <field name="name">[OMUX] Backend: Custom Start Menu Background</field>
+            <field name="bundle">web.assets_backend</field>
+            <field name="directive">append</field>
+            <field name="path">udoo_om_ux/static/src/patch/feature/island_bg.js</field>
+            <field name="active" eval="False"/>
+        </record>
+        <record id="uxopt_blurred_island_bg" model="ir.asset">
+            <field name="name">[OMUX] Backend: Blurred Start Menu Background</field>
+            <field name="bundle">web.assets_backend</field>
+            <field name="directive">append</field>
+            <field name="path">udoo_om_ux/static/src/patch/feature/island_drop.scss</field>
+            <field name="active" eval="False"/>
+        </record>
+    </data>
+    <data noupdate="0">
+        <function model="web_editor.assets" name="_remove_light_in_dark_correction"/>
+        <record id="omux_list_indicator.uxopt_grouping_indicator" model="ir.asset">
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>

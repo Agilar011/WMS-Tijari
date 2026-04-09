@@ -1,0 +1,259 @@
+.island {
+    --island-Width: 494px;
+    width: var(--island-Width);
+
+    background-color: $u-island-bg;
+
+    &[scheme=dark] {
+        --color-background-app-node: #{rgba(black, 0.22)};
+        --color-background-image-base: #111113;
+        --color-background-image-accent-1: #5a7fff90;
+        --color-background-image-accent-2: #473876;
+        --color-background-image-accent-3: #8e4ec6;
+        --color-background-image-accent-4: #004074;
+        --color-background-image-accent-5: #111113;
+        --color-background-image-accent-6: #fd278f51;
+        --color-background-image-accent-7: #253974;
+    }
+
+    &:not([scheme=dark]) {
+        --color-background-app-node: #{rgba($u-island-bg, .7)};
+        --color-background-image-base: #{$o-white};
+        --color-background-image-accent-1: #0037ed54;
+        --color-background-image-accent-2: #d4cafe;
+        --color-background-image-accent-3: #8e4ec6;
+        --color-background-image-accent-4: #c2e5ff;
+        --color-background-image-accent-5: #fcfcfd;
+        --color-background-image-accent-6: #e5004f31;
+        --color-background-image-accent-7: #d2deff;
+    }
+
+    &.o_wdl {
+        position: fixed;
+        width: 100%;
+        height: 100%;
+        left: 0;
+        top: 0;
+
+        .island_mask_layout {
+            display: flex;
+            position: relative;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+
+            .island_content {
+                height: 100%;
+
+                .island_mask {
+                    display: flex;
+                    position: fixed;
+                    align-items: flex-start;
+                    justify-content: center;
+                    z-index: -1;
+                    inset: 0;
+
+                    svg {
+                        opacity: 0.5;
+                        height: auto;
+                        display: block;
+                        overflow: visible;
+                    }
+                }
+            }
+        }
+
+        &:not(.o_mbl) .island_area {
+
+            .island_all_apps,
+            .island_apps {
+
+                @include media-breakpoint-up(md) {
+                    padding-inline: 20%;
+                }
+
+                gap: 2.2rem;
+
+                .u_app_square {
+                    width: 100px;
+                }
+
+                .u_app_icon_l2 {
+                    .u_app_icon_l1 {
+                        .u_app_icon {
+                            height: 43px;
+                            width: 43px;
+                        }
+                    }
+                }
+            }
+        }
+
+        &.o_mbl {
+
+            .island_all_apps,
+            .island_apps {
+                margin-top: 1rem;
+            }
+        }
+
+        .island_area {
+            width: auto;
+            height: 100%;
+            max-height: unset;
+
+            .island_all_apps,
+            .island_apps {
+                justify-content: center;
+                gap: 1.5rem;
+
+                .u_app_icon_l2 {
+                    box-shadow: none;
+                    background: var(--color-background-app-node);
+                    border: 1px solid rgba(mix($o-gray-700, $o-community-color), .26);
+
+                    .u_app_icon_l1 {
+                        padding: 14px;
+                    }
+                }
+            }
+        }
+
+        .island_search_bar {
+            border-top-color: rgba(mix($o-gray-700, $o-community-color), .3) !important;
+            border-top-style: dotted !important;
+        }
+    }
+
+    &:not(.o_wdl) {
+        .apps_switch.top {
+            border-bottom: 1px solid $border-color;
+        }
+    }
+
+    .island_area {
+        height: 73vh;
+        max-height: 43rem;
+        flex-direction: column;
+        display: flex;
+
+        .u_app_icon_sm {
+            width: 22px;
+        }
+
+        .nav-link,
+        .dropdown-item {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .apps_switch {
+            margin-inline: 15px;
+            display: flex;
+
+            .island_fn {
+                width: 100%;
+                display: inline-flex;
+                justify-content: space-between;
+                align-items: baseline;
+
+                >label {
+                    &:after {
+                        content: " ";
+                        display: block;
+                        height: 2px;
+                        width: 27px;
+                        background-color: rgba(complement($o-action-accent), 0.6);
+                    }
+                }
+            }
+
+            .u_toolkit {
+                padding-block: 12px;
+
+                .btn:hover {
+                    background-color: $o-gray-200;
+                }
+            }
+        }
+
+        .island_apps {
+            &:empty {
+                display: none;
+            }
+
+            column-gap: 1rem;
+            row-gap: 1.5rem;
+        }
+
+        .island_all_apps,
+        .island_apps {
+            display: flex;
+            flex-flow: row wrap;
+            align-content: start;
+
+            padding-left: 8px;
+            padding-bottom: 17px;
+            padding-top: 10px;
+
+            .u_app_square {
+                width: 82px;
+                padding-inline: 0;
+            }
+
+            .u_app_icon_l2 {
+                width: min-content;
+                margin: 0 auto;
+
+                border-radius: $o-border-radius-md;
+                background: $u-app-icon;
+                box-shadow: $u-app-icon-shadow;
+
+                .u_app_icon_l1 {
+                    padding: 9px;
+
+                    .u_app_icon {
+                        height: 33px;
+                        width: 33px;
+                    }
+                }
+            }
+
+            .u_app_caption {
+                max-width: 87%;
+                margin: 0 auto;
+                color: $o-navbar-brand-color;
+            }
+
+            .u_dragged_app {
+                .u_app_icon_l2 {
+                    transform: rotate(-12deg);
+                }
+
+                .u_app_icon {
+                    box-shadow: 0 8px 15px -10px $o-black;
+                }
+            }
+
+            .o_app:hover {
+                background-color: transparent !important;
+
+                .u_app_icon_l2 {
+                    box-shadow: $u-app-icon-shadow-hover;
+
+                    .u_app_icon {
+                        transform: translateY(-1px);
+                    }
+                }
+            }
+        }
+    }
+}
+
+.island_search_bar {
+    padding-bottom: 12px;
+
+    input {
+        background-color: transparent !important;
+    }
+}

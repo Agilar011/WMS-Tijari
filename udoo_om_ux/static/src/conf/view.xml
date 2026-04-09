@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates>
+    <t t-name="wub.OmuxConf">
+        <Dialog title.translate="Appearance" withBodyPadding="false" contentClass="'u_conf u_dsheet ' + (env.isSmall ? 'z-full' : '')">
+            <div class="d-flex flex-column">
+                <!-- Notebook Header -->
+                <div class="d-flex u_conf_tabs border-bottom p-2 gap-1" role="tablist">
+                    <button t-att-class="{'btn btn-light': 1, 'active': state.ctab == 'spc'}" t-on-click="switchTab" data-tab="spc" role="tab" data-tooltip="Temporary preferences stored in your current browser session.">
+                            Workspace
+                    </button>
+                    <button t-att-class="{'btn btn-light': 1, 'active': state.ctab == 'usr'}" t-on-click="switchTab" data-tab="usr" role="tab" data-tooltip="Your personal settings, saved to your Odoo account.">
+                            User
+                    </button>
+                    <t t-if="hasGroupOmux">
+                        <button t-att-class="{'btn btn-light': 1, 'active': state.ctab == 'sys'}" t-on-click="switchTab" data-tab="sys" role="tab" data-tooltip="Default settings applied across all users.">
+                                System
+                        </button>
+                        <button t-att-class="{'btn btn-light': 1, 'active': state.ctab == 'adv'}" t-on-click="switchTab" data-tab="adv" role="tab" data-tooltip="Contains add-on-specific settings for advanced customization.">
+                                Advanced
+                        </button>
+                    </t>
+                </div>
+
+                <!-- Notebook Content -->
+                <div class="tab-content px-4 pt-3 pb-2 overflow-auto" role="tabpanel">
+                    <div class="row g-3">
+                        <!-- Workspace Tab Content -->
+                        <t t-if="state.ctab == 'spc'">
+                            <div class="text-uppercase text-primary fw-bolder small">Navigation</div>
+                            <div>
+                                <div>
+                                    <CheckBox className="'user-select-none'" value="!ue.sidenav" onChange.bind="(isChecked) => this.triggerTopbar(isChecked)">
+                                        Use the topbar for main navigation
+                                    </CheckBox>
+                                </div>
+                                <div>
+                                    <CheckBox className="'user-select-none'" value="!ue.footnav" onChange.bind="(isChecked) => this.ue.footnav = !isChecked">
+                                        Collapse the recent records drawer
+                                    </CheckBox>
+                                </div>
+                            </div>
+                            <div class="text-uppercase text-primary fw-bolder small">Form View</div>
+                            <div class="text-uppercase fw-bolder smaller">Interface Size</div>
+                            <div>
+                                <div t-foreach="uiSizes" t-as="ks" t-key="ks_index" t-att-data-tooltip="uiTooltip[ks]" class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="inlineRadioOptions" t-on-change="() => this.onUiSize(uiSizes[ks])" t-attf-id="ui_{{ks}}" t-att-checked="ue.sett_uisize == uiSizes[ks] or uiSizes[ks] == uiUtils.getSize()" t-att-value="uiSizes[ks]"/>
+                                    <label class="form-check-label user-select-none" t-attf-for="ui_{{ks}}" t-esc="ks"></label>
+                                </div>
+                            </div>
+                            <div class="text-uppercase text-primary fw-bolder small">Browser Data</div>
+                            <a t-on-click="clearRecents" class="btn-link text-danger mt-2" role="button">
+                                <i class="text-info ri-arrow-right-line me-1 lh-1"/>
+                                Clear recent record history
+                            </a>
+                        </t>
+
+                        <!-- User Tab Content -->
+                        <t t-if="state.ctab == 'usr'">
+                            <div class="text-uppercase text-primary fw-bolder small">Navigation</div>
+                            <div>
+                                <div data-tooltip="When the sidebar is enabled, the horizontal menu will automatically be hidden.">
+                                    <CheckBox className="'user-select-none'" value="uo.ps_auto_hmenu" onChange.bind="(isChecked) => this.onUoOptionChanged('ps_auto_hmenu', isChecked)">
+                                        Auto hide horizontal menu
+                                    </CheckBox>
+                                </div>
+                                <div data-tooltip="Display the Start menu in full-screen mode instead of the default mode.">
+                                    <CheckBox className="'user-select-none'" value="uo.ps_full_iland" onChange.bind="(isChecked) => this.onUoOptionChanged('ps_full_iland', isChecked)">
+                                        Prefer full-screen start menu
+                                    </CheckBox>
+                                </div>
+                            </div>
+                            <div class="text-uppercase text-primary fw-bolder small">Look &amp; Feel</div>
+                            <div class="text-uppercase fw-bolder smaller">Primary Color</div>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <div t-foreach="schemeData" t-as="pc" t-key="pc_index" t-if="pc.color" class="rounded-pill" t-att-class="{'border': state.color_shade == pc.code}">
+                                    <div t-on-click="() => { state.color_shade = pc.code; }" class="btn rounded-pill color-node-md" t-att-data-tooltip="pc.title" t-attf-style="margin:3px; background: {{pc.color}};">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-uppercase text-primary fw-bolder small">User Data</div>
+                            <div class="useract_area row g-2">
+                                <a t-on-click="resetHomeAction" class="col-md-6 btn-link text-danger" role="button">
+                                    <i class="text-info ri-arrow-right-line me-1 lh-1"/>
+                                    Reset home menu action
+                                </a>
+                                <a t-on-click="resetHomeLayout" class="col-md-6 btn-link text-danger" role="button">
+                                    <i class="text-info ri-arrow-right-line me-1 lh-1"/>
+                                    Reset home menu layout
+                                </a>
+                                <a t-on-click="clearBookmarks" class="col-md-6 btn-link text-danger" role="button">
+                                    <i class="text-info ri-arrow-right-line me-1 lh-1"/>
+                                    Remove all bookmarks
+                                </a>
+                            </div>
+                        </t>
+
+                        <!-- Global/System Tab Content -->
+                        <div t-if="hasGroupOmux" class="col-lg-12" t-att-class="{'d-none': state.ctab != 'sys'}">
+                            <div class="sysact_area row g-2 mb-3">
+                                <a t-on-click="openCompanySett" t-attf-class="col-md-6 btn-link text-dodger" role="button">
+                                    <i class="text-info ri-arrow-right-line me-1 lh-1"/>
+                                    Manage company branding
+                                </a>
+                                <a t-on-click="openAppMenuManager" t-attf-class="col-md-6 btn-link text-dodger" role="button">
+                                    <i class="text-info ri-arrow-right-line me-1 lh-1"/>
+                                    Manage application menus
+                                </a>
+                            </div>
+
+                            <div class="text-uppercase text-primary fw-bolder small">Look &amp; Feel</div>
+                            <div class="mt-3">
+                                <CheckBox className="'user-select-none'" value="state.g_wbg" onChange.bind="(isChecked) => this.state.g_wbg = isChecked">
+                                    Enable company-based home background
+                                </CheckBox>
+                            </div>
+                            <div class="card border-0 flex-md-grow-1">
+                                <t t-foreach="extraFeat" t-as="cf" t-key="cf_index">
+                                    <div class="card-title text-uppercase fw-bolder smaller" t-out="cf.n"/>
+                                    <div class="position-relative h-100">
+                                        <div class="w-100 h-100">
+                                            <div t-foreach="cf.d" t-as="ks" t-key="ks_index" class="form-check form-check-inline">
+                                                <input class="form-check-input" type="radio" t-attf-name="{{cf.k}}RadioOptions" t-attf-id="{{cf.k}}_{{ks}}" t-on-change="() => { this.state['g_' + cf.k] = ks; }" t-att-checked="state['g_' + cf.k] == ks" t-att-value="ks"/>
+                                                <label class="form-check-label user-select-none" t-attf-for="{{cf.k}}_{{ks}}" t-out="cf.d[ks]"></label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </t>
+                            </div>
+
+                            <div class="d-flex align-items-center my-2 justify-content-between">
+                                <div class="text-uppercase my-2 fw-bolder smaller">Font Family</div>
+                            </div>
+                            <SelectMenu class="'w-md-50'" autoSort="false" togglerClass="'pe-0'" choices="fontChoices" required="true" value="state.g_fty" searchable="true" searchPlaceholder="'Type to search fonts...'" onSelect="(v)=> state.g_fty = v" />
+
+                            <div class="d-flex align-items-center mb-2 mt-3 justify-content-between">
+                                <div class="text-uppercase my-2 text-primary fw-bolder smaller">Theme Editor</div>
+                                <a t-on-click="reset" class="btn btn-link text-danger text-decoration-underline lh-1 ms-2">
+                                    Restore defaults
+                                </a>
+                            </div>
+
+                            <div class="card border px-3 mb-3 rounded">
+                                <div class="row rounded align-items-center border-bottom py-2 bg-100">
+                                    <div class="col-6 col-lg-8 fw-bold">Color Value</div>
+                                    <div class="col-3 col-lg-2 fw-bold text-center">Light</div>
+                                    <div class="col-3 col-lg-2 fw-bold text-center">Dark</div>
+                                </div>
+                                <div t-foreach="defs" t-as="o" t-key="o_index" class="row align-items-center py-2">
+                                    <t t-set="info" t-value="defs[o]"/>
+                                    <div class="col-6 col-lg-8">
+                                        <t t-out="info.nam"/>
+                                        <span t-if="info.sub" class="ms-2 small text-muted" t-out="info.sub"/>
+                                    </div>
+                                    <div class="col-3 col-lg-2">
+                                        <div t-ref="{{o}}" class="rounded-pill color-node-md mx-auto" t-attf-style="background: {{state[o]}};">
+                                        </div>
+                                    </div>
+                                    <div class="col-3 col-lg-2">
+                                        <div t-ref="dark_{{o}}" class="rounded-pill color-node-md mx-auto" t-attf-style="background: {{state['dark_'+o]}};">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="dev_area mt-2">
+                                <!-- Additional system options can be added here -->
+                            </div>
+                        </div>
+                        <div t-att-class="{'m-0': state.ctab != 'adv'}" t-if="hasGroupOmux">
+                            <t t-if="state.ctab == 'adv'">
+                                <View t-props="lmisProps"/>
+                            </t>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons -->
+                <t t-set-slot="footer">
+                    <button class="btn btn-secondary me-auto" t-on-click="env.dialogData.close">
+                        Close
+                    </button>
+                    <button t-if="!['spc'].includes(state.ctab)" class="btn btn-primary" t-on-click="confirm">
+                        Save Changes
+                    </button>
+                </t>
+            </div>
+        </Dialog>
+    </t>
+</templates>

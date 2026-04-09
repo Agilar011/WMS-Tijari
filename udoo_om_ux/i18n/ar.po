@@ -1,0 +1,805 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+#   * udoo_om_ux
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-04-13 14:22+0000\n"
+"PO-Revision-Date: 2025-04-13 14:22+0000\n"
+"Last-Translator: \n"
+"Language-Team: Arabic\n"
+"Language: ar\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 "
+"&& n%100<=10 ? 3 : n%100>=11 ? 4 : 5);\n"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Advanced"
+msgstr "متقدم"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "All Apps"
+msgstr "جميع التطبيقات"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "All Features"
+msgstr "جميع الميزات"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/user_menu.js:0
+msgid "Appearance"
+msgstr "المظهر"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Apply & Reload"
+msgstr "تطبيق وإعادة التحميل"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/webclient.xml:0
+msgid "Apps"
+msgstr "التطبيقات"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Auto hide horizontal menu"
+msgstr "إخفاء القائمة الأفقية تلقائيًا"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Realign Layout"
+msgstr "إعادة محاذاة التخطيط"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.js:0
+msgid "Bookmark current view"
+msgstr "حفظ العرض الحالي كمُفضلة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Bookmark saved."
+msgstr "تم حفظ المُفضلة."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Border Radius"
+msgstr "نصف قطر الحواف"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Branding Settings"
+msgstr "إعدادات الهوية البصرية"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Browser Data"
+msgstr "بيانات المتصفح"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Choose options..."
+msgstr "اختر الخيارات..."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Clear recent record history"
+msgstr "مسح سجل السجلات الأخيرة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+#: code:addons/udoo_om_ux/static/src/views/form/form_view_dialog.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Close"
+msgstr "إغلاق"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Collapse the recent records drawer"
+msgstr "طي قائمة السجلات الأخيرة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Color Value"
+msgstr "قيمة اللون"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Comfort"
+msgstr "راحة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/systray/quick_search.xml:0
+msgid "Command Palette"
+msgstr "لوحة الأوامر"
+
+#. module: udoo_om_ux
+#: model:ir.model,name:udoo_om_ux.model_res_company
+msgid "Companies"
+msgstr "الشركات"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Contains add-on-specific settings for advanced customization."
+msgstr "يحتوي على إعدادات خاصة بالإضافة للتخصيص المتقدم."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Copy info"
+msgstr "نسخ المعلومات"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Cozy"
+msgstr "مريح"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Dark"
+msgstr "داكن"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Dark Mode"
+msgstr "الوضع الداكن"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Default"
+msgstr "افتراضي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Default settings applied across all users."
+msgstr "الإعدادات الافتراضية تُطبق على جميع المستخدمين."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Delete"
+msgstr "حذف"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Directory"
+msgstr "الدليل"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/views/form/form_status/indicator.xml:0
+msgid "Discard changes"
+msgstr "تجاهل التعديلات"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/core/dialog/view.xml:0
+msgid "Dismiss"
+msgstr "تجاهل"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Display the Start menu in full-screen mode instead of the default mode."
+msgstr "عرض قائمة البدء بوضع ملء الشاشة بدلاً من الوضع الافتراضي."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Document"
+msgstr "مستند"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Dodger"
+msgstr "أزرق لامع"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Emerald"
+msgstr "زمردي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Enable company-based home background"
+msgstr "تمكين خلفية الصفحة الرئيسية حسب الشركة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/core/dialog/view.xml:0
+msgid "Expand"
+msgstr "توسيع"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Extended Creation"
+msgstr "إنشاء موسع"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Filled"
+msgstr "ممتلئ"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Font Family"
+msgstr "عائلة الخط"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Font Size"
+msgstr "حجم الخط"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Form View"
+msgstr "عرض النموذج"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Green"
+msgstr "أخضر"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.edit_menu_access_search_ui
+msgid "Group By"
+msgstr "تجميع حسب"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Home Background"
+msgstr "خلفية الصفحة الرئيسية"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Home Menu"
+msgstr "قائمة الصفحة الرئيسية"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.js:0
+msgid "Home action has been set!"
+msgstr "تم تعيين إجراء الصفحة الرئيسية!"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Indigo"
+msgstr "نيلي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Input Style"
+msgstr "نمط الإدخال"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Interface Size"
+msgstr "حجم الواجهة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Large"
+msgstr "كبير"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Last Created Record"
+msgstr "آخر سجل تم إنشاؤه"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Light"
+msgstr "فاتح"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Light Mode"
+msgstr "الوضع الفاتح"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Lime"
+msgstr "ليموني"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "List Density"
+msgstr "كثافة القائمة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Look & Feel"
+msgstr "الشكل والمظهر"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Magenta"
+msgstr "أرجواني"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/core/dialog/view.xml:0
+msgid "Maximize"
+msgstr "تكبير"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Menu Preset"
+msgstr "تكوين القائمة المسبق"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields,field_description:udoo_om_ux.field_res_company__menus_preset
+msgid "Menus Preset"
+msgstr "إعدادات القوائم المسبقة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Moderate"
+msgstr "متوسط"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Navigation"
+msgstr "التنقل"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.js:0
+msgid "Notification"
+msgstr "الإشعارات"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_auto_hmenu__off
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_full_iland__off
+msgid "Off"
+msgstr "إيقاف"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_auto_hmenu__on
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_full_iland__on
+msgid "On"
+msgstr "تشغيل"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Open company branding settings"
+msgstr "فتح إعدادات العلامة التجارية للشركة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Open in main view"
+msgstr "فتح في العرض الرئيسي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Open in new tab"
+msgstr "فتح في تبويب جديد"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Open in popup view"
+msgstr "فتح في نافذة منبثقة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Optimal"
+msgstr "مثالي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Orange"
+msgstr "برتقالي"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.edit_menu_access_search_ui
+msgid "Parent"
+msgstr "الأصل"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Pin all to start"
+msgstr "تثبيت الكل على البدء"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Pin to start"
+msgstr "تثبيت على البدء"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Pink"
+msgstr "وردي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Pinned"
+msgstr "مثبّت"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Planning"
+msgstr "التخطيط"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Position Chatter and Document Viewer on right"
+msgstr "وضع المحادثة ومُستعرض المستندات على اليمين"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Position Chatter at bottom; Document Viewer on right if present"
+msgstr "وضع المحادثة في الأسفل؛ مستعرض المستندات على اليمين إذا كان موجودًا"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Position Chatter at bottom; Hide Document Viewer by default"
+msgstr "وضع المحادثة في الأسفل؛ إخفاء مستعرض المستندات افتراضيًا"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Prefer full-screen start menu"
+msgstr "تفضيل قائمة البدء بوضع ملء الشاشة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Primary Color"
+msgstr "اللون الأساسي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Quick Access"
+msgstr "وصول سريع"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Quick Create"
+msgstr "إنشاء سريع"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Quick View Panel"
+msgstr "لوحة العرض السريع"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Readable"
+msgstr "سهل القراءة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+#: code:addons/udoo_om_ux/static/src/webclient/webclient.xml:0
+msgid "Recents"
+msgstr "الأخيرة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Remove all bookmarks"
+msgstr "إزالة جميع العلامات"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Repeat From:"
+msgstr "التكرار من:"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Reporting"
+msgstr "التقارير"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Reset home menu action"
+msgstr "إعادة تعيين إجراء القائمة الرئيسية"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Reset home menu layout"
+msgstr "إعادة تعيين تخطيط القائمة الرئيسية"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Restore defaults"
+msgstr "استعادة الإعدادات الافتراضية"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Roomy"
+msgstr "واسع"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.edit_menu_access_search_ui
+msgid "Root Menu"
+msgstr "القائمة الجذرية"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Rose"
+msgstr "وردي فاتح"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Save Changes"
+msgstr "حفظ التغييرات"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/views/form/form_status/indicator.xml:0
+msgid "Save manually"
+msgstr "حفظ يدويًا"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Search..."
+msgstr "بحث..."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Select Language"
+msgstr "اختيار اللغة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Set as home action"
+msgstr "تعيين كإجراء رئيسي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Set default form list view to Kanban; Position Chatter at bottom; Hide Document Viewer by default"
+msgstr "تعيين عرض قائمة النماذج الافتراضي إلى كانبان؛ وضع المحادثة في الأسفل؛ إخفاء مستعرض المستندات افتراضيًا"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Sharp"
+msgstr "حاد"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Sidenav Logo"
+msgstr "شعار الشريط الجانبي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Sky"
+msgstr "أزرق سماوي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Soft"
+msgstr "ناعم"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Subtle"
+msgstr "دقيق"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Switch Scheme"
+msgstr "تبديل النظام اللوني"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "System"
+msgstr "النظام"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Temporary preferences stored in your current browser session."
+msgstr "يتم حفظ التفضيلات المؤقتة في جلسة المتصفح الحالية."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Theme Editor"
+msgstr "محرر الثيم"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.js:0
+msgid "There is unsaved data. Do you want to discard the changes and proceed?"
+msgstr "هناك بيانات غير محفوظة. هل تريد تجاهل التغييرات والمتابعة؟"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "This action cannot be undone. Are you sure?"
+msgstr "لا يمكن التراجع عن هذا الإجراء. هل أنت متأكد؟"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Toggle Chatter Panel"
+msgstr "تبديل لوحة المحادثة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Toggle Fullscreen"
+msgstr "تبديل وضع ملء الشاشة"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Undefined"
+msgstr "غير محدد"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Underline input fields; Set default form list view to Kanban; Position Chatter at bottom; Hide Document Viewer by default"
+msgstr "تسطير حقول الإدخال؛ تعيين عرض القائمة الافتراضي للنموذج إلى كانبان؛ وضع المحادثة في الأسفل؛ إخفاء مستعرض المستندات افتراضيًا"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Underlined"
+msgstr "مسطر"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Unpin from start"
+msgstr "إزالة التثبيت من البدء"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields,field_description:udoo_om_ux.field_res_users_settings__up_bookmarks
+msgid "Up Bookmarks"
+msgstr "ترقية العلامات"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Use the topbar for main navigation"
+msgstr "استخدم الشريط العلوي للتنقل الرئيسي"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "User"
+msgstr "المستخدم"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "User Data"
+msgstr "بيانات المستخدم"
+
+#. module: udoo_om_ux
+#: model:ir.model,name:udoo_om_ux.model_res_users_settings
+msgid "User Settings"
+msgstr "إعدادات المستخدم"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "When the sidebar is enabled, the horizontal menu will automatically be hidden."
+msgstr "عند تفعيل الشريط الجانبي، سيتم إخفاء القائمة الأفقية تلقائيًا."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Workspace"
+msgstr "مساحة العمل"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Yellow"
+msgstr "أصفر"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Your home menu action has been restored."
+msgstr "تمت استعادة إجراء القائمة الرئيسية الخاصة بك."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Your home menu layout has been restored."
+msgstr "تمت استعادة تخطيط القائمة الرئيسية الخاصة بك."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Your personal settings, saved to your Odoo account."
+msgstr "تم حفظ إعداداتك الشخصية في حسابك على Odoo."

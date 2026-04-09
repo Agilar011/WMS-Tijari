@@ -1,0 +1,65 @@
+.u_layter {
+
+    .u_toggle_area,
+    .u_action_area {
+        &:has(> .dropdown-header:only-child) {
+            display: none;
+        }
+    }
+
+    .dropdown-header {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        gap: 10px;
+
+        &::before,
+        &::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background-color: $border-color;
+        }
+    }
+
+    .dropdown-item {
+        line-height: $o-line-height-lg !important;
+    }
+}
+
+.u_layter_tg {
+    padding: .5rem;
+}
+
+@include media-breakpoint-down(sm, $o-extra-grid-breakpoints) {
+    .u_layter_tg {
+        // padding: $o-touch-btn-with-icon-padding !important;
+        padding: 7px 10px !important;
+    }
+}
+
+// = Dialog Sheets
+.u_dsheet {
+    position: fixed;
+    left: auto !important;
+    right: 0;
+    width: var(--modal-width);
+    height: 100%;
+    border-radius: 0;
+    box-shadow: -7px 0 37px rgba(0, 0, 0, 0.15);
+    animation: slxbnc 0.232s cubic-bezier(0.175, 0.885, 0.32, 1.05) forwards;
+}
+
+.modal-fs .u_dsheet {
+    width: 100% !important;
+}
+
+@keyframes slxbnc {
+    0% {
+        transform: translateX(100%);
+    }
+
+    100% {
+        transform: translateX(0);
+    }
+}

@@ -1,0 +1,10 @@
+.o_notebook {
+    --notebook-link-border-color: #{$border-color};
+    --notebook-link-border-color-hover: #{$border-color};
+    --notebook-link-border-color-active-accent: #{$o-notebook-tab-active};
+
+    .modal & {
+        --notebook-padding-x: #{$modal-inner-padding};
+        --notebook-margin-x: -#{$modal-inner-padding};
+    }
+}

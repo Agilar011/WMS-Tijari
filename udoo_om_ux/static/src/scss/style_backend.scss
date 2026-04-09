@@ -1,0 +1,514 @@
+// == General
+// ============================================================================
+
+.btn-group {
+    --btn-group-gap: 0px;
+}
+
+// == Sash Sizing: Chatter, Attachment Preview
+:root {
+    --ul-height: #{$u-lh};
+
+    --uw-sidenav: #{$u-sidenav-width};
+
+    --u-sash-size: 17px;
+    --u-sash-mid-size: 16px;
+    --u-sash-hover-size: 3px;
+
+    // Dynamic sizing is equivalent to flex: 2 1 990px
+    // 
+    // @Inspired by https://github.com/microsoft/vscode
+    // @File /src/vs/base/browser/ui/sash/sash.ts:250
+    --Chatter-min-width: calc(#{$o-mail-Chatter-minWidth} + (100vw - #{$o-form-sheet-min-width} - var(--uw-sidenav, 0px) - #{$o-mail-Chatter-minWidth}) * (1 / 3));
+
+    .o_web_client.noaside {
+        --Chatter-min-width: 14px;
+
+        .o-mail-ChatterContainer,
+        .o_attachment_preview {
+            display: none;
+        }
+
+        .o_form_sheet_bg:has(+ .o-mail-Form-chatter.o-aside) {
+            @media screen and (max-width: 1920px) {
+                --formView-sheetBg-padding-right: unset;
+            }
+        }
+    }
+
+    .o-mail-Form-chatter {
+        &.o-aside {
+            width: var(--Chatter-min-width);
+            flex-grow: 0;
+            flex-shrink: 0;
+        }
+    }
+}
+
+@include media-breakpoint-down(md) {
+    :root {
+        --uw-sidenav: 200px;
+    }
+}
+
+@include media-breakpoint-down(xl) {
+    :root {
+        --uw-sidenav: 210px;
+    }
+}
+
+@include media-breakpoint-down(xxl) {
+    :root {
+        --uw-sidenav: 216px;
+    }
+}
+
+@include media-breakpoint-up(xl, $o-extra-grid-breakpoints) {
+
+    .o_move_line_list_view .o_attachment_preview,
+    .o_attachment_preview {
+        width: var(--Chatter-min-width);
+        flex-grow: 0;
+        flex-shrink: 0;
+    }
+}
+
+%-sash-container-base {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+
+    .monaco-sash {
+        z-index: 200;
+        position: absolute;
+        touch-action: none;
+        pointer-events: initial;
+    }
+
+    .monaco-sash.disabled {
+        pointer-events: none;
+    }
+
+    .monaco-sash:before {
+        content: '';
+        width: var(--u-sash-hover-size);
+        height: 100%;
+        background: transparent;
+        pointer-events: none;
+        position: absolute;
+        transition: background-color 0.2s ease-out;
+    }
+
+    .monaco-sash.vertical {
+        width: var(--u-sash-size);
+        height: 100%;
+        cursor: ew-resize;
+
+        &.sizing:before {
+            background-color: $o-notebook-tab-active;
+        }
+    }
+}
+
+.o_action_manager>.o_form_view .o_content:has(.o-aside),
+.o_action_manager>.o_form_view .o_content:has(.o_attachment_preview) {
+
+    >.sash-container {
+        @extend %-sash-container-base;
+
+        .monaco-sash.vertical {
+            right: calc(var(--Chatter-min-width) - var(--u-sash-mid-size));
+            cursor: col-resize;
+        }
+
+        .monaco-sash.vertical.sizing {
+            --u-sash-size: 370px;
+            --u-sash-mid-size: 248px;
+
+            &:before {
+                margin-left: calc(var(--u-sash-mid-size) / 2 - var(--u-sash-hover-size));
+            }
+        }
+    }
+}
+
+.o_content:has(.container-fluid) {
+    ::-webkit-scrollbar {
+        width: 0px;
+    }
+}
+
+.o_control_panel_actions:has(> .o-form-buttonbox:empty,
+    > .btn-group.o_search_options:empty) {
+    display: none !important;
+}
+
+
+// == Nav Segment
+.nav-segment {
+    align-items: center;
+}
+
+.nav-segment .nav-link {
+    border-radius: $o-border-radius-md;
+    color: $nav-segment-link;
+    font-size: small;
+    padding: .3rem .6rem;
+    font-weight: 500;
+}
+
+.nav-segment .nav-link:hover {
+    color: $o-main-link-color;
+}
+
+.nav-segment .nav-link.active {
+    color: inherit;
+    background-color: $u-nav-segment-bg;
+    box-shadow: $u-nav-segment-shadow;
+}
+
+.nav-segment .nav-link.disabled {
+    color: #bdc5d1
+}
+
+//
+
+.indicator-pill {
+    display: inline-flex;
+    align-items: center;
+    padding-inline: 6px;
+    height: 16px;
+    margin: auto 0;
+    margin-right: 6px;
+    border-radius: 6px;
+}
+
+.indicator-pill::before {
+    content: "";
+    height: 4px;
+    width: 4px;
+    border-radius: $o-border-radius-xl;
+    background-color: rgba(complement($o-brand-primary), $o-opacity-disabled);
+}
+
+// == Text Status
+.btn-warning,
+.text-bg-warning {
+    color: $o-white !important;
+}
+
+// == Text Selection
+::selection {
+    background: $o-brand-primary;
+    color: white;
+}
+
+
+// == Navbar
+// ============================================================================
+
+.o_mobile_menu_toggle,
+.o_user_menu {
+    margin-left: 0.5rem !important;
+}
+
+.badge i {
+    font-size: 13px !important;
+}
+
+
+// == List
+// ============================================================================
+
+
+// == Kanban
+// ============================================================================
+
+
+// == Pivot
+// ============================================================================
+
+thead .o_pivot_measure_row {
+    font-weight: 600 !important;
+    color: $o-gray-600 !important;
+    padding-inline: 8px;
+}
+
+
+// == Calendar
+// ============================================================================
+
+.o_calendar_header {
+    text-transform: capitalize;
+}
+
+.fc-month-container {
+    h2 {
+        text-transform: capitalize;
+    }
+}
+
+
+// == Hierarchy
+// ============================================================================
+
+.o_hierarchy_node_header {
+    color: $o-white;
+}
+
+
+// == Modules
+// ============================================================================
+
+.o_menu_brand,
+.o_nav_entry,
+.o_menu_sections div button {
+    text-transform: capitalize;
+}
+
+
+// == Websites
+// ============================================================================
+
+.o_website_preview {
+    >.o_blockUI {
+        width: 100% !important;
+        width: -moz-available !important;
+        /* WebKit-based browsers will ignore this. */
+        width: -webkit-fill-available !important;
+        /* Mozilla-based browsers will ignore this. */
+    }
+}
+
+
+// == Scrollbar
+@media (min-width: 992px) {
+
+    div,
+    main,
+    ol,
+    pre,
+    span,
+    ul {
+        scrollbar-width: thin;
+        scrollbar-color: var(--bs-scrollbar-color, $o-form-lightsecondary) transparent
+    }
+
+    @-moz-document url-prefix() {
+
+        div,
+        main,
+        ol,
+        pre,
+        span,
+        ul {
+            scrollbar-width: auto;
+        }
+    }
+
+    div::-webkit-scrollbar,
+    main::-webkit-scrollbar,
+    ol::-webkit-scrollbar,
+    pre::-webkit-scrollbar,
+    span::-webkit-scrollbar,
+    ul::-webkit-scrollbar {
+        width: var(--bs-scrollbar-size);
+        height: var(--bs-scrollbar-size)
+    }
+
+    div ::-webkit-scrollbar-track,
+    main ::-webkit-scrollbar-track,
+    ol ::-webkit-scrollbar-track,
+    pre ::-webkit-scrollbar-track,
+    span ::-webkit-scrollbar-track,
+    ul ::-webkit-scrollbar-track {
+        background-color: transparent
+    }
+
+    div ::-webkit-scrollbar-thumb,
+    main ::-webkit-scrollbar-thumb,
+    ol ::-webkit-scrollbar-thumb,
+    pre ::-webkit-scrollbar-thumb,
+    span ::-webkit-scrollbar-thumb,
+    ul ::-webkit-scrollbar-thumb {
+        border-radius: var(--bs-scrollbar-size)
+    }
+
+    div::-webkit-scrollbar-thumb,
+    main::-webkit-scrollbar-thumb,
+    ol::-webkit-scrollbar-thumb,
+    pre::-webkit-scrollbar-thumb,
+    span::-webkit-scrollbar-thumb,
+    ul::-webkit-scrollbar-thumb {
+        background-color: var(--bs-scrollbar-color)
+    }
+
+    div::-webkit-scrollbar-corner,
+    main::-webkit-scrollbar-corner,
+    ol::-webkit-scrollbar-corner,
+    pre::-webkit-scrollbar-corner,
+    span::-webkit-scrollbar-corner,
+    ul::-webkit-scrollbar-corner {
+        background-color: transparent
+    }
+
+    div:hover,
+    main:hover,
+    ol:hover,
+    pre:hover,
+    span:hover,
+    ul:hover {
+        scrollbar-color: var(--bs-scrollbar-hover-color, $o-gray-300) transparent
+    }
+
+    div:hover::-webkit-scrollbar-thumb,
+    main:hover::-webkit-scrollbar-thumb,
+    ol:hover::-webkit-scrollbar-thumb,
+    pre:hover::-webkit-scrollbar-thumb,
+    span:hover::-webkit-scrollbar-thumb,
+    ul:hover::-webkit-scrollbar-thumb {
+        background-color: var(--bs-scrollbar-hover-color)
+    }
+
+    div:hover::-webkit-scrollbar-corner,
+    main:hover::-webkit-scrollbar-corner,
+    ol:hover::-webkit-scrollbar-corner,
+    pre:hover::-webkit-scrollbar-corner,
+    span:hover::-webkit-scrollbar-corner,
+    ul:hover::-webkit-scrollbar-corner {
+        background-color: transparent
+    }
+}
+
+.rolkit {
+    overflow-y: auto;
+    position: relative;
+    scrollbar-width: thin;
+}
+
+@-moz-document url-prefix() {
+    .rolkit {
+        scrollbar-width: auto;
+    }
+}
+
+.rolkit,
+.rolkit-overlay,
+.rolkit-overlay-x,
+.rolkit-overlay-y,
+.rolkit-x,
+.rolkit-y {
+    scrollbar-color: transparent transparent
+}
+
+.rolkit-overlay-x::-webkit-scrollbar-thumb,
+.rolkit-overlay-y::-webkit-scrollbar-thumb,
+.rolkit-overlay::-webkit-scrollbar-thumb,
+.rolkit-x::-webkit-scrollbar-thumb,
+.rolkit-y::-webkit-scrollbar-thumb,
+.rolkit::-webkit-scrollbar-thumb {
+    background-color: transparent
+}
+
+.rolkit-overlay-x::-webkit-scrollbar-corner,
+.rolkit-overlay-y::-webkit-scrollbar-corner,
+.rolkit-overlay::-webkit-scrollbar-corner,
+.rolkit-x::-webkit-scrollbar-corner,
+.rolkit-y::-webkit-scrollbar-corner,
+.rolkit::-webkit-scrollbar-corner {
+    background-color: transparent
+}
+
+.rolkit-overlay-x:hover,
+.rolkit-overlay-y:hover,
+.rolkit-overlay:hover,
+.rolkit-x:hover,
+.rolkit-y:hover,
+.rolkit:hover {
+    scrollbar-color: rgba($o-gray-700, .4)
+}
+
+.rolkit-overlay-x:hover::-webkit-scrollbar-thumb,
+.rolkit-overlay-y:hover::-webkit-scrollbar-thumb,
+.rolkit-overlay:hover::-webkit-scrollbar-thumb,
+.rolkit-x:hover::-webkit-scrollbar-thumb,
+.rolkit-y:hover::-webkit-scrollbar-thumb,
+.rolkit:hover::-webkit-scrollbar-thumb {
+    background-color: rgba($o-gray-700, .6)
+}
+
+.rolkit-overlay-x:hover::-webkit-scrollbar-corner,
+.rolkit-overlay-y:hover::-webkit-scrollbar-corner,
+.rolkit-overlay:hover::-webkit-scrollbar-corner,
+.rolkit-x:hover::-webkit-scrollbar-corner,
+.rolkit-y:hover::-webkit-scrollbar-corner,
+.rolkit:hover::-webkit-scrollbar-corner {
+    background-color: transparent
+}
+
+.rolvis {
+    scrollbar-width: none
+}
+
+// == Atomic Styles
+// ============================================================================
+
+.badge-ln {
+    line-height: 1;
+    align-self: flex-end;
+}
+
+.pt-1pt {
+    padding-top: 1pt !important;
+}
+
+.lh-ud {
+    line-height: var(--ul-height, 1.77);
+}
+
+// == Font Size
+.fs-7 {
+    font-size: 0.75rem !important;
+}
+
+.fw-sbold {
+    font-weight: 600;
+}
+
+// = Space
+.cg-32 {
+    column-gap: 32px;
+}
+
+
+// = Button
+.btn-om {
+    border-radius: unset;
+
+    i {
+        pointer-events: none;
+    }
+
+    &:hover {
+        background-color: rgba($u-sidenav, .1);
+    }
+}
+
+// = Mask
+.om-mask {
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+}
+
+.om-mask-blob {
+    mask-image: url(data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIj48cGF0aCBkPSJNMTAwIDBDMjAgMCAwIDIwIDAgMTAwczIwIDEwMCAxMDAgMTAwIDEwMC0yMCAxMDAtMTAwUzE4MCAwIDEwMCAwIi8+PC9zdmc+)
+}
+
+.form-control.form-control-solid {
+    background-color: $o-webclient-background-color;
+    border-color: $o-webclient-background-color;
+    color: $o-gray-700;
+}

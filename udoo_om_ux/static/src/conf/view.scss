@@ -1,0 +1,80 @@
+.color-node {
+    width: 20px;
+    height: 20px;
+}
+
+.color-node-md {
+    border: 1px solid var(--border-color);
+    width: 25px;
+    height: 25px;
+}
+
+.pcr-app .pcr-interaction input {
+    padding-inline: .98em !important;
+}
+
+.pcr-app .pcr-swatches {
+    margin-inline: 4px;
+}
+
+.u_conf {
+    width: 42rem;
+
+    &.z-full {
+        width: 100%;
+    }
+
+    .z-buttons {
+        display: none;
+    }
+
+    .u_conf_tabs {
+        display: flex;
+        justify-content: flex-start;
+        overflow-x: auto;
+        white-space: nowrap;
+        scrollbar-width: none;
+    }
+
+    .modal-title::before {
+        content: "";
+        width: 16px;
+        height: 16px;
+        display: inline-block;
+        background-image: url('/omux_config_base/static/img/preferen.svg');
+        vertical-align: middle;
+        margin-right: 12px;
+        margin-bottom: 2px;
+    }
+
+    .card-title {
+        margin-top: 1.1rem;
+    }
+
+    .thoem {
+        &.o_list_view .o_content {
+            margin-inline: unset;
+            border: 1px solid var(--border-color);
+
+            .o_list_footer {
+                display: none;
+            }
+        }
+
+        tr>th:nth-of-type(1)>div>span {
+            font-weight: 600;
+            color: #009BC0;
+
+            &:before {
+                content: "";
+                display: inline-flex;
+                vertical-align: middle;
+                height: 6px;
+                width: 6px;
+                background-color: rgba(complement(#009BC0), 0.6);
+                margin: auto 0;
+                margin-right: 10px;
+            }
+        }
+    }
+}

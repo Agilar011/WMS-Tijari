@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="uxopt_grouping_indicator" model="ir.asset">
+            <field name="name">[OMUX] List View: Grouping Indicator</field>
+            <field name="bundle">web.assets_backend</field>
+            <field name="directive">include</field>
+            <field name="path">omux_list_indicator.grouping_indicator</field>
+            <field name="active" eval="False"/>
+        </record>
+    </data>
+</odoo>

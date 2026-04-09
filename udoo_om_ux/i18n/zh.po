@@ -1,0 +1,808 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+#   * udoo_om_ux
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-04-13 14:22+0000\n"
+"PO-Revision-Date: 2025-04-13 14:22+0000\n"
+"Last-Translator: \n"
+"Language-Team: Chinese (Simplified)\n"
+"Language: zh\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Advanced"
+msgstr "高级"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "All Apps"
+msgstr "所有应用"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "All Features"
+msgstr "所有功能"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/user_menu.js:0
+msgid "Appearance"
+msgstr "外观"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Apply & Reload"
+msgstr "应用并重新加载"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/webclient.xml:0
+msgid "Apps"
+msgstr "应用"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Auto hide horizontal menu"
+msgstr "自动隐藏横向菜单"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Realign Layout"
+msgstr "重新对齐布局"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.js:0
+msgid "Bookmark current view"
+msgstr "添加当前视图为书签"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Bookmark saved."
+msgstr "书签已保存！"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Border Radius"
+msgstr "圆角边框"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Branding Settings"
+msgstr "品牌设置"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Browser Data"
+msgstr "浏览器数据"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Choose options..."
+msgstr "选择选项..."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Clear recent record history"
+msgstr "清除最近记录历史"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+#: code:addons/udoo_om_ux/static/src/views/form/form_view_dialog.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Close"
+msgstr "关闭"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Collapse the recent records drawer"
+msgstr "折叠最近记录抽屉"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Color Value"
+msgstr "颜色值"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Comfort"
+msgstr "舒适"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/systray/quick_search.xml:0
+msgid "Command Palette"
+msgstr "命令面板"
+
+#. module: udoo_om_ux
+#: model:ir.model,name:udoo_om_ux.model_res_company
+msgid "Companies"
+msgstr "公司"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Contains add-on-specific settings for advanced customization."
+msgstr "包含插件专属的高级自定义设置。"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Copy info"
+msgstr "复制信息"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Cozy"
+msgstr "宽松"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Dark"
+msgstr "深色"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Dark Mode"
+msgstr "深色模式"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Default"
+msgstr "默认"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Default settings applied across all users."
+msgstr "默认设置适用于所有用户。"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Delete"
+msgstr "删除"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Directory"
+msgstr "目录"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/views/form/form_status/indicator.xml:0
+msgid "Discard changes"
+msgstr "放弃更改"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/core/dialog/view.xml:0
+msgid "Dismiss"
+msgstr "忽略"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Display the Start menu in full-screen mode instead of the default mode."
+msgstr "以全屏模式显示开始菜单，而不是默认模式。"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Document"
+msgstr "文档"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Dodger"
+msgstr "闪蓝色"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Emerald"
+msgstr "翡翠绿"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Enable company-based home background"
+msgstr "启用按公司设置的主页背景"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/core/dialog/view.xml:0
+msgid "Expand"
+msgstr "展开"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Extended Creation"
+msgstr "批量创建"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Filled"
+msgstr "填充"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Font Family"
+msgstr "字体族"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Font Size"
+msgstr "字体大小"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Form View"
+msgstr "表单视图"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Green"
+msgstr "绿色"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.edit_menu_access_search_ui
+msgid "Group By"
+msgstr "分组方式"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Home Background"
+msgstr "主页背景"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Home Menu"
+msgstr "主页菜单"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.js:0
+msgid "Home action has been set!"
+msgstr "主页操作已设置！"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Indigo"
+msgstr "靛蓝"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Input Style"
+msgstr "输入样式"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Interface Size"
+msgstr "界面尺寸"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Large"
+msgstr "大"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Last Created Record"
+msgstr "最新创建记录"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Light"
+msgstr "浅色"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Light Mode"
+msgstr "浅色模式"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Lime"
+msgstr "柠檬绿"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "List Density"
+msgstr "列表密度"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Look & Feel"
+msgstr "外观与体验"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Magenta"
+msgstr "洋红"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/core/dialog/view.xml:0
+msgid "Maximize"
+msgstr "最大化"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Menu Preset"
+msgstr "菜单预设"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields,field_description:udoo_om_ux.field_res_company__menus_preset
+msgid "Menus Preset"
+msgstr "菜单列表预设"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Moderate"
+msgstr "适中"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Navigation"
+msgstr "导航"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.js:0
+msgid "Notification"
+msgstr "通知"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_auto_hmenu__off
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_full_iland__off
+msgid "Off"
+msgstr "关闭"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_auto_hmenu__on
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_full_iland__on
+msgid "On"
+msgstr "开启"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Open company branding settings"
+msgstr "打开公司品牌设置"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Open in main view"
+msgstr "在主视图中打开"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Open in new tab"
+msgstr "在新标签页中打开"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Open in popup view"
+msgstr "在弹窗视图中打开"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Optimal"
+msgstr "最佳"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Orange"
+msgstr "橙色"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.edit_menu_access_search_ui
+msgid "Parent"
+msgstr "父级"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Pin all to start"
+msgstr "全部固定到开始页"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Pin to start"
+msgstr "固定到开始页"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Pink"
+msgstr "粉色"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Pinned"
+msgstr "已固定"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Planning"
+msgstr "计划"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Position Chatter and Document Viewer on right"
+msgstr "将聊天区和文档查看器置于右侧"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Position Chatter at bottom; Document Viewer on right if present"
+msgstr "将聊天区置于底部；若有文档查看器则置于右侧"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Position Chatter at bottom; Hide Document Viewer by default"
+msgstr "将聊天区置于底部；默认隐藏文档查看器"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Prefer full-screen start menu"
+msgstr "优先使用全屏开始菜单"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Primary Color"
+msgstr "主色"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Quick Access"
+msgstr "快速访问"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Quick Create"
+msgstr "快速创建"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Quick View Panel"
+msgstr "快速预览面板"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Readable"
+msgstr "易读"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+#: code:addons/udoo_om_ux/static/src/webclient/webclient.xml:0
+msgid "Recents"
+msgstr "最近"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Remove all bookmarks"
+msgstr "移除所有书签"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Repeat From:"
+msgstr "重复开始于："
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Reporting"
+msgstr "报表"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Reset home menu action"
+msgstr "重置主页操作"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Reset home menu layout"
+msgstr "重置主页布局"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Restore defaults"
+msgstr "恢复默认设置"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Roomy"
+msgstr "宽敞"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.edit_menu_access_search_ui
+msgid "Root Menu"
+msgstr "根菜单"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Rose"
+msgstr "玫瑰色"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Save Changes"
+msgstr "保存更改"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/views/form/form_status/indicator.xml:0
+msgid "Save manually"
+msgstr "手动保存"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Search..."
+msgstr "搜索..."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Select Language"
+msgstr "选择语言"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Set as home action"
+msgstr "设为主页操作"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid ""
+"Set default form list view to Kanban; Position Chatter at bottom; Hide "
+"Document Viewer by default"
+msgstr "将默认表单列表视图设置为看板；将聊天区置于底部；默认隐藏文档查看器"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Sharp"
+msgstr "锐利"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Sidenav Logo"
+msgstr "侧边栏 Logo"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Sky"
+msgstr "天蓝"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Soft"
+msgstr "柔和"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Subtle"
+msgstr "细腻"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Switch Scheme"
+msgstr "切换配色方案"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "System"
+msgstr "系统"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Temporary preferences stored in your current browser session."
+msgstr "临时偏好设置将保存在当前浏览器会话中。"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Theme Editor"
+msgstr "主题编辑器"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.js:0
+msgid "There is unsaved data. Do you want to discard the changes and proceed?"
+msgstr "有未保存的数据。你想放弃更改并继续吗？"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "This action cannot be undone. Are you sure?"
+msgstr "此操作无法撤销。你确定吗？"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Toggle Chatter Panel"
+msgstr "切换聊天面板"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Toggle Fullscreen"
+msgstr "切换全屏"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Undefined"
+msgstr "未定义"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Underline input fields; Set default form list view to Kanban; Position Chatter at bottom; Hide Document Viewer by default"
+msgstr "输入字段带下划线；默认表单列表为看板视图；聊天区置于底部；默认隐藏文档查看器"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Underlined"
+msgstr "下划线"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Unpin from start"
+msgstr "从开始页取消固定"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields,field_description:udoo_om_ux.field_res_users_settings__up_bookmarks
+msgid "Up Bookmarks"
+msgstr "提升书签"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Use the topbar for main navigation"
+msgstr "使用顶部栏进行主导航"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "User"
+msgstr "用户"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "User Data"
+msgstr "用户数据"
+
+#. module: udoo_om_ux
+#: model:ir.model,name:udoo_om_ux.model_res_users_settings
+msgid "User Settings"
+msgstr "用户设置"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid ""
+"When the sidebar is enabled, the horizontal menu will automatically be "
+"hidden."
+msgstr "启用侧边栏后，横向菜单将自动隐藏。"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Workspace"
+msgstr "工作区"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Yellow"
+msgstr "黄色"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Your home menu action has been restored."
+msgstr "你的主页操作已恢复。"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Your home menu layout has been restored."
+msgstr "你的主页布局已恢复。"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Your personal settings, saved to your Odoo account."
+msgstr "你的个性化设置已保存到 Odoo 账户中。"

@@ -1,0 +1,36 @@
+.o_form_view {
+    &.o_xxl_form_view {
+
+        .o_form_sheet_bg,
+        .o_form_renderer {
+            max-width: unset;
+        }
+    }
+}
+
+/***********************************************************
+        Form View : Handle for required fields
+************************************************************/
+.o_wrap_field:has(.o_required_modifier):has(.o_input) {
+    .o_wrap_label {
+        margin-right: 6px;
+
+        >label:after {
+            content: "*";
+            color: #eb9091;
+            position: absolute;
+            font-size: larger;
+            line-height: 1.2;
+            margin-left: 4px;
+        }
+
+        >label:has(sup):after {
+            margin-left: 2px;
+        }
+    }
+}
+
+// NOTE: Remove later
+.o_notebook_headers {
+    overflow-y: hidden;
+}

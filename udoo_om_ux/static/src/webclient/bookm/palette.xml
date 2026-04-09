@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="wub.BookmarkCommandItem">
+        <div class="o_command_default d-flex align-items-center justify-content-between py-2 cursor-pointer">
+            <t t-slot="name"/>
+            <t t-slot="focusMessage"/>
+        </div>
+    </t>
+    <t t-name="wub.BookmarkPalette" t-inherit="web.CommandPalette" t-inherit-mode="primary">
+        <xpath expr="//t[@name='command.name']" position="attributes">
+            <attribute name="t-on-contextmenu.prevent">() => this.openItemCtx(commandIndex)</attribute>
+        </xpath>
+        <xpath expr="//small[hasclass('o_command_focus')]" position="after">
+            <span class="btn btn-sm lh-1 px-1 ms-2 opacity-50" t-att-data-bmkid="commandIndex" t-on-click.stop.prevent="() => this.openItemCtx(commandIndex)">
+                <i class="ri-more-2-fill"/>
+            </span>
+        </xpath>
+        <xpath expr="//t[@t-foreach='command.splitName']" position="before">
+            <i t-if="command.category == 'add'" class="ri-lr ri-add-box-line me-3 lh-1 align-middle opacity-75"/>
+            <i t-else="" class="ri-lr me-3 lh-1 align-middle opacity-75" t-att-class="view_imap[command.view_type] || 'ri-airplay-line'"/>
+        </xpath>
+        <xpath expr="//div[hasclass('o_command_palette_search')]" position="attributes">
+            <attribute name="class" remove="mb-2 px-4 py-3" add="pt-3 pb-2 ps-2" separator=" "/>
+        </xpath>
+        <xpath expr="//span[hasclass('o_command_name')]" position="attributes">
+            <attribute name="class" add="text-truncate" separator=" "/>
+        </xpath>
+        <xpath expr="//span[@t-out='category.name']" position="attributes">
+            <attribute name="class" add="d-block text-primary my-2 w-100" remove="text-uppercase fs-6 px-3" separator=" "/>
+        </xpath>
+    </t>
+    <t t-name="wub.BookmContextMenu">
+        <div class="dropdown-menu show position-relative border-0 shadow-none">
+            <a t-if="props.item._a" t-on-click.prevent="() => this.open(0)" class="dropdown-item" role="button">
+                <i class="ri-md ri-eye-line text-dodger me-2"/>
+                <span class="text-truncate">Open in main view</span>
+            </a>
+            <a t-if="props.item.view_type" t-on-click.prevent="() => this.open(1)" class="dropdown-item" role="button">
+                <i class="ri-md ri-arrow-go-forward-fill text-dodger me-2"/>
+                <span class="text-truncate">Open in popup view</span>
+            </a>
+            <div role="separator" class="dropdown-divider"/>
+            <a t-on-click.prevent="copy" class="dropdown-item" role="button">
+                <i class="ri-md ri-information-line text-dodger me-2"/>
+                <span class="text-truncate">Copy info</span>
+            </a>
+            <div role="separator" class="dropdown-divider"/>
+            <a t-on-click.prevent="delete" class="dropdown-item" role="button">
+                <i class="ri-md ri-delete-bin-3-line text-dodger me-2"/>
+                <span class="text-truncate">Delete</span>
+            </a>
+        </div>
+    </t>
+</templates>

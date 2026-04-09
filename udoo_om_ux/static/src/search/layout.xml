@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-inherit="web.Layout" t-inherit-mode="extension">
+        <xpath expr="//t[@t-component='components.SearchPanel']" position="before">
+            <div class="sash-container">
+                <div class="monaco-sash vertical"
+                    t-on-contextmenu.prevent.stop=""
+                    t-on-mousedown.prevent.stop.capture="onSassAsideStart"
+                    t-att-class="{'sizing': yy.sashMarkPoint}"/>
+            </div>
+        </xpath>
+    </t>
+
+</templates>

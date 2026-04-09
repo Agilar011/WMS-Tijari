@@ -1,0 +1,151 @@
+// == Colors
+// ============================================================================
+
+$o-white: #FFF !default;
+$o-black: #000 !default;
+
+$o-gray-100: #f8f9fa !default;
+$o-gray-200: #e9ecef !default;
+$o-gray-300: #dee2e6 !default;
+$o-gray-400: #ced4da !default;
+$o-gray-500: #adb5bd !default;
+$o-gray-600: #6c757d !default;
+$o-gray-700: #495057 !default;
+$o-gray-800: #343a40 !default;
+$o-gray-900: #212529 !default;
+
+$o-opacity-disabled: .5 !default;
+$o-opacity-muted: .76 !default;
+
+$o-community-color: #3a98ce !default;
+$o-enterprise-color: #05869c !default;
+
+$o-brand-primary: $o-enterprise-color !default;
+$o-brand-secondary: #8f8f8f !default;
+$o-brand-lightsecondary: $o-gray-100 !default;
+
+$o-action: #0c7b8f !default;
+$o-success: #00a184 !default;
+$o-info: #0092C5 !default;
+$o-warning: #F47B12 !default;
+$o-danger: #d45263 !default;
+
+$o-action-accent: lighten($o-action, 5%) !default;
+$o-action-accent: #0e8fa7 !default; // Fake for color picker
+
+$u-text-success: #10B981 !default;
+$u-text-info: #1885b8 !default;
+$u-text-warning: #d99114 !default;
+$u-text-danger: #db5f5f !default;
+
+$o-theme-text-colors: (
+    "success": $u-text-success,
+    "info": $u-text-info,
+    "warning": $u-text-warning,
+    "danger": $u-text-danger,
+    "dodger": #009999,
+) !default;
+
+
+// == Udoo
+// ============================================================================
+
+$u-lh: 1.77 !default;
+
+// = Actions
+$u-menuitem-hover: $o-action !default;
+$u-menuitem-hover-bg: rgba($u-menuitem-hover, .1) !default;
+
+// = Segment
+$nav-segment-link: $o-gray-500 !default;
+$u-nav-segment-bg: $o-white !default;
+$u-nav-segment-shadow: 1px 0 1rem 0 rgba($o-gray-400, .3) !default;
+
+
+// == Components
+// ============================================================================
+
+$o-component-active-color: $o-gray-900 !default;
+$o-component-active-bg: mix($o-action, $o-white, 10%) !default;
+$o-component-active-border: $o-action !default;
+
+// == List
+$o-list-head-title-weight: 600 !default;
+$o-list-group-header-color: $o-gray-900 !default;
+$o-list-footer-font-weight: 600 !default;
+$o-list-footer-color: $o-gray-900 !default;
+$o-list-footer-bg-color: transparent !default;
+
+// == Text
+$o-main-text-color: $o-gray-700 !default;
+$o-main-link-color: $o-action-accent !default;
+$o-main-color-muted: rgba($o-main-text-color, $o-opacity-muted) !default;
+
+// == Inputs
+$o-input-padding-y: 1px !default;
+$o-input-padding-x: 0 !default;
+$o-input-border-required: #ee7777 !default;
+
+// == Badges
+$o-badge-min-width: 2.7ch !default;
+
+// == Buttons
+// Map of customized values for each button. If a button's design is defined
+// here, the relative values will take priority over default BS ones.
+// Notice: each map's entry is passed directly to the Bootstrap mixin, meaning
+// that all states must be defined, there can't be omissions.
+$o-btns-bs-override: (
+    ) !default;
+$o-btns-bs-override: map-merge(("primary": (background: $o-brand-primary,
+                border: $o-brand-primary,
+                color: $o-white,
+
+                hover-background: darken($o-brand-primary, 5%),
+                hover-border: darken($o-brand-primary, 10%),
+                hover-color: $o-white,
+
+                active-background: mix($o-brand-primary, $o-white, 10%),
+                active-border: $o-brand-primary,
+                active-color:$o-brand-primary,
+            ),
+            "secondary": (background: $o-gray-200,
+                border: $o-gray-200,
+                color: $o-gray-700,
+
+                hover-background: $o-gray-300,
+                hover-border: $o-gray-300,
+                hover-color: $o-gray-800,
+
+                active-background: $o-component-active-bg,
+                active-border: $o-component-active-border,
+                active-color: $o-component-active-color,
+            ),
+        ), $o-btns-bs-override
+);
+
+$o-btns-bs-outline-override: (
+    ) !default;
+$o-btns-bs-outline-override: map-merge(("secondary": (background: transparent,
+                border: $o-gray-300,
+                color: $o-gray-700,
+
+                hover-background: $o-gray-200,
+                hover-border: $o-gray-300,
+                hover-color: $o-gray-800,
+
+                active-background: mix($o-action-accent, $o-white, 10%),
+                active-border: $o-action-accent,
+                active-color: $o-gray-900,
+            ),
+        ), $o-btns-bs-outline-override
+);
+
+// == Form
+$headings-line-height: auto !default;
+$o-form-lightsecondary: $o-gray-200 !default;
+$o-notebook-tab-active: #ee7777 !default;
+
+// == Border
+$o-border-radius: o-to-rem(4px) !default;
+$o-border-radius-md: o-to-rem(6px) !default;
+$o-border-radius-xl: o-to-rem(8px) !default;

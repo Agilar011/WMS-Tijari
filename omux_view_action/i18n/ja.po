@@ -1,0 +1,29 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+#   * omux_view_action
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-02-19 01:40+0000\n"
+"PO-Revision-Date: 2025-02-19 01:40+0000\n"
+"Last-Translator: \n"
+"Language-Team: Japanese\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#. module: omux_view_action
+#. odoo-javascript
+#: code:addons/omux_view_action/static/src/control_panel.xml:0
+msgid "Configuration"
+msgstr "設定"
+
+#. module: omux_view_action
+#. odoo-javascript
+#: code:addons/omux_view_action/static/src/control_panel.xml:0
+msgid "View Actions"
+msgstr "アクションを表示"

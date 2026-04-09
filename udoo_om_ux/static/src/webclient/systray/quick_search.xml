@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<templates xml:space="preserve">
+    <t t-name="wub.CommandPalette">
+        <span class="o_nav_entry d-flex align-items-center cursor-pointer"
+            title="Command Palette"
+            t-attf-style="{{ env.isSmall ? 'margin-left: 1.3rem ; margin-right: 1rem;' : 'margin-inline: 1rem;' }}"
+            t-on-click="openMainPalette">
+            <i class="ri-lg ri-terminal-fill"/>
+        </span>
+    </t>
+</templates>

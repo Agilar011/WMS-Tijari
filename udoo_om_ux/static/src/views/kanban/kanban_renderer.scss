@@ -1,0 +1,10 @@
+.o_kanban_renderer.o_kanban_grouped {
+
+    .o_kanban_record {
+        margin-top: 12px;
+    }
+}
+
+.o_kanban_renderer:has(.o_kanban_record > .o_kanban_aside_full) {
+    --KanbanRecord-width: 349px;
+}

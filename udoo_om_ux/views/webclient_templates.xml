@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="webclient_login" inherit_id="web.login_layout">
+        <xpath expr="//t[@t-call='web.frontend_layout']/t[last()]" position="after">
+            <t t-set="body_classname" t-value="'light-dm o_home_menu_background'"/>
+        </xpath>
+    </template>
+
+    <template id="signup" inherit_id="auth_signup.signup">
+        <xpath expr="//a[hasclass('btn-sm')]" position="attributes">
+            <attribute name="class" remove="btn btn-link btn-sm" add="small mt-2" separator=" "/>
+        </xpath>
+        <xpath expr="//div[hasclass('oe_login_buttons')]" position="attributes">
+            <attribute name="class" remove="pt-3" add="pt-4" separator=" "/>
+        </xpath>
+    </template>
+    <template id="auth_signup_fields" inherit_id="auth_signup.fields">
+        <xpath expr="//div[hasclass('field-login')]" position="attributes">
+            <attribute name="class" remove="mb-3" separator=" "/>
+        </xpath>
+        <xpath expr="//div[hasclass('field-name')]" position="attributes">
+            <attribute name="class" remove="mb-3" add="pt-2" separator=" "/>
+        </xpath>
+        <xpath expr="//div[hasclass('field-password')]" position="attributes">
+            <attribute name="class" remove="mb-3" add="pt-2" separator=" "/>
+        </xpath>
+        <xpath expr="//div[hasclass('field-confirm_password')]" position="attributes">
+            <attribute name="class" remove="mb-3" add="pt-2" separator=" "/>
+        </xpath>
+    </template>
+
+    <template id="webclient_bootstrap" inherit_id="web.webclient_bootstrap">
+        <xpath expr="//meta[@name='theme-color']" position="replace">
+            <meta name="theme-color" t-att-content="'#111827' if request.httprequest.cookies.get('color_scheme') == 'dark' else '#262626'"/>
+            <t t-set="color_shade" t-value="request.httprequest.cookies.get('color_shade')"/>
+        </xpath>
+        <xpath expr="//t[@t-call-assets='web.assets_web']" position="replace">
+            <t t-if="not color_shade">
+                <t t-call-assets="web.assets_web"/>
+            </t>
+            <t t-elif="color_shade == 'magenta'" t-call-assets="web.assets_web_magenta"/>
+            <t t-elif="color_shade == 'dodger'" t-call-assets="web.assets_web_dodger"/>
+            <t t-elif="color_shade == 'lime'" t-call-assets="web.assets_web_lime"/>
+            <t t-elif="color_shade == 'green'" t-call-assets="web.assets_web_green"/>
+            <t t-elif="color_shade == 'emerald'" t-call-assets="web.assets_web_emerald"/>
+            <t t-elif="color_shade == 'indigo'" t-call-assets="web.assets_web_indigo"/>
+            <t t-elif="color_shade == 'pink'" t-call-assets="web.assets_web_pink"/>
+            <t t-elif="color_shade == 'sky'" t-call-assets="web.assets_web_sky"/>
+            <t t-elif="color_shade == 'rose'" t-call-assets="web.assets_web_rose"/>
+            <t t-elif="color_shade == 'yellow'" t-call-assets="web.assets_web_yellow"/>
+            <t t-elif="color_shade == 'orange'" t-call-assets="web.assets_web_orange"/>
+        </xpath>
+        <xpath expr="//t[@t-call-assets='web.assets_web_dark']" position="replace">
+            <t t-if="not color_shade">
+                <t t-call-assets="web.assets_web_dark"/>
+            </t>
+            <t t-elif="color_shade == 'magenta'" t-call-assets="web.assets_web_magenta_dark"/>
+            <t t-elif="color_shade == 'dodger'" t-call-assets="web.assets_web_dodger_dark"/>
+            <t t-elif="color_shade == 'lime'" t-call-assets="web.assets_web_lime_dark"/>
+            <t t-elif="color_shade == 'green'" t-call-assets="web.assets_web_green_dark"/>
+            <t t-elif="color_shade == 'emerald'" t-call-assets="web.assets_web_emerald_dark"/>
+            <t t-elif="color_shade == 'indigo'" t-call-assets="web.assets_web_indigo_dark"/>
+            <t t-elif="color_shade == 'pink'" t-call-assets="web.assets_web_pink_dark"/>
+            <t t-elif="color_shade == 'sky'" t-call-assets="web.assets_web_sky_dark"/>
+            <t t-elif="color_shade == 'rose'" t-call-assets="web.assets_web_rose_dark"/>
+            <t t-elif="color_shade == 'yellow'" t-call-assets="web.assets_web_yellow_dark"/>
+            <t t-elif="color_shade == 'orange'" t-call-assets="web.assets_web_orange_dark"/>
+        </xpath>
+    </template>
+</odoo>

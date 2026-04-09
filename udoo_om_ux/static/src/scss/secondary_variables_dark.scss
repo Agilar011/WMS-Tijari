@@ -1,0 +1,19 @@
+$o-colors-original: #A2A2A2, #DC67AB, #38c0e9, #35c5a6, #FAB446, #A367DC, #DB8865,
+    #50CD89, #6771DC, #F7636C, #2cb9cc, #8757EC !default;
+
+$o-colors-secondary-original: #aa4b6b, #30C381, #97743a, #F7CD1F, #4285F4, #8E24AA,
+    #d34345, #173e43, #348F50, #AA3A38, #795548, #5e0231,
+    #6be585, #999966, #e9d362, #b56969, #bdc3c7, #649173 !default;
+
+$o-colors: ()!default;
+$o-colors-secondary: ()!default;
+
+@each $-color in $o-colors-original {
+    $-adjusted: saturate(mix($-color, $o-black, 50%), 60%);
+    $o-colors: append($o-colors, $-adjusted);
+}
+
+@each $-color in $o-colors-secondary-original {
+    $-adjusted: saturate(mix($-color, $o-black, 50%), 80%);
+    $o-colors-secondary: append($o-colors-secondary, $-adjusted);
+}

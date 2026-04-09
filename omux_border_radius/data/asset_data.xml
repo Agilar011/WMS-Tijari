@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="uxfeat_border_radius_sharp" model="ir.asset">
+            <field name="name">[OMUX] Border Radius: Sharp</field>
+            <field name="bundle">web.assets_backend</field>
+            <field name="directive">include</field>
+            <field name="path">omux_border_radius/sharp</field>
+            <field name="active" eval="False"/>
+        </record>
+        <record id="uxfeat_border_radius_subtle" model="ir.asset">
+            <field name="name">[OMUX] Border Radius: Subtle</field>
+            <field name="bundle">web.assets_backend</field>
+            <field name="directive">include</field>
+            <field name="path">omux_border_radius/subtle</field>
+            <field name="active" eval="False"/>
+        </record>
+        <record id="uxfeat_border_radius_moderate" model="ir.asset">
+            <field name="name">[OMUX] Border Radius: Moderate</field>
+            <field name="bundle">web.assets_backend</field>
+            <field name="directive">include</field>
+            <field name="path">omux_border_radius/moderate</field>
+            <field name="active" eval="False"/>
+        </record>
+        <record id="uxfeat_border_radius_soft" model="ir.asset">
+            <field name="name">[OMUX] Border Radius: Soft</field>
+            <field name="bundle">web.assets_backend</field>
+            <field name="directive">include</field>
+            <field name="path">omux_border_radius/soft</field>
+            <field name="active" eval="False"/>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,21 @@
+.o_list_renderer .o_list_table {
+    .o_data_row:first-of-type {
+        border-top: unset !important;
+    }
+
+    thead {
+        &::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: .5px;
+            background-color: $table-border-color;
+        }
+
+        th {
+            border-bottom-width: 0;
+        }
+    }
+}

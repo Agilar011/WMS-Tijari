@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-inherit="web.FormStatusIndicator" t-inherit-mode="extension">
+        <xpath expr="//div[(hasclass('o_form_status_indicator_buttons'))]" position="replace">
+            <div class="o_form_status_indicator_buttons d-flex" t-att-class="{ invisible: !(props.model.root.isNew or displayButtons) }">
+                <button
+                    type="button"
+                    class="o_form_button_save btn btn-outline-info py-0 mx-1"
+                    data-hotkey="s"
+                    t-on-click.stop="save"
+                    data-tooltip="Save manually"
+                    aria-label="Save manually"
+                    t-ref="save">
+                    <i class="ri-lr ri-save-2-fill" />
+                </button>
+                <button
+                    type="button"
+                    class="o_form_button_cancel btn btn-secondary py-0"
+                    data-hotkey="j"
+                    t-on-click.stop="discard"
+                    data-tooltip="Discard changes"
+                    aria-label="Discard changes">
+                    <i class="ri-lr ri-close-circle-fill" />
+                </button>
+            </div>
+        </xpath>
+    </t>
+
+</templates>

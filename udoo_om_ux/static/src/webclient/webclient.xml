@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="web.WebClient" t-inherit-mode="extension">
+        <xpath expr="//t[@t-if='!state.fullscreen']" position="replace">
+            <t t-if="!state.fullscreen">
+                <button t-on-click="() => this.onSassLsideFold()" class="sidenav_toggle btn btn-icon position-absolute border-0 d-none d-sm-flex lh-1">
+                    <svg width="24" height="130" viewBox="0 0 24 130" fill="none"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path d="M1.38462 18.7168L1.8301 22.7112C2.26003 26.5663 4.27932 30.0671 7.40111 32.3694V32.3694C11.5512 35.4301 14.0007 40.2802 14.0007 45.4369V82.4101C14.0007 87.7445 11.5406 92.7807 7.33313 96.0597V96.0597C4.30939 98.4163 2.31544 101.852 1.76936 105.646L1.31152 108.828" stroke="currentColor" stroke-width="1"></path>
+                        <path d="M1 21V21.1546C1 22.0457 1.14367 22.931 1.42547 23.7764L1.47964 23.9389C1.4932 23.9796 1.50962 24.0192 1.52879 24.0576C1.83879 24.6776 2.00233 25.3605 2.0068 26.0536L2.48837 100.697C2.49595 101.872 2.15172 103.022 1.5 104L1.48049 104.039C1.32729 104.345 1.20808 104.668 1.125 105L1 106V103.821V21Z" fill="var(--u-panel-toggle-bg)"></path>
+                    </svg>
+                    <i class="position-absolute lh-0 fs-3" t-att-class="{ 'ri-arrow-right-s-line': !ue.sidenav, 'ri-arrow-left-s-line': ue.sidenav }"/>
+                </button>
+                <ResizablePanel handleSide="'end'"
+                    class="'o_sidenav d-none position-fixed start-0 opacity-0'"
+                    onResize.bind="_onSideNavResize"
+                    initialWidth="ue.sidenavWidth"
+                    minWidth="79">
+
+                    <div class="sidenav_header">
+                        <a class="navbar-brand m-0 text-uppercase" href="/web">
+                            <img class="navbar-brand-logo" t-attf-src="/web/image/res.company/{{cpyId}}/{{ui.color_scheme == 'dark' ? 'logo_lui': 'logo_dui'}}"/>
+                        </a>
+                    </div>
+                    <div class="sidenav_subsec nav-item">
+                        <span class="sidenav_hr d-block mb-3"/>
+                        <div class="d-flex align-items-center justify-content-between">
+                            <h6 class="fs-7 fw-sbold ms-2 sidenav_subtile text-uppercase mb-0">Apps</h6>
+                            <button data-hotkey="j" type="button" class="btn btn-om border-transparent d-flex om-mask om-mask-blob sidenav_subtile p-1" t-on-click="openOmSearch">
+                                <i class="ri-st ri-search-line"/>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="sidenav_content d-flex flex-column rolvis"/>
+                    <div role="button" class="sidenav_footer_toggler nav-item mb-3 user-select-none" t-on-click="toggleFootnav" t-att-aria-expanded="ue.footnav">
+                        <span class="sidenav_hr d-block mb-3"/>
+                        <div class="d-flex flex-row">
+                            <h6 class="fs-7 fw-sbold ms-2 sidenav_subtile text-uppercase mb-0 me-auto">Recents</h6>
+                            <span t-out="uo.recents.length" class="btn btn-sm border-secondary text-reset fw-sbold lh-1" style="font-size: 10px;"/>
+                        </div>
+                    </div>
+                    <div t-ref="footnav" class="sidenav_footer flex-column rolkit" t-att-class="{'d-none': !ue.footnav}">
+                    </div>
+                </ResizablePanel>
+                <NavBar/>
+            </t>
+        </xpath>
+    </t>
+</templates>

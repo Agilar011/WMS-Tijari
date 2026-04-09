@@ -1,0 +1,40 @@
+// == Udoo
+// ============================================================================
+
+$u-island-bg: $o-white !default;
+
+$u-app-icon: linear-gradient(315deg, $o-gray-100, $u-island-bg) !default;
+$u-app-icon-shadow: -4px -4px 15px $o-gray-100, 2px 2px 1px $o-gray-200 !default;
+$u-app-icon-shadow-hover: -4px -4px 0 $o-gray-100, 2.5px 2.5px 0 $o-gray-200 !default;
+
+$u-sidenav: $o-gray-700 !default;
+$u-sidenav-bg: $u-island-bg !default;
+$u-sidenav-hr: $u-sidenav !default;
+$u-sidenav-width: 243px !default;
+
+$u-sidenav-border: $o-gray-300 !default;
+$u-sidenav-accent: $o-action !default;
+
+$u-sidenav-item-arrow: $u-sidenav !default;
+$u-sidenav-item-arrow-bg: $u-sidenav-accent !default;
+
+$u-vd-sidenav-app-icon-threshold: 10%;
+$u-vd-sidenav-app-icon: linear-gradient(315deg, rgba(white, 0.8), rgba(white, 0.87)) !default;
+$u-vd-sidenav-app-icon-shadow: -4px -4px 15px rgba(black, 0.03), 1.5px 1.5px 1px rgba(black, 0.07) !default;
+
+$u-dd-sidenav-app-icon-threshold: 50%;
+$u-dd-sidenav-app-icon: linear-gradient(315deg, rgba(white, 0.02), rgba(black, 0.12)) !default;
+$u-dd-sidenav-app-icon-shadow: -4px -4px 15px rgba(black, 0.05), 1.5px 1.5px 1px rgba(black, 0.15) !default;
+
+$u-md-sidenav-app-icon-threshold: 98%;
+$u-md-sidenav-app-icon: linear-gradient(315deg, rgba(white, .89), rgba(white, .77)) !default;
+$u-md-sidenav-app-icon-shadow: -4px -4px 15px rgba(white, 0.1), 1.5px 1.5px 1px rgba(black, 0.12) !default;
+
+$u-sidenav-app-icon: linear-gradient(315deg, $o-gray-100, $u-sidenav-bg) !default;
+$u-sidenav-app-icon-shadow: -4px -4px 15px $o-gray-100, 1.5px 1.5px 1px $o-gray-200 !default;
+
+$u-sidenav-app-on-icon: linear-gradient(315deg, $o-gray-100, $u-sidenav-bg) !default;
+$u-sidenav-app-on-icon-shadow: -4px -4px 15px $o-gray-100, 2px 2px 1px darken($o-gray-200, 3%) !default;
+
+$u-subnav-bg: $u-island-bg !default;
+$u-subnav-header: $o-gray-500 !default;

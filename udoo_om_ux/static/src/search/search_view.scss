@@ -1,0 +1,41 @@
+.o_cp_searchview {
+    border-radius: $u-searchview-border-radius;
+
+    .show {
+        >.btn-outline-secondary.dropdown-toggle {
+            background: $u-searchview-bg;
+            color: $o-brand-primary;
+        }
+
+        .o_searchview_dropdown_toggler {
+            border-color: $u-searchview-border;
+        }
+    }
+
+    .o_searchview_dropdown_toggler {
+        transition: border 0.375s;
+        border-width: $u-searchview-border-width;
+        border-radius: $u-searchview-border-radius;
+        border-left: 0 !important;
+        border-color: $u-searchview-border;
+        background: $u-searchview-bg;
+        padding-inline: 8px;
+    }
+
+    .o_searchview {
+        transition: border 0.375s;
+        border-top-left-radius: $u-searchview-border-radius;
+        border-bottom-left-radius: $u-searchview-border-radius;
+        border-width: $u-searchview-border-width;
+        border-color: $u-searchview-border;
+        background: $u-searchview-bg;
+
+        &:focus-within {
+            border-color: $input-focus-border-color;
+        }
+
+        >.o_searchview_input_container {
+            margin-left: 2px;
+        }
+    }
+}

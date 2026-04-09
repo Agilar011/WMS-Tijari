@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="web.ControlPanel" t-inherit-mode="extension">
+        <xpath expr="//button[@t-on-click='doRefresh']" position="after">
+            <t t-if="!env.isSmall and !env.inDialog and hasChatter and this.store.canSwAside !== false and hasAttachmentPreview !== true">
+                <button class="btn btn-secondary w-100" t-on-click="() => this.uSwitchAside('r')">
+                    <i class="ri-lg ri-layout-right-line"></i>
+                </button>
+                <button class="btn btn-secondary w-100" t-on-click="() => this.uSwitchAside('b')">
+                    <i class="ri-lg ri-layout-bottom-line"></i>
+                </button>
+            </t>
+        </xpath>
+        <xpath expr="//div[hasclass('u_header_area')]" position="inside">
+            <div t-if="env.config?.viewType == 'form'" class="rounded w-100 p-2 mt-2" t-att-class="{ 'border': store.uQuickRepeat }">
+                <CheckBox className="'o_field_boolean o_boolean_toggle form-switch align-self-center'" value="store.uQuickRepeat" onChange.bind="uQuickRepeatCheck">
+                    <span class="user-select-none">Extended Creation</span>
+                </CheckBox>
+                <div t-if="store.uQuickRepeat" class="mt-2">
+                    <label class="h6 text-muted">Repeat From:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="exampleRadios" id="cm_last_record" checked=""/>
+                        <label class="form-check-label user-select-none" for="cm_last_record">Last Created Record</label>
+                    </div>
+                </div>
+            </div>
+        </xpath>
+        <xpath expr="//div[hasclass('u_action_area')]" position="inside">
+            <DropdownItem t-if="!env.inDialog and hasChatter" class="'d-flex align-items-center'" onSelected="() => env.bus.trigger('LYT:TCTT')">
+                <t>Toggle Chatter Panel</t>
+            </DropdownItem>
+            <DropdownItem class="'d-flex align-items-center'" onSelected="() => this.uToggleFullScreen()">
+                <t>Toggle Fullscreen</t>
+            </DropdownItem>
+            <DropdownItem class="'d-flex align-items-center'" onSelected="() => this.uReloadLayout()">
+                <t>Realign Layout</t>
+            </DropdownItem>
+        </xpath>
+        <xpath expr="//div[hasclass('u_toggle_area')]" position="inside">
+            <span t-if="env.config.viewType == 'kanban'" t-on-click.prevent="uSwitchPopMode" class="dropdown-item" role="menuitem" tabindex="0">
+                <div class="pe-none o-checkbox form-check form-switch d-flex align-items-center flex-row-reverse justify-content-between p-0 w-100 mb-0">
+                    <input id="u_DropinMode" type="checkbox" class="form-check-input ms-3 mt-0" t-att-checked="ui.dropinMode or state.dropinMode"/>
+                    <label class="user-select-none d-flex align-items-center" for="u_DropinMode">
+                        <t>Quick View Panel</t>
+                    </label>
+                </div>
+            </span>
+        </xpath>
+        <xpath expr="//div[hasclass('o_control_panel_main_buttons')]//div[hasclass('d-inline-flex')]/t" position="after">
+            <button t-if="breadcrumbs.length > 1" class="u_btn_back btn btn-outline-primary px-2" t-on-click.prevent.stop="uBackTrick">
+                <svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 1 24 24" fill="currentColor"><path d="M7.82843 10.9999H20V12.9999H7.82843L13.1924 18.3638L11.7782 19.778L4 11.9999L11.7782 4.22168L13.1924 5.63589L7.82843 10.9999Z"></path></svg>
+            </button>
+        </xpath>
+        <xpath expr="//div[hasclass('o_control_panel_main')]" position="attributes">
+            <attribute name="class" add="gap-2" separator=" "/>
+        </xpath>
+    </t>
+    <t t-inherit="web.Breadcrumbs" t-inherit-mode="extension">
+        <xpath expr="//button[hasclass('btn-light btn-sm px-1 p-0')]" position="attributes">
+            <attribute name="class" add="lh-1" separator=" "/>
+        </xpath>
+    </t>
+</templates>

@@ -1,0 +1,63 @@
+// == Control Panel
+// ============================================================================
+
+.o_control_panel_main_buttons,
+.o_statusbar_buttons {
+
+    .btn-primary,
+    .btn-secondary {
+        text-transform: capitalize;
+        text-wrap: nowrap;
+    }
+}
+
+.o_control_panel {
+    padding-bottom: 13px !important;
+
+    ol.breadcrumb {
+        margin-top: -3px;
+        --breadcrumb-divider: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='#{$breadcrumb-divider-color}' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m5.5.75 10.72 10.72a.749.749 0 0 1 0 1.06L5.5 23.25'/%3E%3C/svg%3E");
+    }
+
+    .o_searchview_input_container:has(.o_searchview_facet) {
+        input {
+            width: 11em !important;
+        }
+
+    }
+
+    .o_breadcrumb {
+        margin-left: 5px;
+
+        &:not(.align-self-stretch) {
+            .fa-cog {
+                font-size: 16px !important;
+            }
+        }
+    }
+
+    // == Patch
+    .o_cp_action_menus .o-dropdown {
+        .dropdown-item {
+            line-height: $u-lh;
+        }
+
+        button.dropdown-toggle.dropdown-item {
+
+            &::after,
+            &::before {
+                --ddi-arr: -0.45em #{"/*rtl:0.45em*/"};
+                transform: translate(calc(#{$u-lh} * var(--ddi-arr)), calc(#{$u-lh} * 0.45em)) #{"/*rtl:append:scaleX(-1)*/"};
+            }
+        }
+    }
+}
+
+.o_control_panel_navigation {
+
+    .o_switch_view {
+        padding-inline: .52rem;
+        place-items: center;
+        display: grid;
+    }
+}

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="ir_asset_setting_view" model="ir.ui.view">
+        <field name="name">omux.config.base</field>
+        <field name="model">ir.asset</field>
+        <field name="priority">999</field>
+        <field name="arch" type="xml">
+            <list string="Assets" create="false">
+                <field name="name" string="Feature List"/>
+                <field name="active" string="" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+</odoo>

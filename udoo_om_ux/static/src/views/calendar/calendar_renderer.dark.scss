@@ -1,0 +1,30 @@
+.o_calendar_renderer {
+    .o_calendar_widget {
+
+        // ====== Month only
+        .fc-dayGridMonth-view {
+            .fc-content-skeleton {
+
+                .fc-day-top {
+
+                    &.fc-today {
+                        --o-cw-color: #{$black};
+                    }
+                }
+            }
+        }
+
+        // ====== Year only
+        .fc-dayGridYear-view {
+
+            &:not(.fc-readonly-year-view) {
+                .fc-day-top {
+
+                    &:hover>.fc-day-number {
+                        --o-cw-color: #{$o-black};
+                    }
+                }
+            }
+        }
+    }
+}

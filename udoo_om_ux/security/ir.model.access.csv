@@ -1,0 +1,3 @@
+"id","name","model_id:id","group_id:id","perm_read","perm_write","perm_create","perm_unlink"
+access_ir_asset_group_omux,access_ir_asset_group_omux,base.model_ir_asset,udoo_om_ux.group_omux,1,1,0,0
+access_ir_ui_view_group_omux,access_ir_ui_view_group_omux,base.model_ir_ui_view,udoo_om_ux.group_omux,1,0,0,0

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="web.FormViewDialog.ToOne.buttons" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('o_form_buttons_view')]" position="after">
+            <button t-else="" class="btn btn-primary" t-on-click.stop="discard">Close</button>
+        </xpath>
+    </t>
+
+    <t t-inherit="web.FormViewDialog" t-inherit-mode="extension">
+        <xpath expr="//Dialog" position="attributes">
+            <attribute name="contentClass">props.context?.ucls ? props.context.ucls: ''</attribute>
+            <attribute name="size">'xl'</attribute>
+        </xpath>
+    </t>
+</templates>

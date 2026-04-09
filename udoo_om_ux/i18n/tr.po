@@ -1,0 +1,810 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+#   * udoo_om_ux
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-04-13 14:22+0000\n"
+"PO-Revision-Date: 2025-04-13 14:22+0000\n"
+"Last-Translator: \n"
+"Language-Team: Turkish\n"
+"Language: tr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Advanced"
+msgstr "Gelişmiş"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "All Apps"
+msgstr "Tüm Uygulamalar"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "All Features"
+msgstr "Tüm Özellikler"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/user_menu.js:0
+msgid "Appearance"
+msgstr "Görünüm"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Apply & Reload"
+msgstr "Uygula ve Yenile"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/webclient.xml:0
+msgid "Apps"
+msgstr "Uygulamalar"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Auto hide horizontal menu"
+msgstr "Yatay menüyü otomatik gizle"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Realign Layout"
+msgstr "Düzeni Yeniden Hizala"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.js:0
+msgid "Bookmark current view"
+msgstr "Geçerli görünümü yer imlerine ekle"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Bookmark saved."
+msgstr "Yer imi kaydedildi."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Border Radius"
+msgstr "Kenar Yarıçapı"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Branding Settings"
+msgstr "Marka Ayarları"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Browser Data"
+msgstr "Tarayıcı Verisi"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Choose options..."
+msgstr "Seçenekleri seçin..."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Clear recent record history"
+msgstr "Son kayıt geçmişini temizle"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+#: code:addons/udoo_om_ux/static/src/views/form/form_view_dialog.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Close"
+msgstr "Kapat"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Collapse the recent records drawer"
+msgstr "Son kayıtlar çekmecesini daralt"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Color Value"
+msgstr "Renk Değeri"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Comfort"
+msgstr "Konfor"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/systray/quick_search.xml:0
+msgid "Command Palette"
+msgstr "Komut Paleti"
+
+#. module: udoo_om_ux
+#: model:ir.model,name:udoo_om_ux.model_res_company
+msgid "Companies"
+msgstr "Şirketler"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Contains add-on-specific settings for advanced customization."
+msgstr "Gelişmiş özelleştirme için eklentiye özel ayarları içerir."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Copy info"
+msgstr "Bilgiyi kopyala"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Cozy"
+msgstr "Rahat"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Dark"
+msgstr "Koyu"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Dark Mode"
+msgstr "Karanlık Mod"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Default"
+msgstr "Varsayılan"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Default settings applied across all users."
+msgstr "Tüm kullanıcılar için varsayılan ayarlar uygulanır."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Delete"
+msgstr "Sil"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Directory"
+msgstr "Dizin"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/views/form/form_status/indicator.xml:0
+msgid "Discard changes"
+msgstr "Değişiklikleri iptal et"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/core/dialog/view.xml:0
+msgid "Dismiss"
+msgstr "Yoksay"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Display the Start menu in full-screen mode instead of the default mode."
+msgstr "Başlat menüsünü varsayılan yerine tam ekran olarak göster."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Document"
+msgstr "Belge"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Dodger"
+msgstr "Açık Mavi"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Emerald"
+msgstr "Zümrüt"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Enable company-based home background"
+msgstr "Şirkete özel ana sayfa arka planını etkinleştir"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/core/dialog/view.xml:0
+msgid "Expand"
+msgstr "Genişlet"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Extended Creation"
+msgstr "Genişletilmiş Oluşturma"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Filled"
+msgstr "Dolu"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Font Family"
+msgstr "Yazı Tipi Ailesi"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Font Size"
+msgstr "Yazı Boyutu"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Form View"
+msgstr "Form Görünümü"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Green"
+msgstr "Yeşil"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.edit_menu_access_search_ui
+msgid "Group By"
+msgstr "Grupla"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Home Background"
+msgstr "Ana Sayfa Arka Planı"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Home Menu"
+msgstr "Ana Menü"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.js:0
+msgid "Home action has been set!"
+msgstr "Ana sayfa eylemi ayarlandı!"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Indigo"
+msgstr "Çivit Mavisi"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Input Style"
+msgstr "Giriş Stili"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Interface Size"
+msgstr "Arayüz Boyutu"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Large"
+msgstr "Büyük"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Last Created Record"
+msgstr "Son Oluşturulan Kayıt"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Light"
+msgstr "Açık"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Light Mode"
+msgstr "Açık Mod"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Lime"
+msgstr "Açık Yeşil"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "List Density"
+msgstr "Liste Yoğunluğu"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Look & Feel"
+msgstr "Görünüm ve Hissiyat"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Magenta"
+msgstr "Eflatun"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/core/dialog/view.xml:0
+msgid "Maximize"
+msgstr "Maksimize Et"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Menu Preset"
+msgstr "Menü Ön Ayarı"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields,field_description:udoo_om_ux.field_res_company__menus_preset
+msgid "Menus Preset"
+msgstr "Menü Listesi Ön Ayarı"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Moderate"
+msgstr "Orta"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Navigation"
+msgstr "Gezinme"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.js:0
+msgid "Notification"
+msgstr "Bildirim"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_auto_hmenu__off
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_full_iland__off
+msgid "Off"
+msgstr "Kapalı"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_auto_hmenu__on
+#: model:ir.model.fields.selection,name:udoo_om_ux.selection__res_users_settings__ps_full_iland__on
+msgid "On"
+msgstr "Açık"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Open company branding settings"
+msgstr "Şirket markalama ayarlarını aç"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Open in main view"
+msgstr "Ana görünümde aç"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Open in new tab"
+msgstr "Yeni sekmede aç"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/palette.xml:0
+msgid "Open in popup view"
+msgstr "Açılır pencerede aç"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Optimal"
+msgstr "En Uygun"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Orange"
+msgstr "Turuncu"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.edit_menu_access_search_ui
+msgid "Parent"
+msgstr "Üst Menü"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Pin all to start"
+msgstr "Tümünü başlangıca sabitle"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Pin to start"
+msgstr "Başlangıca sabitle"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Pink"
+msgstr "Pembe"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Pinned"
+msgstr "Sabitlendi"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Planning"
+msgstr "Planlama"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Position Chatter and Document Viewer on right"
+msgstr "Sohbet ve Belge Görüntüleyiciyi sağa yerleştir"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Position Chatter at bottom; Document Viewer on right if present"
+msgstr "Sohbeti alta yerleştir; Belge Görüntüleyici varsa sağa yerleştir"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Position Chatter at bottom; Hide Document Viewer by default"
+msgstr "Sohbet alt kısma yerleştirilsin; Belge Görüntüleyici varsayılan olarak gizlensin"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Prefer full-screen start menu"
+msgstr "Tam ekran başlangıç menüsü tercih edilsin"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Primary Color"
+msgstr "Birincil Renk"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Quick Access"
+msgstr "Hızlı Erişim"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Quick Create"
+msgstr "Hızlı Oluştur"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Quick View Panel"
+msgstr "Hızlı Görünüm Paneli"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Readable"
+msgstr "Okunaklı"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+#: code:addons/udoo_om_ux/static/src/webclient/webclient.xml:0
+msgid "Recents"
+msgstr "Son Kullanılanlar"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Remove all bookmarks"
+msgstr "Tüm yer imlerini kaldır"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Repeat From:"
+msgstr "Tekrarlama Başlangıcı:"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Reporting"
+msgstr "Raporlama"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Reset home menu action"
+msgstr "Ana menü eylemini sıfırla"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Reset home menu layout"
+msgstr "Ana menü düzenini sıfırla"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Restore defaults"
+msgstr "Varsayılanları geri yükle"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Roomy"
+msgstr "Ferahlık"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.edit_menu_access_search_ui
+msgid "Root Menu"
+msgstr "Kök Menü"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Rose"
+msgstr "Pembe Gül"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Save Changes"
+msgstr "Değişiklikleri Kaydet"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/views/form/form_status/indicator.xml:0
+msgid "Save manually"
+msgstr "Elle kaydet"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Search..."
+msgstr "Ara..."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Select Language"
+msgstr "Dil Seç"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Set as home action"
+msgstr "Ana eylem olarak ayarla"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid ""
+"Set default form list view to Kanban; Position Chatter at bottom; Hide "
+"Document Viewer by default"
+msgstr ""
+"Varsayılan form liste görünümünü Kanban olarak ayarla; Sohbeti alta yerleştir; "
+"Belge Görüntüleyiciyi varsayılan olarak gizle"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Sharp"
+msgstr "Keskin"
+
+#. module: udoo_om_ux
+#: model_terms:ir.ui.view,arch_db:udoo_om_ux.res_company_form_inherit_om
+msgid "Sidenav Logo"
+msgstr "Yan Menü Logosu"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Sky"
+msgstr "Gökyüzü"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Soft"
+msgstr "Yumuşak"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Subtle"
+msgstr "Hafif"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Switch Scheme"
+msgstr "Tema Değiştir"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "System"
+msgstr "Sistem"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Temporary preferences stored in your current browser session."
+msgstr "Geçici tercihler mevcut tarayıcı oturumunda saklanır."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Theme Editor"
+msgstr "Tema Düzenleyici"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.js:0
+msgid "There is unsaved data. Do you want to discard the changes and proceed?"
+msgstr "Kaydedilmemiş veriler var. Değişiklikleri iptal edip devam etmek istiyor musunuz?"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "This action cannot be undone. Are you sure?"
+msgstr "Bu işlem geri alınamaz. Emin misiniz?"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Toggle Chatter Panel"
+msgstr "Sohbet Panelini Aç/Kapat"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/search/control_panel.xml:0
+msgid "Toggle Fullscreen"
+msgstr "Tam Ekran Modunu Aç/Kapat"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/bookm/provider.js:0
+msgid "Undefined"
+msgstr "Tanımsız"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Underline input fields; Set default form list view to Kanban; Position Chatter at bottom; Hide Document Viewer by default"
+msgstr "Giriş alanlarını altı çizili yap; Varsayılan form liste görünümünü Kanban olarak ayarla; Sohbet alt kısma yerleştir; Belge Görüntüleyici varsayılan olarak gizlensin"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Underlined"
+msgstr "Altı Çizili"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Unpin from start"
+msgstr "Başlangıçtan sabitlemeyi kaldır"
+
+#. module: udoo_om_ux
+#: model:ir.model.fields,field_description:udoo_om_ux.field_res_users_settings__up_bookmarks
+msgid "Up Bookmarks"
+msgstr "Yer İmlerini Yükselt"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Use the topbar for main navigation"
+msgstr "Ana gezinme için üst çubuğu kullan"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "User"
+msgstr "Kullanıcı"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "User Data"
+msgstr "Kullanıcı Verileri"
+
+#. module: udoo_om_ux
+#: model:ir.model,name:udoo_om_ux.model_res_users_settings
+msgid "User Settings"
+msgstr "Kullanıcı Ayarları"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid ""
+"When the sidebar is enabled, the horizontal menu will automatically be "
+"hidden."
+msgstr "Yan menü etkinleştirildiğinde, yatay menü otomatik olarak gizlenecektir."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+#: code:addons/udoo_om_ux/static/src/webclient/navbar/navbar.xml:0
+msgid "Workspace"
+msgstr "Çalışma Alanı"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Yellow"
+msgstr "Sarı"
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Your home menu action has been restored."
+msgstr "Ana menü eyleminiz geri yüklendi."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.js:0
+msgid "Your home menu layout has been restored."
+msgstr "Ana menü düzeniniz geri yüklendi."
+
+#. module: udoo_om_ux
+#. odoo-javascript
+#: code:addons/udoo_om_ux/static/src/conf/view.xml:0
+msgid "Your personal settings, saved to your Odoo account."
+msgstr "Kişisel ayarlarınız Odoo hesabınıza kaydedildi."

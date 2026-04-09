@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-inherit="web.SearchBar.Facets" t-inherit-mode="extension">
+        <xpath expr="//div[hasclass('o_searchview_facet_label')]" position="attributes">
+            <attribute name="class" add="d-flex align-items-center" separator=" "/>
+        </xpath>
+        <xpath expr="//div[hasclass('o_searchview_facet_label')]//small" position="attributes">
+            <attribute name="class" add="fs-7" separator=" "/>
+        </xpath>
+    </t>
+
+</templates>
