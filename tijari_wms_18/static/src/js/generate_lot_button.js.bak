@@ -1,0 +1,17 @@
+/** @odoo-module **/
+import { registry } from '@web/core/registry';
+import { useService } from '@web/core/utils/hooks';
+import { Component } from '@odoo/owl';
+
+class GenerateLotButton extends Component {
+    setup() {
+        this.orm = useService("orm");
+    }
+    onClick() {
+        // Update field dummy agar onchange terpanggil di client
+        this.props.update({ lot_button: true });
+    }
+}
+
+GenerateLotButton.template = "tijari.GenerateLotButton";
+registry.category("fields").add("generate_lot_button", GenerateLotButton);
