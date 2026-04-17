@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates>
+    <t t-name="tijari.GenerateLotButton" owl="1">
+        <button t-on-click="onClick" type="button" class="btn btn-secondary btn-sm oe_inline">
+            <i class="fa fa-refresh" style="margin-right:4px;"></i>
+            Auto Generate Lot Number
+        </button>
+    </t>
+</templates>

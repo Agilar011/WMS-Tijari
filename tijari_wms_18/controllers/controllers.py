@@ -1,0 +1,333 @@
+# -*- coding: utf-8 -*-
+from odoo import http, _
+from odoo.http import request
+from odoo.exceptions import UserError
+import logging
+
+_logger = logging.getLogger(__name__)
+
+
+class WmsApiController(http.Controller):
+
+    # ---------- Helper: API Key Auth ----------
+    def _check_api_key(self):
+        api_key = request.httprequest.headers.get('X-API-Key')
+        if not api_key:
+            return False, _("Missing X-API-Key header")
+
+        expected = request.env['ir.config_parameter'].sudo().get_param('wms.api_key')
+        if not expected:
+            return False, _("WMS API Key is not configured in System Parameters")
+
+        if api_key != expected:
+            return False, _("Invalid API Key")
+
+        return True, None
+
+    def _json_error(self, message, status=400, details=None):
+        _logger.warning("WMS API error: %s", message)
+        body = {'status': 'error', 'message': message}
+        if details:
+            body['details'] = details
+        return request.make_json_response(body, status=status)
+
+    # =========================================================
+    #  POST /wms/api/receiving  -> create inbound / receiving
+    # =========================================================
+    @http.route('/wms/api/receiving', type='json', auth='public', methods=['POST'], csrf=False)
+    def wms_receiving(self, **payload):
+        ok, err = self._check_api_key()
+        if not ok:
+            return self._json_error(err, status=401)
+
+        _logger.info("WMS Receiving payload: %s", payload)
+
+        try:
+            Picking = request.env['stock.picking'].sudo()
+            Partner = request.env['res.partner'].sudo()
+            Product = request.env['product.product'].sudo()
+            Location = request.env['stock.location'].sudo()
+            Uom = request.env['uom.uom'].sudo()
+            Lot = request.env['stock.lot'].sudo()
+            PickingType = request.env['stock.picking.type'].sudo()
+
+            external_ref = payload.get('external_ref')
+            vendor_code = payload.get('vendor_code')
+            vendor_name = payload.get('vendor_name')
+            warehouse_code = payload.get('warehouse_code')
+            picking_type_code = payload.get('picking_type_code')  # optional
+            scheduled_date = payload.get('scheduled_date')
+            auto_validate = payload.get('auto_validate', False)
+            lines = payload.get('lines')
+
+            if not lines:
+                raise UserError(_(f"No lines provided in payload {lines}"))
+
+            # 1) Cari partner
+            partner = False
+            if vendor_code:
+                partner = Partner.search([('ref', '=', vendor_code)], limit=1)
+            if not partner and vendor_name:
+                partner = Partner.search([('name', '=', vendor_name)], limit=1)
+            if not partner:
+                raise UserError(_("Vendor not found (vendor_code or vendor_name required)"))
+
+            # 2) Cari picking type (operation_category = 'receive')
+            picking_type_domain = [('operation_category', '=', 'receive')]
+            if picking_type_code:
+                picking_type_domain.append(('sequence_code', '=', picking_type_code))
+            picking_type = PickingType.search(picking_type_domain, limit=1)
+            if not picking_type:
+                raise UserError(_("No picking type configured for operation_category = 'receive'"))
+
+            location_src_id = Location.search([('complete_name', '=', 'Partners/Vendors')], limit=1)
+            # 3) Create picking (draft)
+            picking_vals = {
+                'picking_type_id': picking_type.id,
+                'partner_id': partner.id,
+                'scheduled_date': scheduled_date,
+                'origin': external_ref or payload.get('origin'),
+                'location_id': location_src_id.id,
+                'location_dest_id': picking_type.default_location_dest_id.id,
+            }
+
+            picking = Picking.create(picking_vals)
+
+            # 4) Create moves
+            for line in lines:
+                product_code = line.get('product_code')   # default_code / internal reference
+                product_barcode = line.get('product_barcode')
+                qty = line.get('qty') or line.get('quantity')
+                uom_name = line.get('uom')
+                lot_name = line.get('lot')
+                dest_location_code = line.get('location_dest_code')  # unique_code dari location
+
+                if not product_code and not product_barcode:
+                    raise UserError(_("Each line must have product_code or product_barcode"))
+
+                # Cari product
+                domain_prod = []
+                if product_code:
+                    domain_prod = [('default_code', '=', product_code)]
+                elif product_barcode:
+                    domain_prod = [('barcode', '=', product_barcode)]
+                product = Product.search(domain_prod, limit=1)
+                if not product:
+                    raise UserError(_("Product not found for code/barcode: %s") % (product_code or product_barcode))
+
+                # UoM
+                uom = product.uom_id
+                if uom_name:
+                    uom = Uom.search([('name', '=', uom_name)], limit=1) or product.uom_id
+
+                # Location dest pakai unique_code
+                dest_location = picking.location_dest_id
+                if dest_location_code:
+                    dest_location = Location.search([('complete_name', '=', dest_location_code)], limit=1)
+                    if not dest_location:
+                        raise UserError(_("Destination location not found for unique_code: %s") % dest_location_code)
+
+                move_vals = {
+                    'name': product.display_name,
+                    'product_id': product.id,
+                    'product_uom_qty': qty,
+                    'product_uom': uom.id,
+                    'picking_id': picking.id,
+                    'location_id': picking.location_id.id,
+                    'location_dest_id': dest_location.id,
+                }
+                move = request.env['stock.move'].sudo().create(move_vals)
+
+                # Lot + immediate done (optional)
+                if lot_name:
+                    lot = Lot.search([
+                        ('name', '=', lot_name),
+                        ('product_id', '=', product.id),
+                    ], limit=1)
+                    if not lot:
+                        lot = Lot.create({
+                            'name': lot_name,
+                            'product_id': product.id,
+                        })
+
+                    move_line_vals = {
+                        'move_id': move.id,
+                        'picking_id': picking.id,
+                        'product_id': product.id,
+                        'product_uom_id': uom.id,
+                        'qty_done': qty if auto_validate else 0.0,
+                        'location_id': picking.location_id.id,
+                        'location_dest_id': dest_location.id,
+                        'lot_id': lot.id,
+                    }
+                    request.env['stock.move.line'].sudo().create(move_line_vals)
+
+            # 5) Auto-validate jika diminta (WMS langsung terima)
+            if auto_validate:
+                picking.action_confirm()
+                picking.action_assign()
+                picking.button_validate()
+
+            return {
+                'status': 'success',
+                'picking_id': picking.id,
+                'picking_name': picking.name,
+                'operation_category': 'receive',
+            }
+
+        except UserError as e:
+            return self._json_error(str(e), status=400)
+        except Exception as e:
+            _logger.exception("Unexpected error in /wms/api/receiving")
+            return self._json_error(_("Unexpected server error: %s") % str(e), status=500)
+
+    # =========================================================
+    #  POST /wms/api/delivery  -> create outbound / DO
+    # =========================================================
+    @http.route('/wms/api/delivery', type='json', auth='public', methods=['POST'], csrf=False)
+    def wms_delivery(self, **kwargs):
+        ok, err = self._check_api_key()
+        if not ok:
+            return self._json_error(err, status=401)
+
+        payload = {}
+        _logger.info("WMS Delivery payload: %s", payload)
+
+        try:
+            Picking = request.env['stock.picking'].sudo()
+            Partner = request.env['res.partner'].sudo()
+            Product = request.env['product.product'].sudo()
+            Location = request.env['stock.location'].sudo()
+            Uom = request.env['uom.uom'].sudo()
+            Lot = request.env['stock.lot'].sudo()
+            PickingType = request.env['stock.picking.type'].sudo()
+
+            external_ref = payload.get('external_ref')
+            customer_code = payload.get('customer_code')
+            customer_name = payload.get('customer_name')
+            warehouse_code = payload.get('warehouse_code')
+            picking_type_code = payload.get('picking_type_code')  # optional
+            scheduled_date = payload.get('scheduled_date')
+            auto_validate = payload.get('auto_validate', False)
+            lines = payload.get('lines') or []
+
+            if not lines:
+                raise UserError(_("No lines provided in payload"))
+
+            # 1) Partner
+            partner = False
+            if customer_code:
+                partner = Partner.search([('ref', '=', customer_code)], limit=1)
+            if not partner and customer_name:
+                partner = Partner.search([('name', '=', customer_name)], limit=1)
+            if not partner:
+                raise UserError(_("Customer not found (customer_code or customer_name required)"))
+
+            # 2) Picking Type (operation_category = 'delivery')
+            picking_type_domain = [('operation_category', '=', 'delivery')]
+            if picking_type_code:
+                picking_type_domain.append(('sequence_code', '=', picking_type_code))
+            picking_type = PickingType.search(picking_type_domain, limit=1)
+            if not picking_type:
+                raise UserError(_("No picking type configured for operation_category = 'delivery'"))
+
+            location_dest_id = Location.search([('complete_name', '=', 'Partners/Customers')], limit=1)
+            # 3) Create picking
+            picking_vals = {
+                'picking_type_id': picking_type.id,
+                'partner_id': partner.id,
+                'scheduled_date': scheduled_date,
+                'origin': external_ref or payload.get('origin'),
+                'location_id': picking_type.default_location_src_id.id,
+                'location_dest_id': location_dest_id.id
+            }
+
+            picking = Picking.create(picking_vals)
+
+            # 4) Create moves
+            for line in lines:
+                product_code = line.get('product_code')
+                product_barcode = line.get('product_barcode')
+                qty = line.get('qty') or line.get('quantity')
+                uom_name = line.get('uom')
+                lot_name = line.get('lot')
+                src_location_code = line.get('location_src_code')  # unique_code
+
+                if not product_code and not product_barcode:
+                    raise UserError(_("Each line must have product_code or product_barcode"))
+
+                # Product
+                domain_prod = []
+                if product_code:
+                    domain_prod = [('default_code', '=', product_code)]
+                elif product_barcode:
+                    domain_prod = [('barcode', '=', product_barcode)]
+                product = Product.search(domain_prod, limit=1)
+                if not product:
+                    raise UserError(_("Product not found for code/barcode: %s") % (product_code or product_barcode))
+
+                # UoM
+                uom = product.uom_id
+                if uom_name:
+                    uom = Uom.search([('name', '=', uom_name)], limit=1) or product.uom_id
+
+                # Source location pakai unique_code
+                src_location = picking.location_id
+                if src_location_code:
+                    src_location = Location.search([('unique_code', '=', src_location_code)], limit=1)
+                    if not src_location:
+                        raise UserError(_("Source location not found for unique_code: %s") % src_location_code)
+
+                move_vals = {
+                    'name': product.display_name,
+                    'product_id': product.id,
+                    'product_uom_qty': qty,
+                    'product_uom': uom.id,
+                    'picking_id': picking.id,
+                    'location_id': src_location.id,
+                    'location_dest_id': picking.location_dest_id.id,
+                }
+                move = request.env['stock.move'].sudo().create(move_vals)
+
+                # Lot + immediate done (optional)
+                if lot_name:
+                    lot = Lot.search([
+                        ('name', '=', lot_name),
+                        ('product_id', '=', product.id),
+                    ], limit=1)
+                    if not lot:
+                        lot = Lot.create({
+                            'name': lot_name,
+                            'product_id': product.id,
+                        })
+
+                    move_line_vals = {
+                        'move_id': move.id,
+                        'picking_id': picking.id,
+                        'product_id': product.id,
+                        'product_uom_id': uom.id,
+                        'qty_done': qty if auto_validate else 0.0,
+                        'location_id': src_location.id,
+                        'location_dest_id': picking.location_dest_id.id,
+                        'lot_id': lot.id,
+                    }
+                    request.env['stock.move.line'].sudo().create(move_line_vals)
+
+            # 5) Auto validate (ship langsung)
+            if auto_validate:
+                picking.action_confirm()
+                picking.action_assign()
+                picking.button_validate()
+
+            return {
+                'status': 'success',
+                'picking_id': picking.id,
+                'picking_name': picking.name,
+                'operation_category': 'delivery',
+            }
+
+        except UserError as e:
+            return self._json_error(str(e), status=400)
+        except Exception as e:
+            _logger.exception("Unexpected error in /wms/api/delivery")
+            return self._json_error(_("Unexpected server error: %s") % str(e), status=500)
