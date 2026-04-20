@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_acumatica_issue_config_user,acumatica.issue.config,model_acumatica_issue_config,base.group_user,1,1,1,1
+access_acumatica_issue_line_user,acumatica.issue.line,model_acumatica_issue_line,base.group_user,1,1,1,1
+access_import_issue_wizard_user,import.issue.wizard,model_import_issue_wizard,base.group_user,1,1,1,1

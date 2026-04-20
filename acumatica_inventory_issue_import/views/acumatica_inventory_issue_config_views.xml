@@ -1,0 +1,69 @@
+
+<odoo>
+    <record id="view_acumatica_inventory_issue_config_list" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.config.list</field>
+        <field name="model">acumatica.inventory.issue.config</field>
+        <field name="arch" type="xml">
+            <list string="Konfigurasi Acumatica Inventory Issue">
+                <field name="name"/>
+                <field name="base_url"/>
+                <field name="company_code"/>
+                <field name="endpoint_name"/>
+                <field name="state"/>
+                <field name="active"/>
+                <field name="last_sync"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_acumatica_inventory_issue_config_form" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.config.form</field>
+        <field name="model">acumatica.inventory.issue.config</field>
+        <field name="arch" type="xml">
+            <form string="Konfigurasi Acumatica Inventory Issue">
+                <header>
+                    <button name="action_test_connection" type="object" string="Test Connection" class="btn-primary"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
+                </header>
+                <sheet>
+                    <group string="Koneksi API">
+                        <group>
+                            <field name="name"/>
+                            <field name="base_url"/>
+                            <field name="api_version"/>
+                            <field name="endpoint_name"/>
+                        </group>
+                        <group>
+                            <field name="username"/>
+                            <field name="password" password="True"/>
+                            <field name="company_code"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <group string="OData Default">
+                        <group>
+                            <field name="odata_expand"/>
+                            <field name="odata_select"/>
+                            <field name="odata_filter"/>
+                        </group>
+                        <group>
+                            <div class="o_form_label">Default request:</div>
+                            <div>
+                                <span class="text-muted">Shipment?$filter=Type eq 'Issue' and Operation eq 'Issue'&amp;$expand=Details</span>
+                            </div>
+                        </group>
+                    </group>
+                    <group string="Sinkronisasi">
+                        <field name="last_sync" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_inventory_issue_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Inventory Issue</field>
+        <field name="res_model">acumatica.inventory.issue.config</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>
