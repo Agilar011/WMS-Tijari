@@ -1,4 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_acumatica_inventory_issue_config_user,acumatica.inventory.issue.config,model_acumatica_inventory_issue_config,base.group_user,1,1,1,1
-access_acumatica_inventory_issue_line_user,acumatica.inventory.issue.line,model_acumatica_inventory_issue_line,base.group_user,1,1,1,1
-access_import_inventory_issue_wizard_user,import.inventory.issue.wizard,model_import_inventory_issue_wizard,base.group_user,1,1,1,1

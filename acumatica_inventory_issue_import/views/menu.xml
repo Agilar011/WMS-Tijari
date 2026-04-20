@@ -1,7 +1,0 @@
-
-<odoo>
-    <menuitem id="menu_acumatica_issue_root" name="Acumatica Inventory Issue" sequence="60"/>
-    <menuitem id="menu_acumatica_inventory_issue_config" name="Konfigurasi" parent="menu_acumatica_issue_root" action="action_acumatica_inventory_issue_config" sequence="10"/>
-    <menuitem id="menu_acumatica_issue_import" name="Import Inventory Issue" parent="menu_acumatica_issue_root" action="action_import_inventory_issue_wizard" sequence="20"/>
-    <menuitem id="menu_acumatica_inventory_issue_line" name="Data Staging" parent="menu_acumatica_issue_root" action="action_acumatica_inventory_issue_line" sequence="30"/>
-</odoo>
