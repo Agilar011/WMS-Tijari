@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_acumatica_customer_config_manager,acumatica.customer.config manager,model_acumatica_customer_config,base.group_system,1,1,1,1
+access_acumatica_customer_config_user,acumatica.customer.config user,model_acumatica_customer_config,base.group_user,1,0,0,0
+access_acumatica_customer_line_manager,acumatica.customer.line manager,model_acumatica_customer_line,base.group_system,1,1,1,1
+access_acumatica_customer_line_user,acumatica.customer.line user,model_acumatica_customer_line,base.group_user,1,1,1,1
+access_import_customer_wizard_user,import.customer.wizard user,model_import_customer_wizard,base.group_user,1,1,1,1
