@@ -3,7 +3,9 @@
     'version':  '18.0.1.0.0',
     'summary':  'master data import dari Acumatica ke Odoo',
     'category': 'Inventory, Master Data, Transaction',
-    'author':   'Tijari',
+    'author': 'Tijari',
+    'company': 'Tijari',
+    'maintainer': 'Tijari Corp.',
     'depends':  ['base', 'stock', 'acumatica_customer_import'],
     'data': [
         'security/ir.model.access.csv',
