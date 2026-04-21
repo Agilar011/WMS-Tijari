@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_product_template_form_inherit_acumatica_nonstock" model="ir.ui.view">
+        <field name="name">product.template.form.acumatica.nonstock</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Acumatica">
+                    <group>
+                        <group string="Identitas">
+                            <field name="adt_external_id"/>
+                            <field name="adt_item_class"/>
+                            <field name="adt_item_status"/>
+                            <field name="adt_item_type"/>
+                            <field name="adt_posting_class"/>
+                            <field name="adt_price_class"/>
+                        </group>
+                        <group string="Unit">
+                            <field name="adt_base_unit"/>
+                            <field name="adt_purchase_unit"/>
+                            <field name="adt_sales_unit"/>
+                            <field name="adt_volume_uom"/>
+                            <field name="adt_weight_uom"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Kit">
+                            <field name="adt_is_a_kit"/>
+                            <field name="adt_is_kit"/>
+                        </group>
+                        <group string="Lainnya">
+                            <field name="adt_note_id"/>
+                            <field name="adt_last_modified_datetime"/>
+                        </group>
+                    </group>
+                    <group string="Note">
+                        <field name="adt_note" nolabel="1"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

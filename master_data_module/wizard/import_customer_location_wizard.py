@@ -1,5 +1,8 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 class ImportCustomerLocationWizard(models.TransientModel):
@@ -50,13 +53,20 @@ class ImportCustomerLocationWizard(models.TransientModel):
     total_no_customer = fields.Integer(readonly=True)
 
     # =========================
-    # ACTION FETCH
+    # FETCH DATA
     # =========================
     def action_fetch_data(self):
         self.ensure_one()
 
         if not self.config_id:
             raise UserError('Pilih API terlebih dahulu')
+
+        _logger.info(
+            "START FETCH: batch=%s, skip=%s, target=%s",
+            self.fetch_limit,
+            self.fetch_skip,
+            self.total_target or 'ALL'
+        )
 
         # cleanup staging
         self.env['acumatica.customer.location.line'].search([
@@ -73,20 +83,40 @@ class ImportCustomerLocationWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data dari API')
 
+        _logger.info("FETCH DONE: total=%s", len(raw_list))
+
         Loc     = self.env['acumatica.customer.location']
         Partner = self.env['res.partner']
+
+        # =========================
+        # OPTIMASI: PRELOAD DATA
+        # =========================
+        external_ids = [x['external_id'] for x in raw_list if x.get('external_id')]
+        customers    = [x['customer'] for x in raw_list if x.get('customer')]
+
+        existing_map = {
+            r.adt_external_id: r.id
+            for r in Loc.search([('adt_external_id', 'in', external_ids)])
+        }
+
+        partner_map = {
+            r.company_registry: r.id
+            for r in Partner.search([('company_registry', 'in', customers)])
+        }
+
+        _logger.info(
+            "PRELOAD DONE: existing=%s, partners=%s",
+            len(existing_map), len(partner_map)
+        )
 
         new_count = existing_count = no_customer_count = 0
         lines = []
 
-        for item in raw_list:
-            existing = Loc.search([
-                ('adt_external_id', '=', item['external_id'])
-            ], limit=1)
+        _logger.info("BUILD STAGING START...")
 
-            partner = Partner.search([
-                ('company_registry', '=', item['customer'])
-            ], limit=1)
+        for i, item in enumerate(raw_list, start=1):
+            existing = existing_map.get(item['external_id'])
+            partner  = partner_map.get(item['customer'])
 
             if existing:
                 existing_count += 1
@@ -109,7 +139,15 @@ class ImportCustomerLocationWizard(models.TransientModel):
                 'selected': bool(partner),
             })
 
+            if i % 1000 == 0:
+                _logger.info("Prepared %s staging records", i)
+
         self.env['acumatica.customer.location.line'].create(lines)
+
+        _logger.info(
+            "STAGING CREATED: total=%s | new=%s | existing=%s | no_customer=%s",
+            len(lines), new_count, existing_count, no_customer_count
+        )
 
         self.write({
             'state': 'fetched',
@@ -128,7 +166,7 @@ class ImportCustomerLocationWizard(models.TransientModel):
         }
 
     # =========================
-    # IMPORT
+    # IMPORT ALL (HATI-HATI)
     # =========================
     def action_import_all_pending(self):
         self.ensure_one()
@@ -142,5 +180,52 @@ class ImportCustomerLocationWizard(models.TransientModel):
         if not lines:
             raise UserError('Tidak ada data untuk diimport')
 
+        _logger.info("IMPORT ALL START: %s records", len(lines))
+
         lines._do_import()
+
+        _logger.info("IMPORT ALL DONE")
+
         self.state = 'done'
+
+    # =========================
+    # IMPORT BATCH (RECOMMENDED)
+    # =========================
+    def action_import_batch(self):
+        self.ensure_one()
+
+        Line = self.env['acumatica.customer.location.line']
+
+        remaining = Line.search_count([
+            ('config_id', '=', self.config_id.id),
+            ('import_state', '=', 'pending'),
+            ('selected', '=', True),
+        ])
+
+        _logger.info("REMAINING BEFORE IMPORT: %s", remaining)
+
+        lines = Line.search([
+            ('config_id', '=', self.config_id.id),
+            ('import_state', '=', 'pending'),
+            ('selected', '=', True),
+        ], limit=1000)
+
+        if not lines:
+            raise UserError('Tidak ada data untuk diimport.')
+
+        _logger.info("IMPORT BATCH START (limit=1000)")
+
+        lines._do_import()
+
+        _logger.info("IMPORT BATCH DONE")
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Batch Import',
+                'message': f'{len(lines)} data berhasil diproses',
+                'type': 'success',
+                'sticky': False,
+            }
+        }
