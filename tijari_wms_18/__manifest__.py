@@ -17,6 +17,9 @@
     ],
     'data': [
         'views/stock.xml',
+        'views/hide_menu.xml',
+        'views/wms_operations_action.xml',
+        'views/wms_operations_menu.xml',
     ],
     'assets': {
         'web.assets_frontend': [

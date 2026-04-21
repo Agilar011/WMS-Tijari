@@ -29,6 +29,23 @@ class StockQuant(models.Model):
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
+    adt_receipt_nbr = fields.Char(string='Receipt Nbr (Acumatica)', index=True)
+    adt_vendor_code = fields.Char(string='VendorID (Acumatica)')
+    adt_partner_ref = fields.Char(string='Vendor Ref (Acumatica)')
+    adt_branch_warehouse = fields.Char(string='Branch (Acumatica)')
+    adt_actual_qty = fields.Float(string='Control Qty (Acumatica)')
+    adt_is_hold = fields.Boolean(string='Hold (Acumatica)')
+    adt_inventory_ref = fields.Char(string='Inventory Ref Nbr (Acumatica)')
+    adt_acumatica_write_date = fields.Datetime(string='Last Modified (Acumatica)')
+    adt_header_location_code = fields.Char(string='Header Location (Acumatica)')
+    adt_post_period = fields.Char(string='Post Period (Acumatica)')
+    adt_status = fields.Char(string='Status (Acumatica)')
+    adt_total_qty = fields.Float(string='Total Qty (Acumatica)')
+    adt_type = fields.Char(string='Type (Acumatica)')
+    adt_external_ref = fields.Char(string='External Ref (Acumatica)')
+    adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
+    adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
+
     def button_validate(self):
         for picking in self:
             operation_category = picking.picking_type_id.operation_category
@@ -326,3 +343,26 @@ class StockMoveLine(models.Model):
                 'sticky': False,
             }
         }
+
+class StockMove(models.Model):
+    _inherit = 'stock.move'
+
+    adt_line_external_id = fields.Char(string='UUID Line Acumatica', index=True)
+    adt_inventory_id = fields.Char(string='InventoryID (Acumatica)')
+    adt_line_nbr = fields.Char(string='Line Nbr (Acumatica)')
+    adt_line_type = fields.Char(string='Line Type (Acumatica)')
+    adt_open_qty = fields.Float(string='Open Qty (Acumatica)')
+    adt_order_qty = fields.Float(string='Ordered Qty (Acumatica)')
+    adt_po_line_number = fields.Char(string='PO Line Nbr (Acumatica)')
+    adt_po_number = fields.Char(string='PO Number (Acumatica)')
+    adt_po_type = fields.Char(string='PO Type (Acumatica)')
+    adt_po_receipt_line_number = fields.Char(string='PO Receipt Line Nbr (Acumatica)')
+    adt_po_receipt_number = fields.Char(string='PO Receipt Number (Acumatica)')
+    adt_transfer_order_line_number = fields.Char(string='Transfer Order Line Nbr (Acumatica)')
+    adt_transfer_order_number = fields.Char(string='Transfer Order Number (Acumatica)')
+    adt_transfer_order_type = fields.Char(string='Transfer Order Type (Acumatica)')
+    adt_transfer_shipment_number = fields.Char(string='Transfer Shipment Number (Acumatica)')
+    adt_uom_code = fields.Char(string='UOM (Acumatica)')
+    adt_warehouse_dest_code = fields.Char(string='Warehouse Dest (Acumatica)')
+    adt_location_dest_code = fields.Char(string='Location Dest (Acumatica)')
+    adt_line_note = fields.Text(string='Line Note (Acumatica)')
