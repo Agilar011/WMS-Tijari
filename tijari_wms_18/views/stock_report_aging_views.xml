@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_stock_report_aging_line_list" model="ir.ui.view">
+        <field name="name">stock.report.aging.line.list</field>
+        <field name="model">stock.report.aging.line</field>
+        <field name="arch" type="xml">
+            <list create="0" delete="0" edit="0">
+                <field name="product_id"/>
+                <field name="product_name"/>
+                <field name="receipt_date"/>
+                <field name="layer_qty"/>
+                <field name="aging_days"/>
+                <field name="aging_bucket"/>
+                <field name="generated_at"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_stock_report_aging_line_form" model="ir.ui.view">
+        <field name="name">stock.report.aging.line.form</field>
+        <field name="model">stock.report.aging.line</field>
+        <field name="arch" type="xml">
+            <form create="0" delete="0" edit="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="product_id"/>
+                            <field name="product_name"/>
+                            <field name="receipt_date"/>
+                        </group>
+                        <group>
+                            <field name="layer_qty"/>
+                            <field name="aging_days"/>
+                            <field name="aging_bucket"/>
+                            <field name="generated_at"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_stock_report_aging_generate_form" model="ir.ui.view">
+        <field name="name">stock.report.aging.generate.form</field>
+        <field name="model">stock.report.aging.generate</field>
+        <field name="arch" type="xml">
+            <form string="Generate Aging Report">
+                <sheet>
+                    <group>
+                        <div class="o_form_label">
+                            Klik Generate untuk refresh data aging report.
+                        </div>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_generate_report" type="object" string="Generate" class="btn-primary"/>
+                    <button string="Cancel" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_stock_report_aging_lines" model="ir.actions.act_window">
+        <field name="name">Report Aging</field>
+        <field name="res_model">stock.report.aging.line</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <record id="action_stock_report_aging_generate" model="ir.actions.act_window">
+        <field name="name">Generate Aging</field>
+        <field name="res_model">stock.report.aging.generate</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>
