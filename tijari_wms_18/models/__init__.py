@@ -3,3 +3,5 @@
 from . import stock
 from . import stock_picking
 from . import stock_move
+from . import stock_report_velocity
+from . import stock_report_aging
