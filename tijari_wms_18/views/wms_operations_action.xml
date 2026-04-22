@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="action_wms_operations_purchase_receipts" model="ir.actions.act_window">
+        <field name="name">Purchase Receipts</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'incoming'),
+            ('adt_type', '=', 'Receipt')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_sotr_receipts" model="ir.actions.act_window">
+        <field name="name">Sales Order Receipts</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'internal'),
+            ('adt_type', '=', 'Transfer Receipt')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_receipts_type_change" model="ir.actions.act_window">
+        <field name="name">Receipts Type Change Item</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'incoming'),
+            ('adt_type', '=', 'Change Item')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_inventory_receive" model="ir.actions.act_window">
+        <field name="name">Inventory Receive</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'incoming'),
+            ('adt_type', '=', 'Inventory Receive')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_issue_type_change_items" model="ir.actions.act_window">
+        <field name="name">Issue Type Change Item</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('adt_type', '=', 'Issue')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_inventory_issue" model="ir.actions.act_window">
+        <field name="name">Inventory Issue</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'internal'),
+            ('adt_type', '=', 'Issue')
+        ]</field>
+    </record>
+
+</odoo>
