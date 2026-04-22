@@ -14,9 +14,11 @@
         'base', 
         'stock', 
         'stock_sms',
+        'product',
     ],
     'data': [
         'views/stock.xml',
+        'views/stock_picking_views.xml'
     ],
     'assets': {
         'web.assets_frontend': [
