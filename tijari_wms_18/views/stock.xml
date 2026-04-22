@@ -56,7 +56,7 @@
         <field name="model">stock.location</field>
         <field name="inherit_id" ref="stock.view_location_form" />
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='quantity']" position="before">
+            <xpath expr="//field[@name='move_line_ids']" position="before">
                 <label for="unique_code" string="Location Unique Code"/>
                 <div class="o_row">
                     <field name="unique_code" readonly="1" force_save="1" />
