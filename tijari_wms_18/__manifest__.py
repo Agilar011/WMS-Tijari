@@ -14,10 +14,17 @@
         'base', 
         'stock', 
         'stock_sms',
+        'product',
     ],
     'data': [
         'views/stock.xml',
         'views/stock_picking_views.xml',
+        'views/hide_menu.xml',
+        'views/wms_operations_action.xml',
+        'views/wms_operations_menu.xml',
+        'views/stock_report_velocity_views.xml',
+        'views/stock_report_aging_views.xml',
+        'views/stock_report_inherit_inventory.xml',
     ],
     'assets': {
         'web.assets_frontend': [

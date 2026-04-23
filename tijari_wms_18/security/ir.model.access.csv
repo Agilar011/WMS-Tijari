@@ -1,2 +1,6 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_tijari_wms_16_tijari_wms_16,tijari_wms_16.tijari_wms_16,model_tijari_wms_16_tijari_wms_16,base.group_user,1,1,1,1
+access_stock_report_velocity_line_user,access.stock.report.velocity.line.user,model_stock_report_velocity_line,base.group_user,1,0,0,0
+access_stock_report_velocity_generate_user,access.stock.report.velocity.generate.user,model_stock_report_velocity_generate,base.group_user,1,1,1,1
+access_stock_report_aging_line_user,access.stock.report.aging.line.user,model_stock_report_aging_line,base.group_user,1,0,0,0
+access_stock_report_aging_generate_user,access.stock.report.aging.generate.user,model_stock_report_aging_generate,base.group_user,1,1,1,1
