@@ -63,7 +63,7 @@
         <!-- Tambahkan tombol satu saja, berlaku untuk dua mode -->
         <xpath expr="//field[@name='lot_name']" position="after">
             <field name="lot_button" widget="generate_lot_button"
-            invisible="not context.get('show_lots_text')"/>
+            invisible="False"/>
       
         </xpath>
 

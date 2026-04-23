@@ -42,7 +42,7 @@ class StockPicking(models.Model):
                             "Validation blocked.\n\n"
                             "Line:\n"
                             f"- Product: {line.product_id.display_name}\n"
-                            f"- Qty: {line.qty_done or line.product_uom_qty}\n\n"
+                            f"- Qty: {line.quantity or line.product_uom_qty}\n\n"
                             "Status: ❌ NOT MATCH\n\n"
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
@@ -244,7 +244,7 @@ class StockMoveLine(models.Model):
             # - Jika qty_done sudah diisi, pakai itu.
             # - Jika kosong: untuk serial -> 1; untuk lot -> sisa qty di line (product_uom_qty/demand).
             uom_line = line.product_uom_id or line.product_id.uom_id
-            qty_needed_line_uom = line.qty_done
+            qty_needed_line_uom = line.quantity
             if not qty_needed_line_uom:
                 if line.product_id.tracking == 'serial':
                     qty_needed_line_uom = 1.0
@@ -288,7 +288,7 @@ class StockMoveLine(models.Model):
                     # gunakan lot ini
                     updates = {'lot_id': q.lot_id.id, 'lot_name': False}
                     # Kalau qty_done 0, isi qty_done minimal 1 untuk serial, atau min(avail, qty_needed)
-                    if not line.qty_done:
+                    if not line.quantity:
                         if line.product_id.tracking == 'serial':
                             qty_to_write = 1.0
                         else:
@@ -298,7 +298,7 @@ class StockMoveLine(models.Model):
                                 uom_line,
                                 rounding_method='HALF-UP'
                             )
-                        updates['qty_done'] = qty_to_write
+                        updates['quantity'] = qty_to_write
                     line.write(updates)
                     chosen = True
                     break
@@ -310,9 +310,9 @@ class StockMoveLine(models.Model):
                     package_id=q.package_id or None, owner_id=q.owner_id or None, strict=True) > 0), None)
                 if partial:
                     line.write({'lot_id': partial.lot_id.id, 'lot_name': False})
-                    # qty_done bila kosong isi seminimal mungkin agar user sadar (1 untuk serial, else 0)
-                    if not line.qty_done and line.product_id.tracking == 'serial':
-                        line.qty_done = 1.0
+                    # quantity bila kosong isi seminimal mungkin agar user sadar (1 untuk serial, else 0)
+                    if not line.quantity and line.product_id.tracking == 'serial':
+                        line.quantity = 1.0
                 else:
                     raise UserError(_("No available lots found for product %s in %s.") % (line.product_id.display_name, line.location_id.display_name))
 
