@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <!-- 
+  * HINT
+  - MENU INI AKAN ADA DI INVENTORY SEBAGAI WMS OPERATIONS
+
+  - method_action_picking_tree_incoming: INI ACTIONS UNTUK MENU RECEIPTS JIKA MENGACU KE INVENTORY OPERATIONS
+  - method_action_picking_tree_outgoing: INI ACTIONS UNTUK MENU DELIVERIES JIKA MENGACU KE INVENTORY OPERATIONS
+  - method_action_picking_tree_internal: INI ACTIONS UNTUK MENU INTERNAL JIKA MENGACU KE INVENTORY OPERATIONS
+  
+  -->
+
+  <!-- HEADERS -->
+  <menuitem id="wms_operations_menu" 
+            name="WMS Operations"
+            parent="stock.menu_stock_root" 
+            sequence="11"/>
+
+
+  <!-- INBOUND HEADERS -->
+  <menuitem id="wms_operations_menu_inbound"
+            name="Inbound"
+            parent="wms_operations_menu"
+            sequence="10"/>
+
+
+  <!-- INBOUND SUB MENUS -->
+  <menuitem id="wms_operations_inbound_purchase_receipts" 
+            name="Purchase Receipts"
+            parent="wms_operations_menu_inbound" 
+            sequence="1" 
+            action="action_wms_operations_purchase_receipts"/>
+
+  <menuitem id="wms_operations_inbound_sotr_receipts" 
+            name="SOTR Receipts (Sales Orders Transfer Receipts)"
+            parent="wms_operations_menu_inbound" 
+            sequence="2" 
+            action="action_wms_operations_sotr_receipts"/>
+
+  <menuitem id="wms_operations_inbound_receipts_type_change" 
+            name="Receipts Type Change Item"
+            parent="wms_operations_menu_inbound" 
+            sequence="3" 
+            action="action_wms_operations_receipts_type_change"/>
+
+  <menuitem id="wms_operations_inbound_inventory_receive" 
+            name="Inventory Receive"
+            parent="wms_operations_menu_inbound" 
+            sequence="4" 
+            action="action_wms_operations_inventory_receive"/>
+
+  <menuitem id="wms_operations_inbound_shipment_so_return" 
+            name="Shipment SO Return"
+            parent="wms_operations_menu_inbound" 
+            sequence="5" 
+            action="stock.method_action_picking_tree_incoming"/>
+
+
+  <!-- OUTBOUND HEADERS -->
+  <menuitem id="wms_operations_menu_outbound"
+            name="Outbound"
+            parent="wms_operations_menu"
+            sequence="20"/>
+
+
+  <!-- OUTBOUND SUB MENUS -->
+  <menuitem id="wms_operations_outbound_sale_orders_shipment"
+            name="Sale Orders Shipment"
+            parent="wms_operations_menu_outbound" 
+            sequence="1" 
+            action="stock.method_action_picking_tree_outgoing"/>
+
+  <menuitem id="wms_operations_outbound_transfer_shipment"
+            name="Transfer Shipment"
+            parent="wms_operations_menu_outbound" 
+            sequence="2" 
+            action="stock.method_action_picking_tree_outgoing"/>
+
+  <menuitem id="wms_operations_outbound_issue_type_change_items"
+            name="Issue Type Change Items"
+            parent="wms_operations_menu_outbound" 
+            sequence="2" 
+            action="action_wms_operations_issue_type_change_items"/>
+
+  <menuitem id="wms_operations_outbound_inventory_issue"
+            name="Inventory Issue"
+            parent="wms_operations_menu_outbound" 
+            sequence="3" 
+            action="action_wms_operations_inventory_issue"/>
+
+  <menuitem id="wms_operations_outbound_po_return"
+            name="Issue Type PO Return"
+            parent="wms_operations_menu_outbound" 
+            sequence="4" 
+            action="stock.method_action_picking_tree_outgoing"/>
+
+  <menuitem id="wms_operations_outbound_transfer_pinjaman_1_step"
+            name="Transfer Pinjaman (1 Step)"
+            parent="wms_operations_menu_outbound" 
+            sequence="6" 
+            action="stock.method_action_picking_tree_internal"/>
+
+  <menuitem id="wms_operations_outbound_transfer_pinjaman_2_step"
+            name="Transfer Pinjaman (2 Step)"
+            parent="wms_operations_menu_outbound" 
+            sequence="7" 
+            action="stock.method_action_picking_tree_internal"/>
+
+</odoo>
