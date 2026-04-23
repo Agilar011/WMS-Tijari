@@ -1,136 +1,85 @@
 <odoo>
-    <!-- Inherit form picking: tambah kolom konfirmasi & status matching di operasi -->
-
-    <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_button2" model="ir.ui.view">
-      <field name="name">stock.move.operations.nosuggest.form.tjr.fifo.button2</field>
-      <field name="model">stock.move.line</field>
-      <field name="inherit_id" ref="stock.view_stock_move_line_detailed_operation_tree"/>
-      <field name="arch" type="xml">
-
-        <xpath expr="//field[@name='lot_id']" position="after">
-            <field name="operation_category" invisible="1"/>
-                <!-- Kolom konfirmasi lokasi -->
-            <field name="confirmation_location_code"
-                       string="Confirm Location Code"
-                       invisible="operation_category not in ['put', 'delivery']"
-                       password="True"/>
-
-                <!-- Kolom konfirmasi lot -->
-                <field name="confirmation_lot_code"
-                       string="Confirm Lot Code"
-                       invisible="operation_category not in ['put', 'delivery']"
-                       password="True"/>
-
-                <!-- Status matching (disembunyikan) -->
-                <field name="matching" invisible="1"/>
-
-                <!-- HTML indicator MATCH / NOT MATCH -->
-                <field name="matching_html"
-                       widget="html"
-                       string="Status"
-                       readonly="1"
-                       invisible="matching == False"/>
-        </xpath>
-
-      </field>
+    <!-- View untuk Detailed Operations -->
+    <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_detailed" model="ir.ui.view">
+        <field name="name">stock.move.line.detailed.list.tjr.fifo</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_stock_move_line_detailed_operation_tree"/>
+        <field name="arch" type="xml">
+            <!-- XPath yang lebih spesifik menggunakan atribut name jika tersedia, atau field -->
+            <xpath expr="//field[@name='lot_id']" position="after">
+                <field name="operation_category" column_invisible="True"/>
+                <field name="confirmation_location_code" string="Confirm Location Code" 
+                       invisible="operation_category not in ['put', 'delivery']" password="True"/>
+                <field name="confirmation_lot_code" string="Confirm Lot Code" 
+                       invisible="operation_category not in ['put', 'delivery']" password="True"/>
+                <field name="matching" column_invisible="True"/>
+                <field name="matching_html" widget="html" string="Status" readonly="1" 
+                       invisible="not matching"/>
+            </xpath>
+        </field>
     </record>
 
-    <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_button" model="ir.ui.view">
-      <field name="name">stock.move.operations.nosuggest.form.tjr.fifo.button</field>
-      <field name="model">stock.move.line</field>
-      <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
-      <field name="arch" type="xml">
-
-        <!-- Pastikan lot_name tampil (untuk receipt) -->
-        <!-- <xpath expr="//field[@name='lot_id']" position="after">
-          <field name="lot_name"
-                 readonly="1"
-                 placeholder="Lot/Serial"
-                 invisible="not context.get('show_lots_text')"/>
-        </xpath> -->
-
-        <!-- Jadikan lot_id readonly selalu -->
-        <xpath expr="//field[@name='lot_id']" position="attributes">
-          <attribute name="readonly">1</attribute>
-          <attribute name="force_save">1</attribute>
-        </xpath>
-
-        <xpath expr="//field[@name='lot_name']" position="attributes">
-          <attribute name="readonly">1</attribute>
-          <attribute name="force_save">1</attribute>
-        </xpath>
-
-        <!-- Tambahkan tombol satu saja, berlaku untuk dua mode -->
-        <xpath expr="//field[@name='lot_name']" position="after">
-            <field name="lot_button" widget="generate_lot_button"
-            invisible="not context.get('show_lots_text')"/>
-      
-        </xpath>
-
-        <xpath expr="//field[@name='lot_id']" position="after">
-            <field name="operation_category" invisible="1"/>
-                <!-- Kolom konfirmasi lokasi -->
-            <field name="confirmation_location_code"
-                       string="Confirm Location Code"
-                       invisible="operation_category not in ['put', 'delivery']"
-                       password="True"/>
-
-                <!-- Kolom konfirmasi lot -->
-                <field name="confirmation_lot_code"
-                       string="Confirm Lot Code"
-                       invisible="operation_category not in ['put', 'delivery']"
-                       password="True"/>
-
-                <!-- Status matching (disembunyikan) -->
-                <field name="matching" invisible="1"/>
-
-                <!-- HTML indicator MATCH / NOT MATCH -->
-                <field name="matching_html"
-                       widget="html"
-                       string="Status"
-                       readonly="1"
-                       invisible="matching == False"/>
-        </xpath>
-
-      </field>
+    <!-- View untuk Operations normal -->
+    <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_standard" model="ir.ui.view">
+        <field name="name">stock.move.line.list.tjr.fifo</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='lot_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+                <attribute name="force_save">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='lot_name']" position="attributes">
+                <attribute name="readonly">1</attribute>
+                <attribute name="force_save">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='lot_name']" position="after">
+                <field name="lot_button" widget="generate_lot_button" 
+                       invisible="0"/>
+            </xpath>
+            <!-- <xpath expr="//field[@name='lot_id']" position="after">
+                <field name="operation_category" column_invisible="True"/>
+                <field name="confirmation_location_code" password="True" 
+                       invisible="operation_category not in ['put', 'delivery']"/>
+                <field name="confirmation_lot_code" password="True" 
+                       invisible="operation_category not in ['put', 'delivery']"/>
+                <field name="matching" column_invisible="True"/>
+                <field name="matching_html" widget="html" readonly="1" 
+                       invisible="not matching"/>
+            </xpath> -->
+        </field>
     </record>
 
-    <record id="view_location_form_wms_matching" model="ir.ui.view">
+    <!-- Location Form -->
+    <record id="view_location_form_wms_matching_v18" model="ir.ui.view">
         <field name="name">stock.location.form.wms.unique.code</field>
         <field name="model">stock.location</field>
         <field name="inherit_id" ref="stock.view_location_form" />
         <field name="arch" type="xml">
-
             <xpath expr="//field[@name='usage']" position="before">
-                    <label for="unique_code" string="Location Unique Code"/>
-                    <div class="o_row">
-                      <field name="unique_code" readonly="1" force_save="1" />
-                      <button name="generate_unique_code"
-                          type="object"
-                          string="Generate Barcode Location"
-                          class="btn-link mb-1 px-0"
-                          icon="fa-barcode"
-                          invisible="unique_code"/>
-                    </div>
-                    
-                    <field name="sequence" />
+                <label for="unique_code" string="Location Unique Code"/>
+                <div class="o_row">
+                    <field name="unique_code" readonly="1" force_save="1" />
+                    <button name="generate_unique_code" type="object" string="Generate" 
+                            class="btn-link" icon="fa-barcode" invisible="unique_code"/>
+                </div>
+                <field name="sequence" />
             </xpath>
-
         </field>
     </record>
 
-    <record id="view_picking_type_form_wms_operation_category" model="ir.ui.view">
+    <!-- Picking Type Form -->
+    <record id="view_picking_type_form_wms_category_v18" model="ir.ui.view">
         <field name="name">stock.picking.type.form.wms.operation.category</field>
         <field name="model">stock.picking.type</field>
         <field name="inherit_id" ref="stock.view_picking_type_form" />
         <field name="arch" type="xml">
-
             <xpath expr="//field[@name='code']" position="after">
                 <field name="operation_category" required="1"/>
             </xpath>
-
         </field>
     </record>
+    
 
     <record id="view_picking_form_inherit_acumatica_receipt" model="ir.ui.view">
         <field name="name">stock.picking.form.acumatica.receipt</field>
