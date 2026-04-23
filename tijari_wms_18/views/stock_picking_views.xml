@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_picking_form_tjr_acumatica_v18_REL_FIX" model="ir.ui.view">
+        <field name="name">stock.picking.form.tjr.acumatica</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <!-- Gunakan page name='extra' (Extra Info) agar tidak salah alamat ke Search View -->
+            <xpath expr="//page[@name='extra']" position="after">
+                <page string="Acumatica" name="acumatica_tab">
+                    <group>
+                        <group name="acumatica_left">
+                            <field name="adt_receipt_nbr"/>
+                            <field name="adt_vendor_code"/>
+                            <field name="adt_partner_ref"/>
+                            <field name="adt_branch_warehouse"/>
+                            <field name="adt_actual_qty"/>
+                            <field name="adt_is_hold"/>
+                            <field name="adt_inventory_ref"/>
+                        </group>
+                        <group name="acumatica_right">
+                            <field name="adt_acumatica_write_date"/>
+                            <field name="adt_header_location_code"/>
+                            <field name="adt_post_period"/>
+                            <field name="adt_status"/>
+                            <field name="adt_total_qty"/>
+                            <field name="adt_receipt_type"/>
+                            <field name="adt_trans_type"/>
+                            <field name="adt_warehouse_code"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
