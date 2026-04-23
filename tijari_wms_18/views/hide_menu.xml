@@ -2,19 +2,19 @@
 <odoo>
 
   <record id="sale.sale_menu_root" model="ir.ui.menu">
-      <field name="active" eval="False"/>
+      <field name="active" eval="True"/>
   </record>
 
   <record id="purchase.menu_purchase_root" model="ir.ui.menu">
-      <field name="active" eval="False"/>
+      <field name="active" eval="True"/>
   </record>
 
   <record id="account.menu_finance" model="ir.ui.menu">
-      <field name="active" eval="False"/>
+      <field name="active" eval="True"/>
   </record>
 
   <record id="utm.menu_link_tracker_root" model="ir.ui.menu">
-      <field name="active" eval="False"/>
+      <field name="active" eval="True"/>
   </record>
 
 </odoo>
