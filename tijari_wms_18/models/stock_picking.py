@@ -24,7 +24,5 @@ class StockPicking(models.Model):
     adt_external_ref = fields.Char(string='External Ref (Acumatica)')
     adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
-    adt_type = fields.Selection([
-        ('receipt', 'Receipt'),
-        ('other', 'Other'),
-    ], string='Source Type', default='receipt')
+    adt_type = fields.Char(string='Type (Acumatica)')
+    

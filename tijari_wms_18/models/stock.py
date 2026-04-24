@@ -194,7 +194,7 @@ class StockMoveLine(models.Model):
 
     @api.onchange('lot_button')
     def _onchange_lot_button(self):
-        print(F">>> Self value : {self}") # Cek di terminal Odoo
+        # print(F">>> Self value : {self}") # Cek di terminal Odoo
         print(">>> TOMBOL GENERATE LOT DIKLIK!") # Cek di terminal Odoo
         for line in self:
             if line.lot_button:
@@ -280,7 +280,7 @@ class StockMoveLine(models.Model):
         Fields lot_id & lot_name dibuat readonly di view; perubahan via tombol ini.
         """
         print(">>> action_generate_or_pick_lot called!") # Cek di terminal Odoo
-        print(self.env.context) # Cek context di terminal Odoo
+        # print(self.env.context) # Cek context di terminal Odoo
 
         print(f">>> Warhouse des line: {self.location_dest_id.location_id.name}") # Cek di terminal Odoo
         # kode_supplier = self.picking_id.partner_id.company_registry or (self.picking_id.partner_id.ref if self.picking_id.partner_id and self.picking_id.partner_id.ref else False)
@@ -298,6 +298,8 @@ class StockMoveLine(models.Model):
                 # continue
 
             # Code generate lot untuk incoming
+
+            print(f">>> Picking Type Code: {line.picking_id.picking_type_id.code}") # Cek di terminal Odoo
 
             is_incoming = self.env.context.get('default_picking_type_code') == 'incoming' or \
                           line.picking_id.picking_type_code == 'incoming' or \
@@ -417,13 +419,13 @@ class StockMoveLine(models.Model):
             for q in quants:
                 # hitung available di lokasi quant (strict ke lokasi quant)
                 avail = Quant._get_available_quantity(
-                    product=line.product_id,
-                    location=q.location_id,
+                    line.product_id,
+                    q.location_id,
                     lot_id=q.lot_id,
                     package_id=q.package_id or None,
                     owner_id=q.owner_id or None,
                     strict=True,
-                )
+                )                
                 if avail <= 0:
                     continue
 
@@ -436,6 +438,7 @@ class StockMoveLine(models.Model):
 
                     # Kalau qty_done 0, isi qty_done minimal 1 untuk serial, atau min(avail, qty_needed)
                     if not line.quantity:
+                        print(f">>> Line quantity before assignment: {line.quantity}") # Cek di terminal Odoo
                         print(f">>> Calculating quantity to assign for line {line.id}") # Cek di terminal Odoo
                         if line.product_id.tracking == 'serial':
                             # qty_to_write = 1.0

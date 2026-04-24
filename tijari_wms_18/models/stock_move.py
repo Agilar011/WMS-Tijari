@@ -23,3 +23,4 @@ class StockMove(models.Model):
     adt_warehouse_dest_code = fields.Char(string='Warehouse Dest (Acumatica)')
     adt_location_dest_code = fields.Char(string='Location Dest (Acumatica)')
     adt_line_note = fields.Text(string='Line Note (Acumatica)')
+    adt_type = fields.Char(string='Type (Acumatica)')
