@@ -1,0 +1,28 @@
+<odoo>
+    <record id="view_partner_form_inherit_acumatica" model="ir.ui.view">
+        <field name="name">res.partner.form.acumatica</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            
+            <xpath expr="//sheet/notebook" position="inside">
+                <page string="Acumatica">
+                    <group>
+                        <field name="adt_b_account_id"/>
+                        <field name="adt_customer_class"/>
+                        <field name="adt_status"/>
+                        <field name="adt_currency_id"/>
+                        <field name="adt_warehouse_id"/>
+                        <field name="adt_shipping_zone_id"/>
+                        <field name="adt_fob_point"/>
+                        <field name="adt_created_datetime"/>
+                        <field name="adt_last_modified_datetime"/>
+                        <field name="adt_note_id"/>
+                        <field name="adt_note"/>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>

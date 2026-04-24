@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem id="menu_acumatica_vendor_root"
+              name="Acumatica Vendor Import"
+              sequence="83"
+              web_icon="acumatica_vendor_import,static/description/icon.png"/>
+
+    <menuitem id="menu_acumatica_vendor_import"
+              name="Import Data"
+              parent="menu_acumatica_vendor_root"
+              sequence="10"/>
+
+    <menuitem id="menu_import_vendor_wizard"
+              name="Import Vendor"
+              parent="menu_acumatica_vendor_import"
+              action="action_import_vendor_wizard"
+              sequence="10"/>
+
+    <menuitem id="menu_acumatica_vendor_line"
+              name="Data Vendor Staging"
+              parent="menu_acumatica_vendor_import"
+              action="action_acumatica_vendor_line"
+              sequence="20"/>
+
+    <menuitem id="menu_acumatica_vendor_config_root"
+              name="Konfigurasi"
+              parent="menu_acumatica_vendor_root"
+              sequence="90"/>
+
+    <menuitem id="menu_acumatica_vendor_config"
+              name="API Config"
+              parent="menu_acumatica_vendor_config_root"
+              action="action_acumatica_vendor_config"
+              sequence="10"/>
+
+</odoo>
