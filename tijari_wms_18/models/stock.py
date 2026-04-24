@@ -313,6 +313,10 @@ class StockMoveLine(models.Model):
 
             if is_incoming:
                 print(">>> Kondisi Terpenuhi: Dokumen adalah RECEIPT")
+
+                # logic replace destination location dan  owner
+
+                
                 
                 # 1. Ambil KODE SUPPLIER
                 # Mengambil dari partner_id dokumen (ADT Vendor Code jika ada, jika tidak pakai Partner ID)
