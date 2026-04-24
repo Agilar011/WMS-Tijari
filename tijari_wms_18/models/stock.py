@@ -211,6 +211,8 @@ class StockMoveLine(models.Model):
                     line.lot_name = vals['lot_name']
                 line.lot_button = False
 
+
+
     def _compute_lot_button(self):
         # field dummy, tidak dipakai
         for rec in self:
@@ -288,6 +290,8 @@ class StockMoveLine(models.Model):
 
         Quant = self.env['stock.quant']
         for line in self:
+            print(f">>> Starting processing for line {line.location_dest_id.location_id.name}") # Cek di terminal Odoo
+            print(f">>> Partner ID: {line.picking_id.partner_id.id if line.picking_id.partner_id else 'No Partner'}") # Cek di terminal Odoo
             print(f">>> Processing line {line.id} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
             print(f">>> Tracking Product: {line.product_id.default_code}") # Cek di terminal Odoo
             print(f">>> Tracking: {line.product_id.tracking}") # Cek di terminal Odoo
@@ -309,6 +313,10 @@ class StockMoveLine(models.Model):
 
             if is_incoming:
                 print(">>> Kondisi Terpenuhi: Dokumen adalah RECEIPT")
+
+                # logic replace destination location dan  owner
+
+                
                 
                 # 1. Ambil KODE SUPPLIER
                 # Mengambil dari partner_id dokumen (ADT Vendor Code jika ada, jika tidak pakai Partner ID)
