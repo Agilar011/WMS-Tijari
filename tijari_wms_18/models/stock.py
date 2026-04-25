@@ -132,6 +132,7 @@ class StockMoveLine(models.Model):
     def _compute_matching(self):
         print(">>> Computing matching status...") # Cek di terminal Odoo
         for line in self:
+            print(f">>> Evaluating line {line.id} - Product: {line}") # Cek di terminal Odoo
             matching = ''
 
             picking_type = line.picking_id.picking_type_id
@@ -194,7 +195,6 @@ class StockMoveLine(models.Model):
 
     @api.onchange('lot_button')
     def _onchange_lot_button(self):
-        # print(F">>> Self value : {self}") # Cek di terminal Odoo
         print(">>> TOMBOL GENERATE LOT DIKLIK!") # Cek di terminal Odoo
         for line in self:
             if line.lot_button:
@@ -205,10 +205,24 @@ class StockMoveLine(models.Model):
                 print(f">>> Values returned from action_generate_or_pick_lot: {vals}") # Cek di terminal Odoo
                 print(f">>> Line confirmation_location_code after generate/pick: {line.confirmation_location_code}") # Cek di terminal Odoo
                 print(f">>> Line confirmation_lot_code after generate/pick: {line.confirmation_lot_code}") # Cek di terminal Odoo
+                print(f">>> Line operation_category: {line.operation_category}") # Cek di terminal Odoo
+                print(f">>> Lot ID assigned: {line.lot_id}") # Cek di terminal Odoo
+                print(f">>> Lot Name assigned: {line.lot_name}") # Cek di terminal Odoo
+                print(f">>> Confirmation Location Code assigned: {line.confirmation_location_code}") # Cek di terminal Odoo
+                print(f">>> Confirmation Lot Code assigned: {line.confirmation_lot_code}") # Cek di terminal Odoo
+
                 if vals.get('lot_id'):
                     line.lot_id = vals['lot_id']
+                    print(f">>> Lot ID assigned: {line.lot_id}") # Cek di terminal Odoo
                 if vals.get('lot_name'):
                     line.lot_name = vals['lot_name']
+                    print(f">>> Lot Name assigned: {line.lot_name}") # Cek di terminal Odoo
+                if vals.get('confirmation_location_code'):
+                    line.confirmation_location_code = vals['confirmation_location_code']
+                    print(f">>> Confirmation Location Code assigned: {line.confirmation_location_code}") # Cek di terminal Odoo
+                if vals.get('confirmation_lot_code'):
+                    line.confirmation_lot_code = vals['confirmation_lot_code']
+                    print(f">>> Confirmation Lot Code assigned: {line.confirmation_lot_code}") # Cek di terminal Odoo
                 line.lot_button = False
 
 
@@ -315,8 +329,7 @@ class StockMoveLine(models.Model):
                 print(">>> Kondisi Terpenuhi: Dokumen adalah RECEIPT")
 
                 # logic replace destination location dan  owner
-
-                
+              
                 
                 # 1. Ambil KODE SUPPLIER
                 # Mengambil dari partner_id dokumen (ADT Vendor Code jika ada, jika tidak pakai Partner ID)
