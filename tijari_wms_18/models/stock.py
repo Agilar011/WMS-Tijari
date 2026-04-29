@@ -199,7 +199,18 @@ class StockMoveLine(models.Model):
         for line in self:
             if line.lot_button:
                 vals = line.action_generate_or_pick_lot()
-                print(f">>> Values to update line {line.id}: {vals}") # Cek di terminal Odoo
+                print(f">>> Values returned from action_generate_or_pick_lot: {vals}") # Cek di terminal Odoo
+                print(f">>> Line confirmation_location_code after generate/pick: {line.confirmation_location_code}") # Cek di terminal Odoo
+                print(f">>> Line confirmation_lot_code after generate/pick: {line.confirmation_lot_code}") # Cek di terminal Odoo
+                print(f">>> Line operation_category: {line.operation_category}") # Cek di terminal Odoo
+                print(f">>> Lot ID assigned: {line.lot_id}") # Cek di terminal Odoo
+                print(f">>> Lot Name assigned: {line.lot_name}") # Cek di terminal Odoo
+                print(f">>> Confirmation Location Code assigned: {line.confirmation_location_code}") # Cek di terminal Odoo
+                print(f">>> Confirmation Lot Code assigned: {line.confirmation_lot_code}") # Cek di terminal Odoo
+
+                if vals.get('lot_id'):
+                    line.lot_id = vals['lot_id']
+                    print(f">>> Lot ID assigned: {line.lot_id}") # Cek di terminal Odoo
                 if vals.get('lot_name'):
                     line.lot_name = vals['lot_name']
                     print(f">>> Lot Name assigned: {line.lot_name}") # Cek di terminal Odoo
