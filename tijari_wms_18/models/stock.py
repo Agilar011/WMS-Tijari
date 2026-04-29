@@ -47,6 +47,12 @@ class StockPicking(models.Model):
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
 
     def button_validate(self):
+        for rec in self:
+            for line in rec.move_line_ids:
+                if not line.lot_name:
+                    raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
+            # if not rec.lot_name:
+            #     raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
         for picking in self:
             operation_category = picking.picking_type_id.operation_category
 
@@ -353,8 +359,10 @@ class StockMoveLine(models.Model):
 
                 # 4. Ambil SEQUENCE (Berdasarkan jumlah lot yang dibuat hari ini)
                 # Mencari lot dengan awalan yang sama untuk menghitung urutan
-                prefix = f"{kode_supplier}-{tanggal_masuk}-{kode_warehouse}"
-                
+                kode_product = line.product_id.default_code or f"PROD{line.product_id.id}"
+                source_document = line.picking_id.origin or f"PICK{line.picking_id.id}"
+                prefix = f"{source_document}-{tanggal_masuk}-{kode_product}-"
+
                 lot_count = self.env['stock.lot'].search_count([
                     ('name', '=like', f"{prefix}%"),
                     ('product_id', '=', line.product_id.id)
