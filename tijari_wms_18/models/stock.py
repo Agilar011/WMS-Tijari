@@ -198,9 +198,6 @@ class StockMoveLine(models.Model):
         print(">>> TOMBOL GENERATE LOT DIKLIK!") # Cek di terminal Odoo
         for line in self:
             if line.lot_button:
-                # Jalankan logika generate/pick lot
-                print(f">>> Line confirmation_location_code before generate/pick: {line.confirmation_location_code}") # Cek di terminal Odoo
-                print(f">>> Line confirmation_lot_code before generate/pick: {line.confirmation_lot_code}") # Cek di terminal Odoo
                 vals = line.action_generate_or_pick_lot()
                 print(f">>> Values returned from action_generate_or_pick_lot: {vals}") # Cek di terminal Odoo
                 print(f">>> Line confirmation_location_code after generate/pick: {line.confirmation_location_code}") # Cek di terminal Odoo
@@ -236,8 +233,10 @@ class StockMoveLine(models.Model):
     def _tjr_is_incoming_tracked(self):
         print(f">>> Checking if line {self.id} is incoming tracked...") # Cek di terminal Odoo
         self.ensure_one()
+        print(f">>> Line {self.id} - Product: {self.product_id.display_name} - Lot id {self.lot_id.name if self.lot_id else 'N/A'}") # Cek di terminal Odoo
         # Cek tipe picking dari berbagai sumber (picking_id atau dari context)
         picking_type = self.picking_id.picking_type_id or self.move_id.picking_type_id
+        print(f">>> Line {self.id} - Picking Type: {picking_type.name if picking_type else 'N/A'}") # Cek di terminal Odoo
         is_incoming = picking_type.code == 'incoming' or self._context.get('default_picking_type_code') == 'incoming'
         
         return (
@@ -247,7 +246,6 @@ class StockMoveLine(models.Model):
         )
 
     # def _tjr_is_incoming_tracked(self):
-    #     print(f">>> Checking if line {self.id} is incoming tracked...") # Cek di terminal Odoo
     #     self.ensure_one()
     #     return (
     #         self.picking_id
@@ -382,11 +380,24 @@ class StockMoveLine(models.Model):
                 print(f">>> Line Confirmation Lot Code after update: {line.confirmation_lot_code}")
                 
                 print(f">>> SUCCESS: Generated lot name -> {new_lot_name}")
+                lot_data = {
+                    'name': line.lot_name,               # Nomor Lot
+                    'product_id': line.product_id.id,              # ID Produk
+                    'product_uom_id': line.product_id.uom_id.id,           # ID Satuan Unit
+                    'company_id': False,           # [NULL] di Odoo diwakili False
+                    'location_id': line.location_id.id,              # Lokasi awal/default (opsional tergantung versi)
+                    'ref': False,                  # Internal Reference [NULL]
+                    'note': False,                 # Catatan [NULL]
+                }                    
+                new_lot = line.env['stock.lot'].create(lot_data)
+                line.lot_id = line['lot_id'] = new_lot.id
+                print(f">>> Created new lot with ID: {new_lot.id} and Name: {new_lot.name}") # Cek di terminal Odoo
+                line.update({
+                    'lot_id': new_lot.id,
+                })
+                print(f">>> Lot ID assigned: {line.lot_id}") # Cek di terminal Odoo
+
                 continue
-
-
-
-
 
             # === Incoming: generate lot_name ===
             if line._tjr_is_incoming_tracked():
@@ -411,7 +422,10 @@ class StockMoveLine(models.Model):
             # - Jika kosong: untuk serial -> 1; untuk lot -> sisa qty di line (product_uom_qty/demand).
             uom_line = line.product_uom_id or line.product_id.uom_id
             qty_needed_line_uom = line.quantity
+            print(f">>> Initial quantity needed (line UoM): {qty_needed_line_uom}") # Cek di terminal Odoo
+            # print(f">>> Product Tracking: {line.product_id.tracking}") # Cek di terminal Odoo   
             if not qty_needed_line_uom:
+                print(">>> Quantity needed is zero, calculating fallback...") # Cek di terminal Odoo
                 if line.product_id.tracking == 'serial':
                     qty_needed_line_uom = 1.0
                 else:
@@ -421,6 +435,7 @@ class StockMoveLine(models.Model):
 
             # konversi ke UoM produk (base) untuk hitung available quant
             qty_needed_base = uom_line._compute_quantity(qty_needed_line_uom, line.product_id.uom_id, rounding_method='HALF-UP')
+            print(f">>> Quantity needed (product UoM): {qty_needed_base}") # Cek di terminal Odoo
 
             # Ambil quants dengan lot yang punya stok available > 0 di lokasi sumber (FIFO)
             domain = [
