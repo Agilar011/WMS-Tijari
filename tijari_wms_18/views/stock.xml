@@ -39,10 +39,11 @@
             </xpath>
             <xpath expr="//field[@name='lot_id']" position="after">
                 <field name="operation_category" column_invisible="True"/>
+                <field name="lot_name" readonly="1"/>
                 <field name="confirmation_location_code" password="True" 
-                       invisible="operation_category not in ['put', 'delivery', 'receive']"/>
+                       invisible="operation_category not in ['put', 'delivery']"/>
                 <field name="confirmation_lot_code" password="True" 
-                       invisible="operation_category not in ['put', 'delivery', 'receive']"/>
+                       invisible="operation_category not in ['put', 'delivery']"/>
                 <field name="matching" column_invisible="True"/>
                 <field name="matching_html" widget="html" readonly="1" 
                        invisible="not matching"/>
