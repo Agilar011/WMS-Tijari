@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ══════════════════════════════════════════════ -->
+    <!-- MASTER: acumatica.customer.location            -->
+    <!-- ══════════════════════════════════════════════ -->
+
+    <record id="view_acumatica_customer_location_search" model="ir.ui.view">
+        <field name="name">acumatica.customer.location.search</field>
+        <field name="model">acumatica.customer.location</field>
+        <field name="arch" type="xml">
+            <search string="Cari Customer Location">
+                <field name="name"           string="Location Name"/>
+                <field name="adt_location_id" string="LocationID"/>
+                <field name="partner_id"     string="Customer"/>
+                <field name="warehouse_id"   string="Warehouse"/>
+                <filter string="Active"      name="active"
+                        domain="[('adt_is_active','=',True)]"/>
+                <filter string="Default"     name="default"
+                        domain="[('adt_default','=',True)]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Customer"  name="group_partner"
+                            context="{'group_by': 'partner_id'}"/>
+                    <filter string="Warehouse" name="group_warehouse"
+                            context="{'group_by': 'warehouse_id'}"/>
+                    <filter string="Status"    name="group_status"
+                            context="{'group_by': 'adt_status'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_acumatica_customer_location_list" model="ir.ui.view">
+        <field name="name">acumatica.customer.location.list</field>
+        <field name="model">acumatica.customer.location</field>
+        <field name="arch" type="xml">
+            <list string="Customer Location">
+                <field name="adt_location_id" string="LocationID"/>
+                <field name="name"            string="Location Name"/>
+                <field name="partner_id"      string="Customer"/>
+                <field name="warehouse_id"    string="Warehouse"      optional="show"/>
+                <field name="adt_status"      string="Status"
+                       decoration-success="adt_status == 'Active'"
+                       decoration-muted="adt_status == 'Inactive'"/>
+                <field name="adt_default"     string="Default"        widget="boolean" optional="show"/>
+                <field name="adt_is_active"   string="Active"         widget="boolean" optional="show"/>
+                <field name="city"            string="City"           optional="show"/>
+                <field name="adt_shipping_zone" string="Shipping Zone" optional="show"/>
+                <field name="adt_fob_point"   string="FOB Point"      optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_acumatica_customer_location_form" model="ir.ui.view">
+        <field name="name">acumatica.customer.location.form</field>
+        <field name="model">acumatica.customer.location</field>
+        <field name="arch" type="xml">
+            <form string="Customer Location">
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="display_name_full" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group string="Identitas">
+                            <field name="adt_location_id"/>
+                            <field name="name"/>
+                            <field name="partner_id"/>
+                            <field name="warehouse_id"/>
+                            <field name="adt_status"/>
+                            <field name="adt_is_active"/>
+                            <field name="adt_default"/>
+                        </group>
+                        <group string="Shipping">
+                            <field name="adt_fob_point"/>
+                            <field name="adt_shipping_branch"/>
+                            <field name="adt_shipping_zone"/>
+                            <field name="adt_ship_via"/>
+                            <field name="adt_lead_time_days"/>
+                            <field name="adt_order_priority"/>
+                        </group>
+                    </group>
+                    <group string="Alamat">
+                        <group>
+                            <field name="street"/>
+                            <field name="city"/>
+                            <field name="zip"/>
+                        </group>
+                        <group>
+                            <field name="adt_state_code"/>
+                            <field name="adt_country_code"/>
+                        </group>
+                    </group>
+                    <group string="Info Lainnya">
+                        <group>
+                            <field name="adt_usage_type"/>
+                            <field name="adt_ext_ref_number"/>
+                            <field name="adt_address_override"/>
+                            <field name="adt_fed_ex_ground_collect"/>
+                            <field name="adt_insurance"/>
+                        </group>
+                        <group>
+                            <field name="adt_external_id"/>
+                            <field name="adt_note_id"/>
+                            <field name="adt_created_datetime"/>
+                            <field name="adt_last_modified_datetime"/>
+                        </group>
+                    </group>
+                    <group string="Note">
+                        <field name="adt_note" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_customer_location" model="ir.actions.act_window">
+        <field name="name">Customer Location</field>
+        <field name="res_model">acumatica.customer.location</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_acumatica_customer_location_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Belum ada data. Gunakan menu "Import Customer Location" untuk menarik data dari Acumatica.
+            </p>
+        </field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════ -->
+    <!-- STAGING: acumatica.customer.location.line      -->
+    <!-- ══════════════════════════════════════════════ -->
+
+    <record id="view_acumatica_customer_location_line_search" model="ir.ui.view">
+        <field name="name">acumatica.customer.location.line.search</field>
+        <field name="model">acumatica.customer.location.line</field>
+        <field name="arch" type="xml">
+            <search string="Cari Staging Customer Location">
+                <field name="customer"              string="Customer"/>
+                <field name="location_id_acumatica" string="LocationID"/>
+                <field name="location_name"         string="Location Name"/>
+                <filter string="Belum Diimport" name="pending"
+                        domain="[('import_state','=','pending')]"/>
+                <filter string="Sudah Dibuat"   name="imported"
+                        domain="[('import_state','=','imported')]"/>
+                <filter string="Diupdate"       name="updated"
+                        domain="[('import_state','=','updated')]"/>
+                <filter string="Error"          name="error"
+                        domain="[('import_state','=','error')]"/>
+                <separator/>
+                <filter string="Dipilih"        name="selected"
+                        domain="[('selected','=',True)]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Status Import" name="group_state"
+                            context="{'group_by': 'import_state'}"/>
+                    <filter string="Customer"      name="group_customer"
+                            context="{'group_by': 'customer'}"/>
+                    <filter string="Warehouse"     name="group_warehouse"
+                            context="{'group_by': 'warehouse'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_acumatica_customer_location_line_list" model="ir.ui.view">
+        <field name="name">acumatica.customer.location.line.list</field>
+        <field name="model">acumatica.customer.location.line</field>
+        <field name="arch" type="xml">
+            <list string="Staging Customer Location" multi_edit="1">
+                <field name="selected"              optional="show"/>
+                <field name="row_number"            string="No"            optional="show"/>
+                <field name="customer"              string="Customer"/>
+                <field name="location_id_acumatica" string="LocationID"/>
+                <field name="location_name"         string="Location Name"/>
+                <field name="warehouse"             string="Warehouse"     optional="show"/>
+                <field name="status"                string="Status"
+                       decoration-success="status == 'Active'"
+                       decoration-muted="status == 'Inactive'"/>
+                <field name="city"                  string="City"          optional="show"/>
+                <field name="import_state"          string="Status Import" widget="badge"
+                       decoration-success="import_state == 'imported'"
+                       decoration-info="import_state == 'updated'"
+                       decoration-danger="import_state == 'error'"
+                       decoration-muted="import_state == 'pending'"/>
+                <field name="odoo_location_id"      string="Location di Odoo" optional="show"/>
+                <field name="import_message"        string="Keterangan"    optional="show"/>
+                <button name="action_import_this"
+                        string="Import"
+                        type="object"
+                        icon="fa-download"
+                        invisible="import_state != 'pending'"/>
+                <button name="action_open_location"
+                        string="Lihat"
+                        type="object"
+                        icon="fa-external-link"
+                        invisible="not odoo_location_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_acumatica_customer_location_line_form" model="ir.ui.view">
+        <field name="name">acumatica.customer.location.line.form</field>
+        <field name="model">acumatica.customer.location.line</field>
+        <field name="arch" type="xml">
+            <form string="Detail Staging Customer Location">
+                <header>
+                    <button name="action_import_this"
+                            string="Import ke Odoo"
+                            type="object" class="btn-primary"
+                            invisible="import_state != 'pending'"/>
+                    <button name="action_open_location"
+                            string="Lihat Location di Odoo"
+                            type="object" class="btn-secondary"
+                            invisible="not odoo_location_id"/>
+                    <button name="action_reset_pending"
+                            string="Reset ke Pending"
+                            type="object"
+                            invisible="import_state == 'pending'"/>
+                    <field name="import_state" widget="statusbar"
+                           statusbar_visible="pending,imported,updated,error"/>
+                </header>
+                <sheet>
+                    <group string="Field Mandatory">
+                        <group>
+                            <field name="customer"              string="Customer → partner_id (FK)"/>
+                            <field name="location_id_acumatica" string="LocationID → adt_location_id"/>
+                            <field name="location_name"         string="LocationName → name"/>
+                            <field name="is_active"             string="Active → adt_is_active"/>
+                            <field name="address_override"      string="AddressOverride → adt_address_override"/>
+                            <field name="fob_point"             string="FOBPoint → adt_fob_point"/>
+                            <field name="shipping_branch"       string="ShippingBranch → adt_shipping_branch"/>
+                            <field name="status"                string="Status → adt_status"/>
+                            <field name="warehouse"             string="Warehouse → warehouse_id (FK)"/>
+                        </group>
+                        <group>
+                            <field name="is_default"            string="Default → adt_default"/>
+                            <field name="usage_type"            string="EntityUsageType → adt_usage_type"/>
+                            <field name="shipping_zone"         string="ShippingZone → adt_shipping_zone"/>
+                            <field name="ship_via"              string="ShipVia → adt_ship_via"/>
+                            <field name="lead_time_days"        string="LeadTimeDays → adt_lead_time_days"/>
+                            <field name="order_priority"        string="OrderPriority → adt_order_priority"/>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_last_modified_datetime"/>
+                        </group>
+                    </group>
+                    <group string="Address (LocationContact/Address)">
+                        <group>
+                            <field name="address_line1" string="AddressLine1 → street"/>
+                            <field name="city"          string="City → city"/>
+                            <field name="postal_code"   string="PostalCode → zip"/>
+                            <field name="state_code"    string="State → adt_state_code"/>
+                            <field name="country_code"  string="Country → adt_country_code"/>
+                        </group>
+                    </group>
+                    <group string="Info Sync">
+                        <group>
+                            <field name="external_id"/>
+                            <field name="sync_date"/>
+                            <field name="config_id"/>
+                        </group>
+                        <group>
+                            <field name="odoo_location_id"/>
+                            <field name="import_message"/>
+                        </group>
+                    </group>
+                    <group string="Note">
+                        <field name="note" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_customer_location_line" model="ir.actions.act_window">
+        <field name="name">Staging Customer Location</field>
+        <field name="res_model">acumatica.customer.location.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_acumatica_customer_location_line_search"/>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Belum ada data staging. Gunakan wizard Import untuk menarik data dari Acumatica.
+            </p>
+        </field>
+    </record>
+
+</odoo>

@@ -17,10 +17,14 @@ class StockPicking(models.Model):
     adt_status = fields.Char(string='Status (Acumatica)')
     adt_total_qty = fields.Float(string='Total Qty (Acumatica)')
     
-    # PERBAIKAN: Beri string yang berbeda untuk masing-masing field
-    adt_receipt_type = fields.Char(string='Receipt Type (Acumatica)')
-    adt_trans_type = fields.Char(string='Trans Type (Acumatica)')
+    adt_type = fields.Char(string='Type (Acumatica)')
     
     adt_external_ref = fields.Char(string='External Ref (Acumatica)')
     adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
     adt_external_id = fields.Char(string='UUID Header Acumatica')
+    adt_to_warehouse_code = fields.Char(string='To Warehouse (Acumatica)')
+    adt_from_warehouse_code = fields.Char(string='From Warehouse (Acumatica)')
+    adt_description = fields.Char(string='Description (Acumatica)')
+
+    adt_actual_amount = fields.Float(string='Control Amount (Acumatica)')
+    adt_total_amount = fields.Float(string='Total Amount (Acumatica)')

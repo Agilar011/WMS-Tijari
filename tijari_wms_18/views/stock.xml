@@ -120,7 +120,7 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='origin']" position="after">
-                <field name="adt_type"/>
+                <field name="adt_type" readonly="1"/>
                 <field name="adt_total_qty"/>
                 <field name="adt_actual_qty"/>
             </xpath>

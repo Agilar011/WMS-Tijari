@@ -1,0 +1,70 @@
+<odoo>
+    <record id="view_acumatica_inventory_recieved_config_form" model="ir.ui.view">
+        <field name="name">acumatica.inventory.recieved.config.form</field>
+        <field name="model">acumatica.inventory.recieved.config</field>
+        <field name="arch" type="xml">
+            <form string="Acumatica Inventory Recieved Config">
+                <sheet>
+                    <group string="Connection">
+                        <group>
+                            <field name="name"/>
+                            <field name="base_url"/>
+                            <field name="api_version"/>
+                            <field name="company_code"/>
+                        </group>
+                        <group>
+                            <field name="username"/>
+                            <field name="password" password="True"/>
+                            <field name="endpoint_name"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <group string="OData">
+                        <group>
+                            <field name="odata_expand"/>
+                            <field name="odata_select"/>
+                        </group>
+                        <group>
+                            <field name="odata_filter"/>
+                            <field name="state" readonly="1"/>
+                            <field name="last_sync" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Default URL Preview">
+                        <group>
+                            <div class="o_form_label">Default request modul:</div>
+                            <div>
+                                <span class="text-muted">InventoryReceipt?$filter=Type eq 'Inventory Receive'&amp;$expand=Details</span>
+                            </div>
+                        </group>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_test_connection" type="object" string="Test Connection" class="btn-primary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_acumatica_inventory_recieved_config_list" model="ir.ui.view">
+        <field name="name">acumatica.inventory.recieved.config.list</field>
+        <field name="model">acumatica.inventory.recieved.config</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="base_url"/>
+                <field name="username"/>
+                <field name="company_code"/>
+                <field name="endpoint_name"/>
+                <field name="active"/>
+                <field name="state"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_acumatica_inventory_recieved_config" model="ir.actions.act_window">
+        <field name="name">API Config</field>
+        <field name="res_model">acumatica.inventory.recieved.config</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

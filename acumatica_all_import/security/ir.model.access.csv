@@ -1,0 +1,57 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_acumatica_transfer_config_user,acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
+access_acumatica_transfer_config,access.acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
+access_acumatica_transfer_line_user,acumatica.transfer.line,model_acumatica_transfer_line,base.group_user,1,1,1,1
+access_import_transfer_wizard_user,import.transfer.wizard,model_import_transfer_wizard,base.group_user,1,1,1,1
+access_acumatica_transfer_one_step_config_manager,acumatica.transfer.one.step.config manager,model_acumatica_transfer_one_step_config,base.group_system,1,1,1,1
+access_acumatica_transfer_one_step_config_user,acumatica.transfer.one.step.config user,model_acumatica_transfer_one_step_config,base.group_user,1,0,0,0
+access_acumatica_transfer_one_step_line_manager,acumatica.transfer.one.step.line manager,model_acumatica_transfer_one_step_line,base.group_system,1,1,1,1
+access_acumatica_transfer_one_step_line_user,acumatica.transfer.one.step.line user,model_acumatica_transfer_one_step_line,base.group_user,1,1,1,1
+access_import_transfer_one_step_wizard_user,import.transfer.one.step.wizard user,model_import_transfer_one_step_wizard,base.group_user,1,1,1,1
+access_acumatica_inventory_recieved_config_user,acumatica.inventory.recieved.config,model_acumatica_inventory_recieved_config,base.group_user,1,1,1,1
+access_acumatica_inventory_recieved_line_user,acumatica.inventory.recieved.line,model_acumatica_inventory_recieved_line,base.group_user,1,1,1,1
+access_import_inventory_recieved_wizard_user,import.inventory.recieved.wizard,model_import_inventory_recieved_wizard,base.group_user,1,1,1,1
+access_acumatica_inventory_issue_config_user,acumatica.inventory.issue.config,model_acumatica_inventory_issue_config,base.group_user,1,1,1,1
+access_acumatica_inventory_issue_line_user,acumatica.inventory.issue.line,model_acumatica_inventory_issue_line,base.group_user,1,1,1,1
+access_import_inventory_issue_wizard_user,import.inventory.issue.wizard,model_import_inventory_issue_wizard,base.group_user,1,1,1,1
+access_acumatica_issue_po_return_config_manager,acumatica.issue.po.return.config manager,model_acumatica_issue_po_return_config,base.group_system,1,1,1,1
+access_acumatica_issue_po_return_config_user,acumatica.issue.po.return.config user,model_acumatica_issue_po_return_config,base.group_user,1,0,0,0
+access_acumatica_issue_po_return_line_manager,acumatica.issue.po.return.line manager,model_acumatica_issue_po_return_line,base.group_system,1,1,1,1
+access_acumatica_issue_po_return_line_user,acumatica.issue.po.return.line user,model_acumatica_issue_po_return_line,base.group_user,1,1,1,1
+access_import_issue_po_return_wizard_user,import.issue.po.return.wizard user,model_import_issue_po_return_wizard,base.group_user,1,1,1,1
+access_acumatica_receipt_change_item_config,access_acumatica_receipt_change_item_config,model_acumatica_receipt_change_item_config,,1,1,1,1
+access_acumatica_receipt_change_item_line,access_acumatica_receipt_change_item_line,model_acumatica_receipt_change_item_line,,1,1,1,1
+access_import_receipt_change_item_wizard,access_import_receipt_change_item_wizard,model_import_receipt_change_item_wizard,,1,1,1,1
+access_acumatica_shipment_config_user,acumatica.shipment.config,model_acumatica_shipment_config,base.group_user,1,1,1,1
+access_acumatica_shipment_line_user,acumatica.shipment.line,model_acumatica_shipment_line,base.group_user,1,1,1,1
+access_import_shipment_wizard_user,import.shipment.wizard,model_import_shipment_wizard,base.group_user,1,1,1,1
+access_acumatica_issue_config_user,acumatica.issue.config,model_acumatica_issue_config,base.group_user,1,1,1,1
+access_acumatica_issue_line_user,acumatica.issue.line,model_acumatica_issue_line,base.group_user,1,1,1,1
+access_import_issue_wizard_user,import.issue.wizard,model_import_issue_wizard,base.group_user,1,1,1,1
+access_acumatica_transfer_shipment_config,access.acumatica.transfer.shipment.config,model_acumatica_transfer_shipment_config,,1,1,1,1
+access_acumatica_transfer_shipment_line,access.acumatica.transfer.shipment.line,model_acumatica_transfer_shipment_line,,1,1,1,1
+access_import_transfer_shipment_wizard,access.import.transfer.shipment.wizard,model_import_transfer_shipment_wizard,,1,1,1,1
+access_acumatica_so_shipment_config_user,acumatica.so.shipment.config,model_acumatica_so_shipment_config,base.group_user,1,1,1,1
+access_acumatica_so_shipment_line_user,acumatica.so.shipment.line,model_acumatica_so_shipment_line,base.group_user,1,1,1,1
+access_import_so_shipment_wizard_user,import.so.shipment.wizard,model_import_so_shipment_wizard,base.group_user,1,1,1,1
+access_acumatica_receipt_config_manager,acumatica.receipt.config manager,model_acumatica_receipt_config,base.group_system,1,1,1,1
+access_acumatica_receipt_config_user,acumatica.receipt.config user,model_acumatica_receipt_config,base.group_user,1,0,0,0
+access_acumatica_receipt_line_manager,acumatica.receipt.line manager,model_acumatica_receipt_line,base.group_system,1,1,1,1
+access_acumatica_receipt_line_user,acumatica.receipt.line user,model_acumatica_receipt_line,base.group_user,1,1,1,1
+access_import_receipt_wizard_user,import.receipt.wizard user,model_import_receipt_wizard,base.group_user,1,1,1,1
+access_acumatica_transfer_two_step_config_manager,acumatica.transfer.two.step.config manager,model_acumatica_transfer_two_step_config,base.group_system,1,1,1,1
+access_acumatica_transfer_two_step_config_user,acumatica.transfer.two.step.config user,model_acumatica_transfer_two_step_config,base.group_user,1,0,0,0
+access_acumatica_transfer_two_step_line_manager,acumatica.transfer.two.step.line manager,model_acumatica_transfer_two_step_line,base.group_system,1,1,1,1
+access_acumatica_transfer_two_step_line_user,acumatica.transfer.two.step.line user,model_acumatica_transfer_two_step_line,base.group_user,1,1,1,1
+access_import_transfer_two_step_wizard_user,import.transfer.two.step.wizard user,model_import_transfer_two_step_wizard,base.group_user,1,1,1,1
+access_acumatica_unified_import_wizard,access.acumatica.unified.import.wizard,model_acumatica_unified_import_wizard,,1,1,1,1
+access_acumatica_vendor_config,acumatica.vendor.config,model_acumatica_vendor_config,base.group_user,1,1,1,1
+access_acumatica_vendor_line,acumatica.vendor.line,model_acumatica_vendor_line,base.group_user,1,1,1,1
+access_import_vendor_wizard,import.vendor.wizard,model_import_vendor_wizard,base.group_user,1,1,1,1
+access_acumatica_warehouse_config_manager,acumatica.warehouse.config manager,model_acumatica_warehouse_config,base.group_system,1,1,1,1
+access_acumatica_warehouse_config_user,acumatica.warehouse.config user,model_acumatica_warehouse_config,base.group_user,1,0,0,0
+access_acumatica_warehouse_line_manager,acumatica.warehouse.line manager,model_acumatica_warehouse_line,base.group_system,1,1,1,1
+access_acumatica_warehouse_line_user,acumatica.warehouse.line user,model_acumatica_warehouse_line,base.group_user,1,1,1,1
+access_acumatica_warehouse_location_line_manager,acumatica.warehouse.location.line manager,model_acumatica_warehouse_location_line,base.group_system,1,1,1,1
+access_acumatica_warehouse_location_line_user,acumatica.warehouse.location.line user,model_acumatica_warehouse_location_line,base.group_user,1,1,1,1
+access_import_warehouse_wizard_user,import.warehouse.wizard user,model_import_warehouse_wizard,base.group_user,1,1,1,1
