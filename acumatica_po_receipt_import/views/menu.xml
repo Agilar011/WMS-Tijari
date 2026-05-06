@@ -1,0 +1,33 @@
+<odoo>
+    <menuitem id="menu_acumatica_receipt_root"
+              name="Acumatica PO Receipt"
+              sequence="81"/>
+
+    <menuitem id="menu_acumatica_receipt_import"
+              name="Import Data"
+              parent="menu_acumatica_receipt_root"
+              sequence="10"/>
+
+    <menuitem id="menu_import_receipt_wizard"
+              name="Import Inventory Receipt"
+              parent="menu_acumatica_receipt_import"
+              action="action_import_receipt_wizard"
+              sequence="10"/>
+
+    <menuitem id="menu_acumatica_receipt_line"
+              name="Data Inventory Receipt"
+              parent="menu_acumatica_receipt_import"
+              action="action_acumatica_receipt_line"
+              sequence="20"/>
+
+    <menuitem id="menu_acumatica_receipt_config_root"
+              name="Konfigurasi"
+              parent="menu_acumatica_receipt_root"
+              sequence="90"/>
+
+    <menuitem id="menu_acumatica_receipt_config"
+              name="API Config"
+              parent="menu_acumatica_receipt_config_root"
+              action="action_acumatica_receipt_config"
+              sequence="10"/>
+</odoo>

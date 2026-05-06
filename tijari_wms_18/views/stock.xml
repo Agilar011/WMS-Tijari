@@ -1,11 +1,11 @@
 <odoo>
     <!-- View untuk Detailed Operations -->
-    <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_detailed" model="ir.ui.view">
+    <!-- <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_detailed" model="ir.ui.view">
         <field name="name">stock.move.line.detailed.list.tjr.fifo</field>
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock.view_stock_move_line_detailed_operation_tree"/>
         <field name="arch" type="xml">
-            <!-- XPath yang lebih spesifik menggunakan atribut name jika tersedia, atau field -->
+
             <xpath expr="//field[@name='lot_id']" position="after">
                 <field name="operation_category" column_invisible="True"/>
                 <field name="confirmation_location_code" string="Confirm Location Code" 
@@ -17,7 +17,7 @@
                        invisible="not matching"/>
             </xpath>
         </field>
-    </record>
+    </record> -->
 
     <!-- View untuk Operations normal -->
     <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_standard" model="ir.ui.view">
@@ -37,16 +37,17 @@
                 <field name="lot_button" widget="generate_lot_button" 
                        invisible="0"/>
             </xpath>
-            <!-- <xpath expr="//field[@name='lot_id']" position="after">
+            <xpath expr="//field[@name='lot_id']" position="after">
                 <field name="operation_category" column_invisible="True"/>
+                <field name="lot_name" readonly="1"/>              
                 <field name="confirmation_location_code" password="True" 
-                       invisible="operation_category not in ['put', 'delivery']"/>
+                       invisible="operation_category not in ['put', 'delivery', 'receive']"/>
                 <field name="confirmation_lot_code" password="True" 
-                       invisible="operation_category not in ['put', 'delivery']"/>
+                       invisible="operation_category not in ['put', 'delivery', 'receive']"/>
                 <field name="matching" column_invisible="True"/>
                 <field name="matching_html" widget="html" readonly="1" 
                        invisible="not matching"/>
-            </xpath> -->
+            </xpath>
         </field>
     </record>
 

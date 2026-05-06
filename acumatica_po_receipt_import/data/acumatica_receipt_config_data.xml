@@ -1,0 +1,12 @@
+<odoo noupdate="1">
+    <record id="acumatica_receipt_config_default" model="acumatica.receipt.config">
+        <field name="name">Acumatica WMS</field>
+        <field name="base_url">http://34.101.103.239/acumportal/entity</field>
+        <field name="api_version">25.200.001</field>
+        <field name="username">wms</field>
+        <field name="password">WMSAditya@2026</field>
+        <field name="company_code">asgjkt</field>
+        <field name="endpoint_name">PurchaseReceipt</field>
+        <field name="active">True</field>
+    </record>
+</odoo>
