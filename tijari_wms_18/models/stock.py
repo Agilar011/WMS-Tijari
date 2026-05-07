@@ -49,6 +49,8 @@ class StockPicking(models.Model):
     def button_validate(self):
         for rec in self:
             for line in rec.move_line_ids:
+                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id}") # Cek di terminal Odoo
+                line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
                 if not line.lot_name:
                     raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
             # if not rec.lot_name:
@@ -60,6 +62,9 @@ class StockPicking(models.Model):
             if operation_category in ['put', 'delivery']:
                 for line in picking.move_line_ids:
                     # Jika belum dicek (invisible), tidak dianggap ok
+                    print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+                    # line.matching = 'match'
+                    print(f">>> Matching status for line {line.id}: {line.matching}") # Cek di terminal Odoo
                     if line.matching != 'match':
                         raise UserError(_(
                             "Validation blocked.\n\n"
@@ -198,6 +203,20 @@ class StockMoveLine(models.Model):
                 line.matching_html = "<span style='color: red; font-weight: bold;'>NOT MATCH</span>"
             else:
                 line.matching_html = False
+    
+    @api.onchange('quant_id')
+    def _onchange_move_line_ids(self):
+        for line in self:
+            if line.quant_id:
+                print(f">>> Onchange move_line_ids: quant_id changed for line {line.id}, new quant_id: {line.quant_id.id}, lot_id: {line.quant_id.lot_id.name if line.quant_id.lot_id else 'N/A'}") # Cek di terminal Odoo
+                # line.lot_id = line.quant_id.lot_id.name if line.quant_id.lot_id else line.lot_name
+                line.lot_name = line.quant_id.lot_id.name if line.quant_id.lot_id else line.lot_name
+                print(f">>> changed lot_name: {line.lot_name}") # Cek di terminal Odoo
+            if not line.lot_name and line.lot_id:
+                print(f">>> Onchange move_line_ids: setting lot_name for line {line.id} based on lot_id {line.lot_id.name}") # Cek di terminal Odoo
+                line.lot_name = line.lot_id.name
+
+            
 
     @api.onchange('lot_button')
     def _onchange_lot_button(self):
@@ -239,7 +258,7 @@ class StockMoveLine(models.Model):
     def _tjr_is_incoming_tracked(self):
         print(f">>> Checking if line {self.id} is incoming tracked...") # Cek di terminal Odoo
         self.ensure_one()
-        print(f">>> Line {self.id} - Product: {self.product_id.display_name} - Lot id {self.lot_id.name if self.lot_id else 'N/A'}") # Cek di terminal Odoo
+        print(f">>> Line {self.id} - Product: {self.product_id.display_name} - Lot id {self.lot_id.name if self.lot_id else 'N/A'} - Stock Quantity: {self.quantity}") # Cek di terminal Odoo
         # Cek tipe picking dari berbagai sumber (picking_id atau dari context)
         picking_type = self.picking_id.picking_type_id or self.move_id.picking_type_id
         print(f">>> Line {self.id} - Picking Type: {picking_type.name if picking_type else 'N/A'}") # Cek di terminal Odoo
@@ -299,21 +318,21 @@ class StockMoveLine(models.Model):
         Outgoing/Internal : pick FIFO lot_id from stock.quant (source location).
         Fields lot_id & lot_name dibuat readonly di view; perubahan via tombol ini.
         """
-        print(">>> action_generate_or_pick_lot called!") # Cek di terminal Odoo
+        # print(">>> action_generate_or_pick_lot called!") # Cek di terminal Odoo
         # print(self.env.context) # Cek context di terminal Odoo
 
-        print(f">>> Warhouse des line: {self.location_dest_id.location_id.name}") # Cek di terminal Odoo
+        # print(f">>> Warhouse des line: {self.location_dest_id.location_id.name}") # Cek di terminal Odoo
         # kode_supplier = self.picking_id.partner_id.company_registry or (self.picking_id.partner_id.ref if self.picking_id.partner_id and self.picking_id.partner_id.ref else False)
         # print(f">>> Kode Supplier: {kode_supplier}") # Cek di terminal Odoo
 
         Quant = self.env['stock.quant']
         for line in self:
-            print(f">>> Starting processing for line {line.location_dest_id.location_id.name}") # Cek di terminal Odoo
-            print(f">>> Partner ID: {line.picking_id.partner_id.id if line.picking_id.partner_id else 'No Partner'}") # Cek di terminal Odoo
-            print(f">>> Processing line {line.id} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
-            print(f">>> Tracking Product: {line.product_id.default_code}") # Cek di terminal Odoo
-            print(f">>> Tracking: {line.product_id.tracking}") # Cek di terminal Odoo
-            print(f">>> Tracking Status: {'Tracked' if line.product_id.tracking != 'none' else 'Not Tracked'}") # Cek di terminal Odoo
+            # print(f">>> Starting processing for line {line.location_dest_id.location_id.name}") # Cek di terminal Odoo
+            # print(f">>> Partner ID: {line.picking_id.partner_id.id if line.picking_id.partner_id else 'No Partner'}") # Cek di terminal Odoo
+            # print(f">>> Processing line {line.id} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
+            # print(f">>> Tracking Product: {line.product_id.default_code}") # Cek di terminal Odoo
+            # print(f">>> Tracking: {line.product_id.tracking}") # Cek di terminal Odoo
+            # print(f">>> Tracking Status: {'Tracked' if line.product_id.tracking != 'none' else 'Not Tracked'}") # Cek di terminal Odoo
             # if not line.product_id or line.product_id.tracking == 'none':
             #     # tidak perlu lot
             #     print(">>> Lot not found") # Cek di terminal Odoo
@@ -321,16 +340,16 @@ class StockMoveLine(models.Model):
 
             # Code generate lot untuk incoming
 
-            print(f">>> Picking Type Code: {line.picking_id.picking_type_id.code}") # Cek di terminal Odoo
+            # print(f">>> Picking Type Code: {line.picking_id.picking_type_id.code}") # Cek di terminal Odoo
 
             is_incoming = self.env.context.get('default_picking_type_code') == 'incoming' or \
                           line.picking_id.picking_type_code == 'incoming' or \
                           line.picking_id.picking_type_id.code == 'incoming'
             
-            print(f">>> Is Incoming: {is_incoming}") # Cek di terminal Odoo
+            # print(f">>> Is Incoming: {is_incoming}") # Cek di terminal Odoo
 
             if is_incoming:
-                print(">>> Kondisi Terpenuhi: Dokumen adalah RECEIPT")
+                # print(">>> Kondisi Terpenuhi: Dokumen adalah RECEIPT")
 
                 # logic replace destination location dan  owner
               
@@ -437,7 +456,7 @@ class StockMoveLine(models.Model):
                 if line.product_id.tracking == 'serial':
                     qty_needed_line_uom = 1.0
                 else:
-                    qty_needed_line_uom = line.product_uom_qty or line.qty_reserved or 0.0
+                    qty_needed_line_uom = line.quantity or line.qty_reserved or 0.0
                     if not qty_needed_line_uom:
                         qty_needed_line_uom = 1.0  # fallback
 
@@ -462,6 +481,7 @@ class StockMoveLine(models.Model):
             chosen = False
             for q in quants:
                 # hitung available di lokasi quant (strict ke lokasi quant)
+                print(f"Product ID - {line.product_id.id}, Location ID - {q.location_id.id}, Lot ID - {q.lot_id.id if q.lot_id else 'N/A'}, Package ID - {q.package_id.id if q.package_id else 'N/A'}, Owner ID - {q.owner_id.id if q.owner_id else 'N/A'}") # Cek di terminal Odoo
                 avail = Quant._get_available_quantity(
                     line.product_id,
                     q.location_id,
@@ -469,7 +489,8 @@ class StockMoveLine(models.Model):
                     package_id=q.package_id or None,
                     owner_id=q.owner_id or None,
                     strict=True,
-                )                
+                )
+                print(f">>> Evaluating quant {q.id} - Lot: {q.lot_id.name if q.lot_id else 'N/A'} - Available Qty: {avail}") # Cek di terminal Odoo                
                 if avail <= 0:
                     continue
 
@@ -502,8 +523,10 @@ class StockMoveLine(models.Model):
                     # line.write(updates)
                     chosen = True
                     break
-
+                      
             if not chosen:
+                print(f">>> chosen {chosen}") # Cek di terminal Odoo
+                print(f">>> chosen lot {q.lot_id.name} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
                 # Tidak ada lot yg cukup → pilih lot tertua yang punya sedikit stok (sebagai hint)
                 partial = next((q for q in quants if Quant._get_available_quantity(
                     line.product_id, q.location_id, lot_id=q.lot_id,
