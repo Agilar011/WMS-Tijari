@@ -48,8 +48,9 @@ class StockPicking(models.Model):
 
     def button_validate(self):
         for rec in self:
+            print(rec.picking_type_id.operation_category)
             for line in rec.move_line_ids:
-                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id}") # Cek di terminal Odoo
+                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}") # Cek di terminal Odoo
                 line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
                 if not line.lot_name:
                     raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
@@ -57,6 +58,7 @@ class StockPicking(models.Model):
             #     raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
         for picking in self:
             operation_category = picking.picking_type_id.operation_category
+            print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
 
             # Hanya enforce untuk PUT dan DELIVERY
             if operation_category in ['put', 'delivery']:
@@ -154,11 +156,15 @@ class StockMoveLine(models.Model):
             if operation_category == 'put':
                 print(f">>> Operation Category: PUT") # Cek di terminal Odoo
                 # kalau belum ada input, keep invisible
+                print(f">>> Line Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
+                print(f">>> Line Confirmation Lot Code: {line.confirmation_lot_code}") # Cek di terminal Odoo
                 if line.confirmation_location_code or line.confirmation_lot_code:
                     print(f">>> Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
                     print(f">>> Confirmation Lot Code: {line.confirmation_lot_code}") #
                     dest_loc = line.location_dest_id
                     dest_code = dest_loc.unique_code if dest_loc else False
+                    print(f">>> Destination Location unique code: {dest_code}") # Cek di terminal Odoo
+                    print(f">>> Line Lot ID: {line.lot_id}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
                     lot = line.lot_id
 
                     loc_ok = bool(dest_code and line.confirmation_location_code == dest_code)
@@ -174,16 +180,21 @@ class StockMoveLine(models.Model):
             # Untuk PACK → cek lot + unique_code (aku anggap SOURCE location)
             elif operation_category == 'delivery':
                 print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
+                print(f">>> Evaluating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
                 # kalau belum ada input sama sekali, invisible
                 if line.confirmation_location_code or line.confirmation_lot_code:
-                    print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
-                    src_loc = line.location_id
-                    src_code = src_loc.unique_code if src_loc else False
-                    lot = line.lot_id
+                    loc_code = line.location_id.unique_code if line.location_id else (line.quant_id.location_id.unique_code if line.quant_id and line.quant_id.location_id else 'N/A')
+                    lot_code = line.lot_id.name if line.lot_id else (line.quant_id.lot_id.name if line.quant_id and line.quant_id.lot_id else 'N/A')
+                    print(f">>> Information to match : Lot Code = {lot_code}, Location Code = {loc_code}") # Cek di terminal Odoo
+                    # src_loc = line.location_id
+                    # src_code = src_loc.unique_code if src_loc else False
+                    # lot = line.lot_id
+                    # src_code = line.quant_id.location_id.unique_code if line.quant_id.location_id else False
+                    # lot = line.quant_id.lot_id.name
 
                     # kondisi match
-                    loc_ok = bool(src_code and line.confirmation_location_code == src_code)
-                    lot_ok = bool(lot and line.confirmation_lot_code and line.confirmation_lot_code == lot.name)
+                    loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
+                    lot_ok = bool(lot_code and line.confirmation_lot_code == lot_code)
 
                     if loc_ok and lot_ok:
                         matching = 'match'

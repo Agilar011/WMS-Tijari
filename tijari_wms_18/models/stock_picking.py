@@ -28,3 +28,6 @@ class StockPicking(models.Model):
 
     adt_actual_amount = fields.Float(string='Control Amount (Acumatica)')
     adt_total_amount = fields.Float(string='Total Amount (Acumatica)')
+
+    adt_receipt_type = fields.Char(string='Receipt Type (Acumatica)')
+    adt_trans_type = fields.Char(string='Trans Type (Acumatica)')
