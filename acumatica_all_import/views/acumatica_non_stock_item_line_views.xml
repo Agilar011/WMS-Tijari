@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ─── Search View ─── -->
+    <record id="view_acumatica_non_stock_item_line_search" model="ir.ui.view">
+        <field name="name">acumatica.non.stock.item.line.search</field>
+        <field name="model">acumatica.non.stock.item.line</field>
+        <field name="arch" type="xml">
+            <search string="Cari Non-Stock Item">
+                <field name="inventory_id"  string="InventoryID"/>
+                <field name="description"   string="Description"/>
+                <field name="item_class"    string="ItemClass"/>
+                <field name="item_status"   string="ItemStatus"/>
+                <field name="posting_class" string="PostingClass"/>
+
+                <filter string="Belum Diimport" name="pending"
+                        domain="[('import_state','=','pending')]"/>
+                <filter string="Sudah Dibuat"   name="imported"
+                        domain="[('import_state','=','imported')]"/>
+                <filter string="Diupdate"       name="updated"
+                        domain="[('import_state','=','updated')]"/>
+                <filter string="Error"          name="error"
+                        domain="[('import_state','=','error')]"/>
+                <separator/>
+                <filter string="Dipilih"        name="selected"
+                        domain="[('selected','=',True)]"/>
+                <filter string="Is Kit"         name="is_kit"
+                        domain="[('is_kit','=',True)]"/>
+
+                <group expand="0" string="Group By">
+                    <filter string="Status Import"  name="group_state"
+                            context="{'group_by': 'import_state'}"/>
+                    <filter string="Item Class"     name="group_class"
+                            context="{'group_by': 'item_class'}"/>
+                    <filter string="Item Status"    name="group_status"
+                            context="{'group_by': 'item_status'}"/>
+                    <filter string="Posting Class"  name="group_posting"
+                            context="{'group_by': 'posting_class'}"/>
+                    <filter string="Price Class"    name="group_price"
+                            context="{'group_by': 'price_class'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ─── List View ─── -->
+    <record id="view_acumatica_non_stock_item_line_list" model="ir.ui.view">
+        <field name="name">acumatica.non.stock.item.line.list</field>
+        <field name="model">acumatica.non.stock.item.line</field>
+        <field name="arch" type="xml">
+            <list string="Data Non-Stock Item dari Acumatica" multi_edit="1">
+                <field name="selected"       optional="show"/>
+                <field name="row_number"     string="No"            optional="show"/>
+                <field name="inventory_id"   string="InventoryID"/>
+                <field name="description"    string="Description"/>
+                <field name="item_type"      string="ItemType"      optional="show"/>
+                <field name="item_class"     string="ItemClass"     optional="show"/>
+                <field name="item_status"    string="ItemStatus"
+                       decoration-success="item_status == 'Active'"
+                       decoration-muted="item_status == 'Inactive'"/>
+                <field name="is_kit"         string="Kit"           widget="boolean" optional="show"/>
+                <field name="posting_class"  string="PostingClass"  optional="show"/>
+                <field name="price_class"    string="PriceClass"    optional="show"/>
+                <field name="import_state"   string="Status Import" widget="badge"
+                       decoration-success="import_state == 'imported'"
+                       decoration-info="import_state == 'updated'"
+                       decoration-danger="import_state == 'error'"
+                       decoration-muted="import_state == 'pending'"/>
+                <field name="odoo_product_id" string="Product di Odoo" optional="show"/>
+                <field name="import_message"  string="Keterangan"      optional="show"/>
+                <button name="action_import_this"
+                        string="Import"
+                        type="object"
+                        icon="fa-download"
+                        invisible="import_state != 'pending'"/>
+                <button name="action_open_product"
+                        string="Lihat"
+                        type="object"
+                        icon="fa-external-link"
+                        invisible="not odoo_product_id"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ─── Form View ─── -->
+    <record id="view_acumatica_non_stock_item_line_form" model="ir.ui.view">
+        <field name="name">acumatica.non.stock.item.line.form</field>
+        <field name="model">acumatica.non.stock.item.line</field>
+        <field name="arch" type="xml">
+            <form string="Detail Data Non-Stock Item">
+                <header>
+                    <button name="action_import_this"
+                            string="Import ke Odoo"
+                            type="object" class="btn-primary"
+                            invisible="import_state != 'pending'"/>
+                    <button name="action_open_product"
+                            string="Lihat Product di Odoo"
+                            type="object" class="btn-secondary"
+                            invisible="not odoo_product_id"/>
+                    <button name="action_reset_pending"
+                            string="Reset ke Pending"
+                            type="object"
+                            invisible="import_state == 'pending'"/>
+                    <field name="import_state" widget="statusbar"
+                           statusbar_visible="pending,imported,updated,error"/>
+                </header>
+                <sheet>
+                    <group string="Field Mandatory">
+                        <group>
+                            <field name="inventory_id"  string="InventoryID → default_code"/>
+                            <field name="description"   string="Description → name"/>
+                            <field name="item_type"     string="ItemType → adt_item_type (to be)"/>
+                            <field name="item_class"    string="ItemClass → adt_item_class (to be)"/>
+                            <field name="item_status"   string="ItemStatus → adt_item_status (to be)"/>
+                            <field name="base_unit"     string="BaseUnit → adt_base_unit (to be)"/>
+                            <field name="purchase_unit" string="PurchaseUnit → adt_purchase_unit (to be)"/>
+                            <field name="sales_unit"    string="SalesUnit → adt_sales_unit (to be)"/>
+                        </group>
+                        <group>
+                            <field name="is_a_kit"      string="IsAKit → adt_is_a_kit" widget="boolean"/>
+                            <field name="is_kit"        string="IsKit → adt_is_kit"    widget="boolean"/>
+                            <field name="note_id"       string="NoteID → adt_note_id (to be)"/>
+                            <field name="posting_class" string="PostingClass → adt_posting_class (to be)"/>
+                            <field name="price_class"   string="PriceClass → adt_price_class (to be)"/>
+                        </group>
+                    </group>
+
+                    <group string="Field Optional">
+                        <group>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_last_modified_datetime (to be)"/>
+                            <field name="volume"    string="Volume → volume"/>
+                            <field name="volume_uom" string="VolumeUOM → adt_volume_uom"/>
+                            <field name="weight"    string="Weight → weight"/>
+                            <field name="weight_uom" string="WeightUOM → adt_weight_uom"/>
+                        </group>
+                        <group>
+                            <field name="external_id"/>
+                            <field name="sync_date"/>
+                            <field name="config_id"/>
+                        </group>
+                    </group>
+
+                    <group string="Note → adt_note">
+                        <field name="note" nolabel="1"/>
+                    </group>
+
+                    <group string="Hasil di Odoo">
+                        <field name="odoo_product_id"/>
+                        <field name="import_message"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ─── Action ─── -->
+    <record id="action_acumatica_non_stock_item_line" model="ir.actions.act_window">
+        <field name="name">Data Non-Stock Item Acumatica</field>
+        <field name="res_model">acumatica.non.stock.item.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_acumatica_non_stock_item_line_search"/>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Belum ada data. Gunakan menu "Import Non-Stock Item" untuk menarik data dari Acumatica.
+            </p>
+        </field>
+    </record>
+
+</odoo>
