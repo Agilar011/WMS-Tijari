@@ -1,0 +1,9 @@
+<odoo>
+    <template id="assets_backend" inherit_id="web.layout">
+        <xpath expr="//link[@rel='shortcut icon']" position="replace">
+            <link rel="shortcut icon"
+                  type="image/x-icon"
+                  href="/tijari_wms_18/static/description/icon.png"/>    
+        </xpath>
+    </template>
+</odoo>
