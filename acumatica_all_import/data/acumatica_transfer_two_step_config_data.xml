@@ -2,7 +2,7 @@
 
     <record id="acumatica_transfer_two_step_config_default" model="acumatica.transfer.two.step.config">
         <field name="name">ACUMATICA WMS</field>
-        <field name="base_url">http://34.101.103.239/acumportal/entity</field>
+        <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
         <field name="api_version">25.200.002</field>
         <field name="username">wms</field>
         <field name="password">WMSAditya@2026</field>

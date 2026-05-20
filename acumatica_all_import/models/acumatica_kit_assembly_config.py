@@ -15,7 +15,7 @@ class AcumaticaKitAssemblyConfig(models.Model):
     name         = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
     base_url     = fields.Char(
         string='Base URL', required=True,
-        default='http://34.101.103.239/acumportal/entity',
+        default='http://staging.aditya.group/acumportal/entity',
     )
     api_version  = fields.Char(string='API Version', required=True, default='25.200.002')
     username     = fields.Char(string='Username', required=True, default='wms')
@@ -89,90 +89,62 @@ class AcumaticaKitAssemblyConfig(models.Model):
         except Exception:
             pass
 
-    def fetch_kit_assembly_data(self, batch_size=100, start_skip=0, target_total=None):
-        """
-        Fetch data Kit Assembly dengan:
-        - batch_size  = jumlah data per request
-        - start_skip  = titik awal data
-        - target_total = total data yang ingin diambil (None = ambil semua)
-        """
+    @staticmethod
+    def _val(item, key):
+        value = item.get(key, {})
+        if isinstance(value, dict):
+            return value.get('value', '') or ''
+        return value or ''
+
+    @staticmethod
+    def _normalize_rows(payload):
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            if isinstance(payload.get('value'), list):
+                return payload.get('value')
+            if isinstance(payload.get('rows'), list):
+                return payload.get('rows')
+        return []
+
+    def fetch_kit_assembly_data(self, limit=100, offset=0):
+        """Fetch 1 page Kit Assembly dari Acumatica (paging via $top/$skip)."""
         self.ensure_one()
         session = self._do_login()
-
         try:
             endpoint = f"{self.api_url}/KitAssembly"
+            params = {'$top': limit, '$skip': offset, '$expand': 'StockComponents'}
 
-            all_results = []
-            current_skip = start_skip
-
-            while True:
-                # =========================
-                # STOP JIKA TARGET TERCAPAI
-                # =========================
-                if target_total and len(all_results) >= target_total:
-                    break
-
-                # tentukan batch size aktual
-                current_batch_size = batch_size
-                if target_total:
-                    remaining = target_total - len(all_results)
-                    current_batch_size = min(batch_size, remaining)
-
-                params = {
-                    "$top": current_batch_size,
-                    "$skip": current_skip,
-                }
-
-                response = session.get(endpoint, params=params, timeout=60)
-
-                if response.status_code != 200:
-                    raise UserError(
-                        f'Gagal ambil data Kit Assembly '
-                        f'(HTTP {response.status_code}): {response.text}'
-                    )
-
-                raw_data = response.json()
-
-                if not raw_data:
-                    _logger.info("Data API habis.")
-                    break
-
-                _logger.info(
-                    "Fetch KitAssembly batch: %d records (skip=%d, top=%d)",
-                    len(raw_data), current_skip, current_batch_size
+            response = session.get(endpoint, params=params, timeout=60)
+            if response.status_code != 200:
+                raise UserError(
+                    f'Gagal ambil data Kit Assembly '
+                    f'(HTTP {response.status_code}): {response.text}'
                 )
 
-                # =========================
-                # HELPER
-                # =========================
-                def val(item, key):
-                    v = item.get(key, {})
-                    if isinstance(v, dict):
-                        return v.get("value", "") or ""
-                    return ""
+            raw_data = self._normalize_rows(response.json())
+            result = []
 
-                # =========================
-                # PARSE
-                # =========================
-                for item in raw_data:
-                    header = {
-                        'external_id':item.get("id", "") or "",
-                        'row_number': item.get("rowNumber", 0),
-                        'description': val(item, "Description"),
-                        'inventory_id': val(item, "InventoryID"),
-                        'last_modified_datetime': val(item, "LastModifiedDateTime"),
-                        'location': val(item, "Location"),
-                        'post_period': val(item, "PostPeriod"),
-                        'quantity': val(item, "Qty"),
-                        'reason_code':val(item, "ReasonCode"),
-                        'reference_nbr':val(item, "ReferenceNbr"),
-                        'requested_on':val(item, "RequestedOn"),
-                        'revision':val(item, "Revision"),
-                        'status':val(item, "Status"),
-                        'type':val(item, "Type"),
-                        'uom': val(item, "UOM"),
-                        'warehouse': val(item, "Warehouse"),
-                    }
+            for item in raw_data:
+                header = {
+                    'external_id': item.get('id', '') or '',
+                    'row_number': item.get('rowNumber', 0) or 0,
+                    'description': self._val(item, 'Description'),
+                    'inventory_id': self._val(item, 'InventoryID'),
+                    'last_modified_datetime': self._val(item, 'LastModifiedDateTime'),
+                    'location': self._val(item, 'Location'),
+                    'post_period': self._val(item, 'PostPeriod'),
+                    'quantity': self._val(item, 'Qty'),
+                    'reason_code': self._val(item, 'ReasonCode'),
+                    'reference_nbr': self._val(item, 'ReferenceNbr'),
+                    'requested_on': self._val(item, 'RequestedOn'),
+                    'revision': self._val(item, 'Revision'),
+                    'status': self._val(item, 'Status'),
+                    'type': self._val(item, 'Type'),
+                    'uom': self._val(item, 'UOM'),
+                    'warehouse': self._val(item, 'Warehouse'),
+                }
+
                 stock_components = item.get('StockComponents') or []
                 if isinstance(stock_components, dict):
                     stock_components = stock_components.get('value', []) or []
@@ -180,13 +152,12 @@ class AcumaticaKitAssemblyConfig(models.Model):
                     stock_components = []
 
                 if not stock_components:
-                    all_results.append(dict(header, line_nbr='0'))
+                    result.append(dict(header, line_nbr='0'))
                     continue
 
                 for component in stock_components:
                     line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
-
-                    all_results.append({
+                    result.append({
                         **header,
                         'line_external_id': component.get('id', '') or '',
                         'line_note': component.get('note', {}).get('value', '') or '',
@@ -200,18 +171,11 @@ class AcumaticaKitAssemblyConfig(models.Model):
                         'line_uom': self._val(component, 'UOM'),
                     })
 
-                batch_count = len(raw_data)
-                current_skip += batch_count
-
-                # stop kalau data API habis
-                if batch_count < current_batch_size:
-                    _logger.info("Batch terakhir, data habis.")
-                    break
-
-            _logger.info("TOTAL KIT ASSEMBLY TERAMBIL: %d", len(all_results))
-
-            return all_results
-
+            _logger.info(
+                'Berhasil ambil %s rows Kit Assembly dari Acumatica (skip=%s, top=%s)',
+                len(result), offset, limit,
+            )
+            return result
         finally:
             self._do_logout(session)
             self.last_sync = fields.Datetime.now()

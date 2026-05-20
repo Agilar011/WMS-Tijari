@@ -18,6 +18,7 @@
                         <field name="stock_item_config_id" invisible="import_type != 'stock_item'" required="import_type == 'stock_item'"/>
                         <field name="non_stock_item_config_id" invisible="import_type != 'non_stock_item'" required="import_type == 'non_stock_item'"/>
                         <field name="customer_location_config_id" invisible="import_type != 'customer_location'" required="import_type == 'customer_location'"/>
+                        <field name="shipvia_config_id" invisible="import_type != 'shipvia'" required="import_type == 'shipvia'"/>
                         <field name="receipt_config_id" invisible="import_type != 'po_receipt'" required="import_type == 'po_receipt'"/>
                         <field name="issue_po_return_config_id" invisible="import_type != 'issue_po_return'" required="import_type == 'issue_po_return'"/>
                         <field name="transfer_one_step_config_id" invisible="import_type != 'transfer_one_step'" required="import_type == 'transfer_one_step'"/>
@@ -30,6 +31,7 @@
                         <field name="so_shipment_config_id" invisible="import_type != 'so_shipment'" required="import_type == 'so_shipment'"/>
                         <field name="transfer_config_id" invisible="import_type != 'so_transfer'" required="import_type == 'so_transfer'"/>
                         <field name="transfer_shipment_config_id" invisible="import_type != 'transfer_shipment'" required="import_type == 'transfer_shipment'"/>
+                        <field name="kit_assembly_config_id" invisible="import_type != 'kit_assembly'" required="import_type == 'kit_assembly'"/>
                     </group>
                     <group string="Filter Fetch">
                         <field name="fetch_limit"/>

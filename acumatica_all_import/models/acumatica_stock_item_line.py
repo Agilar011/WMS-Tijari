@@ -182,8 +182,22 @@ class AcumaticaStockItemLine(models.Model):
                 }
 
                 existing = self._find_existing_product(line)
+                SkuHistory = self.env['product.sku.history']
 
                 if existing:
+                    if existing and existing.default_code != line.inventory_id:
+
+                        SkuHistory.search([
+                            ('product_tmpl_id', '=', existing.id),
+                            ('date_end', '=', False),
+                        ]).write({'date_end': fields.Datetime.now(), 'is_current': False})
+                        # Create a new SKU history record for the old SKU
+                        SkuHistory.create({
+                            'product_tmpl_id': existing.id,
+                            'sku': existing.default_code,
+                            'date_start': fields.Datetime.now(),
+                            'is_current': True,
+                        })
                     existing.write(vals)
                     line.write({
                         'import_state':   'updated',
@@ -192,6 +206,7 @@ class AcumaticaStockItemLine(models.Model):
                     })
                     updated += 1
                 else:
+                    # buat juga log sku baru untuk log perubahan sku di masa depan
                     new_product = self.env['product.template'].create(vals)
                     line.write({
                         'import_state':   'imported',
@@ -199,6 +214,12 @@ class AcumaticaStockItemLine(models.Model):
                         'odoo_product_id': new_product.id,
                     })
                     imported += 1
+                    self.env['product.sku.history'].create({
+                        'product_tmpl_id': new_product.id,
+                        'sku': new_product.default_code,
+                        'date_start': fields.Datetime.now(),
+                        'is_current': True,
+                    })
 
             except Exception as e:
                 _logger.error("Error import Stock Item %s: %s", line.inventory_id, str(e))

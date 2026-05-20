@@ -19,15 +19,10 @@ class ImportKitAssemblyWizard(models.TransientModel):
         domain=[('active', '=', True)],
     )
 
-    fetch_limit = fields.Integer(
-        string='Batch Size',
-        default=100
-    )
+    fetch_limit = fields.Integer(string='Maks Data Ditarik', default=5000)
+    batch_size = fields.Integer(string='Batch Size untuk Fetch', default=100)
 
-    fetch_skip = fields.Integer(
-        string='Mulai dari Data ke-',
-        default=0
-    )
+    fetch_skip = fields.Integer(string='Mulai dari Data ke-', default=0)
 
     total_target = fields.Integer(
         string='Total Data Diambil',
@@ -67,57 +62,87 @@ class ImportKitAssemblyWizard(models.TransientModel):
         # =========================
         # FETCH (AUTO LOOP)
         # =========================
-        raw_list = self.config_id.fetch_kit_assembly_data(
-            batch_size=self.fetch_limit,
-            start_skip=self.fetch_skip,
-            target_total=self.total_target or None
-        )
+        import math
+
+        effective_total = self.total_target or self.fetch_limit
+        if effective_total <= 0:
+            raise UserError('Maks Data Ditarik harus lebih besar dari 0.')
+        if self.batch_size <= 0:
+            raise UserError('Batch Size untuk Fetch harus lebih besar dari 0.')
+
+        raw_list = []
+        loop_count = math.ceil(effective_total / self.batch_size)
+
+        for i in range(loop_count):
+            offset = self.fetch_skip + (i * self.batch_size)
+            batch_data = self.config_id.fetch_kit_assembly_data(
+                limit=self.batch_size,
+                offset=offset,
+            )
+            if not batch_data:
+                break
+            raw_list.extend(batch_data)
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        Product = self.env['product.template']
+        Bom = self.env['mrp.bom']
 
         new_count = existing_count = 0
         lines_to_create = []
 
         for item in raw_list:
-            existing = Product.browse()
+            reference_nbr = item.get('reference_nbr') or ''
+            existing_bom = Bom.browse()
+            if reference_nbr:
+                existing_bom = Bom.search([('code', '=', reference_nbr)], limit=1)
 
-            if item['external_id']:
-                existing = Product.search([
-                    ('adt_external_id', '=', item['external_id'])
-                ], limit=1)
-
-            if not existing and item['inventory_id']:
-                existing = Product.search([
-                    ('default_code', '=', item['inventory_id'])
-                ], limit=1)
-
-            if existing:
+            if existing_bom:
                 existing_count += 1
-                msg = f'Sudah ada → akan diupdate: {existing.name}'
+                msg = f'Sudah ada → akan diupdate: {existing_bom.display_name}'
             else:
                 new_count += 1
                 msg = ''
 
             lines_to_create.append({
-                'config_id':              self.config_id.id,
-                'row_number':             item['row_number'],
-                'external_id':            item['external_id'],
-                'inventory_id':           item['inventory_id'],
-                'description':            item['description'],
-                'item_type':              item['item_type'],
-                'item_class':             item['item_class'],
-                'item_status':            item['item_status'],
-                'base_uom':               item['base_uom'],
-                'valuation_method':       item['valuation_method'],
-                'last_modified_datetime': item['last_modified_datetime'],
-                'import_state':           'pending',
-                'import_message':         msg,
-                'odoo_product_id':        existing.id if existing else False,
-                'selected':               True,
-                'sync_date':              fields.Datetime.now(),
+                'config_id': self.config_id.id,
+
+                # Header fields
+                'row_number': item.get('row_number') or 0,
+                'external_id': item.get('external_id') or '',
+                'inventory_id': item.get('inventory_id') or '',
+                'description': item.get('description') or '',
+                'last_modified_datetime': item.get('last_modified_datetime') or '',
+                'location': item.get('location') or '',
+                'post_period': item.get('post_period') or '',
+                'quantity': item.get('quantity') or '',
+                'reason_code': item.get('reason_code') or '',
+                'reference_nbr': reference_nbr,
+                'requested_on': item.get('requested_on') or '',
+                'revision': item.get('revision') or '',
+                'status': item.get('status') or '',
+                'type': item.get('type') or '',
+                'uom': item.get('uom') or '',
+                'warehouse': item.get('warehouse') or '',
+
+                # Line fields
+                'line_external_id': item.get('line_external_id') or '',
+                'line_note': item.get('line_note') or '',
+                'line_inventory_id': item.get('line_inventory_id') or '',
+                'line_component_qty': item.get('line_component_qty') or '',
+                'line_nbr': item.get('line_nbr') or '',
+                'line_location_id': item.get('line_location_id') or '',
+                'line_quantity': item.get('line_quantity') or '',
+                'line_reason_code': item.get('line_reason_code') or '',
+                'stock_inventory_id': item.get('stock_inventory_id') or '',
+                'line_uom': item.get('line_uom') or '',
+
+                # Import flags
+                'import_state': 'pending',
+                'import_message': msg,
+                'odoo_bom_id': existing_bom.id if existing_bom else False,
+                'selected': True,
+                'sync_date': fields.Datetime.now(),
             })
 
         self.env['acumatica.kit.assembly.line'].create(lines_to_create)
@@ -213,55 +238,28 @@ class ImportKitAssemblyWizard(models.TransientModel):
         
     def action_import_batch(self):
         self.ensure_one()
-        _logger.info("Memulai batch import kit assembly...")
+        Line = self.env['acumatica.kit.assembly.line']
 
-        BATCH_SIZE = 1000
-        batch_
-        _;logger.info("Mencari hingga %s record pending untuk diimport...", BATCH_SIZE)
-
-        lines = self.env['acumatica.kit.assembly.line'].search([
+        domain = [
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
             ('selected', '=', True),
-        ], limit=BATCH_SIZE)
+        ]
 
+        lines = Line.search(domain, limit=1000)
         if not lines:
             raise UserError('Tidak ada data pending untuk diimport.')
-        
-        _logger.info("Menemukan %s record pending untuk diimport.", len(lines))
-        total_before = self.env['acumatica.kit.assembly.line'].search_count([
-            ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
-            ('selected', '=', True),
-        ])
 
-        count_to_import = round(total_before / BATCH_SIZE)
+        lines._do_import()
+        self.env.cr.commit()
 
-        for i in range(count_to_import + 1):
-            _logger.info("Memulai batch import ke-%s dari %s...", i + 1, count_to_import + 1)
-            lines._do_import()
-
-            # 🔥 penting: commit biar tidak nge-hang
-            self.env.cr.commit()
-
-        total_after = self.env['acumatica.kit.assembly.line'].search_count([
-            ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
-            ('selected', '=', True),
-        ])
-
-        _logger.info(
-            "Import batch selesai: %s -> %s",
-            total_before,
-            total_after
-        )
-
+        remaining = Line.search_count(domain)
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': 'Batch Import Selesai',
-                'message': f'{len(lines)} data diproses. Sisa: {total_after}',
+                'message': f'{len(lines)} data diproses. Sisa pending: {remaining}',
                 'type': 'success',
                 'sticky': False,
             },

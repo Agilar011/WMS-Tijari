@@ -21,13 +21,13 @@ class AcumaticaConfig(models.Model):
     base_url = fields.Char(
         string='Base URL',
         required=True,
-        default='http://34.101.103.239/acumportal/entity',
+        default='http://staging.aditya.group/acumportal/entity',
         help='Contoh: http://your-server/acumportal/entity',
     )
     api_version = fields.Char(
         string='API Version',
         required=True,
-        default='25.200.001',
+        default='25.200.002',
     )
     username = fields.Char(
         string='Username',
@@ -122,7 +122,7 @@ class AcumaticaConfig(models.Model):
             pass  # Logout gagal tidak masalah
 
     # ─── Fetch UoM dari API ──────────────────────────
-    def fetch_uom_data(self, limit=500):
+    def fetch_uom_data(self, limit=500, offset=0):
         """
         Ambil data Units of Measure dari Acumatica API.
         Return: list of dict { unit_id, description, external_id }
@@ -132,7 +132,7 @@ class AcumaticaConfig(models.Model):
 
         try:
             endpoint = f"{self.api_url}/UnitsOfMeasure"
-            params = {"$top": limit}
+            params = {"$top": limit, "$skip": offset}
 
             response = session.get(endpoint, params=params, timeout=60)
 

@@ -20,3 +20,4 @@ from . import import_stock_item_wizard
 from . import import_customer_wizard
 from . import import_uom_wizard
 from . import import_kit_assembly_wizard
+from . import import_shipvia_wizard

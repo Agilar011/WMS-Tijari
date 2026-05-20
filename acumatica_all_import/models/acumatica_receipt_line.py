@@ -2,6 +2,7 @@ from odoo import models, fields, api
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
 import logging
+import requests
 
 _logger = logging.getLogger(__name__)
 
@@ -100,6 +101,17 @@ class AcumaticaReceiptLine(models.Model):
                 vendor = Partner.search([('name', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
         return vendor
 
+    def _resolve_uom(self, uom_name):
+        """
+        Lookup uom.uom by name (case-insensitive).
+        UOM sudah diimport sebelumnya ke uom.uom.
+        Return: uom.uom record atau browse() jika tidak ditemukan.
+        """
+        if not uom_name:
+            return self.env['uom.uom'].browse()
+        uom = self.env['uom.uom'].search([('name', '=ilike', uom_name)], limit=1)
+        return uom
+
     # def _find_product(self, line):
     #     Product = self.env['product.product']
     #     product = False
@@ -110,6 +122,54 @@ class AcumaticaReceiptLine(models.Model):
     #     if not product and line.transaction_description:
     #         product = Product.search([('name', '=', line.transaction_description)], limit=1)
     #     return product
+
+    def _search_product_from_acumatica(self, line):
+        session = self.config_id._do_login()
+        try:
+            endpoint = f"{self.config_id.base_url}/{self.config_id.endpoint_name}"
+            params = {'$top': 1, '$filter': f"InventoryID eq '{line.inventory_id}'"}
+            response = session.get(endpoint, params=params, timeout=90)
+            if response.status_code != 200:
+                raise UserError(f'Gagal ambil data Inventory Receipt (HTTP {response.status_code}): {response.text}')
+
+            uom = self._resolve_uom(line.base_uom)
+            if not uom and line.base_uom:
+                _logger.warning(
+                    "UOM '%s' tidak ditemukan di Odoo untuk item %s",
+                    line.base_uom, line.inventory_id
+                )
+
+            odoo_type = self.ITEM_TYPE_MAP.get(
+                    (line.item_type or '').lower(), 'consu'
+                )
+
+            valuation = self.VALUATION_MAP.get(line.valuation_method or '', False)
+
+            item_status = self.STATUS_MAP.get(line.item_status or '', False)
+
+            raw_data = self._normalize_rows(response.json())
+            vals = {
+                    # Field standar Odoo
+                    'name':         raw_data.description,
+                    'default_code': raw_data.inventory_id or False,
+                    'type':         odoo_type,
+
+                    # UOM
+                    'uom_id':    uom.id if uom else False,
+                    'uom_po_id': uom.id if uom else False,
+
+                    # Field custom adt_
+                    'adt_external_id':            raw_data.external_id or False,
+                    'adt_item_class':             raw_data.item_class or False,
+                    'adt_item_status':            item_status or False,
+                    'adt_valuation_method':       valuation or False,
+                    'adt_last_modified_datetime': self._parse_dt(raw_data.last_modified_datetime),
+                }
+            
+        finally:
+            self._do_logout(session)
+            self.last_sync = fields.Datetime.now()
+
     def _find_product(self, line):
         Product = self.env['product.product']
 
@@ -133,6 +193,15 @@ class AcumaticaReceiptLine(models.Model):
                 'default_code': line.inventory_id or False,
                 'type': 'consu',  # stockable
             })
+            session = self.config_id._do_login()
+            endpoint = f"{self.config_id.base_url}/{self.config_id.endpoint_name}"
+            params = {'$top': 1, '$filter': f"InventoryID eq '{line.inventory_id}'"}
+            response = session.get(endpoint, params=params, timeout=90)
+            if response.status_code != 200:
+                raise UserError(f'Gagal ambil data Inventory Receipt (HTTP {response.status_code}): {response.text}')
+
+            raw_data = self._normalize_rows(response.json())
+
 
         return product
 
@@ -230,7 +299,7 @@ class AcumaticaReceiptLine(models.Model):
                         if picking_type.default_location_src_id
                         else self.env.ref('stock.stock_location_suppliers').id
                     ),
-                    'location_dest_id': dest_location.id,
+                    # 'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
                     'origin': origin,
                     'note': first.note or False,

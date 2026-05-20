@@ -13,7 +13,7 @@ class AcumaticaTransferOneStepConfig(models.Model):
     _rec_name = 'name'
 
     name = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
-    base_url = fields.Char(string='Base URL', required=True, default='http://34.101.103.239/acumportal/entity')
+    base_url = fields.Char(string='Base URL', required=True, default='http://staging.aditya.group/acumportal/entity')
     api_version = fields.Char(string='API Version', required=True, default='25.200.002')
     username = fields.Char(string='Username', required=True, default='wms')
     password = fields.Char(string='Password', required=True)

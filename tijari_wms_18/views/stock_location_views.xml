@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_stock_location_acumatica_list" model="ir.ui.view">
+        <field name="name">stock.location.acumatica.list</field>
+        <field name="model">stock.location.acumatica</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="odoo_location_id"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+</odoo>

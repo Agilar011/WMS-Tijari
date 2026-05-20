@@ -80,8 +80,7 @@ class ImportStockItemWizard(models.TransientModel):
             offset = i * self.batch_size
             batch_data = self.config_id.fetch_stock_item_data(
                 limit=self.batch_size,
-                # offset=offset,
-                odata_filter=self.odata_filter,
+                offset=offset,
             )
 
             if not batch_data:
