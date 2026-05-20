@@ -154,6 +154,7 @@ class StockMoveLine(models.Model):
 
             # Untuk PUT → cek unique_code lokasi (aku anggap DESTINATION location)
             if operation_category == 'put':
+                print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
                 print(f">>> Operation Category: PUT") # Cek di terminal Odoo
                 # kalau belum ada input, keep invisible
                 print(f">>> Line Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
@@ -179,6 +180,7 @@ class StockMoveLine(models.Model):
 
             # Untuk PACK → cek lot + unique_code (aku anggap SOURCE location)
             elif operation_category == 'delivery':
+                print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
                 print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
                 print(f">>> Evaluating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
                 # kalau belum ada input sama sekali, invisible
