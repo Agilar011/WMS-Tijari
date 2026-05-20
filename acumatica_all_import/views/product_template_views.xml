@@ -7,6 +7,16 @@
         <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
+                <page name="Sku History" string="Historical SKU">
+                    <field name="sku_history_ids" nolabel="1" readonly="1">
+                        <list>
+                            <field name="sku"/>
+                            <field name="date_start"/>
+                            <field name="date_end"/>
+                            <field name="is_current"/>
+                        </list>
+                    </field>
+                </page>
                 <page string="Acumatica">
                     <group>
                         <group string="Identitas">

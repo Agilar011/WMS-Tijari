@@ -28,4 +28,4 @@ class StockMove(models.Model):
     adt_from_location_code = fields.Char(string='From Location (Acumatica)')
     adt_quantity = fields.Float(string='Quantity (Acumatica)')
     adt_type = fields.Char(string='Type (Acumatica)')
-    adt_line_description = fields.Char(string='Line Description (Acumatica)')
+    adt_acumatica_write_date = fields.Datetime(string='Last Modified (Acumatica)')

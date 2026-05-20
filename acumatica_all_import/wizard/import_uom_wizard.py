@@ -24,6 +24,11 @@ class ImportUomWizard(models.TransientModel):
         default=500,
         help='Jumlah maksimal record yang diambil dari API',
     )
+    batch_size = fields.Integer(
+        string='Batch Size untuk Import',
+        default=20,
+        help='Jumlah record yang diimport sekaligus saat proses import',
+    )
     state = fields.Selection([
         ('draft',    'Siap'),
         ('fetched',  'Data Sudah Ditarik'),
@@ -47,8 +52,16 @@ class ImportUomWizard(models.TransientModel):
             ('config_id', '=', self.config_id.id)
         ]).unlink()
 
-        # Fetch dari API
-        raw_list = self.config_id.fetch_uom_data(limit=self.fetch_limit)
+        import math
+
+        raw_list = []
+        loop_count = math.ceil(self.fetch_limit / 200) if self.fetch_limit else 0
+        for i in range(loop_count):
+            offset = i * 200
+            batch_data = self.config_id.fetch_uom_data(limit=200, offset=offset)
+            if not batch_data:
+                break
+            raw_list.extend(batch_data)
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')

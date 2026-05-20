@@ -14,8 +14,8 @@ class AcumaticaWarehouseConfig(models.Model):
 
     name         = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
     base_url     = fields.Char(string='Base URL', required=True,
-                               default='http://34.101.103.239/acumportal/entity')
-    api_version  = fields.Char(string='API Version', required=True, default='25.200.001')
+                               default='http://staging.aditya.group/acumportal/entity')
+    api_version  = fields.Char(string='API Version', required=True, default='25.200.002')
     username     = fields.Char(string='Username', required=True, default='wms')
     password     = fields.Char(string='Password', required=True)
     company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
@@ -83,7 +83,7 @@ class AcumaticaWarehouseConfig(models.Model):
         except Exception:
             pass
 
-    def fetch_warehouse_data(self, limit=50):
+    def fetch_warehouse_data(self, limit=50, offset=0):
         """
         Fetch Warehouse + Locations dari Acumatica.
         Endpoint: /Warehouse?$expand=Locations&$top={limit}
@@ -94,7 +94,7 @@ class AcumaticaWarehouseConfig(models.Model):
 
         try:
             endpoint = f"{self.api_url}/Warehouse"
-            params   = {"$expand": "Locations", "$top": limit}
+            params   = {"$expand": "Locations", "$top": limit, "$skip": offset}
 
             response = session.get(endpoint, params=params, timeout=60)
 

@@ -47,7 +47,7 @@ class StockWarehouse(models.Model):
     adt_state                 = fields.Boolean(string='Active (Acumatica)',
                                                help='Active status dari Acumatica WMS')
     adt_drop_ship_location_id = fields.Char(string='Drop Ship Location ID')
-    adt_last_modified_dt      = fields.Datetime(string='Last Modified (Acumatica)')
+    adt_acumatica_write_date      = fields.Datetime(string='Last Modified (Acumatica)')
     adt_receiving_location_id = fields.Char(string='Receiving Location ID')
     adt_rma_location_id       = fields.Char(string='RMA Location ID')
     adt_shipping_location_id  = fields.Char(string='Shipping Location ID')

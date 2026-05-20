@@ -1,8 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_acumatica_warehouse_config_manager,acumatica.warehouse.config manager,model_acumatica_warehouse_config,base.group_system,1,1,1,1
-access_acumatica_warehouse_config_user,acumatica.warehouse.config user,model_acumatica_warehouse_config,base.group_user,1,0,0,0
-access_acumatica_warehouse_line_manager,acumatica.warehouse.line manager,model_acumatica_warehouse_line,base.group_system,1,1,1,1
-access_acumatica_warehouse_line_user,acumatica.warehouse.line user,model_acumatica_warehouse_line,base.group_user,1,1,1,1
-access_acumatica_warehouse_location_line_manager,acumatica.warehouse.location.line manager,model_acumatica_warehouse_location_line,base.group_system,1,1,1,1
-access_acumatica_warehouse_location_line_user,acumatica.warehouse.location.line user,model_acumatica_warehouse_location_line,base.group_user,1,1,1,1
-access_import_warehouse_wizard_user,import.warehouse.wizard user,model_import_warehouse_wizard,base.group_user,1,1,1,1

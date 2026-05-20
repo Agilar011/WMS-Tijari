@@ -53,7 +53,7 @@ class ProductTemplate(models.Model):
         string='Valuation Method (Acumatica)',
         help='ValuationMethod dari Acumatica WMS',
     )
-    adt_last_modified_datetime = fields.Datetime(
+    adt_acumatica_write_date = fields.Datetime(
         string='Last Modified (Acumatica)',
         help='LastModifiedDateTime dari Acumatica WMS',
     )
@@ -69,3 +69,54 @@ class ProductTemplate(models.Model):
     adt_sales_unit     = fields.Char(string='Sales Unit (Acumatica)',    help='SalesUnit dari Acumatica WMS')
     adt_volume_uom     = fields.Char(string='Volume UOM (Acumatica)',    help='VolumeUOM dari Acumatica WMS')
     adt_weight_uom     = fields.Char(string='Weight UOM (Acumatica)',    help='WeightUOM dari Acumatica WMS')
+
+    sku_history_ids = fields.One2many(
+        'product.sku.history',
+        'product_tmpl_id',
+        string='SKU History',
+    )
+    acumatica_sync_date = fields.Datetime(
+        string='Last Acumatica Sync',
+        copy=False,
+    )
+
+
+class ProductSkuHistory(models.Model):
+    _name = 'product.sku.history'
+    _description = 'Product SKU History'
+    _order = 'date_start desc, id desc'
+    _rec_name = 'sku'
+
+    product_tmpl_id = fields.Many2one(
+        'product.template',
+        string='Product',
+        required=True,
+        index=True,
+        ondelete='cascade',
+    )
+
+    sku = fields.Char(
+        string='SKU',
+        required=True,
+        index=True,
+    )
+    date_start = fields.Datetime(
+        string='Start Date',
+        required=True,
+        default=fields.Datetime.now,
+        index=True,
+    )
+
+    date_end = fields.Datetime(
+        string='End Date',
+        index=True,
+    )
+
+    is_current = fields.Boolean(
+        string='Current SKU',
+        default=True,
+        index=True,
+    )
+
+    note = fields.Text()
+

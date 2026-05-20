@@ -15,9 +15,9 @@ class AcumaticaVendorConfig(models.Model):
     name         = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
     base_url     = fields.Char(
         string='Base URL', required=True,
-        default='http://34.101.103.239/acumportal/entity',
+        default='http://staging.aditya.group/acumportal/entity',
     )
-    api_version  = fields.Char(string='API Version', required=True, default='25.200.001')
+    api_version  = fields.Char(string='API Version', required=True, default='25.200.002')
     username     = fields.Char(string='Username', required=True, default='wms')
     password     = fields.Char(string='Password', required=True)
     company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
@@ -160,14 +160,16 @@ class AcumaticaVendorConfig(models.Model):
                     'external_id':             item.get("id", "") or "",
                     'row_number':              item.get("rowNumber", 0),
                     # Mandatory
+                    'note':                    item.get("note", {}).get("value", "") or "",
+                    'account_ref':             val(item,  "AccountRef"),
+                    'b_account_ref':           val(item,  "BAccountRef"),
                     'vendor_id':               val(item,  "VendorID"),
                     'vendor_name':             val(item,  "VendorName"),
-                    'location_name':           val(item,  "LocationName"),
-                    'status':                  val(item,  "Status"),
-                    'lead_time_days':          ival(item, "LeadTimedays"),
                     'fob_point':               val(item,  "FOBPoint"),
                     'last_modified_date_time': val(item,  "LastModifiedDateTime"),
-                    'note':                    item.get("note", {}).get("value", "") or "",
+                    'lead_time_days':          ival(item, "LeadTimedays"),
+                    'location_name':           val(item,  "LocationName"),
+                    'status':                  val(item,  "Status"),
                     # Optional
                     'vendor_class':            val(item,  "VendorClass"),
                 })

@@ -27,6 +27,9 @@
         'views/stock_report_inherit_inventory.xml',
         'views/master_menu_view.xml',
         'views/assets.xml',
+        'views/stock_location_action.xml',
+        'views/stock_location_menu.xml',
+        'views/stock_location_views.xml',
     ],
     'assets': {
         'web.assets_frontend': [

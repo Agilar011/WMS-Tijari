@@ -41,7 +41,7 @@ class ResPartner(models.Model):
     )
 
     # ══════════════════════════════════════════════════════
-    # FIELD CUSTOMER
+    # FIELD CUSTOMER & CUSTOMER LOCATION
     # ══════════════════════════════════════════════════════
 
     adt_b_account_id = fields.Char(
@@ -85,8 +85,25 @@ class ResPartner(models.Model):
     adt_note = fields.Text(
         string='Note (Acumatica)',
         help='Note/keterangan dari Acumatica WMS',
-    )
-
+    )   
+    adt_location_id = fields.Char(string='Acumatica Location ID', index=True)
+    adt_location_name = fields.Char(string='Acumatica Location Name', index=True)
+    adt_acumatica_write_date = fields.Datetime(string='Acumatica Last Modified')
+    adt_address_override = fields.Boolean(string='Address Override')
+    adt_created_dt = fields.Datetime(string='Acumatica Created Date')
+    adt_order_priority = fields.Integer(string='Order Priority')
+    adt_shipping_branch = fields.Char(string='Shipping Branch')
+    adt_ship_via = fields.Char(string='Ship Via')
+    adt_tax_exemption_nbr = fields.Char(string='Tax Exemption Number')
+    adt_default = fields.Boolean(string='Default Location')
+    adt_entity_usage_type = fields.Char(string='Entity Usage Type')
+    adt_ext_ref_nbr = fields.Char(string='External Ref Number')
+    adt_fedex_ground_collect = fields.Boolean(string='FedEx Ground Collect')
+    adt_insurance = fields.Boolean(string='Insurance')
+    adt_ship_via = fields.Char(string='Ship Via')
+    adt_tax_exemption_number = fields.Char(string='Tax Exemption Number')
+    adt_tax_registration_id = fields.Char(string='Tax Registration ID')
+    adt_tax_exemption_nbr = fields.Char(string='Tax Exemption Number')
     # ══════════════════════════════════════════════════════
     # FIELD VENDOR
     # ══════════════════════════════════════════════════════
@@ -113,3 +130,8 @@ class ResPartner(models.Model):
     #     string='Customer Rank',
     #     help='Used to prioritize customers during import (lower is higher priority)',
     # )
+    partner_type = fields.Selection([
+        ('customer', 'Customer'),
+        ('vendor', 'Vendor'),
+        ('shipvia', 'ShipVia')
+    ], string='Partner Type', default='customer', required=True)

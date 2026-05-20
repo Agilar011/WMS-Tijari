@@ -1,8 +1,8 @@
 <odoo noupdate="1">
     <record id="acumatica_issue_config_default" model="acumatica.issue.config">
         <field name="name">Acumatica Issue Change Item - Default</field>
-        <field name="base_url">http://34.101.103.239/acumportal/entity</field>
-        <field name="api_version">25.200.001</field>
+        <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+        <field name="api_version">25.200.002</field>
         <field name="username">wms</field>
         <field name="password">WMSAditya@2026</field>
         <field name="company_code">asgjkt</field>

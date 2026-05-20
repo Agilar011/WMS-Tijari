@@ -17,7 +17,7 @@ class AcumaticaCustomerConfig(models.Model):
         string='Base URL', required=True,
         default='http://34.101.103',
     )
-    api_version = fields.Char(string='API Version', required=True, default='25.200.001')
+    api_version = fields.Char(string='API Version', required=True, default='25.200.002')
     username    = fields.Char(string='Username', required=True, default='wms')
     password    = fields.Char(string='Password', required=True)
     company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
@@ -135,20 +135,19 @@ class AcumaticaCustomerConfig(models.Model):
                     'external_id':            item.get("id", "") or "",
                     'row_number':             item.get("rowNumber", 0),
                     # Field yang diimport ke res.partner
-                    'customer_id':            val(item, "CustomerID"),
-                    'b_account_id':           str(val(item, "BAccountID")) if val(item, "BAccountID") else "",
-                    'customer_name':          val(item, "CustomerName"),
-                    'customer_class':         val(item, "CustomerClass"),
-                    'status':                 val(item, "Status"),
-                    'currency_id':            val(item, "CurrencyID"),
-                    'warehouse_id':           val(item, "WarehouseID"),
-                    'shipping_zone_id':       val(item, "ShippingZoneID"),
-                    'fob_point':              val(item, "FOBPoint"),
-                    'created_datetime':       val(item, "CreatedDateTime"),
-                    'last_modified_datetime': val(item, "LastModifiedDateTime"),
-                    'note_id':                val(item, "NoteID"),
                     'note':                   item.get("note", {}).get("value", "") or "",
+                    'b_account_id':           str(val(item, "BAccountID")) if val(item, "BAccountID") else "",
+                    'customer_class':         val(item, "CustomerClass"),
+                    'customer_id':            val(item, "CustomerID"),
+                    'customer_name':          val(item, "CustomerName"),
+                    'fob_point':              val(item, "FOBPoint"),
+                    'last_modified_datetime': val(item, "LastModifiedDateTime"),
                     'location_name':          val(item, "LocationName"),
+                    'note_id':                val(item, "NoteID"),
+                    'shipping_zone_id':       val(item, "ShippingZoneID"),
+                    'status':                 val(item, "Status"),
+                    'warehouse_id':           val(item, "WarehouseID"),
+                    'tax_registration_id':    val(item, "TaxRegistrationID"),
                 })
 
             return result
