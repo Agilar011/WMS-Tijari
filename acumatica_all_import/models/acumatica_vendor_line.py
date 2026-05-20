@@ -39,6 +39,8 @@ class AcumaticaVendorLine(models.Model):
     fob_point              = fields.Char(string='FOBPoint',        readonly=True)
     last_modified_date_time = fields.Char(string='LastModifiedDateTime', readonly=True)
     note                   = fields.Text(string='Note',            readonly=True)
+    account_ref            = fields.Char(string='AccountRef',      readonly=True)
+    b_account_ref          = fields.Char(string='BAccountRef',     readonly=True)
 
     # Optional
     vendor_class           = fields.Char(string='VendorClass',     readonly=True)
@@ -152,6 +154,7 @@ class AcumaticaVendorLine(models.Model):
                     'adt_last_modified_datetime': self._parse_dt(line.last_modified_date_time),
                     'adt_vendor_state':                   adt_state_val,
                     'adt_class':                   line.vendor_class or False,
+                    'partner_type':                 'vendor',
                 }
 
                 existing = self._find_existing_partner(line)

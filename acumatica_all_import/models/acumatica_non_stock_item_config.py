@@ -15,9 +15,9 @@ class AcumaticaNonStockItemConfig(models.Model):
     name         = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
     base_url     = fields.Char(
         string='Base URL', required=True,
-        default='http://34.101.103.239/acumportal/entity',
+        default='http://staging.aditya.group/acumportal/entity',
     )
-    api_version  = fields.Char(string='API Version', required=True, default='25.200.001')
+    api_version  = fields.Char(string='API Version', required=True, default='25.200.002')
     username     = fields.Char(string='Username', required=True, default='wms')
     password     = fields.Char(string='Password', required=True)
     company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
@@ -89,7 +89,7 @@ class AcumaticaNonStockItemConfig(models.Model):
         except Exception:
             pass
 
-    def fetch_non_stock_item_data(self, limit=50):
+    def fetch_non_stock_item_data(self, limit=50, offset=0):
         """
         Ambil data Non-Stock Item dari Acumatica API.
         Endpoint: GET /NonStockItem?$top={limit}
@@ -99,7 +99,7 @@ class AcumaticaNonStockItemConfig(models.Model):
 
         try:
             endpoint = f"{self.api_url}/NonStockItem"
-            params   = {"$top": limit}
+            params   = {"$top": limit, "$skip": offset}
             response = session.get(endpoint, params=params, timeout=60)
 
             if response.status_code != 200:

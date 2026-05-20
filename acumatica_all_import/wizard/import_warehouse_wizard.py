@@ -37,23 +37,29 @@ class ImportWarehouseWizard(models.TransientModel):
         old_lines = self.env['acumatica.warehouse.line'].search([
             ('config_id', '=', self.config_id.id)
         ])
-        old_lines.mapped('location_line_ids').unlink()
         old_lines.unlink()
 
-        raw_list = self.config_id.fetch_warehouse_data(limit=self.fetch_limit)
+        import math
+
+        raw_list = []
+        loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
+        for i in range(loop_count):
+            offset = i * self.batch_size
+            batch_data = self.config_id.fetch_warehouse_data(limit=self.batch_size, offset=offset)
+            if not batch_data:
+                break
+            raw_list.extend(batch_data)
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
         new_count = existing_count = total_loc = 0
-        WH = self.env['stock.warehouse']
+        WH = self.env['stock.location.acumatica']
 
         for item in raw_list:
             # Cek existing warehouse
             existing = WH.browse()
-            if item['external_id']:
-                existing = WH.search([('adt_external_id', '=', item['external_id'])], limit=1)
-            if not existing and item['warehouse_id']:
+            if item['warehouse_id']:
                 existing = WH.search([('code', '=', item['warehouse_id'])], limit=1)
 
             if existing:
@@ -82,24 +88,6 @@ class ImportWarehouseWizard(models.TransientModel):
                 'selected':              True,
                 'sync_date':             fields.Datetime.now(),
             })
-
-            # Buat detail location lines
-            loc_vals_list = []
-            for loc in item.get('locations', []):
-                loc_vals_list.append({
-                    'warehouse_line_id': wh_line.id,
-                    'row_number':        loc['row_number'],
-                    'external_id':       loc['external_id'],
-                    'location_id':       loc['location_id'],
-                    'description':       loc['description'],
-                    'active':            loc['active'],
-                    'note':              loc['note'],
-                    'import_state':      'pending',
-                })
-                total_loc += 1
-
-            if loc_vals_list:
-                self.env['acumatica.warehouse.location.line'].create(loc_vals_list)
 
         self.write({
             'state':           'fetched',

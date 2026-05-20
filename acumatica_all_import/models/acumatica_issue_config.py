@@ -15,7 +15,7 @@ class AcumaticaIssueConfig(models.Model):
 
     name = fields.Char(required=True, default='Acumatica Issue Change Item')
     base_url = fields.Char(required=True, help='Contoh: http://server/acumportal/entity')
-    api_version = fields.Char(required=True, default='25.200.001')
+    api_version = fields.Char(required=True, default='25.200.002')
     username = fields.Char(required=True)
     password = fields.Char(required=True)
     company_code = fields.Char(required=True)

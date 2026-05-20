@@ -25,4 +25,40 @@
 
         </field>
     </record>
+
+    <record id="view_partner_form_inherit_acumatica" model="ir.ui.view">
+        <field name="name">res.partner.form.inherit.acumatica</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='name']" position="after">
+
+                    <div style="font-size: 14px !important; line-height: 1.4; margin-top: 8px;">
+
+                        <div style="display: flex; gap: 16px;">
+                            <div>Code</div>
+                            <field name="company_registry"
+                                nolabel="1"
+                                class="oe_inline"/>
+                        </div>
+
+                        <div style="display: flex; gap: 16px;" >
+                            <div>Type</div>
+                            <field name="partner_type"
+                                nolabel="1"
+                                class="oe_inline"/>
+                        </div>
+
+                    </div>
+<!-- 
+                <group class="mt-2">
+                    <field name="company_registry" style="font-weight: 200;" />
+                    <field name="partner_type" />
+                </group> -->
+
+            </xpath>
+
+        </field>
+    </record>
 </odoo>

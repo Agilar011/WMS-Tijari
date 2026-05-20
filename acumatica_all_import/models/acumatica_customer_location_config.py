@@ -15,9 +15,9 @@ class AcumaticaCustomerLocationConfig(models.Model):
     name         = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
     base_url     = fields.Char(
         string='Base URL', required=True,
-        default='http://34.101.103.239/acumportal/entity',
+        default='http://staging.aditya.group/acumportal/entity',
     )
-    api_version  = fields.Char(string='API Version', required=True, default='25.200.001')
+    api_version  = fields.Char(string='API Version', required=True, default='25.200.002')
     username     = fields.Char(string='Username', required=True, default='wms')
     password     = fields.Char(string='Password', required=True)
     company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
@@ -89,7 +89,7 @@ class AcumaticaCustomerLocationConfig(models.Model):
         except Exception:
             pass
 
-    def fetch_customer_location_data(self, batch_size=100, start_skip=0, target_total=None):
+    def fetch_customer_location_data(self, limit=100, offset=0):
         self.ensure_one()
         session = self._do_login()
 
@@ -97,125 +97,97 @@ class AcumaticaCustomerLocationConfig(models.Model):
             endpoint = f"{self.api_url}/CustomerLocation"
 
             all_results = []
-            current_skip = start_skip
+            params = {
+                "$expand": "Contact/Address",
+                "$top": limit,
+                "$skip": offset,
+            }
 
-            while True:
-                # =========================
-                # STOP JIKA TARGET TERCAPAI
-                # =========================
-                if target_total and len(all_results) >= target_total:
-                    break
+            response = session.get(endpoint, params=params, timeout=60)
 
-                # hitung batch yg akan diambil
-                current_batch_size = batch_size
-                if target_total:
-                    remaining = target_total - len(all_results)
-                    current_batch_size = min(batch_size, remaining)
-
-                params = {
-                    "$expand": "LocationContact/Address",
-                    "$top": current_batch_size,
-                    "$skip": current_skip,
-                }
-
-                response = session.get(endpoint, params=params, timeout=60)
-
-                if response.status_code != 200:
-                    raise UserError(
-                        f'Gagal ambil data Customer Location '
-                        f'(HTTP {response.status_code}): {response.text}'
-                    )
-
-                raw_data = response.json()
-
-                if not raw_data:
-                    _logger.info("Data API habis.")
-                    break
-
-                _logger.info(
-                    "Fetch batch: %d records (skip=%d, top=%d)",
-                    len(raw_data), current_skip, current_batch_size
+            if response.status_code != 200:
+                raise UserError(
+                    f'Gagal ambil data Customer Location '
+                    f'(HTTP {response.status_code}): {response.text}'
                 )
 
-                # =========================
-                # HELPER
-                # =========================
-                def val(item, key):
-                    v = item.get(key, {})
+            raw_data = response.json()
+
+            # =========================
+            # HELPER
+            # =========================
+            def val(item, key):
+                v = item.get(key, {})
+                if isinstance(v, dict):
+                    return v.get("value", "") or ""
+                return ""
+
+            def bval(item, key):
+                v = item.get(key, {})
+                if isinstance(v, dict):
+                    return bool(v.get("value", False))
+                return False
+
+            def ival(item, key):
+                v = item.get(key, {})
+                if isinstance(v, dict):
+                    try:
+                        return int(v.get("value", 0) or 0)
+                    except:
+                        return 0
+                return 0
+
+            # =========================
+            # PARSE
+            # =========================
+            for item in raw_data:
+                contact = item.get("Contact", {}) or {}
+                address = contact.get("Address", {}) or {}
+
+                def aval(key):
+                    v = address.get(key, {})
                     if isinstance(v, dict):
                         return v.get("value", "") or ""
                     return ""
 
-                def bval(item, key):
-                    v = item.get(key, {})
-                    if isinstance(v, dict):
-                        return bool(v.get("value", False))
-                    return False
+                all_results.append({
+                    'external_id':          item.get("id", "") or "",
+                    'row_number':           item.get("rowNumber", 0),
+                    'note':                 item.get("note", {}).get("value", "") or "",
+                    'is_active':            bval(item, "Active"),
+                    'address_override':     bval(item, "AddressOverride"),
+                    'created_datetime':     val(item, "CreatedDateTime"),
+                    'customer':             val(item, "Customer"),
+                    'is_default':           bval(item, "Default"),
+                    'usage_type':           val(item, "EntityUsageType"),
+                    'ext_ref_number':       val(item, "ExtRefNbr"),
+                    'fed_ex_ground_collect': bval(item, "FedExGroundCollect"),
+                    'fob_point':            val(item, "FOBPoint"),
+                    'insurance':            bval(item, "Insurance"),
+                    'last_modified_datetime': val(item, "LastModifiedDateTime"),
+                    'lead_time_days':       ival(item, "LeadTimeDays"),
+                    'location_id_acumatica': val(item, "LocationID"),
+                    'location_name':        val(item, "LocationName"),
+                    'order_priority':       ival(item, "OrderPriority"),
+                    'shipping_branch':      val(item, "ShippingBranch"),
+                    'shipping_zone':        val(item, "ShippingZone"),
+                    'ship_via':             val(item, "ShipVia"),
+                    'status':               val(item, "Status"),
+                    'tax_exemption_number': val(item, "TaxExemptionNbr"),
+                    'tax_registration_id':   val(item, "TaxRegistrationID"),
+                    'warehouse':            val(item, "Warehouse"),
 
-                def ival(item, key):
-                    v = item.get(key, {})
-                    if isinstance(v, dict):
-                        try:
-                            return int(v.get("value", 0) or 0)
-                        except:
-                            return 0
-                    return 0
-
-                # =========================
-                # PARSE
-                # =========================
-                for item in raw_data:
-                    contact = item.get("LocationContact", {}) or {}
-                    address = contact.get("Address", {}) or {}
-
-                    def aval(key):
-                        v = address.get(key, {})
-                        if isinstance(v, dict):
-                            return v.get("value", "") or ""
-                        return ""
-
-                    all_results.append({
-                        'external_id':          item.get("id", "") or "",
-                        'row_number':           item.get("rowNumber", 0),
-                        'note':                 item.get("note", {}).get("value", "") or "",
-                        'customer':             val(item, "Customer"),
-                        'location_id_acumatica': val(item, "LocationID"),
-                        'location_name':        val(item, "LocationName"),
-                        'is_active':            bval(item, "Active"),
-                        'address_override':     bval(item, "AddressOverride"),
-                        'fob_point':            val(item, "FOBPoint"),
-                        'shipping_branch':      val(item, "ShippingBranch"),
-                        'status':               val(item, "Status"),
-                        'warehouse':            val(item, "Warehouse"),
-                        'is_default':           bval(item, "Default"),
-                        'usage_type':           val(item, "EntityUsageType"),
-                        'ext_ref_number':       val(item, "ExtRefNbr"),
-                        'fed_ex_ground_collect': bval(item, "FedExGroundCollect"),
-                        'insurance':            bval(item, "Insurance"),
-                        'lead_time_days':       ival(item, "LeadTimeDays"),
-                        'note_id':              val(item, "NoteID"),
-                        'order_priority':       ival(item, "OrderPriority"),
-                        'shipping_zone':        val(item, "ShippingZone"),
-                        'ship_via':             val(item, "ShipVia"),
-                        'created_datetime':     val(item, "CreatedDateTime"),
-                        'last_modified_datetime': val(item, "LastModifiedDateTime"),
-                        'address_line1':        aval("AddressLine1"),
-                        'city':                 aval("City"),
-                        'postal_code':          aval("PostalCode"),
-                        'state_code':           aval("State"),
-                        'country_code':         aval("Country"),
-                    })
-
-                batch_count = len(raw_data)
-                current_skip += batch_count
-
-                # stop kalau API habis
-                if batch_count < current_batch_size:
-                    _logger.info("Batch terakhir, data habis.")
-                    break
+                    'note_id':              val(item, "NoteID"),
+                    'address_line1':        aval("AddressLine1"),
+                    'address_line2':        aval("AddressLine2"),
+                    'city':                 aval("City"),
+                    'country_code':         aval("Country"),
+                    'country_name':         aval("CountryName"),
+                    'postal_code':          aval("PostalCode"),
+                    'state_code':           aval("State"),
+                })
 
             _logger.info("TOTAL FINAL: %d records", len(all_results))
-
             return all_results
 
         finally:

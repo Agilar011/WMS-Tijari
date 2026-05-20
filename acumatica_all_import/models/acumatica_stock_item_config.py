@@ -15,9 +15,9 @@ class AcumaticaStockItemConfig(models.Model):
     name         = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
     base_url     = fields.Char(
         string='Base URL', required=True,
-        default='http://34.101.103.239/acumportal/entity',
+        default='http://staging.aditya.group/acumportal/entity',
     )
-    api_version  = fields.Char(string='API Version', required=True, default='25.200.001')
+    api_version  = fields.Char(string='API Version', required=True, default='25.200.002')
     username     = fields.Char(string='Username', required=True, default='wms')
     password     = fields.Char(string='Password', required=True)
     company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
@@ -89,11 +89,11 @@ class AcumaticaStockItemConfig(models.Model):
         except Exception:
             pass
 
-    def fetch_stock_item_data(self, batch_size=100, start_skip=0, target_total=None):
+    def fetch_stock_item_data(self, limit=50, offset=0):
         """
         Fetch data Stock Item dengan:
-        - batch_size  = jumlah data per request
-        - start_skip  = titik awal data
+        - limit  = jumlah data per request
+        - offset  = titik awal data
         - target_total = total data yang ingin diambil (None = ambil semua)
         """
         self.ensure_one()
@@ -103,78 +103,43 @@ class AcumaticaStockItemConfig(models.Model):
             endpoint = f"{self.api_url}/StockItem"
 
             all_results = []
-            current_skip = start_skip
+            params = {"$top": limit, "$skip": offset}
 
-            while True:
-                # =========================
-                # STOP JIKA TARGET TERCAPAI
-                # =========================
-                if target_total and len(all_results) >= target_total:
-                    break
+            response = session.get(endpoint, params=params, timeout=60)
 
-                # tentukan batch size aktual
-                current_batch_size = batch_size
-                if target_total:
-                    remaining = target_total - len(all_results)
-                    current_batch_size = min(batch_size, remaining)
-
-                params = {
-                    "$top": current_batch_size,
-                    "$skip": current_skip,
-                }
-
-                response = session.get(endpoint, params=params, timeout=60)
-
-                if response.status_code != 200:
-                    raise UserError(
-                        f'Gagal ambil data Stock Item '
-                        f'(HTTP {response.status_code}): {response.text}'
-                    )
-
-                raw_data = response.json()
-
-                if not raw_data:
-                    _logger.info("Data API habis.")
-                    break
-
-                _logger.info(
-                    "Fetch StockItem batch: %d records (skip=%d, top=%d)",
-                    len(raw_data), current_skip, current_batch_size
+            if response.status_code != 200:
+                raise UserError(
+                    f'Gagal ambil data Stock Item '
+                    f'(HTTP {response.status_code}): {response.text}'
                 )
 
-                # =========================
-                # HELPER
-                # =========================
-                def val(item, key):
-                    v = item.get(key, {})
-                    if isinstance(v, dict):
-                        return v.get("value", "") or ""
-                    return ""
+            raw_data = response.json()
 
-                # =========================
-                # PARSE
-                # =========================
-                for item in raw_data:
-                    all_results.append({
-                        'external_id':            item.get("id", "") or "",
-                        'row_number':             item.get("rowNumber", 0),
-                        'inventory_id':           val(item, "InventoryID"),
-                        'description':            val(item, "Description"),
-                        'item_type':              val(item, "ItemType"),
-                        'item_class':             val(item, "ItemClass"),
-                        'item_status':            val(item, "ItemStatus"),
-                        'base_uom':               val(item, "BaseUOM"),
-                        'valuation_method':       val(item, "ValuationMethod"),
-                        'last_modified_datetime': val(item, "LastModifiedDateTime"),
-                    })
+            # =========================
+            # HELPER
+            # =========================
+            def val(item, key):
+                v = item.get(key, {})
+                if isinstance(v, dict):
+                    return v.get("value", "") or ""
+                return ""
 
-                batch_count = len(raw_data)
-                current_skip += batch_count
-
-                # stop kalau data API habis
-                if batch_count < current_batch_size:
-                    _logger.info("Batch terakhir, data habis.")
-                    break
+            # =========================
+            # PARSE
+            # =========================
+            for item in raw_data:
+                all_results.append({
+                    'external_id':            item.get("id", "") or "",
+                    'row_number':             item.get("rowNumber", 0),
+                    'inventory_id':           val(item, "InventoryID"),
+                    'description':            val(item, "Description"),
+                    'item_type':              val(item, "ItemType"),
+                    'item_class':             val(item, "ItemClass"),
+                    'item_status':            val(item, "ItemStatus"),
+                    'base_uom':               val(item, "BaseUOM"),
+                    'valuation_method':       val(item, "ValuationMethod"),
+                    'last_modified_datetime': val(item, "LastModifiedDateTime"),
+                })
 
             _logger.info("TOTAL STOCK ITEM TERAMBIL: %d", len(all_results))
 

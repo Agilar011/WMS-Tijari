@@ -87,32 +87,19 @@ class AcumaticaWarehouseLine(models.Model):
         except Exception:
             return False
 
-    def _find_existing_warehouse(self, rec):
+    def _find_existing_location(self, rec):
         """Cari warehouse code (BuildingID)."""
-        WH = self.env['stock.warehouse']
+        location = self.env['stock.location.acumatica']
         # if rec.external_id:
-        #     found = WH.search([('adt_external_id', '=', rec.external_id)], limit=1)
+        #     found = location.search([('adt_external_id', '=', rec.external_id)], limit=1)
         #     if found:
         #         return found
         if rec.building_id:
-            found = WH.search([('code', '=', rec.building_id)], limit=1)
+            found = location.search([('code', '=', rec.warehouse_id)], limit=1)
             if found:
                 return found
-        return WH.browse()
+        return location.browse()
     
-    def _find_existing_warehouse_location(self, rec):
-        """Cari warehouse location by code (WarehouseID)."""
-        WH = self.env['stock.location']
-        # if rec.external_id:
-        #     found = WH.search([('adt_external_id', '=', rec.external_id)], limit=1)
-        #     if found:
-        #         return found
-        if rec.warehouse_id:
-            found = WH.search([('name', '=', rec.warehouse_id)], limit=1)
-            if found:
-                return found
-        return WH.browse()
-
     # ─── Actions ─────────────────────────────────────
     def action_import_this(self):
         self.ensure_one()
@@ -148,7 +135,8 @@ class AcumaticaWarehouseLine(models.Model):
 
                 vals = {
                     'name':                    line.description,
-                    # 'code':                    line.warehouse_id,
+                    'code':                    line.warehouse_id,
+                    'active':                  line.active,
                     # 'adt_external_id':         line.external_id or False,
                     # 'adt_note':                line.note or False,
                     # 'adt_state':               line.active,
@@ -159,68 +147,36 @@ class AcumaticaWarehouseLine(models.Model):
                     # 'adt_shipping_location_id': line.shipping_location_id or False,
                 }
 
-                existing = self._find_existing_warehouse(line)
+                existing = self._find_existing_location(line)
                 if existing:
-                    location_existing = self.env['stock.location'].search([
-                        ('name', '=', line.warehouse_id),
-                    ], limit=1)
-
-                    if location_existing:
-                        line.write({
-                            'import_state': 'updated',
-                            'import_message': f'Location sudah ada: {location_existing.display_name}',
-                            'odoo_warehouse_id': existing.id,
-                        })
-                        updated += 1
-                        continue
-
-                    else:
-                        new_wh_location = self.env['stock.location'].create({
-                            **vals,
-                            'location_id': existing.lot_stock_id.id if existing.lot_stock_id else False,
-                            'usage': 'view',
-                        })
-                    odoo_wh = new_wh_location
-                    # existing.write(vals)
-                    # odoo_wh = existing
-                    # line.write({
-                    #     'import_state':    'updated',
-                    #     'import_message':  f'Diupdate: {existing.name} (code: {existing.code})',
-                    #     'odoo_warehouse_id': existing.id,
-                    # })
-                    # updated += 1
+                    existing.write(vals)
+                    line.write({
+                        'import_state':    'updated',
+                        'import_message':  f'Diupdate: {existing.name} (code: {existing.code})',
+                        # 'odoo_warehouse_id': existing.id,
+                    })
+                    updated += 1
                 else:
-                    # new_wh = self.env['stock.warehouse'].create(vals)
-                    building_code = (line.building_id or '').strip()
                     location_code = (line.warehouse_id or '').strip()
 
-                    if not building_code:
+                    if not location_code:
                         line.write({
                             'import_state': 'error',
-                            'import_message': 'BuildingID kosong, tidak bisa create warehouse',
+                            'import_message': 'WarehouseID kosong, tidak bisa create location',
                         })
                         error += 1
                         continue
-                    new_wh = self.env['stock.warehouse'].create({
-                        'name': line.building_id,
-                        'code': line.building_id
-                    })
-                    new_wh_location = self.env['stock.location'].create({
-                        **vals,
-                        'location_id': new_wh.lot_stock_id.id if new_wh.lot_stock_id else False,
-                        'usage': 'view',
-                    })
-                    odoo_wh = new_wh_location
+                    new_location = self.env['stock.location.acumatica'].create(vals)
                     line.write({
                         'import_state':    'imported',
-                        'import_message':  f'Dibuat: {new_wh.name} (code: {new_wh.code})',
-                        'odoo_warehouse_id': new_wh.id,
+                        'import_message':  f'Dibuat: {new_location.name} (code: {new_location.code})',
+                        # 'odoo_warehouse_id': new_location.id,
                     })
                     imported += 1
 
                 # ── Import location lines ──
-                if odoo_wh and line.location_line_ids:
-                    line.location_line_ids._do_import(odoo_wh)
+                # if odoo_wh and line.location_line_ids:
+                #     line.location_line_ids._do_import(odoo_wh)
 
             except Exception as e:
                 _logger.error("Error import Warehouse %s: %s", line.warehouse_id, str(e))

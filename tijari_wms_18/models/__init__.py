@@ -9,3 +9,4 @@ from . import stock_report_aging
 
 from . import product_template
 from . import product_product
+from . import stock_location

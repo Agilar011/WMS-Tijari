@@ -21,6 +21,11 @@ class ImportCustomerLocationWizard(models.TransientModel):
         default=100,
         help='Jumlah data per request ke API'
     )
+    batch_size = fields.Integer(
+        string='Batch Size untuk Import',
+        default=20,
+        help='Jumlah record yang diproses per batch saat import. Sesuaikan dengan performa server dan jumlah data. Default 20.',
+    )
 
     fetch_skip = fields.Integer(
         string='Mulai dari Data ke-',
@@ -64,24 +69,35 @@ class ImportCustomerLocationWizard(models.TransientModel):
         ]).unlink()
 
         # fetch dari API
-        raw_list = self.config_id.fetch_customer_location_data(
-            batch_size=self.fetch_limit,
-            start_skip=self.fetch_skip,
-            target_total=self.total_target or None
-        )
+        import math
+
+        raw_list = []
+        loop_count = math.ceil(self.fetch_limit / self.batch_size)
+
+        for i in range(loop_count):
+            offset = i * self.batch_size
+            batch_data = self.config_id.fetch_customer_location_data(
+                limit=self.batch_size,
+                offset=offset,
+            )
+
+            if not batch_data:
+                break
+
+            raw_list.extend(batch_data)
 
         if not raw_list:
             raise UserError('Tidak ada data dari API')
 
-        Loc     = self.env['acumatica.customer.location']
         Partner = self.env['res.partner']
 
         new_count = existing_count = no_customer_count = 0
         lines = []
 
         for item in raw_list:
-            existing = Loc.search([
-                ('adt_external_id', '=', item['external_id'])
+            existing = Partner.search([
+                ('name', '=', item['location_id_acumatica']),
+                ('parent_id.company_registry', '=', item['customer'])
             ], limit=1)
 
             partner = Partner.search([
@@ -99,6 +115,7 @@ class ImportCustomerLocationWizard(models.TransientModel):
                 msg = 'New'
 
             lines.append({
+                **item,
                 'config_id': self.config_id.id,
                 'external_id': item['external_id'],
                 'customer': item['customer'],

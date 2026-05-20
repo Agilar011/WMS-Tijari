@@ -162,13 +162,17 @@ class AcumaticaCustomerLocationLine(models.Model):
     ship_via               = fields.Char(string='ShipVia',         readonly=True)
     created_datetime       = fields.Char(string='CreatedDateTime', readonly=True)
     last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
+    tax_exemption_number   = fields.Char(string='TaxExemptionNbr', readonly=True)
+    tax_registration_id    = fields.Char(string='TaxRegistrationID', readonly=True)
 
     # Address dari LocationContact/Address
     address_line1          = fields.Char(string='AddressLine1',    readonly=True)
+    address_line2          = fields.Char(string='AddressLine2',    readonly=True)
     city                   = fields.Char(string='City',            readonly=True)
     postal_code            = fields.Char(string='PostalCode',      readonly=True)
     state_code             = fields.Char(string='State',           readonly=True)
     country_code           = fields.Char(string='Country',         readonly=True)
+    country_name           = fields.Char(string='CountryName',     readonly=True)
 
     # ── Status Import ─────────────────────────────────
     import_state = fields.Selection([
@@ -178,10 +182,15 @@ class AcumaticaCustomerLocationLine(models.Model):
         ('error',    'Error'),
     ], string='Status', default='pending', readonly=True)
 
-    import_message   = fields.Char(string='Keterangan',               readonly=True)
+    import_message   = fields.Char(string='Keterangan', readonly=True)
     odoo_location_id = fields.Many2one(
         'acumatica.customer.location',
         string='Location di Odoo',
+        readonly=True,
+    )
+    odoo_partner_id  = fields.Many2one(
+        'res.partner',
+        string='Customer di Odoo',
         readonly=True,
     )
     selected  = fields.Boolean(string='Pilih', default=True)
@@ -205,15 +214,11 @@ class AcumaticaCustomerLocationLine(models.Model):
 
     def _find_existing_location(self, rec):
         """Cari by UUID dulu, fallback by LocationID + partner."""
-        Loc = self.env['acumatica.customer.location']
-        if rec.external_id:
-            found = Loc.search([('adt_external_id', '=', rec.external_id)], limit=1)
-            if found:
-                return found
+        Loc = self.env['res.partner']
         if rec.location_id_acumatica:
             found = Loc.search([
-                ('adt_location_id', '=', rec.location_id_acumatica),
-                ('partner_id.company_registry', '=', rec.customer),
+                ('name', '=', rec.location_id_acumatica),
+                ('parent_id.company_registry', '=', rec.customer),
             ], limit=1)
             if found:
                 return found
@@ -253,10 +258,10 @@ class AcumaticaCustomerLocationLine(models.Model):
 
         for line in self:
             try:
-                if not line.location_name:
+                if not line.customer:
                     line.write({
                         'import_state':   'error',
-                        'import_message': 'LocationName kosong',
+                        'import_message': 'Customer kosong',
                     })
                     error += 1
                     continue
@@ -272,45 +277,46 @@ class AcumaticaCustomerLocationLine(models.Model):
                     })
                     error += 1
                     continue
-
+                country_id = self.env['res.country'].search([('code', '=', line.country_code)], limit=1).id if line.country_code else False
                 vals = {
                     # Identitas
                     'adt_external_id':  line.external_id or False,
-                    'adt_location_id':  line.location_id_acumatica or False,
-                    'name':             line.location_name,
+                    'name':             line.location_id_acumatica or False,
+                    'type':             'other',
+                    'company_type':     'person',
+                    'is_company':       False,
 
-                    # FK
-                    'partner_id':   partner.id,
-                    'warehouse_id': warehouse.id if warehouse else False,
-
-                    # Mandatory
-                    'adt_is_active':        line.is_active,
-                    'adt_address_override': line.address_override,
-                    'adt_fob_point':        line.fob_point or False,
-                    'adt_shipping_branch':  line.shipping_branch or False,
-                    'adt_status':           STATUS_MAP.get(line.status or '', False),
-
-                    # Optional
-                    'adt_default':               line.is_default,
-                    'adt_usage_type':            line.usage_type or False,
-                    'adt_ext_ref_number':        line.ext_ref_number or False,
-                    'adt_fed_ex_ground_collect': line.fed_ex_ground_collect,
-                    'adt_insurance':             line.insurance,
-                    'adt_lead_time_days':        line.lead_time_days or 0,
-                    'adt_note_id':               line.note_id or False,
                     'adt_note':                  line.note or False,
-                    'adt_order_priority':        line.order_priority or 0,
-                    'adt_shipping_zone':         line.shipping_zone or False,
-                    'adt_ship_via':              line.ship_via or False,
+                    # 'adt_is_active':             line.is_active,
+                    'adt_address_override':      line.address_override,
                     'adt_created_datetime':      self._parse_dt(line.created_datetime),
-                    'adt_last_modified_datetime': self._parse_dt(line.last_modified_datetime),
+                    'parent_id':                 partner.id,
+                    'adt_default':               line.is_default,
+                    'adt_entity_usage_type':            line.usage_type or False,
+                    'adt_ext_ref_nbr':        line.ext_ref_number or False,
+                    'adt_fedex_ground_collect': line.fed_ex_ground_collect,
+                    'adt_fob_point':             line.fob_point or False,
+                    'adt_shipping_branch':       line.shipping_branch or False,
+                    'adt_insurance':             line.insurance,
+                    'adt_acumatica_write_date':  self._parse_dt(line.last_modified_datetime),
+                    'adt_lead_time_days':        line.lead_time_days or 0,
+
+                    'adt_note_id':               line.note_id or False,
+                    'adt_order_priority':        line.order_priority or 0,
+                    'adt_shipping_zone_id':         line.shipping_zone or False,
+                    'adt_ship_via':              line.ship_via or False,
+                    'adt_status':                STATUS_MAP.get(line.status or '', False),
+                    'adt_tax_exemption_number':  line.tax_exemption_number or False,
+                    'adt_tax_registration_id':   line.tax_registration_id or False,
+                    'vat':                       line.tax_registration_id or False,  # untuk mempermudah pencarian di res.partner
+                    'adt_warehouse_id':          warehouse.id if warehouse else False,
 
                     # Address
                     'street':          line.address_line1 or False,
+                    'street2':         line.address_line2 or False,
                     'city':            line.city or False,
                     'zip':             line.postal_code or False,
-                    'adt_state_code':  line.state_code or False,
-                    'adt_country_code': line.country_code or False,
+                    'country_id':      country_id,
                 }
 
                 existing = self._find_existing_location(line)
@@ -319,16 +325,16 @@ class AcumaticaCustomerLocationLine(models.Model):
                     existing.write(vals)
                     line.write({
                         'import_state':    'updated',
-                        'import_message':  f'Diupdate: {existing.display_name_full}',
-                        'odoo_location_id': existing.id,
+                        'import_message':  f'Diupdate: {existing.name}',
+                        'odoo_partner_id': existing.id,
                     })
                     updated += 1
                 else:
-                    new_loc = self.env['acumatica.customer.location'].create(vals)
+                    new_loc = self.env['res.partner'].create(vals)
                     line.write({
                         'import_state':    'imported',
-                        'import_message':  f'Dibuat: {new_loc.display_name_full}',
-                        'odoo_location_id': new_loc.id,
+                        'import_message':  f'Dibuat: {new_loc.name}',
+                        'odoo_partner_id': new_loc.id,
                     })
                     imported += 1
 
@@ -361,11 +367,11 @@ class AcumaticaCustomerLocationLine(models.Model):
 
     def action_open_location(self):
         self.ensure_one()
-        if not self.odoo_location_id:
+        if not self.odoo_partner_id:
             raise UserError('Belum diimport.')
         return {
             'type':      'ir.actions.act_window',
-            'res_model': 'acumatica.customer.location',
-            'res_id':    self.odoo_location_id.id,
+            'res_model': 'res.partner',
+            'res_id':    self.odoo_partner_id.id,
             'view_mode': 'form',
         }

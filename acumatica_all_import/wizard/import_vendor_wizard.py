@@ -24,6 +24,11 @@ class ImportVendorWizard(models.TransientModel):
         string='Maks Data Ditarik',
         default=50,
     )
+    batch_size = fields.Integer(
+        string='Batch Size untuk Import',
+        default=20,
+        help='Jumlah record yang diproses per batch saat import. Sesuaikan dengan performa server dan jumlah data. Default 20.',
+    )
     # Tambahkan field skip agar user bisa memasukkan loncatan data
     fetch_skip = fields.Integer(
         string='Skip Data (Offset)',
@@ -52,11 +57,16 @@ class ImportVendorWizard(models.TransientModel):
             ('config_id', '=', self.config_id.id)
         ]).unlink()
 
-        # Teruskan parameter limit dan skip ke fungsi fetch
-        raw_list = self.config_id.fetch_vendor_data(
-            limit=self.fetch_limit, 
-            skip=self.fetch_skip
-        )
+        import math
+
+        raw_list = []
+        loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
+        for i in range(loop_count):
+            offset = self.fetch_skip + (i * self.batch_size)
+            batch_data = self.config_id.fetch_vendor_data(limit=self.batch_size, skip=offset)
+            if not batch_data:
+                break
+            raw_list.extend(batch_data)
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
@@ -97,6 +107,7 @@ class ImportVendorWizard(models.TransientModel):
                 'last_modified_date_time': item['last_modified_date_time'],
                 'note':                    item['note'],
                 'vendor_class':            item['vendor_class'],
+                'account_ref':             item['account_ref'],
                 'import_state':            'pending',
                 'import_message':          msg,
                 'odoo_partner_id':         existing.id if existing else False,

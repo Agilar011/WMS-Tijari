@@ -68,7 +68,7 @@ class ProductTemplate(models.Model):
         string='Valuation Method (Acumatica)',
         help='ValuationMethod dari Acumatica WMS',
     )
-    adt_last_modified_datetime = fields.Datetime(
+    adt_acumatica_write_date = fields.Datetime(
         string='Last Modified (Acumatica)',
         help='LastModifiedDateTime dari Acumatica WMS',
     )

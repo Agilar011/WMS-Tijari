@@ -42,3 +42,7 @@ from . import stock_location
 from . import stock_warehouse
 from . import product_template
 from . import res_partner
+from . import acumatica_shipvia_config
+from . import acumatica_shipvia_line
+from . import acumatica_kit_assembly_config
+from . import acumatica_kit_assembly_line

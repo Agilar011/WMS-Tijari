@@ -1,4 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_acumatica_stock_item_config,acumatica.stock.item.config,model_acumatica_stock_item_config,base.group_user,1,1,1,1
-access_acumatica_stock_item_line,acumatica.stock.item.line,model_acumatica_stock_item_line,base.group_user,1,1,1,1
-access_import_stock_item_wizard,import.stock.item.wizard,model_import_stock_item_wizard,base.group_user,1,1,1,1

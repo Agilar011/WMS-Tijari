@@ -48,6 +48,7 @@ class AcumaticaCustomerLine(models.Model):
     customer_class         = fields.Char(string='CustomerClass', readonly=True)
     currency_id            = fields.Char(string='CurrencyID', readonly=True)
     created_datetime       = fields.Char(string='CreatedDateTime', readonly=True)
+    tax_registration_id    = fields.Char(string='TaxRegistrationID', readonly=True)
     last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
     note_id                = fields.Char(string='NoteID', readonly=True)
     note                   = fields.Text(string='Note', readonly=True)
@@ -152,16 +153,18 @@ class AcumaticaCustomerLine(models.Model):
                     # Field "to be" (custom) - semua diprefix acumatica_
                     # agar tidak conflict dengan field bawaan Odoo
                     'adt_external_id':              line.external_id or False,
+                    'adt_note':                     line.note or False,
                     'adt_b_account_id':             line.b_account_id or False,
                     'adt_customer_class':           line.customer_class or False,
-                    'adt_currency_id':              line.currency_id or False,
-                    'adt_warehouse_id':             line.warehouse_id or False,
-                    'adt_shipping_zone_id':         line.shipping_zone_id or False,
                     'adt_fob_point':                line.fob_point or False,
-                    'adt_created_datetime':         self._parse_dt(line.created_datetime),
-                    'adt_last_modified_datetime':   self._parse_dt(line.last_modified_datetime),
+                    'adt_acumatica_write_date':     self._parse_dt(line.last_modified_datetime),
+                    'adt_location_name':            line.location_name or False,
                     'adt_note_id':                  line.note_id or False,
-                    'adt_note':                     line.note or False,
+                    'adt_shipping_zone_id':         line.shipping_zone_id or False,
+                    'adt_status':                   line.status or False,
+                    'adt_tax_registration_id':      line.tax_registration_id or False,
+                    'adt_warehouse_id':             line.warehouse_id or False,
+                    'partner_type':                 'customer',
                 }
 
                 # Map Status → selection field

@@ -36,7 +36,16 @@ class ImportNonStockItemWizard(models.TransientModel):
             ('config_id', '=', self.config_id.id)
         ]).unlink()
 
-        raw_list = self.config_id.fetch_non_stock_item_data(limit=self.fetch_limit)
+        import math
+
+        raw_list = []
+        loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
+        for i in range(loop_count):
+            offset = i * self.batch_size
+            batch_data = self.config_id.fetch_non_stock_item_data(limit=self.batch_size, offset=offset)
+            if not batch_data:
+                break
+            raw_list.extend(batch_data)
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 

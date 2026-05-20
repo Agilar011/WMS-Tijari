@@ -153,12 +153,8 @@ class AcumaticaKitAssemblyLine(models.Model):
         return uom
 
     def _find_existing_product(self, rec):
-        """Cari product.template by UUID dulu, fallback by default_code (InventoryID)."""
+        """Cari product.template by default_code (InventoryID)."""
         Product = self.env['product.template']
-        if rec.external_id:
-            found = Product.search([('adt_external_id', '=', rec.external_id)], limit=1)
-            if found:
-                return found
         if rec.inventory_id:
             found = Product.search([('default_code', '=', rec.inventory_id)], limit=1)
             if found:
@@ -175,104 +171,6 @@ class AcumaticaKitAssemblyLine(models.Model):
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
-
-    def _do_import(self):
-        imported = updated = error = 0
-
-        for line in self:
-            try:
-                if not line.description:
-                    line.write({
-                        'import_state':   'error',
-                        'import_message': 'Description (name) kosong',
-                    })
-                    error += 1
-                    continue
-
-                # ── Resolve UOM ─────────────────────────────
-                uom = self._resolve_uom(line.uom)
-                if not uom and line.uom:
-                    _logger.warning(
-                        "UOM '%s' tidak ditemukan di Odoo untuk item %s",
-                        line.uom, line.inventory_id
-                    )
-
-                # ── Map ItemType → type ──────────────────────
-                odoo_type = self.ITEM_TYPE_MAP.get(
-                    (line.item_type or '').lower(), 'consu'
-                )
-
-                # ── Map ValuationMethod ──────────────────────
-                valuation = self.VALUATION_MAP.get(line.valuation_method or '', False)
-
-                # ── Map ItemStatus ───────────────────────────
-                item_status = self.STATUS_MAP.get(line.item_status or '', False)
-
-                # row_number = fields.Integer(string='No', readonly=True)
-                # inventory_id = fields.Char(string='InventoryID', readonly=True)
-                # location = fields.Char(string='Location', readonly=True)
-                # requested_on = fields.Char(string='RequestedOn', readonly=True)
-                # revision = fields.Char(string='Revision', readonly=True)
-                # status = fields.Char(string='Status', readonly=True)
-                # type = fields.Char(string='Type', readonly=True)
-                # warehouse = fields.Char(string='Warehouse', readonly=True)
-    
-
-                vals = {
-                    # Field standar Odoo
-                    'name':line.description,
-                    'product_quantity': float(line.quantity) if line.quantity else 0.0,
-                    'code': line.reference_nbr or False,
-
-                    # UOM
-                    'uom_id': uom.id if uom else False,
-
-                    # Field custom adt_
-                    'adt_external_id': line.external_id or False,
-                    'adt_reason_code': line.reason_code or False,
-                    'adt_item_status': item_status or False,
-                    'adt_post_period': line.post_period or False,
-                    'adt_last_modified_datetime': self._parse_dt(line.last_modified_datetime),
-                }
-
-                existing = self._find_existing_product(line)
-
-                if existing:
-                    existing.write(vals)
-                    line.write({
-                        'import_state':   'updated',
-                        'import_message': f'Diupdate: {existing.name} (ID: {existing.id})',
-                        'odoo_product_id': existing.id,
-                    })
-                    updated += 1
-                else:
-                    new_product = self.env['product.template'].create(vals)
-                    line.write({
-                        'import_state':   'imported',
-                        'import_message': f'Dibuat: {new_product.name} (ID: {new_product.id})',
-                        'odoo_product_id': new_product.id,
-                    })
-                    imported += 1
-
-            except Exception as e:
-                _logger.error("Error import Stock Item %s: %s", line.inventory_id, str(e))
-                line.write({
-                    'import_state':   'error',
-                    'import_message': str(e)[:200],
-                })
-                error += 1
-
-        msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag':  'display_notification',
-            'params': {
-                'title':   'Import Stock Item',
-                'message': msg,
-                'type':    'success' if error == 0 else 'warning',
-                'sticky':  True,
-            },
-        }
 
     def _do_import(self):
         Bom = self.env['mrp.bom']
@@ -294,6 +192,12 @@ class AcumaticaKitAssemblyLine(models.Model):
             first = reference_lines[0]
 
             try:
+                product = self._find_existing_product(first)
+                if not product:
+                    raise UserError(
+                        f'Product tidak ditemukan untuk InventoryID: '
+                        f'{first.inventory_id or "-"}'
+                    )
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
                     raise UserError(
@@ -364,7 +268,7 @@ class AcumaticaKitAssemblyLine(models.Model):
 
                 for line in reference_lines:
                     try:
-                        product = self._find_product(line)
+                        product = self._find_existing_product(line)
                         if not product:
                             raise UserError(
                                 f'Product tidak ditemukan untuk InventoryID: '

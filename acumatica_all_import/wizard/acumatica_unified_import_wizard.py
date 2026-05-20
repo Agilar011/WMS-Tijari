@@ -43,6 +43,11 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'line_model': 'acumatica.customer.location.line', 'result_name': 'Hasil Import Customer Location',
             'staging_name': 'Data Customer Location dari Acumatica', 'extra_fields': [],
         },
+        'shipvia': {
+            'label': 'ShipVia', 'wizard_model': 'import.shipvia.wizard', 'config_field': 'shipvia_config_id',
+            'line_model': 'acumatica.shipvia.line', 'result_name': 'Hasil Import ShipVia',
+            'staging_name': 'Data ShipVia dari Acumatica', 'extra_fields': [],
+        },
         'po_receipt': {
             'label': 'PO / Inventory Receipt',
             'wizard_model': 'import.receipt.wizard',
@@ -151,31 +156,43 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Transfer Shipment dari Acumatica',
             'extra_fields': ['shipment_nbr', 'last_modified_from', 'odata_filter'],
         },
+        'kit_assembly': {
+            'label': 'Kit Assembly',
+            'wizard_model': 'import.kit.assembly.wizard',
+            'config_field': 'kit_assembly_config_id',
+            'line_model': 'acumatica.kit.assembly.line',
+            'result_name': 'Hasil Import Kit Assembly',
+            'staging_name': 'Data Kit Assembly dari Acumatica',
+            'extra_fields': [],
+        },
     }
 
     MASTER_DATA_TYPES = [
-        'uom',
         'customer',
-        'vendor',
+        'customer_location',
+        'shipvia',
         'warehouse',
         'stock_item',
         'non_stock_item',
-        'customer_location',
+        'uom',
+        'vendor',
     ]
 
     TRANSACTION_TYPES = [
         'po_receipt',
+        'so_transfer',
+        'receipt_change_item',
+        'inventory_received',
+        'shipment_so',
+
+        'so_shipment',
+        'transfer_shipment',
+        'issue_change_item',
+        'inventory_issue',
         'issue_po_return',
         'transfer_one_step',
         'transfer_two_step',
-        'inventory_received',
-        'inventory_issue',
-        'receipt_change_item',
-        'issue_change_item',
-        'shipment_so',
-        'so_shipment',
-        'so_transfer',
-        'transfer_shipment',
+        'kit_assembly',
     ]
 
     def _get_import_type_selection(self):
@@ -240,6 +257,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     stock_item_config_id = fields.Many2one('acumatica.stock.item.config', string='Konfigurasi Stock Item', domain=[('active', '=', True)])
     non_stock_item_config_id = fields.Many2one('acumatica.non.stock.item.config', string='Konfigurasi Non-Stock Item', domain=[('active', '=', True)])
     customer_location_config_id = fields.Many2one('acumatica.customer.location.config', string='Konfigurasi Customer Location', domain=[('active', '=', True)])
+    shipvia_config_id = fields.Many2one('acumatica.shipvia.config', string='Konfigurasi ShipVia', domain=[('active', '=', True)])
 
     receipt_config_id = fields.Many2one('acumatica.receipt.config', string='Konfigurasi Receipt', domain=[('active', '=', True)])
     issue_po_return_config_id = fields.Many2one('acumatica.issue.po.return.config', string='Konfigurasi Issue PO Return', domain=[('active', '=', True)])
@@ -253,6 +271,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     so_shipment_config_id = fields.Many2one('acumatica.so.shipment.config', string='Konfigurasi SO Shipment', domain=[('active', '=', True)])
     transfer_config_id = fields.Many2one('acumatica.transfer.config', string='Konfigurasi SO Transfer', domain=[('active', '=', True)])
     transfer_shipment_config_id = fields.Many2one('acumatica.transfer.shipment.config', string='Konfigurasi Transfer Shipment', domain=[('active', '=', True)])
+    kit_assembly_config_id = fields.Many2one('acumatica.kit.assembly.config', string='Konfigurasi Kit Assembly', domain=[('active', '=', True)])
 
     state = fields.Selection([('draft', 'Siap'), ('fetched', 'Data Sudah Ditarik'), ('done', 'Selesai')], default='draft')
     total_fetched = fields.Integer(string='Total Line Ditarik', readonly=True)

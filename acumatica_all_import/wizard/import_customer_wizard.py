@@ -59,11 +59,16 @@ class ImportCustomerWizard(models.TransientModel):
             ('config_id', '=', self.config_id.id)
         ]).unlink()
 
-        # Teruskan parameter limit dan skip ke fungsi fetch
-        raw_list = self.config_id.fetch_customer_data(
-            limit=self.fetch_limit, 
-            skip=self.fetch_skip
-        )
+        import math
+
+        raw_list = []
+        loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
+        for i in range(loop_count):
+            offset = self.fetch_skip + (i * self.batch_size)
+            batch_data = self.config_id.fetch_customer_data(limit=self.batch_size, skip=offset)
+            if not batch_data:
+                break
+            raw_list.extend(batch_data)
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
@@ -102,15 +107,14 @@ class ImportCustomerWizard(models.TransientModel):
                 'customer_name':         item['customer_name'],
                 'customer_class':        item['customer_class'],
                 'status':                item['status'],
-                'currency_id':           item['currency_id'],
                 'warehouse_id':          item['warehouse_id'],
                 'shipping_zone_id':      item['shipping_zone_id'],
                 'fob_point':             item['fob_point'],
-                'created_datetime':      item['created_datetime'],
-                'last_modified_datetime': item['last_modified_datetime'],
+                'last_modified_datetime':item['last_modified_datetime'],
                 'note_id':               item['note_id'],
                 'note':                  item['note'],
                 'location_name':         item['location_name'],
+                'tax_registration_id':   item['tax_registration_id'],
                 'import_state':          state,
                 'import_message':        msg,
                 'odoo_partner_id':       existing.id if existing else False,

@@ -1,4 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_acumatica_vendor_config,acumatica.vendor.config,model_acumatica_vendor_config,base.group_user,1,1,1,1
-access_acumatica_vendor_line,acumatica.vendor.line,model_acumatica_vendor_line,base.group_user,1,1,1,1
-access_import_vendor_wizard,import.vendor.wizard,model_import_vendor_wizard,base.group_user,1,1,1,1
