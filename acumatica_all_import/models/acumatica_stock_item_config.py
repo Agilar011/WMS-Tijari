@@ -209,6 +209,8 @@ class AcumaticaStockItemConfig(models.Model):
         except Exception:
             pass
 
+
+
     def fetch_stock_item_data(
         self,
         limit=50,
@@ -228,6 +230,11 @@ class AcumaticaStockItemConfig(models.Model):
 
         session = self._do_login()
 
+        max_retry = 3
+        retry_delay = 30
+
+        last_error = None
+
         try:
 
             endpoint = f"{self.api_url}/StockItem"
@@ -246,8 +253,6 @@ class AcumaticaStockItemConfig(models.Model):
             print(f'REAL SKIP   : {real_skip}')
             print('==================================================')
 
-            all_results = []
-
             params = {
                 "$top": limit,
                 "$skip": real_skip
@@ -258,115 +263,233 @@ class AcumaticaStockItemConfig(models.Model):
             print(f'PARAMS   : {params}')
             print('==================================================')
 
-            response = session.get(
-                endpoint,
-                params=params,
-                timeout=60
+            # ==================================================
+            # RETRY LOOP
+            # ==================================================
+            for attempt in range(1, max_retry + 1):
+
+                try:
+
+                    print('==================================================')
+                    print(
+                        f'FETCH STOCK ITEM ATTEMPT '
+                        f'{attempt}/{max_retry}'
+                    )
+                    print(f'BATCH NO : {batch_no}')
+                    print('==================================================')
+
+                    _logger.info(
+                        'FETCH STOCK ITEM ATTEMPT %s/%s | '
+                        'BATCH=%s | OFFSET=%s | SKIP=%s',
+                        attempt,
+                        max_retry,
+                        batch_no,
+                        offset,
+                        skip
+                    )
+
+                    # ==========================================
+                    # GET API
+                    # ==========================================
+                    response = session.get(
+                        endpoint,
+                        params=params,
+                        timeout=60
+                    )
+
+                    print('RESPONSE RECEIVED')
+                    print(f'STATUS CODE : {response.status_code}')
+                    print('==================================================')
+
+                    # ==========================================
+                    # VALIDATE RESPONSE
+                    # ==========================================
+                    if response.status_code != 200:
+
+                        last_error = (
+                            f'Gagal ambil data Stock Item '
+                            f'(HTTP {response.status_code}): '
+                            f'{response.text}'
+                        )
+
+                        print('ERROR FETCH STOCK ITEM')
+                        print(last_error)
+                        print('==================================================')
+
+                        _logger.error(last_error)
+
+                        raise Exception(last_error)
+
+                    # ==========================================
+                    # SUCCESS
+                    # ==========================================
+                    raw_data = response.json()
+
+                    print(f'TOTAL RAW DATA : {len(raw_data)}')
+                    print('==================================================')
+
+                    all_results = []
+
+                    # ==========================================
+                    # HELPER
+                    # ==========================================
+                    def val(item, key):
+
+                        v = item.get(key, {})
+
+                        if isinstance(v, dict):
+                            return v.get("value", "") or ""
+
+                        return ""
+
+                    # ==========================================
+                    # PARSE
+                    # ==========================================
+                    item_no = 0
+
+                    for item in raw_data:
+
+                        item_no += 1
+
+                        parsed_vals = {
+                            'external_id':            item.get("id", "") or "",
+                            'row_number':             item.get("rowNumber", 0),
+                            'inventory_id':           val(item, "InventoryID"),
+                            'description':            val(item, "Description"),
+                            'item_type':              val(item, "ItemType"),
+                            'item_class':             val(item, "ItemClass"),
+                            'item_status':            val(item, "ItemStatus"),
+                            'base_uom':               val(item, "BaseUOM"),
+                            'valuation_method':       val(item, "ValuationMethod"),
+                            'last_modified_datetime': val(item, "LastModifiedDateTime"),
+                        }
+
+                        all_results.append(parsed_vals)
+
+                        print('--------------------------------------------------')
+                        print(f'BATCH        : {batch_no}')
+                        print(f'ITEM NO      : {item_no}')
+                        print(f'EXTERNAL ID  : {parsed_vals["external_id"]}')
+                        print(f'INVENTORY ID : {parsed_vals["inventory_id"]}')
+                        print(f'DESCRIPTION  : {parsed_vals["description"]}')
+                        print(f'ITEM TYPE    : {parsed_vals["item_type"]}')
+                        print(f'STATUS       : {parsed_vals["item_status"]}')
+                        print('--------------------------------------------------')
+
+                    # ==========================================
+                    # FINAL LOG
+                    # ==========================================
+                    print('==================================================')
+                    print('FETCH STOCK ITEM DONE')
+                    print(f'BATCH NO           : {batch_no}')
+                    print(f'OFFSET             : {offset}')
+                    print(f'SKIP               : {skip}')
+                    print(f'REAL SKIP          : {real_skip}')
+                    print(f'LIMIT              : {limit}')
+                    print(f'TOTAL STOCK ITEM   : {len(all_results)}')
+                    print('==================================================')
+
+                    _logger.info(
+                        'BATCH %s | OFFSET %s | SKIP %s | '
+                        'REAL SKIP %s | LIMIT %s | '
+                        'TOTAL STOCK ITEM: %s',
+                        batch_no,
+                        offset,
+                        skip,
+                        real_skip,
+                        limit,
+                        len(all_results)
+                    )
+
+                    return all_results
+
+                # ==============================================
+                # CONNECTION ERROR
+                # ==============================================
+                except requests.exceptions.ConnectionError as e:
+
+                    last_error = (
+                        f'Tidak bisa terhubung ke server: '
+                        f'{self.base_url}'
+                    )
+
+                    print('==================================================')
+                    print('CONNECTION ERROR')
+                    print(last_error)
+                    print(str(e))
+                    print('==================================================')
+
+                    _logger.error(last_error)
+
+                # ==============================================
+                # TIMEOUT ERROR
+                # ==============================================
+                except requests.exceptions.Timeout as e:
+
+                    last_error = (
+                        'Timeout saat ambil data Stock Item '
+                        'dari Acumatica.'
+                    )
+
+                    print('==================================================')
+                    print('TIMEOUT ERROR')
+                    print(last_error)
+                    print(str(e))
+                    print('==================================================')
+
+                    _logger.error(last_error)
+
+                # ==============================================
+                # UNKNOWN ERROR
+                # ==============================================
+                except Exception as e:
+
+                    last_error = str(e)
+
+                    print('==================================================')
+                    print('UNKNOWN FETCH ERROR')
+                    print(last_error)
+                    print('==================================================')
+
+                    _logger.exception(e)
+
+                # ==============================================
+                # RETRY
+                # ==============================================
+                if attempt < max_retry:
+
+                    print('==================================================')
+                    print(
+                        f'RETRY FETCH STOCK ITEM '
+                        f'DALAM {retry_delay} DETIK'
+                    )
+                    print(f'NEXT ATTEMPT : {attempt + 1}')
+                    print('==================================================')
+
+                    _logger.warning(
+                        'FETCH STOCK ITEM FAILED - RETRY IN %s SECONDS '
+                        '(attempt %s/%s)',
+                        retry_delay,
+                        attempt,
+                        max_retry
+                    )
+
+                    time.sleep(retry_delay)
+
+            # ==================================================
+            # FINAL FAILED
+            # ==================================================
+            print('==================================================')
+            print('SEMUA FETCH STOCK ITEM RETRY GAGAL')
+            print(f'LAST ERROR : {last_error}')
+            print('==================================================')
+
+            _logger.error(
+                'ALL FETCH STOCK ITEM RETRY FAILED: %s',
+                last_error
             )
 
-            print('RESPONSE RECEIVED')
-            print(f'STATUS CODE : {response.status_code}')
-            print('==================================================')
-
-            if response.status_code != 200:
-
-                print('ERROR FETCH STOCK ITEM')
-                print(f'HTTP STATUS : {response.status_code}')
-                print(f'RESPONSE    : {response.text}')
-                print('==================================================')
-
-                raise UserError(
-                    f'Gagal ambil data Stock Item '
-                    f'(HTTP {response.status_code}): {response.text}'
-                )
-
-            raw_data = response.json()
-
-            print(f'TOTAL RAW DATA : {len(raw_data)}')
-            print('==================================================')
-
-            # ==================================================
-            # HELPER
-            # ==================================================
-            def val(item, key):
-
-                v = item.get(key, {})
-
-                if isinstance(v, dict):
-                    return v.get("value", "") or ""
-
-                return ""
-
-            # ==================================================
-            # PARSE
-            # ==================================================
-            item_no = 0
-
-            for item in raw_data:
-
-                item_no += 1
-
-                parsed_vals = {
-                    'external_id':            item.get("id", "") or "",
-                    'row_number':             item.get("rowNumber", 0),
-                    'inventory_id':           val(item, "InventoryID"),
-                    'description':            val(item, "Description"),
-                    'item_type':              val(item, "ItemType"),
-                    'item_class':             val(item, "ItemClass"),
-                    'item_status':            val(item, "ItemStatus"),
-                    'base_uom':               val(item, "BaseUOM"),
-                    'valuation_method':       val(item, "ValuationMethod"),
-                    'last_modified_datetime': val(item, "LastModifiedDateTime"),
-                }
-
-                all_results.append(parsed_vals)
-
-                print('--------------------------------------------------')
-                print(f'BATCH        : {batch_no}')
-                print(f'ITEM NO      : {item_no}')
-                print(f'EXTERNAL ID  : {parsed_vals["external_id"]}')
-                print(f'INVENTORY ID : {parsed_vals["inventory_id"]}')
-                print(f'DESCRIPTION  : {parsed_vals["description"]}')
-                print(f'ITEM TYPE    : {parsed_vals["item_type"]}')
-                print(f'STATUS       : {parsed_vals["item_status"]}')
-                print('--------------------------------------------------')
-
-            # ==================================================
-            # FINAL LOG
-            # ==================================================
-            print('==================================================')
-            print('FETCH STOCK ITEM DONE')
-            print(f'BATCH NO           : {batch_no}')
-            print(f'OFFSET             : {offset}')
-            print(f'SKIP               : {skip}')
-            print(f'REAL SKIP          : {real_skip}')
-            print(f'LIMIT              : {limit}')
-            print(f'TOTAL STOCK ITEM   : {len(all_results)}')
-            print('==================================================')
-
-            _logger.info(
-                'BATCH %s | OFFSET %s | SKIP %s | REAL SKIP %s | LIMIT %s | TOTAL STOCK ITEM: %s',
-                batch_no,
-                offset,
-                skip,
-                real_skip,
-                limit,
-                len(all_results)
-            )
-
-            return all_results
-
-        except Exception as e:
-
-            print('==================================================')
-            print('FETCH STOCK ITEM ERROR')
-            print(f'BATCH NO : {batch_no}')
-            print(f'ERROR    : {str(e)}')
-            print('==================================================')
-
-            _logger.exception(e)
-
-            raise
+            raise UserError(last_error)
 
         finally:
 
