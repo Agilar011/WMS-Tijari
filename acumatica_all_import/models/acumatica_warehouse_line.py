@@ -66,7 +66,7 @@ class AcumaticaWarehouseLine(models.Model):
     ], string='Status', default='pending', readonly=True)
 
     import_message    = fields.Char(string='Keterangan', readonly=True)
-    odoo_warehouse_id = fields.Many2one('stock.warehouse', string='Warehouse di Odoo', readonly=True)
+    odoo_warehouse_id = fields.Many2one('stock.warehouse', string='Warehouse di Odoo', readonly=True, ondelete='set null')
     selected          = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one(

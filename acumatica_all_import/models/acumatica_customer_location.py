@@ -2,6 +2,7 @@ from odoo import models, fields, api
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
 import logging
+from odoo.tools import split_every
 
 _logger = logging.getLogger(__name__)
 
@@ -251,111 +252,599 @@ class AcumaticaCustomerLocationLine(models.Model):
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
 
+    # def _do_import(self):
+    #     imported = updated = error = 0
+
+    #     STATUS_MAP = {'Active': 'Active', 'Inactive': 'Inactive'}
+
+    #     for line in self:
+    #         try:
+    #             if not line.customer:
+    #                 line.write({
+    #                     'import_state':   'error',
+    #                     'import_message': 'Customer kosong',
+    #                 })
+    #                 error += 1
+    #                 continue
+
+    #             # ── Resolve FK ───────────────────────────────
+    #             partner  = self._resolve_partner(line.customer)
+    #             warehouse = self._resolve_warehouse(line.warehouse)
+
+    #             if not partner:
+    #                 line.write({
+    #                     'import_state':   'error',
+    #                     'import_message': f'Customer "{line.customer}" tidak ditemukan di Odoo. Import Customer dulu.',
+    #                 })
+    #                 error += 1
+    #                 continue
+    #             country_id = self.env['res.country'].search([('code', '=', line.country_code)], limit=1).id if line.country_code else False
+    #             vals = {
+    #                 # Identitas
+    #                 'adt_external_id':  line.external_id or False,
+    #                 'name':             line.location_id_acumatica or False,
+    #                 'type':             'other',
+    #                 'company_type':     'person',
+    #                 'is_company':       False,
+
+    #                 'adt_note':                  line.note or False,
+    #                 # 'adt_is_active':             line.is_active,
+    #                 'adt_address_override':      line.address_override,
+    #                 'adt_created_datetime':      self._parse_dt(line.created_datetime),
+    #                 'parent_id':                 partner.id,
+    #                 'adt_default':               line.is_default,
+    #                 'adt_entity_usage_type':            line.usage_type or False,
+    #                 'adt_ext_ref_nbr':        line.ext_ref_number or False,
+    #                 'adt_fedex_ground_collect': line.fed_ex_ground_collect,
+    #                 'adt_fob_point':             line.fob_point or False,
+    #                 'adt_shipping_branch':       line.shipping_branch or False,
+    #                 'adt_insurance':             line.insurance,
+    #                 'adt_acumatica_write_date':  self._parse_dt(line.last_modified_datetime),
+    #                 'adt_lead_time_days':        line.lead_time_days or 0,
+
+    #                 'adt_note_id':               line.note_id or False,
+    #                 'adt_order_priority':        line.order_priority or 0,
+    #                 'adt_shipping_zone_id':         line.shipping_zone or False,
+    #                 'adt_ship_via':              line.ship_via or False,
+    #                 'adt_status':                STATUS_MAP.get(line.status or '', False),
+    #                 'adt_tax_exemption_number':  line.tax_exemption_number or False,
+    #                 'adt_tax_registration_id':   line.tax_registration_id or False,
+    #                 'vat':                       line.tax_registration_id or False,  # untuk mempermudah pencarian di res.partner
+    #                 'adt_warehouse_id':          warehouse.id if warehouse else False,
+
+    #                 # Address
+    #                 'street':          line.address_line1 or False,
+    #                 'street2':         line.address_line2 or False,
+    #                 'city':            line.city or False,
+    #                 'zip':             line.postal_code or False,
+    #                 'country_id':      country_id,
+    #             }
+
+    #             existing = self._find_existing_location(line)
+
+    #             if existing:
+    #                 existing.write(vals)
+    #                 line.write({
+    #                     'import_state':    'updated',
+    #                     'import_message':  f'Diupdate: {existing.name}',
+    #                     'odoo_partner_id': existing.id,
+    #                 })
+    #                 updated += 1
+    #             else:
+    #                 new_loc = self.env['res.partner'].create(vals)
+    #                 line.write({
+    #                     'import_state':    'imported',
+    #                     'import_message':  f'Dibuat: {new_loc.name}',
+    #                     'odoo_partner_id': new_loc.id,
+    #                 })
+    #                 imported += 1
+
+    #         except Exception as e:
+    #             _logger.error("Error import CustomerLocation %s-%s: %s",
+    #                           line.customer, line.location_id_acumatica, str(e))
+    #             line.write({
+    #                 'import_state':   'error',
+    #                 'import_message': str(e)[:200],
+    #             })
+    #             error += 1
+
+    #     msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
+    #     return {
+    #         'type': 'ir.actions.client',
+    #         'tag':  'display_notification',
+    #         'params': {
+    #             'title':   'Import Customer Location',
+    #             'message': msg,
+    #             'type':    'success' if error == 0 else 'warning',
+    #             'sticky':  True,
+    #         },
+    #     }
+
+
     def _do_import(self):
-        imported = updated = error = 0
+        BATCH_SIZE = 1000
+        imported = 0
+        updated = 0
+        error = 0
 
-        STATUS_MAP = {'Active': 'Active', 'Inactive': 'Inactive'}
+        STATUS_MAP = {
+            'Active': 'Active',
+            'Inactive': 'Inactive'
+        }
 
-        for line in self:
+        ctx = {
+            'tracking_disable': True,
+            'mail_create_nolog': True,
+            'mail_notrack': True,
+            'mail_create_nosubscribe': True,
+        }
+
+        Partner = self.env['res.partner'].with_context(**ctx)
+
+        # =====================================================
+        # CACHE COUNTRY
+        # =====================================================
+
+        country_map = {}
+
+        countries = self.env['res.country'].search([])
+
+        for c in countries:
+            country_map[(c.code or '').upper()] = c.id
+
+        # =====================================================
+        # CACHE WAREHOUSE
+        # =====================================================
+
+        warehouse_map = {}
+
+        warehouses = self.env['stock.warehouse'].search([])
+
+        for wh in warehouses:
+            warehouse_map[wh.name] = wh.id
+
+        # =====================================================
+        # CACHE CUSTOMER
+        # =====================================================
+
+        customer_names = list(set([
+            x.customer
+            for x in self
+            if x.customer
+        ]))
+
+        customer_map = {}
+
+        if customer_names:
+
+            customers = Partner.search([
+                ('name', 'in', customer_names)
+            ])
+
+            for c in customers:
+                customer_map[c.name] = c.id
+
+        # =====================================================
+        # CACHE EXISTING LOCATION
+        # =====================================================
+
+        external_ids = list(set([
+            x.external_id
+            for x in self
+            if x.external_id
+        ]))
+
+        existing_map = {}
+
+        if external_ids:
+
+            self.env.cr.execute("""
+                SELECT id, adt_external_id
+                FROM res_partner
+                WHERE adt_external_id IN %s
+            """, [tuple(external_ids)])
+
+            for row in self.env.cr.fetchall():
+
+                existing_map[row[1]] = row[0]
+
+        # =====================================================
+        # PROCESS CHUNK
+        # =====================================================
+
+        for chunk in split_every(BATCH_SIZE, self):
+
             try:
-                if not line.customer:
-                    line.write({
-                        'import_state':   'error',
-                        'import_message': 'Customer kosong',
-                    })
-                    error += 1
-                    continue
 
-                # ── Resolve FK ───────────────────────────────
-                partner  = self._resolve_partner(line.customer)
-                warehouse = self._resolve_warehouse(line.warehouse)
+                create_vals = []
 
-                if not partner:
-                    line.write({
-                        'import_state':   'error',
-                        'import_message': f'Customer "{line.customer}" tidak ditemukan di Odoo. Import Customer dulu.',
-                    })
-                    error += 1
-                    continue
-                country_id = self.env['res.country'].search([('code', '=', line.country_code)], limit=1).id if line.country_code else False
-                vals = {
-                    # Identitas
-                    'adt_external_id':  line.external_id or False,
-                    'name':             line.location_id_acumatica or False,
-                    'type':             'other',
-                    'company_type':     'person',
-                    'is_company':       False,
+                update_params = []
 
-                    'adt_note':                  line.note or False,
-                    # 'adt_is_active':             line.is_active,
-                    'adt_address_override':      line.address_override,
-                    'adt_created_datetime':      self._parse_dt(line.created_datetime),
-                    'parent_id':                 partner.id,
-                    'adt_default':               line.is_default,
-                    'adt_entity_usage_type':            line.usage_type or False,
-                    'adt_ext_ref_nbr':        line.ext_ref_number or False,
-                    'adt_fedex_ground_collect': line.fed_ex_ground_collect,
-                    'adt_fob_point':             line.fob_point or False,
-                    'adt_shipping_branch':       line.shipping_branch or False,
-                    'adt_insurance':             line.insurance,
-                    'adt_acumatica_write_date':  self._parse_dt(line.last_modified_datetime),
-                    'adt_lead_time_days':        line.lead_time_days or 0,
+                staging_success = []
 
-                    'adt_note_id':               line.note_id or False,
-                    'adt_order_priority':        line.order_priority or 0,
-                    'adt_shipping_zone_id':         line.shipping_zone or False,
-                    'adt_ship_via':              line.ship_via or False,
-                    'adt_status':                STATUS_MAP.get(line.status or '', False),
-                    'adt_tax_exemption_number':  line.tax_exemption_number or False,
-                    'adt_tax_registration_id':   line.tax_registration_id or False,
-                    'vat':                       line.tax_registration_id or False,  # untuk mempermudah pencarian di res.partner
-                    'adt_warehouse_id':          warehouse.id if warehouse else False,
+                staging_error = []
 
-                    # Address
-                    'street':          line.address_line1 or False,
-                    'street2':         line.address_line2 or False,
-                    'city':            line.city or False,
-                    'zip':             line.postal_code or False,
-                    'country_id':      country_id,
-                }
+                # =============================================
+                # PREPARE
+                # =============================================
 
-                existing = self._find_existing_location(line)
+                for line in chunk:
 
-                if existing:
-                    existing.write(vals)
-                    line.write({
-                        'import_state':    'updated',
-                        'import_message':  f'Diupdate: {existing.name}',
-                        'odoo_partner_id': existing.id,
-                    })
-                    updated += 1
-                else:
-                    new_loc = self.env['res.partner'].create(vals)
-                    line.write({
-                        'import_state':    'imported',
-                        'import_message':  f'Dibuat: {new_loc.name}',
-                        'odoo_partner_id': new_loc.id,
-                    })
-                    imported += 1
+                    try:
+
+                        # =====================================
+                        # VALIDATION
+                        # =====================================
+
+                        if not line.customer:
+
+                            staging_error.append((
+                                'error',
+                                'Customer kosong',
+                                line.id
+                            ))
+
+                            error += 1
+                            continue
+
+                        partner_id = customer_map.get(
+                            line.customer
+                        )
+
+                        if not partner_id:
+
+                            staging_error.append((
+                                'error',
+                                f'Customer "{line.customer}" tidak ditemukan',
+                                line.id
+                            ))
+
+                            error += 1
+                            continue
+
+                        warehouse_id = warehouse_map.get(
+                            line.warehouse
+                        )
+
+                        country_id = country_map.get(
+                            (line.country_code or '').upper()
+                        )
+
+                        vals = {
+                            'adt_external_id':
+                                line.external_id or False,
+
+                            'name':
+                                line.location_id_acumatica or False,
+
+                            'type':
+                                'other',
+
+                            'company_type':
+                                'person',
+
+                            'is_company':
+                                False,
+
+                            'adt_note':
+                                line.note or False,
+
+                            'adt_address_override':
+                                line.address_override,
+
+                            'adt_created_datetime':
+                                self._parse_dt(
+                                    line.created_datetime
+                                ),
+
+                            'parent_id':
+                                partner_id,
+
+                            'adt_default':
+                                line.is_default,
+
+                            'adt_entity_usage_type':
+                                line.usage_type or False,
+
+                            'adt_ext_ref_nbr':
+                                line.ext_ref_number or False,
+
+                            'adt_fedex_ground_collect':
+                                line.fed_ex_ground_collect,
+
+                            'adt_fob_point':
+                                line.fob_point or False,
+
+                            'adt_shipping_branch':
+                                line.shipping_branch or False,
+
+                            'adt_insurance':
+                                line.insurance,
+
+                            'adt_acumatica_write_date':
+                                self._parse_dt(
+                                    line.last_modified_datetime
+                                ),
+
+                            'adt_lead_time_days':
+                                line.lead_time_days or 0,
+
+                            'adt_note_id':
+                                line.note_id or False,
+
+                            'adt_order_priority':
+                                line.order_priority or 0,
+
+                            'adt_shipping_zone_id':
+                                line.shipping_zone or False,
+
+                            'adt_ship_via':
+                                line.ship_via or False,
+
+                            'adt_status':
+                                STATUS_MAP.get(
+                                    line.status or '',
+                                    False
+                                ),
+
+                            'adt_tax_exemption_number':
+                                line.tax_exemption_number or False,
+
+                            'adt_tax_registration_id':
+                                line.tax_registration_id or False,
+
+                            'vat':
+                                line.tax_registration_id or False,
+
+                            'adt_warehouse_id':
+                                warehouse_id or False,
+
+                            # ADDRESS
+                            'street':
+                                line.address_line1 or False,
+
+                            'street2':
+                                line.address_line2 or False,
+
+                            'city':
+                                line.city or False,
+
+                            'zip':
+                                line.postal_code or False,
+
+                            'country_id':
+                                country_id or False,
+                        }
+
+                        existing_id = existing_map.get(
+                            line.external_id
+                        )
+
+                        # =====================================
+                        # CREATE
+                        # =====================================
+
+                        if not existing_id:
+
+                            vals['_line_id'] = line.id
+
+                            create_vals.append(vals)
+
+                        # =====================================
+                        # UPDATE
+                        # =====================================
+
+                        else:
+
+                            update_params.append((
+                                line.location_id_acumatica or False,
+                                line.note or False,
+                                line.address_override,
+                                self._parse_dt(
+                                    line.created_datetime
+                                ),
+                                partner_id,
+                                line.is_default,
+                                line.usage_type or False,
+                                line.ext_ref_number or False,
+                                line.fed_ex_ground_collect,
+                                line.fob_point or False,
+                                line.shipping_branch or False,
+                                line.insurance,
+                                self._parse_dt(
+                                    line.last_modified_datetime
+                                ),
+                                line.lead_time_days or 0,
+                                line.note_id or False,
+                                line.order_priority or 0,
+                                line.shipping_zone or False,
+                                line.ship_via or False,
+                                STATUS_MAP.get(
+                                    line.status or '',
+                                    False
+                                ),
+                                line.tax_exemption_number or False,
+                                line.tax_registration_id or False,
+                                line.tax_registration_id or False,
+                                warehouse_id or False,
+                                line.address_line1 or False,
+                                line.address_line2 or False,
+                                line.city or False,
+                                line.postal_code or False,
+                                country_id or False,
+                                existing_id
+                            ))
+
+                            staging_success.append((
+                                'updated',
+                                f'Diupdate: {line.location_id_acumatica}',
+                                existing_id,
+                                line.id
+                            ))
+
+                            updated += 1
+
+                    except Exception as e:
+
+                        staging_error.append((
+                            'error',
+                            str(e)[:200],
+                            line.id
+                        ))
+
+                        error += 1
+
+                # =============================================
+                # BULK CREATE ORM
+                # =============================================
+
+                if create_vals:
+
+                    clean_vals = []
+
+                    line_map = {}
+
+                    for vals in create_vals:
+
+                        line_id = vals.pop('_line_id')
+
+                        line_map[
+                            vals['adt_external_id']
+                        ] = line_id
+
+                        clean_vals.append(vals)
+
+                    new_locations = Partner.create(
+                        clean_vals
+                    )
+
+                    for loc in new_locations:
+
+                        staging_success.append((
+                            'imported',
+                            f'Dibuat: {loc.name}',
+                            loc.id,
+                            line_map[loc.adt_external_id]
+                        ))
+
+                        imported += 1
+
+                # =============================================
+                # BULK SQL UPDATE
+                # =============================================
+
+                if update_params:
+
+                    self.env.cr.executemany("""
+                        UPDATE res_partner
+                        SET name = %s,
+                            adt_note = %s,
+                            adt_address_override = %s,
+                            adt_created_datetime = %s,
+                            parent_id = %s,
+                            adt_default = %s,
+                            adt_entity_usage_type = %s,
+                            adt_ext_ref_nbr = %s,
+                            adt_fedex_ground_collect = %s,
+                            adt_fob_point = %s,
+                            adt_shipping_branch = %s,
+                            adt_insurance = %s,
+                            adt_acumatica_write_date = %s,
+                            adt_lead_time_days = %s,
+                            adt_note_id = %s,
+                            adt_order_priority = %s,
+                            adt_shipping_zone_id = %s,
+                            adt_ship_via = %s,
+                            adt_status = %s,
+                            adt_tax_exemption_number = %s,
+                            adt_tax_registration_id = %s,
+                            vat = %s,
+                            adt_warehouse_id = %s,
+                            street = %s,
+                            street2 = %s,
+                            city = %s,
+                            zip = %s,
+                            country_id = %s
+                        WHERE id = %s
+                    """, update_params)
+
+                # =============================================
+                # BULK STAGING SUCCESS
+                # =============================================
+
+                if staging_success:
+
+                    self.env.cr.executemany("""
+                        UPDATE acumatica_customer_location_line
+                        SET import_state = %s,
+                            import_message = %s,
+                            odoo_partner_id = %s
+                        WHERE id = %s
+                    """, staging_success)
+
+                # =============================================
+                # BULK STAGING ERROR
+                # =============================================
+
+                if staging_error:
+
+                    self.env.cr.executemany("""
+                        UPDATE acumatica_customer_location_line
+                        SET import_state = %s,
+                            import_message = %s
+                        WHERE id = %s
+                    """, staging_error)
+
+                # =============================================
+                # COMMIT PER CHUNK
+                # =============================================
+
+                self.env.cr.commit()
+
+                self.env.clear()
 
             except Exception as e:
-                _logger.error("Error import CustomerLocation %s-%s: %s",
-                              line.customer, line.location_id_acumatica, str(e))
-                line.write({
-                    'import_state':   'error',
-                    'import_message': str(e)[:200],
-                })
-                error += 1
 
-        msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
+                self.env.cr.rollback()
+
+                _logger.exception(
+                    "IMPORT CUSTOMER LOCATION ERROR: %s",
+                    str(e)
+                )
+
+                for line in chunk:
+
+                    self.env.cr.execute("""
+                        UPDATE acumatica_customer_location_line
+                        SET import_state = 'error',
+                            import_message = %s
+                        WHERE id = %s
+                    """, (
+                        str(e)[:200],
+                        line.id
+                    ))
+
+                self.env.cr.commit()
+
+        # =====================================================
+        # RESULT
+        # =====================================================
+
+        msg = (
+            f'Import selesai: '
+            f'{imported} dibuat, '
+            f'{updated} diupdate, '
+            f'{error} error.'
+        )
+
         return {
             'type': 'ir.actions.client',
-            'tag':  'display_notification',
+            'tag': 'display_notification',
             'params': {
-                'title':   'Import Customer Location',
+                'title': 'Import Customer Location',
                 'message': msg,
-                'type':    'success' if error == 0 else 'warning',
-                'sticky':  True,
+                'type': 'success' if error == 0 else 'warning',
+                'sticky': True,
             },
         }
 

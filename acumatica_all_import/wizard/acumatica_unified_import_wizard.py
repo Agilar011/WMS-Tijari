@@ -401,8 +401,8 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             last_id = batch[-1].id
             batch_count += 1
 
-            with self.env.cr.savepoint():
-                batch._do_import()
+            # with self.env.cr.savepoint():
+            batch._do_import()
 
             processed += len(batch)
 
