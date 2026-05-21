@@ -45,6 +45,7 @@ class ImportVendorWizard(models.TransientModel):
     total_fetched  = fields.Integer(string='Total Data Ditarik',       readonly=True)
     total_new      = fields.Integer(string='Vendor Baru',              readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
+    fetch_skip      = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
     # ─── Step 1: Tarik Data ──────────────────────────
     def action_fetch_data(self):

@@ -40,6 +40,7 @@ class ImportShipviaWizard(models.TransientModel):
     total_fetched  = fields.Integer(string='Total Data Ditarik',       readonly=True)
     total_new      = fields.Integer(string='ShipVia Baru',              readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
+    fetch_skip      = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
     # ─── Step 1: Tarik Data ──────────────────────────
     def action_fetch_data(self):
@@ -59,7 +60,7 @@ class ImportShipviaWizard(models.TransientModel):
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
-            offset = i * self.batch_size
+            offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_shipvia_data(
                 limit=self.batch_size,
                 offset=offset,

@@ -236,6 +236,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     )
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=5000, required=True)
     batch_size = fields.Integer(string='Batch Size Import', default=50, required=True)
+    fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai fetch.')
     skip_size = fields.Integer(string='Skip Size ', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai import.')
     auto_commit_batch = fields.Boolean(
         string='Commit setiap batch',
@@ -299,6 +300,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'config_id': config.id,
             'fetch_limit': self.fetch_limit,
             'batch_size': self.batch_size,
+            'fetch_skip': self.fetch_skip,
         }
         for field_name in info.get('extra_fields', []):
             if field_name in self.env[info['wizard_model']]._fields:

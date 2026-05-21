@@ -75,7 +75,7 @@ class ImportCustomerLocationWizard(models.TransientModel):
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
-            offset = i * self.batch_size
+            offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_customer_location_data(
                 limit=self.batch_size,
                 offset=offset,

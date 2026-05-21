@@ -17,6 +17,7 @@ class ImportNonStockItemWizard(models.TransientModel):
     )
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
+    fetch_skip = fields.Integer(string='Skip Data Teratas', default=0)
     state       = fields.Selection([
         ('draft',   'Siap'),
         ('fetched', 'Data Sudah Ditarik'),
@@ -41,7 +42,7 @@ class ImportNonStockItemWizard(models.TransientModel):
         raw_list = []
         loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
         for i in range(loop_count):
-            offset = i * self.batch_size
+            offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_non_stock_item_data(limit=self.batch_size, offset=offset)
             if not batch_data:
                 break

@@ -27,6 +27,7 @@ class ImportWarehouseWizard(models.TransientModel):
     total_existing       = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
     total_locations      = fields.Integer(string='Total Locations', readonly=True)
     batch_size           = fields.Integer(string='Batch Size untuk Import', default=20)
+    fetch_skip            = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
     def action_fetch_data(self):
         self.ensure_one()
@@ -44,7 +45,7 @@ class ImportWarehouseWizard(models.TransientModel):
         raw_list = []
         loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
         for i in range(loop_count):
-            offset = i * self.batch_size
+            offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_warehouse_data(limit=self.batch_size, offset=offset)
             if not batch_data:
                 break

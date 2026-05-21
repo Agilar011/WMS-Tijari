@@ -83,7 +83,7 @@ class ImportStockItemWizard(models.TransientModel):
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
-            offset = i * self.batch_size
+            offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_stock_item_data(
                 limit=self.batch_size,
                 offset=offset,
@@ -205,7 +205,6 @@ class ImportStockItemWizard(models.TransientModel):
         print('START FETCH + IMPORT PER BATCH')
         print(f'FETCH LIMIT    : {self.fetch_limit}')
         print(f'BATCH SIZE     : {self.batch_size}')
-        print(f'SKIP SIZE      : {self.skip_size}')
         print(f'LOOP COUNT     : {loop_count}')
         print('==================================================')
 

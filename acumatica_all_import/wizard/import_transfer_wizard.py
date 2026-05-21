@@ -9,6 +9,7 @@ class ImportTransferWizard(models.TransientModel):
     config_id = fields.Many2one('acumatica.transfer.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
+    fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
     receipt_nbr = fields.Char(string='Filter Receipt Number')
     last_modified_from = fields.Char(string='Filter Last Modified From', help='Contoh: 2026-02-12T00:00:00+07:00')
     odata_filter = fields.Char(string='Custom OData Filter')
@@ -32,7 +33,7 @@ class ImportTransferWizard(models.TransientModel):
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
-            offset = i * self.batch_size
+            offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_transfer_data(
                 limit=self.batch_size,
                 offset=offset,
