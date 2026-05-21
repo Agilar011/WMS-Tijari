@@ -311,6 +311,25 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             ('import_state', '=', 'pending'),
             ('selected', '=', True),
         ], order='id')
+    
+    def _get_pending_domain(self, config):
+        return [
+            ('config_id', '=', config.id),
+            ('import_state', '=', 'pending'),
+            ('selected', '=', True),
+        ]
+
+
+    def _get_pending_lines_batch(self, info, config, limit, last_id=0):
+        domain = self._get_pending_domain(config)
+        if last_id:
+            domain.append(('id', '>', last_id))
+
+        return self.env[info['line_model']].search(
+            domain,
+            order='id',
+            limit=limit,
+        )
 
     def action_fetch_data(self):
         print('action_fetch_data called')
@@ -348,34 +367,59 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
     def action_import_pending_batch(self):
         self.ensure_one()
+
         if self.batch_size <= 0:
             raise UserError(_('Batch Size Import harus lebih besar dari 0.'))
+
         info = self._get_import_info()
         config = self._get_selected_config(info)
-        lines = self._get_pending_lines(info, config)
-        if not lines:
+
+        Line = self.env[info['line_model']]
+        pending_domain = self._get_pending_domain(config)
+
+        total_pending_before = Line.search_count(pending_domain)
+        if not total_pending_before:
             raise UserError(_('Tidak ada data pending yang dipilih untuk diimport.'))
 
-        total = len(lines)
         processed = 0
         batch_count = 0
-        for offset in range(0, total, self.batch_size):
-            batch = lines[offset:offset + self.batch_size]
+        last_id = 0
+
+        while True:
+            batch = self._get_pending_lines_batch(
+                info=info,
+                config=config,
+                limit=self.batch_size,
+                last_id=last_id,
+            )
+
+            if not batch:
+                break
+
+            last_id = batch[-1].id
             batch_count += 1
+
             with self.env.cr.savepoint():
                 batch._do_import()
+
             processed += len(batch)
+
             if self.auto_commit_batch:
                 self.env.cr.commit()
+                self.env.invalidate_all()
 
-        remaining = self._get_pending_lines(info, config)
+        remaining_count = Line.search_count(pending_domain)
+
         self.write({
-            'state': 'done' if not remaining else 'fetched',
-            'total_pending': len(remaining),
+            'state': 'done' if not remaining_count else 'fetched',
+            'total_pending': remaining_count,
             'total_imported': processed,
             'batch_count': batch_count,
-            'last_message': _('Import batch selesai. %s data diproses dalam %s batch. Sisa pending: %s.') % (processed, batch_count, len(remaining)),
+            'last_message': _(
+                'Import batch selesai. %s data diproses dalam %s batch. Sisa pending: %s.'
+            ) % (processed, batch_count, remaining_count),
         })
+
         return {
             'type': 'ir.actions.act_window',
             'name': info['result_name'],
