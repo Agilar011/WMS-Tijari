@@ -1,6 +1,7 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
 import logging
+import time
 
 _logger = logging.getLogger(__name__)
 
@@ -37,6 +38,8 @@ class ImportCustomerWizard(models.TransientModel):
         default=0,
         help='Jumlah data yang dilewati sebelum menarik data baru',
     )
+    skip_size = fields.Integer(string='Skip Size ', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai import.')
+
     state = fields.Selection([
         ('draft',   'Siap'),
         ('fetched', 'Data Sudah Ditarik'),
@@ -130,6 +133,104 @@ class ImportCustomerWizard(models.TransientModel):
             'total_new':      new_count,
             'total_existing': existing_count,
         })
+
+    def action_fetch_data_import_batch(self):
+        print('ACTION: FETCH DATA + IMPORT BATCH')
+        self.ensure_one()
+        if not self.config_id:
+            raise UserError('Pilih konfigurasi API terlebih dahulu.')
+
+        # Hapus staging lama dari config ini
+        self.env['acumatica.customer.line'].search([
+            ('config_id', '=', self.config_id.id)
+        ]).unlink()
+
+        import math
+
+        raw_list = []
+        loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
+        for i in range(loop_count):
+            print(f'FETCH BATCH {i+1}/{loop_count} (limit={self.batch_size}, offset={self.fetch_skip + (i * self.batch_size)})')
+            offset = self.fetch_skip + (i * self.batch_size)
+            batch_data = self.config_id.fetch_customer_data(limit=self.batch_size, skip=offset)
+            if not batch_data:
+                break
+            raw_list.extend(batch_data)
+
+        if not raw_list:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+
+        new_count = existing_count = 0
+        lines_to_create = []
+
+        for item in raw_list:
+            # Cek existing: cari by external_id dulu, lalu CustomerID
+            Partner = self.env['res.partner']
+            existing = False
+            if item['external_id']:
+                existing = Partner.search([
+                    ('adt_external_id', '=', item['external_id'])
+                ], limit=1)
+            if not existing and item['customer_id']:
+                existing = Partner.search([
+                    ('company_registry', '=', item['customer_id'])
+                ], limit=1)
+
+            if existing:
+                existing_count += 1
+                state = 'pending'  # tetap pending agar bisa diupdate
+                msg   = f'Sudah ada → akan diupdate: {existing.name}'
+            else:
+                new_count += 1
+                state = 'pending'
+                msg   = ''
+
+            lines_to_create.append({
+                'config_id':             self.config_id.id,
+                'row_number':            item['row_number'],
+                'external_id':           item['external_id'],
+                'customer_id':           item['customer_id'],
+                'b_account_id':          item['b_account_id'],
+                'customer_name':         item['customer_name'],
+                'customer_class':        item['customer_class'],
+                'status':                item['status'],
+                'warehouse_id':          item['warehouse_id'],
+                'shipping_zone_id':      item['shipping_zone_id'],
+                'fob_point':             item['fob_point'],
+                'last_modified_datetime':item['last_modified_datetime'],
+                'note_id':               item['note_id'],
+                'note':                  item['note'],
+                'location_name':         item['location_name'],
+                'tax_registration_id':   item['tax_registration_id'],
+                'import_state':          state,
+                'import_message':        msg,
+                'odoo_partner_id':       existing.id if existing else False,
+                'selected':              True,
+                'sync_date':             fields.Datetime.now(),
+            })
+
+        self.env['acumatica.customer.line'].create(lines_to_create)
+
+        self.write({
+            'state':          'fetched',
+            'total_fetched':  len(raw_list),
+            'total_new':      new_count,
+            'total_existing': existing_count,
+        })
+
+
+        lines = self.env['acumatica.customer.line'].search([
+            ('config_id', '=', self.config_id.id),
+            ('import_state', '=', 'pending'),
+            ('selected', '=', True),
+        ])
+        if not lines:
+            raise UserError('Tidak ada data pending yang dipilih untuk diimport.')
+
+        lines._do_import()
+        self.state = 'done'
+
+
 
         return {
             'type': 'ir.actions.act_window',

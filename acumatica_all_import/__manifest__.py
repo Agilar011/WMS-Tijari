@@ -3,7 +3,7 @@
  'summary': 'Satu addon untuk semua import Acumatica dengan unified wizard dan batch import',
  'category': 'Inventory/Inventory',
  'author': 'Tijari / OpenAI Custom Merge',
- 'depends': ['base', 'contacts', 'product', 'purchase', 'stock', 'uom'],
+ 'depends': ['base', 'contacts', 'product', 'purchase', 'stock', 'uom', 'tijari_wms_18'],
  'data': ['security/ir.model.access.csv',
           'views/acumatica_config_views.xml',
           'views/acumatica_inventory_issue_config_views.xml',

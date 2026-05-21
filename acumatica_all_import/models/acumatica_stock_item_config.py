@@ -1,5 +1,6 @@
 import requests
 import logging
+import time
 
 from odoo import models, fields
 from odoo.exceptions import UserError
@@ -61,27 +62,146 @@ class AcumaticaStockItemConfig(models.Model):
             self.state = 'error'
             raise UserError(f'Koneksi gagal: {str(e)}')
 
+
+
     def _do_login(self):
         self.ensure_one()
-        try:
-            session  = requests.Session()
-            response = session.post(
-                self.login_url,
-                json={
-                    "name":     self.username,
-                    "password": self.password,
-                    "company":  self.company_code,
-                },
-                headers={"Content-Type": "application/json"},
-                timeout=30,
-            )
-            if response.status_code == 204:
-                return session
-            raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
-        except requests.exceptions.ConnectionError:
-            raise UserError(f'Tidak bisa terhubung ke server: {self.base_url}')
-        except requests.exceptions.Timeout:
-            raise UserError('Koneksi timeout. Periksa URL server.')
+
+        max_retry = 3
+        retry_delay = 30
+
+        last_error = None
+
+        for attempt in range(1, max_retry + 1):
+
+            try:
+
+                print('==================================================')
+                print(f'LOGIN ACUMATICA ATTEMPT {attempt}/{max_retry}')
+                print(f'LOGIN URL   : {self.login_url}')
+                print(f'USERNAME    : {self.username}')
+                print(f'COMPANY     : {self.company_code}')
+                print('==================================================')
+
+                _logger.info(
+                    'LOGIN ACUMATICA ATTEMPT %s/%s',
+                    attempt,
+                    max_retry
+                )
+
+                session = requests.Session()
+
+                response = session.post(
+                    self.login_url,
+                    json={
+                        "name":     self.username,
+                        "password": self.password,
+                        "company":  self.company_code,
+                    },
+                    headers={
+                        "Content-Type": "application/json"
+                    },
+                    timeout=30,
+                )
+
+                print('=============== LOGIN RESPONSE ===================')
+                print(f'STATUS CODE : {response.status_code}')
+                print(f'RESPONSE    : {response.text}')
+                print('==================================================')
+
+                if response.status_code == 204:
+
+                    print('LOGIN SUCCESS')
+                    print('==================================================')
+
+                    _logger.info('LOGIN SUCCESS')
+
+                    return session
+
+                last_error = (
+                    f'Login gagal '
+                    f'(HTTP {response.status_code}): {response.text}'
+                )
+
+                print('LOGIN FAILED')
+                print(last_error)
+
+                _logger.error(last_error)
+
+            except requests.exceptions.ConnectionError as e:
+
+                last_error = (
+                    f'Tidak bisa terhubung ke server: {self.base_url}'
+                )
+
+                print('==================================================')
+                print('CONNECTION ERROR')
+                print(last_error)
+                print(str(e))
+                print('==================================================')
+
+                _logger.error(last_error)
+
+            except requests.exceptions.Timeout as e:
+
+                last_error = 'Koneksi timeout. Periksa URL server.'
+
+                print('==================================================')
+                print('TIMEOUT ERROR')
+                print(last_error)
+                print(str(e))
+                print('==================================================')
+
+                _logger.error(last_error)
+
+            except Exception as e:
+
+                last_error = str(e)
+
+                print('==================================================')
+                print('UNKNOWN LOGIN ERROR')
+                print(last_error)
+                print('==================================================')
+
+                _logger.exception(e)
+
+            # ==============================================
+            # RETRY
+            # ==============================================
+            if attempt < max_retry:
+
+                print('==================================================')
+                print(
+                    f'LOGIN GAGAL - RETRY LAGI DALAM '
+                    f'{retry_delay} DETIK'
+                )
+                print(f'NEXT ATTEMPT : {attempt + 1}')
+                print('==================================================')
+
+                _logger.warning(
+                    'LOGIN FAILED - RETRY IN %s SECONDS '
+                    '(attempt %s/%s)',
+                    retry_delay,
+                    attempt,
+                    max_retry
+                )
+
+                time.sleep(retry_delay)
+
+        # ==================================================
+        # FINAL FAILED
+        # ==================================================
+        print('==================================================')
+        print('SEMUA LOGIN RETRY GAGAL')
+        print(f'LAST ERROR : {last_error}')
+        print('==================================================')
+
+        _logger.error(
+            'ALL LOGIN RETRY FAILED: %s',
+            last_error
+        )
+
+        raise UserError(last_error)
 
     def _do_logout(self, session):
         try:
