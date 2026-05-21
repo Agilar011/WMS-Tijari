@@ -22,7 +22,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=5000)
     batch_size = fields.Integer(string='Batch Size untuk Fetch', default=100)
 
-    fetch_skip = fields.Integer(string='Mulai dari Data ke-', default=0)
+    fetch_skip = fields.Integer(string='Skip Data Teratas', default=0)
 
     total_target = fields.Integer(
         string='Total Data Diambil',

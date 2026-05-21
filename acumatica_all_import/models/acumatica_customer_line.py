@@ -2,6 +2,8 @@ from odoo import models, fields, api
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
 import logging
+import time
+
 
 _logger = logging.getLogger(__name__)
 
@@ -125,6 +127,7 @@ class AcumaticaCustomerLine(models.Model):
         return self._do_import()
 
     def _do_import(self):
+        print('MULAI IMPORT CUSTOMER')
         """
         Import/update data Customer ke res.partner Odoo.
         - Field standar Odoo: langsung diisi
@@ -199,6 +202,7 @@ class AcumaticaCustomerLine(models.Model):
                     })
                     imported += 1
 
+                print(f'PROCESSED LINE {line.row_number}: {line.customer_name} → {line.import_message}')
             except Exception as e:
                 _logger.error("Error import Customer line %s: %s", line.customer_id, str(e))
                 line.write({

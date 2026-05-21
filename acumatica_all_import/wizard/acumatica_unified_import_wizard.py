@@ -184,7 +184,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'receipt_change_item',
         'inventory_received',
         'shipment_so',
-
         'so_shipment',
         'transfer_shipment',
         'issue_change_item',
@@ -215,7 +214,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             for key in self.MASTER_DATA_TYPES
             if key in self.IMPORT_MAP
         ]
-
+        print(selection)
         return selection
 
     @api.onchange('import_type')
@@ -237,6 +236,8 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     )
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=5000, required=True)
     batch_size = fields.Integer(string='Batch Size Import', default=50, required=True)
+    fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai fetch.')
+    skip_size = fields.Integer(string='Skip Size ', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai import.')
     auto_commit_batch = fields.Boolean(
         string='Commit setiap batch',
         default=False,
@@ -284,12 +285,14 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         self.ensure_one()
         if not self.import_type or self.import_type not in self.IMPORT_MAP:
             raise UserError(_('Pilih data yang ingin diimport terlebih dahulu.'))
+        print(self.import_type)
         return self.IMPORT_MAP[self.import_type]
 
     def _get_selected_config(self, info):
         config = self[info['config_field']]
         if not config:
             raise UserError(_('Pilih konfigurasi API untuk %s terlebih dahulu.') % info['label'])
+        print(config)
         return config
 
     def _prepare_source_wizard_vals(self, info, config):
@@ -297,6 +300,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'config_id': config.id,
             'fetch_limit': self.fetch_limit,
             'batch_size': self.batch_size,
+            'fetch_skip': self.fetch_skip,
         }
         for field_name in info.get('extra_fields', []):
             if field_name in self.env[info['wizard_model']]._fields:
@@ -330,6 +334,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         )
 
     def action_fetch_data(self):
+        print('action_fetch_data called')
         self.ensure_one()
         if self.fetch_limit <= 0:
             raise UserError(_('Maks Data Ditarik harus lebih besar dari 0.'))
@@ -427,8 +432,30 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
     def action_fetch_and_import_batch(self):
         self.ensure_one()
-        self.action_fetch_data()
-        return self.action_import_pending_batch()
+
+        print('action_fetch_data & import called')
+        self.ensure_one()
+        if self.fetch_limit <= 0:
+            raise UserError(_('Maks Data Ditarik harus lebih besar dari 0.'))
+        info = self._get_import_info()
+        config = self._get_selected_config(info)
+        source_wizard = self.env[info['wizard_model']].create(self._prepare_source_wizard_vals(info, config))
+        source_wizard.action_fetch_data_import_batch()
+        pending_lines = self._get_pending_lines(info, config)
+        total_fetched = len(self.env[info['line_model']].search([('config_id', '=', config.id)]))
+        self.write({
+            'state': 'fetched',
+            'total_fetched': total_fetched,
+            'total_pending': len(pending_lines),
+            'total_imported': 0,
+            'batch_count': 0,
+            'last_message': _('Fetch selesai. %s line staging dibuat, %s line pending terpilih siap diimport.') % (total_fetched, len(pending_lines)),
+        })
+
+
+
+        # self.action_fetch_data()
+        # return self.action_import_pending_batch()
 
     def action_reset(self):
         self.write({
