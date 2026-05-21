@@ -209,12 +209,19 @@ class AcumaticaStockItemConfig(models.Model):
         except Exception:
             pass
 
-   def fetch_stock_item_data(self, limit=50, offset=0, batch_no=1):
+    def fetch_stock_item_data(
+        self,
+        limit=50,
+        offset=0,
+        skip=0,
+        batch_no=1
+    ):
         """
         Fetch data Stock Item dengan:
-        - limit      = jumlah data per request
-        - offset     = titik awal data
-        - batch_no   = nomor batch untuk logging
+        - limit     = jumlah data per request
+        - offset    = offset batch internal
+        - skip      = starting row manual
+        - batch_no  = nomor batch untuk logging
         """
 
         self.ensure_one()
@@ -223,20 +230,27 @@ class AcumaticaStockItemConfig(models.Model):
 
         try:
 
+            endpoint = f"{self.api_url}/StockItem"
+
+            # ==================================================
+            # REAL SKIP
+            # ==================================================
+            real_skip = offset + skip
+
             print('==================================================')
             print('START FETCH STOCK ITEM')
-            print(f'BATCH NO   : {batch_no}')
-            print(f'LIMIT      : {limit}')
-            print(f'OFFSET     : {offset}')
+            print(f'BATCH NO    : {batch_no}')
+            print(f'LIMIT       : {limit}')
+            print(f'OFFSET      : {offset}')
+            print(f'SKIP        : {skip}')
+            print(f'REAL SKIP   : {real_skip}')
             print('==================================================')
-
-            endpoint = f"{self.api_url}/StockItem"
 
             all_results = []
 
             params = {
                 "$top": limit,
-                "$skip": offset
+                "$skip": real_skip
             }
 
             print('REQUEST INFO')
@@ -271,9 +285,9 @@ class AcumaticaStockItemConfig(models.Model):
             print(f'TOTAL RAW DATA : {len(raw_data)}')
             print('==================================================')
 
-            # =========================
+            # ==================================================
             # HELPER
-            # =========================
+            # ==================================================
             def val(item, key):
 
                 v = item.get(key, {})
@@ -283,9 +297,9 @@ class AcumaticaStockItemConfig(models.Model):
 
                 return ""
 
-            # =========================
+            # ==================================================
             # PARSE
-            # =========================
+            # ==================================================
             item_no = 0
 
             for item in raw_data:
@@ -317,21 +331,25 @@ class AcumaticaStockItemConfig(models.Model):
                 print(f'STATUS       : {parsed_vals["item_status"]}')
                 print('--------------------------------------------------')
 
-            # =========================
+            # ==================================================
             # FINAL LOG
-            # =========================
+            # ==================================================
             print('==================================================')
             print('FETCH STOCK ITEM DONE')
             print(f'BATCH NO           : {batch_no}')
             print(f'OFFSET             : {offset}')
+            print(f'SKIP               : {skip}')
+            print(f'REAL SKIP          : {real_skip}')
             print(f'LIMIT              : {limit}')
             print(f'TOTAL STOCK ITEM   : {len(all_results)}')
             print('==================================================')
 
             _logger.info(
-                'BATCH %s | OFFSET %s | LIMIT %s | TOTAL STOCK ITEM: %s',
+                'BATCH %s | OFFSET %s | SKIP %s | REAL SKIP %s | LIMIT %s | TOTAL STOCK ITEM: %s',
                 batch_no,
                 offset,
+                skip,
+                real_skip,
                 limit,
                 len(all_results)
             )
@@ -358,4 +376,5 @@ class AcumaticaStockItemConfig(models.Model):
             print('==================================================')
 
             self._do_logout(session)
+
             self.last_sync = fields.Datetime.now()
