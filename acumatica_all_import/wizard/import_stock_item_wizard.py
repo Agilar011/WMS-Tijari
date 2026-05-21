@@ -103,9 +103,11 @@ class ImportStockItemWizard(models.TransientModel):
 
         new_count = existing_count = 0
         lines_to_create = []
+        batch_num = 0
 
         for item in raw_list:
             existing = Product.browse()
+            batch_num += 1
 
             if item['external_id']:
                 existing = Product.search([
@@ -123,27 +125,52 @@ class ImportStockItemWizard(models.TransientModel):
             else:
                 new_count += 1
                 msg = ''
+            query = """
+                INSERT INTO acumatica_stock_item_line (config_id, row_number, external_id, inventory_id, description, item_type, item_class, item_status, base_uom, valuation_method, last_modified_datetime, import_state, import_message, odoo_product_id, selected, sync_date) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            params = (
+                self.config_id.id,
+                item['row_number'],
+                item['external_id'],
+                item['inventory_id'],
+                item['description'],
+                item['item_type'],
+                item['item_class'],
+                item['item_status'],
+                item['base_uom'],
+                item['valuation_method'],
+                item['last_modified_datetime'],
+                'pending',
+                msg,
+                existing.id if existing else None,
+                True,
+                fields.Datetime.now(),
+            )
+            self.env.cr.execute(query, params)
 
-            lines_to_create.append({
-                'config_id':              self.config_id.id,
-                'row_number':             item['row_number'],
-                'external_id':            item['external_id'],
-                'inventory_id':           item['inventory_id'],
-                'description':            item['description'],
-                'item_type':              item['item_type'],
-                'item_class':             item['item_class'],
-                'item_status':            item['item_status'],
-                'base_uom':               item['base_uom'],
-                'valuation_method':       item['valuation_method'],
-                'last_modified_datetime': item['last_modified_datetime'],
-                'import_state':           'pending',
-                'import_message':         msg,
-                'odoo_product_id':        existing.id if existing else False,
-                'selected':               True,
-                'sync_date':              fields.Datetime.now(),
-            })
+            self.env['acumatica.stock.item.line']._invalidate_cache()
+            print(f"DATA BERHASIL NAMBAH NIH - BATCH {batch_num}")
+            # lines_to_create.append({
+            #     'config_id':              self.config_id.id,
+            #     'row_number':             item['row_number'],
+            #     'external_id':            item['external_id'],
+            #     'inventory_id':           item['inventory_id'],
+            #     'description':            item['description'],
+            #     'item_type':              item['item_type'],
+            #     'item_class':             item['item_class'],
+            #     'item_status':            item['item_status'],
+            #     'base_uom':               item['base_uom'],
+            #     'valuation_method':       item['valuation_method'],
+            #     'last_modified_datetime': item['last_modified_datetime'],
+            #     'import_state':           'pending',
+            #     'import_message':         msg,
+            #     'odoo_product_id':        existing.id if existing else False,
+            #     'selected':               True,
+            #     'sync_date':              fields.Datetime.now(),
+            # })
 
-        self.env['acumatica.stock.item.line'].create(lines_to_create)
+        # self.env['acumatica.stock.item.line'].create(lines_to_create)
 
         self.write({
             'state':          'fetched',

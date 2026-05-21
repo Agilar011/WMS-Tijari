@@ -85,7 +85,6 @@ class ImportWarehouseWizard(models.TransientModel):
                 'shipping_location_id':  item['shipping_location_id'],
                 'import_state':          'pending',
                 'import_message':        f'Sudah ada → akan diupdate: {existing.name}' if existing else '',
-                'odoo_warehouse_id':     existing.id if existing else False,
                 'selected':              True,
                 'sync_date':             fields.Datetime.now(),
             })
