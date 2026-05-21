@@ -209,25 +209,58 @@ class AcumaticaStockItemConfig(models.Model):
         except Exception:
             pass
 
-    def fetch_stock_item_data(self, limit=50, offset=0):
+   def fetch_stock_item_data(self, limit=50, offset=0, batch_no=1):
         """
         Fetch data Stock Item dengan:
-        - limit  = jumlah data per request
-        - offset  = titik awal data
-        - target_total = total data yang ingin diambil (None = ambil semua)
+        - limit      = jumlah data per request
+        - offset     = titik awal data
+        - batch_no   = nomor batch untuk logging
         """
+
         self.ensure_one()
+
         session = self._do_login()
 
         try:
+
+            print('==================================================')
+            print('START FETCH STOCK ITEM')
+            print(f'BATCH NO   : {batch_no}')
+            print(f'LIMIT      : {limit}')
+            print(f'OFFSET     : {offset}')
+            print('==================================================')
+
             endpoint = f"{self.api_url}/StockItem"
 
             all_results = []
-            params = {"$top": limit, "$skip": offset}
 
-            response = session.get(endpoint, params=params, timeout=60)
+            params = {
+                "$top": limit,
+                "$skip": offset
+            }
+
+            print('REQUEST INFO')
+            print(f'ENDPOINT : {endpoint}')
+            print(f'PARAMS   : {params}')
+            print('==================================================')
+
+            response = session.get(
+                endpoint,
+                params=params,
+                timeout=60
+            )
+
+            print('RESPONSE RECEIVED')
+            print(f'STATUS CODE : {response.status_code}')
+            print('==================================================')
 
             if response.status_code != 200:
+
+                print('ERROR FETCH STOCK ITEM')
+                print(f'HTTP STATUS : {response.status_code}')
+                print(f'RESPONSE    : {response.text}')
+                print('==================================================')
+
                 raise UserError(
                     f'Gagal ambil data Stock Item '
                     f'(HTTP {response.status_code}): {response.text}'
@@ -235,20 +268,31 @@ class AcumaticaStockItemConfig(models.Model):
 
             raw_data = response.json()
 
+            print(f'TOTAL RAW DATA : {len(raw_data)}')
+            print('==================================================')
+
             # =========================
             # HELPER
             # =========================
             def val(item, key):
+
                 v = item.get(key, {})
+
                 if isinstance(v, dict):
                     return v.get("value", "") or ""
+
                 return ""
 
             # =========================
             # PARSE
             # =========================
+            item_no = 0
+
             for item in raw_data:
-                all_results.append({
+
+                item_no += 1
+
+                parsed_vals = {
                     'external_id':            item.get("id", "") or "",
                     'row_number':             item.get("rowNumber", 0),
                     'inventory_id':           val(item, "InventoryID"),
@@ -259,12 +303,59 @@ class AcumaticaStockItemConfig(models.Model):
                     'base_uom':               val(item, "BaseUOM"),
                     'valuation_method':       val(item, "ValuationMethod"),
                     'last_modified_datetime': val(item, "LastModifiedDateTime"),
-                })
+                }
 
-            _logger.info("TOTAL STOCK ITEM TERAMBIL: %d", len(all_results))
+                all_results.append(parsed_vals)
+
+                print('--------------------------------------------------')
+                print(f'BATCH        : {batch_no}')
+                print(f'ITEM NO      : {item_no}')
+                print(f'EXTERNAL ID  : {parsed_vals["external_id"]}')
+                print(f'INVENTORY ID : {parsed_vals["inventory_id"]}')
+                print(f'DESCRIPTION  : {parsed_vals["description"]}')
+                print(f'ITEM TYPE    : {parsed_vals["item_type"]}')
+                print(f'STATUS       : {parsed_vals["item_status"]}')
+                print('--------------------------------------------------')
+
+            # =========================
+            # FINAL LOG
+            # =========================
+            print('==================================================')
+            print('FETCH STOCK ITEM DONE')
+            print(f'BATCH NO           : {batch_no}')
+            print(f'OFFSET             : {offset}')
+            print(f'LIMIT              : {limit}')
+            print(f'TOTAL STOCK ITEM   : {len(all_results)}')
+            print('==================================================')
+
+            _logger.info(
+                'BATCH %s | OFFSET %s | LIMIT %s | TOTAL STOCK ITEM: %s',
+                batch_no,
+                offset,
+                limit,
+                len(all_results)
+            )
 
             return all_results
 
+        except Exception as e:
+
+            print('==================================================')
+            print('FETCH STOCK ITEM ERROR')
+            print(f'BATCH NO : {batch_no}')
+            print(f'ERROR    : {str(e)}')
+            print('==================================================')
+
+            _logger.exception(e)
+
+            raise
+
         finally:
+
+            print('==================================================')
+            print('LOGOUT SESSION ACUMATICA')
+            print(f'BATCH NO : {batch_no}')
+            print('==================================================')
+
             self._do_logout(session)
             self.last_sync = fields.Datetime.now()
