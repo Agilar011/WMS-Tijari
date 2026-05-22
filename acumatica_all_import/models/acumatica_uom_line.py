@@ -92,14 +92,13 @@ class AcumaticaUomLine(models.Model):
                     error += 1
                     continue
 
-                # ── 1. Cari atau buat uom.category dari UnitID ──
-                categ_name = line.unit_id or 'Unit'
+                # ── 1. Cari Kategori Unit ──
                 uom_categ = self.env['uom.category'].search([
-                    ('name', '=ilike', categ_name)
+                    ('name', '=ilike', 'Unit')
                 ], limit=1)
                 if not uom_categ:
-                    uom_categ = self.env['uom.category'].create({'name': categ_name})
-                    _logger.info("Kategori UoM baru dibuat: %s", categ_name)
+                    uom_categ = self.env['uom.category'].create({'name': 'Unit'})
+                    _logger.info("Kategori UoM baru dibuat: %s", 'Unit')
 
                 # ── 2. Cek apakah uom.uom (Description) sudah ada ──
                 existing = self.env['uom.uom'].search([
@@ -108,6 +107,7 @@ class AcumaticaUomLine(models.Model):
                 ], limit=1)
 
                 if existing:
+                    existing.categ_id = uom_categ.id  # Pastikan kategorinya sesuai
                     line.write({
                         'import_state':   'skipped',
                         'import_message': f'Sudah ada: {existing.name} (kategori: {uom_categ.name})',

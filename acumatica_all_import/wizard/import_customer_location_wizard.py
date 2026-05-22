@@ -72,6 +72,7 @@ class ImportCustomerLocationWizard(models.TransientModel):
         import math
 
         raw_list = []
+        raw_list_count = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
@@ -80,10 +81,11 @@ class ImportCustomerLocationWizard(models.TransientModel):
                 limit=self.batch_size,
                 offset=offset,
             )
+            raw_list_count += len(batch_data)
 
             if not batch_data:
                 break
-
+            print(f"Batch {i+1} - Data Diterima: {len(batch_data)} - Total so far: {raw_list_count}")
             raw_list.extend(batch_data)
 
         if not raw_list:
@@ -117,30 +119,23 @@ class ImportCustomerLocationWizard(models.TransientModel):
                 msg = 'New'
             
             query = """
-                INSERT INTO acumatica_stock_item_line (config_id, row_number, external_id, inventory_id, description, item_type, item_class, item_status, base_uom, valuation_method, last_modified_datetime, import_state, import_message, odoo_product_id, selected, sync_date) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO acumatica_customer_location_line (config_id, row_number, external_id, customer, location_id_acumatica, location_name, import_state, import_message, selected) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
             params = (
                 self.config_id.id,
                 item['row_number'],
                 item['external_id'],
-                item['inventory_id'],
-                item['description'],
-                item['item_type'],
-                item['item_class'],
-                item['item_status'],
-                item['base_uom'],
-                item['valuation_method'],
-                item['last_modified_datetime'],
+                item['customer'],
+                item['location_id_acumatica'],
+                item['location_name'],
                 'pending',
                 msg,
-                existing.id if existing else None,
-                True,
-                fields.Datetime.now(),
+                 True if msg in ['Update', 'New'] else False
             )
             self.env.cr.execute(query, params)
 
-            self.env['acumatica.stock.item.line']._invalidate_cache()
+            self.env['acumatica.customer.location.line']._invalidate_cache()
             print(f"DATA BERHASIL NAMBAH NIH - BATCH {batch_num}")
 
         #     lines.append({
