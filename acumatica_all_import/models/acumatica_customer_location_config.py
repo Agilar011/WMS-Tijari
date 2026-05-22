@@ -193,3 +193,4 @@ class AcumaticaCustomerLocationConfig(models.Model):
         finally:
             self._do_logout(session)
             self.last_sync = fields.Datetime.now()
+
