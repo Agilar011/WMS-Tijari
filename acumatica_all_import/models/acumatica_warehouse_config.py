@@ -122,16 +122,6 @@ class AcumaticaWarehouseConfig(models.Model):
             result = []
             for item in raw_data:
                 # ── Parse locations (detail) ──
-                locations = []
-                for loc in item.get("Locations", []):
-                    locations.append({
-                        'external_id':  loc.get("id", "") or "",
-                        'row_number':   loc.get("rowNumber", 0),
-                        'active':       bval(loc, "Active"),
-                        'description':  val(loc, "Description"),
-                        'location_id':  val(loc, "LocationID"),
-                        'note':         loc.get("note", {}).get("value", "") or "",
-                    })
 
                 result.append({
                     # Header
@@ -147,8 +137,6 @@ class AcumaticaWarehouseConfig(models.Model):
                     'rma_location_id':       val(item, "RMALocationID"),
                     'shipping_location_id':  val(item, "ShippingLocationID"),
                     'warehouse_id':          val(item, "WarehouseID"),
-                    # Detail
-                    'locations':             locations,
                 })
 
             return result

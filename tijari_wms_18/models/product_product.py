@@ -35,6 +35,11 @@ class ProductTemplate(models.Model):
     """
     _inherit = 'product.template'
 
+    adt_product_type = fields.Selection([
+        ('stock_item', 'Stock Item'),
+        ('non_stock_item', 'Non-Stock Item'),
+    ], string='Product Type (Acumatica)', help='ItemType dari Acumatica WMS')
+
     adt_external_id = fields.Char(
         string='UUID Acumatica',
         index=True,

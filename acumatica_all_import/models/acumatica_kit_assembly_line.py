@@ -19,7 +19,7 @@ class AcumaticaKitAssemblyLine(models.Model):
       ItemStatus           → adt_item_status            (Mandatory, to be)
       BaseUOM              → uom_id / uom_po_id         (Mandatory, lookup by name)
       ValuationMethod      → adt_valuation_method       (Mandatory, to be)
-      LastModifiedDateTime → adt_last_modified_datetime (Mandatory, to be)
+      LastModifiedDateTime → adt_acumatica_write_date (Mandatory, to be)
     """
     _name        = 'acumatica.kit.assembly.line'
     _description = 'Data Kit Assembly dari Acumatica (Staging)'
@@ -241,7 +241,7 @@ class AcumaticaKitAssemblyLine(models.Model):
                     'adt_revision': line.revision or False,
                     'adt_status': line.status or False,
                     'adt_warehouse': line.warehouse or False,
-                    'adt_last_modified_datetime': self._parse_dt(line.last_modified_datetime),
+                    'adt_acumatica_write_date': self._parse_dt(line.last_modified_datetime),
 
                     # field custom, kalau ada di model
                 }

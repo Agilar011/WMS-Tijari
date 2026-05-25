@@ -127,7 +127,7 @@
 
                     <group string="Field Optional">
                         <group>
-                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_last_modified_datetime (to be)"/>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_acumatica_write_date (to be)"/>
                             <field name="volume"    string="Volume → volume"/>
                             <field name="volume_uom" string="VolumeUOM → adt_volume_uom"/>
                             <field name="weight"    string="Weight → weight"/>

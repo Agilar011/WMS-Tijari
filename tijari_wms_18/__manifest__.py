@@ -30,13 +30,18 @@
         'views/stock_location_action.xml',
         'views/stock_location_menu.xml',
         'views/stock_location_views.xml',
+        'views/res_partner.xml',
+        'views/res_users.xml',
+        'views/product_template.xml',
     ],
     'assets': {
         'web.assets_frontend': [
         ],
         'web.assets_backend': [
             'tijari_wms_18/static/src/js/generate_lot_button.js',
-            'tijari_wms_18/static/src/xml/generate_lot_button.xml'
+            'tijari_wms_18/static/src/xml/generate_lot_button.xml',
+            'tijari_wms_18/static/src/xml/auto_input_code.xml'
+
         ]
     },
     'installable': True,

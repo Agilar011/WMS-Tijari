@@ -27,6 +27,7 @@ class ImportWarehouseWizard(models.TransientModel):
     total_existing       = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
     total_locations      = fields.Integer(string='Total Locations', readonly=True)
     batch_size           = fields.Integer(string='Batch Size untuk Import', default=20)
+    fetch_skip            = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
     def action_fetch_data(self):
         self.ensure_one()
@@ -44,10 +45,11 @@ class ImportWarehouseWizard(models.TransientModel):
         raw_list = []
         loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
         for i in range(loop_count):
-            offset = i * self.batch_size
+            offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_warehouse_data(limit=self.batch_size, offset=offset)
             if not batch_data:
                 break
+            print(len(batch_data))
             raw_list.extend(batch_data)
 
         if not raw_list:
@@ -75,7 +77,8 @@ class ImportWarehouseWizard(models.TransientModel):
                 'external_id':           item['external_id'],
                 'warehouse_id':          item['warehouse_id'],
                 'description':           item['description'],
-                'active':                item['active'],
+                'is_active':             item['active'],
+                'active':                True,
                 'note':                  item['note'],
                 'drop_ship_location_id': item['drop_ship_location_id'],
                 'last_modified_dt':      item['last_modified_dt'],
@@ -84,7 +87,6 @@ class ImportWarehouseWizard(models.TransientModel):
                 'shipping_location_id':  item['shipping_location_id'],
                 'import_state':          'pending',
                 'import_message':        f'Sudah ada → akan diupdate: {existing.name}' if existing else '',
-                'odoo_warehouse_id':     existing.id if existing else False,
                 'selected':              True,
                 'sync_date':             fields.Datetime.now(),
             })

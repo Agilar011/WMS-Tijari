@@ -8,8 +8,10 @@
             <list editable="bottom">
                 <field name="name"/>
                 <field name="code"/>
+                <field name="building"/>
                 <field name="odoo_location_id"/>
-                <field name="active"/>
+                <field name="odoo_building_id"/>
+                <field name="is_active"/>
             </list>
         </field>
     </record>

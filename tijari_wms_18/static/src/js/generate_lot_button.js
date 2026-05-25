@@ -18,7 +18,23 @@ class GenerateLotButton extends Component {
     }
 }
 
+class AutoInputCode extends Component {
+    static props = { ...standardFieldProps }; // Sangat disarankan di Odoo 18
+    static template = "tijari.AutoInputCode";
+
+    setup() {
+        this.orm = useService("orm");
+    }
+    onClick() {
+        this.props.record.update({ [this.props.name]: true });
+    }
+}
+
 // PERBAIKAN UTAMA: Daftarkan sebagai objek dengan key 'component'
 registry.category("fields").add("generate_lot_button", {
     component: GenerateLotButton,
+});
+
+registry.category("fields").add("auto_input_code", {
+    component: AutoInputCode,
 });

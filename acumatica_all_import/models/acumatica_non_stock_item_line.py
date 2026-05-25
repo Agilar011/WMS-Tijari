@@ -155,6 +155,8 @@ class AcumaticaNonStockItemLine(models.Model):
 
                     # ── Field custom adt_ ───────────────────
                     'adt_external_id':            line.external_id or False,
+                    'adt_product_type':         'non_stock_item',
+                    'is_storable': True,
                     'adt_note':                   line.note or False,
                     'adt_base_unit':              line.base_unit or False,
                     'adt_is_a_kit':               line.is_a_kit,
@@ -162,7 +164,7 @@ class AcumaticaNonStockItemLine(models.Model):
                     'adt_item_class':             line.item_class or False,
                     'adt_item_status':            item_status or False,
                     'adt_item_type':              line.item_type or False,
-                    'adt_last_modified_datetime': self._parse_dt(line.last_modified_datetime),
+                    'adt_acumatica_write_date': self._parse_dt(line.last_modified_datetime),
                     'adt_note_id':                line.note_id or False,
                     'adt_posting_class':          line.posting_class or False,
                     'adt_price_class':            line.price_class or False,

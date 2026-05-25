@@ -72,18 +72,20 @@ class ImportCustomerLocationWizard(models.TransientModel):
         import math
 
         raw_list = []
+        raw_list_count = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
-            offset = i * self.batch_size
+            offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_customer_location_data(
                 limit=self.batch_size,
                 offset=offset,
             )
+            raw_list_count += len(batch_data)
 
             if not batch_data:
                 break
-
+            print(f"Batch {i+1} - Data Diterima: {len(batch_data)} - Total so far: {raw_list_count}")
             raw_list.extend(batch_data)
 
         if not raw_list:
@@ -94,7 +96,9 @@ class ImportCustomerLocationWizard(models.TransientModel):
         new_count = existing_count = no_customer_count = 0
         lines = []
 
+        batch_num = 0
         for item in raw_list:
+            batch_num += 1
             existing = Partner.search([
                 ('name', '=', item['location_id_acumatica']),
                 ('parent_id.company_registry', '=', item['customer'])
@@ -113,20 +117,40 @@ class ImportCustomerLocationWizard(models.TransientModel):
             else:
                 new_count += 1
                 msg = 'New'
+            
+            query = """
+                INSERT INTO acumatica_customer_location_line (config_id, row_number, external_id, customer, location_id_acumatica, location_name, import_state, import_message, selected) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            params = (
+                self.config_id.id,
+                item['row_number'],
+                item['external_id'],
+                item['customer'],
+                item['location_id_acumatica'],
+                item['location_name'],
+                'pending',
+                msg,
+                 True if msg in ['Update', 'New'] else False
+            )
+            self.env.cr.execute(query, params)
 
-            lines.append({
-                **item,
-                'config_id': self.config_id.id,
-                'external_id': item['external_id'],
-                'customer': item['customer'],
-                'location_id_acumatica': item['location_id_acumatica'],
-                'location_name': item['location_name'],
-                'import_state': 'pending',
-                'import_message': msg,
-                'selected': bool(partner),
-            })
+            self.env['acumatica.customer.location.line']._invalidate_cache()
+            print(f"DATA BERHASIL NAMBAH NIH - BATCH {batch_num}")
 
-        self.env['acumatica.customer.location.line'].create(lines)
+        #     lines.append({
+        #         **item,
+        #         'config_id': self.config_id.id,
+        #         'external_id': item['external_id'],
+        #         'customer': item['customer'],
+        #         'location_id_acumatica': item['location_id_acumatica'],
+        #         'location_name': item['location_name'],
+        #         'import_state': 'pending',
+        #         'import_message': msg,
+        #         'selected': bool(partner),
+        #     })
+
+        # self.env['acumatica.customer.location.line'].create(lines)
 
         self.write({
             'state': 'fetched',
