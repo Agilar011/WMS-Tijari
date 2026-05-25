@@ -96,7 +96,8 @@ class AcumaticaReceiptLine(models.Model):
         Partner = self.env['res.partner']
         vendor = False
         if line.vendor_code:
-            vendor = Partner.search([('ref', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
+            # vendor = Partner.search([('ref', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
+            vendor = Partner.search([('company_registry', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
             if not vendor:
                 vendor = Partner.search([('name', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
         return vendor
@@ -381,7 +382,7 @@ class AcumaticaReceiptLine(models.Model):
                             'product_uom_qty': qty,
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': picking.location_id.id,
-                            'location_dest_id': line_dest.id,
+                            'location_dest_id': '9',
                             'description_picking': line.description or False,
 
                             'adt_line_external_id': line.line_external_id or False,

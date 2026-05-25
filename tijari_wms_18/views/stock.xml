@@ -67,9 +67,9 @@
             <!-- Tombol custom -->
             <xpath expr="//field[@name='lot_name']" position="after">
                 <field name="operation_category" column_invisible="1"/>
+                <field name="lot_name" column_invisible="0"/>
                 <field name="lot_button" widget="generate_lot_button"
                 invisible="operation_category != 'receive'"/>
-
             </xpath>
 
             <!-- Custom fields -->
@@ -87,6 +87,9 @@
                     widget="html"
                     readonly="1"
                     column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+                    
+                <field name="auto_input_code" widget="auto_input_code"
+                    invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
 
             </xpath>
 

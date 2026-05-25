@@ -39,7 +39,9 @@
         ],
         'web.assets_backend': [
             'tijari_wms_18/static/src/js/generate_lot_button.js',
-            'tijari_wms_18/static/src/xml/generate_lot_button.xml'
+            'tijari_wms_18/static/src/xml/generate_lot_button.xml',
+            'tijari_wms_18/static/src/xml/auto_input_code.xml'
+
         ]
     },
     'installable': True,
