@@ -3,22 +3,7 @@ from odoo import models, fields
 
 class ResPartner(models.Model):
     """
-    Extend res.partner dengan field-field dari Acumatica.
-    Semua field baru diprefix 'adt_' untuk menghindari conflict.
-
-    PENTING: Beberapa nama field sengaja TIDAK menggunakan nama bawaan Odoo:
-      - property_stock_supplier  → sudah ada di Odoo (Many2one stock.location)
-      - property_stock_customer  → sudah ada di Odoo (Many2one stock.location)
-      - property_account_*       → sudah ada di Odoo (Many2one account.account)
-
-    Field standar Odoo yang dipakai langsung (TIDAK perlu dibuat ulang):
-      Customer:
-        - name              → CustomerName
-        - company_registry  → CustomerID
-      Vendor:
-        - name              → VendorName
-        - company_registry  → VendorID
-        - comment           → note (internal_notes)
+    Extend res.partner dengan field-field dari Acumatica WMS (Customer, Customer Location, Vendor, Shipvia).
     """
     _inherit = 'res.partner'
 
@@ -35,15 +20,14 @@ class ResPartner(models.Model):
         string='FOB Point (Acumatica)',
         help='FOBPoint dari Acumatica WMS',
     )
-    adt_last_modified_datetime = fields.Datetime(
-        string='Last Modified (Acumatica)',
-        help='LastModifiedDateTime dari Acumatica WMS',
-    )
 
     # ══════════════════════════════════════════════════════
     # FIELD CUSTOMER & CUSTOMER LOCATION
     # ══════════════════════════════════════════════════════
 
+    adt_account_ref = fields.Char(
+        string='Account Ref (Acumatica)',
+    )
     adt_b_account_id = fields.Char(
         string='BAccount ID (Acumatica)',
         help='BAccountID dari Acumatica WMS',
@@ -58,6 +42,7 @@ class ResPartner(models.Model):
         ('Hold',       'Hold'),
         ('CreditHold', 'Credit Hold'),
         ('OneTime',    'One Time'),
+        ('Prospect',    'Prospect'),
     ],
         string='Status Customer (Acumatica)',
         help='Status Customer di Acumatica WMS',
@@ -125,13 +110,19 @@ class ResPartner(models.Model):
         string='Lead Time Days (Acumatica)',
         help='LeadTimedays dari Acumatica WMS',
     )
-
+    adt_vendor_id = fields.Char(
+        string='Vendor ID (Acumatica)',
+        help='VendorID dari Acumatica WMS',
+    )
     # customer_rank = fields.Integer(
     #     string='Customer Rank',
     #     help='Used to prioritize customers during import (lower is higher priority)',
     # )
     partner_type = fields.Selection([
-        ('customer', 'Customer'),
+        ('customer', 'Kustomer'),
         ('vendor', 'Vendor'),
-        ('shipvia', 'ShipVia')
+        ('shipvia', 'Ekspedisi Kargo'),
+        ('customer_location', 'Lokasi Kustomer'),
+        ('warehouse', 'Warehouse'),
     ], string='Partner Type', default='customer', required=True)
+

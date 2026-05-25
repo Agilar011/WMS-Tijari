@@ -31,6 +31,7 @@ class AcumaticaWarehouseLine(models.Model):
     warehouse_id         = fields.Char(string='WarehouseID → code', readonly=True)
     description          = fields.Char(string='Description → name', readonly=True)
     active               = fields.Boolean(string='Active', readonly=True)
+    is_active            = fields.Boolean(string='Aktif (Active)')
     note                 = fields.Text(string='Note', readonly=True)
     drop_ship_location_id = fields.Char(string='DropShipLocationID', readonly=True)
     last_modified_dt     = fields.Char(string='LastModifiedDateTime', readonly=True)
@@ -90,11 +91,7 @@ class AcumaticaWarehouseLine(models.Model):
     def _find_existing_location(self, rec):
         """Cari warehouse code (BuildingID)."""
         location = self.env['stock.location.acumatica']
-        # if rec.external_id:
-        #     found = location.search([('adt_external_id', '=', rec.external_id)], limit=1)
-        #     if found:
-        #         return found
-        if rec.building_id:
+        if rec.warehouse_id:
             found = location.search([('code', '=', rec.warehouse_id)], limit=1)
             if found:
                 return found
@@ -136,15 +133,8 @@ class AcumaticaWarehouseLine(models.Model):
                 vals = {
                     'name':                    line.description,
                     'code':                    line.warehouse_id,
-                    'active':                  line.active,
-                    # 'adt_external_id':         line.external_id or False,
-                    # 'adt_note':                line.note or False,
-                    # 'adt_state':               line.active,
-                    # 'adt_drop_ship_location_id': line.drop_ship_location_id or False,
-                    # 'adt_last_modified_dt':    self._parse_dt(line.last_modified_dt),
-                    # 'adt_receiving_location_id': line.receiving_location_id or False,
-                    # 'adt_rma_location_id':     line.rma_location_id or False,
-                    # 'adt_shipping_location_id': line.shipping_location_id or False,
+                    'building':                line.building_id,
+                    'is_active':               line.active,
                 }
 
                 existing = self._find_existing_location(line)
@@ -167,6 +157,11 @@ class AcumaticaWarehouseLine(models.Model):
                         error += 1
                         continue
                     new_location = self.env['stock.location.acumatica'].create(vals)
+                    if line.building_id:
+                        wh_address = self.env['res.partner'].search([('name', '=', line.building_id)], limit=1)
+                        if wh_address:
+                            self.env['res.partner'].create({'name': line.building_id, 'partner_type': 'warehouse'})
+
                     line.write({
                         'import_state':    'imported',
                         'import_message':  f'Dibuat: {new_location.name} (code: {new_location.code})',

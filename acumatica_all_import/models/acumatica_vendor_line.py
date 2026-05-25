@@ -146,15 +146,19 @@ class AcumaticaVendorLine(models.Model):
                     'supplier_rank':    1,
                     'is_company':       True,
                     'comment':          line.note or False,       # internal_notes
-                    'adt_lead_time_days': line.lead_time_days or 0,
 
                     # ── Field custom adt_ ───────────────────
-                    'adt_external_id':             line.external_id or False,
-                    'adt_fob_point':               line.fob_point or False,
-                    'adt_last_modified_datetime': self._parse_dt(line.last_modified_date_time),
-                    'adt_vendor_state':                   adt_state_val,
-                    'adt_class':                   line.vendor_class or False,
-                    'partner_type':                 'vendor',
+                    'adt_external_id': line.external_id or False,
+                    'adt_fob_point': line.fob_point or False,
+                    'adt_lead_time_days': line.lead_time_days or 0,
+                    'adt_acumatica_write_date': self._parse_dt(line.last_modified_date_time),
+                    'adt_vendor_id': line.vendor_id or False,
+                    # 'adt_account_ref': line.account_ref or False,
+                    'adt_note': line.note or False,
+                    'adt_b_account_id': line.b_account_ref or False,
+                    'adt_location_name': line.location_name or False,
+                    'adt_status': line.status or False,
+                    'partner_type': 'vendor',
                 }
 
                 existing = self._find_existing_partner(line)

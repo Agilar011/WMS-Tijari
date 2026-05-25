@@ -115,7 +115,7 @@
                             <field name="item_class"        string="ItemClass → adt_item_class (to be)"/>
                             <field name="base_uom"          string="BaseUOM → uom_id (lookup)"/>
                             <field name="valuation_method"  string="ValuationMethod → adt_valuation_method (to be)"/>
-                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_last_modified_datetime (to be)"/>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_acumatica_write_date (to be)"/>
                         </group>
                     </group>
 
