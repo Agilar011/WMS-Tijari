@@ -49,6 +49,7 @@ class ImportWarehouseWizard(models.TransientModel):
             batch_data = self.config_id.fetch_warehouse_data(limit=self.batch_size, offset=offset)
             if not batch_data:
                 break
+            print(len(batch_data))
             raw_list.extend(batch_data)
 
         if not raw_list:
@@ -76,7 +77,8 @@ class ImportWarehouseWizard(models.TransientModel):
                 'external_id':           item['external_id'],
                 'warehouse_id':          item['warehouse_id'],
                 'description':           item['description'],
-                'active':                item['active'],
+                'is_active':             item['active'],
+                'active':                True,
                 'note':                  item['note'],
                 'drop_ship_location_id': item['drop_ship_location_id'],
                 'last_modified_dt':      item['last_modified_dt'],

@@ -520,6 +520,9 @@ class AcumaticaCustomerLocationLine(models.Model):
                             'type':
                                 'other',
 
+                            'partner_type':
+                                'customer_location',
+
                             'company_type':
                                 'person',
 

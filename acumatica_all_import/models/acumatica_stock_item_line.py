@@ -20,7 +20,7 @@ class AcumaticaStockItemLine(models.Model):
       ItemStatus           → adt_item_status            (Mandatory, to be)
       BaseUOM              → uom_id / uom_po_id         (Mandatory, lookup by name)
       ValuationMethod      → adt_valuation_method       (Mandatory, to be)
-      LastModifiedDateTime → adt_last_modified_datetime (Mandatory, to be)
+      LastModifiedDateTime → adt_acumatica_write_date (Mandatory, to be)
     """
     _name        = 'acumatica.stock.item.line'
     _description = 'Data Stock Item dari Acumatica (Staging)'
@@ -124,7 +124,7 @@ class AcumaticaStockItemLine(models.Model):
 
     def _create_product_and_sku_history(self, line):
         query_product = """
-            INSERT INTO product_template (name, categ_id, default_code, type, uom_id, uom_po_id, adt_external_id, adt_item_class, adt_item_status, adt_valuation_method, adt_last_modified_datetime)
+            INSERT INTO product_template (name, categ_id, default_code, type, uom_id, uom_po_id, adt_external_id, adt_item_class, adt_item_status, adt_valuation_method, adt_acumatica_write_date)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """
         params_product = (
@@ -180,8 +180,8 @@ class AcumaticaStockItemLine(models.Model):
                 adt_item_class = %s,
                 adt_item_status = %s,
                 adt_valuation_method = %s,
-                adt_last_modified_datetime = %s
-            WHERE adt_external_id = %s and adt_last_modified_datetime != %s RETURNING id, default_code
+                adt_acumatica_write_date = %s
+            WHERE adt_external_id = %s and adt_acumatica_write_date != %s RETURNING id, default_code
         """
         params_product = (
             json.dumps({"en_US": line.description}),
@@ -531,6 +531,8 @@ class AcumaticaStockItemLine(models.Model):
 
                             vals = {
                                 'name': line.description,
+                                'adt_product_type': 'stock_item',
+                                'is_storable': True,
                                 'default_code': line.inventory_id or False,
                                 'type': self.ITEM_TYPE_MAP.get(
                                     (line.item_type or '').lower(),

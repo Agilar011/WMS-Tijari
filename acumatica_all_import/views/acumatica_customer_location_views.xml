@@ -237,7 +237,7 @@
                             <field name="ship_via"              string="ShipVia → adt_ship_via"/>
                             <field name="lead_time_days"        string="LeadTimeDays → adt_lead_time_days"/>
                             <field name="order_priority"        string="OrderPriority → adt_order_priority"/>
-                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_last_modified_datetime"/>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_acumatica_write_date"/>
                         </group>
                     </group>
                     <group string="Address (LocationContact/Address)">

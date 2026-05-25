@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_product_template_form_inherit_acumatica_nonstock" model="ir.ui.view">
+        <field name="name">product.template.form.acumatica.nonstock</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page name="Sku History" string="Historical SKU">
+                    <field name="sku_history_ids" nolabel="1" readonly="1">
+                        <list>
+                            <field name="sku"/>
+                            <field name="date_start"/>
+                            <field name="date_end"/>
+                            <field name="is_current"/>
+                        </list>
+                    </field>
+                </page>
+                <page string="Acumatica">
+                    <!-- Non-Stock Item and Stock Item Fields -->
+                      <group>
+                          <field name="adt_external_id"/>
+                          <field name="adt_acumatica_write_date"/>
+                          <field name="adt_item_class"/>
+                          <field name="adt_item_status"/>
+                      </group>
+                      <!-- Stock Item Fields -->
+                      <group>
+                          <field name="adt_valuation_method" invisible="adt_product_type != 'stock_item'"/>
+                      </group>
+                      <!-- Non-Stock Item Fields -->
+                      <group>
+                          <field name="adt_is_a_kit" invisible="adt_product_type != 'non_stock_item'"/>
+                          <field name="adt_is_kit" invisible="adt_product_type != 'non_stock_item'"/>
+                          <field name="adt_item_type" invisible="adt_product_type != 'non_stock_item'"/>
+                          <field name="adt_posting_class" invisible="adt_product_type != 'non_stock_item'"/>
+                          <field name="adt_price_class" invisible="adt_product_type != 'non_stock_item'"/>
+                          <field name="adt_purchase_unit" invisible="adt_product_type != 'non_stock_item'"/>
+                          <field name="adt_sales_unit" invisible="adt_product_type != 'non_stock_item'"/>
+                          <field name="adt_volume_uom" invisible="adt_product_type != 'non_stock_item'"/>
+                          <field name="adt_weight_uom" invisible="adt_product_type != 'non_stock_item'"/>
+                      </group>
+                    <group string="Note">
+                        <field name="adt_note" nolabel="1"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_product_template_form_inherit_acumatica_product_type" model="ir.ui.view">
+        <field name="name">product.template.form.acumatica.product.type</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+          <xpath expr="//field[@name='type']" position="after">
+            <field name="adt_product_type"/>
+          </xpath>
+        </field>
+    </record>
+
+</odoo>
