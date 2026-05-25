@@ -111,6 +111,7 @@ class StockMoveLine(models.Model):
     _description = "Stock Move Line"
     
     lot_button = fields.Char(string="Lot Button", compute="_compute_lot_button")
+    auto_input_code = fields.Boolean(string="Auto Input Code", compute="_compute_auto_input_code")
 
     confirmation_location_code = fields.Char(
         string='Confirmation Location Code',
@@ -230,6 +231,12 @@ class StockMoveLine(models.Model):
                 line.lot_name = line.lot_id.name
 
             
+    @api.onchange('auto_input_code')
+    def _compute_auto_input_code(self):
+        for line in self:
+            if line.auto_input_code:
+                print(f">>> Auto input code triggered for line {line.id}") # Cek di terminal Odoo
+                line.matching = 'match'
 
     @api.onchange('lot_button')
     def _onchange_lot_button(self):
