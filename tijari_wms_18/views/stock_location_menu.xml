@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <menuitem
+      id="menu_stock_location_acumatica"
+      name="Location Acumatica"
+      parent="custom_master_menu"
+      action="action_stock_location_acumatica"
+      sequence="10"/>
+
+</odoo>

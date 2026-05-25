@@ -19,35 +19,77 @@
         </field>
     </record> -->
 
+<!-- status View -->
+    <!-- <record id="view_picking_form_inherit" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='move_ids_without_package']"
+                position="attributes">
+
+                <attribute name="context">
+                    {
+                        'operation_category': picking_type_id.operation_category
+                    }
+                </attribute>
+            </xpath>
+
+        </field>
+    </record> -->
     <!-- View untuk Operations normal -->
     <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_standard" model="ir.ui.view">
         <field name="name">stock.move.line.list.tjr.fifo</field>
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
         <field name="arch" type="xml">
+
+            <!-- Daftarkan field helper ke list -->
+            <xpath expr="//list" position="inside">
+                <field name="picking_type_id" column_invisible="1"/>
+                <field name="matching" column_invisible="1"/>
+                <field name="operation_category" column_invisible="0"/>
+                <field name="package_id" column_invisible="0"/>
+            </xpath>
+
+            <!-- Lock lot fields -->
             <xpath expr="//field[@name='lot_id']" position="attributes">
                 <attribute name="readonly">1</attribute>
                 <attribute name="force_save">1</attribute>
             </xpath>
+
             <xpath expr="//field[@name='lot_name']" position="attributes">
                 <attribute name="readonly">1</attribute>
                 <attribute name="force_save">1</attribute>
             </xpath>
+
+            <!-- Tombol custom -->
             <xpath expr="//field[@name='lot_name']" position="after">
-                <field name="lot_button" widget="generate_lot_button" 
-                       invisible="0"/>
+                <field name="operation_category" column_invisible="1"/>
+                <field name="lot_name" column_invisible="0"/>
+                <field name="lot_button" widget="generate_lot_button"
+                invisible="operation_category != 'receive'"/>
             </xpath>
+
+            <!-- Custom fields -->
             <xpath expr="//field[@name='lot_id']" position="after">
-                <field name="operation_category" column_invisible="True"/>
-                <field name="lot_name" readonly="1"/>              
-                <field name="confirmation_location_code" password="True" 
-                       invisible="operation_category not in ['put', 'delivery', 'receive']"/>
-                <field name="confirmation_lot_code" password="True" 
-                       invisible="operation_category not in ['put', 'delivery', 'receive']"/>
-                <field name="matching" column_invisible="True"/>
-                <field name="matching_html" widget="html" readonly="1" 
-                       invisible="not matching"/>
+
+                <field name="confirmation_location_code"
+                    password="1"
+                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+
+                <field name="confirmation_lot_code"
+                    password="1"
+                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+
+                <field name="matching_html"
+                    widget="html"
+                    readonly="1"
+                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+
             </xpath>
+
         </field>
     </record>
 
@@ -121,7 +163,7 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='origin']" position="after">
-                <field name="adt_type"/>
+                <field name="adt_type" readonly="1"/>
                 <field name="adt_total_qty"/>
                 <field name="adt_actual_qty"/>
             </xpath>

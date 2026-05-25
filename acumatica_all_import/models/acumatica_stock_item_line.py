@@ -1,0 +1,798 @@
+from odoo import models, fields, api
+from odoo.exceptions import UserError
+from dateutil import parser as dateutil_parser
+import logging
+import json
+
+_logger = logging.getLogger(__name__)
+
+
+class AcumaticaStockItemLine(models.Model):
+    """
+    Tabel staging: hasil tarikan data Stock Item dari Acumatica.
+    Target model Odoo: product.template
+
+    Mapping:
+      InventoryID          → default_code              (Mandatory)
+      Description          → name                      (Mandatory)
+      ItemType             → type                      (Mandatory)
+      ItemClass            → adt_item_class             (Mandatory, to be)
+      ItemStatus           → adt_item_status            (Mandatory, to be)
+      BaseUOM              → uom_id / uom_po_id         (Mandatory, lookup by name)
+      ValuationMethod      → adt_valuation_method       (Mandatory, to be)
+      LastModifiedDateTime → adt_last_modified_datetime (Mandatory, to be)
+    """
+    _name        = 'acumatica.stock.item.line'
+    _description = 'Data Stock Item dari Acumatica (Staging)'
+    _order       = 'row_number asc'
+
+    # ─── Data mentah dari Acumatica ──────────────────
+    row_number             = fields.Integer(string='No',                    readonly=True)
+    external_id            = fields.Char(string='UUID Acumatica',           readonly=True)
+    inventory_id           = fields.Char(string='InventoryID',              readonly=True)
+    description            = fields.Char(string='Description',              readonly=True)
+    item_type              = fields.Char(string='ItemType',                 readonly=True)
+    item_class             = fields.Char(string='ItemClass',                readonly=True)
+    item_status            = fields.Char(string='ItemStatus',               readonly=True)
+    base_uom               = fields.Char(string='BaseUOM',                  readonly=True)
+    valuation_method       = fields.Char(string='ValuationMethod',          readonly=True)
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime',     readonly=True)
+
+    # ─── Status Import ───────────────────────────────
+    import_state = fields.Selection([
+        ('pending',  'Belum Diimport'),
+        ('imported', 'Sudah Diimport'),
+        ('updated',  'Diupdate'),
+        ('error',    'Error'),
+    ], string='Status', default='pending', readonly=True)
+
+    import_message   = fields.Char(string='Keterangan',         readonly=True)
+    odoo_product_id  = fields.Many2one('product.template', string='Product di Odoo', readonly=True)
+    selected         = fields.Boolean(string='Pilih',           default=True)
+
+    config_id = fields.Many2one(
+        'acumatica.stock.item.config',
+        string='Konfigurasi',
+        readonly=True,
+        ondelete='cascade',
+    )
+    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+
+    # ─── Helpers ─────────────────────────────────────
+    @staticmethod
+    def _parse_dt(dt_str):
+        if not dt_str:
+            return False
+        try:
+            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
+        except Exception:
+            return False
+
+    # ItemType Acumatica → type Odoo
+    # 'consu' = storable/consumable (Odoo 17/18 pakai 'consu' untuk goods)
+    ITEM_TYPE_MAP = {
+        'finished good': 'consu',
+        'component':     'consu',
+        'non-stock':     'consu',
+        'service':       'service',
+        'labor':         'service',
+        'charge':        'service',
+    }
+
+    # ValuationMethod Acumatica → adt_valuation_method selection
+    VALUATION_MAP = {
+        'FIFO':     'FIFO',
+        'Average':  'Average',
+        'Standard': 'Standard',
+        'Specific': 'Specific',
+    }
+
+    # ItemStatus Acumatica → adt_item_status selection
+    STATUS_MAP = {
+        'Active':       'Active',
+        'Inactive':     'Inactive',
+        'ToDelete':     'ToDelete',
+        'NoSales':      'NoSales',
+        'NoPurchases':  'NoPurchases',
+        'NoRequest':    'NoRequest',
+    }
+
+    def _resolve_uom(self, uom_name):
+        """
+        Lookup uom.uom by name (case-insensitive).
+        UOM sudah diimport sebelumnya ke uom.uom.
+        Return: uom.uom record atau browse() jika tidak ditemukan.
+        """
+        if not uom_name:
+            return self.env['uom.uom'].browse()
+        uom = self.env['uom.uom'].search([('name', '=ilike', uom_name)], limit=1)
+        return uom
+
+    def _find_existing_product(self, rec):
+        """Cari product.template by UUID dulu, fallback by default_code (InventoryID)."""
+        Product = self.env['product.template']
+        if rec.external_id:
+            query = "SELECT id FROM product_template WHERE adt_external_id = %s"
+            self.env.cr.execute(query, (rec.external_id,))     
+            data = self.env.cr.fetchone()  
+            if data:
+                return True
+            # found = Product.search([('adt_external_id', '=', rec.external_id)], limit=1)
+            # if found:
+            #     return found
+        return False
+
+    def _create_product_and_sku_history(self, line):
+        query_product = """
+            INSERT INTO product_template (name, categ_id, default_code, type, uom_id, uom_po_id, adt_external_id, adt_item_class, adt_item_status, adt_valuation_method, adt_last_modified_datetime)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """
+        params_product = (
+            json.dumps({"en_US": line.description}),
+            1,  # Default category (Uncategorized)
+            line.inventory_id or False,
+            self.ITEM_TYPE_MAP.get((line.item_type or '').lower(), 'consu'),
+            self._resolve_uom(line.base_uom).id if line.base_uom else None,
+            self._resolve_uom(line.base_uom).id if line.base_uom else None,
+            line.external_id or False,
+            line.item_class or False,
+            self.STATUS_MAP.get(line.item_status or '', False),
+            self.VALUATION_MAP.get(line.valuation_method or '', False),
+            self._parse_dt(line.last_modified_datetime),
+        )
+        self.env.cr.execute(query_product, params_product)
+        product_id = self.env.cr.fetchone()[0]
+        query_staging = """
+            UPDATE acumatica_stock_item_line
+            SET import_state = %s, 
+            import_message = %s, 
+            odoo_product_id = %s
+            WHERE id = %s
+        """                    
+        params_staging = (
+            'imported',
+            f'Dibuat: {line.name} (ID: {product_id})',
+            product_id,
+            line.id
+        )
+        self.env.cr.execute(query_staging, params_staging)
+        query_sku = """
+            INSERT INTO product_sku_history (product_tmpl_id, sku, date_start, is_current)
+            VALUES (%s, %s, %s, %s)
+        """
+        params_sku = (
+            product_id,
+            line.inventory_id,
+            fields.Datetime.now(),
+            True
+        )
+        self.env.cr.execute(query_sku, params_sku)
+
+    def _update_product_and_sku_history(self, existing, line):
+        # Jika Terjadi Perubahan Data, Update Product
+        query_product = """
+            UPDATE product_template
+            SET name = %s,
+                type = %s,
+                uom_id = %s,
+                uom_po_id = %s,
+                adt_external_id = %s,
+                adt_item_class = %s,
+                adt_item_status = %s,
+                adt_valuation_method = %s,
+                adt_last_modified_datetime = %s
+            WHERE adt_external_id = %s and adt_last_modified_datetime != %s RETURNING id, default_code
+        """
+        params_product = (
+            json.dumps({"en_US": line.description}),
+            # line.inventory_id,
+            self.ITEM_TYPE_MAP.get((line.item_type or '').lower(), 'consu'),
+            self._resolve_uom(line.base_uom).id if line.base_uom else None,
+            self._resolve_uom(line.base_uom).id if line.base_uom else None,
+            line.external_id,
+            line.item_class,
+            self.STATUS_MAP.get(line.item_status or '', False),
+            self.VALUATION_MAP.get(line.valuation_method or '', False),
+            self._parse_dt(line.last_modified_datetime),
+            line.external_id,
+            line._parse_dt(line.last_modified_datetime)
+        )
+        self.env.cr.execute(query_product, params_product)
+        result = self.env.cr.fetchone()
+        if not result:
+            # Tidak ada perubahan data, skip update
+            query_staging = """
+                UPDATE acumatica_stock_item_line
+                SET 
+                    import_state = %s, 
+                    import_message = %s
+                WHERE id = %s
+            """                    
+            params_staging = (
+                'updated',
+                f'Tidak ada perubahan data → tetap pakai: {line.description}',
+                line.id
+            )
+            self.env.cr.execute(query_staging, params_staging)
+            return
+
+        product_id = result[0]
+        old_sku = result[1]
+
+        query_staging = """
+            UPDATE acumatica_stock_item_line
+            SET import_state = %s, 
+            import_message = %s, 
+            odoo_product_id = %s
+            WHERE id = %s
+        """                    
+        params_staging = (
+            'updated',
+            f'Diupdate: {line.description} (ID: {product_id})',
+            product_id,
+            line.id
+        )
+        self.env.cr.execute(query_staging, params_staging)
+
+        # Jika SKU berubah, update product_sku_history dan update SKU di product.template
+        if old_sku != line.inventory_id:
+            query_sku_end = """
+                UPDATE product_sku_history
+                SET date_end = %s, is_current = False
+                WHERE product_tmpl_id = %s AND is_current = True
+            """
+            params_sku_end = (
+                fields.Datetime.now(),
+                product_id,
+            )
+            self.env.cr.execute(query_sku_end, params_sku_end)
+
+            query_product_sku_new = """
+                UPDATE product_template
+                SET default_code = %s
+                WHERE id = %s
+            """
+            params_product_sku_new = (
+                line.inventory_id,
+                product_id,
+            )
+            self.env.cr.execute(query_product_sku_new, params_product_sku_new)
+
+            query_sku_new = """
+                INSERT INTO product_sku_history (product_tmpl_id, sku, date_start, is_current)
+                VALUES (%s, %s, %s, %s)
+            """
+            params_sku_new = (
+                product_id,
+                line.inventory_id,
+                fields.Datetime.now(),
+                True
+            )
+            self.env.cr.execute(query_sku_new, params_sku_new)
+
+    # ─── Import Actions ──────────────────────────────
+    def action_import_this(self):
+        self.ensure_one()
+        return self._do_import()
+
+    def action_import_selected(self):
+        lines = self.filtered(lambda l: l.selected and l.import_state == 'pending')
+        if not lines:
+            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
+        return lines._do_import()
+
+    # def _do_import(self):
+    #     imported = updated = error = 0
+
+    #     for line in self:
+    #         try:
+    #             if not line.description:
+    #                 line.write({
+    #                     'import_state':   'error',
+    #                     'import_message': 'Description (name) kosong',
+    #                 })
+    #                 error += 1
+    #                 continue
+
+    #             # ── Resolve UOM ─────────────────────────────
+    #             uom = self._resolve_uom(line.base_uom)
+    #             if not uom and line.base_uom:
+    #                 _logger.warning(
+    #                     "UOM '%s' tidak ditemukan di Odoo untuk item %s",
+    #                     line.base_uom, line.inventory_id
+    #                 )
+
+    #             # ── Map ItemType → type ──────────────────────
+    #             odoo_type = self.ITEM_TYPE_MAP.get((line.item_type or '').lower(), 'consu')
+    #             valuation = self.VALUATION_MAP.get(line.valuation_method or '', False)
+    #             item_status = self.STATUS_MAP.get(line.item_status or '', False)
+
+    #             vals = {
+    #                 # Field standar Odoo
+    #                 'name':         line.description,
+    #                 'default_code': line.inventory_id or False,
+    #                 'type':         odoo_type,
+
+    #                 # UOM
+    #                 'uom_id':    uom.id if uom else False,
+    #                 'uom_po_id': uom.id if uom else False,
+
+    #                 # Field custom adt_
+    #                 'adt_external_id': line.external_id or False,
+    #                 'adt_item_class': line.item_class or False,
+    #                 'adt_item_status': item_status or False,
+    #                 'adt_valuation_method': valuation or False,
+    #                 'adt_last_modified_datetime': self._parse_dt(line.last_modified_datetime),
+    #             }
+
+    #             existing = self._find_existing_product(line)
+    #             SkuHistory = self.env['product.sku.history']
+
+    #             if not existing:
+    #                 # new_product = self.env['product.template'].create(vals)
+    #                 # line.write({
+    #                 #     'import_state':   'imported',
+    #                 #     'import_message': f'Dibuat: {new_product.name} (ID: {new_product.id})',
+    #                 #     'odoo_product_id': new_product.id,
+    #                 # })
+    #                 # imported += 1
+    #                 # self.env['product.sku.history'].create({
+    #                 #     'product_tmpl_id': new_product.id,
+    #                 #     'sku': new_product.default_code,
+    #                 #     'date_start': fields.Datetime.now(),
+    #                 #     'is_current': True,
+    #                 # })
+    #                 self._create_product_and_sku_history(line)
+    #                 imported += 1
+    #                 print(f"DATA BERHASIL DIBUAT NIH - ID {line.inventory_id}")
+    #             else:
+    #                 # if existing.adt_last_modified_datetime != self._parse_dt(line.last_modified_datetime):
+    #                 #     if existing.default_code != line.inventory_id:
+    #                 #         SkuHistory.search([
+    #                 #             ('product_tmpl_id', '=', existing.id),
+    #                 #             ('date_end', '=', False),
+    #                 #         ]).write({'date_end': fields.Datetime.now(), 'is_current': False})
+    #                 #         # Create a new SKU history record for the old SKU
+    #                 #         SkuHistory.create({
+    #                 #             'product_tmpl_id': existing.id,
+    #                 #             'sku': existing.default_code,
+    #                 #             'date_start': fields.Datetime.now(),
+    #                 #             'is_current': True,
+    #                 #         })
+    #                 #         existing.message_post(body=f"SKU berubah dari {existing.default_code} menjadi {line.inventory_id} karena data di Acumatica berubah. Last Modified: {line.last_modified_datetime}")
+    #                 #     existing.write(vals)
+    #                 #     existing.message_post(body=f"Stock Item berhasil diupdate karena data di Acumatica berubah. Last Modified: {line.last_modified_datetime}")
+    #                 #     line.write({
+    #                 #         'import_state':   'updated',
+    #                 #         'import_message': f'Diupdate: {existing.name} (ID: {existing.id})',
+    #                 #         'odoo_product_id': existing.id,
+    #                 #     })
+    #                 #     updated += 1
+    #                 self._update_product_and_sku_history(existing, line)
+    #                 updated += 1
+    #                 print(f"DATA BERHASIL DIUPDATE NIH - ID {line.inventory_id}")
+                
+    #             # if existing:
+    #             #     if existing and existing.default_code != line.inventory_id:
+
+    #             #         SkuHistory.search([
+    #             #             ('product_tmpl_id', '=', existing.id),
+    #             #             ('date_end', '=', False),
+    #             #         ]).write({'date_end': fields.Datetime.now(), 'is_current': False})
+    #             #         # Create a new SKU history record for the old SKU
+    #             #         SkuHistory.create({
+    #             #             'product_tmpl_id': existing.id,
+    #             #             'sku': existing.default_code,
+    #             #             'date_start': fields.Datetime.now(),
+    #             #             'is_current': True,
+    #             #         })
+    #             #     existing.write(vals)
+    #             #     line.write({
+    #             #         'import_state':   'updated',
+    #             #         'import_message': f'Diupdate: {existing.name} (ID: {existing.id})',
+    #             #         'odoo_product_id': existing.id,
+    #             #     })
+    #             #     updated += 1
+    #             # else:
+    #             #     # buat juga log sku baru untuk log perubahan sku di masa depan
+    #             #     new_product = self.env['product.template'].create(vals)
+    #             #     line.write({
+    #             #         'import_state':   'imported',
+    #             #         'import_message': f'Dibuat: {new_product.name} (ID: {new_product.id})',
+    #             #         'odoo_product_id': new_product.id,
+    #             #     })
+    #             #     imported += 1
+    #             #     self.env['product.sku.history'].create({
+    #             #         'product_tmpl_id': new_product.id,
+    #             #         'sku': new_product.default_code,
+    #             #         'date_start': fields.Datetime.now(),
+    #             #         'is_current': True,
+    #             #     })
+
+    #         except Exception as e:
+    #             _logger.error("Error import Stock Item %s: %s", line.inventory_id, str(e))
+    #             line.write({
+    #                 'import_state':   'error',
+    #                 'import_message': str(e)[:200],
+    #             })
+    #             error += 1
+
+    #     msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
+    #     return {
+    #         'type': 'ir.actions.client',
+    #         'tag':  'display_notification',
+    #         'params': {
+    #             'title':   'Import Stock Item',
+    #             'message': msg,
+    #             'type':    'success' if error == 0 else 'warning',
+    #             'sticky':  True,
+    #         },
+    #     }
+
+
+
+    def _do_import(self):
+
+        from odoo.tools import split_every
+
+        BATCH_SIZE = 1000
+        imported = 0
+        updated = 0
+        error = 0
+        ctx = {
+            'tracking_disable': True,
+            'mail_create_nolog': True,
+            'mail_notrack': True,
+            'mail_create_nosubscribe': True,
+        }
+        Product = self.env['product.template'].with_context(**ctx)
+
+        # =====================================================
+        # CACHE UOM
+        # =====================================================
+
+        uom_map = {}
+        all_uoms = self.env['uom.uom'].search([])
+        for uom in all_uoms:
+            uom_map[(uom.name or '').lower()] = uom.id
+
+        # =====================================================
+        # CACHE EXISTING PRODUCTS
+        # =====================================================
+
+        # Cari existing product berdasarkan external_id (UUID Acumatica) di acumatica_stock_item_line
+        external_ids = [
+            line.external_id
+            for line in self
+            if line.external_id
+        ]
+        existing_map = {}
+        # Jika ada external_id, ambil data product_template yang matching dengan external_id
+        if external_ids:
+            self.env.cr.execute("""
+                SELECT id, adt_external_id, default_code
+                FROM product_template
+                WHERE adt_external_id IN %s
+            """, [tuple(external_ids)])
+            # Buat mapping dari external_id ke product_template id dan default_code
+            for row in self.env.cr.fetchall():
+                existing_map[row[1]] = {
+                    'id': row[0],
+                    'default_code': row[2],
+                }
+
+        # =====================================================
+        # PROCESS PER CHUNK
+        # =====================================================
+
+        # Proses data per chunk untuk menghindari memory error jika datanya sangat besar
+        for chunk in split_every(BATCH_SIZE, self):
+            try:
+                
+                create_vals = []
+                update_params = []
+                sku_insert_params = []
+                staging_success = []
+                staging_error = []
+
+                # =============================================
+                # PREPARE
+                # =============================================
+
+                for line in chunk:
+                    try:
+                        # Cek kalo description (name) kosong, langsung tandai error dan skip proses import untuk line ini
+                        if not line.description:
+
+                            staging_error.append((
+                                'error',
+                                'Description kosong',
+                                line.id
+                            ))
+
+                            error += 1
+                            continue
+
+                        uom_id = uom_map.get(
+                            (line.base_uom or '').lower()
+                        )
+
+                        # Cari existing product berdasarkan external_id (UUID Acumatica) yang sudah dicache sebelumnya
+                        existing = existing_map.get(
+                            line.external_id
+                        )
+
+                        # =====================================
+                        # CREATE
+                        # =====================================
+
+                        # Buat data baru jika tidak ditemukan existing product dengan external_id yang sama.
+                        if not existing:
+
+                            vals = {
+                                'name': line.description,
+                                'default_code': line.inventory_id or False,
+                                'type': self.ITEM_TYPE_MAP.get(
+                                    (line.item_type or '').lower(),
+                                    'consu'
+                                ),
+                                'categ_id': 1,
+                                'uom_id': uom_id,
+                                'uom_po_id': uom_id,
+                                'adt_external_id': line.external_id or False,
+                                'adt_item_class': line.item_class or False,
+                                'adt_item_status': self.STATUS_MAP.get(
+                                    line.item_status or '',
+                                    False
+                                ),
+                                'adt_valuation_method': self.VALUATION_MAP.get(
+                                    line.valuation_method or '',
+                                    False
+                                ),
+                                'adt_last_modified_datetime':
+                                    self._parse_dt(
+                                        line.last_modified_datetime
+                                    ),
+
+                                # helper temporary
+                                '_line_id': line.id,
+                            }
+
+                            # Tambahkan data baru ke list create_vals untuk nanti di-bulk create dengan ORM
+                            create_vals.append(vals)
+
+                        # =====================================
+                        # UPDATE
+                        # =====================================
+
+                        # Kalo ada product dengan external_id yang sama, tapi data di Acumatica lebih baru daripada data di Odoo, maka update datanya.
+                        else:
+                            # Tambahkan data update ke list update_params untuk nanti di-bulk update dengan SQL
+                            update_params.append((
+                                json.dumps({
+                                    "en_US": line.description
+                                }),
+                                self.ITEM_TYPE_MAP.get(
+                                    (line.item_type or '').lower(),
+                                    'consu'
+                                ),
+                                uom_id,
+                                uom_id,
+                                line.item_class or False,
+                                self.STATUS_MAP.get(
+                                    line.item_status or '',
+                                    False
+                                ),
+                                self.VALUATION_MAP.get(
+                                    line.valuation_method or '',
+                                    False
+                                ),
+                                self._parse_dt(
+                                    line.last_modified_datetime
+                                ),
+                                existing['id']
+                            ))
+
+                            # SKU changed
+                            if existing['default_code'] != line.inventory_id:
+                                
+                                # Tutup SKU history lama dengan date_end dan is_current = False
+                                self.env.cr.execute("""
+                                    UPDATE product_sku_history
+                                    SET date_end = NOW(),
+                                        is_current = FALSE
+                                    WHERE product_tmpl_id = %s
+                                    AND is_current = TRUE
+                                """, [existing['id']])
+
+                                # Tambahkan data SKU baru ke list sku_insert_params untuk nanti di-bulk insert dengan SQL
+                                sku_insert_params.append((
+                                    existing['id'],
+                                    line.inventory_id,
+                                    fields.Datetime.now(),
+                                    True
+                                ))
+
+                                # Update SKU di product_template
+                                self.env.cr.execute("""
+                                    UPDATE product_template
+                                    SET default_code = %s
+                                    WHERE id = %s
+                                """, (
+                                    line.inventory_id,
+                                    existing['id']
+                                ))
+
+                            # Tambahkan data sukses update ke list staging_success untuk nanti di-bulk update status di staging dengan SQL
+                            staging_success.append((
+                                'updated',
+                                f'Updated: {line.description}',
+                                existing['id'],
+                                line.id
+                            ))
+                            updated += 1
+
+                    except Exception as e:
+
+                        staging_error.append((
+                            'error',
+                            str(e)[:200],
+                            line.id
+                        ))
+
+                        error += 1
+
+                # =============================================
+                # BULK CREATE ORM
+                # =============================================
+
+                # Bulk create dengan ORM 
+                if create_vals:
+                    clean_vals = []
+                    line_map = {}
+                    for vals in create_vals:
+                        # Hapus _line_id dari vals karena ga dipake di product.template, tapi simpan mapping ke line_id untuk nanti update status di staging setelah create berhasil
+                        line_id = vals.pop('_line_id')
+                        line_map[vals['default_code']] = line_id
+
+                        clean_vals.append(vals)
+
+                    products = Product.create(clean_vals)
+
+                    for product in products:
+
+                        staging_success.append((
+                            'imported',
+                            f'Created: {product.name}',
+                            product.id,
+                            line_map[product.default_code]
+                        ))
+                        # Tambahkan data SKU baru ke list sku_insert_params untuk nanti di-bulk insert dengan SQL
+                        sku_insert_params.append((
+                            product.id,
+                            product.default_code,
+                            fields.Datetime.now(),
+                            True
+                        ))
+
+                        imported += 1
+
+                # =============================================
+                # BULK SQL UPDATE PRODUCT
+                # =============================================
+
+                if update_params:
+
+                    self.env.cr.executemany("""
+                        UPDATE product_template
+                        SET name = %s,
+                            type = %s,
+                            uom_id = %s,
+                            uom_po_id = %s,
+                            adt_item_class = %s,
+                            adt_item_status = %s,
+                            adt_valuation_method = %s,
+                            adt_last_modified_datetime = %s
+                        WHERE id = %s
+                    """, update_params)
+
+                # =============================================
+                # BULK SKU HISTORY
+                # =============================================
+
+                if sku_insert_params:
+
+                    self.env.cr.executemany("""
+                        INSERT INTO product_sku_history (
+                            product_tmpl_id,
+                            sku,
+                            date_start,
+                            is_current
+                        )
+                        VALUES (%s, %s, %s, %s)
+                    """, sku_insert_params)
+
+                # =============================================
+                # BULK STAGING SUCCESS
+                # =============================================
+
+                if staging_success:
+
+                    self.env.cr.executemany("""
+                        UPDATE acumatica_stock_item_line
+                        SET import_state = %s,
+                            import_message = %s,
+                            odoo_product_id = %s
+                        WHERE id = %s
+                    """, staging_success)
+
+                # =============================================
+                # BULK STAGING ERROR
+                # =============================================
+
+                if staging_error:
+
+                    self.env.cr.executemany("""
+                        UPDATE acumatica_stock_item_line
+                        SET import_state = %s,
+                            import_message = %s
+                        WHERE id = %s
+                    """, staging_error)
+
+                # =============================================
+                # COMMIT PER BATCH
+                # =============================================
+
+                self.env.cr.commit()
+
+                self.env.clear()
+
+            except Exception as e:
+
+                self.env.cr.rollback()
+
+                _logger.exception("IMPORT ERROR: %s", str(e))
+
+                for line in chunk:
+
+                    self.env.cr.execute("""
+                        UPDATE acumatica_stock_item_line
+                        SET import_state = 'error',
+                            import_message = %s
+                        WHERE id = %s
+                    """, (
+                        str(e)[:200],
+                        line.id
+                    ))
+
+                self.env.cr.commit()
+
+        msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Import Stock Item',
+                'message': msg,
+                'type': 'success' if error == 0 else 'warning',
+                'sticky': True,
+            },
+        }
+
+    # ─── Misc Actions ────────────────────────────────
+    def action_reset_pending(self):
+        self.filtered(lambda l: l.import_state == 'error').write({
+            'import_state':   'pending',
+            'import_message': False,
+        })
+
+    def action_open_product(self):
+        self.ensure_one()
+        if not self.odoo_product_id:
+            raise UserError('Belum diimport.')
+        return {
+            'type':      'ir.actions.act_window',
+            'res_model': 'product.template',
+            'res_id':    self.odoo_product_id.id,
+            'view_mode': 'form',
+        }

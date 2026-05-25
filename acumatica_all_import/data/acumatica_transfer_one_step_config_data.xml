@@ -1,0 +1,14 @@
+<odoo noupdate="1">
+
+    <record id="acumatica_transfer_one_step_config_default" model="acumatica.transfer.one.step.config">
+        <field name="name">ACUMATICA WMS</field>
+        <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+        <field name="api_version">25.200.002</field>
+        <field name="username">wms</field>
+        <field name="password">WMSAditya@2026</field>
+        <field name="company_code">asgjkt</field>
+        <field name="endpoint_name">TransferOrder</field>
+        <field name="active">True</field>
+    </record>
+
+</odoo>
