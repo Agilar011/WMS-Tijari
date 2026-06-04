@@ -4,14 +4,9 @@ from . import acumatica_customer_config
 from . import acumatica_customer_line
 from . import acumatica_customer_location
 from . import acumatica_customer_location_config
-from . import acumatica_inventory_issue_config
-from . import acumatica_inventory_issue_line
 from . import acumatica_inventory_recieved_config
 from . import acumatica_inventory_recieved_line
-from . import acumatica_issue_config
 from . import acumatica_issue_line
-from . import acumatica_issue_po_return_config
-from . import acumatica_issue_po_return_line
 from . import acumatica_non_stock_item_config
 from . import acumatica_non_stock_item_line
 from . import acumatica_stock_item_config
@@ -22,8 +17,6 @@ from . import acumatica_receipt_config
 from . import acumatica_receipt_line
 from . import acumatica_shipment_config
 from . import acumatica_shipment_line
-from . import acumatica_so_shipment_config
-from . import acumatica_so_shipment_line
 from . import acumatica_transfer_config
 from . import acumatica_transfer_line
 from . import acumatica_transfer_one_step_config
@@ -42,3 +35,8 @@ from . import acumatica_shipvia_config
 from . import acumatica_shipvia_line
 from . import acumatica_kit_assembly_config
 from . import acumatica_kit_assembly_line
+
+# Merged models
+from . import acumatica_sales_order_shipment
+from . import acumatica_inventory_issue
+from . import acumatica_issue_po_return
