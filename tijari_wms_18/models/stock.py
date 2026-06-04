@@ -3,9 +3,18 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Datetime as fDT
 from odoo.tools import float_is_zero, float_compare
-import hashlib
+from datetime import datetime
 import base64
 from ast import literal_eval
+import logging
+import json
+import requests
+
+_logger = logging.getLogger(__name__)
+
+
+from .acumatica import StagingTableTMS
+
 
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
@@ -29,22 +38,368 @@ class StockQuant(models.Model):
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
-    adt_receipt_nbr = fields.Char(string='Receipt Nbr (Acumatica)', index=True)
-    adt_vendor_code = fields.Char(string='VendorID (Acumatica)')
-    adt_partner_ref = fields.Char(string='Vendor Ref (Acumatica)')
-    adt_branch_warehouse = fields.Char(string='Branch (Acumatica)')
+        # Memberi label unik untuk menghindari warning 'Same label: Type (Acumatica)'
+    adt_actual_amount = fields.Float(string='Control Amount (Acumatica)')
     adt_actual_qty = fields.Float(string='Control Qty (Acumatica)')
-    adt_is_hold = fields.Boolean(string='Hold (Acumatica)')
-    adt_inventory_ref = fields.Char(string='Inventory Ref Nbr (Acumatica)')
     adt_acumatica_write_date = fields.Datetime(string='Last Modified (Acumatica)')
-    adt_header_location_code = fields.Char(string='Header Location (Acumatica)')
-    adt_post_period = fields.Char(string='Post Period (Acumatica)')
-    adt_status = fields.Char(string='Status (Acumatica)')
-    adt_total_qty = fields.Float(string='Total Qty (Acumatica)')
-    adt_type = fields.Char(string='Type (Acumatica)')
-    adt_external_ref = fields.Char(string='External Ref (Acumatica)')
-    adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
+    adt_branch_warehouse = fields.Char(string='Branch (Acumatica)')
+    adt_description = fields.Char(string='Description (Acumatica)')
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
+    adt_external_ref = fields.Char(string='External Ref (Acumatica)')
+    adt_from_warehouse_code = fields.Char(string='From Warehouse (Acumatica)')
+    adt_header_location_code = fields.Char(string='Header Location (Acumatica)')
+    adt_inventory_ref = fields.Char(string='Inventory Ref Nbr (Acumatica)')
+    adt_is_hold = fields.Boolean(string='Hold (Acumatica)')
+    adt_partner_ref = fields.Char(string='Vendor Ref (Acumatica)')
+    adt_post_period = fields.Char(string='Post Period (Acumatica)')
+    adt_receipt_nbr = fields.Char(string='Receipt Nbr (Acumatica)', index=True)
+    adt_receipt_type = fields.Char(string='Receipt Type (Acumatica)')
+    adt_status = fields.Char(string='Status (Acumatica)')
+    adt_to_warehouse_code = fields.Char(string='To Warehouse (Acumatica)')
+    adt_total_amount = fields.Float(string='Total Amount (Acumatica)')
+    adt_total_qty = fields.Float(string='Total Qty (Acumatica)')
+    adt_trans_type = fields.Char(string='Trans Type (Acumatica)')
+    adt_type = fields.Char(string='Type (Acumatica)')
+    adt_vendor_code = fields.Char(string='VendorID (Acumatica)')
+    adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
+
+
+    state = fields.Selection(
+        selection_add=[
+            ('waiting_response', 'Waiting Response')
+        ]
+    )
+
+    is_customer_location = fields.Boolean(
+        compute="_compute_is_customer_location"
+    )
+
+    def _compute_is_customer_location(self):
+        for rec in self:
+            rec.is_customer_location = (
+                rec.location_dest_id.usage == "customer"
+            )
+
+    def check_delivery_status(self):
+        raise UserError(_("This button is only for demonstration and does not perform any real check."))
+        
+    
+    def change_state_to_waiting_response(self):
+        total_weight = sum(
+            line.product_id.weight * line.quantity
+            for line in self.move_line_ids
+        )
+
+        total_volume = sum(
+            line.product_id.volume * line.quantity
+            for line in self.move_line_ids
+        )
+
+        vals = {
+            "order_no": "Testing-Dev-" + (self.origin or ""),
+            "shipment_order_dt": self.create_date,
+            "shipment_order_type_cd": "DELIVER",
+            "order_state": "FORWARD",
+
+            # Branch / DC
+            "distribution_center": (
+                self.location_id.location_id.name
+                if self.location_id and self.location_id.location_id
+                else "MAIN_DC"
+            ),
+            "return_branch": (
+                self.location_id.location_id.name
+                if self.location_id and self.location_id.location_id
+                else "MAIN_BRANCH"
+            ),
+
+            # Package info
+            "package_weight": total_weight,
+            "package_volume": total_volume,
+            "preparation_time": (
+                (self.date_done - self.date).total_seconds()
+                if self.date_done and self.date
+                else 0
+            ),
+            "payment_type": "PREPAID",
+            "package_value": 0,
+            "number_of_items": sum(
+                line.quantity for line in self.move_line_ids
+            ),
+
+            # Flags
+            "partial_delivery_allowed_fl": "Y",
+            "return_allowed_fl": "Y",
+            "cancellation_allowed_fl": "Y",
+
+            # Delivery time
+            "deliver_service_time": "STANDARD",
+            "deliver_start_time_window": datetime.now().strftime('%Y-%m-%d 08:00:00'),
+            "deliver_end_time_window": datetime.now().strftime('%Y-%m-%d 18:00:00'),
+
+            # Delivery type
+            "delivery_type": "DRIVER",
+
+            # Delivery branch
+            "deliver_branch": (
+                self.location_id.location_id.name
+                if self.location_id and self.location_id.location_id
+                else "DEFAULT_BRANCH"
+            ),
+
+            # Account info
+            "deliver_account_code": (
+                self.partner_id.company_registry
+                if self.partner_id and self.partner_id.company_registry
+                else "000000"
+            ),
+            "deliver_account_name": (
+                self.partner_id.name
+                if self.partner_id
+                else "Walk In Customer"
+            ),
+
+            # Address info
+            "deliver_apartment": (
+                 "Unknown Apartment"
+            ),
+            "deliver_street_name": (
+                 "Unknown Street"
+            ),
+            "deliver_locality": (
+                 "Unknown Locality"
+            ),
+            "deliver_city": (
+                 "Unknown City"
+            ),
+            "deliver_state": (
+                 "Unknown State"
+            ),
+            "deliver_country": (
+                 "Indonesia"
+            ),
+            "deliver_pin_code": (
+                 "00000"
+            ),
+            "deliver_address_timezone": "Asia/Jakarta",
+            "deliver_notes": "ShipVia",
+            "api_sent_datetime": datetime.now(),
+        }
+        vals = self.env['staging.table.tms'].create(vals)
+        # for line in self.move_line_ids:
+        #      line_vals = {
+        #         "item_cd": line.product_id.default_code or line.product_id.name,
+        #         "item_name": line.product_id.name,
+        #         "item_price": line.product_id.list_price,
+        #         "item_quantity": line.quantity,
+        #         "item_type": "GOOD",
+        #         "item_weight": line.product_id.weight * line.quantity,
+        #         "crate_id": vals.id,  # Link ke shipment order
+        #     }
+        #      self.env['staging.table.tms.crate'].create(line_vals)
+
+        for line in self.move_line_ids:
+            line_crate_vals = {
+                "crate_cd": f"CRATE-{line.id}",
+                # "crate_weight": line.product_id.weight * line.quantity,
+                # "number_of_items": line.quantity,
+                "shipment_id": vals.id,  # Link ke shipment order
+            }
+            crate = self.env['staging.table.tms.crate'].create(line_crate_vals)
+
+            line_vals = {
+                "item_cd": line.product_id.default_code or line.product_id.name,
+                "item_name": line.product_id.name,
+                "item_price": line.product_id.list_price,
+                "item_quantity": line.quantity,
+                "item_type": "GOOD",
+                "item_weight": line.product_id.weight * line.quantity,
+                "crate_id": crate.id,  # Link ke shipment order
+            }
+            self.env['staging.table.tms.line'].create(line_vals)
+
+        # return vals
+
+        StagingTableTMS._do_login_tms_api(self)
+
+        for shipment in vals:
+
+            try:
+
+                crate_payloads = []
+
+                # =====================================
+                # CRATES
+                # =====================================
+                for crate in shipment.crate_ids:
+
+                    item_payloads = []
+
+                    # =================================
+                    # ITEMS
+                    # =================================
+                    for line in crate.line_ids:
+
+                        item_payloads.append({
+                            "item_cd": line.item_cd,
+                            "item_name": line.item_name,
+                            "item_price": line.item_price,
+                            "item_quantity": line.item_quantity,
+                            "item_type": line.item_type,
+                            "item_weight": line.item_weight,
+                        })
+
+                    crate_payloads.append({
+                        "crate_cd": crate.crate_cd,
+                        "crate_name": crate.crate_name,
+                        "crate_type": crate.crate_type,
+                        "crate_weight": crate.crate_weight,
+                        "items": item_payloads,
+                    })
+
+                # =====================================
+                # MAIN PAYLOAD
+                # =====================================
+                payload = {
+                    "order_no": shipment.order_no,
+                    "shipment_order_dt": (
+                        shipment.shipment_order_dt.strftime('%Y-%m-%d %H:%M:%S')
+                        if shipment.shipment_order_dt else ""
+                    ),
+                    "shipment_order_type_cd": shipment.shipment_order_type_cd,
+                    "order_state": shipment.order_state,
+
+                    "distribution_center": shipment.distribution_center,
+                    "return_branch": shipment.return_branch,
+
+                    "package_weight": shipment.package_weight,
+                    "package_volume": shipment.package_volume,
+                    "preparation_time": shipment.preparation_time,
+
+                    "payment_type": shipment.payment_type,
+                    "package_value": shipment.package_value,
+                    "number_of_items": shipment.number_of_items,
+
+                    "partial_delivery_allowed_fl":
+                        shipment.partial_delivery_allowed_fl,
+
+                    "return_allowed_fl":
+                        shipment.return_allowed_fl,
+
+                    "cancellation_allowed_fl":
+                        shipment.cancellation_allowed_fl,
+
+                    "deliver_service_time":
+                        shipment.deliver_service_time,
+
+                    "deliver_start_time_window":
+                        shipment.deliver_start_time_window,
+
+                    "deliver_end_time_window":
+                        shipment.deliver_end_time_window,
+
+                    "delivery_type": shipment.delivery_type,
+
+                    "deliver_branch": shipment.deliver_branch,
+
+                    "deliver_account_code":
+                        shipment.deliver_account_code,
+
+                    "deliver_account_name":
+                        shipment.deliver_account_name,
+
+                    "deliver_apartment":
+                        shipment.deliver_apartment,
+
+                    "deliver_street_name":
+                        shipment.deliver_street_name,
+
+                    "deliver_locality":
+                        shipment.deliver_locality,
+
+                    "deliver_city":
+                        shipment.deliver_city,
+
+                    "deliver_state":
+                        shipment.deliver_state,
+
+                    "deliver_country":
+                        shipment.deliver_country,
+
+                    "deliver_pin_code":
+                        shipment.deliver_pin_code,
+
+                    "deliver_address_timezone":
+                        shipment.deliver_address_timezone,
+
+                    "deliver_notes":
+                        shipment.deliver_notes,
+
+                    # =================================
+                    # CRATES
+                    # =================================
+                    "crates": crate_payloads,
+                }
+
+                # _logger.info(
+                #     "SEND PAYLOAD %s:\n%s",
+                #     shipment.order_no,
+                #     json.dumps(payload, indent=4)
+                # )
+
+                # response = session.post(
+                #     api_url,
+                #     json=payload,
+                #     headers={
+                #         "Content-Type": "application/json",
+                #         "Accept": "application/json",
+                #     },
+                #     timeout=60,
+                # )
+
+                # _logger.info(
+                #     "RESPONSE %s: %s",
+                #     shipment.order_no,
+                #     response.text
+                # )
+
+                # =====================================
+                # SUCCESS
+                # =====================================
+                if response.status_code in [200, 201]:
+
+                    shipment.write({
+                        'api_sent_datetime':
+                            fields.Datetime.now()
+                    })
+
+                else:
+
+                    raise UserError(
+                        f"API Error: {response.text}"
+                    )
+
+            except Exception as e:
+
+                _logger.error(
+                    "FAILED SEND ORDER %s: %s",
+                    shipment.order_no,
+                    str(e)
+                )
+
+                raise UserError(str(e))
+        
+
+                print(f">>> Payload to be sent to TMS API: {payload}")  # Cek payload di terminal Odoo
+            
+
+
+
+        for picking in self:
+            if picking.state != 'waiting_response':
+                a = 1
+            else:
+                raise UserError(_("Current state is already 'Waiting Response'."))
 
     def button_validate(self):
         for rec in self:

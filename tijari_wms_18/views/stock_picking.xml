@@ -1,0 +1,123 @@
+<odoo>
+
+    <!-- STATUSBAR -->
+    <record id="view_picking_form_inherit_waiting_response"
+            model="ir.ui.view">
+
+        <field name="name">
+            stock.picking.form.waiting.response
+        </field>
+
+        <field name="model">stock.picking</field>
+
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='state']"
+                   position="attributes">
+
+                <!-- OUTGOING -->
+                <field name="state"
+                    widget="statusbar"
+                    statusbar_visible="draft,waiting,confirmed,assigned,waiting_response,done,cancel"
+                    invisible="picking_type_code != 'outgoing'"/>
+
+                <!-- NON OUTGOING -->
+                <field name="state"
+                    widget="statusbar"
+                    statusbar_visible="draft,waiting,confirmed,assigned,done,cancel"
+                    invisible="picking_type_code == 'outgoing'"/>
+
+            </xpath>
+
+        </field>
+
+    </record>
+
+
+    <!-- REPLACE VALIDATE BUTTON -->
+    <record id="view_picking_form_submit_status"
+            model="ir.ui.view">
+
+        <field name="name">
+            stock.picking.form.submit.status
+        </field>
+
+        <field name="model">stock.picking</field>
+
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+
+        <field name="arch" type="xml">
+
+            <!-- Hide original validate -->
+            <xpath expr="//button[@name='button_validate']"
+                position="attributes">
+
+                <attribute name="invisible">1</attribute>
+
+            </xpath>
+
+            <!-- Add custom button -->
+            <xpath expr="//button[@name='button_validate']"
+                position="after">
+
+                <button name="change_state_to_waiting_response"
+                        type="object"
+                        string="Submit Status"
+                        class="btn-primary"
+                        invisible="state != 'assigned' or picking_type_code != 'outgoing' or not is_customer_location"/>
+
+                <button name="button_validate"
+                        type="object"
+                        string="Validate"
+                        class="btn-primary"
+                        invisible="state != 'assigned' and picking_type_code != 'outgoing'"/>
+
+            </xpath>
+
+            <!-- DEBUG FIELD -->
+            <xpath expr="//sheet" position="inside">
+
+                <group string="Debug">
+
+                    <field name="is_customer_location"/>
+
+                </group>
+
+            </xpath>
+
+        </field>
+
+    </record>
+
+    <record id="view_picking_form_check_status"
+            model="ir.ui.view">
+
+        <field name="name">
+            stock.picking.form.check.status
+        </field>
+
+        <field name="model">stock.picking</field>
+
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+
+        <field name="arch" type="xml">
+
+            <xpath expr="//header"
+                   position="inside">
+
+                <button name="check_delivery_status"
+                        type="object"
+                        string="Check Status"
+                        class="btn-secondary"
+                        invisible="state != 'waiting_response' or picking_type_code != 'outgoing'"/>
+
+            </xpath>
+
+        </field>
+
+    </record>
+
+
+</odoo>

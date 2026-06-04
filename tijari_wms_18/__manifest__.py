@@ -33,6 +33,7 @@
         'views/res_partner.xml',
         'views/res_users.xml',
         'views/product_template.xml',
+        'views/stock_picking.xml',
     ],
     'assets': {
         'web.assets_frontend': [
