@@ -10,3 +10,8 @@ from . import stock_report_aging
 from . import product_template
 from . import product_product
 from . import stock_location
+from . import stock_location
+from . import res_partner
+from . import res_users
+
+from . import acumatica

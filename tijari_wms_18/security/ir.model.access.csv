@@ -4,3 +4,6 @@ access_stock_report_velocity_line_user,access.stock.report.velocity.line.user,mo
 access_stock_report_velocity_generate_user,access.stock.report.velocity.generate.user,model_stock_report_velocity_generate,base.group_user,1,1,1,1
 access_stock_report_aging_line_user,access.stock.report.aging.line.user,model_stock_report_aging_line,base.group_user,1,0,0,0
 access_stock_report_aging_generate_user,access.stock.report.aging.generate.user,model_stock_report_aging_generate,base.group_user,1,1,1,1
+access_staging_table_tms,access_staging_table_tms,model_staging_table_tms,base.group_user,1,1,1,1
+access_staging_table_tms_crate,access_staging_table_tms_crate,model_staging_table_tms_crate,base.group_user,1,1,1,1
+access_staging_table_tms_line,access_staging_table_tms_line,model_staging_table_tms_line,base.group_user,1,1,1,1

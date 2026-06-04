@@ -30,6 +30,10 @@
         'views/stock_location_action.xml',
         'views/stock_location_menu.xml',
         'views/stock_location_views.xml',
+        'views/res_partner.xml',
+        'views/res_users.xml',
+        'views/product_template.xml',
+        'views/stock_picking.xml',
     ],
     'assets': {
         'web.assets_frontend': [

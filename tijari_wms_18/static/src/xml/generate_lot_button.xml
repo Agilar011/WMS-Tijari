@@ -2,19 +2,7 @@
 <templates>
     <t t-name="tijari.GenerateLotButton" owl="1">
         <button t-on-click="onClick" type="button" class="btn btn-secondary btn-sm oe_inline">
-            <i class="fa fa-refresh" style="margin-right:4px;"></i>
-            Auto Generate Lot Number
+            <i class="fa fa-refresh" style="margin-right:4px;"/>
         </button>
-    </t>
-</templates>
-<templates>
-    <t t-name="tijari.AutoInputCode" owl="1">
-        <div class="o_row">
-            <!-- <input type="text" t-model="inputValue" class="o_input"/> -->
-            <button t-on-click="onClick" type="button" class="btn btn-secondary btn-sm oe_inline">
-                <i class="fa fa-check" style="margin-right:4px;"></i>
-                Confirm
-            </button>
-        </div>
     </t>
 </templates>

@@ -74,6 +74,7 @@ class AcumaticaTransferShipmentLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+    receipt_type = fields.Char(string='Receipt Type', readonly=True)
 
     @api.depends('shipment_nbr')
     def _compute_exists_in_odoo(self):
