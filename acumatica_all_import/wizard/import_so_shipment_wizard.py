@@ -24,6 +24,7 @@ class ImportSOShipmentWizard(models.TransientModel):
     fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
     def action_fetch_data(self):
+        print(f"Self Limit: {self.fetch_limit}")
         self.ensure_one()
         self.env['acumatica.so.shipment.line'].search([('config_id', '=', self.config_id.id)]).unlink()
 
@@ -31,8 +32,10 @@ class ImportSOShipmentWizard(models.TransientModel):
 
         raw_list = []
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
+        print(f"Loop Count: {loop_count}")
 
         for i in range(loop_count):
+            print(f"Fetching batch {i+1}/{loop_count} with offset {self.fetch_skip + (i * self.batch_size)}")
             offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_shipment_data(
                 limit=self.batch_size,
@@ -46,6 +49,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                 break
 
             raw_list.extend(batch_data)
+            print(f"Batch {i+1}/{loop_count} fetched: {len(batch_data)} records (Total so far: {len(raw_list)})")
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
@@ -74,8 +78,10 @@ class ImportSOShipmentWizard(models.TransientModel):
                 'sync_date': fields.Datetime.now(),
             })
             lines_to_create.append(vals)
+            print(f"Prepared line for origin '{origin}': exists={exists}, msg='{msg}'")
 
         self.env['acumatica.so.shipment.line'].create(lines_to_create)
+        print(f"Total lines created in staging: {len(lines_to_create)} (New: {len(new_keys)}, Existing: {len(existing_keys)})")
         self.write({
             'state': 'fetched',
             'total_fetched': len(raw_list),

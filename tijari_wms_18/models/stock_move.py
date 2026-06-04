@@ -29,3 +29,6 @@ class StockMove(models.Model):
     adt_quantity = fields.Float(string='Quantity (Acumatica)')
     adt_type = fields.Char(string='Type (Acumatica)')
     adt_acumatica_write_date = fields.Datetime(string='Last Modified (Acumatica)')
+
+    def action_open_note_wizard(self):
+        return True    
