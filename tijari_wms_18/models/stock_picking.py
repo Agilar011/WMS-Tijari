@@ -31,3 +31,4 @@ class StockPicking(models.Model):
 
     adt_receipt_type = fields.Char(string='Receipt Type (Acumatica)')
     adt_trans_type = fields.Char(string='Trans Type (Acumatica)')
+    adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
