@@ -47,7 +47,7 @@
         <field name="view_mode">list,form</field>
         <field name="domain">[
             ('picking_type_id.code', '=', 'outgoing'),
-            ('adt_type', '=', 'Issue')
+            ('adt_type', '=', 'Change Item')
         ]</field>
     </record>
 
@@ -56,8 +56,28 @@
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[
-            ('picking_type_id.code', '=', 'internal'),
+            ('picking_type_id.code', '=', 'outgoing'),
             ('adt_type', '=', 'Issue')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_1_step_transfer" model="ir.actions.act_window">
+        <field name="name">1-Step Transfer</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'internal'),
+            ('adt_type', '=', '1-Step')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_2_step_transfer" model="ir.actions.act_window">
+        <field name="name">2-Step Transfer</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'internal'),
+            ('adt_type', '=', '2-Step')
         ]</field>
     </record>
 

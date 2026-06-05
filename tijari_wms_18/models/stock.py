@@ -132,7 +132,16 @@ class StockMoveLine(models.Model):
         compute='_compute_matching_html',
         store=False)
     operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
-    
+
+    allocation_id = fields.Char(string='Allocation ID')
+    allocation_note = fields.Text(string='Allocation Note')
+    allocation_Description = fields.Text(string='Allocation Description')
+    allocation_InventoryID = fields.Char(string='Allocation Inventory ID')
+    allocation_LocationID = fields.Char(string='Allocation Location ID')
+    allocation_Quantity = fields.Float(string='Allocation Quantity')
+    allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
+    allocation_UOM = fields.Char(string='Allocation UOM')
+
     @api.depends(
         'confirmation_location_code',
         'confirmation_lot_code',
@@ -593,3 +602,11 @@ class StockMove(models.Model):
     adt_warehouse_dest_code = fields.Char(string='Warehouse Dest (Acumatica)')
     adt_location_dest_code = fields.Char(string='Location Dest (Acumatica)')
     adt_line_note = fields.Text(string='Line Note (Acumatica)')
+    allocation_id = fields.Char(string='Allocation ID')
+    allocation_note = fields.Text(string='Allocation Note')
+    allocation_Description = fields.Text(string='Allocation Description')
+    allocation_InventoryID = fields.Char(string='Allocation Inventory ID')
+    allocation_LocationID = fields.Char(string='Allocation Location ID')
+    allocation_Quantity = fields.Float(string='Allocation Quantity')
+    allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
+    allocation_UOM = fields.Char(string='Allocation UOM')    
