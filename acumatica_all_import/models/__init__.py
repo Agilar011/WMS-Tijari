@@ -19,12 +19,8 @@ from . import acumatica_shipment_config
 from . import acumatica_shipment_line
 from . import acumatica_transfer_config
 from . import acumatica_transfer_line
-from . import acumatica_transfer_one_step_config
-from . import acumatica_transfer_one_step_line
 from . import acumatica_transfer_shipment_config
 from . import acumatica_transfer_shipment_line
-from . import acumatica_transfer_two_step_config
-from . import acumatica_transfer_two_step_line
 from . import acumatica_vendor_config
 from . import acumatica_vendor_line
 from . import acumatica_warehouse_config
@@ -40,3 +36,5 @@ from . import acumatica_kit_assembly_line
 from . import acumatica_sales_order_shipment
 from . import acumatica_inventory_issue
 from . import acumatica_issue_po_return
+from . import acumatica_transfer_one_step
+from . import acumatica_transfer_two_step
