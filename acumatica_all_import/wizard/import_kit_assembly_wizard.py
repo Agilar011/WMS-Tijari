@@ -49,6 +49,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
     # FETCH
     # =========================
     def action_fetch_data(self):
+        print("Starting data fetch...")
         self.ensure_one()
 
         if not self.config_id:
@@ -58,6 +59,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
         self.env['acumatica.kit.assembly.line'].search([
             ('config_id', '=', self.config_id.id)
         ]).unlink()
+        print("Existing staging data cleared.")
 
         # =========================
         # FETCH (AUTO LOOP)
@@ -74,6 +76,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
         loop_count = math.ceil(effective_total / self.batch_size)
 
         for i in range(loop_count):
+            print(f"Fetching batch {i+1}/{loop_count} (offset={self.fetch_skip + (i * self.batch_size)})...")
             offset = self.fetch_skip + (i * self.batch_size)
             batch_data = self.config_id.fetch_kit_assembly_data(
                 limit=self.batch_size,
@@ -86,12 +89,14 @@ class ImportKitAssemblyWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
+        print("Data fetch completed.")
         Bom = self.env['mrp.bom']
 
         new_count = existing_count = 0
         lines_to_create = []
 
         for item in raw_list:
+            print(f"Processing ReferenceNbr: {item.get('reference_nbr')}")
             reference_nbr = item.get('reference_nbr') or ''
             existing_bom = Bom.browse()
             if reference_nbr:
@@ -144,8 +149,10 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 'selected': True,
                 'sync_date': fields.Datetime.now(),
             })
+            print(f"Prepared line for ReferenceNbr {reference_nbr}: {msg}")
 
         self.env['acumatica.kit.assembly.line'].create(lines_to_create)
+        print(f"Data fetch completed: total_fetched={len(raw_list)}, total_new={new_count}, total_existing={existing_count}")
 
         self.write({
             'state':          'fetched',
@@ -246,6 +253,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
             ('selected', '=', True),
         ]
 
+        print("Starting batch import...")
         lines = Line.search(domain, limit=1000)
         if not lines:
             raise UserError('Tidak ada data pending untuk diimport.')
