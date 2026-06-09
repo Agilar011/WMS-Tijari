@@ -107,4 +107,10 @@
             sequence="7" 
             action="action_wms_operations_2_step_transfer"/>
 
+  <menuitem id="wms_operations_kit_assembly"
+            name="Kit Assembly"
+            parent="wms_operations_menu_outbound" 
+            sequence="8" 
+            action="action_wms_kit_assembly"/>
+
 </odoo>

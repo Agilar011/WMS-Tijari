@@ -427,9 +427,9 @@ class AcumaticaTransferOneStepLine(models.Model):
 
                 picking_type = PickingType.search([
                     ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'internal'),
+                    ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
                 ], limit=1) or PickingType.search([
-                    ('code', '=', 'internal')
+                    ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
                 ], limit=1)
 
                 print(picking_type.mapped('name'))
