@@ -164,9 +164,9 @@ class AcumaticaKitAssemblyConfig(models.Model):
         
     def fetch_kit_assembly_data(self, limit=100, offset=0):
         """Fetch 1 page Kit Assembly dari Acumatica (paging via $top/$skip)."""
-        print("==========================================================================================")
-        print("ACTION: Fetch data from Acumatica")
-        print("==========================================================================================")
+        # print("==========================================================================================")
+        # print("ACTION: Fetch data from Acumatica")
+        # print("==========================================================================================")
 
         self.ensure_one()
         session = self._do_login()
@@ -174,7 +174,7 @@ class AcumaticaKitAssemblyConfig(models.Model):
         staging_line = self.env['acumatica.kit.assembly.component']
         try:
             endpoint = f"{self.api_url}/KitAssembly"
-            print(f"Fetching Kit Assembly data from {endpoint} with limit={limit} and offset={offset}...")
+            # print(f"Fetching Kit Assembly data from {endpoint} with limit={limit} and offset={offset}...")
             params = {'$top': limit, '$skip': offset, '$expand': 'StockComponents'}
 
             response = session.get(endpoint, params=params, timeout=60)
@@ -211,10 +211,10 @@ class AcumaticaKitAssemblyConfig(models.Model):
                 }
 
                 # === PRINT DATA HEADER ===
-                print("==========================================================================================")
-                print("HEADER DATA:")
-                for h_key, h_val in header.items():
-                    print(f"{h_key:<25} : {h_val}")
+                # print("==========================================================================================")
+                # print("HEADER DATA:")
+                # for h_key, h_val in header.items():
+                    # print(f"{h_key:<25} : {h_val}")
 
                 assembly = self.env['acumatica.kit.assembly'].create(header)  # Simpan header ke staging untuk referensi, bisa dihapus jika tidak perlu
                 print(f"Created staging header record with ID {assembly.id} for ReferenceNbr {header['reference_nbr']}")
@@ -226,13 +226,13 @@ class AcumaticaKitAssemblyConfig(models.Model):
                     stock_components = []
 
                 if not stock_components:
-                    print("-- (No Components Available)") # Info jika component kosong
+                    # print("-- (No Components Available)") # Info jika component kosong
                     result.append(dict(header, line_nbr='0'))
-                    print("==========================================================================================")
+                    # print("==========================================================================================")
                     continue
 
                 # === PRINT DATA COMPONENT ===
-                print("COMPONENTS:")
+                # print("COMPONENTS:")
                 for component in stock_components:
                     line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
                     
@@ -252,17 +252,17 @@ class AcumaticaKitAssemblyConfig(models.Model):
                     }
                     
                     # Print setiap field di dalam component ini dengan awalan '--'
-                    print("  ----------------------------------------")
-                    for c_key, c_val in component_data.items():
-                        print(f"  -- {c_key:<25} : {c_val}")
+                    # print("  ----------------------------------------")
+                    # for c_key, c_val in component_data.items():
+                        # print(f"  -- {c_key:<25} : {c_val}")
 
                     assembly_line = self.env['acumatica.kit.assembly.component'].create(component_data)  # Simpan component ke staging, bisa dihapus jika tidak perlu
-                    print(f"  Created staging component record with ID {assembly_line.id} for LineNbr {component_data['line_nbr']} under ReferenceNbr {header['reference_nbr']}")
+                    # print(f"  Created staging component record with ID {assembly_line.id} for LineNbr {component_data['line_nbr']} under ReferenceNbr {header['reference_nbr']}")
                     
                     # Tetap masukkan ke hasil akhir Odoo wizard Anda
                     result.append({**header, **component_data})
                 
-                print("==========================================================================================")
+                # print("==========================================================================================")
 
 
             # for item in raw_data:
@@ -800,13 +800,16 @@ class AcumaticaKitAssemblyLine(models.Model):
                 'product_uom_qty': False,
             }
         
-        print(product_id.default_code)
-        print(processed_product.uom_id.name)
-        
-        manufacturing = manufacturing.create(vals)
-        print(manufacturing)
-        looping_count += 1
-        print(looping_count)
+        manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)])
+        if manufacturing_check:
+            print("Create MO Skipped")
+        if not manufacturing_check:
+            if kit_assembly_warehouse.odoo_location_id.id:
+                manufacturing = manufacturing.create(vals)
+                print(f"Created : {manufacturing}")
+                
+            if not kit_assembly_warehouse.odoo_location_id.id:
+                print('created skipped cause location not found')
 
 
             # print("============================================================")
