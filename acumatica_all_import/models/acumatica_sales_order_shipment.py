@@ -11,6 +11,89 @@ from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
+class AcumaticaSalesOrderShipmentStaging(models.Model):
+    _name = 'acumatica.sales.order.shipment.staging'
+    _description = 'Staging Data Shipment Receipt dari Acumatica'
+
+    note = fields.Text(string='Note', readonly=True)
+    ControlQty = fields.Float(string='Control Qty', readonly=True)
+    CustomerID = fields.Char(string='Customer ID', readonly=True)
+    Description = fields.Text(string='Description', readonly=True)
+    FOBPoint = fields.Char(string='FOB Point', readonly=True)
+    FOBPointDescription = fields.Text(string='FOB Point Description', readonly=True)
+    Hold = fields.Boolean(string='Hold', readonly=True)
+    Insurance = fields.Float(string='Insurance', readonly=True)
+    LastModifiedDateTime = fields.Datetime(string='Last Modified Date', readonly=True)
+    LocationID = fields.Char(string='Location ID', readonly=True)
+    LocationName = fields.Char(string='Location Name', readonly=True)
+    Operation = fields.Char(string='Operation', readonly=True)
+    PackageCount = fields.Integer(string='Package Count', readonly=True)
+    PackageWeight = fields.Float(string='Package Weight', readonly=True)
+    ShipmentDate = fields.Date(string='Shipment Date', readonly=True)
+    ShipmentNbr = fields.Char(string='Shipment Number', readonly=True)
+    ShippedQty = fields.Float(string='Shipped Qty', readonly=True)
+    ShippedVolume = fields.Float(string='Shipped Volume', readonly=True)
+    ShippedWeight = fields.Float(string='Shipped Weight', readonly=True)
+    ShippingZoneID = fields.Char(string='Shipping Zone ID', readonly=True)
+    ShipVia = fields.Char(string='Ship Via', readonly=True)
+    Status = fields.Char(string='Status', readonly=True)
+    ToWarehouseID = fields.Char(string='To Warehouse ID', readonly=True)
+    Type = fields.Char(string='Type', readonly=True)
+    UnlimitedPackages = fields.Boolean(string='Unlimited Packages', readonly=True)
+    WarehouseID = fields.Char(string='Warehouse ID', readonly=True)
+    UnlimitedPackages = fields.Boolean(string='Unlimited Packages', readonly=True)
+    LocationName = fields.Char(string='Location Name', readonly=True)
+
+
+
+class AcumaticaSalesOrderShipmentStagingLine(models.Model):
+    _name = 'acumatica.sales.order.shipment.staging.line'
+    _description = 'Staging Data Detail Shipment Receipt dari Acumatica'
+
+    acumatica_id = fields.Char(string='ID', readonly=True)
+    rowNumber = fields.Integer(string='Row Number', readonly=True)
+    note = fields.Text(string='Note', readonly=True)
+    Description = fields.Text(string='Description', readonly=True)
+    FreeItem = fields.Boolean(string='Free Item', readonly=True)
+    InventoryID = fields.Char(string='Inventory ID', readonly=True)
+    LineNbr = fields.Integer(string='Line Number', readonly=True)
+    LocationID = fields.Char(string='Location ID', readonly=True)
+    OpenOrderQty = fields.Float(string='Open Order Qty', readonly=True)
+    OrderedQty = fields.Float(string='Ordered Qty', readonly=True)
+    OrderLineNbr = fields.Integer(string='Order Line Number', readonly=True)
+    OrderNbr = fields.Char(string='Order Number', readonly=True)
+    OrderType = fields.Char(string='Order Type', readonly=True)
+    ShippedQty = fields.Float(string='Shipped Qty', readonly=True)
+    UOM = fields.Char(string='UOM', readonly=True)
+    WarehouseID = fields.Char(string='Warehouse ID', readonly=True)
+
+class AcumaticaSalesOrderShipmentStagingAllocation(models.Model):
+    _name = 'acumatica.sales.order.shipment.staging.allocation'
+    _description = 'Staging Data Allocation Detail Shipment Receipt dari Acumatica'
+
+    acumatica_id = fields.Char(string='ID', readonly=True)
+    rowNumber = fields.Integer(string='Row Number', readonly=True)
+    note = fields.Text(string='Note', readonly=True)
+    Description = fields.Text(string='Description', readonly=True)
+    InventoryID = fields.Char(string='Inventory ID', readonly=True)
+    LocationID = fields.Char(string='Location ID', readonly=True)
+    Quantity = fields.Float(string='Quantity', readonly=True)
+    SplitLineNbr = fields.Integer(string='Split Line Number', readonly=True)
+    UOM = fields.Char(string='UOM', readonly=True)
+
+class AcumaticaSalesOrderShipmentShipToAddressStaging(models.Model):
+    _name = 'acumatica.sales.order.shipment.shiptoaddress.staging'
+    _description = 'Staging Data Ship To Address Detail Shipment Receipt dari Acumatica'
+
+    AddressLine1 = fields.Char(string='Address Line 1', readonly=True)
+    AddressLine2 = fields.Char(string='Address Line 2', readonly=True)
+    City = fields.Char(string='City', readonly=True)
+    Country = fields.Char(string='Country', readonly=True)
+    CountryName = fields.Char(string='Country Name', readonly=True)
+    PostalCode = fields.Char(string='Postal Code', readonly=True)
+    State = fields.Char(string='State', readonly=True)
+
+
 class AcumaticaShipmentConfig(models.Model):
     _name = 'acumatica.so.shipment.config'
     _description = 'Konfigurasi Koneksi Acumatica - Shipment Receipt'
