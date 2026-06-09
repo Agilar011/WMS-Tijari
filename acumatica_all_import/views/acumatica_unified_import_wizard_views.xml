@@ -36,16 +36,16 @@
                     <group string="Filter Fetch">
                         <field name="fetch_limit"/>
                         <field name="fetch_skip"></field>
+                        <field name="batch_size"/>
                         <field name="reference_nbr" invisible="import_type not in ['issue_po_return','transfer_one_step','transfer_two_step','inventory_received','inventory_issue','receipt_change_item','issue_change_item','so_transfer']"/>
                         <field name="receipt_nbr" invisible="import_type != 'po_receipt'"/>
                         <field name="shipment_nbr" invisible="import_type not in ['shipment_so','so_shipment','transfer_shipment']"/>
                         <field name="last_modified_from"/>
                         <field name="odata_filter"/>
                     </group>
-                    <group string="Batch Import">
-                        <field name="batch_size"/>
-                        <field name="auto_commit_batch"/>
-                    </group>
+                    <!-- <group string="Batch Import"> -->
+                        <!-- <field name="auto_commit_batch"/> -->
+                    <!-- </group> -->
                     <group string="Ringkasan">
                         <field name="state" readonly="1"/>
                         <field name="total_fetched" readonly="1"/>
@@ -60,7 +60,7 @@
                 <footer>
                     <button name="action_fetch_data" string="1. Tarik Data" type="object" class="btn-primary"/>
                     <button name="action_import_pending_batch" string="2. Import Pending per Batch" type="object" class="btn-secondary" invisible="state == 'draft'"/>
-                    <button name="action_fetch_and_import_batch" string="Tarik + Import Batch" type="object" class="btn-primary"/>
+                    <!-- <button name="action_fetch_and_import_batch" string="Tarik + Import Batch" type="object" class="btn-primary"/> -->
                     <button name="action_view_staging" string="Lihat Staging" type="object" invisible="state == 'draft'"/>
                     <button name="action_reset" string="Reset Wizard" type="object"/>
                     <button string="Tutup" special="cancel"/>

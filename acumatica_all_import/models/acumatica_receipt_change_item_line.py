@@ -41,6 +41,10 @@ class AcumaticaReceiptChangeItemLine(models.Model):
     line_note = fields.Text(string='Line Note', readonly=True)
 
     change_item_nbr = fields.Char(string='Change Item Nbr', readonly=True)
+    shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
+    transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
+    location_code = fields.Char(string='Location Code', readonly=True)
+    customer_code = fields.Char(string='Customer Code', readonly=True)
 
     import_state = fields.Selection([
         ('pending', 'Belum Diimport'),
@@ -96,15 +100,31 @@ class AcumaticaReceiptChangeItemLine(models.Model):
             })
         return product
 
+    # def _find_warehouse(self, line):
+    #     Warehouse = self.env['stock.warehouse']
+    #     code = line.line_warehouse_code or line.warehouse_code
+    #     warehouse = False
+    #     if code:
+    #         warehouse = Warehouse.search([('code', '=', code)], limit=1)
+    #         if not warehouse:
+    #             warehouse = Warehouse.search([('name', '=', code)], limit=1)
+    #     return warehouse or Warehouse.search([], limit=1)
+
     def _find_warehouse(self, line):
-        Warehouse = self.env['stock.warehouse']
-        code = line.line_warehouse_code or line.warehouse_code
-        warehouse = False
-        if code:
-            warehouse = Warehouse.search([('code', '=', code)], limit=1)
-            if not warehouse:
-                warehouse = Warehouse.search([('name', '=', code)], limit=1)
-        return warehouse or Warehouse.search([], limit=1)
+            Warehouse = self.env['stock.location.acumatica']
+            warehouse = False
+            if line.line_warehouse_code:
+                warehouse = Warehouse.search([('code', '=', line.line_warehouse_code)], limit=1)
+                if not warehouse:
+                    warehouse = Warehouse.search([('name', '=', line.line_warehouse_code)], limit=1)
+                else:
+                    if not warehouse.odoo_building_id:
+                        warehouse = False
+                    else:
+                        warehouse = warehouse.odoo_building_id    
+                # else:
+                #     warehouse = Warehouse.search([('id', '=', 1)], limit=1)
+            return warehouse or Warehouse.search([], limit=1)
 
     def _find_internal_location(self, line, warehouse=False):
         Location = self.env['stock.location']

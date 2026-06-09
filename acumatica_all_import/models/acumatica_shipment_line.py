@@ -127,25 +127,25 @@ class AcumaticaShipmentLine(models.Model):
         Partner = self.env['res.partner']
         partner = False
         if line.partner_code:
-            partner = Partner.search([('ref', '=', line.partner_code)], limit=1)
+            partner = Partner.search([('company_registry', '=', line.partner_code)], limit=1)
             if not partner:
                 partner = Partner.search([('name', '=', line.partner_code)], limit=1)
-            if not partner:
-                partner = Partner.create({
-                    'name': line.partner_code,
-                    'ref': line.partner_code,
-                    'customer_rank': 1,
-                })
         return partner
 
     def _find_warehouse(self, line):
-        Warehouse = self.env['stock.warehouse']
-        code = line.warehouse_code
+        Warehouse = self.env['stock.location.acumatica']
         warehouse = False
-        if code:
-            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+        if line.detail_warehouse_code:
+            warehouse = Warehouse.search([('code', '=', line.detail_warehouse_code)], limit=1)
             if not warehouse:
-                warehouse = Warehouse.search([('name', '=', code)], limit=1)
+                warehouse = Warehouse.search([('name', '=', line.detail_warehouse_code)], limit=1)
+            else:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_building_id    
+            # else:
+            #     warehouse = Warehouse.search([('id', '=', 1)], limit=1)
         return warehouse or Warehouse.search([], limit=1)
 
     def _find_destination_location(self, line, warehouse=False):
@@ -200,9 +200,22 @@ class AcumaticaShipmentLine(models.Model):
                 continue
             first = receipt_lines[0]
             try:
+                # partner = self._find_partner(first)
+                partner = self._find_partner(first)
+                if not partner:
+                    flag = {
+                        'sync_state': 'not_ready',
+                        'sync_message': f'Customer dengan CustomerID {first.partner_code} tidak ditemukan di WMS.',
+                    }
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
-                    raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
+                    flag = {
+                        'sync_state': 'not_ready',
+                        'sync_message': f'Warehouse dengan code {first.warehouse_dest_code} tidak ditemukan di WMS.',
+                    }
+                # warehouse = self._find_warehouse(first)
+                # if not warehouse:
+                #     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
                 picking_type = PickingType.search([
                     ('warehouse_id', '=', warehouse.id),
@@ -211,21 +224,20 @@ class AcumaticaShipmentLine(models.Model):
                 if not picking_type:
                     raise UserError('Picking type receipt/incoming tidak ditemukan.')
 
-                partner = self._find_partner(first)
-                dest_location = self._find_destination_location(first, warehouse)
-                if not dest_location:
-                    raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.location_dest_code or first.header_location_code or "-"}')
+                # dest_location = self._find_destination_location(first, warehouse)
+                # if not dest_location:
+                #     raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.location_dest_code or first.header_location_code or "-"}')
 
-                src_location = self._find_source_location(warehouse)
-                if not src_location:
-                    raise UserError('Location sumber supplier tidak ditemukan.')
+                # src_location = self._find_source_location(warehouse)
+                # if not src_location:
+                #     raise UserError('Location sumber supplier tidak ditemukan.')
 
                 vals = {
                     'origin': first.receipt_nbr,
                     'partner_id': partner.id if partner else False,
                     'picking_type_id': picking_type.id,
-                    'location_id': src_location.id,
-                    'location_dest_id': dest_location.id,
+                    # 'location_id': src_location.id,
+                    # 'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
                     'note': first.note or first.description or False,
 

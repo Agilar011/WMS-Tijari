@@ -207,14 +207,19 @@ class AcumaticaReceiptLine(models.Model):
         return product
 
     def _find_warehouse(self, line):
-        Warehouse = self.env['stock.warehouse']
+        Warehouse = self.env['stock.location.acumatica']
         warehouse = False
-        if line.warehouse_code:
-            warehouse = Warehouse.search([('code', '=', line.warehouse_code)], limit=1)
+        if line.warehouse_dest_code:
+            warehouse = Warehouse.search([('code', '=', line.warehouse_dest_code)], limit=1)
             if not warehouse:
-                warehouse = Warehouse.search([('name', '=', line.warehouse_code)], limit=1)
+                warehouse = Warehouse.search([('name', '=', line.warehouse_dest_code)], limit=1)
             else:
-                warehouse = Warehouse.search([('id', '=', 1)], limit=1)
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_building_id    
+            # else:
+            #     warehouse = Warehouse.search([('id', '=', 1)], limit=1)
         return warehouse or Warehouse.search([], limit=1)
 
     def _find_location_dest(self, line, warehouse=False):
@@ -266,15 +271,25 @@ class AcumaticaReceiptLine(models.Model):
             first = receipt_lines[0]
 
             try:
+                # Cari vendor, inventory, warehouse, uom. kalo salah satu tidak sync di wms, maka berikan flag Not Ready di stock.picking, dan keterangan di sync_message.
                 vendor = self._find_vendor(first)
+                if not vendor:
+                    flag = {
+                        'sync_state': 'not_ready',
+                        'sync_message': f'Vendor dengan VendorID {first.vendor_code} tidak ditemukan di WMS.',
+                    }
+                else:
+                    flag = {}
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
-                    raise UserError(
-                        f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}'
-                    )
-
+                    flag = {
+                        'sync_state': 'not_ready',
+                        'sync_message': f'Warehouse dengan code {first.warehouse_dest_code} tidak ditemukan di WMS.',
+                    }
+                else:
+                    flag = {}
                 picking_type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
+                    ('warehouse_id', '=', warehouse.id if warehouse else False),
                     ('code', '=', 'incoming'),
                 ], limit=1) or PickingType.search([
                     ('code', '=', 'incoming')
@@ -283,12 +298,12 @@ class AcumaticaReceiptLine(models.Model):
                 if not picking_type:
                     raise UserError('Picking type incoming tidak ditemukan.')
 
-                dest_location = self._find_location_dest(first, warehouse)
-                if not dest_location:
-                    raise UserError(
-                        f'Location tujuan tidak ditemukan untuk code: '
-                        f'{first.location_dest_code or first.header_location_code or "-"}'
-                    )
+                # dest_location = self._find_location_dest(first, warehouse)
+                # if not dest_location:
+                #     raise UserError(
+                #         f'Location tujuan tidak ditemukan untuk code: '
+                #         f'{first.location_dest_code or first.header_location_code or "-"}'
+                #     )
 
                 origin = first.receipt_nbr or first.po_number or False
 
@@ -328,6 +343,11 @@ class AcumaticaReceiptLine(models.Model):
 
                 # pakai origin buat dedup
                 picking = Picking.search([('origin', '=', origin)], limit=1)
+                final_vals = {**vals, **flag} if 'flag' in locals() else vals
+                if not flag:
+                    final_vals['state'] = 'assigned'
+                    final_vals['sync_state'] = 'ready'
+                    final_vals['sync_message'] = False
 
                 if picking:
                     if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
@@ -335,11 +355,11 @@ class AcumaticaReceiptLine(models.Model):
                             f'Receipt {receipt_nbr} sudah ada di Odoo dengan state '
                             f'{picking.state}, tidak bisa diupdate.'
                         )
-                    picking.write(vals)
+                    picking.write(final_vals)
                     action_state = 'updated'
                     updated += 1
                 else:
-                    picking = Picking.create(vals)
+                    picking = Picking.create(final_vals)
                     action_state = 'imported'
                     imported += 1
 
@@ -347,13 +367,13 @@ class AcumaticaReceiptLine(models.Model):
                     try:
                         product = self._find_product(line)
                         if not product:
-                            raise UserError(
-                                f'Product tidak ditemukan untuk InventoryID: '
-                                f'{line.inventory_id or "-"}'
-                            )
+                            flag = {
+                                'sync_state': 'not_ready',
+                                'sync_message': f'Product dengan InventoryID {line.inventory_id} tidak ditemukan di WMS.',
+                            }
 
                         uom = self._find_uom(line, product)
-                        line_dest = self._find_location_dest(line, warehouse) or dest_location
+                        # line_dest = self._find_location_dest(line, warehouse) or dest_location
                         qty = self._parse_float(line.product_uom_qty)
 
                         # dedup move
@@ -410,6 +430,8 @@ class AcumaticaReceiptLine(models.Model):
                         move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
 
                         Move.create(move_vals)
+                        if flag.get('sync_state') == 'not_ready':
+                            picking.write(flag)
 
                         line.write({
                             'import_state': action_state,

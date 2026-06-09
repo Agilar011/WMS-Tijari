@@ -95,26 +95,43 @@ class AcumaticaInventoryRecievedLine(models.Model):
         return product
 
     def _find_warehouse(self, line):
-        Warehouse = self.env['stock.warehouse']
-        code = line.detail_warehouse_code or line.warehouse_code
+        Warehouse = self.env['stock.location.acumatica']
         warehouse = False
+        code = line.detail_warehouse_code or line.warehouse_code
         if code:
             warehouse = Warehouse.search([('code', '=', code)], limit=1)
             if not warehouse:
                 warehouse = Warehouse.search([('name', '=', code)], limit=1)
+            else:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_building_id    
+            # else:
+            #     warehouse = Warehouse.search([('id', '=', 1)], limit=1)
         return warehouse or Warehouse.search([], limit=1)
 
-    def _find_location(self, line, warehouse=False):
-        Location = self.env['stock.location']
-        code = line.location_code
-        location = False
-        if code:
-            location = Location.search([('complete_name', '=', code)], limit=1)
-            if not location:
-                location = Location.search([('name', '=', code)], limit=1)
-        if not location and warehouse:
-            location = warehouse.lot_stock_id
-        return location
+    # def _find_warehouse(self, line):
+    #     Warehouse = self.env['stock.warehouse']
+    #     code = line.detail_warehouse_code or line.warehouse_code
+    #     warehouse = False
+    #     if code:
+    #         warehouse = Warehouse.search([('code', '=', code)], limit=1)
+    #         if not warehouse:
+    #             warehouse = Warehouse.search([('name', '=', code)], limit=1)
+    #     return warehouse or Warehouse.search([], limit=1)
+
+    # def _find_location(self, line, warehouse=False):
+    #     Location = self.env['stock.location']
+    #     code = line.location_code
+    #     location = False
+    #     if code:
+    #         location = Location.search([('complete_name', '=', code)], limit=1)
+    #         if not location:
+    #             location = Location.search([('name', '=', code)], limit=1)
+    #     if not location and warehouse:
+    #         location = warehouse.lot_stock_id
+    #     return location
 
     def _find_delivery_picking_type(self, warehouse=False):
         PickingType = self.env['stock.picking.type']
@@ -161,21 +178,24 @@ class AcumaticaInventoryRecievedLine(models.Model):
             try:
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
-                    raise UserError(f'Warehouse tidak ditemukan untuk code: {first.detail_warehouse_code or first.warehouse_code or "-"}')
+                    flag = {
+                        'sync_state': 'not_ready',
+                        'sync_message': f'Warehouse dengan code {first.warehouse_dest_code} tidak ditemukan di WMS.',
+                    }
 
                 picking_type = self._find_delivery_picking_type(warehouse)
                 if not picking_type:
                     raise UserError('Picking type delivery/outgoing tidak ditemukan.')
 
-                dest_location = self._find_location(first, warehouse)
-                if not dest_location:
-                    raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.location_code or "-"}')
+                # dest_location = self._find_location(first, warehouse)
+                # if not dest_location:
+                #     raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.location_code or "-"}')
 
                 vals = {
                     'origin': first.reference_nbr,
                     'picking_type_id': picking_type.id,
-                    'location_id': picking_type.default_location_src_id.id if picking_type.default_location_src_id else (warehouse.lot_stock_id.id if warehouse else self.env.ref('stock.stock_location_stock').id),
-                    'location_dest_id': dest_location.id if dest_location else (picking_type.default_location_dest_id.id if picking_type.default_location_dest_id else warehouse.lot_stock_id.id),
+                    # 'location_id': picking_type.default_location_src_id.id if picking_type.default_location_src_id else (warehouse.lot_stock_id.id if warehouse else self.env.ref('stock.stock_location_stock').id),
+                    # 'location_dest_id': dest_location.id if dest_location else (picking_type.default_location_dest_id.id if picking_type.default_location_dest_id else warehouse.lot_stock_id.id),
                     'scheduled_date': self._parse_dt(first.scheduled_date),
                     'note': first.note or first.header_description or False,
 
@@ -205,7 +225,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     uom = self._find_uom(line, product)
                     qty = self._parse_float(line.product_uom_qty)
                     move_name = line.description or product.display_name
-                    move_dest = self._find_location(line, warehouse) or dest_location or picking.location_dest_id
+                    # move_dest = self._find_location(line, warehouse) or dest_location or picking.location_dest_id
 
                     existing = Move.search([
                         ('picking_id', '=', picking.id),
@@ -228,14 +248,11 @@ class AcumaticaInventoryRecievedLine(models.Model):
                         'product_uom_qty': qty,
                         'product_uom': uom.id if uom else product.uom_id.id,
                         'location_id': picking.location_id.id,
-                        'location_dest_id': move_dest.id,
+                        # 'location_dest_id': move_dest.id,
                         'description_picking': line.description or False,
 
                         'adt_inventory_id': line.line_note or False,
                         'adt_line_nbr': line.line_nbr or False,
-                        'adt_line_type': line.line_description or False,
-                        'adt_open_qty': self._parse_float(line.open_qty),
-                        'adt_order_qty': self._parse_float(line.order_qty),
                         'adt_uom_code': line.uom_code or False,
                         'adt_warehouse_dest_code': line.warehouse_code or False,
                         'adt_type': first.transfer_type or False,
