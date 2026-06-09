@@ -153,7 +153,7 @@ class AcumaticaInventoryRecievedConfig(models.Model):
                         'post_period': str(self._val(header, 'PostPeriod')),
                         'status': self._val(header, 'Status'),
                         'total_qty': str(self._val(header, 'TotalQty')),
-                        'warehouse_code': self._val(header, 'ToWarehouseID'),
+                        # 'warehouse_code': self._val(header, 'ToWarehouseID'),
                         'transfer_type': self._val(header, 'TransType'),
                         'note': self._val(header, 'note'),
                         'line_note': self._val(detail, 'note'),
@@ -161,7 +161,7 @@ class AcumaticaInventoryRecievedConfig(models.Model):
                         'inventory_id': self._val(detail, 'InventoryID'),
                         'line_nbr': str(self._val(detail, 'LineNbr')),
                         'product_uom_qty': str(self._val(detail, 'Qty')),
-                        'detail_warehouse_code': self._val(detail, 'WarehouseID'),
+                        'detail_warehouse_code': self._val(detail, 'Warehouse'),
                         'uom_code': self._val(detail, 'UOM'),
                     })
                     row_number += 1

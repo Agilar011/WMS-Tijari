@@ -141,19 +141,20 @@ class AcumaticaReceiptChangeItemConfig(models.Model):
                     'row_number': row_number,
                     'note': item.get('note', {}).get('value', '') or '',
                     'branch_warehouse': self._val(item, 'Branch'),
-                    # CHANGE ITEM NUMBER
-                    'change_item_nbr': self._val(item, 'ChangeItemNbr'),
+                    'change_item_nbr': self._val(item, 'ChangeItemRefNbr'),
                     'actual_qty': self._val(item, 'ControlQty'),
-                    # CUSTOMER
+                    'customer_code': self._val(item, 'Customer'),
                     'scheduled_date': self._val(item, 'Date'),
                     'description': self._val(item, 'Description'),
                     'external_ref': self._val(item, 'ExternalRef'),
                     'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    # LOCATION
+                    'location_code': self._val(item, 'Location'),
                     'post_period': self._val(item, 'PostPeriod'),
                     'origin': self._val(item, 'ReferenceNbr'),
+                    'shipment_nbr': self._val(item, 'ShipmentNbr'),
                     'status': self._val(item, 'Status'),
                     'total_qty': self._val(item, 'TotalQty'),
+                    'transfer_nbr': self._val(item, 'TransferNbr'),
                     'transfer_type': self._val(item, 'TransType'),
                 }
 
@@ -179,7 +180,7 @@ class AcumaticaReceiptChangeItemConfig(models.Model):
                         'location_code': self._val(detail, 'Location'),
                         'line_nbr': str(line_nbr),
                         'product_uom_qty': self._val(detail, 'Qty'),
-                        'line_warehouse_code': self._val(detail, 'WarehouseID'),
+                        'line_warehouse_code': self._val(detail, 'Warehouse'),
                         'uom_code': self._val(detail, 'UOM'),
                     })
 

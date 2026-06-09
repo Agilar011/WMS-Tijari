@@ -38,7 +38,7 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
                 limit=self.batch_size,
                 reference_nbr=self.reference_nbr,
                 offset=offset,
-                receipt_nbr=self.receipt_nbr,
+                # receipt_nbr=self.receipt_nbr,
                 last_modified_from=self.last_modified_from,
                 odata_filter=self.odata_filter,
             )

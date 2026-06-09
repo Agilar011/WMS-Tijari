@@ -112,14 +112,31 @@ class AcumaticaTransferLine(models.Model):
         return product
 
     def _find_warehouse(self, line):
-        Warehouse = self.env['stock.warehouse']
-        code = line.warehouse_dest_code or line.warehouse_code
+        Warehouse = self.env['stock.location.acumatica']
         warehouse = False
-        if code:
-            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+        code = line.warehouse_dest_code or line.warehouse_code
+        if line.code:
+            warehouse = Warehouse.search([('code', '=', line.code)], limit=1)
             if not warehouse:
-                warehouse = Warehouse.search([('name', '=', code)], limit=1)
+                warehouse = Warehouse.search([('name', '=', line.code)], limit=1)
+            else:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_building_id    
+            # else:
+            #     warehouse = Warehouse.search([('id', '=', 1)], limit=1)
         return warehouse or Warehouse.search([], limit=1)
+
+    # def _find_warehouse(self, line):
+    #     Warehouse = self.env['stock.warehouse']
+    #     code = line.warehouse_dest_code or line.warehouse_code
+    #     warehouse = False
+    #     if code:
+    #         warehouse = Warehouse.search([('code', '=', code)], limit=1)
+    #         if not warehouse:
+    #             warehouse = Warehouse.search([('name', '=', code)], limit=1)
+    #     return warehouse or Warehouse.search([], limit=1)
 
     def _find_internal_location(self, line, warehouse=False):
         Location = self.env['stock.location']

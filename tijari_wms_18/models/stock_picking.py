@@ -1,4 +1,5 @@
 from odoo import models, fields
+from odoo.exceptions import UserError
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -31,4 +32,23 @@ class StockPicking(models.Model):
 
     adt_receipt_type = fields.Char(string='Receipt Type (Acumatica)')
     adt_trans_type = fields.Char(string='Trans Type (Acumatica)')
+    sync_state = fields.Selection([
+        ('ready', 'Ready'),
+        ('not_ready', 'Not Ready'),
+    ], string='Sync State', default='ready', readonly=True, help='Data acumatica yg tidak sesuai dengan master yg ada di wms akan masuk ke state Not Ready, dan record tidak bisa di proses sampai data master nya sudah sinkron.')
+    sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
     adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
+
+    def _check_sync_state(self):
+        for picking in self:
+            if picking.sync_state == 'not_ready':
+                raise UserError(
+                    f'Picking {picking.name} tidak bisa diproses karena data tidak lengkap: {picking.sync_message}'
+                )
+    def action_confirm(self):
+        self._check_sync_state()
+        return super().action_confirm()
+    
+    def button_validate(self):
+        self._check_sync_state()
+        return super().button_validate()
