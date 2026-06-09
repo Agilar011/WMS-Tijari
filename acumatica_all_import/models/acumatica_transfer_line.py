@@ -114,11 +114,11 @@ class AcumaticaTransferLine(models.Model):
     def _find_warehouse(self, line):
         Warehouse = self.env['stock.location.acumatica']
         warehouse = False
-        code = line.warehouse_dest_code or line.warehouse_code
-        if line.code:
-            warehouse = Warehouse.search([('code', '=', line.code)], limit=1)
+        code = line.warehouse_code
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
             if not warehouse:
-                warehouse = Warehouse.search([('name', '=', line.code)], limit=1)
+                warehouse = Warehouse.search([('name', '=', code)], limit=1)
             else:
                 if not warehouse.odoo_building_id:
                     warehouse = False
@@ -137,6 +137,21 @@ class AcumaticaTransferLine(models.Model):
     #         if not warehouse:
     #             warehouse = Warehouse.search([('name', '=', code)], limit=1)
     #     return warehouse or Warehouse.search([], limit=1)
+
+    def _find_dest_location(self, line):
+        Location = self.env['stock.location.acumatica']
+        location = False
+        code = line.warehouse_dest_code
+        if code:
+            location = Location.search([('code', '=', code)], limit=1) or Location.search([('name', '=', code)], limit=1)
+            if not location:
+                return Location.search([], limit=1)
+            else:
+                if not location.odoo_location_id:
+                    location = False
+                else:
+                    location = location.odoo_location_id    
+        return location or Location.search([], limit=1)
 
     def _find_internal_location(self, line, warehouse=False):
         Location = self.env['stock.location']
@@ -195,9 +210,9 @@ class AcumaticaTransferLine(models.Model):
                 if not picking_type:
                     raise UserError('Picking type internal tidak ditemukan.')
 
-                dest_location = self._find_internal_location(first, warehouse)
+                dest_location = self._find_dest_location(first)
                 if not dest_location:
-                    raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.location_dest_code or first.header_location_code or "-"}')
+                    raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.warehouse_dest_code or "-"}')
 
                 origin = first.receipt_nbr or False
                 vals = {

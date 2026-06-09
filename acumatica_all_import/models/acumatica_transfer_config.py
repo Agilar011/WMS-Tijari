@@ -134,6 +134,7 @@ class AcumaticaTransferConfig(models.Model):
 
             raw_data = self._normalize_rows(response.json())
             result = []
+            is_found_dest_warehouse = False
 
             for row_number, item in enumerate(raw_data, start=1):
                 header = {
@@ -154,7 +155,7 @@ class AcumaticaTransferConfig(models.Model):
                     'receipt_type': self._val(item, 'Type'),
                     'vendor_code': self._val(item, 'VendorID'),
                     'partner_ref': self._val(item, 'VendorRef'),
-                    'warehouse_code': self._val(item, 'Warehouse'),
+                    'warehouse_dest_code': self._val(item, 'Warehouse'),
                 }
 
                 details = item.get('Details') or []
@@ -170,7 +171,10 @@ class AcumaticaTransferConfig(models.Model):
                 for detail in details:
                     line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
                     description = self._val(detail, 'Description') or self._val(detail, 'TransactionDescription')
-                    warehouse_dest_code = self._val(detail, 'Warehouse') or header.get('warehouse_code')
+                    transfer_shipment_nbr = self._val(detail, 'TransferShipmentNbr')
+                    if transfer_shipment_nbr and not is_found_dest_warehouse:
+                        dest_warehouse_data = self.search_dest_warehouse(transfer_shipment_nbr, session)
+                        is_found_dest_warehouse = True
 
                     result.append({
                         **header,
@@ -193,9 +197,9 @@ class AcumaticaTransferConfig(models.Model):
                         'transfer_order_line_number': self._val(detail, 'TransferOrderLineNbr'),
                         'transfer_order_number': self._val(detail, 'TransferOrderNbr'),
                         'transfer_order_type': self._val(detail, 'TransferOrderType'),
-                        'transfer_shipment_number': self._val(detail, 'TransferShipmentNbr'),
+                        'transfer_shipment_number': transfer_shipment_nbr,
                         'uom_code': self._val(detail, 'UOM'),
-                        'warehouse_dest_code': warehouse_dest_code,
+                        'warehouse_code': dest_warehouse_data.get('source_warehouse') if dest_warehouse_data else None,
                     })
 
             _logger.info('Berhasil ambil %s rows Transfer Receipt dari Acumatica', len(result))
@@ -203,3 +207,36 @@ class AcumaticaTransferConfig(models.Model):
             return result
         finally:
             self._do_logout(session)
+
+    def search_dest_warehouse(self, transfer_nbr, session):
+        self.ensure_one()
+        # if not session:
+        #     session = self._do_login()
+        if not transfer_nbr:
+            return None
+        try:
+            endpoint = f"{self.api_url}/Shipment"
+            params = {
+                '$select': 'ToWarehouseID, WarehouseID, ShipmentNbr', 
+                '$filter': f"ShipmentNbr eq '{transfer_nbr}'"
+            }
+
+            response = session.get(endpoint, params=params, timeout=90)
+            if response.status_code != 200:
+                raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
+
+            raw_data = self._normalize_rows(response.json())
+
+            item = raw_data[0]  # misal ambil data pertama
+
+            result = {
+                'shipment_number': self._val(item, 'ShipmentNbr'),
+                'dest_warehouse': self._val(item, 'ToWarehouseID'),
+                'source_warehouse': self._val(item, 'WarehouseID'),
+            }
+
+            _logger.info('Berhasil ambil data Warehouse dari Transfer Shipment', len(result))
+            return result
+        except Exception as e:
+            _logger.error('Gagal ambil data Warehouse dari Transfer Shipment: %s', str(e))
+            return None
