@@ -49,6 +49,10 @@ class ImportKitAssemblyWizard(models.TransientModel):
     # FETCH
     # =========================
     def action_fetch_data(self):
+        print("==========================================================================================")
+        print("ACTION: Fetch Wizard data from Acumatica")
+        print("==========================================================================================")
+        # print("Starting data fetch...")
         self.ensure_one()
 
         if not self.config_id:
@@ -58,6 +62,24 @@ class ImportKitAssemblyWizard(models.TransientModel):
         self.env['acumatica.kit.assembly.line'].search([
             ('config_id', '=', self.config_id.id)
         ]).unlink()
+
+        self.env['acumatica.kit.assembly'].sudo().search([]).unlink()
+        self.env['acumatica.kit.assembly.component'].sudo().search([]).unlink()
+        
+        self.env.cr.execute("""
+            TRUNCATE TABLE acumatica_kit_assembly RESTART IDENTITY CASCADE;
+        """)
+        self.env.cr.execute("""
+            TRUNCATE TABLE acumatica_kit_assembly_component RESTART IDENTITY CASCADE;
+        """)
+
+        self.env.cr.commit()
+
+        header_count = self.env['acumatica.kit.assembly'].search_count([])
+        component_count = self.env['acumatica.kit.assembly.component'].search_count([])
+
+        if header_count > 0 or component_count > 0:
+            raise UserError('Delete Function belum berhasil')
 
         # =========================
         # FETCH (AUTO LOOP)
