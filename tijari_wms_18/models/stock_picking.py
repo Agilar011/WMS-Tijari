@@ -37,6 +37,7 @@ class StockPicking(models.Model):
         ('not_ready', 'Not Ready'),
     ], string='Sync State', default='ready', readonly=True, help='Data acumatica yg tidak sesuai dengan master yg ada di wms akan masuk ke state Not Ready, dan record tidak bisa di proses sampai data master nya sudah sinkron.')
     sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
+    adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
 
     def _check_sync_state(self):
         for picking in self:

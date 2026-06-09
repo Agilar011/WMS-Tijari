@@ -286,6 +286,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         if not self.import_type or self.import_type not in self.IMPORT_MAP:
             raise UserError(_('Pilih data yang ingin diimport terlebih dahulu.'))
         print(self.import_type)
+        print(f"Import type: {self.import_type}")
         return self.IMPORT_MAP[self.import_type]
 
     def _get_selected_config(self, info):
@@ -336,14 +337,21 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     def action_fetch_data(self):
         print('action_fetch_data called')
         self.ensure_one()
+        print(f"Fetch limit: {self.fetch_limit}")
         if self.fetch_limit <= 0:
             raise UserError(_('Maks Data Ditarik harus lebih besar dari 0.'))
         info = self._get_import_info()
+        print(f"Import info: {info}")
         config = self._get_selected_config(info)
+        print(f"Config: {config}")
         source_wizard = self.env[info['wizard_model']].create(self._prepare_source_wizard_vals(info, config))
+        print(f"Source wizard created: {source_wizard}")
         source_wizard.action_fetch_data()
+        print("Fetch data action called on source wizard")
         pending_lines = self._get_pending_lines(info, config)
+        print(f"Pending lines fetched: {len(pending_lines)}")
         total_fetched = len(self.env[info['line_model']].search([('config_id', '=', config.id)]))
+        print(f"Total fetched: {total_fetched}, Pending lines: {len(pending_lines)}")
         self.write({
             'state': 'fetched',
             'total_fetched': total_fetched,

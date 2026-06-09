@@ -1,11 +1,196 @@
 
 import logging
 from dateutil import parser as dateutil_parser
+import requests
 
-from odoo import api, fields, models
+from odoo import fields, models, api
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+
+class AcumaticaInventoryIssueConfig(models.Model):
+    _name = 'acumatica.inventory.issue.config'
+    _description = 'Konfigurasi Koneksi Acumatica - Inventory Issue'
+    _rec_name = 'name'
+
+    name = fields.Char(required=True, default='Acumatica Inventory Issue')
+    base_url = fields.Char(required=True, help='Contoh: http://server/acumportal/entity')
+    api_version = fields.Char(required=True, default='25.200.002')
+    username = fields.Char(required=True)
+    password = fields.Char(required=True)
+    company_code = fields.Char(required=True)
+    endpoint_name = fields.Char(required=True, default='Shipment')
+    active = fields.Boolean(default=True)
+    last_sync = fields.Datetime(readonly=True)
+    state = fields.Selection([
+        ('draft', 'Belum Ditest'),
+        ('connected', 'Terhubung'),
+        ('error', 'Error'),
+    ], default='draft', readonly=True)
+
+    odata_expand = fields.Char(default='Details')
+    odata_select = fields.Char()
+    odata_filter = fields.Char()
+
+    @property
+    def api_url(self):
+        return f"{self.base_url}/wms/{self.api_version}"
+
+    @property
+    def login_url(self):
+        return f"{self.base_url}/auth/login"
+
+    @property
+    def logout_url(self):
+        return f"{self.base_url}/auth/logout"
+
+    def action_test_connection(self):
+        self.ensure_one()
+        try:
+            session = self._do_login()
+            self._do_logout(session)
+            self.state = 'connected'
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Koneksi Berhasil',
+                    'message': f'Berhasil terhubung ke {self.base_url}',
+                    'type': 'success',
+                    'sticky': False,
+                }
+            }
+        except Exception as e:
+            self.state = 'error'
+            raise UserError(f'Koneksi gagal: {str(e)}')
+
+    def _do_login(self):
+        self.ensure_one()
+        session = requests.Session()
+        response = session.post(
+            self.login_url,
+            json={
+                'name': self.username,
+                'password': self.password,
+                'company': self.company_code,
+            },
+            headers={'Content-Type': 'application/json'},
+            timeout=30,
+        )
+        if response.status_code == 204:
+            return session
+        raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
+
+    def _do_logout(self, session):
+        try:
+            session.post(self.logout_url, timeout=10)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _val(item, key):
+        value = item.get(key, {})
+        if isinstance(value, dict):
+            return value.get('value', '') or ''
+        return value or ''
+
+    @staticmethod
+    def _normalize_rows(payload):
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            if isinstance(payload.get('value'), list):
+                return payload.get('value')
+            if isinstance(payload.get('rows'), list):
+                return payload.get('rows')
+        return []
+
+    def fetch_inventory_issue_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
+        self.ensure_one()
+        session = self._do_login()
+        try:
+            endpoint = f"{self.api_url}/{self.endpoint_name}"
+            params = {'$top': limit, '$skip': offset}
+            filters = []
+
+            if self.odata_expand:
+                params['$expand'] = self.odata_expand
+            if self.odata_select:
+                params['$select'] = self.odata_select
+            if reference_nbr:
+                filters.append(f"ReferenceNbr eq '{reference_nbr}'")
+            if last_modified_from:
+                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
+            if odata_filter:
+                filters.append(f"({odata_filter})")
+            # elif self.odata_filter:
+            #     filters.append(f"({self.odata_filter})")
+
+            if filters:
+                params['$filter'] = ' and '.join(filters)
+
+            response = session.get(endpoint, params=params, timeout=90)
+            if response.status_code != 200:
+                raise UserError(f'Gagal ambil data Inventory Issue (HTTP {response.status_code}): {response.text}')
+
+            raw_data = self._normalize_rows(response.json())
+            result = []
+            print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched with params: {params}")
+
+            for row_number, item in enumerate(raw_data, start=1):
+                header = {
+                    'external_id': item.get('id', '') or '',
+                    'row_number': row_number,
+                    'note': item.get('note', {}).get('value', '') or '',
+                    'actual_amount': self._val(item, 'ControlAmount'),
+                    'actual_qty': self._val(item, 'ControlQty'),
+                    'scheduled_date': self._val(item, 'Date'),
+                    'description': self._val(item, 'Description'),
+                    'external_ref': self._val(item, 'ExternalRef'),
+                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+                    'post_period': self._val(item, 'PostPeriod'),
+                    'reference_nbr': self._val(item, 'ReferenceNbr'),
+                    'status': self._val(item, 'Status'),
+                    'total_amount': self._val(item, 'TotalAmount'),
+                    'total_qty': self._val(item, 'TotalQty'),
+                    'trans_type': self._val(item, 'TransType'),
+                }
+                print(f" Get data : {header['reference_nbr']}, Trans Type: {header['trans_type']}, Status: {header['status']}")
+                
+
+                details = item.get('Details') or item.get('details') or []
+                if isinstance(details, dict):
+                    details = details.get('value', []) or []
+                if not isinstance(details, list):
+                    details = []
+
+                if not details:
+                    result.append(dict(header, line_nbr='0'))
+                    continue
+
+                for detail in details:
+                    line_nbr = self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
+                    result.append({
+                        **header,
+                        'line_external_id': detail.get('id', '') or '',
+                        'line_note': detail.get('note', {}).get('value', '') or '',
+                        'branch_warehouse': self._val(detail, 'Branch'),
+                        'line_description': self._val(detail, 'Description'),
+                        'inventory_id': self._val(detail, 'InventoryID'),
+                        'line_nbr': str(line_nbr),
+                        'location_code': self._val(detail, 'Location'),
+                        'product_uom_qty': self._val(detail, 'Qty'),
+                        'line_trans_type': self._val(detail, 'TranType'),
+                        'uom_code': self._val(detail, 'UOM'),
+                        'warehouse_code': self._val(detail, 'WarehouseID'),
+                    })
+
+            _logger.info('Berhasil ambil %s rows Inventory Inventory Issue dari Acumatica', len(result))
+            self.last_sync = fields.Datetime.now()
+            return result
+        finally:
+            self._do_logout(session)
 
 
 class AcumaticaInventoryIssueLine(models.Model):
@@ -151,10 +336,12 @@ class AcumaticaInventoryIssueLine(models.Model):
         return lines._do_import()
 
     def action_import_this(self):
+        print('Starting import for Inventory Issue with reference_nbr in:', self.mapped('reference_nbr'))
         self.ensure_one()
         return self._do_import()
 
     def _do_import(self):
+        print('Starting import for Inventory Issue with reference_nbr in:', self.mapped('reference_nbr'))
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         PickingType = self.env['stock.picking.type']
@@ -163,27 +350,35 @@ class AcumaticaInventoryIssueLine(models.Model):
         keys = [k for k in self.mapped('reference_nbr') if k]
 
         for issue_key in keys:
+            print(f'Processing Inventory Issue with reference_nbr: {issue_key}')
             issue_lines = self.filtered(lambda l: l.reference_nbr == issue_key and l.import_state == 'pending')
             if not issue_lines:
+                print(f'No pending lines found for reference_nbr: {issue_key}, skipping.')
                 continue
             first = issue_lines[0]
+            print(f'Found {len(issue_lines)} lines for Inventory Issue with reference_nbr: {issue_key}, first line description: {first.description}')
             try:
                 warehouse = self._find_warehouse(first)
+                print(f'Found warehouse: {warehouse.name} for code: {first.warehouse_code}')
                 if not warehouse:
+                    print(f'Warehouse not found for code: {first.warehouse_code}')
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
                 picking_type = PickingType.search([
                     ('warehouse_id', '=', warehouse.id),
                     ('code', '=', 'outgoing'),
                 ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
+                print(f'Found picking type: {picking_type.name if picking_type else "None"} for warehouse: {warehouse.name}')
                 if not picking_type:
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
 
                 source_location = warehouse.lot_stock_id or picking_type.default_location_src_id
                 dest_location = picking_type.default_location_dest_id or self.env.ref('stock.stock_location_customers', raise_if_not_found=False)
                 if not source_location:
+                    print(f'Source location not found for warehouse: {warehouse.name}')
                     raise UserError('Source location warehouse tidak ditemukan.')
                 if not dest_location:
+                    print(f'Destination location not found for customer: {dest_location.name if dest_location else "None"}')
                     raise UserError('Destination location customer tidak ditemukan.')
 
                 vals = {
@@ -195,31 +390,36 @@ class AcumaticaInventoryIssueLine(models.Model):
                     'note': first.note or first.description or False,
 
                     'adt_receipt_nbr': first.reference_nbr or False,
-                    'adt_vendor_code': first.vendor_code or False,
-                    'adt_partner_ref': first.partner_ref or False,
+                    # 'adt_vendor_code': first.vendor_code or False,
+                    # 'adt_partner_ref': first.partner_ref or False,
                     'adt_branch_warehouse': first.branch_warehouse or False,
-                    'adt_actual_qty': self._parse_float(first.actual_qty),
-                    'adt_is_hold': str(first.is_hold or '').lower() in ('true', '1', 'yes'),
-                    'adt_inventory_ref': first.inventory_ref or False,
+                    # 'adt_actual_qty': self._parse_float(first.actual_qty),
+                    # 'adt_is_hold': str(first.is_hold or '').lower() in ('true', '1', 'yes'),
+                    # 'adt_inventory_ref': first.inventory_ref or False,
                     'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
-                    'adt_header_location_code': first.header_location_code or False,
+                    # 'adt_header_location_code': first.header_location_code or False,
                     'adt_post_period': first.post_period or False,
                     'adt_status': first.status or False,
                     'adt_total_qty': self._parse_float(first.total_qty),
-                    'adt_type': first.receipt_type or False,
                     'adt_warehouse_code': first.warehouse_code or False,
                     'adt_external_id': first.external_id or False,
+
+                    'adt_type': first.trans_type or False,
+
                 }
 
                 picking = Picking.search([('origin', '=', first.reference_nbr)], limit=1)
+                print(f'Found existing picking: {picking.name if picking else "None"} for reference_nbr: {issue_key}')
                 if picking:
                     if picking.state in ('done', 'cancel'):
                         raise UserError(f'Delivery Order {first.reference_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
                     picking.write(vals)
+                    print(f'Updated existing picking {picking.name} for Inventory Issue with reference_nbr: {issue_key}')
                     action_state = 'updated'
                     updated += 1
                 else:
                     picking = Picking.create(vals)
+                    print(f'Created new picking {picking.name} for Inventory Issue with reference_nbr: {issue_key}')
                     action_state = 'imported'
                     imported += 1
 
