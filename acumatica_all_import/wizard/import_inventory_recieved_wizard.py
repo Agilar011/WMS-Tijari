@@ -21,6 +21,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
     total_new = fields.Integer(string='Data Baru', readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan ditambah)', readonly=True)
     fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
+    batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
 
     def action_fetch_data(self):
         self.ensure_one()
