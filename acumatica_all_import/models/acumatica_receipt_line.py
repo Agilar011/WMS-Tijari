@@ -220,7 +220,7 @@ class AcumaticaReceiptLine(models.Model):
                     warehouse = warehouse.odoo_building_id    
             # else:
             #     warehouse = Warehouse.search([('id', '=', 1)], limit=1)
-        return warehouse or Warehouse.search([], limit=1)
+        return warehouse
 
     def _find_location_dest(self, line, warehouse=False):
         Location = self.env['stock.location']
@@ -251,10 +251,13 @@ class AcumaticaReceiptLine(models.Model):
     def action_import_this(self):
         self.ensure_one()
         return self._do_import()
+
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         PickingType = self.env['stock.picking.type']
+        Error = self.env['stock.picking.acumatica.error']
+        ErrorLine = self.env['stock.picking.acumatica.error.line']
 
         imported = 0
         updated = 0
@@ -280,6 +283,7 @@ class AcumaticaReceiptLine(models.Model):
                     }
                 else:
                     flag = {}
+
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
                     flag = {
@@ -288,6 +292,7 @@ class AcumaticaReceiptLine(models.Model):
                     }
                 else:
                     flag = {}
+
                 picking_type = PickingType.search([
                     ('warehouse_id', '=', warehouse.id if warehouse else False),
                     ('code', '=', 'incoming'),
@@ -305,16 +310,16 @@ class AcumaticaReceiptLine(models.Model):
                 #         f'{first.location_dest_code or first.header_location_code or "-"}'
                 #     )
 
-                origin = first.receipt_nbr or first.po_number or False
+                origin = first.receipt_nbr or False
 
                 vals = {
                     'partner_id': vendor.id if vendor else False,
                     'picking_type_id': picking_type.id,
-                    'location_id': (
-                        picking_type.default_location_src_id.id
-                        if picking_type.default_location_src_id
-                        else self.env.ref('stock.stock_location_suppliers').id
-                    ),
+                    # 'location_id': (
+                    #     picking_type.default_location_src_id.id
+                    #     if picking_type.default_location_src_id
+                    #     else self.env.ref('stock.stock_location_suppliers').id
+                    # ),
                     # 'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
                     'origin': origin,
@@ -344,24 +349,37 @@ class AcumaticaReceiptLine(models.Model):
                 # pakai origin buat dedup
                 picking = Picking.search([('origin', '=', origin)], limit=1)
                 final_vals = {**vals, **flag} if 'flag' in locals() else vals
-                if not flag:
+                if flag:
+                    error_data = Error.search([('origin', '=', origin)], limit=1)
+                    if not error_data:
+                        error_data = Error.create({
+                            'partner': first.vendor_code or False,
+                            'operation_type': 'receipt',
+                            'location': first.warehouse_code or False,
+                            'location_dest': first.warehouse_dest_code or False,
+                            'scheduled_date': self._parse_dt(first.scheduled_date),
+                            'origin': origin,
+                            'api_acumatica': 'po_receipt',
+                            'error_message': flag.get('sync_message', 'Data tidak sesuai dengan master di WMS.'),
+                            'payload': str(vals)[:1000],
+                        })
+                else:
                     final_vals['state'] = 'assigned'
                     final_vals['sync_state'] = 'ready'
                     final_vals['sync_message'] = False
-
-                if picking:
-                    if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
-                        raise UserError(
-                            f'Receipt {receipt_nbr} sudah ada di Odoo dengan state '
-                            f'{picking.state}, tidak bisa diupdate.'
-                        )
-                    picking.write(final_vals)
-                    action_state = 'updated'
-                    updated += 1
-                else:
-                    picking = Picking.create(final_vals)
-                    action_state = 'imported'
-                    imported += 1
+                    if picking:
+                        if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                            raise UserError(
+                                f'Receipt {receipt_nbr} sudah ada di Odoo dengan state '
+                                f'{picking.state}, tidak bisa diupdate.'
+                            )
+                        picking.write(final_vals)
+                        action_state = 'updated'
+                        updated += 1
+                    else:
+                        picking = Picking.create(final_vals)
+                        action_state = 'imported'
+                        imported += 1
 
                 for line in receipt_lines:
                     try:
@@ -371,6 +389,8 @@ class AcumaticaReceiptLine(models.Model):
                                 'sync_state': 'not_ready',
                                 'sync_message': f'Product dengan InventoryID {line.inventory_id} tidak ditemukan di WMS.',
                             }
+                        else:
+                            flag = {}
 
                         uom = self._find_uom(line, product)
                         # line_dest = self._find_location_dest(line, warehouse) or dest_location
@@ -428,10 +448,30 @@ class AcumaticaReceiptLine(models.Model):
 
                         # filter field yang ada di stock.move
                         move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
+                        if error_data:
+                            ErrorLine.create({
+                                'error_id': error_data.id,
+                                'inventory_id': line.inventory_id or False,
+                                'product_name': line.description or False,
+                                'qty': line.product_uom_qty or False,
+                                'uom': line.uom_code or False,
+                            })
+                            continue
 
-                        Move.create(move_vals)
-                        if flag.get('sync_state') == 'not_ready':
-                            picking.write(flag)
+                        if flag:
+                            error_line_data = ErrorLine.search([('error_id', '=', error.id)], limit=1)
+                            if not error_line_data:
+                                error_line_data = ErrorLine.create({
+                                    'error_id': error_data.id,
+                                    'inventory_id': line.inventory_id or False,
+                                    'product_name': line.description or False,
+                                    'qty': line.product_uom_qty or False,
+                                    'uom': line.uom_code or False,
+                                    'payload': str(move_vals)[:1000],
+                                })
+                                error += 1
+                        else:
+                            Move.create(move_vals)
 
                         line.write({
                             'import_state': action_state,

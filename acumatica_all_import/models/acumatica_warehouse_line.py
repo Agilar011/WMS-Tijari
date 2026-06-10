@@ -148,18 +148,34 @@ class AcumaticaWarehouseLine(models.Model):
                     updated += 1
                 else:
                     location_code = (line.warehouse_id or '').strip()
-
+                    error_list = []
                     if not location_code:
                         line.write({
                             'import_state': 'error',
                             'import_message': 'WarehouseID kosong, tidak bisa create location',
                         })
                         error += 1
-                        continue
+                        vals['is_error'] = True
+                        error_list.append('WarehouseID kosong')
+                    if not line.building_id:
+                        building_code = line.building_id.strip()
+                        if not building_code:
+                            line.write({
+                                'import_state': 'error',
+                                'import_message': 'BuildingID kosong',
+                            })
+                            error += 1
+                            vals['is_error'] = True
+                            error_list.append('BuildingID kosong')
+
                     new_location = self.env['stock.location.acumatica'].create(vals)
+                    if error_list:
+                        vals['error_message'] = '; '.join(error_list)
+                        new_location.write({'is_error': True, 'error_message': vals['error_message']})
+                        
                     if line.building_id:
                         wh_address = self.env['res.partner'].search([('name', '=', line.building_id)], limit=1)
-                        if wh_address:
+                        if not wh_address:
                             self.env['res.partner'].create({'name': line.building_id, 'partner_type': 'warehouse'})
 
                     line.write({

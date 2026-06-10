@@ -1,5 +1,5 @@
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import ValidationError
 
 class StockLocationAcumatica(models.Model):
     _name = 'stock.location.acumatica'
@@ -12,23 +12,20 @@ class StockLocationAcumatica(models.Model):
     odoo_building_id = fields.Many2one('stock.warehouse', string='Building Grouping')
     active = fields.Boolean(string='Aktif', default=True)
     is_active = fields.Boolean(string='Is Active')
+    is_error = fields.Boolean(string='Is Error')
+    error_message = fields.Char(string='Error Message', readonly=True)
 
     @api.onchange('odoo_location_id')
-    def _onchange_odoo_location_id(self):        
+    def _onchange_odoo_location_id(self):
+        if self.is_error:
+            raise ValidationError('Lokasi ini memiliki error, silakan perbaiki terlebih dahulu sebelum mengubah grouping.')
         if self.odoo_location_id:
-            warehouse_id = self.env['stock.warehouse'].search([('lot_stock_id', '=', self.odoo_location_id.location_id.id), ('code', '=', self.building)], limit=1)
+            warehouse_id = self.env['stock.warehouse'].search([('code', '=', self.building)], limit=1)
             if warehouse_id:
                 if warehouse_id != self.env.user.warehouse_id and warehouse_id not in self.env.user.warehouse_ids:
                     # Jika warehouse hasil pencarian tidak termasuk dalam warehouse yang diizinkan untuk user, maka tidak diset
-                    self.odoo_location_id = False
-                    return {
-                        'warning': {
-                            'title': 'Access Warning',
-                            'message': 'Anda Tidak memiliki akses ke warehouse ini.'
-                        }
-                    }
-
+                    raise ValidationError(f'Lokasi ini berada di building {self.building} yang tidak termasuk dalam warehouse yang diizinkan untuk user. Warehouse yang diizinkan: {", ".join(self.env.user.warehouse_ids.mapped("name"))}')
                 else:
                     self.odoo_building_id = warehouse_id
             else:
-                self.odoo_building_id = False
+                raise ValidationError(f'Lokasi ini berada di building {self.building} yang tidak ditemukan di Odoo. Pastikan building sudah terdaftar di Odoo sebelum mengatur grouping.')

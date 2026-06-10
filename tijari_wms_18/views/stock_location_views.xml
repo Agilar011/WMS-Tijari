@@ -16,4 +16,20 @@
         </field>
     </record>
 
+    <record id="view_stock_location_acumatica_list_error" model="ir.ui.view">
+        <field name="name">stock.location.acumatica.list.error</field>
+        <field name="model">stock.location.acumatica</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="building"/>
+                <field name="odoo_location_id"/>
+                <field name="odoo_building_id"/>
+                <field name="is_active"/>
+                <field name="error_message"/>
+            </list>
+        </field>
+    </record>
+
 </odoo>

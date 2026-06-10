@@ -12,7 +12,7 @@
                 <field name="transaction_description"/>
                 <field name="product_uom_qty"/>
                 <field name="uom_code"/>
-                <field name="warehouse_code"/>
+                <field name="warehouse_dest_code"/>
                 <field name="location_dest_code"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"
