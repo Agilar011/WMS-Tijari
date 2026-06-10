@@ -13,10 +13,8 @@ from . import acumatica_stock_item_config
 from . import acumatica_stock_item_line
 from . import acumatica_receipt_change_item_config
 from . import acumatica_receipt_change_item_line
-from . import acumatica_receipt_config
-from . import acumatica_receipt_line
-from . import acumatica_shipment_config
-from . import acumatica_shipment_line
+from . import acumatica_receipt
+from . import acumatica_shipment
 from . import acumatica_transfer_config
 from . import acumatica_transfer_line
 from . import acumatica_transfer_shipment_config

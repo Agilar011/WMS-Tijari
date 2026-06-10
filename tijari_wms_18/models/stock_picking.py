@@ -53,6 +53,53 @@ class StockPicking(models.Model):
         self._check_sync_state()
         return super().button_validate()
 
+    adt_dest_location_id = fields.Many2one(
+        "stock.location",
+        domain="[('usage', '=', 'internal')]",
+        string="Custom Destination Location",
+    )
+    allowed_dest_root_id = fields.Many2one(
+        "stock.location",
+        string="Allowed Destination Root",
+        copy=False,
+        index=True,
+    )
+
+    def _allow_custom_push_destination(self):
+        self.ensure_one()
+        # Untuk picking type incomine, kalo dibutuhkan untuk internal, manufacturing, dan lain lain bisa ditambahkan "self.picking_type_id.code in ["incoming", "internal", "manufacturing"]" atau yang lain sesuai kebutuhan
+        return self.picking_type_id.code == "incoming"
+
+
+class StockRule(models.Model):
+    _inherit = "stock.rule"
+
+    # Override method _push_prepare_move_copy_values untuk mengubah lokasi tujuan push berdasarkan adt_dest_location_id di stock.picking jika picking type incoming dan adt_dest_location_id terisi, sehingga bisa push ke lokasi selain location_dest_id yang sudah ditentukan di stock.rule
+    def _push_prepare_move_copy_values(
+        self,
+        move_to_copy,
+        new_date,
+    ):
+        vals = super()._push_prepare_move_copy_values(
+            move_to_copy,
+            new_date,
+        )
+
+        picking = move_to_copy.picking_id
+
+        if (
+            picking
+            and picking.adt_dest_location_id
+            and picking._allow_custom_push_destination()
+        ):
+            vals.update({
+                "location_dest_id": picking.custom_dest_location_id.id,
+                "allowed_dest_root_id": picking.custom_dest_location_id.id,
+            })
+
+        return vals
+
+
 class StockPickingAcumaticaError(models.Model):
     _name = 'stock.picking.acumatica.error'
     _description = 'Error log untuk data picking yang diimport dari Acumatica'
