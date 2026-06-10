@@ -52,3 +52,57 @@ class StockPicking(models.Model):
     def button_validate(self):
         self._check_sync_state()
         return super().button_validate()
+
+class StockPickingAcumaticaError(models.Model):
+    _name = 'stock.picking.acumatica.error'
+    _description = 'Error log untuk data picking yang diimport dari Acumatica'
+
+    partner = fields.Char(string='Contact')
+    operation_type = fields.Selection([
+        ('receipt', 'Receipt'),
+        ('delivery', 'Delivery'),
+        ('internal', 'Internal'),
+    ], string='Operation Type')
+
+    location = fields.Char(string='Source Location')
+    location_dest = fields.Char(string='Destination Location')
+    scheduled_date = fields.Datetime(string='Scheduled Date')
+    origin = fields.Char(string='Source Document')
+    adt_total_qty = fields.Float(string='Total Qty (Acumatica)')
+    adt_actual_qty = fields.Float(string='Actual Qty (Acumatica)')
+    state = fields.Selection([
+        ('new', 'New'),
+        ('resolved', 'Resolved')
+    ], default='new')
+
+    api_acumatica = fields.Selection([
+        ('po_receipt', 'PO Receipt'),
+        ('so_transfer', 'SOTR Receipt'),
+        ('receipt_change_item', 'Receipt Type Change Item'),
+        ('inventory_received', 'Inventory Receive'),
+        ('shipment_so', 'Shipment SO Return'),
+        ('so_shipment', 'Sales Order Shipment'),
+        ('transfer_shipment', 'Transfer Shipment'),
+        ('issue_change_item', 'Issue Type Change Item'),
+        ('inventory_issue', 'Inventory Issue'),
+        ('issue_po_return', 'Issue Type PO Return'),
+        ('transfer_one_step', 'Transfer Pinjaman (1 Step)'),
+        ('transfer_two_step', 'Transfer Pinjaman (2 Step)'),
+    ], string='API Acumatica', required=True)
+
+    error_message = fields.Text(string='Error Message')
+    line_ids = fields.One2many('stock.picking.acumatica.error.line', 'error_id', string='Error Lines')
+    payload = fields.Json()
+
+class StockPickingAcumaticaErrorLine(models.Model):
+    _name = "stock.picking.acumatica.error.line"
+
+    error_id = fields.Many2one(
+        "stock.picking.acumatica.error",
+        ondelete="cascade"
+    )
+    inventory_id = fields.Char(string="Product")
+    product_name = fields.Char()
+    qty = fields.Float(string="Demand")
+    uom = fields.Char()
+    payload = fields.Json()

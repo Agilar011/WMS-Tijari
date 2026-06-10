@@ -18,6 +18,7 @@
     ],
     'data': [
         'views/stock.xml',
+        'views/stock_picking_action.xml',
         'views/stock_picking_views.xml',
         'views/hide_menu.xml',
         'views/wms_operations_action.xml',
