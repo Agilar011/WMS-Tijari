@@ -97,6 +97,15 @@ class AcumaticaWarehouseLine(models.Model):
                 return found
         return location.browse()
     
+    def _search_warehouse(self, building):
+        """Cari warehouse code (BuildingID)."""
+        Warehouse = self.env['stock.warehouse']
+        if building:
+            found = Warehouse.search([('code', '=', building)], limit=1)
+            if found:
+                return found
+        return Warehouse.browse()
+    
     # ─── Actions ─────────────────────────────────────
     def action_import_this(self):
         self.ensure_one()
@@ -149,6 +158,7 @@ class AcumaticaWarehouseLine(models.Model):
                 else:
                     location_code = (line.warehouse_id or '').strip()
                     error_list = []
+                    warehouse_odoo = self._search_warehouse(line.building_id)
                     if not location_code:
                         line.write({
                             'import_state': 'error',
@@ -167,7 +177,14 @@ class AcumaticaWarehouseLine(models.Model):
                             error += 1
                             vals['is_error'] = True
                             error_list.append('BuildingID kosong')
-
+                    if not warehouse_odoo:
+                        line.write({
+                            'import_state': 'error',
+                            'import_message': f'Building {line.building_id} tidak ditemukan di Odoo, pastikan sudah dibuat sebagai warehouse sebelum mengimpor.',
+                        })
+                        error += 1
+                        vals['is_error'] = True
+                        error_list.append(f'Building {line.building_id} tidak ditemukan di Odoo')
                     new_location = self.env['stock.location.acumatica'].create(vals)
                     if error_list:
                         vals['error_message'] = '; '.join(error_list)

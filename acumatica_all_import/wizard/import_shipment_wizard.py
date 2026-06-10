@@ -22,6 +22,9 @@ class ImportShipmentWizard(models.TransientModel):
     total_new = fields.Integer(string='Receipt Baru', readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan ditambah)', readonly=True)
     fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
+    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
     def action_fetch_data(self):
         self.ensure_one()
@@ -31,6 +34,16 @@ class ImportShipmentWizard(models.TransientModel):
 
         raw_list = []
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
+        params = []
+        start_date_datetime_str = self.start_date.strftime('%Y-%m-%dT%H:%M:%S') if self.start_date else None
+        end_date_datetime_str = self.end_date.strftime('%Y-%m-%dT%H:%M:%S') if self.end_date else None
+        if self.wh33_filter:
+            params.append("startswith(WarehouseID,'WH33')")
+        if self.start_date and self.end_date:
+            params.append(f"ShipmentDate ge date'{start_date_datetime_str}' and ShipmentDate le date'{end_date_datetime_str}'")
+        if self.odata_filter:
+            params.append(self.odata_filter)
+
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
@@ -39,7 +52,7 @@ class ImportShipmentWizard(models.TransientModel):
                 offset=offset,
                 receipt_nbr=self.receipt_nbr,
                 last_modified_from=self.last_modified_from,
-                odata_filter=self.odata_filter,
+                odata_filter=params if params else None,
             )
 
             if not batch_data:

@@ -109,7 +109,14 @@ class StockMoveLine(models.Model):
     _inherit  = 'stock.move.line'
     # _inherit = ['portal.mixin', 'mail.thread', 'mail.activity.mixin']
     _description = "Stock Move Line"
-    
+
+    allowed_dest_root_id = fields.Many2one(
+        "stock.location",
+        related="move_id.allowed_dest_root_id",
+        store=True,
+        readonly=True,
+    )
+
     lot_button = fields.Char(string="Lot Button", compute="_compute_lot_button")
     auto_input_code = fields.Boolean(string="Auto Input Code", compute="_compute_auto_input_code")
 
@@ -610,3 +617,7 @@ class StockMove(models.Model):
     allocation_Quantity = fields.Float(string='Allocation Quantity')
     allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
     allocation_UOM = fields.Char(string='Allocation UOM')    
+    allowed_dest_root_id = fields.Many2one(
+        related="picking_id.allowed_dest_root_id",
+        store=True,
+    )
