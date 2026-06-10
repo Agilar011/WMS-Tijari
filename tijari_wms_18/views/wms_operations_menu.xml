@@ -99,13 +99,13 @@
             name="Transfer Pinjaman (1 Step)"
             parent="wms_operations_menu_outbound" 
             sequence="6" 
-            action="action_wms_operations_1_step_transfer"/>
+            action="action_wms_operations_transfer_pinjaman_1_step"/>
 
   <menuitem id="wms_operations_outbound_transfer_pinjaman_2_step"
             name="Transfer Pinjaman (2 Step)"
             parent="wms_operations_menu_outbound" 
             sequence="7" 
-            action="action_wms_operations_2_step_transfer"/>
+            action="action_wms_operations_transfer_pinjaman_2_step"/>
 
   <menuitem id="wms_operations_kit_assembly"
             name="Kit Assembly"
