@@ -595,8 +595,9 @@ class AcumaticaShipmentLine(models.Model):
 
                 picking_type = PickingType.search([
                     ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'outgoing'),
-                ], limit=1) or PickingType.search([('code', '=', 'incoming')], limit=1)
+                    ('code', '=', 'incoming'),
+                    ('name', '=', 'Internal Transfers')
+                ], limit=1) or PickingType.search([('code', '=', 'incoming'), ('name', '=', 'Internal Transfers' )], limit=1)
                 if not picking_type:
                     raise UserError('Picking type receipt/incoming tidak ditemukan.')
 

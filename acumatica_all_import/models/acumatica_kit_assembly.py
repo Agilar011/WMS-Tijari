@@ -672,6 +672,7 @@ class AcumaticaKitAssemblyLine(models.Model):
         mapping_location = self.env['stock.location.acumatica']
         header_reference = self.env['acumatica.kit.assembly']
         component_reference = self.env['acumatica.kit.assembly.component']
+        stock_picking = self.env['stock.picking']
         looping_count = 0
         
 
@@ -812,206 +813,59 @@ class AcumaticaKitAssemblyLine(models.Model):
                 print('created skipped cause location not found')
 
 
-            # print("============================================================")
-            # print("============================================================")
-            # print("============================================================")
-            # raise UserError(f'checkpoint raise error')
+# Block Kode Generate 1-Step Transfer Pemindahan barang dari penyimpanan ke Assembly Line
+        operation_type = self.env['stock.picking.type'].search([('code', '=', 'internal'), ('operation_category', '=', 'internal')], limit=1)
 
-            # try:
-            #     for item in reference_lines:
-            #         print(f"Line {item.line_nbr}: InventoryID={item.line_inventory_id}, Qty={item.line_quantity}, UOM={item.line_uom}")
-            #     product = self._find_existing_product(first)
-            #     print(f"Found product for InventoryID {first.inventory_id}: {product.id if product else 'None'}")
-            #     if not product:
-            #         raise UserError(
-            #             f'Product tidak ditemukan untuk InventoryID: '
-            #             f'{first.inventory_id or "-"}'
-            #         )
+        total_moving_qty = 0 
+
+        component = component_reference.search([('assembly_id', '=', header.id)])
+        for item in component:
+            total_moving_qty += item.line_quantity
+
+        vals = {
+            'picking_type_id' : operation_type.id,
+            'location_id' : operation_type.default_location_src_id.id,
+            'location_dest_id' : operation_type.default_location_dest_id.id,
+            'scheduled_date' : fields.Datetime.now(),
+            'origin' : header.name,
+            'adt_type' : "1-Step",
+            'adt_total_qty' : total_moving_qty,
+        }
+
+        if manufacturing_check:
+            print("Create MO Skipped")
+        if not manufacturing_check:
+            if kit_assembly_warehouse.odoo_location_id.id:
+                # stock_picking = self.env['stock.picking']
+                stock_picking = stock_picking.create(vals)
+                print(stock_picking.name)
                 
-                
+            if not kit_assembly_warehouse.odoo_location_id.id:
+                print('created skipped cause location not found')
 
-            #     origin = reference_nbr or False
-            #     print(f"Determined origin for picking: {origin}")
+        for item in component:
+            component = self.env['product.template'].search(
+                [('default_code', '=', item.stock_inventory_id)],
+                limit=1
+            )
+            
+            vals = {
+                    'name' : stock_picking.name,
+                    'product_id' : component.id,
+                    'product_uom_qty' : item.line_quantity,
+                    'product_uom' : component.uom_id.id,
+                    'picking_id' : stock_picking.id
+                }
 
-            #     uom = self._resolve_uom(first.uom)
-            #     print(f"Resolved UOM for '{first.uom}': {uom.id if uom else 'None'}")    
-
-
-                
-
-            #     vals = {
-            #         'product_id': product.id,
-            #         'product_uom_id': uom.id if uom else False,
-            #         'picking_type_id': picking_type.id,  # Replace with actual picking type ID if needed
-            #         'location_src_id': (
-            #             kit_assembly_warehouse.odoo_location_id.id
-            #             if kit_assembly_warehouse and kit_assembly_warehouse.odoo_location_id
-            #             else False
-            #         ),
-
-            #         'location_dest_id': (
-            #             kit_assembly_warehouse.odoo_location_id.id
-            #             if kit_assembly_warehouse and kit_assembly_warehouse.odoo_location_id
-            #             else False
-            #         ),
-            #         'location_final_id': False,  # Replace with actual final location ID if needed
-            #         'user_id': self.env.uid,
-            #         'company_id': company_id, #ambil dari company aditya
-            #         'procurement_group_id': False,
-            #         'orderpoint_id': False,
-            #         'production_location_id': False,
-            #         'create_uid': False,
-            #         'write_uid': False,
-            #         'name': False,
-            #         'priority': False,
-            #         'origin': first.reference_nbr or False,
-            #         'product_qty': first.quantity or False,
-            #         'qty_producing': first.quantity or False,
-            #         'date_deadline': False,
-            #         'date_start': fields.Datetime.now(),
-            #         'date_finished': False,
-            #         'create_date': fields.Datetime.now(),
-            #         'write_date': fields.Datetime.now(),
-            #         'product_uom_qty': False,
-            #     }
-
-            #     manufacturing = manufacturing.search([('origin', '=', reference_nbr)], limit=1)
-            #     print(f"Existing manufacturing with origin {reference_nbr}: {manufacturing.id if manufacturing else 'None'}")
-            #     if manufacturing:
-            #         if manufacturing.state in ('done', 'cancel'):
-            #             raise UserError(f'Receipt {manufacturing.origin} sudah ada di Odoo dengan state {manufacturing.state}, tidak bisa diupdate.')
-            #         manufacturing.write(vals)
-            #         print(f"Updated existing Receipt with origin {reference_nbr}: {picking_type.id}")
-            #         action_state = 'updated'
-            #         updated += 1
-            #     else:
-            #         manufacturing = manufacturing.create(vals)
-            #         print(f"Created new Receipt with origin {reference_nbr}: {picking_type.id}")
-            #         action_state = 'imported'
-            #         imported += 1
-
-            # reference_lines = self.filtered(
-            #     lambda l: l.reference_nbr == reference_nbr and l.import_state == 'pending'
-            # )
-            # if not reference_lines:
-            #     continue
-
-            # first = reference_lines[0]
-
-
-
-            #     # filter field yang bener-bener ada di stock.picking
-            #     vals = {k: v for k, v in vals.items() if k in Bom._fields}
-
-            #     # pakai origin buat dedup
-            #     # bom = Bom.search([('origin', '=', origin)], limit=1)
-            #     # print(f"Existing BOM with origin {origin}: {bom.id if bom else 'None'}")
-
-            #     # if bom:
-            #     #     if bom.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
-            #     #         raise UserError(
-            #     #             f'Kit Assembly dengan Reference No {reference_nbr} sudah ada di Odoo dengan state '
-            #     #             f'{bom.state}, tidak bisa diupdate.'
-            #     #         )
-            #     #     bom.write(vals)
-            #     #     action_state = 'updated'
-            #     #     updated += 1
-            #     # else:
-            #     #     bom = Bom.create(vals)
-            #     #     action_state = 'imported'
-            #     #     imported += 1
-
-            #     print(f"Processed ReferenceNbr: {reference_nbr}")
-
-            #     for line in reference_lines:
-            #         print(f"Processing line {line} for ReferenceNbr {reference_nbr}...")
-            #         try:
-            #             product = self._find_existing_product(line)
-            #             if not product:
-            #                 raise UserError(
-            #                     f'Product tidak ditemukan untuk InventoryID: '
-            #                     f'{line.inventory_id or "-"}'
-            #                 )
-
-            #             uom = self._find_uom(line, product)
-            #             # qty = self._parse_float(line.product_uom_qty)
-
-            #             # dedup move
-            #             # move_domain = [('bom_id', '=', bom.id)]
-            #             # if 'adt_line_external_id' in BomLine._fields and line.line_external_id:
-            #             #     move_domain.append(('adt_line_external_id', '=', line.line_external_id))
-            #             # else:
-            #             #     move_domain += [
-            #             #         ('product_id', '=', product.id),
-            #             #         ('product_uom_qty', '=', qty),
-            #             #     ]
-
-            #             # existing_move = BomLine.search(move_domain, limit=1)
-            #             # if existing_move:
-            #             #     line.write({
-            #             #         'import_state': action_state,
-            #             #         'import_message': f'Skip duplicate: {bom.name}',
-            #             #         # 'odoo_bom_id': bom.id,
-            #             #     })
-            #             #     continue
-
-            #             # bom_line_vals = {
-            #             #     'bom_id': bom.id,
-            #             #     'product_id': product.id,
-            #             #     'product_qty': qty,
-            #             #     'product_uom_id': uom.id if uom else product.uom_id.id,
-
-            #             #     'adt_line_external_id': line.line_external_id or False,
-            #             #     'adt_line_note': line.line_note or False,
-            #             #     'adt_line_inventory_id': line.line_inventory_id or False,
-            #             #     'adt_line_nbr': line.line_nbr or False,
-            #             #     'adt_line_component_qty': line.line_component_qty or False,
-            #             #     'line_location_id': line.line_location_id or False,
-            #             #     'adt_line_quantity': line.line_quantity or False,
-            #             #     'adt_line_reason_code': line.line_reason_code or False,
-            #             #     'adt_stock_inventory_id': line.stock_inventory_id or False,
-            #             #     'adt_uom_code': line.uom_code or False,
-            #             # }
-
-            #             # # filter field yang ada di stock.move
-            #             # bom_line_vals = {k: v for k, v in bom_line_vals.items() if k in BomLine._fields}
-
-            #             # BomLine.create(bom_line_vals)
-            #             # picking = Picking.search([('origin', '=', line.receipt_nbr)], limit=1)
-            #             # print(f"Existing Receipt with origin {line.receipt_nbr}: {picking.id if picking else 'None'}")
-            #             # if picking:
-            #             #     if picking.state in ('done', 'cancel'):
-            #             #         raise UserError(f'Receipt {picking.origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
-            #             #     picking.write(vals)
-            #             #     action_state = 'updated'
-            #             #     updated += 1
-            #             # else:
-            #             #     picking = Picking.create(vals)
-            #             #     action_state = 'imported'
-            #             #     imported += 1
-
-            #             line.write({
-            #                 'import_state': action_state,
-            #                 # 'import_message': f'{action_state.title()}: {bom.name}',
-            #                 # 'odoo_bom_id': bom.id,
-            #             })
-
-            #         except Exception as line_e:
-            #             _logger.exception("Error import line %s", line.id)
-            #             line.write({
-            #                 'import_state': 'error',
-            #                 'import_message': str(line_e)[:200],
-            #                 # 'odoo_bom_id': bom.id if bom else False,
-            #             })
-            #             error += 1
-
-            # except Exception as e:
-            #     _logger.exception("Error import receipt %s", reference_nbr)
-            #     reference_lines.write({
-            #         'import_state': 'error',
-            #         'import_message': str(e)[:200],
-            #     })
-            #     error += len(reference_lines)
+            if manufacturing_check:
+                print("Create MO Skipped")
+            if not manufacturing_check:
+                if kit_assembly_warehouse.odoo_location_id.id:
+                    stock_move = self.env['stock.move']
+                    stock_move = stock_move.create(vals)
+                    
+                if not kit_assembly_warehouse.odoo_location_id.id:
+                    print('created skipped cause location not found')
 
         msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
         return {
