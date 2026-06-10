@@ -117,7 +117,7 @@ class AcumaticaReceiptConfig(models.Model):
                 return payload.get('rows')
         return []
 
-    def fetch_receipt_data(self, limit=50, offset=0, receipt_nbr=False, last_modified_from=False, odata_filter=False):
+    def fetch_receipt_data(self, limit=50, offset=0, receipt_nbr=False, odata_filter=False):
         self.ensure_one()
         session = self._do_login()
         try:
@@ -132,13 +132,11 @@ class AcumaticaReceiptConfig(models.Model):
                 params['$select'] = self.odata_select
             if receipt_nbr:
                 filters.append(f"ReceiptNbr eq '{receipt_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-            if self.odata_filter:
-                filters.append(f"({self.odata_filter})")
+            if odata_filter:
+                filters.append(self.odata_filter)
+                filters.extend(odata_filter)
             else:
                 filters.append("(Type eq 'Receipt')")
-
             if filters:
                 params['$filter'] = ' and '.join(filters)       
 

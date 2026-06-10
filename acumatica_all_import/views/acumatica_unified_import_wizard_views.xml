@@ -7,6 +7,7 @@
             <form string="Unified Acumatica Import">
                 <sheet>
                     <group>
+                        <field name="import_category"/>
                         <field name="import_type"/>
                     </group>
                     <group string="Konfigurasi API">
@@ -35,14 +36,18 @@
                     </group>
                     <group string="Filter Fetch">
                         <field name="fetch_limit"/>
-                        <field name="fetch_skip"></field>
+                        <field name="fetch_skip"/>
                         <field name="batch_size"/>
                         <field name="reference_nbr" invisible="import_type not in ['issue_po_return','transfer_one_step','transfer_two_step','inventory_received','inventory_issue','receipt_change_item','issue_change_item','so_transfer']"/>
                         <field name="receipt_nbr" invisible="import_type != 'po_receipt'"/>
                         <field name="shipment_nbr" invisible="import_type not in ['shipment_so','so_shipment','transfer_shipment']"/>
-                        <field name="last_modified_from"/>
+                        <field name='wh33_filter' invisible="import_category != 'transaction'"/>
                         <field name="odata_filter"/>
                     </group>
+                    <group invisible="import_category != 'transaction'" string="Rentang Waktu">
+                        <field name="start_date"/>
+                        <field name="end_date"/>
+                    </group>                        <!-- <field name="last_modified_from"/> -->
                     <!-- <group string="Batch Import"> -->
                         <!-- <field name="auto_commit_batch"/> -->
                     <!-- </group> -->

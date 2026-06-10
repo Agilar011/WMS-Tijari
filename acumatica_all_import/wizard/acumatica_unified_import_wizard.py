@@ -228,6 +228,32 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             if rec.import_type in ('__trx_header__', '__master_header__'):
                 raise ValidationError('Silakan pilih jenis import, bukan kategori.')
 
+    # @api.onchange('import_category')
+    # def _onchange_import_category(self):
+    #     category = self.import_category
+
+    #     if category == 'transaction':
+    #         yanto = [
+    #             (key, self.IMPORT_MAP[key]['label'])
+    #             for key in self.TRANSACTION_TYPES
+    #             if key in self.IMPORT_MAP
+    #         ]
+    #         return yanto
+
+    #     elif category == 'master':
+    #         return [
+    #             (key, self.IMPORT_MAP[key]['label'])
+    #             for key in self.MASTER_DATA_TYPES
+    #             if key in self.IMPORT_MAP
+    #         ]
+
+    #     return []
+
+    import_category = fields.Selection([
+        ('transaction', 'Transaction'),
+        ('master', 'Master Data'),
+    ], string='Kategori Import', required=True, default='transaction')
+
     import_type = fields.Selection(
         selection=_get_import_type_selection,
         string='Data yang ingin diimport',
@@ -249,7 +275,9 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     shipment_nbr = fields.Char(string='Filter Shipment Number')
     last_modified_from = fields.Char(string='Filter Last Modified From', help='Contoh: 2026-02-12T00:00:00+07:00')
     odata_filter = fields.Char(string='Custom OData Filter')
-
+    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
     uom_config_id = fields.Many2one('acumatica.config', string='Konfigurasi UoM', domain=[('active', '=', True)])
     customer_config_id = fields.Many2one('acumatica.customer.config', string='Konfigurasi Customer', domain=[('active', '=', True)])
@@ -303,6 +331,10 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'batch_size': self.batch_size,
             'fetch_skip': self.fetch_skip,
         }
+        if self.import_type in ('po_receipt'):
+            vals['wh33_filter'] = self.wh33_filter
+            vals['start_date'] = self.start_date
+            vals['end_date'] = self.end_date     
         for field_name in info.get('extra_fields', []):
             if field_name in self.env[info['wizard_model']]._fields:
                 vals[field_name] = self[field_name]

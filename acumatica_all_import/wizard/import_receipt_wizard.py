@@ -11,6 +11,9 @@ class ImportReceiptWizard(models.TransientModel):
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
     receipt_nbr = fields.Char(string='Filter Receipt Number')
     last_modified_from = fields.Char(string='Filter Last Modified From', help="Contoh: 2025-01-01T00:00:00+07:00")
+    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
     odata_filter = fields.Char(string='Custom OData Filter')
     state = fields.Selection([
         ('draft', 'Siap'),
@@ -31,6 +34,14 @@ class ImportReceiptWizard(models.TransientModel):
 
         raw_list = []
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
+        params = []
+        if self.wh33_filter:
+            params.append("startswith(Warehouse,'WH33')")
+        if self.start_date and self.end_date:
+            params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+        if self.odata_filter:
+            params.append(self.odata_filter)
+
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
@@ -38,8 +49,7 @@ class ImportReceiptWizard(models.TransientModel):
                 limit=self.batch_size,
                 offset=offset,
                 receipt_nbr=self.receipt_nbr,
-                last_modified_from=self.last_modified_from,
-                odata_filter=self.odata_filter,
+                odata_filter=params if params else None,
             )
 
             if not batch_data:
