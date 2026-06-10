@@ -29,8 +29,6 @@ from . import acumatica_warehouse_location_line
 from . import acumatica_uom_line
 from . import acumatica_shipvia_config
 from . import acumatica_shipvia_line
-from . import acumatica_kit_assembly_config
-from . import acumatica_kit_assembly_line
 
 # Merged models
 from . import acumatica_sales_order_shipment
@@ -38,3 +36,4 @@ from . import acumatica_inventory_issue
 from . import acumatica_issue_po_return
 from . import acumatica_transfer_one_step
 from . import acumatica_transfer_two_step
+from . import acumatica_kit_assembly
