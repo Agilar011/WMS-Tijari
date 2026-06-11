@@ -409,7 +409,6 @@ class AcumaticaReceiptLine(models.Model):
         PickingType = self.env['stock.picking.type']
         Error = self.env['stock.picking.acumatica.error']
         ErrorLine = self.env['stock.picking.acumatica.error.line']
-        error_list = []
 
         imported = 0
         updated = 0
@@ -419,15 +418,16 @@ class AcumaticaReceiptLine(models.Model):
         for line in self:
             first = line
             origin = line.receipt_nbr or False
+            error_list = []
             try:
                 # Cari vendor, inventory, warehouse, uom. kalo salah satu tidak sync di wms, maka record akan masuk ke stock_picking_error.
                 vendor = self._find_vendor(first)
                 if not vendor:
-                    error_list.append(f'Vendor dengan VendorID {first.vendor_code} tidak ditemukan di WMS.')                
+                    error_list.append(f'Vendor with VendorID {first.vendor_code} was not found in the WMS | MASTER VENDOR.')
 
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
-                    error_list.append(f'Warehouse dengan code {first.warehouse_dest_code} tidak ditemukan di WMS.')
+                    error_list.append(f'Warehouse with location code {first.warehouse_code} was not found in the WMS | MAPPING WAREHOUSE.')
 
                 picking_type = PickingType.search([
                     ('warehouse_id', '=', warehouse.id if warehouse else False),
@@ -439,7 +439,7 @@ class AcumaticaReceiptLine(models.Model):
 
                 dest_location = self._find_location_dest(first)
                 if not dest_location:
-                    error_list.append(f'Location tujuan tidak ditemukan untuk code: {first.warehouse_dest_code}')
+                    error_list.append(f'Location with code {first.warehouse_code} was not found in the WMS | MAPPING WAREHOUSE.')
 
 
                 vals = {
@@ -491,7 +491,7 @@ class AcumaticaReceiptLine(models.Model):
                             'scheduled_date': self._parse_dt(first.scheduled_date),
                             'origin': origin,
                             'api_acumatica': 'po_receipt',
-                            'error_message': error_list,
+                            'error_message': '\n'.join(error_list),
                             'payload': str(vals)[:1000],
                         })
                 else:
@@ -512,7 +512,7 @@ class AcumaticaReceiptLine(models.Model):
                     try:
                         product = self._find_product(line)
                         if not product:
-                            error_list.append(f'Product dengan InventoryID {line.inventory_id} tidak ditemukan di WMS.')
+                            error_list.append(f'Product with InventoryID {line.inventory_id} was not found in the WMS | MASTER PRODUCT.')
 
                         uom = self._find_uom(line, product)
                         # line_dest = self._find_location_dest(line, warehouse) or dest_location
@@ -600,6 +600,7 @@ class AcumaticaReceiptLine(models.Model):
                             'import_message': f'{action_state.title()}: {picking.name}',
                             'odoo_picking_id': picking.id,
                         })
+                        
 
                     except Exception as line_e:
                         _logger.exception("Error import line %s", line.id)
@@ -626,7 +627,7 @@ class AcumaticaReceiptLine(models.Model):
                 })
                 # error += len(receipt_lines)
 
-        msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
+        msg = f'Import done: {imported} receipt created, {updated} receipt updated, {error} receipt error.'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',

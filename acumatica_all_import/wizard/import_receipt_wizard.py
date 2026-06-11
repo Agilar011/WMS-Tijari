@@ -187,8 +187,9 @@ class ImportReceiptWizard(models.TransientModel):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
-
+                header["warehouse_code"] = self._val(details[0], 'Warehouse')
                 result.append(dict(header, line_nbr='0'))
+
 
                 for detail in details:
                     line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
@@ -212,11 +213,6 @@ class ImportReceiptWizard(models.TransientModel):
                         'warehouse_dest_code': warehouse_dest_code,
                     })
 
-                for line in result:
-                    print(line)
-                    product = detail_result[0]
-                    if not line['warehouse_code']:
-                        line['warehouse_code'] = product['warehouse_dest_code']
             _logger.info("Berhasil ambil %s rows PO Receipt dari Acumatica", len(result))
             self._validate_staging_against_picking(result, detail_result)
             # return result
@@ -289,13 +285,15 @@ class ImportReceiptWizard(models.TransientModel):
             receipts = self._create_receipt_lines(to_create)
             line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
             if line_update:
-                self._create_receipt_lines_product(line_update, to_create)
+                self._create_receipt_lines_product(line_update, to_update)
             elif line_create:
-                self._create_receipt_lines_product(line_create, to_update)
+                self._create_receipt_lines_product(line_create, receipts)
 
             # to_create_filtered = self.filter_by_receipt_lines(to_create, receipts)
             # to_update_filtered = self.filter_by_receipt_lines(to_update, receipts)
             # self._create_receipt_lines_product(to_create_filtered, receipts)
+
+
 
     def _search_receipt_lines(self, data):
         if not data:
@@ -356,7 +354,7 @@ class ImportReceiptWizard(models.TransientModel):
         :param receipts: recordset receipt
         :return: list of dict yang header_external_id-nya ada di receipts
         """
-        receipt_ids = {rec.external_id for rec in receipts}
+        receipt_ids = {rec['external_id'] for rec in receipts}
 
         filtered_data = [
             vals for vals in data
@@ -367,7 +365,7 @@ class ImportReceiptWizard(models.TransientModel):
 
     def _create_receipt_lines_product(self, data, receipts):
         receipt_map = {
-            rec.external_id: rec.id
+            rec['external_id']: rec.id
             for rec in receipts
         }
 

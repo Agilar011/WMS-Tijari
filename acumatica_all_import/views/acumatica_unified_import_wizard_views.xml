@@ -51,13 +51,13 @@
                     <!-- <group string="Batch Import"> -->
                         <!-- <field name="auto_commit_batch"/> -->
                     <!-- </group> -->
-                    <group string="Ringkasan">
+                    <!-- <group string="Ringkasan">
                         <field name="state" readonly="1"/>
                         <field name="total_fetched" readonly="1"/>
                         <field name="total_pending" readonly="1"/>
                         <field name="total_imported" readonly="1"/>
                         <field name="batch_count" readonly="1"/>
-                    </group>
+                    </group> -->
                     <group string="Pesan">
                         <field name="last_message" readonly="1" nolabel="1"/>
                     </group>
