@@ -1,6 +1,7 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
 
+
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
 
@@ -58,12 +59,6 @@ class StockPicking(models.Model):
         domain="[('usage', '=', 'internal')]",
         string="Custom Destination Location",
     )
-    allowed_dest_root_id = fields.Many2one(
-        "stock.location",
-        string="Allowed Destination Root",
-        copy=False,
-        index=True,
-    )
 
     def _allow_custom_push_destination(self):
         self.ensure_one()
@@ -93,8 +88,8 @@ class StockRule(models.Model):
             and picking._allow_custom_push_destination()
         ):
             vals.update({
-                "location_dest_id": picking.custom_dest_location_id.id,
-                "allowed_dest_root_id": picking.custom_dest_location_id.id,
+                "location_dest_id": picking.adt_dest_location_id.id,
+                "adt_dest_location_id": picking.adt_dest_location_id.id
             })
 
         return vals
