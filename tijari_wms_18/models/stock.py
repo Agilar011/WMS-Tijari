@@ -7,6 +7,10 @@ import hashlib
 import base64
 from ast import literal_eval
 
+import logging
+_logger = logging.getLogger(__name__)
+
+
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
 
@@ -47,6 +51,8 @@ class StockPicking(models.Model):
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
 
     def button_validate(self):
+        res = super().button_validate()
+
         for rec in self:
             print(rec.picking_type_id.operation_category)
             for line in rec.move_line_ids:
@@ -77,7 +83,30 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-        return super().button_validate()
+            pickings = self.env["stock.picking"].search([])
+
+            for p in pickings.sorted("id", reverse=True)[:10]:
+                _logger.info(
+                    "id=%s name=%s origin=%s type=%s",
+                    p.id,
+                    p.name,
+                    p.origin,
+                    p.picking_type_id.name,
+                )
+            if picking.picking_type_id.code != "incoming":
+                continue
+
+            storage_pickings = self.env["stock.picking"].search([
+                ("origin", "ilike", picking.name),
+                ("picking_type_id.code", "=", "internal"),
+            ])
+
+            storage_pickings.write({
+                "adt_dest_location_id": picking.adt_dest_location_id,
+            })
+
+
+        return res
 
 class StockPickingType(models.Model):
     _inherit = 'stock.picking.type'

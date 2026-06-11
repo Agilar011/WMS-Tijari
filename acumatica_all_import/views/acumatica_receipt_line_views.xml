@@ -8,12 +8,7 @@
                 <field name="receipt_nbr"/>
                 <field name="line_nbr"/>
                 <field name="vendor_code"/>
-                <field name="inventory_id"/>
-                <field name="transaction_description"/>
-                <field name="product_uom_qty"/>
-                <field name="uom_code"/>
-                <field name="warehouse_dest_code"/>
-                <field name="location_dest_code"/>
+                <field name="warehouse_code"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"
                        decoration-warning="import_state == 'pending'"

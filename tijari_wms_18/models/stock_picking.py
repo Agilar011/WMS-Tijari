@@ -89,7 +89,7 @@ class StockRule(models.Model):
         ):
             vals.update({
                 "location_dest_id": picking.adt_dest_location_id.id,
-                "adt_dest_location_id": picking.adt_dest_location_id.id
+                # "adt_dest_location_id": picking.adt_dest_location_id.id
             })
 
         return vals
