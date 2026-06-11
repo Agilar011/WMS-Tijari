@@ -36,8 +36,8 @@
                     <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,updated,error"/>
                 </header>
                 <sheet>
-                    <group>
-                        <group string="Header Receipt">
+                    <group string="Header Receipt">
+                        <group>
                             <field name="receipt_nbr"/>
                             <field name="vendor_code"/>
                             <field name="partner_ref"/>
@@ -46,6 +46,8 @@
                             <field name="header_location_code"/>
                             <field name="status"/>
                             <field name="receipt_type"/>
+                        </group>
+                        <group>
                             <field name="actual_qty"/>
                             <field name="total_qty"/>
                             <field name="is_hold"/>
@@ -53,9 +55,9 @@
                             <field name="post_period"/>
                             <field name="acumatica_write_date"/>
                             <field name="branch_warehouse"/>
-                            <field name="note"/>
+                            <field name="note"/>                            
                         </group>
-                        <group string="Detail Line">
+                        <!-- <group string="Detail Line">
                             <field name="line_nbr"/>
                             <field name="inventory_id"/>
                             <field name="transaction_description"/>
@@ -77,8 +79,20 @@
                             <field name="transfer_order_type"/>
                             <field name="transfer_shipment_number"/>
                             <field name="line_note"/>
-                        </group>
+                        </group> -->
                     </group>
+                    <notebook>
+                        <page name="Details" string="Details">
+                            <field name="product_line_ids" readonly="1">
+                                <list>
+                                    <field name="inventory_id"/>
+                                    <field name="transaction_description"/>
+                                    <field name="warehouse_dest_code"/>
+                                    <field name="order_qty"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                     <group>
                         <field name="import_message" readonly="1"/>
                         <field name="odoo_picking_id" readonly="1"/>

@@ -110,9 +110,9 @@ class StockMoveLine(models.Model):
     # _inherit = ['portal.mixin', 'mail.thread', 'mail.activity.mixin']
     _description = "Stock Move Line"
 
-    allowed_dest_root_id = fields.Many2one(
+    adt_dest_location_id = fields.Many2one(
         "stock.location",
-        related="move_id.allowed_dest_root_id",
+        related="move_id.adt_dest_location_id",
         store=True,
         readonly=True,
     )
@@ -617,7 +617,7 @@ class StockMove(models.Model):
     allocation_Quantity = fields.Float(string='Allocation Quantity')
     allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
     allocation_UOM = fields.Char(string='Allocation UOM')    
-    allowed_dest_root_id = fields.Many2one(
-        related="picking_id.allowed_dest_root_id",
+    adt_dest_location_id = fields.Many2one(
+        related="picking_id.adt_dest_location_id",
         store=True,
     )

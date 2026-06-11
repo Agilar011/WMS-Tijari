@@ -1,6 +1,9 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
 
+import logging
+_logger = logging.getLogger(__name__)
+
 
 class ImportReceiptWizard(models.TransientModel):
     _name = 'import.receipt.wizard'
@@ -45,7 +48,7 @@ class ImportReceiptWizard(models.TransientModel):
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_receipt_data(
+            batch_data = self.fetch_receipt_data(
                 limit=self.batch_size,
                 offset=offset,
                 receipt_nbr=self.receipt_nbr,
@@ -57,20 +60,203 @@ class ImportReceiptWizard(models.TransientModel):
 
             raw_list.extend(batch_data)
 
-        if not raw_list:
-            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        # if not raw_list:
+        #     raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
+        # Picking = self.env['stock.picking']
+        # existing_receipts = set()
+        # new_receipts = set()
+        # lines_to_create = []
+
+        # for item in raw_list:
+        #     receipt_nbr = item.get('receipt_nbr')
+        #     exists = bool(receipt_nbr and Picking.search_count([('adt_receipt_nbr', '=', receipt_nbr)]))
+        #     if exists:
+        #         existing_receipts.add(receipt_nbr)
+        #         msg = 'Sudah ada → akan diupdate'
+        #     else:
+        #         new_receipts.add(receipt_nbr)
+        #         msg = ''
+        #     vals = dict(item)
+        #     vals.update({
+        #         'config_id': self.config_id.id,
+        #         'import_state': 'pending',
+        #         'import_message': msg,
+        #         'selected': True,
+        #         'sync_date': fields.Datetime.now(),
+        #     })
+        #     lines_to_create.append(vals)
+
+        # self.env['acumatica.receipt.line'].create(lines_to_create)
+        # self.write({
+        #     'state': 'fetched',
+        #     'total_fetched': len(raw_list),
+        #     'total_new': len([r for r in new_receipts if r]),
+        #     'total_existing': len([r for r in existing_receipts if r]),
+        # })
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'import.receipt.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def _val(self, item, key):
+        value = item.get(key, {})
+        if isinstance(value, dict):
+            return value.get('value', '') or ''
+        return value or ''
+
+    def _normalize_rows(self, payload):
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            if isinstance(payload.get('value'), list):
+                return payload.get('value')
+            if isinstance(payload.get('rows'), list):
+                return payload.get('rows')
+        return []
+
+    def fetch_receipt_data(self, limit=50, offset=0, receipt_nbr=False, odata_filter=False):
+        self.ensure_one()
+        session = self.config_id._do_login()
+        try:
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
+            params = {'$top': limit, '$skip': offset}
+            filters = []
+
+            if self.config_id.odata_expand:
+                params['$expand'] = self.config_id.odata_expand
+
+            if self.config_id.odata_select:
+                params['$select'] = self.config_id.odata_select
+            if receipt_nbr:
+                filters.append(f"ReceiptNbr eq '{receipt_nbr}'")
+            if odata_filter:
+                filters.append(self.config_id.odata_filter)
+                filters.extend(odata_filter)
+            else:
+                filters.append("(Type eq 'Receipt')")
+            if filters:
+                params['$filter'] = ' and '.join(filters)       
+
+            response = session.get(endpoint, params=params, timeout=90)
+            if response.status_code != 200:
+                raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
+
+            raw_data = self._normalize_rows(response.json())
+            result = []
+            detail_result = []
+
+            for row_number, item in enumerate(raw_data, start=1):
+                header = {
+                    'external_id': item.get('id', '') or '',
+                    'row_number': row_number,
+                    'note': item.get('note', {}).get('value', '') or '',
+                    'branch_warehouse': self._val(item, 'Branch'),
+                    'actual_qty': self._val(item, 'ControlQty'),
+                    'scheduled_date': self._val(item, 'Date'),
+                    'is_hold': self._val(item, 'Hold'),
+                    'inventory_ref': self._val(item, 'InventoryRefNbr'),
+                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+                    'header_location_code': self._val(item, 'Location'),
+                    'post_period': self._val(item, 'PostPeriod'),
+                    'receipt_nbr': self._val(item, 'ReceiptNbr'),
+                    'status': self._val(item, 'Status'),
+                    'total_qty': self._val(item, 'TotalQty'),
+                    'receipt_type': self._val(item, 'Type'),
+                    'vendor_code': self._val(item, 'VendorID'),
+                    'partner_ref': self._val(item, 'VendorRef'),
+                    'warehouse_code': self._val(item, 'Warehouse'),
+                }
+
+                # Cek apakah Detail ada dan berbentuk list / dict / array
+                details = item.get('Details') or []
+                if isinstance(details, dict):
+                    details = details.get('value', []) or []
+                if not isinstance(details, list):
+                    details = []
+
+                result.append(dict(header, line_nbr='0'))
+
+                for detail in details:
+                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
+                    description = self._val(detail, 'TransactionDescription') or self._val(detail, 'Description')
+                    warehouse_dest_code = self._val(detail, 'Warehouse')
+
+                    detail_result.append({
+                        'header_external_id': header['external_id'],
+                        'line_external_id': detail.get('id', '') or '',
+                        'line_note': detail.get('note', {}).get('value', '') or '',
+                        'description': description,
+                        'inventory_id': self._val(detail, 'InventoryID'),
+                        'line_nbr': str(line_nbr),
+                        'line_type': self._val(detail, 'LineType'),
+                        'location_dest_code': self._val(detail, 'Location'),
+                        'open_qty': self._val(detail, 'OpenQty'),
+                        'order_qty': self._val(detail, 'OrderedQty'),
+                        'product_uom_qty': self._val(detail, 'ReceiptQty'),
+                        'transaction_description': self._val(detail, 'TransactionDescription'),
+                        'uom_code': self._val(detail, 'UOM'),
+                        'warehouse_dest_code': warehouse_dest_code,
+                    })
+
+                for line in result:
+                    print(line)
+                    product = detail_result[0]
+                    if not line['warehouse_code']:
+                        line['warehouse_code'] = product['warehouse_dest_code']
+            _logger.info("Berhasil ambil %s rows PO Receipt dari Acumatica", len(result))
+            self._validate_staging_against_picking(result, detail_result)
+            # return result
+            # Picking = self.env['stock.picking']
+            # existing_receipts = set()
+            # new_receipts = set()
+            # lines_to_create = []
+
+            # for item in raw_list:
+            #     receipt_nbr = item.get('receipt_nbr')
+            #     exists = bool(receipt_nbr and Picking.search_count([('adt_receipt_nbr', '=', receipt_nbr)]))
+            #     if exists:
+                    
+            #         msg = 'Sudah ada → akan diupdate'
+            #     else:
+            #         new_receipts.add(receipt_nbr)
+            #         msg = ''
+            #     vals = dict(item)
+            #     vals.update({
+            #         'config_id': self.config_id.id,
+            #         'import_state': 'pending',
+            #         'import_message': msg,
+            #         'selected': True,
+            #         'sync_date': fields.Datetime.now(),
+            #     })
+            #     lines_to_create.append(vals)
+
+            # self.env['acumatica.receipt.line'].create(lines_to_create)
+            # self.write({
+            #     'state': 'fetched',
+            #     'total_fetched': len(raw_list),
+            #     'total_new': len([r for r in new_receipts if r]),
+            #     'total_existing': len([r for r in existing_receipts if r]),
+            # })
+
+        finally:
+            self.config_id._do_logout(session)
+            self.config_id.last_sync = fields.Datetime.now()
+
+    def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']
         existing_receipts = set()
         new_receipts = set()
         lines_to_create = []
-
-        for item in raw_list:
+        for item in header_list:
             receipt_nbr = item.get('receipt_nbr')
-            exists = bool(receipt_nbr and Picking.search_count([('adt_receipt_nbr', '=', receipt_nbr)]))
+            exists = bool(receipt_nbr and Picking.search_count([('origin', '=', receipt_nbr)]))
             if exists:
                 existing_receipts.add(receipt_nbr)
-                msg = 'Sudah ada → akan diupdate'
+                msg = f'{receipt_nbr}: Sudah ada → akan diupdate'
             else:
                 new_receipts.add(receipt_nbr)
                 msg = ''
@@ -84,20 +270,30 @@ class ImportReceiptWizard(models.TransientModel):
             })
             lines_to_create.append(vals)
 
-        self.env['acumatica.receipt.line'].create(lines_to_create)
-        self.write({
-            'state': 'fetched',
-            'total_fetched': len(raw_list),
-            'total_new': len([r for r in new_receipts if r]),
-            'total_existing': len([r for r in existing_receipts if r]),
-        })
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'import.receipt.wizard',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'new',
+        if lines_to_create:
+            receipts = self._create_receipt_lines(lines_to_create)
+            self._create_receipt_lines_product(line_list, receipts)
+
+
+    def _create_receipt_lines(self, data):
+        if not data:
+            return False
+
+        return self.env['acumatica.receipt.line'].create(data)
+
+    def _create_receipt_lines_product(self, data, receipts):
+        receipt_map = {
+            rec.external_id: rec.id
+            for rec in receipts
         }
+
+        for vals in data:
+            vals['receipt_line_id'] = receipt_map.get(
+                vals['header_external_id']
+            )
+
+        self.env['acumatica.receipt.product.line'].create(data)
+
 
     def action_view_staging(self):
         self.ensure_one()

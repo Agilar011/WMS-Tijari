@@ -148,7 +148,14 @@ class AcumaticaWarehouseLine(models.Model):
 
                 existing = self._find_existing_location(line)
                 if existing:
-                    existing.write(vals)
+                    warehouse_odoo = self._search_warehouse(line.building_id)
+                    if line.building_id and line.warehouse_id and warehouse_odoo:
+                        vals.update({
+                            'is_error': False,
+                            'error_message': None
+                        })
+                        existing.write(vals)
+
                     line.write({
                         'import_state':    'updated',
                         'import_message':  f'Diupdate: {existing.name} (code: {existing.code})',
@@ -189,11 +196,15 @@ class AcumaticaWarehouseLine(models.Model):
                     if error_list:
                         vals['error_message'] = '; '.join(error_list)
                         new_location.write({'is_error': True, 'error_message': vals['error_message']})
-                        
+                    
                     if line.building_id:
                         wh_address = self.env['res.partner'].search([('name', '=', line.building_id)], limit=1)
                         if not wh_address:
-                            self.env['res.partner'].create({'name': line.building_id, 'partner_type': 'warehouse'})
+                            company = self.env.user.commercial_partner_id
+                            wh_address = self.env['res.partner'].create({'name': line.building_id, 'partner_type': 'warehouse'})
+                        wh_building = self.env['stock.warehouse'].search([('code', '=', line.building_id)], limit=1)
+                        if not wh_building:
+                            self.env['stock.warehouse'].create({'name': line.building_id, 'code': line.building_id})
 
                     line.write({
                         'import_state':    'imported',

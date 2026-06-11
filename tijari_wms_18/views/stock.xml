@@ -173,8 +173,7 @@
                 <!-- <field name="adt_type" readonly="1"/> -->
                 <field name="adt_total_qty"/>
                 <field name="adt_actual_qty"/>
-                <field name="adt_dest_location_id" invisible="1"/>
-                <field name="allowed_dest_root_id" invisible="1"/>
+                <field name="adt_dest_location_id"/>
             </xpath>
         </field>
     </record>
@@ -189,27 +188,9 @@
 
                 <attribute name="domain">
                     [
-                        ('id', 'child_of', allowed_dest_root_id),
-                        ('usage', '=', 'internal')
-                    ]
-                </attribute>
-
-            </xpath>
-
-        </field>
-    </record>
-
-    <record id="view_picking_form_dest_domain" model="ir.ui.view">
-        <field name="name">stock.picking.dest.domain</field>
-        <field name="model">stock.picking</field>
-        <field name="inherit_id" ref="stock.view_picking_form"/>
-        <field name="arch" type="xml">
-
-            <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']" position="attributes">
-
-                <attribute name="domain">
-                    [
-                        ('id', 'child_of', allowed_dest_root_id),
+                        ('id', 'child_of', adt_dest_location_id),
+                        '|',
+                        ('company_id', '=', company_id),
                         ('usage', '=', 'internal')
                     ]
                 </attribute>
@@ -230,7 +211,7 @@
 
                 <attribute name="domain">
                     [
-                        ('id', 'child_of', allowed_dest_root_id),
+                        ('id', 'child_of', adt_dest_location_id),
                         ('usage', '=', 'internal')
                     ]
                 </attribute>
@@ -253,7 +234,7 @@
 
                 <attribute name="domain">
                     [
-                        ('id', 'child_of', allowed_dest_root_id),
+                        ('id', 'child_of', adt_dest_location_id),
                         ('usage', '=', 'internal')
                     ]
                 </attribute>
