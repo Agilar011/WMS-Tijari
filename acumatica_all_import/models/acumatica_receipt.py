@@ -248,11 +248,11 @@ class AcumaticaReceiptLine(models.Model):
     line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
 
     product_line_ids = fields.One2many('acumatica.receipt.product.line', 'receipt_line_id', string='Lines')
-    receipt_nbr = fields.Char(string='Receipt Number', readonly=True, index=True)
+    receipt_nbr = fields.Char(string='Receipt Number', index=True)
     vendor_code = fields.Char(string='VendorID', readonly=True)
     partner_ref = fields.Char(string='Vendor Ref', readonly=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
-    warehouse_code = fields.Char(string='Warehouse', readonly=True)
+    warehouse_code = fields.Char(string='Warehouse')
     header_location_code = fields.Char(string='Header Location', readonly=True)
     status = fields.Char(string='Status', readonly=True)
     receipt_type = fields.Char(string='Type', readonly=True)
@@ -600,7 +600,7 @@ class AcumaticaReceiptLine(models.Model):
                             'import_message': f'{action_state.title()}: {picking.name}',
                             'odoo_picking_id': picking.id,
                         })
-                        
+
 
                     except Exception as line_e:
                         _logger.exception("Error import line %s", line.id)
