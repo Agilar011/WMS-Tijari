@@ -1,5 +1,6 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
+from dateutil import parser as dateutil_parser
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class ImportReceiptWizard(models.TransientModel):
 
     def action_fetch_data(self):
         self.ensure_one()
-        self.env['acumatica.receipt.line'].search([('config_id', '=', self.config_id.id)]).unlink()
+        # self.env['acumatica.receipt.line'].search([('config_id', '=', self.config_id.id)]).unlink()
 
         import math
 
@@ -118,6 +119,15 @@ class ImportReceiptWizard(models.TransientModel):
                 return payload.get('rows')
         return []
 
+    @staticmethod
+    def _parse_dt(dt_str):
+        if not dt_str:
+            return False
+        try:
+            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
+        except Exception:
+            return False
+
     def fetch_receipt_data(self, limit=50, offset=0, receipt_nbr=False, odata_filter=False):
         self.ensure_one()
         session = self.config_id._do_login()
@@ -177,8 +187,9 @@ class ImportReceiptWizard(models.TransientModel):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
-
+                header["warehouse_code"] = self._val(details[0], 'Warehouse')
                 result.append(dict(header, line_nbr='0'))
+
 
                 for detail in details:
                     line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
@@ -202,11 +213,6 @@ class ImportReceiptWizard(models.TransientModel):
                         'warehouse_dest_code': warehouse_dest_code,
                     })
 
-                for line in result:
-                    print(line)
-                    product = detail_result[0]
-                    if not line['warehouse_code']:
-                        line['warehouse_code'] = product['warehouse_dest_code']
             _logger.info("Berhasil ambil %s rows PO Receipt dari Acumatica", len(result))
             self._validate_staging_against_picking(result, detail_result)
             # return result
@@ -271,9 +277,53 @@ class ImportReceiptWizard(models.TransientModel):
             lines_to_create.append(vals)
 
         if lines_to_create:
-            receipts = self._create_receipt_lines(lines_to_create)
-            self._create_receipt_lines_product(line_list, receipts)
+            # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
+            unchanged, to_update, to_create = self._search_receipt_lines(lines_to_create)
+            # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
+            self._update_receipt_lines(to_update)
 
+            receipts = self._create_receipt_lines(to_create)
+            line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
+            if line_update:
+                self._create_receipt_lines_product(line_update, to_update)
+            elif line_create:
+                self._create_receipt_lines_product(line_create, receipts)
+
+            # to_create_filtered = self.filter_by_receipt_lines(to_create, receipts)
+            # to_update_filtered = self.filter_by_receipt_lines(to_update, receipts)
+            # self._create_receipt_lines_product(to_create_filtered, receipts)
+
+
+
+    def _search_receipt_lines(self, data):
+        if not data:
+            return False
+
+        unchanged = []
+        to_update = []
+        to_create = []
+        
+        for line in data:
+            existing_line = self.env['acumatica.receipt.line'].search([
+                ('receipt_nbr', '=', line['receipt_nbr'])
+            ], limit=1)
+
+            if not existing_line:
+                to_create.append(line)
+                continue
+
+            if existing_line.acumatica_write_date == self._parse_dt(line['acumatica_write_date']):
+                unchanged.append(existing_line)
+            else:
+                to_update.append(existing_line)
+
+        return unchanged, to_update, to_create
+
+    def _update_receipt_lines(self, data):
+        if not data:
+            return False
+
+        return self.env['acumatica.receipt.line'].write(data)
 
     def _create_receipt_lines(self, data):
         if not data:
@@ -281,9 +331,41 @@ class ImportReceiptWizard(models.TransientModel):
 
         return self.env['acumatica.receipt.line'].create(data)
 
+    def filter_product_line(self, data, update, create):
+        # buat set dari semua external_id di update
+        update_ids = {upd['external_id'] for upd in update}
+
+        # filter data yang header_external_id ada di update_ids
+        update_final = [line for line in data if line['header_external_id'] in update_ids]
+
+        # buat set dari semua external_id di create
+        create_ids = {crt['external_id'] for crt in create}
+
+        # filter data yang header_external_id ada di create_ids
+        create_final = [line for line in data if line['header_external_id'] in create_ids]
+
+        return update_final, create_final
+        
+    def filter_by_receipt_lines(self, data, receipts):
+        """
+        Filter data berdasarkan header_external_id yang ada di receipts.
+        
+        :param data: list of dict (to_create atau to_update)
+        :param receipts: recordset receipt
+        :return: list of dict yang header_external_id-nya ada di receipts
+        """
+        receipt_ids = {rec['external_id'] for rec in receipts}
+
+        filtered_data = [
+            vals for vals in data
+            if vals.get('header_external_id') in receipt_ids
+        ]
+
+        return filtered_data
+
     def _create_receipt_lines_product(self, data, receipts):
         receipt_map = {
-            rec.external_id: rec.id
+            rec['external_id']: rec.id
             for rec in receipts
         }
 
@@ -299,7 +381,7 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Data Inventory Receipt dari Acumatica',
+            'name': 'Data PO Receipt dari Acumatica',
             'res_model': 'acumatica.receipt.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],

@@ -28,6 +28,7 @@
                 <field name="odoo_building_id"/>
                 <field name="is_active"/>
                 <field name="error_message"/>
+                <field name="is_error" invisible="1"></field>
             </list>
         </field>
     </record>

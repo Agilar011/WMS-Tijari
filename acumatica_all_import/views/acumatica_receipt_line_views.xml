@@ -3,17 +3,12 @@
         <field name="name">acumatica.receipt.line.list</field>
         <field name="model">acumatica.receipt.line</field>
         <field name="arch" type="xml">
-            <list string="Data Inventory Receipt dari Acumatica" create="0" delete="0">
+            <list string="Data PO Receipt dari Acumatica">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="receipt_nbr"/>
                 <field name="line_nbr"/>
                 <field name="vendor_code"/>
-                <field name="inventory_id"/>
-                <field name="transaction_description"/>
-                <field name="product_uom_qty"/>
-                <field name="uom_code"/>
-                <field name="warehouse_dest_code"/>
-                <field name="location_dest_code"/>
+                <field name="warehouse_code"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"
                        decoration-warning="import_state == 'pending'"
@@ -29,7 +24,7 @@
         <field name="name">acumatica.receipt.line.form</field>
         <field name="model">acumatica.receipt.line</field>
         <field name="arch" type="xml">
-            <form string="Inventory Receipt Line Acumatica">
+            <form string="Inventory PO Line Acumatica">
                 <header>
                     <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
                     <button name="action_open_picking" string="Buka Receipt" type="object" invisible="not odoo_picking_id"/>
@@ -83,7 +78,7 @@
                     </group>
                     <notebook>
                         <page name="Details" string="Details">
-                            <field name="product_line_ids" readonly="1">
+                            <field name="product_line_ids">
                                 <list>
                                     <field name="inventory_id"/>
                                     <field name="transaction_description"/>
@@ -104,7 +99,7 @@
     </record>
 
     <record id="action_acumatica_receipt_line" model="ir.actions.act_window">
-        <field name="name">Data Inventory Receipt</field>
+        <field name="name">Data PO Receipt</field>
         <field name="res_model">acumatica.receipt.line</field>
         <field name="view_mode">list,form</field>
     </record>
