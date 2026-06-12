@@ -201,10 +201,11 @@ class AcumaticaWarehouseLine(models.Model):
                         wh_address = self.env['res.partner'].search([('name', '=', line.building_id)], limit=1)
                         if not wh_address:
                             company = self.env.user.commercial_partner_id
-                            wh_address = self.env['res.partner'].create({'name': line.building_id, 'partner_type': 'warehouse'})
-                        wh_building = self.env['stock.warehouse'].search([('code', '=', line.building_id)], limit=1)
+                            wh_address = self.env['res.partner'].create({'name': line.building_id, 'partner_type': 'warehouse', 'type': 'other', 'company_type': 'person', 'parent_id': company.id})
+                        code = (line.building_id or '').strip().upper()
+                        wh_building = self.env['stock.warehouse'].search([('code', '=', code)], limit=1)
                         if not wh_building:
-                            self.env['stock.warehouse'].create({'name': line.building_id, 'code': line.building_id})
+                            wh_building = self.env['stock.warehouse'].create({'name': code, 'code': code, 'partner_id': wh_address.id, 'company_id': self.env.company.id,})
 
                     line.write({
                         'import_state':    'imported',

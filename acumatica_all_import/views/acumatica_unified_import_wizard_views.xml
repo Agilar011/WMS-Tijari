@@ -4,7 +4,7 @@
         <field name="name">acumatica.unified.import.wizard.form</field>
         <field name="model">acumatica.unified.import.wizard</field>
         <field name="arch" type="xml">
-            <form string="Unified Acumatica Import">
+            <form string="Import Data API Acumatica">
                 <sheet>
                     <group>
                         <field name="import_category"/>
@@ -75,7 +75,7 @@
     </record>
 
     <record id="action_acumatica_unified_import_wizard" model="ir.actions.act_window">
-        <field name="name">Unified Acumatica Import</field>
+        <field name="name">Import Data API Acumatica</field>
         <field name="res_model">acumatica.unified.import.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>

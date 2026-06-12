@@ -381,7 +381,7 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Data Inventory Receipt dari Acumatica',
+            'name': 'Data PO Receipt dari Acumatica',
             'res_model': 'acumatica.receipt.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],

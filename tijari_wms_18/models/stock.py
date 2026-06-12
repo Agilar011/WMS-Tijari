@@ -84,15 +84,6 @@ class StockPicking(models.Model):
                         ))
 
             pickings = self.env["stock.picking"].search([])
-
-            for p in pickings.sorted("id", reverse=True)[:10]:
-                _logger.info(
-                    "id=%s name=%s origin=%s type=%s",
-                    p.id,
-                    p.name,
-                    p.origin,
-                    p.picking_type_id.name,
-                )
             if picking.picking_type_id.code != "incoming":
                 continue
 
@@ -103,8 +94,19 @@ class StockPicking(models.Model):
 
             storage_pickings.write({
                 "adt_dest_location_id": picking.adt_dest_location_id,
+                "note" : picking.note
             })
 
+            for storage in storage_pickings:
+                for storage_move in storage.move_ids:
+                    receipt_move = picking.move_ids.filtered(
+                        lambda m: m.product_id == storage_move.product_id
+                    )[:1]
+
+                    if receipt_move:
+                        storage_move.write({
+                            "product_note": receipt_move.product_note
+                        })
 
         return res
 
