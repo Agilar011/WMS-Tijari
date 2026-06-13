@@ -7,6 +7,10 @@ import hashlib
 import base64
 from ast import literal_eval
 
+import logging
+_logger = logging.getLogger(__name__)
+
+
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
 
@@ -47,6 +51,12 @@ class StockPicking(models.Model):
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
 
     def button_validate(self):
+        res = super().button_validate()
+        if self.env.context.get("skip_backorder"):
+            return super().button_validate()
+
+
+
         for rec in self:
             print(rec.picking_type_id.operation_category)
             for line in rec.move_line_ids:
@@ -77,7 +87,60 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-        return super().button_validate()
+            pickings = self.env["stock.picking"].search([])
+            if picking.picking_type_id.code != "incoming":
+                continue
+
+            storage_pickings = self.env["stock.picking"].search([
+                ("origin", "ilike", picking.name),
+                ("picking_type_id.code", "=", "internal"),
+            ])
+
+            storage_pickings.write({
+                "adt_dest_location_id": picking.adt_dest_location_id,
+                "note" : picking.note
+            })
+
+            for storage in storage_pickings:
+                for storage_move in storage.move_ids:
+                    receipt_move = picking.move_ids.filtered(
+                        lambda m: m.product_id == storage_move.product_id
+                    )[:1]
+
+                    if receipt_move:
+                        storage_move.write({
+                            "product_note": receipt_move.product_note
+                        })
+
+            has_short = False
+            for move in picking.move_ids:
+                if move.quantity > move.product_uom_qty:
+                    total_qty = sum(line.mapped("quantity"))
+                    raise UserError(
+                        _(
+                            "Product: %s\n"
+                            "Lot: %s\n"
+                            "Total QTY: %s\n"
+                            "Demand: %s\n\n"
+                            "Quantity exceeds demand."
+                        ) % (
+                            move.product_id.display_name,
+                            line.lot_id.name or "-",
+                            move.quantity,
+                            move.product_uom_qty,
+                        )
+                    )
+
+                if move.quantity < move.product_uom_qty:
+                    has_short = True
+
+            if has_short:
+                return self.with_context(
+                    skip_backorder=True,
+                    picking_ids_not_to_backorder=self.ids,
+                ).button_validate()
+
+        return res
 
 class StockPickingType(models.Model):
     _inherit = 'stock.picking.type'
@@ -97,6 +160,7 @@ class StockLocation(models.Model):
 
     sequence = fields.Boolean(string='Sequence', default=False, help='Indicates if the location uses sequence for operations')
     unique_code = fields.Char(string='Unique Code', help='A unique code for the location')
+    is_location_mapping = fields.Boolean(string="Parent Mapping Location")
 
     def generate_unique_code(self):
         for location in self:
@@ -630,3 +694,20 @@ class StockMove(models.Model):
             print(move.product_uom)
             print(move.product_id.uom_id)
             move.move_line_ids.generate_lot()
+
+    @api.onchange("move_line_ids")
+    def _onchange_move_line_ids(self):
+        for move in self:
+            total_qty = sum(move.move_line_ids.mapped("quantity"))
+
+            if total_qty > move.product_uom_qty:
+                return {
+                    "warning": {
+                        "title": _("Invalid Quantity"),
+                        "message": _(
+                            "The total quantity (%s) cannot exceed the demand (%s)."
+                        ) % (total_qty, move.product_uom_qty),
+                    }
+                }
+            
+                        
