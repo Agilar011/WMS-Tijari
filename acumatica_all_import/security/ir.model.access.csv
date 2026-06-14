@@ -77,3 +77,4 @@ access_import_uom_wizard_user,import.uom.wizard,model_import_uom_wizard,base.gro
 access_acumatica_shipvia_config_user,acumatica.shipvia.config,model_acumatica_shipvia_config,base.group_user,1,1,1,1
 access_acumatica_shipvia_line_user,acumatica.shipvia.line,model_acumatica_shipvia_line,base.group_user,1,1,1,1
 access_import_shipvia_wizard_user,import.shipvia.wizard,model_import_shipvia_wizard,base.group_user,1,1,1,1
+access_acumatica_receipt_change_item_product_user,access_acumatica_receipt_change_item_product_user,model_acumatica_receipt_change_item_product,base.group_user,1,1,1,1
