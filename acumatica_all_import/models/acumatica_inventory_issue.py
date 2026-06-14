@@ -33,6 +33,60 @@ class AcumaticaInventoryIssueConfig(models.Model):
     odata_select = fields.Char()
     odata_filter = fields.Char()
 
+    # ---------------------------------------------------------
+    # BUTTONS
+    # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # MAIN PROCESS
+    # ---------------------------------------------------------
+
+    def _do_login(self):
+        self.ensure_one()
+        session = requests.Session()
+        response = session.post(
+            self.login_url,
+            json={
+                'name': self.username,
+                'password': self.password,
+                'company': self.company_code,
+            },
+            headers={'Content-Type': 'application/json'},
+            timeout=30,
+        )
+        if response.status_code == 204:
+            return session
+        raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
+
+    def _do_logout(self, session):
+        try:
+            session.post(self.logout_url, timeout=10)
+        except Exception:
+            pass
+
+
+
+
+    # ---------------------------------------------------------
+    # HEADER
+    # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # DETAIL
+    # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # API MAPPING
+    # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # API
+    # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # HELPERS
+    # ---------------------------------------------------------
+
     @property
     def api_url(self):
         return f"{self.base_url}/wms/{self.api_version}"
@@ -65,28 +119,6 @@ class AcumaticaInventoryIssueConfig(models.Model):
             self.state = 'error'
             raise UserError(f'Koneksi gagal: {str(e)}')
 
-    def _do_login(self):
-        self.ensure_one()
-        session = requests.Session()
-        response = session.post(
-            self.login_url,
-            json={
-                'name': self.username,
-                'password': self.password,
-                'company': self.company_code,
-            },
-            headers={'Content-Type': 'application/json'},
-            timeout=30,
-        )
-        if response.status_code == 204:
-            return session
-        raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
-
-    def _do_logout(self, session):
-        try:
-            session.post(self.logout_url, timeout=10)
-        except Exception:
-            pass
 
     @staticmethod
     def _val(item, key):
@@ -106,91 +138,91 @@ class AcumaticaInventoryIssueConfig(models.Model):
                 return payload.get('rows')
         return []
 
-    def fetch_inventory_issue_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
-        self.ensure_one()
-        session = self._do_login()
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-            filters = []
+    # def fetch_inventory_issue_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
+    #     self.ensure_one()
+    #     session = self._do_login()
+    #     try:
+    #         endpoint = f"{self.api_url}/{self.endpoint_name}"
+    #         params = {'$top': limit, '$skip': offset}
+    #         filters = []
 
-            if self.odata_expand:
-                params['$expand'] = self.odata_expand
-            if self.odata_select:
-                params['$select'] = self.odata_select
-            if reference_nbr:
-                filters.append(f"ReferenceNbr eq '{reference_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-            if odata_filter:
-                filters.append(f"({odata_filter})")
-            # elif self.odata_filter:
-            #     filters.append(f"({self.odata_filter})")
+    #         if self.odata_expand:
+    #             params['$expand'] = self.odata_expand
+    #         if self.odata_select:
+    #             params['$select'] = self.odata_select
+    #         if reference_nbr:
+    #             filters.append(f"ReferenceNbr eq '{reference_nbr}'")
+    #         if last_modified_from:
+    #             filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
+    #         if odata_filter:
+    #             filters.append(f"({odata_filter})")
+    #         # elif self.odata_filter:
+    #         #     filters.append(f"({self.odata_filter})")
 
-            if filters:
-                params['$filter'] = ' and '.join(filters)
+    #         if filters:
+    #             params['$filter'] = ' and '.join(filters)
 
-            response = session.get(endpoint, params=params, timeout=90)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Inventory Issue (HTTP {response.status_code}): {response.text}')
+    #         response = session.get(endpoint, params=params, timeout=90)
+    #         if response.status_code != 200:
+    #             raise UserError(f'Gagal ambil data Inventory Issue (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
-            result = []
-            print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched with params: {params}")
+    #         raw_data = self._normalize_rows(response.json())
+    #         result = []
+    #         print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched with params: {params}")
 
-            for row_number, item in enumerate(raw_data, start=1):
-                header = {
-                    'external_id': item.get('id', '') or '',
-                    'row_number': row_number,
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'actual_amount': self._val(item, 'ControlAmount'),
-                    'actual_qty': self._val(item, 'ControlQty'),
-                    'scheduled_date': self._val(item, 'Date'),
-                    'description': self._val(item, 'Description'),
-                    'external_ref': self._val(item, 'ExternalRef'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'post_period': self._val(item, 'PostPeriod'),
-                    'reference_nbr': self._val(item, 'ReferenceNbr'),
-                    'status': self._val(item, 'Status'),
-                    'total_amount': self._val(item, 'TotalAmount'),
-                    'total_qty': self._val(item, 'TotalQty'),
-                    'trans_type': self._val(item, 'TransType'),
-                }
-                print(f" Get data : {header['reference_nbr']}, Trans Type: {header['trans_type']}, Status: {header['status']}")
+    #         for row_number, item in enumerate(raw_data, start=1):
+    #             header = {
+    #                 'external_id': item.get('id', '') or '',
+    #                 'row_number': row_number,
+    #                 'note': item.get('note', {}).get('value', '') or '',
+    #                 'actual_amount': self._val(item, 'ControlAmount'),
+    #                 'actual_qty': self._val(item, 'ControlQty'),
+    #                 'scheduled_date': self._val(item, 'Date'),
+    #                 'description': self._val(item, 'Description'),
+    #                 'external_ref': self._val(item, 'ExternalRef'),
+    #                 'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+    #                 'post_period': self._val(item, 'PostPeriod'),
+    #                 'reference_nbr': self._val(item, 'ReferenceNbr'),
+    #                 'status': self._val(item, 'Status'),
+    #                 'total_amount': self._val(item, 'TotalAmount'),
+    #                 'total_qty': self._val(item, 'TotalQty'),
+    #                 'trans_type': self._val(item, 'TransType'),
+    #             }
+    #             print(f" Get data : {header['reference_nbr']}, Trans Type: {header['trans_type']}, Status: {header['status']}")
                 
 
-                details = item.get('Details') or item.get('details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
+    #             details = item.get('Details') or item.get('details') or []
+    #             if isinstance(details, dict):
+    #                 details = details.get('value', []) or []
+    #             if not isinstance(details, list):
+    #                 details = []
 
-                if not details:
-                    result.append(dict(header, line_nbr='0'))
-                    continue
+    #             if not details:
+    #                 result.append(dict(header, line_nbr='0'))
+    #                 continue
 
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    result.append({
-                        **header,
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'branch_warehouse': self._val(detail, 'Branch'),
-                        'line_description': self._val(detail, 'Description'),
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'location_code': self._val(detail, 'Location'),
-                        'product_uom_qty': self._val(detail, 'Qty'),
-                        'line_trans_type': self._val(detail, 'TranType'),
-                        'uom_code': self._val(detail, 'UOM'),
-                        'warehouse_code': self._val(detail, 'WarehouseID'),
-                    })
+    #             for detail in details:
+    #                 line_nbr = self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
+    #                 result.append({
+    #                     **header,
+    #                     'line_external_id': detail.get('id', '') or '',
+    #                     'line_note': detail.get('note', {}).get('value', '') or '',
+    #                     'branch_warehouse': self._val(detail, 'Branch'),
+    #                     'line_description': self._val(detail, 'Description'),
+    #                     'inventory_id': self._val(detail, 'InventoryID'),
+    #                     'line_nbr': str(line_nbr),
+    #                     'location_code': self._val(detail, 'Location'),
+    #                     'product_uom_qty': self._val(detail, 'Qty'),
+    #                     'line_trans_type': self._val(detail, 'TranType'),
+    #                     'uom_code': self._val(detail, 'UOM'),
+    #                     'warehouse_code': self._val(detail, 'WarehouseID'),
+    #                 })
 
-            _logger.info('Berhasil ambil %s rows Inventory Inventory Issue dari Acumatica', len(result))
-            self.last_sync = fields.Datetime.now()
-            return result
-        finally:
-            self._do_logout(session)
+    #         _logger.info('Berhasil ambil %s rows Inventory Inventory Issue dari Acumatica', len(result))
+    #         self.last_sync = fields.Datetime.now()
+    #         return result
+    #     finally:
+    #         self._do_logout(session)
 
 
 class AcumaticaInventoryIssueLine(models.Model):
@@ -241,27 +273,13 @@ class AcumaticaInventoryIssueLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
-    @api.depends('reference_nbr')
-    def _compute_exists_in_odoo(self):
-        Picking = self.env['stock.picking']
-        for rec in self:
-            rec.exists_in_odoo = bool(rec.reference_nbr and Picking.search_count([('origin', '=', rec.reference_nbr)]))
+    # ---------------------------------------------------------
+    # BUTTONS
+    # ---------------------------------------------------------
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
-
-    @staticmethod
-    def _parse_float(value):
-        try:
-            return float(value or 0)
-        except Exception:
-            return 0.0
+    # ---------------------------------------------------------
+    # MAIN PROCESS
+    # ---------------------------------------------------------
 
     def _find_product(self, line):
         Product = self.env['product.product']
@@ -280,24 +298,17 @@ class AcumaticaInventoryIssueLine(models.Model):
             })
         return product
 
-    # def _find_warehouse(self, line):
-    #     Warehouse = self.env['stock.warehouse']
-    #     code = line.warehouse_code
-    #     warehouse = False
-    #     if code:
-    #         warehouse = Warehouse.search([('code', '=', code)], limit=1)
-    #         if not warehouse:
-    #             warehouse = Warehouse.search([('name', '=', code)], limit=1)
-    #     return warehouse or Warehouse.search([], limit=1)
 
     def _find_warehouse(self, line):
+        print(f"Line: {line}")
         Warehouse = self.env['stock.location.acumatica']
         warehouse = False
-        code = line.detail_warehouse_code or line.warehouse_code
-        if line.code:
-            warehouse = Warehouse.search([('code', '=', line.code)], limit=1)
+
+        code = line.warehouse_code 
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
             if not warehouse:
-                warehouse = Warehouse.search([('name', '=', line.code)], limit=1)
+                warehouse = Warehouse.search([('name', '=', code)], limit=1)
             else:
                 if not warehouse.odoo_building_id:
                     warehouse = False
@@ -314,8 +325,8 @@ class AcumaticaInventoryIssueLine(models.Model):
             location = Location.search([('complete_name', '=', code)], limit=1)
             if not location:
                 location = Location.search([('name', '=', code)], limit=1)
-        if not location and warehouse:
-            location = warehouse.lot_stock_id
+        # if not location and warehouse:
+        #     location = warehouse.lot_stock_id
         if not location and fallback == 'customer':
             location = self.env.ref('stock.stock_location_customers', raise_if_not_found=False)
         return location
@@ -328,18 +339,7 @@ class AcumaticaInventoryIssueLine(models.Model):
         if not uom and product:
             uom = product.uom_id
         return uom
-
-    def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state == 'pending')
-        if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
-
-    def action_import_this(self):
-        print('Starting import for Inventory Issue with reference_nbr in:', self.mapped('reference_nbr'))
-        self.ensure_one()
-        return self._do_import()
-
+    
     def _do_import(self):
         print('Starting import for Inventory Issue with reference_nbr in:', self.mapped('reference_nbr'))
         Picking = self.env['stock.picking']
@@ -372,7 +372,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                 if not picking_type:
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
 
-                source_location = warehouse.lot_stock_id or picking_type.default_location_src_id
+                source_location = picking_type.default_location_src_id
                 dest_location = picking_type.default_location_dest_id or self.env.ref('stock.stock_location_customers', raise_if_not_found=False)
                 if not source_location:
                     print(f'Source location not found for warehouse: {warehouse.name}')
@@ -474,6 +474,65 @@ class AcumaticaInventoryIssueLine(models.Model):
             }
         }
 
+
+    # ---------------------------------------------------------
+    # HEADER
+    # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # DETAIL
+    # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # API MAPPING
+    # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # API
+    # ---------------------------------------------------------
+
+    # ---------------------------------------------------------
+    # HELPERS
+    # ---------------------------------------------------------
+
+
+    @api.depends('reference_nbr')
+    def _compute_exists_in_odoo(self):
+        Picking = self.env['stock.picking']
+        for rec in self:
+            rec.exists_in_odoo = bool(rec.reference_nbr and Picking.search_count([('origin', '=', rec.reference_nbr)]))
+
+    @staticmethod
+    def _parse_dt(dt_str):
+        if not dt_str:
+            return False
+        try:
+            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
+        except Exception:
+            return False
+
+    @staticmethod
+    def _parse_float(value):
+        try:
+            return float(value or 0)
+        except Exception:
+            return 0.0
+
+
+# Unknown
+
+    def action_import_selected(self):
+        lines = self.filtered(lambda l: l.selected and l.import_state == 'pending')
+        if not lines:
+            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
+        return lines._do_import()
+
+    def action_import_this(self):
+        print('Starting import for Inventory Issue with reference_nbr in:', self.mapped('reference_nbr'))
+        self.ensure_one()
+        return self._do_import()
+
+
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
 
@@ -488,3 +547,30 @@ class AcumaticaInventoryIssueLine(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
+
+
+class AcumaticaInventoryIssueProduct(models.Model):
+    _name = 'acumatica.inventory.issue.product'
+    _description = 'Data Inventory Inventory Issue dari Acumatica'
+    _order = 'reference_nbr asc, line_nbr asc, id asc'
+
+    receipt_line_id = fields.Many2one(
+        'acumatica.inventory.issue.line',
+        string='Receipt Header',
+        required=True,
+        ondelete='cascade',
+        index=True,
+    )
+
+    line_external_id = fields.Char(string='UUID Detail', readonly=True)
+    line_note = fields.Char(string='Detail Note', readonly=True)
+    branch_warehouse = fields.Char(string='Warehouse Branch', readonly=True)
+    line_description = fields.Char(string='Product Description', readonly=True)
+    inventory_id = fields.Char(string='UUID Product', readonly=True)
+    line_nbr = fields.Char(string='Product line number', readonly=True)
+    location_code = fields.Char(string='Product Location', readonly=True)
+    product_uom_qty = fields.Char(string='UOM Quantity', readonly=True)
+    line_trans_type = fields.Char(string='Product Trans Type', readonly=True)
+    uom_code = fields.Char(string='UOM', readonly=True)
+    warehouse_code = fields.Char(string='Product Warehouse', readonly=True)
+    header_external_id = fields.Char(string='UUID Header', readonly=True)
