@@ -36,7 +36,7 @@ class ImportReceiptWizard(models.TransientModel):
 
         import math
 
-        raw_list = []
+        raw_list = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
         params = []
         if self.wh33_filter:
@@ -59,7 +59,9 @@ class ImportReceiptWizard(models.TransientModel):
             if not batch_data:
                 break
 
-            raw_list.extend(batch_data)
+            raw_list += batch_data
+
+        self.total_fetched = raw_list
 
         # if not raw_list:
         #     raise UserError('Tidak ada data yang diterima dari API Acumatica.')
@@ -215,6 +217,7 @@ class ImportReceiptWizard(models.TransientModel):
 
             _logger.info("Berhasil ambil %s rows PO Receipt dari Acumatica", len(result))
             self._validate_staging_against_picking(result, detail_result)
+            return len(result)
             # return result
             # Picking = self.env['stock.picking']
             # existing_receipts = set()
@@ -254,27 +257,26 @@ class ImportReceiptWizard(models.TransientModel):
 
     def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']
-        existing_receipts = set()
-        new_receipts = set()
         lines_to_create = []
+        sync_data = fields.Datetime.now()
         for item in header_list:
+            
             receipt_nbr = item.get('receipt_nbr')
-            exists = bool(receipt_nbr and Picking.search_count([('origin', '=', receipt_nbr)]))
-            if exists:
-                existing_receipts.add(receipt_nbr)
-                msg = f'{receipt_nbr}: Sudah ada → akan diupdate'
-            else:
-                new_receipts.add(receipt_nbr)
-                msg = ''
-            vals = dict(item)
-            vals.update({
+            # exists = receipt_nbr and Picking.search_count([('origin', '=', receipt_nbr)])
+            exists = Picking.search_read(
+                domain=[('origin', '=', receipt_nbr)],
+                fields=['id', 'origin'],
+                limit=1
+            )
+            lines_to_create.append({
+                **item,
+                'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
                 'import_state': 'pending',
-                'import_message': msg,
+                'import_message': f'{receipt_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
-                'sync_date': fields.Datetime.now(),
+                'sync_date': sync_data,
             })
-            lines_to_create.append(vals)
 
         if lines_to_create:
             # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
@@ -285,8 +287,9 @@ class ImportReceiptWizard(models.TransientModel):
             receipts = self._create_receipt_lines(to_create)
             line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
             if line_update:
-                self._create_receipt_lines_product(line_update, to_update)
-            elif line_create:
+                self._update_receipt_lines_product(line_update, to_update)
+
+            if line_create:
                 self._create_receipt_lines_product(line_create, receipts)
 
             # to_create_filtered = self.filter_by_receipt_lines(to_create, receipts)
@@ -297,25 +300,41 @@ class ImportReceiptWizard(models.TransientModel):
 
     def _search_receipt_lines(self, data):
         if not data:
-            return False
+            return [], [], []
+
+        receipt_nbrs = [
+            d['receipt_nbr']
+            for d in data
+            if d.get('receipt_nbr')
+        ]
+        existing_lines = self.env['acumatica.receipt.line'].search([
+            ('receipt_nbr', 'in', receipt_nbrs)
+        ])
+
+        existing_map = {
+            line.receipt_nbr: line
+            for line in existing_lines
+        }
 
         unchanged = []
         to_update = []
         to_create = []
         
-        for line in data:
-            existing_line = self.env['acumatica.receipt.line'].search([
-                ('receipt_nbr', '=', line['receipt_nbr'])
-            ], limit=1)
+        for vals in data:
+            existing = existing_map.get(vals['receipt_nbr'])
 
-            if not existing_line:
-                to_create.append(line)
+            if not existing:
+                to_create.append(vals)
                 continue
 
-            if existing_line.acumatica_write_date == self._parse_dt(line['acumatica_write_date']):
-                unchanged.append(existing_line)
+
+            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+                unchanged.append(existing)
             else:
-                to_update.append(existing_line)
+                to_update.append({
+                    'record': existing,
+                    'vals': vals,
+                })
 
         return unchanged, to_update, to_create
 
@@ -323,7 +342,12 @@ class ImportReceiptWizard(models.TransientModel):
         if not data:
             return False
 
-        return self.env['acumatica.receipt.line'].write(data)
+        for item in data:
+            record = item['record']
+            vals = item['vals']
+
+
+            record.write(vals)
 
     def _create_receipt_lines(self, data):
         if not data:
@@ -333,13 +357,24 @@ class ImportReceiptWizard(models.TransientModel):
 
     def filter_product_line(self, data, update, create):
         # buat set dari semua external_id di update
-        update_ids = {upd['external_id'] for upd in update}
+        update_ids = {
+            item.get('vals', {}).get('external_id')
+            for item in update
+            if item.get('vals', {}).get('external_id')
+        }
 
         # filter data yang header_external_id ada di update_ids
-        update_final = [line for line in data if line['header_external_id'] in update_ids]
+        update_final = [
+            line 
+            for line in data 
+            if line['header_external_id'] in update_ids
+        ]
 
         # buat set dari semua external_id di create
-        create_ids = {crt['external_id'] for crt in create}
+        create_ids = {
+            crt['external_id'] 
+            for crt in create
+        }
 
         # filter data yang header_external_id ada di create_ids
         create_final = [line for line in data if line['header_external_id'] in create_ids]
@@ -376,6 +411,21 @@ class ImportReceiptWizard(models.TransientModel):
 
         self.env['acumatica.receipt.product.line'].create(data)
 
+    def _update_receipt_lines_product(self, data, receipts):
+        receipt_map = {
+            rec['vals']['external_id']: rec['record']['id']
+            for rec in receipts
+            if rec.get('vals')
+            and rec.get('record')
+        }
+
+        product_line = self.env['acumatica.receipt.product.line']
+
+        for vals in data:
+            ext_id = vals.get('header_external_id')
+            vals['receipt_line_id'] = receipt_map.get(ext_id)
+            if vals['receipt_line_id']:
+                product_line.browse(vals['receipt_line_id']).write(vals)
 
     def action_view_staging(self):
         self.ensure_one()

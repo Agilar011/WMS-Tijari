@@ -97,7 +97,7 @@
                             </field>
                         </page>
                         <page string="Error">
-                            <field name="error_message" readonly="1" nolabel="1"/>
+                            <field name="error_message" readonly="1" nolabel="1" widget="text"/>
                         </page>
                     </notebook>
                 </sheet>

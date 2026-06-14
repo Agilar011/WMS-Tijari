@@ -1,9 +1,25 @@
 <odoo>
+
+    <record id="action_import_selected_receipt"
+            model="ir.actions.server">
+        <field name="name">Import Selected</field>
+        <field name="model_id" ref="model_acumatica_receipt_line"/>
+        <field name="binding_model_id" ref="model_acumatica_receipt_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
     <record id="view_acumatica_receipt_line_list" model="ir.ui.view">
         <field name="name">acumatica.receipt.line.list</field>
         <field name="model">acumatica.receipt.line</field>
         <field name="arch" type="xml">
             <list string="Data PO Receipt dari Acumatica">
+                <!-- <header>
+                    <button name="action_import_selected" string="Import Selected Record" type="object" class="btn-primary"/>
+                </header> -->
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="receipt_nbr"/>
                 <field name="line_nbr"/>
@@ -89,7 +105,7 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1"/>
+                        <field name="import_message" readonly="1" widget="text"/>
                         <field name="odoo_picking_id" readonly="1"/>
                         <field name="exists_in_odoo" readonly="1"/>
                     </group>

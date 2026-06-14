@@ -306,7 +306,7 @@ class AcumaticaReceiptLine(models.Model):
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('adt_receipt_nbr', '=', rec.receipt_nbr)]))
+            rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('origin', '=', rec.receipt_nbr)]))
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -394,7 +394,7 @@ class AcumaticaReceiptLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state == 'pending')
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -478,7 +478,7 @@ class AcumaticaReceiptLine(models.Model):
                 vals = {k: v for k, v in vals.items() if k in Picking._fields}
 
                 # pakai origin buat dedup
-                picking = Picking.search([('origin', '=', origin)], limit=1)
+                picking = self.odoo_picking_id
                 error_data = False
                 if error_list:
                     error_data = Error.search([('origin', '=', origin)], limit=1)
@@ -490,6 +490,8 @@ class AcumaticaReceiptLine(models.Model):
                             'location_dest': first.warehouse_dest_code or False,
                             'scheduled_date': self._parse_dt(first.scheduled_date),
                             'origin': origin,
+                            'adt_total_qty': self._parse_float(first.total_qty),
+                            'adt_actual_qty': self._parse_float(first.actual_qty),
                             'api_acumatica': 'po_receipt',
                             'error_message': '\n'.join(error_list),
                             'payload': str(vals)[:1000],
@@ -505,6 +507,7 @@ class AcumaticaReceiptLine(models.Model):
                         updated += 1
                     else:
                         picking = Picking.create(vals)
+                        picking.action_confirm()
                         action_state = 'imported'
                         imported += 1
 
@@ -519,7 +522,7 @@ class AcumaticaReceiptLine(models.Model):
                         qty = self._parse_float(line.product_uom_qty)
 
                         # dedup move
-                        move_domain = [('picking_id', '=', picking.id)]
+                        move_domain = [('picking_id', '=', picking.id if picking else False)]
                         if 'adt_line_external_id' in Move._fields and line.line_external_id:
                             move_domain.append(('adt_line_external_id', '=', line.line_external_id))
                         else:
@@ -532,19 +535,20 @@ class AcumaticaReceiptLine(models.Model):
                         if existing_move:
                             first.write({
                                 'import_state': 'updated',
-                                'import_message': f'Skip duplicate: {picking.name}',
-                                'odoo_picking_id': picking.id,
+                                'import_message': f'Skip duplicate: {picking.name if picking else False}',
+                                'odoo_picking_id': picking.id if picking else False,
                             })
                             continue
 
                         move_vals = {
                             'name': line.transaction_description or line.description or product.display_name,
-                            'picking_id': picking.id,
+                            'picking_id': picking.id if picking else False,
                             'product_id': product.id,
                             'product_uom_qty': qty,
                             'product_uom': uom.id if uom else product.uom_id.id,
-                            'location_id': picking.location_id.id,
-                            'location_dest_id': '9',
+                            'location_id': picking.location_id.id if picking else False,
+                            'location_dest_id': picking.location_dest_id.id if picking else False,
+                            'warehouse_id': warehouse.id if warehouse else False,
                             'description_picking': line.description or False,
 
                             'adt_line_external_id': line.line_external_id or False,
@@ -597,8 +601,8 @@ class AcumaticaReceiptLine(models.Model):
 
                         first.write({
                             'import_state': action_state,
-                            'import_message': f'{action_state.title()}: {picking.name}',
-                            'odoo_picking_id': picking.id,
+                            'import_message': f'{action_state.title()}: {picking.name if picking else False}',
+                            'odoo_picking_id': picking.id if picking else False,
                         })
 
 
