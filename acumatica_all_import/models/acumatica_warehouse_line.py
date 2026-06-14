@@ -88,6 +88,12 @@ class AcumaticaWarehouseLine(models.Model):
         except Exception:
             return False
 
+    def bval(item, key):
+        v = item.get(key, {})
+        if isinstance(v, dict):
+            return bool(v.get("value", False))
+        return False
+
     def _find_existing_location(self, rec):
         """Cari warehouse code (BuildingID)."""
         location = self.env['stock.location.acumatica']
@@ -143,7 +149,7 @@ class AcumaticaWarehouseLine(models.Model):
                     'name':                    line.description,
                     'code':                    line.warehouse_id,
                     'building':                line.building_id,
-                    'is_active':               line.active,
+                    'is_active':               self.bval(line.active),
                 }
 
                 existing = self._find_existing_location(line)
