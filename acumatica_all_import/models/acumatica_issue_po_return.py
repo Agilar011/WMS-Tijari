@@ -217,7 +217,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
     _name = 'acumatica.issue.po.return.line'
     _description = 'Data Inventory Receipt dari Acumatica'
     _order = 'receipt_nbr asc, line_nbr asc, id asc'
-
+    product_line_ids = fields.One2many('acumatica.issue.po.return.product', 'receipt_line_id', string='Lines')
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
     line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
@@ -602,3 +602,70 @@ class AcumaticaIssuePoReturnLine(models.Model):
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})
+
+
+class AcumaticaIssuePoReturnProduct(models.Model):
+    _name = 'acumatica.issue.po.return.product'
+    _description = 'Data Inventory Receipt dari Acumatica'
+    _order = 'receipt_nbr asc, line_nbr asc, id asc'
+
+    receipt_line_id = fields.Many2one(
+        'acumatica.issue.po.return.line',
+        string='Receipt Header',
+        required=True,
+        ondelete='cascade',
+        index=True,
+    )
+
+    line_external_id = fields.Char(
+        string='Line External ID',
+        readonly=True,
+        index=True,
+    )
+
+    line_note = fields.Text(
+        string='Line Note',
+        readonly=True,
+    )
+
+    branch_warehouse = fields.Char(
+        string='Branch',
+        readonly=True,
+    )
+
+    line_description = fields.Char(
+        string='Description',
+        readonly=True,
+    )
+
+    inventory_id = fields.Char(
+        string='Inventory ID',
+        readonly=True,
+        index=True,
+    )
+
+    line_nbr = fields.Integer(
+        string='Line Number',
+        readonly=True,
+    )
+
+    location_code = fields.Char(
+        string='Location',
+        readonly=True,
+    )
+
+    product_uom_qty = fields.Float(
+        string='Quantity',
+        digits=(16, 4),
+        readonly=True,
+    )
+
+    uom_code = fields.Char(
+        string='UOM',
+        readonly=True,
+    )
+
+    warehouse_code = fields.Char(
+        string='Warehouse',
+        readonly=True,
+    )
