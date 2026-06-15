@@ -150,7 +150,7 @@ class AcumaticaReceiptConfig(models.Model):
             for row_number, item in enumerate(raw_data, start=1):
                 header = {
                     'external_id': item.get('id', '') or '',
-                    'row_number': row_number,
+                    'row_number': item.get('rowNumber', '') or '',
                     'note': item.get('note', {}).get('value', '') or '',
                     'branch_warehouse': self._val(item, 'Branch'),
                     'actual_qty': self._val(item, 'ControlQty'),
@@ -223,16 +223,19 @@ class AcumaticaReceiptProductLine(models.Model):
     location_dest_code = fields.Char(string='Location', readonly=True)
     open_qty = fields.Char(string='Open Qty', readonly=True)
     order_qty = fields.Char(string='Ordered Qty', readonly=True)
+
     po_line_number = fields.Char(string='PO Line Nbr', readonly=True)
     po_number = fields.Char(string='PO Number', readonly=True)
     po_type = fields.Char(string='PO Type', readonly=True)
     po_receipt_line_number = fields.Char(string='PO Receipt Line Nbr', readonly=True)
     po_receipt_number = fields.Char(string='PO Receipt Nbr', readonly=True)
-    product_uom_qty = fields.Char(string='Receipt Qty', readonly=True)
+
     transfer_order_line_number = fields.Char(string='Transfer Order Line Nbr', readonly=True)
     transfer_order_number = fields.Char(string='Transfer Order Nbr', readonly=True)
     transfer_order_type = fields.Char(string='Transfer Order Type', readonly=True)
     transfer_shipment_number = fields.Char(string='Transfer Shipment Nbr', readonly=True)
+
+    product_uom_qty = fields.Char(string='Receipt Qty', readonly=True)
     uom_code = fields.Char(string='UOM', readonly=True)
     warehouse_dest_code = fields.Char(string='Warehouse Dest', readonly=True)
     line_note = fields.Text(string='Line Note', readonly=True)
@@ -417,7 +420,7 @@ class AcumaticaReceiptLine(models.Model):
         # proses per receipt number
         for line in self:
             first = line
-            origin = line.receipt_nbr or False
+            origin = first.receipt_nbr or False
             error_list = []
             try:
                 # Cari vendor, inventory, warehouse, uom. kalo salah satu tidak sync di wms, maka record akan masuk ke stock_picking_error.
@@ -477,7 +480,6 @@ class AcumaticaReceiptLine(models.Model):
                 # filter field yang bener-bener ada di stock.picking
                 vals = {k: v for k, v in vals.items() if k in Picking._fields}
 
-                # pakai origin buat dedup
                 picking = self.odoo_picking_id
                 error_data = False
                 if error_list:
@@ -518,21 +520,17 @@ class AcumaticaReceiptLine(models.Model):
                             error_list.append(f'Product with InventoryID {line.inventory_id} was not found in the WMS | MASTER PRODUCT.')
 
                         uom = self._find_uom(line, product)
+                        if not uom:
+                            error_list.append(f'UOM with InventoryID {line.inventory_id} was not found in the WMS | MASTER UOM.')
                         # line_dest = self._find_location_dest(line, warehouse) or dest_location
                         qty = self._parse_float(line.product_uom_qty)
 
-                        # dedup move
-                        move_domain = [('picking_id', '=', picking.id if picking else False)]
-                        if 'adt_line_external_id' in Move._fields and line.line_external_id:
-                            move_domain.append(('adt_line_external_id', '=', line.line_external_id))
-                        else:
-                            move_domain += [
-                                ('product_id', '=', product.id),
-                                ('product_uom_qty', '=', qty),
-                            ]
-
-                        existing_move = Move.search(move_domain, limit=1)
-                        if existing_move:
+                        existing = picking.move_ids.filtered(lambda m:
+                            m.picking_id == picking.id and
+                            m.product_id.id == product.id and
+                            m.product_uom_qty == qty
+                        )
+                        if existing:
                             first.write({
                                 'import_state': 'updated',
                                 'import_message': f'Skip duplicate: {picking.name if picking else False}',

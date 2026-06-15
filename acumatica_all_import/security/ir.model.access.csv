@@ -77,4 +77,15 @@ access_import_uom_wizard_user,import.uom.wizard,model_import_uom_wizard,base.gro
 access_acumatica_shipvia_config_user,acumatica.shipvia.config,model_acumatica_shipvia_config,base.group_user,1,1,1,1
 access_acumatica_shipvia_line_user,acumatica.shipvia.line,model_acumatica_shipvia_line,base.group_user,1,1,1,1
 access_import_shipvia_wizard_user,import.shipvia.wizard,model_import_shipvia_wizard,base.group_user,1,1,1,1
+access_acumatica_transfer_config_user,acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
+access_acumatica_transfer_line_user,acumatica.transfer.line,model_acumatica_transfer_line,base.group_user,1,1,1,1
+access_acumatica_transfer_product_line_user,acumatica.transfer.product.line,model_acumatica_transfer_product_line,base.group_user,1,1,1,1
+access_import_transfer_wizard_user,import.transfer.wizard,model_import_transfer_wizard,base.group_user,1,1,1,1
+
+access_acumatica_transfer_config_user,acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
+access_acumatica_transfer_line_user,acumatica.transfer.line,model_acumatica_transfer_line,base.group_user,1,1,1,1
+access_acumatica_inventory_recieved_product_line_user,acumatica.inventory.recieved.product.line,model_acumatica_inventory_recieved_product_line,base.group_user,1,1,1,1
+access_import_transfer_wizard_user,import.transfer.wizard,model_import_transfer_wizard,base.group_user,1,1,1,1
+
+access_acumatica_shipment_product_line_user,acumatica.shipment.product.line,model_acumatica_shipment_product_line,base.group_user,1,1,1,1
 access_acumatica_receipt_change_item_product_user,access_acumatica_receipt_change_item_product_user,model_acumatica_receipt_change_item_product,base.group_user,1,1,1,1

@@ -3,16 +3,12 @@
         <field name="name">acumatica.inventory.recieved.line.list</field>
         <field name="model">acumatica.inventory.recieved.line</field>
         <field name="arch" type="xml">
-            <list create="false" delete="false">
+            <list>
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="reference_nbr"/>
-                <field name="line_nbr"/>
-                <field name="inventory_id"/>
                 <field name="description"/>
-                <field name="product_uom_qty"/>
-                <field name="uom_code"/>
-                <field name="location_code"/>
-                <field name="detail_warehouse_code"/>
+                <field name="warehouse_code"/>
+                <field name="warehouse_dest_code"/>
                 <field name="import_state"/>
                 <field name="import_message"/>
                 <button name="action_import_this" type="object" string="Import" class="btn-primary" invisible="import_state != 'pending'"/>
@@ -27,38 +23,50 @@
         <field name="arch" type="xml">
             <form string="Data Inventory Recieved Acumatica">
                 <header>
-                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
-                    <button name="action_open_picking" type="object" string="Open Picking" invisible="not odoo_picking_id"/>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state not in ['pending', 'error']"/>
+                    <button name="action_open_picking" type="object" string="Open Picking"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,updated,error"/>
                 </header>
                 <sheet>
-                    <group>
-                        <group string="Header">
+                    <group string="Header">
+                        <group>
                             <field name="reference_nbr"/>
                             <field name="scheduled_date"/>
-                            <field name="header_description"/>
+                            <field name="description"/>
                             <field name="actual_qty"/>
-                            <field name="is_hold"/>
                             <field name="acumatica_write_date"/>
                             <field name="post_period"/>
                             <field name="status"/>
                             <field name="total_qty"/>
                             <field name="warehouse_code"/>
+                        </group>
+                        <group>
+                            <field name="warehouse_dest_code"/>
                             <field name="transfer_type"/>
                             <field name="note"/>
-                        </group>
-                        <group string="Detail">
-                            <field name="line_nbr"/>
-                            <field name="inventory_id"/>
-                            <field name="description"/>
+                            <field name="customer_code"/>
+                            <field name="shipment_nbr"/>
+                            <field name="transfer_nbr"/>
                             <field name="location_code"/>
-                            <field name="product_uom_qty"/>
-                            <field name="uom_code"/>
-                            <field name="detail_warehouse_code"/>
-                            <field name="line_note"/>
-                            <field name="import_message"/>
-                            <field name="odoo_picking_id"/>
+                            <field name="change_item_ref_nbr"/>                        
                         </group>
+                    </group>
+                    <notebook>
+                        <page name="Details" string="Details">
+                            <field name="product_line_ids">
+                                <list>
+                                    <field name="inventory_id"/>
+                                    <field name="line_description"/>
+                                    <field name="warehouse_dest_code"/>
+                                    <field name="product_uom_qty"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                    <group>
+                        <field name="import_message" readonly="1" widget="text"/>
+                        <field name="odoo_picking_id" readonly="1"/>
+                        <field name="exists_in_odoo" readonly="1"/>
                     </group>
                 </sheet>
             </form>
