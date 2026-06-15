@@ -80,7 +80,7 @@
                 <field name="operation_category" column_invisible="1"/>
                 <field name="lot_name" column_invisible="0"/>
                 <!-- <field name="lot_button" widget="generate_lot_button" -->
-                invisible="operation_category != 'receive'"/>
+                <!-- invisible="operation_category != 'receive'"/> -->
             </xpath>
 
             <!-- Custom fields -->

@@ -88,3 +88,4 @@ access_acumatica_inventory_recieved_product_line_user,acumatica.inventory.reciev
 access_import_transfer_wizard_user,import.transfer.wizard,model_import_transfer_wizard,base.group_user,1,1,1,1
 
 access_acumatica_shipment_product_line_user,acumatica.shipment.product.line,model_acumatica_shipment_product_line,base.group_user,1,1,1,1
+access_acumatica_receipt_change_item_product_user,access_acumatica_receipt_change_item_product_user,model_acumatica_receipt_change_item_product,base.group_user,1,1,1,1
