@@ -472,7 +472,7 @@ class AcumaticaShipmentLine(models.Model):
                     ('code', '=', 'incoming'),
                 ], limit=1)
                 if not picking_type:
-                    warehouse_txt = f'Warehouse code {warehouse.name if warehouse else '-'}'
+                    warehouse_txt = f'Warehouse code {warehouse.name if warehouse else "-"}'
                     location_txt = f'Location code {first.warehouse_code}'
                     error_list.append(f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | MASTER OPERATION TYPE.')
 
