@@ -62,6 +62,8 @@ class ImportReceiptWizard(models.TransientModel):
             raw_list += batch_data
 
         self.total_fetched = raw_list
+        if not raw_list:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
         # if not raw_list:
         #     raise UserError('Tidak ada data yang diterima dari API Acumatica.')
@@ -140,7 +142,6 @@ class ImportReceiptWizard(models.TransientModel):
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-
             if self.config_id.odata_select:
                 params['$select'] = self.config_id.odata_select
             if receipt_nbr:
@@ -149,7 +150,7 @@ class ImportReceiptWizard(models.TransientModel):
                 filters.append(self.config_id.odata_filter)
                 filters.extend(odata_filter)
             else:
-                filters.append("(Type eq 'Receipt')")
+                filters.append(f"({self.config_id.odata_filter})")
             if filters:
                 params['$filter'] = ' and '.join(filters)       
 
@@ -189,7 +190,6 @@ class ImportReceiptWizard(models.TransientModel):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
-                header["warehouse_code"] = self._val(details[0], 'Warehouse')
                 result.append(dict(header, line_nbr='0'))
 
 
@@ -295,8 +295,6 @@ class ImportReceiptWizard(models.TransientModel):
             # to_create_filtered = self.filter_by_receipt_lines(to_create, receipts)
             # to_update_filtered = self.filter_by_receipt_lines(to_update, receipts)
             # self._create_receipt_lines_product(to_create_filtered, receipts)
-
-
 
     def _search_receipt_lines(self, data):
         if not data:
