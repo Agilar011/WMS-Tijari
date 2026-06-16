@@ -276,7 +276,7 @@ class AcumaticaStockItemLine(models.Model):
         return self._do_import()
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state == 'pending')
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -533,6 +533,7 @@ class AcumaticaStockItemLine(models.Model):
                                 'name': line.description,
                                 'adt_product_type': 'stock_item',
                                 'is_storable': True,
+                                'tracking' : 'lot',
                                 'default_code': line.inventory_id or False,
                                 'type': self.ITEM_TYPE_MAP.get(
                                     (line.item_type or '').lower(),
@@ -551,7 +552,7 @@ class AcumaticaStockItemLine(models.Model):
                                     line.valuation_method or '',
                                     False
                                 ),
-                                'adt_last_modified_datetime':
+                                'adt_acumatica_write_date':
                                     self._parse_dt(
                                         line.last_modified_datetime
                                     ),
@@ -694,7 +695,7 @@ class AcumaticaStockItemLine(models.Model):
                             adt_item_class = %s,
                             adt_item_status = %s,
                             adt_valuation_method = %s,
-                            adt_last_modified_datetime = %s
+                            adt_acumatica_write_date = %s
                         WHERE id = %s
                     """, update_params)
 

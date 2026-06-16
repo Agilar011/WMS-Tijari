@@ -7,7 +7,7 @@
         <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
             <xpath expr="//notebook" position="inside">
-                <page name="Sku History" string="Historical SKU">
+                <page name="Product History" string="Product History">
                     <field name="sku_history_ids" nolabel="1" readonly="1">
                         <list>
                             <field name="sku"/>
@@ -55,7 +55,7 @@
         <field name="inherit_id" ref="product.product_template_form_view"/>
         <field name="arch" type="xml">
           <xpath expr="//field[@name='type']" position="after">
-            <field name="adt_product_type"/>
+            <field name="adt_product_type" string="Type"/>
           </xpath>
         </field>
     </record>

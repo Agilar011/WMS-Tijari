@@ -8,9 +8,11 @@
                 <sheet>
                     <group>
                         <field name="import_category"/>
-                        <field name="import_type"/>
+                        <field name="import_type" invisible="1"/>
+                        <field name="import_type_transaction" invisible="import_category != 'transaction'"/>
+                        <field name="import_type_master" invisible="import_category != 'master'"/>
                     </group>
-                    <group string="Konfigurasi API">
+                    <group string="API Configuration">
 
                         <field name="uom_config_id" invisible="import_type != 'uom'" required="import_type == 'uom'"/>
                         <field name="customer_config_id" invisible="import_type != 'customer'" required="import_type == 'customer'"/>
@@ -44,9 +46,10 @@
                         <field name='wh33_filter' invisible="import_category != 'transaction'"/>
                         <field name="odata_filter"/>
                     </group>
-                    <group invisible="import_category != 'transaction'" string="Rentang Waktu">
-                        <field name="start_date"/>
-                        <field name="end_date"/>
+                    <group invisible="import_category != 'transaction'" string="Date Range">
+                        <field name="date_period"/>
+                        <field name="start_date" invisible="date_period != True"/>
+                        <field name="end_date" invisible="date_period != True"/>
                     </group>                        <!-- <field name="last_modified_from"/> -->
                     <!-- <group string="Batch Import"> -->
                         <!-- <field name="auto_commit_batch"/> -->
@@ -58,7 +61,7 @@
                         <field name="total_imported" readonly="1"/>
                         <field name="batch_count" readonly="1"/>
                     </group> -->
-                    <group string="Pesan">
+                    <group string="Log Messages">
                         <field name="last_message" readonly="1" nolabel="1"/>
                     </group>
                 </sheet>
