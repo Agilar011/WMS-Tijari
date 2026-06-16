@@ -86,6 +86,27 @@ class AcumaticaNonStockItemLine(models.Model):
     )
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
+    # ItemStatus Acumatica → adt_item_status selection
+    STATUS_MAP = {
+        'Active':      'Active',
+        'Inactive':    'Inactive',
+        'ToDelete':    'ToDelete',
+        'NoSales':     'NoSales',
+        'NoPurchases': 'NoPurchases',
+        'NoRequest':   'NoRequest',
+    }
+#debug function
+
+    # def _debug_product_vals(self, title, vals):
+    #     print("\n" + "=" * 100)
+    #     print(title)
+    #     print("=" * 100)
+
+    #     for key, value in sorted(vals.items()):
+    #         print(f"{key:<35}: {value}")
+
+    #     print("=" * 100 + "\n")
+        
     # ─── Helpers ─────────────────────────────────────
     @staticmethod
     def _parse_dt(dt_str):
@@ -96,15 +117,6 @@ class AcumaticaNonStockItemLine(models.Model):
         except Exception:
             return False
 
-    # ItemStatus Acumatica → adt_item_status selection
-    STATUS_MAP = {
-        'Active':      'Active',
-        'Inactive':    'Inactive',
-        'ToDelete':    'ToDelete',
-        'NoSales':     'NoSales',
-        'NoPurchases': 'NoPurchases',
-        'NoRequest':   'NoRequest',
-    }
 
     def _find_existing_product(self, rec):
         """Cari product.template by UUID dulu, fallback by default_code (InventoryID)."""
@@ -112,6 +124,7 @@ class AcumaticaNonStockItemLine(models.Model):
         if rec.external_id:
             found = Product.search([('adt_external_id', '=', rec.external_id)], limit=1)
             if found:
+                found.type = 'consu'
                 return found
         if rec.inventory_id:
             found = Product.search([('default_code', '=', rec.inventory_id)], limit=1)
@@ -147,51 +160,60 @@ class AcumaticaNonStockItemLine(models.Model):
 
                 vals = {
                     # ── Field standar Odoo ──────────────────
-                    'name':         line.description,
+                    'name': line.description,
                     'default_code': line.inventory_id or False,
-                    'type':         'service',   # Non-Stock → service (no inventory tracking)
-                    'volume':       line.volume or 0.0,
-                    'weight':       line.weight or 0.0,
+                    'type': 'consu',   # Non-Stock → service (no inventory tracking)
+                    'volume': line.volume or 0.0,
+                    'weight': line.weight or 0.0,
 
                     # ── Field custom adt_ ───────────────────
-                    'adt_external_id':            line.external_id or False,
-                    'adt_product_type':         'non_stock_item',
+                    'adt_external_id': line.external_id or False,
+                    'adt_product_type': 'non_stock_item',
                     'is_storable': True,
-                    'adt_note':                   line.note or False,
-                    'adt_base_unit':              line.base_unit or False,
-                    'adt_is_a_kit':               line.is_a_kit,
-                    'adt_is_kit':                 line.is_kit,
-                    'adt_item_class':             line.item_class or False,
-                    'adt_item_status':            item_status or False,
-                    'adt_item_type':              line.item_type or False,
+                    'adt_note': line.note or False,
+                    'adt_base_unit':  line.base_unit or False,
+                    'adt_is_a_kit': line.is_a_kit,
+                    'adt_is_kit':  line.is_kit,
+                    'adt_item_class': line.item_class or False,
+                    'adt_item_status': item_status or False,
+                    'adt_item_type':  line.item_type or False,
                     'adt_acumatica_write_date': self._parse_dt(line.last_modified_datetime),
-                    'adt_note_id':                line.note_id or False,
-                    'adt_posting_class':          line.posting_class or False,
-                    'adt_price_class':            line.price_class or False,
-                    'adt_purchase_unit':          line.purchase_unit or False,
-                    'adt_sales_unit':             line.sales_unit or False,
-                    'adt_volume_uom':             line.volume_uom or False,
-                    'adt_weight_uom':             line.weight_uom or False,
+                    'adt_note_id': line.note_id or False,
+                    'adt_posting_class': line.posting_class or False,
+                    'adt_price_class': line.price_class or False,
+                    'adt_purchase_unit': line.purchase_unit or False,
+                    'adt_sales_unit': line.sales_unit or False,
+                    'adt_volume_uom': line.volume_uom or False,
+                    'adt_weight_uom': line.weight_uom or False,
                 }
 
                 existing = self._find_existing_product(line)
 
+
                 if existing:
                     existing.write(vals)
+
                     line.write({
                         'import_state':    'updated',
                         'import_message':  f'Diupdate: {existing.name} (ID: {existing.id})',
                         'odoo_product_id': existing.id,
                     })
                     updated += 1
+                    # for item in existing:
+
+
                 else:
                     new_product = self.env['product.template'].create(vals)
+
                     line.write({
                         'import_state':    'imported',
                         'import_message':  f'Dibuat: {new_product.name} (ID: {new_product.id})',
                         'odoo_product_id': new_product.id,
                     })
                     imported += 1
+                    # for item in new_product:
+
+
 
             except Exception as e:
                 _logger.error("Error import Non-Stock Item %s: %s", line.inventory_id, str(e))
