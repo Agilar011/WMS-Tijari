@@ -165,6 +165,7 @@ class AcumaticaNonStockItemLine(models.Model):
                     'type': 'consu',   # Non-Stock → service (no inventory tracking)
                     'volume': line.volume or 0.0,
                     'weight': line.weight or 0.0,
+                    'tracking' : 'lot',
 
                     # ── Field custom adt_ ───────────────────
                     'adt_external_id': line.external_id or False,
