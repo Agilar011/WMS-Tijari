@@ -162,10 +162,8 @@ class AcumaticaNonStockItemLine(models.Model):
                     # ── Field standar Odoo ──────────────────
                     'name': line.description,
                     'default_code': line.inventory_id or False,
-                    'type': 'consu',   # Non-Stock → service (no inventory tracking)
-                    'volume': line.volume or 0.0,
-                    'weight': line.weight or 0.0,
-                    'tracking' : 'lot',
+                    'type':         'consu',
+                    'is_storable': True,
                     'tracking' : 'lot',
                     'volume':       line.volume or 0.0,
                     'weight':       line.weight or 0.0,
@@ -173,7 +171,6 @@ class AcumaticaNonStockItemLine(models.Model):
                     # ── Field custom adt_ ───────────────────
                     'adt_external_id': line.external_id or False,
                     'adt_product_type': 'non_stock_item',
-                    'is_storable': True,
                     'adt_note': line.note or False,
                     'adt_base_unit':  line.base_unit or False,
                     'adt_is_a_kit': line.is_a_kit,
