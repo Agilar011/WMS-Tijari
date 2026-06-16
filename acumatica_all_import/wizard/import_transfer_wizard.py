@@ -1,5 +1,10 @@
 from odoo import fields, models
 from odoo.exceptions import UserError
+from dateutil import parser as dateutil_parser
+
+import logging
+_logger = logging.getLogger(__name__)
+
 
 
 class ImportTransferWizard(models.TransientModel):
@@ -25,16 +30,15 @@ class ImportTransferWizard(models.TransientModel):
 
     def action_fetch_data(self):
         self.ensure_one()
-        self.env['acumatica.transfer.line'].search([('config_id', '=', self.config_id.id)]).unlink()
 
         import math
 
-        raw_list = []
+        raw_list = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_transfer_data(
+            batch_data = self.fetch_transfer_data(
                 limit=self.batch_size,
                 offset=offset,
                 receipt_nbr=self.receipt_nbr,
@@ -45,50 +49,393 @@ class ImportTransferWizard(models.TransientModel):
             if not batch_data:
                 break
 
-            raw_list.extend(batch_data)
+            raw_list += batch_data
 
-        if not raw_list:
-            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        self.total_fetched = raw_list
 
+        # if not raw_list:
+        #     raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+
+        # Picking = self.env['stock.picking']
+        # existing_keys = set()
+        # new_keys = set()
+        # lines_to_create = []
+
+        # for item in raw_list:
+        #     origin = item.get('transfer_order_number') or item.get('receipt_nbr')
+        #     exists = bool(origin and Picking.search_count([('origin', '=', origin)]))
+        #     if exists:
+        #         existing_keys.add(origin)
+        #         msg = 'Sudah ada → move akan ditambahkan jika belum ada'
+        #     else:
+        #         new_keys.add(origin)
+        #         msg = ''
+
+        #     vals = dict(item)
+        #     vals.update({
+        #         'config_id': self.config_id.id,
+        #         'import_state': 'pending',
+        #         'import_message': msg,
+        #         'selected': True,
+        #         'sync_date': fields.Datetime.now(),
+        #     })
+        #     lines_to_create.append(vals)
+
+        # self.env['acumatica.transfer.line'].create(lines_to_create)
+        # self.write({
+        #     'state': 'fetched',
+        #     'total_fetched': len(raw_list),
+        #     'total_new': len([x for x in new_keys if x]),
+        #     'total_existing': len([x for x in existing_keys if x]),
+        # })
+        # return {
+        #     'type': 'ir.actions.act_window',
+        #     'res_model': 'import.transfer.wizard',
+        #     'res_id': self.id,
+        #     'view_mode': 'form',
+        #     'target': 'new',
+        # }
+
+    @staticmethod
+    def _val(item, key):
+        value = item.get(key, {})
+        if isinstance(value, dict):
+            return value.get('value', '') or ''
+        return value or ''
+
+    @staticmethod
+    def _normalize_rows(payload):
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            if isinstance(payload.get('value'), list):
+                return payload.get('value')
+            if isinstance(payload.get('rows'), list):
+                return payload.get('rows')
+        return []
+    
+    @staticmethod
+    def _parse_dt(dt_str):
+        if not dt_str:
+            return False
+        try:
+            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
+        except Exception:
+            return False
+
+
+    def fetch_transfer_data(self, limit=50, offset=0, receipt_nbr=False, last_modified_from=False, odata_filter=False):
+        self.ensure_one()
+        session = self.config_id._do_login()
+        try:
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
+            params = {'$top': limit, '$skip': offset}
+            filters = []
+
+            if self.config_id.odata_expand:
+                params['$expand'] = self.config_id.odata_expand
+            if self.config_id.odata_select:
+                params['$select'] = self.config_id.odata_select
+            if receipt_nbr:
+                filters.append(f"ReceiptNbr eq '{receipt_nbr}'")
+            if last_modified_from:
+                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
+            if odata_filter:
+                filters.append(f"({odata_filter})")
+            elif self.config_id.odata_filter:
+                filters.append(f"({self.config_id.odata_filter})")
+
+            if filters:
+                params['$filter'] = ' and '.join(filters)
+
+            response = session.get(endpoint, params=params, timeout=90)
+            if response.status_code != 200:
+                raise UserError(f'Gagal ambil data Transfer Receipt (HTTP {response.status_code}): {response.text}')
+
+            raw_data = self._normalize_rows(response.json())
+            result = []
+            detail_result = []
+
+            for row_number, item in enumerate(raw_data, start=1):
+                header = {
+                    'external_id': item.get('id', '') or '',
+                    'row_number': row_number,
+                    'note': item.get('note', {}).get('value', '') or '',
+                    'branch_warehouse': self._val(item, 'Branch'),
+                    'actual_qty': self._val(item, 'ControlQty'),
+                    'scheduled_date': self._val(item, 'Date'),
+                    'is_hold': self._val(item, 'Hold'),
+                    'inventory_ref': self._val(item, 'InventoryRefNbr'),
+                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+                    'header_location_code': self._val(item, 'Location'),
+                    'post_period': self._val(item, 'PostPeriod'),
+                    'receipt_nbr': self._val(item, 'ReceiptNbr'),
+                    'status': self._val(item, 'Status'),
+                    'total_qty': self._val(item, 'TotalQty'),
+                    'receipt_type': self._val(item, 'Type'),
+                    'vendor_code': self._val(item, 'VendorID'),
+                    'partner_ref': self._val(item, 'VendorRef'),
+                    'warehouse_dest_code': self._val(item, 'Warehouse'),
+                }
+
+                details = item.get('Details') or []
+                if isinstance(details, dict):
+                    details = details.get('value', []) or []
+                if not isinstance(details, list):
+                    details = []
+
+                # if not details:
+                #     result.append(dict(header, line_nbr='0'))
+                #     continue
+                if details:
+                    transfer_shipment_nbr = self._val(details[0], 'TransferShipmentNbr')
+                    dest_warehouse_data = self.search_dest_warehouse(transfer_shipment_nbr, session)
+                    if dest_warehouse_data:
+                        header["warehouse_code"] = dest_warehouse_data.get('source_warehouse')
+
+                result.append(dict(header, line_nbr='0'))
+                for detail in details:
+                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
+                    description = self._val(detail, 'Description') or self._val(detail, 'TransactionDescription')
+                    # transfer_shipment_nbr = self._val(detail, 'TransferShipmentNbr')
+                    # if transfer_shipment_nbr and not is_found_dest_warehouse:
+                    #     dest_warehouse_data = self.search_dest_warehouse(transfer_shipment_nbr, session)
+                    #     is_found_dest_warehouse = True
+
+                    detail_result.append({
+                        'header_external_id': header['external_id'],
+                        'line_external_id': detail.get('id', '') or '',
+                        'line_note': detail.get('note', {}).get('value', '') or '',
+                        'description': description,
+                        'inventory_id': self._val(detail, 'InventoryID'),
+                        'line_nbr': str(line_nbr),
+                        'line_type': self._val(detail, 'LineType'),
+                        'location_dest_code': self._val(detail, 'Location'),
+                        'open_qty': self._val(detail, 'OpenQty'),
+                        'order_qty': self._val(detail, 'OrderedQty'),
+                        'po_line_number': self._val(detail, 'POLineNbr'),
+                        'po_number': self._val(detail, 'POOrderNbr'),
+                        'po_type': self._val(detail, 'POOrderType'),
+                        'po_receipt_line_number': self._val(detail, 'POReceiptLineNbr'),
+                        'po_receipt_number': self._val(detail, 'POReceiptNbr'),
+                        'product_uom_qty': self._val(detail, 'ReceiptQty'),
+                        'transaction_description': self._val(detail, 'TransactionDescription'),
+                        'transfer_order_line_number': self._val(detail, 'TransferOrderLineNbr'),
+                        'transfer_order_number': self._val(detail, 'TransferOrderNbr'),
+                        'transfer_order_type': self._val(detail, 'TransferOrderType'),
+                        'transfer_shipment_number': transfer_shipment_nbr,
+                        'uom_code': self._val(detail, 'UOM'),
+                        # 'warehouse_code': dest_warehouse_data.get('source_warehouse') if dest_warehouse_data else None,
+                    })
+
+            _logger.info('Berhasil ambil %s rows Transfer Receipt dari Acumatica', len(result))
+            self.config_id.last_sync = fields.Datetime.now()
+            self._validate_staging_against_picking(result, detail_result)
+            return len(result)
+        finally:
+            self.config_id._do_logout(session)
+
+    def search_dest_warehouse(self, transfer_nbr, session):
+        self.ensure_one()
+        if not transfer_nbr:
+            return None
+        try:
+            endpoint = f"{self.config_id.api_url}/Shipment"
+            params = {
+                '$select': 'ToWarehouseID, WarehouseID, ShipmentNbr', 
+                '$filter': f"ShipmentNbr eq '{transfer_nbr}'"
+            }
+
+            response = session.get(endpoint, params=params, timeout=90)
+            if response.status_code != 200:
+                raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
+
+            raw_data = self._normalize_rows(response.json())
+
+            item = raw_data[0]  # misal ambil data pertama
+
+            result = {
+                'shipment_number': self._val(item, 'ShipmentNbr'),
+                'dest_warehouse': self._val(item, 'ToWarehouseID'),
+                'source_warehouse': self._val(item, 'WarehouseID'),
+            }
+
+            _logger.info('Berhasil ambil data Warehouse dari Transfer Receipt', len(result))
+            return result
+        except Exception as e:
+            _logger.error('Gagal ambil data Warehouse dari Transfer Receipt: %s', str(e))
+            return None
+
+
+    def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']
-        existing_keys = set()
-        new_keys = set()
         lines_to_create = []
-
-        for item in raw_list:
-            origin = item.get('transfer_order_number') or item.get('receipt_nbr')
-            exists = bool(origin and Picking.search_count([('origin', '=', origin)]))
-            if exists:
-                existing_keys.add(origin)
-                msg = 'Sudah ada → move akan ditambahkan jika belum ada'
-            else:
-                new_keys.add(origin)
-                msg = ''
-
-            vals = dict(item)
-            vals.update({
+        sync_data = fields.Datetime.now()
+        for item in header_list:
+            
+            receipt_nbr = item.get('receipt_nbr')
+            # exists = receipt_nbr and Picking.search_count([('origin', '=', receipt_nbr)])
+            exists = Picking.search_read(
+                domain=[('origin', '=', receipt_nbr)],
+                fields=['id', 'origin'],
+                limit=1
+            )
+            lines_to_create.append({
+                **item,
+                'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
                 'import_state': 'pending',
-                'import_message': msg,
+                'import_message': f'{receipt_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
-                'sync_date': fields.Datetime.now(),
+                'sync_date': sync_data,
             })
-            lines_to_create.append(vals)
 
-        self.env['acumatica.transfer.line'].create(lines_to_create)
-        self.write({
-            'state': 'fetched',
-            'total_fetched': len(raw_list),
-            'total_new': len([x for x in new_keys if x]),
-            'total_existing': len([x for x in existing_keys if x]),
-        })
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'import.transfer.wizard',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'new',
+        if lines_to_create:
+            # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
+            unchanged, to_update, to_create = self._search_receipt_lines(lines_to_create)
+            # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
+            self._update_receipt_lines(to_update)
+
+            receipts = self._create_receipt_lines(to_create)
+            line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
+            if line_update:
+                self._update_receipt_lines_product(line_update, to_update)
+
+            if line_create:
+                self._create_receipt_lines_product(line_create, receipts)
+
+            # to_create_filtered = self.filter_by_receipt_lines(to_create, receipts)
+            # to_update_filtered = self.filter_by_receipt_lines(to_update, receipts)
+            # self._create_receipt_lines_product(to_create_filtered, receipts)
+
+    def _search_receipt_lines(self, data):
+        if not data:
+            return [], [], []
+
+        receipt_nbrs = [
+            d['receipt_nbr']
+            for d in data
+            if d.get('receipt_nbr')
+        ]
+        existing_lines = self.env['acumatica.transfer.line'].search([
+            ('receipt_nbr', 'in', receipt_nbrs)
+        ])
+
+        existing_map = {
+            line.receipt_nbr: line
+            for line in existing_lines
         }
+
+        unchanged = []
+        to_update = []
+        to_create = []
+        
+        for vals in data:
+            existing = existing_map.get(vals['receipt_nbr'])
+
+            if not existing:
+                to_create.append(vals)
+                continue
+
+
+            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+                unchanged.append(existing)
+            else:
+                to_update.append({
+                    'record': existing,
+                    'vals': vals,
+                })
+
+        return unchanged, to_update, to_create
+
+    def _update_receipt_lines(self, data):
+        if not data:
+            return False
+
+        for item in data:
+            record = item['record']
+            vals = item['vals']
+
+
+            record.write(vals)
+
+    def _create_receipt_lines(self, data):
+        if not data:
+            return False
+
+        return self.env['acumatica.transfer.line'].create(data)
+
+    def filter_product_line(self, data, update, create):
+        # buat set dari semua external_id di update
+        update_ids = {
+            item.get('vals', {}).get('external_id')
+            for item in update
+            if item.get('vals', {}).get('external_id')
+        }
+
+        # filter data yang header_external_id ada di update_ids
+        update_final = [
+            line 
+            for line in data 
+            if line['header_external_id'] in update_ids
+        ]
+
+        # buat set dari semua external_id di create
+        create_ids = {
+            crt['external_id'] 
+            for crt in create
+        }
+
+        # filter data yang header_external_id ada di create_ids
+        create_final = [line for line in data if line['header_external_id'] in create_ids]
+
+        return update_final, create_final
+        
+    def filter_by_receipt_lines(self, data, receipts):
+        """
+        Filter data berdasarkan header_external_id yang ada di receipts.
+        
+        :param data: list of dict (to_create atau to_update)
+        :param receipts: recordset receipt
+        :return: list of dict yang header_external_id-nya ada di receipts
+        """
+        receipt_ids = {rec['external_id'] for rec in receipts}
+
+        filtered_data = [
+            vals for vals in data
+            if vals.get('header_external_id') in receipt_ids
+        ]
+
+        return filtered_data
+
+    def _create_receipt_lines_product(self, data, receipts):
+        receipt_map = {
+            rec['external_id']: rec.id
+            for rec in receipts
+        }
+
+        for vals in data:
+            vals['transfer_line_id'] = receipt_map.get(
+                vals['header_external_id']
+            )
+
+        self.env['acumatica.transfer.product.line'].create(data)
+
+    def _update_receipt_lines_product(self, data, receipts):
+        receipt_map = {
+            rec['vals']['external_id']: rec['record']['id']
+            for rec in receipts
+            if rec.get('vals')
+            and rec.get('record')
+        }
+
+        product_line = self.env['acumatica.transfer.product.line']
+
+        for vals in data:
+            ext_id = vals.get('header_external_id')
+            vals['transfer_line_id'] = receipt_map.get(ext_id)
+            if vals['transfer_line_id']:
+                product_line.browse(vals['transfer_line_id']).write(vals)
 
     def action_view_staging(self):
         self.ensure_one()

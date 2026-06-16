@@ -3,7 +3,7 @@
         <field name="name">import.shipment.wizard.form</field>
         <field name="model">import.shipment.wizard</field>
         <field name="arch" type="xml">
-            <form string="Import Shipment Receipt dari Acumatica">
+            <form string="Import Shipment Number dari Acumatica">
                 <sheet>
                     <div invisible="state != 'draft'">
                         <div class="alert alert-info" role="alert">
@@ -15,7 +15,7 @@
                             <group>
                                 <field name="config_id"/>
                                 <field name="fetch_limit"/>
-                                <field name="receipt_nbr"/>
+                                <field name="shipment_nbr"/>
                             </group>
                             <group>
                                 <field name="last_modified_from"/>
@@ -51,7 +51,7 @@
                             <group string="Konfigurasi">
                                 <field name="config_id" readonly="1"/>
                                 <field name="fetch_limit" readonly="1"/>
-                                <field name="receipt_nbr" readonly="1"/>
+                                <field name="shipment_nbr" readonly="1"/>
                             </group>
                         </group>
                     </div>
@@ -67,7 +67,7 @@
     </record>
 
     <record id="action_import_shipment_wizard" model="ir.actions.act_window">
-        <field name="name">Import Shipment Receipt</field>
+        <field name="name">Import Shipment SO RETURN</field>
         <field name="res_model">import.shipment.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>

@@ -5,6 +5,7 @@ from docutils.nodes import note
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
+import logging
 _logger = logging.getLogger(__name__)
 
 import requests
@@ -107,7 +108,7 @@ class AcumaticaShipmentConfig(models.Model):
                 return payload.get('rows')
         return []
 
-    def fetch_shipment_data(self, limit=50, offset=0, receipt_nbr=False, last_modified_from=False, odata_filter=False):
+    def fetch_shipment_data(self, limit=50, offset=0, shipment_nbr=False, last_modified_from=False, odata_filter=False):
         self.ensure_one()
         session = self._do_login()
         try:
@@ -119,8 +120,8 @@ class AcumaticaShipmentConfig(models.Model):
                 params['$expand'] = self.odata_expand
             if self.odata_select:
                 params['$select'] = self.odata_select
-            if receipt_nbr:
-                filters.append(f"ShipmentNbr eq '{receipt_nbr}'")
+            if shipment_nbr:
+                filters.append(f"ShipmentNbr eq '{shipment_nbr}'")
             if odata_filter:
                 filters.append(self.odata_filter)
                 filters.extend(odata_filter)
@@ -157,7 +158,7 @@ class AcumaticaShipmentConfig(models.Model):
                     'package_weight': self._val(item, 'PackageWeight'),
                     'is_picked': self._val(item, 'Picked'),
                     'scheduled_date': self._val(item, 'ShipmentDate'),
-                    'receipt_nbr': self._val(item, 'ShipmentNbr'),
+                    'shipment_nbr': self._val(item, 'ShipmentNbr'),
                     'shipped_qty': self._val(item, 'ShippedQty'),
                     'shipped_volume': self._val(item, 'ShippedVolume'),
                     'shipped_weight': self._val(item, 'ShippedWeight'),
@@ -254,16 +255,42 @@ class AcumaticaShipmentConfig(models.Model):
             self.last_sync = fields.Datetime.now()
 
 
+class AcumaticaShipmentProductLine(models.Model):
+    _name = 'acumatica.shipment.product.line'
+    _description = 'Data Shipment Receipt dari Acumatica'
+
+    header_external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
+    shipment_line_id = fields.Many2one('acumatica.shipment.line', string='Receipt', ondelete='cascade')
+    line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
+
+    description = fields.Char(string='Description Line', readonly=True)
+    note = fields.Text(string='Detail Note', readonly=True)
+    is_free_item = fields.Char(string='Free Item', readonly=True)
+    inventory_id = fields.Char(string='InventoryID', readonly=True)
+    line_nbr = fields.Char(string='Line Nbr', readonly=True)
+    location_dest_code = fields.Char(string='Location Detail', readonly=True)
+    open_qty = fields.Char(string='Open Qty', readonly=True)
+    order_qty = fields.Char(string='Ordered Qty', readonly=True)
+    order_line_number = fields.Char(string='Order Line Nbr', readonly=True)
+    order_number = fields.Char(string='Order Nbr', readonly=True)
+    order_type = fields.Char(string='Order Type', readonly=True)
+    shipped_qty = fields.Char(string='Shipped Qty Detail', readonly=True)
+    uom_code = fields.Char(string='UOM', readonly=True)
+    original_qty = fields.Char(string='Original Qty', readonly=True)
+    warehouse_dest_code = fields.Char(string='Warehouse Detail', readonly=True)
+
+
 class AcumaticaShipmentLine(models.Model):
     _name = 'acumatica.shipment.line'
     _description = 'Data Shipment Receipt dari Acumatica'
-    _order = 'receipt_nbr asc, line_nbr asc, id asc'
+    _order = 'shipment_nbr asc, id asc'
 
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)
 
-    receipt_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
+    product_line_ids = fields.One2many('acumatica.shipment.product.line', 'shipment_line_id', string='Lines')
+    shipment_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
     partner_code = fields.Char(string='CustomerID', readonly=True)
     scheduled_date = fields.Char(string='Shipment Date', readonly=True)
     warehouse_code = fields.Char(string='Warehouse Asal', readonly=True)
@@ -298,22 +325,8 @@ class AcumaticaShipmentLine(models.Model):
 
     acumatica_id = fields.Char(string='Acumatica ID', readonly=True)
     acumatica_row_number = fields.Integer(string='Acumatica Row Number', readonly=True)
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)
     acumatica_line_number = fields.Char(string='Acumatica Line Number', readonly=True)
-    line_description = fields.Char(string='Description Line', readonly=True)
-    detail_note = fields.Text(string='Detail Note', readonly=True)
-    is_free_item = fields.Char(string='Free Item', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    location_dest_code = fields.Char(string='Location Detail', readonly=True)
-    open_qty = fields.Char(string='Open Qty', readonly=True)
-    order_qty = fields.Char(string='Ordered Qty', readonly=True)
-    order_line_number = fields.Char(string='Order Line Nbr', readonly=True)
-    order_number = fields.Char(string='Order Nbr', readonly=True)
-    order_type = fields.Char(string='Order Type', readonly=True)
     original_qty = fields.Char(string='Original Qty', readonly=True)
-    detail_shipped_qty = fields.Char(string='Shipped Qty Detail', readonly=True)
-    uom_code = fields.Char(string='UOM', readonly=True)
-    detail_warehouse_code = fields.Char(string='Warehouse Detail', readonly=True)
 
     import_state = fields.Selection([
         ('pending', 'Belum Diimport'),
@@ -330,11 +343,11 @@ class AcumaticaShipmentLine(models.Model):
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
-    @api.depends('receipt_nbr')
+    @api.depends('shipment_nbr')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('origin', '=', rec.receipt_nbr)]))
+            rec.exists_in_odoo = bool(rec.shipment_nbr and Picking.search_count([('origin', '=', rec.shipment_nbr)]))
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -381,8 +394,8 @@ class AcumaticaShipmentLine(models.Model):
     def _find_warehouse(self, line):
         Warehouse = self.env['stock.location.acumatica']
         warehouse = False
-        if line.detail_warehouse_code:
-            warehouse = Warehouse.search([('code', '=', line.detail_warehouse_code)], limit=1)
+        if line.warehouse_code:
+            warehouse = Warehouse.search([('code', '=', line.warehouse_code)], limit=1)
             if warehouse:
                 if not warehouse.odoo_building_id:
                     warehouse = False
@@ -436,55 +449,44 @@ class AcumaticaShipmentLine(models.Model):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         PickingType = self.env['stock.picking.type']
+        Error = self.env['stock.picking.acumatica.error']
+        ErrorLine = self.env['stock.picking.acumatica.error.line']
 
         imported = updated = error = 0
 
-        keys = [k for k in self.mapped('receipt_nbr') if k]
-        for shipment_nbr in keys:
-            receipt_lines = self.filtered(lambda l: l.receipt_nbr == shipment_nbr and l.import_state == 'pending')
-            if not receipt_lines:
-                continue
-            first = receipt_lines[0]
+        for line in self:
+            first = line
+            origin = first.shipment_nbr or False
+            error_list = []
             try:
                 # partner = self._find_partner(first)
                 partner = self._find_partner(first)
                 if not partner:
-                    flag = {
-                        'sync_state': 'not_ready',
-                        'sync_message': f'Customer dengan CustomerID {first.partner_code} tidak ditemukan di WMS.',
-                    }
+                    error_list.append(f'Customer with CustomerID {first.partner_code} was not found in the WMS | MASTER PARTNER.')
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
-                    flag = {
-                        'sync_state': 'not_ready',
-                        'sync_message': f'Warehouse dengan code {first.warehouse_dest_code} tidak ditemukan di WMS.',
-                    }
-                # warehouse = self._find_warehouse(first)
-                # if not warehouse:
-                #     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
+                    error_list.append(f'Warehouse with location code {first.warehouse_code} was not found in the WMS | MAPPING WAREHOUSE.')
 
                 picking_type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
+                    ('warehouse_id', '=', warehouse.id if warehouse else False),
                     ('code', '=', 'incoming'),
                 ], limit=1)
                 if not picking_type:
-                    raise UserError('Picking type receipt/incoming tidak ditemukan.')
+                    warehouse_txt = f'Warehouse code {warehouse.name if warehouse else "-"}'
+                    location_txt = f'Location code {first.warehouse_code}'
+                    error_list.append(f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | MASTER OPERATION TYPE.')
 
                 dest_location = self._find_location_dest(first)
-                # if not dest_location:
-                #     raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.location_dest_code or first.header_location_code or "-"}')
-
-                # src_location = self._find_source_location(warehouse)
-                # if not src_location:
-                #     raise UserError('Location sumber supplier tidak ditemukan.')
+                if not dest_location:
+                    error_list.append(f'Location with code {first.warehouse_code} was not found in the WMS | MAPPING WAREHOUSE.')
 
                 vals = {
-                    'origin': first.receipt_nbr,
+                    'origin': origin,
                     'partner_id': partner.id if partner else False,
-                    'picking_type_id': picking_type.id,
+                    'picking_type_id': picking_type.id if picking_type else False,
                     'adt_dest_location_id': dest_location.id if dest_location else False,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
-                    'note': first.note or first.description or False,
+                    'note': first.note or False,
 
                     'adt_actual_qty': self._parse_float(first.actual_qty),
                     'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
@@ -518,49 +520,116 @@ class AcumaticaShipmentLine(models.Model):
 
                 }
 
-                picking = Picking.search([('origin', '=', first.receipt_nbr)], limit=1)
-                if picking:
-                    if picking.state in ('done', 'cancel'):
-                        raise UserError(f'Receipt {first.receipt_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
-                    picking.write(vals)
-                    action_state = 'updated'
-                    updated += 1
+                picking = self.odoo_picking_id
+                error_data = False
+                if error_list:
+                    error_data = Error.search([('origin', '=', origin)], limit=1)
+                    if not error_data:
+                        error_data = Error.create({
+                            'partner': first.partner_code or False,
+                            'operation_type': 'receipt',
+                            'location': first.warehouse_code or False,
+                            'location_dest': first.warehouse_dest_code or False,
+                            'scheduled_date': self._parse_dt(first.scheduled_date),
+                            'origin': origin,
+                            'adt_total_qty': self._parse_float(first.shipped_qty),
+                            'api_acumatica': 'shipment_so',
+                            'error_message': '\n'.join(error_list),
+                            'payload': str(vals)[:1000],
+                        })
                 else:
-                    picking = Picking.create(vals)
-                    action_state = 'imported'
-                    imported += 1
+                    if picking:
+                        if picking.state in ('done', 'cancel'):
+                            raise UserError(f'Receipt {first.shipment_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
+                        picking.write(vals)
+                        action_state = 'updated'
+                        updated += 1
+                    else:
+                        picking = Picking.create(vals)
+                        picking.action_confirm()
+                        action_state = 'imported'
+                        imported += 1
 
-                for line in receipt_lines:
+                for line in self.product_line_ids:
                     product = self._find_product(line)
-                    uom = self._find_uom(line, product)
-                    line_dest = self._find_location_dest(line) or dest_location
-                    qty = self._parse_float(line.detail_shipped_qty or line.order_qty or line.actual_qty)
+                    if not product:
+                        error_list.append(f'Product with InventoryID {line.inventory_id} was not found in the WMS | MASTER PRODUCT.')
 
-                    existing = Move.search([
-                        ('picking_id', '=', picking.id),
-                        ('product_id', '=', product.id),
-                        ('name', '=', line.line_description or product.display_name),
-                        ('product_uom_qty', '=', qty),
-                    ], limit=1)
+                    uom = self._find_uom(line, product)
+                    if not uom:
+                        error_list.append(f'UOM with InventoryID {line.inventory_id} was not found in the WMS | MASTER UOM.')
+
+                    # line_dest = self._find_location_dest(line) or dest_location
+                    qty = self._parse_float(line.shipped_qty)
+
+                    existing = picking.move_ids.filtered(lambda m:
+                        m.picking_id == picking.id and
+                        m.product_id.id == product.id and
+                        m.product_uom_qty == qty
+                    )
                     if existing:
-                        line.write({
+                        first.write({
                             'import_state': action_state,
                             'import_message': f'{action_state.title()}: {picking.name} (move sudah ada)',
                             'odoo_picking_id': picking.id,
                         })
                         continue
+                    move_vals = {
+                            'name': line.description or product.display_name,
+                            'picking_id': picking.id if picking else False,
+                            'product_id': product.id,
+                            'product_uom_qty': qty,
+                            'product_uom': uom.id if uom else product.uom_id.id,
+                            'location_id': picking.location_id.id if picking else False,
+                            'location_dest_id': picking.location_dest_id.id if picking else False,
+                            'warehouse_id': warehouse.id if warehouse else False,
+                            'description_picking': line.description or False,
+                        }
+                    move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
+                    if error_data:
+                        existing_error = error_data.line_ids.filtered(lambda m:
+                            m.error_id.id == error_data.id and
+                            m.inventory_id == line.inventory_id and
+                            m.qty == line.product_uom_qty
+                        )
+                        if existing_error:
+                            ErrorLine.create({
+                                'error_id': error_data.id,
+                                'inventory_id': line.inventory_id or False,
+                                'product_name': line.description or False,
+                                'qty': qty or False,
+                                'uom': line.uom_code or False,
+                            })
+                            error += 1
+                        else:
+                            ErrorLine.create({
+                                'error_id': error_data.id,
+                                'inventory_id': line.inventory_id or False,
+                                'product_name': line.description or False,
+                                'qty': qty or False,
+                                'uom': line.uom_code or False,
+                            })
+                        continue
 
-                    Move.create({
-                        'name': line.line_description or product.display_name,
-                        'picking_id': picking.id,
-                        'product_id': product.id,
-                        'product_uom_qty': qty,
-                        'product_uom': uom.id if uom else product.uom_id.id,
-                        'location_id': picking.location_id.id,
-                        'location_dest_id': line_dest.id if line_dest else picking.location_dest_id.id,
-                        'description_picking': line.line_description or False,
-                    })
-                    line.write({
+                    if error_list:                                
+                        error_line_data = ErrorLine.search([('error_id', '=', error.id)], limit=1)
+                        if not error_line_data:
+                            error_line_data = ErrorLine.create({
+                                'error_id': error_data.id,
+                                'inventory_id': line.inventory_id or False,
+                                'product_name': line.description or False,
+                                'qty': qty or False,
+                                'uom': line.uom_code or False,
+                                'payload': str(move_vals)[:1000],
+                            })
+                            error += 1
+                            first.write({
+                                'import_state': action_state,
+                                'import_message': f'{action_state.title()}: {picking.name}',
+                            })
+                    else:
+                        Move.create(move_vals)
+                    first.write({
                         'import_state': action_state,
                         'import_message': f'{action_state.title()}: {picking.name}',
                         'odoo_picking_id': picking.id,
@@ -587,12 +656,21 @@ class AcumaticaShipmentLine(models.Model):
                     # Quantity
                     # SplitLineNbr
                     # UOM
-            except Exception as e:
-                _logger.exception('Error import shipment receipt %s', shipment_nbr)
-                receipt_lines.write({'import_state': 'error', 'import_message': str(e)[:200]})
-                error += len(receipt_lines)
+                
+                if error_list:
+                    _logger.exception("Error import receipt %s", origin)
+                    first.write({
+                        'import_state': 'error',
+                        'import_message': '\n'.join(error_list),
+                    })
+                    error += 1
 
-        msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
+            except Exception as e:
+                _logger.exception('Error import shipment receipt %s', origin)
+                first.write({'import_state': 'error', 'import_message': str(e)[:200]})
+                # error += len(receipt_lines)
+
+        msg = f'Import done: {imported} shipment created, {updated} shipment updated, {error} shipment error.'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
