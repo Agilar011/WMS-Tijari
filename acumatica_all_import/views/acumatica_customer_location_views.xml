@@ -5,6 +5,18 @@
     <!-- MASTER: acumatica.customer.location            -->
     <!-- ══════════════════════════════════════════════ -->
 
+    <record id="action_import_selected_customer_location"
+            model="ir.actions.server">
+        <field name="name">Sellect All &amp; Generate</field>
+        <field name="model_id" ref="model_acumatica_customer_location"/>
+        <field name="binding_model_id" ref="model_acumatica_customer_location"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
     <record id="view_acumatica_customer_location_search" model="ir.ui.view">
         <field name="name">acumatica.customer.location.search</field>
         <field name="model">acumatica.customer.location</field>

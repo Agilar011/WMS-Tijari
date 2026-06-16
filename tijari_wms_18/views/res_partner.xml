@@ -87,6 +87,12 @@
 
             </xpath>
 
+            <xpath expr="//field[@name='website']" position="after">
+                <field name="adt_location_id" string="Location ID"
+                    invisible="type != 'other'"/>
+            </xpath>
+
+
         </field>
     </record>
 

@@ -119,10 +119,10 @@ class ResPartner(models.Model):
     #     help='Used to prioritize customers during import (lower is higher priority)',
     # )
     partner_type = fields.Selection([
-        ('customer', 'Kustomer'),
+        ('customer', 'Customer'),
         ('vendor', 'Vendor'),
-        ('shipvia', 'Ekspedisi Kargo'),
-        ('customer_location', 'Lokasi Kustomer'),
+        ('shipvia', 'Shipvia'),
+        ('customer_location', 'Customer Location'),
         ('warehouse', 'Warehouse'),
     ], string='Partner Type', default='customer', required=True)
 

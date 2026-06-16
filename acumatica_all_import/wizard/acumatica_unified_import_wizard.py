@@ -9,44 +9,76 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     IMPORT_MAP = {
 
         'uom': {
-            'label': 'UoM', 'wizard_model': 'import.uom.wizard', 'config_field': 'uom_config_id',
-            'line_model': 'acumatica.uom.line', 'result_name': 'Hasil Import UoM',
-            'staging_name': 'Data UoM dari Acumatica', 'extra_fields': [],
+            'label': 'UoM',
+            'wizard_model': 'import.uom.wizard',
+            'config_field': 'uom_config_id',
+            'line_model': 'acumatica.uom.line',
+            'result_name': 'Hasil Import UoM',
+            'staging_name': 'Data UoM dari Acumatica',
+            'extra_fields': [],
         },
         'customer': {
-            'label': 'Customer', 'wizard_model': 'import.customer.wizard', 'config_field': 'customer_config_id',
-            'line_model': 'acumatica.customer.line', 'result_name': 'Hasil Import Customer',
-            'staging_name': 'Data Customer dari Acumatica', 'extra_fields': [],
+            'label': 'Customer',
+            'wizard_model': 'import.customer.wizard',
+            'config_field': 'customer_config_id',
+            'line_model': 'acumatica.customer.line',
+            'result_name': 'Hasil Import Customer',
+            'staging_name': 'Data Customer dari Acumatica',
+            'extra_fields': [],
         },
         'vendor': {
-            'label': 'Vendor', 'wizard_model': 'import.vendor.wizard', 'config_field': 'vendor_config_id',
-            'line_model': 'acumatica.vendor.line', 'result_name': 'Hasil Import Vendor',
-            'staging_name': 'Data Vendor dari Acumatica', 'extra_fields': [],
+            'label': 'Vendor',
+            'wizard_model': 'import.vendor.wizard',
+            'config_field': 'vendor_config_id',
+            'line_model': 'acumatica.vendor.line',
+            'result_name': 'Hasil Import Vendor',
+            'staging_name': 'Data Vendor dari Acumatica',
+            'extra_fields': [],
         },
         'warehouse': {
-            'label': 'Warehouse', 'wizard_model': 'import.warehouse.wizard', 'config_field': 'warehouse_config_id',
-            'line_model': 'acumatica.warehouse.line', 'result_name': 'Hasil Import Warehouse',
-            'staging_name': 'Data Warehouse dari Acumatica', 'extra_fields': [],
+            'label': 'Warehouse',
+            'wizard_model': 'import.warehouse.wizard',
+            'config_field': 'warehouse_config_id',
+            'line_model': 'acumatica.warehouse.line',
+            'result_name': 'Hasil Import Warehouse',
+            'staging_name': 'Data Warehouse dari Acumatica',
+            'extra_fields': [],
         },
         'stock_item': {
-            'label': 'Stock Item', 'wizard_model': 'import.stock.item.wizard', 'config_field': 'stock_item_config_id',
-            'line_model': 'acumatica.stock.item.line', 'result_name': 'Hasil Import Stock Item',
-            'staging_name': 'Data Stock Item dari Acumatica', 'extra_fields': [],
+            'label': 'Stock Item',
+            'wizard_model': 'import.stock.item.wizard',
+            'config_field': 'stock_item_config_id',
+            'line_model': 'acumatica.stock.item.line',
+            'result_name': 'Hasil Import Stock Item',
+            'staging_name': 'Data Stock Item dari Acumatica',
+            'extra_fields': [],
         },
         'non_stock_item': {
-            'label': 'Non-Stock Item', 'wizard_model': 'import.non.stock.item.wizard', 'config_field': 'non_stock_item_config_id',
-            'line_model': 'acumatica.non.stock.item.line', 'result_name': 'Hasil Import Non-Stock Item',
-            'staging_name': 'Data Non-Stock Item dari Acumatica', 'extra_fields': [],
+            'label': 'Non-Stock Item',
+            'wizard_model': 'import.non.stock.item.wizard',
+            'config_field': 'non_stock_item_config_id',
+            'line_model': 'acumatica.non.stock.item.line',
+            'result_name': 'Hasil Import Non-Stock Item',
+            'staging_name': 'Data Non-Stock Item dari Acumatica',
+            'extra_fields': [],
         },
         'customer_location': {
-            'label': 'Customer Location', 'wizard_model': 'import.customer.location.wizard', 'config_field': 'customer_location_config_id',
-            'line_model': 'acumatica.customer.location.line', 'result_name': 'Hasil Import Customer Location',
-            'staging_name': 'Data Customer Location dari Acumatica', 'extra_fields': [],
+            'label': 'Customer Location',
+            'wizard_model': 'import.customer.location.wizard',
+            'config_field': 'customer_location_config_id',
+            'line_model': 'acumatica.customer.location.line',
+            'result_name': 'Hasil Import Customer Location',
+            'staging_name': 'Data Customer Location dari Acumatica',
+            'extra_fields': [],
         },
         'shipvia': {
-            'label': 'ShipVia', 'wizard_model': 'import.shipvia.wizard', 'config_field': 'shipvia_config_id',
-            'line_model': 'acumatica.shipvia.line', 'result_name': 'Hasil Import ShipVia',
-            'staging_name': 'Data ShipVia dari Acumatica', 'extra_fields': [],
+            'label': 'ShipVia',
+            'wizard_model': 'import.shipvia.wizard',
+            'config_field': 'shipvia_config_id',
+            'line_model': 'acumatica.shipvia.line',
+            'result_name': 'Hasil Import ShipVia',
+            'staging_name': 'Data ShipVia dari Acumatica',
+            'extra_fields': [],
         },
         'po_receipt': {
             'label': 'PO / Inventory Receipt',
@@ -195,20 +227,33 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     ]
 
     def _get_import_type_selection(self):
-        selection = [
-            ('__trx_header__', '──── Transaksi ────'),
+        selection = []
+        selection += [
+            (key, self.IMPORT_MAP[key]['label'])
+            for key in self.TRANSACTION_TYPES
+            if key in self.IMPORT_MAP
         ]
+        selection += [
+            (key, self.IMPORT_MAP[key]['label'])
+            for key in self.MASTER_DATA_TYPES
+            if key in self.IMPORT_MAP
+        ]
+        print(selection)
+        return selection
 
+    def _get_import_type_selection_transaction(self):
+        selection = []
         selection += [
             (key, self.IMPORT_MAP[key]['label'])
             for key in self.TRANSACTION_TYPES
             if key in self.IMPORT_MAP
         ]
 
-        selection += [
-            ('__master_header__', '──── Master Data ────'),
-        ]
+        print(selection)
+        return selection
 
+    def _get_import_type_selection_master(self):
+        selection = []
         selection += [
             (key, self.IMPORT_MAP[key]['label'])
             for key in self.MASTER_DATA_TYPES
@@ -217,52 +262,40 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         
         return selection
 
-    @api.onchange('import_type')
-    def _onchange_import_type_header(self):
-        if self.import_type in ('__trx_header__', '__master_header__'):
-            self.import_type = False
+    @api.onchange('import_category', 'import_type_transaction', 'import_type_master')
+    def _onchange_import_type_value(self):
+        if self.import_category == 'transaction':
+            self.import_type = self.import_type_transaction
 
-    @api.constrains('import_type')
-    def _check_import_type_not_header(self):
-        for rec in self:
-            if rec.import_type in ('__trx_header__', '__master_header__'):
-                raise ValidationError('Silakan pilih jenis import, bukan kategori.')
-
-    # @api.onchange('import_category')
-    # def _onchange_import_category(self):
-    #     category = self.import_category
-
-    #     if category == 'transaction':
-    #         yanto = [
-    #             (key, self.IMPORT_MAP[key]['label'])
-    #             for key in self.TRANSACTION_TYPES
-    #             if key in self.IMPORT_MAP
-    #         ]
-    #         return yanto
-
-    #     elif category == 'master':
-    #         return [
-    #             (key, self.IMPORT_MAP[key]['label'])
-    #             for key in self.MASTER_DATA_TYPES
-    #             if key in self.IMPORT_MAP
-    #         ]
-
-    #     return []
+        if self.import_category == 'master':
+            self.import_type = self.import_type_master
 
     import_category = fields.Selection([
         ('transaction', 'Transaction'),
         ('master', 'Master Data'),
-    ], string='Kategori Import', required=True, default='transaction')
+    ], string='Import Category', required=True, default='transaction')
 
     import_type = fields.Selection(
         selection=_get_import_type_selection,
-        string='Data yang ingin diimport',
+        string='Data to Import',
         required=True,
         default='po_receipt',
     )
-    fetch_limit = fields.Integer(string='Maks Data Ditarik', default=5000, required=True)
-    batch_size = fields.Integer(string='Batch Size Import', default=50, required=True)
-    fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai fetch.')
+    import_type_transaction = fields.Selection(
+        selection=_get_import_type_selection_transaction,
+        string='Data to Import',
+        required=True,
+        default='po_receipt',
+    )
+    import_type_master = fields.Selection(
+        selection=_get_import_type_selection_master,
+        string='Data to Import',
+        required=True,
+        default='customer',
+    )
+    fetch_limit = fields.Integer(string='Maximum Records', default=5000, required=True)
+    batch_size = fields.Integer(string='Import Batch Size', default=50, required=True)
+    fetch_skip = fields.Integer(string='Records to Skip', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai fetch.')
     skip_size = fields.Integer(string='Skip Size ', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai import.')
     auto_commit_batch = fields.Boolean(
         string='Commit setiap batch',
@@ -270,37 +303,38 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         help='Aktifkan untuk import data besar agar setiap batch tersimpan. Gunakan dengan hati-hati karena rollback tidak lagi menyeluruh.',
     )
 
-    reference_nbr = fields.Char(string='Filter Reference Number')
-    receipt_nbr = fields.Char(string='Filter Receipt Number')
-    shipment_nbr = fields.Char(string='Filter Shipment Number')
+    reference_nbr = fields.Char(string='Reference Number Filter')
+    receipt_nbr = fields.Char(string='Receipt Number Filter')
+    shipment_nbr = fields.Char(string='Shipment Number Filter')
     last_modified_from = fields.Char(string='Filter Last Modified From', help='Contoh: 2026-02-12T00:00:00+07:00')
     odata_filter = fields.Char(string='Custom OData Filter')
-    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
-    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
-    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
+    wh33_filter = fields.Boolean(string='WH33 Only', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    date_period = fields.Boolean(string="Enable Date Filter")
+    start_date = fields.Date(string='Start Date Filter', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='End Date Filter', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
-    uom_config_id = fields.Many2one('acumatica.config', string='Konfigurasi UoM', domain=[('active', '=', True)])
-    customer_config_id = fields.Many2one('acumatica.customer.config', string='Konfigurasi Customer', domain=[('active', '=', True)])
-    vendor_config_id = fields.Many2one('acumatica.vendor.config', string='Konfigurasi Vendor', domain=[('active', '=', True)])
-    warehouse_config_id = fields.Many2one('acumatica.warehouse.config', string='Konfigurasi Warehouse', domain=[('active', '=', True)])
-    stock_item_config_id = fields.Many2one('acumatica.stock.item.config', string='Konfigurasi Stock Item', domain=[('active', '=', True)])
-    non_stock_item_config_id = fields.Many2one('acumatica.non.stock.item.config', string='Konfigurasi Non-Stock Item', domain=[('active', '=', True)])
-    customer_location_config_id = fields.Many2one('acumatica.customer.location.config', string='Konfigurasi Customer Location', domain=[('active', '=', True)])
-    shipvia_config_id = fields.Many2one('acumatica.shipvia.config', string='Konfigurasi ShipVia', domain=[('active', '=', True)])
+    uom_config_id = fields.Many2one('acumatica.config', string='UoM Configuration', domain=[('active', '=', True)])
+    customer_config_id = fields.Many2one('acumatica.customer.config', string='Customer Configuration', domain=[('active', '=', True)])
+    vendor_config_id = fields.Many2one('acumatica.vendor.config', string='Vendor Configuration', domain=[('active', '=', True)])
+    warehouse_config_id = fields.Many2one('acumatica.warehouse.config', string='Warehouse Configuration', domain=[('active', '=', True)])
+    stock_item_config_id = fields.Many2one('acumatica.stock.item.config', string='Stock Item Configuration', domain=[('active', '=', True)])
+    non_stock_item_config_id = fields.Many2one('acumatica.non.stock.item.config', string='Non-Stock Item Configuration', domain=[('active', '=', True)])
+    customer_location_config_id = fields.Many2one('acumatica.customer.location.config', string='Customer Location Configuration', domain=[('active', '=', True)])
+    shipvia_config_id = fields.Many2one('acumatica.shipvia.config', string='ShipVia Configuration', domain=[('active', '=', True)])
 
-    receipt_config_id = fields.Many2one('acumatica.receipt.config', string='Konfigurasi Receipt', domain=[('active', '=', True)])
-    issue_po_return_config_id = fields.Many2one('acumatica.issue.po.return.config', string='Konfigurasi Issue PO Return', domain=[('active', '=', True)])
-    transfer_one_step_config_id = fields.Many2one('acumatica.transfer.one.step.config', string='Konfigurasi Transfer One Step', domain=[('active', '=', True)])
-    transfer_two_step_config_id = fields.Many2one('acumatica.transfer.two.step.config', string='Konfigurasi Transfer Two Step', domain=[('active', '=', True)])
-    inventory_received_config_id = fields.Many2one('acumatica.inventory.recieved.config', string='Konfigurasi Inventory Received', domain=[('active', '=', True)])
-    inventory_issue_config_id = fields.Many2one('acumatica.inventory.issue.config', string='Konfigurasi Inventory Issue', domain=[('active', '=', True)])
-    receipt_change_item_config_id = fields.Many2one('acumatica.receipt.change.item.config', string='Konfigurasi Receipt Change Item', domain=[('active', '=', True)])
-    issue_config_id = fields.Many2one('acumatica.issue.config', string='Konfigurasi Issue Change Item', domain=[('active', '=', True)])
-    shipment_config_id = fields.Many2one('acumatica.shipment.config', string='Konfigurasi Shipment SO', domain=[('active', '=', True)])
-    so_shipment_config_id = fields.Many2one('acumatica.so.shipment.config', string='Konfigurasi SO Shipment', domain=[('active', '=', True)])
-    transfer_config_id = fields.Many2one('acumatica.transfer.config', string='Konfigurasi SO Transfer', domain=[('active', '=', True)])
-    transfer_shipment_config_id = fields.Many2one('acumatica.transfer.shipment.config', string='Konfigurasi Transfer Shipment', domain=[('active', '=', True)])
-    kit_assembly_config_id = fields.Many2one('acumatica.kit.assembly.config', string='Konfigurasi Kit Assembly', domain=[('active', '=', True)])
+    receipt_config_id = fields.Many2one('acumatica.receipt.config', string='Receipt Configuration', domain=[('active', '=', True)])
+    issue_po_return_config_id = fields.Many2one('acumatica.issue.po.return.config', string='Issue PO Return Configuration', domain=[('active', '=', True)])
+    transfer_one_step_config_id = fields.Many2one('acumatica.transfer.one.step.config', string='Transfer One Step Configuration', domain=[('active', '=', True)])
+    transfer_two_step_config_id = fields.Many2one('acumatica.transfer.two.step.config', string='Transfer Two Step Configuration', domain=[('active', '=', True)])
+    inventory_received_config_id = fields.Many2one('acumatica.inventory.recieved.config', string='Inventory Received Configuration', domain=[('active', '=', True)])
+    inventory_issue_config_id = fields.Many2one('acumatica.inventory.issue.config', string='Inventory Issue Configuration', domain=[('active', '=', True)])
+    receipt_change_item_config_id = fields.Many2one('acumatica.receipt.change.item.config', string='Receipt Change Item Configuration', domain=[('active', '=', True)])
+    issue_config_id = fields.Many2one('acumatica.issue.config', string='Issue Change Item Configuration', domain=[('active', '=', True)])
+    shipment_config_id = fields.Many2one('acumatica.shipment.config', string='Shipment SO Configuration', domain=[('active', '=', True)])
+    so_shipment_config_id = fields.Many2one('acumatica.so.shipment.config', string='SO Shipment Configuration', domain=[('active', '=', True)])
+    transfer_config_id = fields.Many2one('acumatica.transfer.config', string='SO Transfer Configuration', domain=[('active', '=', True)])
+    transfer_shipment_config_id = fields.Many2one('acumatica.transfer.shipment.config', string='Transfer Shipment Configuration', domain=[('active', '=', True)])
+    kit_assembly_config_id = fields.Many2one('acumatica.kit.assembly.config', string='Kit Assembly Configuration', domain=[('active', '=', True)])
 
     state = fields.Selection([('draft', 'Siap'), ('fetched', 'Data Sudah Ditarik'), ('done', 'Selesai')], default='draft')
     total_fetched = fields.Integer(string='Total Line Ditarik', readonly=True)
@@ -369,40 +403,54 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     def action_fetch_data(self):
         
         self.ensure_one()
-        
+
+        print(f"Fetch limit: {self.fetch_limit}")
+        message = False
+
         if self.fetch_limit <= 0:
-            raise UserError(_('Maks Data Ditarik harus lebih besar dari 0.'))
-        info = self._get_import_info()
-        
+            raise UserError(_('Maximum Records must be greater than 0.'))
 
-        config = self._get_selected_config(info)
-        
+        elif self.batch_size <= 0:
+            raise UserError(_('Import Batch Size must be greater than 0.'))
 
-        source_wizard = self.env[info['wizard_model']].create(self._prepare_source_wizard_vals(info, config))
-        
+        elif self.fetch_skip < 0:
+            raise UserError(_('Records to Skip cannot be less than 0.'))
 
-        source_wizard.action_fetch_data()
-        
+        elif self.batch_size > self.fetch_limit:
+            raise UserError(_('Import Batch Size cannot be greater than Maximum Records.'))
 
-        pending_lines = self._get_pending_lines(info, config)
-        
+        else:
+            info = self._get_import_info()
+            print(f"Import info: {info}")
 
-        total_data = len(self.env[info['line_model']].search([('config_id', '=', config.id)]))
-        
+            config = self._get_selected_config(info)
+            print(f"Config: {config}")
 
-        total_fetched = source_wizard.total_fetched
-        
+            source_wizard = self.env[info['wizard_model']].create(self._prepare_source_wizard_vals(info, config))
+            print(f"Source wizard created: {source_wizard}")
+
+            source_wizard.action_fetch_data()
+            print("Fetch data action called on source wizard")
+
+            pending_lines = self._get_pending_lines(info, config)
+            print(f"Pending lines fetched: {len(pending_lines)}")
+
+            total_data = len(self.env[info['line_model']].search([('config_id', '=', config.id)]))
+            print(f"Total Data in staging: {total_data}")
+
+            total_fetched = source_wizard.total_fetched
+            print(f"Total fetched: {total_fetched}")
 
 
-        self.write({
-            'state': 'fetched',
-            'total_fetched': total_fetched,
-            'total_pending': len(pending_lines),
-            'total_imported': 0,
-            'batch_count': 0,
-            'last_message': _('Fetch complete. %s data is already in staging, %s data has been retrieved, and %s data in staging is ready to be imported.') % (total_data, total_fetched, len(pending_lines)),
-        })
-        return self._reopen()
+            self.write({
+                'state': 'fetched',
+                'total_fetched': total_fetched,
+                'total_pending': len(pending_lines),
+                'total_imported': 0,
+                'batch_count': 0,
+                'last_message': _('Fetch complete. %s data is already in staging, %s data has been retrieved, and %s data in staging is ready to be imported.') % (total_data, total_fetched, len(pending_lines)),
+            })
+            return self._reopen()
 
     def action_view_staging(self):
         self.ensure_one()
@@ -419,9 +467,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
     def action_import_pending_batch(self):
         self.ensure_one()
-
-        if self.batch_size <= 0:
-            raise UserError(_('Batch Size Import harus lebih besar dari 0.'))
 
         info = self._get_import_info()
         config = self._get_selected_config(info)

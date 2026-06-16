@@ -138,7 +138,7 @@ class AcumaticaNonStockItemLine(models.Model):
         return self._do_import()
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state == 'pending')
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -166,6 +166,9 @@ class AcumaticaNonStockItemLine(models.Model):
                     'volume': line.volume or 0.0,
                     'weight': line.weight or 0.0,
                     'tracking' : 'lot',
+                    'tracking' : 'lot',
+                    'volume':       line.volume or 0.0,
+                    'weight':       line.weight or 0.0,
 
                     # ── Field custom adt_ ───────────────────
                     'adt_external_id': line.external_id or False,
