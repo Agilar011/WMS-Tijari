@@ -312,7 +312,7 @@ class AcumaticaIssueLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state == 'pending')
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()

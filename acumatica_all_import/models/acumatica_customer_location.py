@@ -207,11 +207,11 @@ class AcumaticaCustomerLocationLine(models.Model):
     @staticmethod
     def _parse_dt(dt_str):
         if not dt_str:
-            return False
+            return None
         try:
             return dateutil_parser.parse(dt_str).replace(tzinfo=None)
         except Exception:
-            return False
+            return None
 
     def _find_existing_location(self, rec):
         """Cari by UUID dulu, fallback by LocationID + partner."""
@@ -247,7 +247,7 @@ class AcumaticaCustomerLocationLine(models.Model):
         return self._do_import()
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state == 'pending')
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -418,35 +418,42 @@ class AcumaticaCustomerLocationLine(models.Model):
         if customer_names:
 
             customers = Partner.search([
-                ('name', 'in', customer_names)
+                ('company_registry', 'in', customer_names)
             ])
 
             for c in customers:
-                customer_map[c.name] = c.id
+                customer_map[c.company_registry] = c.id
 
         # =====================================================
         # CACHE EXISTING LOCATION
         # =====================================================
 
-        external_ids = list(set([
-            x.external_id
+        location_ids = list(set([
+            x.location_id_acumatica
             for x in self
-            if x.external_id
+            if x.location_id_acumatica
+        ]))
+
+        code = list(set([
+            x.customer
+            for x in self
+            if x.customer
         ]))
 
         existing_map = {}
 
-        if external_ids:
+        if location_ids and code:
 
             self.env.cr.execute("""
-                SELECT id, adt_external_id
+                SELECT id, company_registry, name
                 FROM res_partner
-                WHERE adt_external_id IN %s
-            """, [tuple(external_ids)])
+                WHERE company_registry IN %s
+                AND name IN %s
+            """, (tuple(code), tuple(location_ids)))
 
             for row in self.env.cr.fetchall():
 
-                existing_map[row[1]] = row[0]
+                existing_map[(row[1], row[2])] = row[0]
 
         # =====================================================
         # PROCESS CHUNK
@@ -511,116 +518,56 @@ class AcumaticaCustomerLocationLine(models.Model):
                         )
 
                         vals = {
-                            'adt_external_id':
-                                line.external_id or False,
-
-                            'name':
-                                line.location_id_acumatica or False,
-
-                            'type':
-                                'other',
-
-                            'partner_type':
-                                'customer_location',
-
-                            'company_type':
-                                'person',
-
-                            'is_company':
-                                False,
-
-                            'adt_note':
-                                line.note or False,
-
-                            'adt_address_override':
-                                line.address_override,
-
+                            'adt_external_id': line.external_id or False,
+                            'name': line.location_id_acumatica or False,
+                            'type': 'other',
+                            'partner_type': 'customer',
+                            'company_type': 'person',
+                            'is_company': False,
+                            'adt_note': line.note or False,
+                            'adt_address_override': line.address_override,
                             'adt_created_datetime':
                                 self._parse_dt(
                                     line.created_datetime
                                 ),
-
-                            'parent_id':
-                                partner_id,
-
-                            'adt_default':
-                                line.is_default,
-
-                            'adt_entity_usage_type':
-                                line.usage_type or False,
-
-                            'adt_ext_ref_nbr':
-                                line.ext_ref_number or False,
-
-                            'adt_fedex_ground_collect':
-                                line.fed_ex_ground_collect,
-
-                            'adt_fob_point':
-                                line.fob_point or False,
-
-                            'adt_shipping_branch':
-                                line.shipping_branch or False,
-
-                            'adt_insurance':
-                                line.insurance,
-
+                            'parent_id': partner_id,
+                            'adt_location_id': line.location_id_acumatica or False,
+                            'adt_default': line.is_default,
+                            'adt_entity_usage_type': line.usage_type or False,
+                            'adt_ext_ref_nbr': line.ext_ref_number or False,
+                            'adt_fedex_ground_collect': line.fed_ex_ground_collect,
+                            'adt_fob_point': line.fob_point or False,
+                            'adt_shipping_branch': line.shipping_branch or False,
+                            'adt_insurance': line.insurance,
                             'adt_acumatica_write_date':
                                 self._parse_dt(
                                     line.last_modified_datetime
                                 ),
-
-                            'adt_lead_time_days':
-                                line.lead_time_days or 0,
-
-                            'adt_note_id':
-                                line.note_id or False,
-
-                            'adt_order_priority':
-                                line.order_priority or 0,
-
-                            'adt_shipping_zone_id':
-                                line.shipping_zone or False,
-
-                            'adt_ship_via':
-                                line.ship_via or False,
-
+                            'adt_lead_time_days': line.lead_time_days or 0,
+                            'adt_note_id': line.note_id or False,
+                            'adt_order_priority': line.order_priority or 0,
+                            'adt_shipping_zone_id': line.shipping_zone or False,
+                            'adt_ship_via': line.ship_via or False,
                             'adt_status':
                                 STATUS_MAP.get(
                                     line.status or '',
                                     False
                                 ),
-
-                            'adt_tax_exemption_number':
-                                line.tax_exemption_number or False,
-
-                            'adt_tax_registration_id':
-                                line.tax_registration_id or False,
-
-                            'vat':
-                                line.tax_registration_id or False,
-
-                            'adt_warehouse_id':
-                                warehouse_id or False,
+                            'adt_tax_exemption_number': line.tax_exemption_number or False,
+                            'adt_tax_registration_id': line.tax_registration_id or False,
+                            'vat': line.tax_registration_id or False,
+                            'adt_warehouse_id': warehouse_id or False,
 
                             # ADDRESS
-                            'street':
-                                line.address_line1 or False,
-
-                            'street2':
-                                line.address_line2 or False,
-
-                            'city':
-                                line.city or False,
-
-                            'zip':
-                                line.postal_code or False,
-
-                            'country_id':
-                                country_id or False,
+                            'street': line.address_line1 or False,
+                            'street2': line.address_line2 or False,
+                            'city': line.city or False,
+                            'zip': line.postal_code or False,
+                            'country_id': country_id or False,
                         }
 
                         existing_id = existing_map.get(
-                            line.external_id
+                            ( line.customer, line.location_id_acumatica)
                         )
 
                         # =====================================

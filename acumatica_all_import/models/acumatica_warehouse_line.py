@@ -88,11 +88,6 @@ class AcumaticaWarehouseLine(models.Model):
         except Exception:
             return False
 
-    def bval(item, key):
-        v = item.get(key, {})
-        if isinstance(v, dict):
-            return bool(v.get("value", False))
-        return False
 
     def _find_existing_location(self, rec):
         """Cari warehouse code (BuildingID)."""
@@ -118,7 +113,7 @@ class AcumaticaWarehouseLine(models.Model):
         return self._do_import()
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state == 'pending')
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -149,7 +144,7 @@ class AcumaticaWarehouseLine(models.Model):
                     'name':                    line.description,
                     'code':                    line.warehouse_id,
                     'building':                line.building_id,
-                    'is_active':               self.bval(line.active),
+                    'is_active':               bool(line.building_id),
                 }
 
                 existing = self._find_existing_location(line)
@@ -206,7 +201,7 @@ class AcumaticaWarehouseLine(models.Model):
                     if line.building_id:
                         wh_address = self.env['res.partner'].search([('name', '=', line.building_id)], limit=1)
                         if not wh_address:
-                            company = self.env.user.commercial_partner_id
+                            company = self.env.company.partner_id
                             wh_address = self.env['res.partner'].create({'name': line.building_id, 'partner_type': 'warehouse', 'type': 'other', 'company_type': 'person', 'parent_id': company.id})
                         code = (line.building_id or '').strip().upper()
                         wh_building = self.env['stock.warehouse'].search([('code', '=', code)], limit=1)
