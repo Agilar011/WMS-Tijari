@@ -22,6 +22,7 @@ from . import acumatica_warehouse_location_line
 from . import acumatica_uom_line
 from . import acumatica_shipvia_config
 from . import acumatica_shipvia_line
+from . import acumatica_inventory_stock
 
 # Merged models
 from . import acumatica_sales_order_shipment

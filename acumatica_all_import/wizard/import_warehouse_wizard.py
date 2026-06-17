@@ -55,6 +55,7 @@ class ImportWarehouseWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
+        self.total_fetched = len(raw_list)
         new_count = existing_count = total_loc = 0
         WH = self.env['stock.location.acumatica']
 

@@ -197,6 +197,15 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Kit Assembly dari Acumatica',
             'extra_fields': [],
         },
+        'inventory_stock': {
+            'label': 'Inventory Stock',
+            'wizard_model': 'import.inventory.stock.wizard',
+            'config_field': 'inventory_stock_config_id',
+            'line_model': 'acumatica.inventory.stock.line',
+            'result_name': 'Hasil Import Inventory Stock',
+            'staging_name': 'Data Inventory Stock dari Acumatica',
+            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
+        },
     }
 
     MASTER_DATA_TYPES = [
@@ -224,6 +233,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'transfer_one_step',
         'transfer_two_step',
         'kit_assembly',
+        'inventory_stock',
     ]
 
     def _get_import_type_selection(self):
@@ -308,6 +318,10 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     shipment_nbr = fields.Char(string='Shipment Number Filter')
     last_modified_from = fields.Char(string='Filter Last Modified From', help='Contoh: 2026-02-12T00:00:00+07:00')
     odata_filter = fields.Char(string='Custom OData Filter')
+    warehouse_value = fields.Char(string='Warehouse Value', default='WH33-FG')
+    inventory_id_value = fields.Char(string='InventoryID Value')
+    odata_expand = fields.Char(string='OData Expand', default='InventorySiteInquiryDetails')
+    odata_top = fields.Integer(string='OData Top', default=1)
     wh33_filter = fields.Boolean(string='WH33 Only', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
     date_period = fields.Boolean(string="Enable Date Filter")
     start_date = fields.Date(string='Start Date Filter', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
@@ -335,6 +349,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     transfer_config_id = fields.Many2one('acumatica.transfer.config', string='SO Transfer Configuration', domain=[('active', '=', True)])
     transfer_shipment_config_id = fields.Many2one('acumatica.transfer.shipment.config', string='Transfer Shipment Configuration', domain=[('active', '=', True)])
     kit_assembly_config_id = fields.Many2one('acumatica.kit.assembly.config', string='Kit Assembly Configuration', domain=[('active', '=', True)])
+    inventory_stock_config_id = fields.Many2one('acumatica.inventory.stock.config', string='Inventory Stock Configuration', domain=[('active', '=', True)])
 
     state = fields.Selection([('draft', 'Siap'), ('fetched', 'Data Sudah Ditarik'), ('done', 'Selesai')], default='draft')
     total_fetched = fields.Integer(string='Total Line Ditarik', readonly=True)

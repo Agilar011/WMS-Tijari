@@ -52,8 +52,6 @@ class StockPicking(models.Model):
 
     def button_validate(self):
         res = super().button_validate()
-        if self.env.context.get("skip_backorder"):
-            return super().button_validate()
 
 
 
@@ -100,6 +98,17 @@ class StockPicking(models.Model):
                 "adt_dest_location_id": picking.adt_dest_location_id,
                 "note" : picking.note
             })
+            
+            for l in line:
+                move_line = self.env['stock.move.line'].search([
+                    ("picking_id", "=", l.id),
+                    ("product_id", "=", l.product_id.id),
+                    ("quantity", "=", l.quantity)
+                ])
+                if move_line:
+                    move_line.write({
+                        "location_dest_id": l.allocation_storage
+                    })
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
@@ -112,7 +121,6 @@ class StockPicking(models.Model):
                             "product_note": receipt_move.product_note
                         })
 
-            has_short = False
             for move in picking.move_ids:
                 if move.quantity > move.product_uom_qty:
                     total_qty = sum(line.mapped("quantity"))
@@ -131,16 +139,22 @@ class StockPicking(models.Model):
                         )
                     )
 
-                if move.quantity < move.product_uom_qty:
-                    has_short = True
-
-            if has_short:
-                return self.with_context(
-                    skip_backorder=True,
-                    picking_ids_not_to_backorder=self.ids,
-                ).button_validate()
-
         return res
+
+    def action_print_warehouse_receipt(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/warehouse_receipt?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
+
+    def do_print_picking(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/warehouse_receipt?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
+
 
 class StockPickingType(models.Model):
     _inherit = 'stock.picking.type'
@@ -203,6 +217,11 @@ class StockMoveLine(models.Model):
         compute='_compute_matching_html',
         store=False)
     operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
+
+    allocation_storage = fields.Many2one(
+        "stock.location",
+        string="Allocation Storage",
+    )
 
     allocation_id = fields.Char(string='Allocation ID')
     allocation_note = fields.Text(string='Allocation Note')

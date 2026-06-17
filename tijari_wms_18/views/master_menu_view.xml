@@ -25,9 +25,9 @@
           action="stock.product_template_action_product"/>
 
   <menuitem id="custom_master_menu_uom" 
-          name="Units of Measure Categories"
-          parent="custom_master_menu" 
+          name="Units of Measure"
+          parent="stock.product_uom_menu" 
           sequence="4" 
-          action="uom.product_uom_categ_form_action"/>
+          action="uom.product_uom_form_action"/>
 
 </odoo>

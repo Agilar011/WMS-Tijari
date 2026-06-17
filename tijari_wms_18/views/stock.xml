@@ -265,4 +265,46 @@
 
         </field>
     </record>
+
+    <record id="view_picking_form_inherit_note_ba" model="ir.ui.view">
+        <field name="name">stock.picking.form.note.ba</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Ba Notes">
+                    <field name="note_ba" no_label="1" />
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- <record id="view_move_line_custom_loc_dest" model="ir.ui.view">
+        <field name="name">stock.move.line.custom.loc.dest</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='location_dest_id']" position="replace">
+                <field name="location_dest_id"
+                    invisible="picking_id.picking_type_id.code == 'incoming'"/>
+
+                <field name="allocation_storage"
+                    domain="[('id', 'child_of', adt_dest_location_id), ('usage', '=', 'internal')]"
+                    readonly="0"
+                />
+            </xpath>
+        </field>
+    </record> -->
+
+    <!-- <record id="view_picking_form_inherit_acumatica_receipt_header" model="ir.ui.view">
+        <field name="name">stock.picking.form.acumatica.receipt.header</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_cancel']" position="after">
+                <button invisible="picking_type_id.code != 'incoming'"  name="action_print_warehouse_receipt" string="Print Penerimaan Barang" type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record> -->
+
 </odoo>

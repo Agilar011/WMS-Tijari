@@ -185,18 +185,17 @@ class AcumaticaWarehouseLine(models.Model):
                             error += 1
                             vals['is_error'] = True
                             error_list.append('BuildingID kosong')
-                    if not warehouse_odoo:
-                        line.write({
-                            'import_state': 'error',
-                            'import_message': f'Building {line.building_id} tidak ditemukan di Odoo, pastikan sudah dibuat sebagai warehouse sebelum mengimpor.',
-                        })
-                        error += 1
-                        vals['is_error'] = True
-                        error_list.append(f'Building {line.building_id} tidak ditemukan di Odoo')
+                    # if not warehouse_odoo:
+                    #     line.write({
+                    #         'import_state': 'error',
+                    #         'import_message': f'Building {line.building_id} tidak ditemukan di Odoo, pastikan sudah dibuat sebagai warehouse sebelum mengimpor.',
+                    #     })
+                    #     error += 1
+                    #     vals['is_error'] = True
+                    #     error_list.append(f'Building {line.building_id} tidak ditemukan di Odoo')
                     new_location = self.env['stock.location.acumatica'].create(vals)
                     if error_list:
-                        vals['error_message'] = '; '.join(error_list)
-                        new_location.write({'is_error': True, 'error_message': vals['error_message']})
+                        new_location.write({'is_error': True, 'error_message': '; '.join(error_list)})
                     
                     if line.building_id:
                         wh_address = self.env['res.partner'].search([('name', '=', line.building_id)], limit=1)
@@ -206,7 +205,15 @@ class AcumaticaWarehouseLine(models.Model):
                         code = (line.building_id or '').strip().upper()
                         wh_building = self.env['stock.warehouse'].search([('code', '=', code)], limit=1)
                         if not wh_building:
-                            wh_building = self.env['stock.warehouse'].create({'name': code, 'code': code, 'partner_id': wh_address.id, 'company_id': self.env.company.id,})
+                            wh_building = self.env['stock.warehouse'].create({
+                                'name': code,
+                                'code': code,
+                                'partner_id': wh_address.id,
+                                'company_id': self.env.company.id,
+                                'reception_steps': 'two_steps',
+                                'delivery_steps': 'pick_pack_ship',
+                            })
+                            print(wh_building)
 
                     line.write({
                         'import_state':    'imported',
@@ -226,6 +233,7 @@ class AcumaticaWarehouseLine(models.Model):
                     'import_message': str(e)[:200],
                 })
                 error += 1
+                raise
 
         msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
         return {

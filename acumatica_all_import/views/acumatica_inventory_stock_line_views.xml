@@ -1,0 +1,89 @@
+<odoo>
+    <record id="action_import_selected_inventory_stock" model="ir.actions.server">
+        <field name="name">Import Selected</field>
+        <field name="model_id" ref="model_acumatica_inventory_stock_line"/>
+        <field name="binding_model_id" ref="model_acumatica_inventory_stock_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
+    <record id="view_acumatica_inventory_stock_line_list" model="ir.ui.view">
+        <field name="name">acumatica.inventory.stock.line.list</field>
+        <field name="model">acumatica.inventory.stock.line</field>
+        <field name="arch" type="xml">
+            <list string="Data Inventory Stock dari Acumatica">
+                <field name="selected" widget="boolean_toggle"/>
+                <field name="config_id"/>
+                <field name="warehouse_code"/>
+                <field name="inventory_id"/>
+                <field name="description"/>
+                <field name="on_hand_acumatica"/>
+                <field name="odoo_on_hand"/>
+                <field name="match_status" widget="badge"
+                       decoration-success="match_status == 'match'"
+                       decoration-danger="match_status in ('not_match', 'error')"
+                       decoration-warning="match_status in ('missing_product', 'missing_location')"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported', 'updated')"
+                       decoration-danger="import_state == 'error'"
+                       decoration-warning="import_state == 'pending'"/>
+                <field name="import_message"/>
+                <field name="sync_date"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_acumatica_inventory_stock_line_form" model="ir.ui.view">
+        <field name="name">acumatica.inventory.stock.line.form</field>
+        <field name="model">acumatica.inventory.stock.line</field>
+        <field name="arch" type="xml">
+            <form string="Data Inventory Stock Acumatica">
+                <header>
+                    <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,updated,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Acumatica">
+                            <field name="warehouse_code"/>
+                            <field name="inventory_id"/>
+                            <field name="description"/>
+                            <field name="branch"/>
+                            <field name="item_status"/>
+                            <field name="product_group"/>
+                            <field name="kode_barang_dan_jasa"/>
+                        </group>
+                        <group string="Quantity">
+                            <field name="available"/>
+                            <field name="on_hand_acumatica"/>
+                            <field name="odoo_on_hand"/>
+                            <field name="match_status" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="Mapping">
+                            <field name="odoo_product_id" readonly="1"/>
+                            <field name="odoo_location_id" readonly="1"/>
+                            <field name="exists_in_odoo" readonly="1"/>
+                        </group>
+                        <group string="Import">
+                            <field name="import_message" readonly="1" widget="text"/>
+                            <field name="note" readonly="1"/>
+                            <field name="sync_date" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_inventory_stock_line" model="ir.actions.act_window">
+        <field name="name">Data Inventory Stock</field>
+        <field name="res_model">acumatica.inventory.stock.line</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>
