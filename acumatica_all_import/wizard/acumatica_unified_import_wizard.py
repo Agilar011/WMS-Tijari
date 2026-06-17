@@ -269,7 +269,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             for key in self.MASTER_DATA_TYPES
             if key in self.IMPORT_MAP
         ]
-        print(selection)
+        
         return selection
 
     @api.onchange('import_category', 'import_type_transaction', 'import_type_master')
@@ -362,15 +362,15 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         self.ensure_one()
         if not self.import_type or self.import_type not in self.IMPORT_MAP:
             raise UserError(_('Pilih data yang ingin diimport terlebih dahulu.'))
-        print(self.import_type)
-        print(f"Import type: {self.import_type}")
+        
+        
         return self.IMPORT_MAP[self.import_type]
 
     def _get_selected_config(self, info):
         config = self[info['config_field']]
         if not config:
             raise UserError(_('Pilih konfigurasi API untuk %s terlebih dahulu.') % info['label'])
-        print(config)
+        
         return config
 
     def _prepare_source_wizard_vals(self, info, config):
@@ -416,7 +416,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         )
 
     def action_fetch_data(self):
-        print('action_fetch_data called')
+        
         self.ensure_one()
 
         print(f"Fetch limit: {self.fetch_limit}")
@@ -543,7 +543,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     def action_fetch_and_import_batch(self):
         self.ensure_one()
 
-        print('action_fetch_data & import called')
+        
         self.ensure_one()
         if self.fetch_limit <= 0:
             raise UserError(_('Maks Data Ditarik harus lebih besar dari 0.'))

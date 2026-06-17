@@ -316,7 +316,20 @@ class StockMoveLine(models.Model):
                 line.matching_html = "<span style='color: red; font-weight: bold;'>NOT MATCH</span>"
             else:
                 line.matching_html = False
-    
+
+    @api.onchange('product_id')
+    def _onchange_product_copy_previous_lot(self):
+
+        if not self.move_id:
+            return
+
+        last_line = self.move_id.move_line_ids.filtered(
+            lambda l: l.lot_id
+        )
+
+        if last_line:
+            self.lot_id = last_line[-1].lot_id
+                
     @api.onchange('quant_id')
     def _onchange_move_line_ids(self):
         for line in self:
@@ -337,6 +350,12 @@ class StockMoveLine(models.Model):
                 print(f">>> Auto input code triggered for line {line.id}") # Cek di terminal Odoo
                 line.matching = 'match'
 
+    def action_generate_selected_lot(self):
+        for line in self:
+            line.generate_lot()
+
+        return True
+        
     def generate_lot(self):
         for line in self:
             print(f"BEFORE product={line.product_id.display_name} move={line.move_id.product_id.display_name}")
@@ -707,7 +726,6 @@ class StockMove(models.Model):
     # lot_button = fields.Char(string="Lot Button")
 
     def action_generate_lot(self):
-        print('action jalan')
         for move in self:
             print(move.product_id)
             print(move.product_uom)
