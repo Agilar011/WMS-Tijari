@@ -213,7 +213,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                         'line_description': self._val(detail, 'Description'),
                         'inventory_id': self._val(detail, 'InventoryID'),
                         'location_code': self._val(detail, 'Location'),
-                        'product_uom_qty': str(self._val(detail, 'Qty')),
+                        'product_uom_qty': str(self._val(detail, 'Quantity')),
                         'uom_code': self._val(detail, 'UOM'),
                         'warehouse_dest_code': self._val(detail, 'Warehouse'),
                     })

@@ -96,6 +96,7 @@ class StockPicking(models.Model):
 
             storage_pickings.write({
                 "adt_dest_location_id": picking.adt_dest_location_id,
+                "origin": picking.origin or picking.name,
                 "note" : picking.note
             })
             
@@ -118,7 +119,7 @@ class StockPicking(models.Model):
 
                     if receipt_move:
                         storage_move.write({
-                            "product_note": receipt_move.product_note
+                            "product_note": receipt_move.product_note,
                         })
 
             for move in picking.move_ids:

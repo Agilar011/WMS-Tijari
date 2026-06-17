@@ -1,7 +1,7 @@
 <odoo>
     <record id="action_import_selected_issue"
             model="ir.actions.server">
-        <field name="name">Select All &amp; Generate</field>
+        <field name="name">Generate Data</field>
         <field name="model_id" ref="model_acumatica_issue_line"/>
         <field name="binding_model_id" ref="model_acumatica_issue_line"/>
         <field name="binding_type">action</field>

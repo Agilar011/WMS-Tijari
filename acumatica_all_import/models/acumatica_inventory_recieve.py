@@ -8,6 +8,13 @@ _logger = logging.getLogger(__name__)
 import requests
 
 
+class InventoryImportError(Exception):
+    def __init__(self, message, payload=None, line_payloads=None):
+        super().__init__(message)
+        self.payload = payload or {}
+        self.line_payloads = line_payloads or []
+
+
 class AcumaticaInventoryRecievedConfig(models.Model):
     _name = 'acumatica.inventory.recieved.config'
     _description = 'Konfigurasi Koneksi Acumatica - Inventory Recieved'
@@ -327,220 +334,521 @@ class AcumaticaInventoryRecievedLine(models.Model):
         self.ensure_one()
         return self._do_import()
 
-    def _do_import(self):
+    def _persist_error_tracking(self, first, error_messages, line_payloads=None, payload=None):
+        origin = first.reference_nbr or False
+        if not origin:
+            return False
+
+        line_payloads = line_payloads or []
+        payload_text = payload if payload is not None else {}
+
+        with self.env.registry.cursor() as cr:
+            error_env = api.Environment(cr, self.env.uid, dict(self.env.context))
+            Error = error_env['stock.picking.acumatica.error'].sudo()
+            ErrorLine = error_env['stock.picking.acumatica.error.line'].sudo()
+
+            error_data = Error.search([('origin', '=', origin)], limit=1)
+            error_values = {
+                'operation_type': 'internal',
+                'location': first.warehouse_code or False,
+                'location_dest': first.warehouse_dest_code or False,
+                'scheduled_date': first._parse_dt(first.scheduled_date),
+                'origin': origin,
+                'adt_total_qty': first._parse_float(first.total_qty),
+                'adt_actual_qty': first._parse_float(first.actual_qty),
+                'api_acumatica': 'inventory_received',
+                'error_message': '\n'.join(error_messages),
+                'payload': str(payload_text)[:1000],
+                'state': 'new',
+            }
+
+            if error_data:
+                error_data.write(error_values)
+            else:
+                error_data = Error.create(error_values)
+
+            for line_payload in line_payloads:
+                line_domain = [
+                    ('error_id', '=', error_data.id),
+                    ('inventory_id', '=', line_payload.get('inventory_id') or False),
+                    ('qty', '=', line_payload.get('qty') or False),
+                    ('uom', '=', line_payload.get('uom') or False),
+                ]
+                error_line = ErrorLine.search(line_domain, limit=1)
+                line_values = {
+                    'error_id': error_data.id,
+                    'inventory_id': line_payload.get('inventory_id') or False,
+                    'product_name': line_payload.get('product_name') or False,
+                    'qty': line_payload.get('qty') or False,
+                    'uom': line_payload.get('uom') or False,
+                    'payload': str(line_payload.get('payload') or {})[:1000],
+                }
+                if error_line:
+                    error_line.write(line_values)
+                else:
+                    ErrorLine.create(line_values)
+
+            cr.commit()
+            return error_data
+
+    def _resolve_error_tracking(self, first):
+        origin = first.reference_nbr or False
+        if not origin:
+            return
+
+        error_data = self.env['stock.picking.acumatica.error'].search([('origin', '=', origin)], limit=1)
+        if error_data:
+            error_data.write({'state': 'resolved'})
+
+    def _import_single_receive(self, receive):
+        receive.ensure_one()
+
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         PickingType = self.env['stock.picking.type']
-        Error = self.env['stock.picking.acumatica.error']
-        ErrorLine = self.env['stock.picking.acumatica.error.line']
 
-        imported = updated = error = 0
-        for line in self:
-            first = line
-            origin = first.reference_nbr or False
-            error_list = []
+        origin = receive.reference_nbr or False
+        header_payload = receive.read()[0] if receive.exists() else {}
+        error_messages = []
+        error_line_payloads = []
+        picking = receive.odoo_picking_id
+        action_state = 'pending'
+
+        warehouse = receive._find_warehouse(receive)
+        if not warehouse:
+            error_messages.append(
+                f'Warehouse with location code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+            )
+
+        dest_location = receive._find_location_dest(receive)
+        if not dest_location:
+            error_messages.append(
+                f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+            )
+
+        picking_type = PickingType.search([
+            ('warehouse_id', '=', warehouse.id if warehouse else False),
+            ('operation_category', '=', 'internal'),
+            ('code', '=', 'internal'),
+        ], limit=1)
+        if not picking_type:
+            warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
+            location_txt = f'Location code {receive.warehouse_code}'
+            error_messages.append(
+                f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
+            )
+
+        if error_messages:
+            raise InventoryImportError(
+                '\n'.join(error_messages),
+                payload={'header': header_payload},
+            )
+
+        picking_vals = {
+            'origin': origin,
+            'picking_type_id': picking_type.id,
+            'location_dest_id': dest_location.id if dest_location else False,
+            'adt_dest_location_id': dest_location.id if dest_location else False,
+            'scheduled_date': receive._parse_dt(receive.scheduled_date),
+            'note': receive.note or False,
+
+            'adt_branch_warehouse': receive.branch_warehouse or False,
+            'adt_actual_qty': self._parse_float(receive.actual_qty),
+            'adt_acumatica_write_date': self._parse_dt(receive.acumatica_write_date),
+            'adt_post_period': receive.post_period or False,
+            'adt_total_qty': self._parse_float(receive.total_qty),
+            'adt_type': receive.transfer_type or False,
+            'adt_external_ref': receive.external_ref or False,
+        }
+        picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
+
+        if picking:
+            if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                raise InventoryImportError(
+                    f'receive {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
+                    payload={'header': header_payload, 'picking_vals': picking_vals},
+                )
+            picking.write(picking_vals)
+            action_state = 'updated'
+        else:
+            picking = Picking.create(picking_vals)
+            action_state = 'imported'
+
+        for receive_line in receive.product_line_ids:
+            move_vals = {}
             try:
-                warehouse = self._find_warehouse(first)
-                if not warehouse:
-                    error_list.append(f'Warehouse with location code {first.warehouse_code} was not found in the WMS | MAPPING WAREHOUSE.')
-
-                picking_type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id if warehouse else False),
-                    ('operation_category', '=', 'internal'),
-                    ('code', '=', 'internal'),
-                ], limit=1)
-                if not picking_type:
-                    warehouse_txt = f'Warehouse code {warehouse.name}'
-                    location_txt = f'Location code {first.warehouse_code}'
-                    error_list.append(f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | MASTER OPERATION TYPE.')
-
-                dest_location = self._find_location_dest(first)
-                if not dest_location:
-                    error_list.append(f'Location with code {first.warehouse_dest_code} was not found in the WMS | MAPPING WAREHOUSE.')
-
-                vals = {
-                    'origin': origin,
-                    'picking_type_id': picking_type.id,
-                    'location_dest_id': dest_location.id if dest_location else False,
-                    'adt_dest_location_id': dest_location.id if dest_location else False,
-                    'scheduled_date': self._parse_dt(first.scheduled_date),
-                    'note': first.note or first.description or False,
-
-                    'adt_branch_warehouse': first.branch_warehouse or False,
-                    'adt_actual_qty': self._parse_float(first.actual_qty),
-                    'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
-                    'adt_post_period': first.post_period or False,
-                    'adt_total_qty': self._parse_float(first.total_qty),
-                    'adt_type': first.transfer_type or False,
-                    'adt_external_ref': first.external_ref or False,
-                }
-                # filter field yang bener-bener ada di stock.picking
-                vals = {k: v for k, v in vals.items() if k in Picking._fields}
-
-
-                picking = self.odoo_picking_id
-                error_data = False
-                if error_list:
-                    error_data = Error.search([('origin', '=', origin)], limit=1)
-                    if not error_data:
-                        error_data = Error.create({
-                            'operation_type': 'receipt',
-                            'location': first.warehouse_code or False,
-                            'location_dest': first.warehouse_dest_code or False,
-                            'scheduled_date': self._parse_dt(first.scheduled_date),
-                            'origin': origin,
-                            'adt_total_qty': self._parse_float(first.total_qty),
-                            'adt_actual_qty': self._parse_float(first.actual_qty),
-                            'api_acumatica': 'inventory_received',
-                            'error_message': '\n'.join(error_list),
-                            'payload': str(vals)[:1000],
-                        })
-                else:
-                    if picking:
-                        if picking.state in ('done', 'cancel'):
-                            raise UserError(f'Receive {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
-                        picking.write(vals)
-                        action_state = 'updated'
-                        updated += 1
-                    else:
-                        picking = Picking.create(vals)
-                        picking.action_confirm()
-                        action_state = 'imported'
-                        imported += 1
-
-                for line in self.product_line_ids:
-                    try:
-                        product = self._find_product(line)
-                        if not product:
-                            error_list.append(f'Product with InventoryID {line.inventory_id} was not found in the WMS | MASTER PRODUCT.')
-
-                        uom = self._find_uom(line, product)
-                        if not uom:
-                            error_list.append(f'UOM with InventoryID {line.inventory_id} was not found in the WMS | MASTER UOM.')
-
-                        qty = self._parse_float(line.product_uom_qty)
-                        move_name = line.line_description or product.display_name
-                        # move_dest = self._find_location(line, warehouse) or dest_location or picking.location_dest_id
-
-                        # existing = Move.search([
-                        #     ('picking_id', '=', picking.id),
-                        #     ('product_id', '=', product.id),
-                        #     ('name', '=', move_name),
-                        #     ('product_uom_qty', '=', qty),
-                        # ], limit=1)
-                        existing = picking.move_ids.filtered(lambda m:
-                            m.picking_id == picking.id and
-                            m.product_id.id == product.id and
-                            m.product_uom_qty == qty
-                        )
-                        if existing:
-                            first.write({
-                                'import_state': action_state,
-                                'import_message': f'{action_state.title()}: {picking.name} (move sudah ada)',
-                                'odoo_picking_id': picking.id,
-                            })
-                            continue
-
-                        move_vals = {
-                            'name': move_name,
-                            'picking_id': picking.id,
-                            'product_id': product.id,
-                            'product_uom_qty': qty,
-                            'product_uom': uom.id if uom else product.uom_id.id,
-                            'location_id': picking.location_id.id,
-                            # 'location_dest_id': move_dest.id,
-                            'description_picking': line.line_description or False,
-
-                            'adt_inventory_id': line.line_note or False,
-                            'adt_line_nbr': line.line_nbr or False,
-                            'adt_uom_code': line.uom_code or False,
-                            'adt_warehouse_dest_code': line.warehouse_dest_code or False,
-                            'adt_type': first.transfer_type or False,
-                        }
-                        move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
-                        if error_data:
-                            existing_error = error_data.line_ids.filtered(lambda m:
-                                m.error_id.id == error_data.id and
-                                m.inventory_id == line.inventory_id and
-                                m.qty == line.product_uom_qty
-                            )
-                            if existing_error:
-                                ErrorLine.create({
-                                    'error_id': error_data.id,
-                                    'inventory_id': line.inventory_id or False,
-                                    'product_name': line.line_description or False,
-                                    'qty': line.product_uom_qty or False,
-                                    'uom': line.uom_code or False,
-                                })
-                            else:
-                                ErrorLine.create({
-                                    'error_id': error_data.id,
-                                    'inventory_id': line.inventory_id or False,
-                                    'product_name': line.line_description or False,
-                                    'qty': line.product_uom_qty or False,
-                                    'uom': line.uom_code or False,
-                                })
-                            continue
-
-                        if error_list:                                
-                            error_line_data = ErrorLine.search([('error_id', '=', error.id)], limit=1)
-                            if not error_line_data:
-                                error_line_data = ErrorLine.create({
-                                    'error_id': error_data.id,
-                                    'inventory_id': line.inventory_id or False,
-                                    'product_name': line.line_description or False,
-                                    'qty': line.product_uom_qty or False,
-                                    'uom': line.uom_code or False,
-                                    'payload': str(move_vals)[:1000],
-                                })
-                                error += 1
-                                first.write({
-                                    'import_state': action_state,
-                                    'import_message': f'{action_state.title()}: {picking.name}',
-                                })
-                        else:
-                            Move.create(move_vals)
-                            picking.action_confirm()
-
-                        first.write({
-                            'import_state': action_state,
-                            'import_message': f'{action_state.title()}: {picking.name}',
-                            'odoo_picking_id': picking.id,
-                        })
-                    except Exception as line_e:
-                        _logger.exception("Error import line %s", line.id)
-                        first.write({
-                            'import_state': 'error',
-                            'import_message': str(line_e)[:200],
-                            'odoo_picking_id': picking.id if picking else False,
-                        })
-
-                if error_list:
-                    _logger.exception("Error import receipt %s", origin)
-                    self.write({
-                        'import_state': 'error',
-                        'import_message': '\n'.join(error_list),
+                product = receive._find_product(receive_line)
+                if not product:
+                    error_messages.append(
+                        f'Product with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
+                    )
+                    error_line_payloads.append({
+                        'inventory_id': receive_line.inventory_id or False,
+                        'product_name': receive_line.description or False,
+                        'qty': receive._parse_float(receive_line.product_uom_qty),
+                        'uom': receive_line.uom_code or False,
+                        'payload': receive_line.read()[0] if receive_line.exists() else {},
                     })
-                    error += 1
+                    continue
 
-            except Exception as e:
-                _logger.exception('Error import inventory recieved %s', first.id)
-                first.write({
-                    'import_state': 'error',
-                    'import_message': str(e)[:200]
+                uom = receive._find_uom(receive_line, product)
+                if product and not uom:
+                    error_messages.append(
+                        f'UOM with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER UOM.'
+                    )
+                    error_line_payloads.append({
+                        'inventory_id': receive_line.inventory_id or False,
+                        'product_name': receive_line.description or False,
+                        'qty': receive._parse_float(receive_line.product_uom_qty),
+                        'uom': receive_line.uom_code or False,
+                        'payload': receive_line.read()[0] if receive_line.exists() else {},
+                    })
+                    continue
+
+                qty = receive._parse_float(receive_line.product_uom_qty)
+                existing = picking.move_ids.filtered(
+                    lambda move: (
+                        move.picking_id == picking.id
+                        and move.product_id.id == product.id
+                        and move.product_uom_qty == qty
+                    )
+                )
+                if existing:
+                    continue
+
+                move_vals = {
+                    'name': receive_line.line_description or product.display_name,
+                    'picking_id': picking.id if picking else False,
+                    'product_id': product.id,
+                    'product_uom_qty': qty,
+                    'product_uom': uom.id if uom else product.uom_id.id,
+                    'location_id': picking.location_id.id if picking else False,
+                    'location_dest_id': picking.location_dest_id.id if picking else False,
+                    'warehouse_id': warehouse.id if warehouse else False,
+                    'description_picking': receive_line.line_description or False,
+
+                    'adt_inventory_id': receive_line.line_note or False,
+                    'adt_line_nbr': receive_line.line_nbr or False,
+                    'adt_uom_code': receive_line.uom_code or False,
+                    'adt_warehouse_dest_code': receive_line.warehouse_dest_code or False,
+                }
+
+                move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
+                Move.create(move_vals)
+                picking.action_confirm()
+
+            except InventoryImportError:
+                raise
+
+            except Exception as line_error:
+                _logger.exception("Error import line %s", receive.id)
+                error_messages.append(str(line_error))
+                error_line_payloads.append({
+                    'inventory_id': receive_line.inventory_id or False,
+                    'product_name': receive_line.line_description or False,
+                    'qty': receive._parse_float(receive_line.product_uom_qty),
+                    'uom': receive_line.uom_code or False,
+                    'payload': move_vals if move_vals else (receive_line.read()[0] if receive_line.exists() else {}),
                 })
 
-        msg = f'Import selesai: {imported} delivery dibuat, {updated} delivery diupdate, {error} line error.'
+        if error_messages:
+            raise InventoryImportError(
+                '\n'.join(error_messages),
+                payload={
+                    'header': header_payload,
+                    'picking_vals': picking_vals,
+                    'picking_id': picking.id if picking else False,
+                },
+                line_payloads=error_line_payloads,
+            )
+
+        receive.write({
+            'import_state': action_state,
+            'import_message': f'{action_state.title()}: {picking.name if picking else False}',
+            'odoo_picking_id': picking.id if picking else False,
+        })
+        self._resolve_error_tracking(receive)
+        return action_state
+
+    def _do_import(self):
+        imported = 0
+        updated = 0
+        error = 0
+
+        grouped_references = []
+        seen_reference_numbers = set()
+        for reference in self.sorted(lambda record: (record.reference_nbr or '', record.id)):
+            reference_key = reference.reference_nbr or reference.id
+            if reference_key in seen_reference_numbers:
+                continue
+            seen_reference_numbers.add(reference_key)
+            grouped_references.append(reference)
+
+        for receive in grouped_references:
+            try:
+                with self.env.cr.savepoint():
+                    action_state = self._import_single_receive(receive)
+                if action_state == 'imported':
+                    imported += 1
+                elif action_state == 'updated':
+                    updated += 1
+            except Exception as exc:
+                _logger.exception("Error import Inventory Receive %s", receive.reference_nbr or receive.id)
+                if isinstance(exc, InventoryImportError):
+                    error_payload = exc.payload
+                    error_line_payloads = exc.line_payloads
+                    error_message = str(exc)
+                else:
+                    error_payload = {'header': receive.read()[0] if receive.exists() else {}}
+                    error_line_payloads = []
+                    error_message = str(exc)
+
+                try:
+                    self._persist_error_tracking(
+                        receive,
+                        [error_message],
+                        line_payloads=error_line_payloads,
+                        payload=error_payload,
+                    )
+                except Exception:
+                    _logger.exception(
+                        "Failed to persist error tracking for receive %s",
+                        receive.receive_nbr or receive.id,
+                    )
+
+                receive.write({
+                    'import_state': 'error',
+                    'import_message': error_message[:1000],
+                })
+                error += 1
+                continue
+
+        msg = f'Import done: {imported} receive created, {updated} receive updated, {error} receive error.'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': 'Import Inventory Recieved to Delivery Order',
+                'title': 'Import Inventory Receive',
                 'message': msg,
                 'type': 'success' if error == 0 else 'warning',
                 'sticky': True,
             }
         }
+
+    # def _do_import(self):
+    #     Picking = self.env['stock.picking']
+    #     Move = self.env['stock.move']
+    #     PickingType = self.env['stock.picking.type']
+    #     Error = self.env['stock.picking.acumatica.error']
+    #     ErrorLine = self.env['stock.picking.acumatica.error.line']
+
+    #     imported = updated = error = 0
+    #     for line in self:
+    #         first = line
+    #         origin = first.reference_nbr or False
+    #         error_list = []
+    #         try:
+    #             warehouse = self._find_warehouse(first)
+    #             if not warehouse:
+    #                 error_list.append(f'Warehouse with location code {first.warehouse_code} was not found in the WMS | MAPPING WAREHOUSE.')
+
+    #             picking_type = PickingType.search([
+    #                 ('warehouse_id', '=', warehouse.id if warehouse else False),
+    #                 ('operation_category', '=', 'internal'),
+    #                 ('code', '=', 'internal'),
+    #             ], limit=1)
+    #             if not picking_type:
+    #                 warehouse_txt = f'Warehouse code {warehouse.name}'
+    #                 location_txt = f'Location code {first.warehouse_code}'
+    #                 error_list.append(f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | MASTER OPERATION TYPE.')
+
+    #             dest_location = self._find_location_dest(first)
+    #             if not dest_location:
+    #                 error_list.append(f'Location with code {first.warehouse_dest_code} was not found in the WMS | MAPPING WAREHOUSE.')
+
+    #             vals = {
+    #                 'origin': origin,
+    #                 'picking_type_id': picking_type.id,
+    #                 'location_dest_id': dest_location.id if dest_location else False,
+    #                 'adt_dest_location_id': dest_location.id if dest_location else False,
+    #                 'scheduled_date': self._parse_dt(first.scheduled_date),
+    #                 'note': first.note or first.description or False,
+
+    #                 'adt_branch_warehouse': first.branch_warehouse or False,
+    #                 'adt_actual_qty': self._parse_float(first.actual_qty),
+    #                 'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
+    #                 'adt_post_period': first.post_period or False,
+    #                 'adt_total_qty': self._parse_float(first.total_qty),
+    #                 'adt_type': first.transfer_type or False,
+    #                 'adt_external_ref': first.external_ref or False,
+    #             }
+    #             # filter field yang bener-bener ada di stock.picking
+    #             vals = {k: v for k, v in vals.items() if k in Picking._fields}
+
+
+    #             picking = self.odoo_picking_id
+    #             error_data = False
+    #             if error_list:
+    #                 error_data = Error.search([('origin', '=', origin)], limit=1)
+    #                 if not error_data:
+    #                     error_data = Error.create({
+    #                         'operation_type': 'receipt',
+    #                         'location': first.warehouse_code or False,
+    #                         'location_dest': first.warehouse_dest_code or False,
+    #                         'scheduled_date': self._parse_dt(first.scheduled_date),
+    #                         'origin': origin,
+    #                         'adt_total_qty': self._parse_float(first.total_qty),
+    #                         'adt_actual_qty': self._parse_float(first.actual_qty),
+    #                         'api_acumatica': 'inventory_received',
+    #                         'error_message': '\n'.join(error_list),
+    #                         'payload': str(vals)[:1000],
+    #                     })
+    #             else:
+    #                 if picking:
+    #                     if picking.state in ('done', 'cancel'):
+    #                         raise UserError(f'Receive {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
+    #                     picking.write(vals)
+    #                     action_state = 'updated'
+    #                     updated += 1
+    #                 else:
+    #                     picking = Picking.create(vals)
+    #                     picking.action_confirm()
+    #                     action_state = 'imported'
+    #                     imported += 1
+
+    #             for line in self.product_line_ids:
+    #                 try:
+    #                     product = self._find_product(line)
+    #                     if not product:
+    #                         error_list.append(f'Product with InventoryID {line.inventory_id} was not found in the WMS | MASTER PRODUCT.')
+
+    #                     uom = self._find_uom(line, product)
+    #                     if not uom:
+    #                         error_list.append(f'UOM with InventoryID {line.inventory_id} was not found in the WMS | MASTER UOM.')
+
+    #                     qty = self._parse_float(line.product_uom_qty)
+    #                     move_name = line.line_description or product.display_name
+    #                     # move_dest = self._find_location(line, warehouse) or dest_location or picking.location_dest_id
+
+    #                     # existing = Move.search([
+    #                     #     ('picking_id', '=', picking.id),
+    #                     #     ('product_id', '=', product.id),
+    #                     #     ('name', '=', move_name),
+    #                     #     ('product_uom_qty', '=', qty),
+    #                     # ], limit=1)
+    #                     existing = picking.move_ids.filtered(lambda m:
+    #                         m.picking_id == picking.id and
+    #                         m.product_id.id == product.id and
+    #                         m.product_uom_qty == qty
+    #                     )
+    #                     if existing:
+    #                         first.write({
+    #                             'import_state': action_state,
+    #                             'import_message': f'{action_state.title()}: {picking.name} (move sudah ada)',
+    #                             'odoo_picking_id': picking.id,
+    #                         })
+    #                         continue
+
+    #                     move_vals = {
+    #                         'name': move_name,
+    #                         'picking_id': picking.id,
+    #                         'product_id': product.id,
+    #                         'product_uom_qty': qty,
+    #                         'product_uom': uom.id if uom else product.uom_id.id,
+    #                         'location_id': picking.location_id.id,
+    #                         # 'location_dest_id': move_dest.id,
+    #                         'description_picking': line.line_description or False,
+
+    #                         'adt_inventory_id': line.line_note or False,
+    #                         'adt_line_nbr': line.line_nbr or False,
+    #                         'adt_uom_code': line.uom_code or False,
+    #                         'adt_warehouse_dest_code': line.warehouse_dest_code or False,
+    #                         'adt_type': first.transfer_type or False,
+    #                     }
+    #                     move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
+    #                     if error_data:
+    #                         existing_error = error_data.line_ids.filtered(lambda m:
+    #                             m.error_id.id == error_data.id and
+    #                             m.inventory_id == line.inventory_id and
+    #                             m.qty == line.product_uom_qty
+    #                         )
+    #                         if existing_error:
+    #                             ErrorLine.create({
+    #                                 'error_id': error_data.id,
+    #                                 'inventory_id': line.inventory_id or False,
+    #                                 'product_name': line.line_description or False,
+    #                                 'qty': line.product_uom_qty or False,
+    #                                 'uom': line.uom_code or False,
+    #                             })
+    #                         else:
+    #                             ErrorLine.create({
+    #                                 'error_id': error_data.id,
+    #                                 'inventory_id': line.inventory_id or False,
+    #                                 'product_name': line.line_description or False,
+    #                                 'qty': line.product_uom_qty or False,
+    #                                 'uom': line.uom_code or False,
+    #                             })
+    #                         continue
+
+    #                     if error_list:                                
+    #                         error_line_data = ErrorLine.search([('error_id', '=', error.id)], limit=1)
+    #                         if not error_line_data:
+    #                             error_line_data = ErrorLine.create({
+    #                                 'error_id': error_data.id,
+    #                                 'inventory_id': line.inventory_id or False,
+    #                                 'product_name': line.line_description or False,
+    #                                 'qty': line.product_uom_qty or False,
+    #                                 'uom': line.uom_code or False,
+    #                                 'payload': str(move_vals)[:1000],
+    #                             })
+    #                             error += 1
+    #                             first.write({
+    #                                 'import_state': action_state,
+    #                                 'import_message': f'{action_state.title()}: {picking.name}',
+    #                             })
+    #                     else:
+    #                         Move.create(move_vals)
+    #                         picking.action_confirm()
+
+    #                     first.write({
+    #                         'import_state': action_state,
+    #                         'import_message': f'{action_state.title()}: {picking.name}',
+    #                         'odoo_picking_id': picking.id,
+    #                     })
+    #                 except Exception as line_e:
+    #                     _logger.exception("Error import line %s", line.id)
+    #                     first.write({
+    #                         'import_state': 'error',
+    #                         'import_message': str(line_e)[:200],
+    #                         'odoo_picking_id': picking.id if picking else False,
+    #                     })
+
+    #             if error_list:
+    #                 _logger.exception("Error import receipt %s", origin)
+    #                 self.write({
+    #                     'import_state': 'error',
+    #                     'import_message': '\n'.join(error_list),
+    #                 })
+    #                 error += 1
+
+    #         except Exception as e:
+    #             _logger.exception('Error import inventory recieved %s', first.id)
+    #             first.write({
+    #                 'import_state': 'error',
+    #                 'import_message': str(e)[:200]
+    #             })
+
+    #     msg = f'Import selesai: {imported} delivery dibuat, {updated} delivery diupdate, {error} line error.'
+    #     return {
+    #         'type': 'ir.actions.client',
+    #         'tag': 'display_notification',
+    #         'params': {
+    #             'title': 'Import Inventory Recieved to Delivery Order',
+    #             'message': msg,
+    #             'type': 'success' if error == 0 else 'warning',
+    #             'sticky': True,
+    #         }
+    #     }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})

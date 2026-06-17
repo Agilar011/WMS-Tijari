@@ -23,6 +23,9 @@ class ImportTransferWizard(models.TransientModel):
         ('fetched', 'Data Sudah Ditarik'),
         ('done', 'Selesai'),
     ], default='draft')
+    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
     total_fetched = fields.Integer(string='Total Line Ditarik', readonly=True)
     total_new = fields.Integer(string='Transfer Baru', readonly=True)
@@ -35,6 +38,13 @@ class ImportTransferWizard(models.TransientModel):
 
         raw_list = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
+        params = []
+        if self.wh33_filter:
+            params.append("startswith(Warehouse,'WH33')")
+        if self.start_date and self.end_date:
+            params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+        if self.odata_filter:
+            params.append(self.odata_filter)
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
@@ -42,8 +52,7 @@ class ImportTransferWizard(models.TransientModel):
                 limit=self.batch_size,
                 offset=offset,
                 receipt_nbr=self.receipt_nbr,
-                last_modified_from=self.last_modified_from,
-                odata_filter=self.odata_filter,
+                odata_filter=params if params else None,
             )
 
             if not batch_data:
@@ -124,7 +133,7 @@ class ImportTransferWizard(models.TransientModel):
             return False
 
 
-    def fetch_transfer_data(self, limit=50, offset=0, receipt_nbr=False, last_modified_from=False, odata_filter=False):
+    def fetch_transfer_data(self, limit=50, offset=0, receipt_nbr=False, odata_filter=False):
         self.ensure_one()
         session = self.config_id._do_login()
         try:
@@ -138,11 +147,10 @@ class ImportTransferWizard(models.TransientModel):
                 params['$select'] = self.config_id.odata_select
             if receipt_nbr:
                 filters.append(f"ReceiptNbr eq '{receipt_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
             if odata_filter:
-                filters.append(f"({odata_filter})")
-            elif self.config_id.odata_filter:
+                filters.append(self.config_id.odata_filter)
+                filters.extend(odata_filter)
+            else:
                 filters.append(f"({self.config_id.odata_filter})")
 
             if filters:
@@ -260,7 +268,7 @@ class ImportTransferWizard(models.TransientModel):
                 'source_warehouse': self._val(item, 'WarehouseID'),
             }
 
-            _logger.info('Berhasil ambil data Warehouse dari Transfer Receipt', len(result))
+            _logger.info('Berhasil ambil data Warehouse dari Transfer Receipt', result)
             return result
         except Exception as e:
             _logger.error('Gagal ambil data Warehouse dari Transfer Receipt: %s', str(e))

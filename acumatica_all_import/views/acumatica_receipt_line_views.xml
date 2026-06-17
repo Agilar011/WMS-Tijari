@@ -2,7 +2,7 @@
 
     <record id="action_import_selected_receipt"
             model="ir.actions.server">
-        <field name="name">Sellect All &amp; Generate</field>
+        <field name="name">Generate Data</field>
         <field name="model_id" ref="model_acumatica_receipt_line"/>
         <field name="binding_model_id" ref="model_acumatica_receipt_line"/>
         <field name="binding_type">action</field>
@@ -22,9 +22,9 @@
                 </header> -->
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="receipt_nbr"/>
-                <field name="line_nbr"/>
                 <field name="vendor_code"/>
                 <field name="warehouse_code"/>
+                <field name="total_qty"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"
                        decoration-warning="import_state == 'pending'"
