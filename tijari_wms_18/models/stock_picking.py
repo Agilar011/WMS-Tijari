@@ -43,6 +43,42 @@ class StockPicking(models.Model):
     sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
     adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
 
+    def action_put_in_pack(self, move_lines_to_pack=False):
+        self.ensure_one()
+
+        if self.env.context.get('sml_specific_default'):
+            self = self.with_context(
+                clean_context(self.env.context)
+            )
+
+        if self.state in ('done', 'cancel'):
+            return super().action_put_in_pack(
+                move_lines_to_pack=move_lines_to_pack
+            )
+
+        move_line_ids = self._package_move_lines(
+            move_lines_to_pack=move_lines_to_pack
+        )
+
+        if not move_line_ids:
+            raise UserError(_(
+                "There is nothing eligible to put in a pack."
+            ))
+
+        packages = self.env['stock.quant.package']
+
+        for move in move_line_ids.mapped('move_id'):
+
+            lines = move_line_ids.filtered(
+                lambda ml: ml.move_id == move
+            )
+
+            package = self._put_in_pack(lines)
+
+            packages |= package
+
+        return True
+    
     def _check_sync_state(self):
         for picking in self:
             if picking.sync_state == 'not_ready':
