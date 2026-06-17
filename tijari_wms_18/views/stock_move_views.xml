@@ -18,7 +18,7 @@
             <xpath expr="//div[@class='o_row']//field[@name='product_uom']" position="replace"/>
 
             
-            <xpath expr="//field[@name='use_expiration_date']" position="after">
+            <xpath expr="//field[@name='product_uom']" position="after">
                 <div class="grid-container">
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                         
@@ -47,7 +47,7 @@
                 <button name="action_generate_lot"
                         type="object"
                         string="Generate Lot"
-                        class="btn-primary"
+                        class="btn-warning"
                         invisible="not display_assign_serial"/>
             </xpath>
 
@@ -61,7 +61,7 @@
 
         </field>
     </record>
-    
+
     <record id="stock_picking_form_note_button" model="ir.ui.view">
         <field name="name">stock.picking.form.note.button</field>
         <field name="model">stock.picking</field>
