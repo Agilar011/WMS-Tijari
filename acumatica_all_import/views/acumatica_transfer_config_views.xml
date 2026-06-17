@@ -3,37 +3,41 @@
         <field name="name">acumatica.transfer.config.form</field>
         <field name="model">acumatica.transfer.config</field>
         <field name="arch" type="xml">
-            <form string="Acumatica Internal Transfer Config">
+            <form string="API Configuration Acumatica SOTR">
+                <header>
+                    <button name="action_test_connection" string="🔌 Test Connection" type="object" class="btn-primary"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
+                </header>
                 <sheet>
-                    <group string="Connection">
-                        <group>
-                            <field name="name"/>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="Nama Konfigurasi..."/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="🌐 Koneksi API">
                             <field name="base_url"/>
                             <field name="api_version"/>
-                            <field name="company_code"/>
+                            <field name="endpoint_name"/>
                         </group>
-                        <group>
+                        <group string="🔑 Kredensial">
                             <field name="username"/>
                             <field name="password" password="True"/>
-                            <field name="endpoint_name"/>
-                            <field name="active"/>
+                            <field name="company_code"/>
                         </group>
                     </group>
-                    <group string="OData">
-                        <group>
+                    <group>
+                        <group string="📊 Info Sync">
+                            <field name="last_sync" readonly="1"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="⚙️ OData Settings">
+                            <field name="odata_filter"/>
                             <field name="odata_expand"/>
                             <field name="odata_select"/>
                         </group>
-                        <group>
-                            <field name="odata_filter"/>
-                            <field name="state" readonly="1"/>
-                            <field name="last_sync" readonly="1"/>
-                        </group>
                     </group>
                 </sheet>
-                <footer>
-                    <button name="action_test_connection" type="object" string="Test Connection" class="btn-primary"/>
-                </footer>
             </form>
         </field>
     </record>
@@ -42,20 +46,24 @@
         <field name="name">acumatica.transfer.config.list</field>
         <field name="model">acumatica.transfer.config</field>
         <field name="arch" type="xml">
-            <list>
+            <list string="Konfigurasi Acumatica PO Receipt">
                 <field name="name"/>
                 <field name="base_url"/>
+                <field name="endpoint_name"/>
                 <field name="username"/>
                 <field name="company_code"/>
-                <field name="endpoint_name"/>
-                <field name="active"/>
-                <field name="state"/>
+                <field name="last_sync"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'connected'"
+                       decoration-danger="state == 'error'"
+                       decoration-muted="state == 'draft'"/>
+                <button name="action_test_connection" string="Test" type="object" icon="fa-plug"/>
             </list>
         </field>
     </record>
 
     <record id="action_acumatica_transfer_config" model="ir.actions.act_window">
-        <field name="name">API Config</field>
+        <field name="name">API Configuration</field>
         <field name="res_model">acumatica.transfer.config</field>
         <field name="view_mode">list,form</field>
     </record>

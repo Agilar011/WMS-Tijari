@@ -1,6 +1,9 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
 
+import logging
+_logger = logging.getLogger(__name__)
+
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -46,19 +49,25 @@ class StockPicking(models.Model):
                 raise UserError(
                     f'Picking {picking.name} tidak bisa diproses karena data tidak lengkap: {picking.sync_message}'
                 )
-    def action_confirm(self):
-        self._check_sync_state()
-        return super().action_confirm()
-    
-    def button_validate(self):
-        self._check_sync_state()
-        return super().button_validate()
 
+    # def action_confirm(self):
+    #     self._check_sync_state()
+    #     return super().action_confirm()
+    
+    def action_confirm(self):
+        _logger.info(">>> action_confirm CALLED %s", self.ids)
+
+        res = super().action_confirm()
+
+        _logger.info(">>> state after confirm = %s", self.mapped("state"))
+
+        return res
     adt_dest_location_id = fields.Many2one(
         "stock.location",
         domain="[('usage', '=', 'internal')]",
-        string="Custom Destination Location",
+        string="Mapped Location",
     )
+    note_ba = fields.Text(string="Notes For Official Report")
 
     def _allow_custom_push_destination(self):
         self.ensure_one()

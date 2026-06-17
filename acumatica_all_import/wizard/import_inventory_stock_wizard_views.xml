@@ -1,0 +1,38 @@
+<odoo>
+    <record id="view_import_inventory_stock_wizard_form" model="ir.ui.view">
+        <field name="name">import.inventory.stock.wizard.form</field>
+        <field name="model">import.inventory.stock.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Import Inventory Stock">
+                <sheet>
+                    <group>
+                        <group string="Filter">
+                            <field name="config_id"/>
+                            <field name="warehouse_value"/>
+                            <field name="inventory_id_value"/>
+                            <field name="odata_top"/>
+                            <field name="odata_expand"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="state" readonly="1"/>
+                        <field name="total_fetched" readonly="1"/>
+                        <field name="total_new" readonly="1"/>
+                        <field name="total_existing" readonly="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_fetch_data" type="object" string="Fetch Data" class="btn-primary"/>
+                    <button string="Close" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_import_inventory_stock_wizard" model="ir.actions.act_window">
+        <field name="name">Import Inventory Stock</field>
+        <field name="res_model">import.inventory.stock.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

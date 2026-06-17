@@ -1,4 +1,16 @@
 <odoo>
+    <record id="action_import_selected_kit_assembly"
+            model="ir.actions.server">
+        <field name="name">Select All &amp; Generate</field>
+        <field name="model_id" ref="model_acumatica_kit_assembly_line"/>
+        <field name="binding_model_id" ref="model_acumatica_kit_assembly_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
     <record id="view_acumatica_kit_assembly_line_list" model="ir.ui.view">
         <field name="name">acumatica.kit.assembly.line.list</field>
         <field name="model">acumatica.kit.assembly.line</field>

@@ -259,6 +259,7 @@ class AcumaticaReceiptChangeItemLine(models.Model):
                                 error += 1
                         else:
                             Move.create(move_vals)
+                            picking.action_confirm()
 
                         first.write({
                             'import_state': action_state,

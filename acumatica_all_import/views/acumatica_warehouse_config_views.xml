@@ -7,17 +7,15 @@
         <field name="arch" type="xml">
             <form string="Konfigurasi Acumatica - Warehouse Import">
                 <header>
-                    <button name="action_test_connection" string="🔌 Test Koneksi"
-                            type="object" class="btn-primary"/>
-                    <field name="state" widget="statusbar"
-                           statusbar_visible="draft,connected,error"/>
+                    <button name="action_test_connection" string="🔌 Test Connection" type="object" class="btn-primary"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
                 </header>
                 <sheet>
                     <div class="oe_title">
                         <h1><field name="name" placeholder="Nama Konfigurasi..."/></h1>
                     </div>
                     <group>
-                        <group string="🌐 Koneksi Server">
+                        <group string="🌐 Koneksi API">
                             <field name="base_url" placeholder="http://your-server/acumportal/entity"/>
                             <field name="api_version"/>
                         </group>
@@ -52,8 +50,7 @@
                        decoration-success="state == 'connected'"
                        decoration-danger="state == 'error'"
                        decoration-muted="state == 'draft'"/>
-                <button name="action_test_connection" string="Test"
-                        type="object" icon="fa-plug"/>
+                <button name="action_test_connection" string="Test" type="object" icon="fa-plug"/>
             </list>
         </field>
     </record>

@@ -573,12 +573,14 @@ class AcumaticaTransferLine(models.Model):
                                 })
                         else:
                             Move.create(move_vals)
+                            picking.action_confirm()
 
                         first.write({
                             'import_state': action_state,
                             'import_message': f'{action_state.title()}: {picking.name}',
                             'odoo_picking_id': picking.id,
                         })
+
                     except Exception as line_e:
                         _logger.exception("Error import line %s", line.id)
                         first.write({

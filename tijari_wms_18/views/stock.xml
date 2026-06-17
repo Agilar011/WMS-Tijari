@@ -79,8 +79,6 @@
             <xpath expr="//field[@name='lot_name']" position="after">
                 <field name="operation_category" column_invisible="1"/>
                 <field name="lot_name" column_invisible="1"/>
-                <!-- <field name="lot_button" widget="generate_lot_button" -->
-                <!-- invisible="operation_category != 'receive'"/> -->
             </xpath>
 
             <!-- Custom fields -->
@@ -241,6 +239,42 @@
         <field name="inherit_id" ref="stock.view_stock_move_operations"/>
         <field name="arch" type="xml">
 
+            <xpath expr="//field[@name='product_id']" position="replace">
+            </xpath>
+
+            <xpath expr="//label[@for='product_uom_qty']" position="replace"/>
+
+            <xpath expr="//div[@class='o_row']//field[@name='product_uom_qty']" position="replace"/>
+
+
+            <xpath expr="//div[@class='o_row']//field[@name='product_uom']" position="replace"/>
+
+            
+            <xpath expr="//field[@name='use_expiration_date']" position="after">
+                <div class="grid-container">
+                    <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
+                        
+                        <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: top; gap: 5px; width: 100%;">
+                            <label for="product_id" style="margin: 0 !important; white-space: nowrap !important;"/>
+                            <field name="product_id" readonly="id or move_line_ids"/>
+                        </div>
+
+                    </div>
+
+                    <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
+                                            
+                        <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
+                            <label for="product_uom_qty" style="margin: 0 !important; white-space: nowrap !important;"/>
+                            <field name="product_uom_qty" readonly="state != 'draft'" nolabel="1"/>
+                            <field name="product_uom" groups="uom.group_uom" readonly="state != 'draft'" nolabel="1" options="{'no_open': True}"/>
+                        </div>
+
+                    </div>
+                </div>
+
+            </xpath> 
+           
+
             <xpath expr="//widget[@name='import_lots']" position="after">
                 <button name="action_generate_lot"
                         type="object"
@@ -330,21 +364,63 @@
     <record id="action_generate_selected_lot_server"
             model="ir.actions.server">
 
-        <field name="name">Generate Lot</field>
+        <field name="name" invisible="not display_assign_serial">Generate Lot</field>
 
         <field name="model_id"
-            ref="stock.model_stock_move_line"/>
+            ref="stock.model_stock_move_line" invisible="not display_assign_serial"/>
 
         <field name="binding_model_id"
-            ref="stock.model_stock_move_line"/>
+            ref="stock.model_stock_move_line" invisible="not display_assign_serial"/>
 
-        <field name="binding_type">action</field>
+        <field name="binding_type" invisible="not display_assign_serial">action</field>
 
-        <field name="state">code</field>
+        <field name="state" invisible="not display_assign_serial">code</field>
 
-        <field name="code">
+        <field name="code" invisible="not display_assign_serial">
             records.action_generate_selected_lot()
         </field>
 
     </record>
+
+    <record id="view_picking_form_inherit_note_ba" model="ir.ui.view">
+        <field name="name">stock.picking.form.note.ba</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Ba Notes">
+                    <field name="note_ba" no_label="1" />
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- <record id="view_move_line_custom_loc_dest" model="ir.ui.view">
+        <field name="name">stock.move.line.custom.loc.dest</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='location_dest_id']" position="replace">
+                <field name="location_dest_id"
+                    invisible="picking_id.picking_type_id.code == 'incoming'"/>
+
+                <field name="allocation_storage"
+                    domain="[('id', 'child_of', adt_dest_location_id), ('usage', '=', 'internal')]"
+                    readonly="0"
+                />
+            </xpath>
+        </field>
+    </record> -->
+
+    <!-- <record id="view_picking_form_inherit_acumatica_receipt_header" model="ir.ui.view">
+        <field name="name">stock.picking.form.acumatica.receipt.header</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_cancel']" position="after">
+                <button invisible="picking_type_id.code != 'incoming'"  name="action_print_warehouse_receipt" string="Print Penerimaan Barang" type="object" class="oe_highlight"/>
+            </xpath>
+        </field>
+    </record> -->
+
 </odoo>
