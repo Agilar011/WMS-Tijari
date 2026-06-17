@@ -480,7 +480,7 @@ class AcumaticaReceiptLine(models.Model):
                 # filter field yang bener-bener ada di stock.picking
                 vals = {k: v for k, v in vals.items() if k in Picking._fields}
 
-                picking = self.odoo_picking_id
+                picking = first.odoo_picking_id
                 error_data = False
                 if error_list:
                     error_data = Error.search([('origin', '=', origin)], limit=1)
@@ -508,8 +508,10 @@ class AcumaticaReceiptLine(models.Model):
                         action_state = 'updated'
                         updated += 1
                     else:
+                        # Picking = self.env['stock.picking']
                         picking = Picking.create(vals)
-                        picking.action_confirm()
+                        res = picking.action_confirm()
+                        print(f"After confirm: {res}")
                         action_state = 'imported'
                         imported += 1
 
