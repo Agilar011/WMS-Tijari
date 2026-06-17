@@ -1,0 +1,22 @@
+<!-- <odoo>
+    <record id="action_generate_selected_lot_server"
+            model="ir.actions.server">
+
+        <field name="name" invisible="not display_assign_serial">Generate Lot</field>
+
+        <field name="model_id"
+            ref="stock.model_stock_move_line" invisible="not display_assign_serial"/>
+
+        <field name="binding_model_id"
+            ref="stock.model_stock_move_line" invisible="not display_assign_serial"/>
+
+        <field name="binding_type" invisible="not display_assign_serial">action</field>
+
+        <field name="state" invisible="not display_assign_serial">code</field>
+
+        <field name="code" invisible="not display_assign_serial">
+            records.action_generate_selected_lot()
+        </field>
+
+    </record>
+</odoo> -->

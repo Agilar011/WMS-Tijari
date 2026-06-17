@@ -58,9 +58,10 @@ class StockPicking(models.Model):
         for rec in self:
             print(rec.picking_type_id.operation_category)
             for line in rec.move_line_ids:
-                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}") # Cek di terminal Odoo
+                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
                 line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
                 if not line.lot_name:
+                    print(f"Missing lot: {line}")
                     raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
             # if not rec.lot_name:
             #     raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
@@ -233,6 +234,11 @@ class StockMoveLine(models.Model):
     allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
     allocation_UOM = fields.Char(string='Allocation UOM')
 
+    picking_code = fields.Selection(
+        related='picking_id.picking_type_code',
+        store=False,
+    )
+
     @api.depends(
         'confirmation_location_code',
         'confirmation_lot_code',
@@ -350,6 +356,9 @@ class StockMoveLine(models.Model):
             if line.auto_input_code:
                 print(f">>> Auto input code triggered for line {line.id}") # Cek di terminal Odoo
                 line.matching = 'match'
+                sml = self.env['stock.move.line'].browse(line._origin.id)
+                sml.write({'matching': 'match'})
+
 
     def action_generate_selected_lot(self):
         for line in self:
