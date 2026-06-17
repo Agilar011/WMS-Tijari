@@ -297,7 +297,20 @@ class StockMoveLine(models.Model):
                 line.matching_html = "<span style='color: red; font-weight: bold;'>NOT MATCH</span>"
             else:
                 line.matching_html = False
-    
+
+    @api.onchange('product_id')
+    def _onchange_product_copy_previous_lot(self):
+
+        if not self.move_id:
+            return
+
+        last_line = self.move_id.move_line_ids.filtered(
+            lambda l: l.lot_id
+        )
+
+        if last_line:
+            self.lot_id = last_line[-1].lot_id
+                
     @api.onchange('quant_id')
     def _onchange_move_line_ids(self):
         for line in self:
