@@ -2,7 +2,7 @@
 
     <record id="action_import_selected_shipment"
             model="ir.actions.server">
-        <field name="name">Sellect All &amp; Generate</field>
+        <field name="name">Generate Data</field>
         <field name="model_id" ref="model_acumatica_shipment_line"/>
         <field name="binding_model_id" ref="model_acumatica_shipment_line"/>
         <field name="binding_type">action</field>
@@ -39,13 +39,17 @@
         <field name="arch" type="xml">
             <list string="Data Shipment Receipt" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
-                <!-- <field name="line_nbr"/> -->
-                <!-- <field name="inventory_id"/> -->
-                <!-- <field name="uom_code"/> -->
-                <field name="warehouse_code"/>
-                <!-- <field name="location_dest_code"/> -->
-                <field name="import_state"/>
+                <field name="shipment_nbr"/>
+                <field name="warehouse_code" string="Warehouse"/>
+                <field name="partner_code"/>
+                <field name="actual_qty" string="Qty"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Shipment" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
             </list>
         </field>
     </record>
