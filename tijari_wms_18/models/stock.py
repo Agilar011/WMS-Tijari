@@ -331,6 +331,12 @@ class StockMoveLine(models.Model):
                 print(f">>> Auto input code triggered for line {line.id}") # Cek di terminal Odoo
                 line.matching = 'match'
 
+    def action_generate_selected_lot(self):
+        for line in self:
+            line.generate_lot()
+
+        return True
+        
     def generate_lot(self):
         for line in self:
             print(f"BEFORE product={line.product_id.display_name} move={line.move_id.product_id.display_name}")
@@ -701,7 +707,6 @@ class StockMove(models.Model):
     # lot_button = fields.Char(string="Lot Button")
 
     def action_generate_lot(self):
-        print('action jalan')
         for move in self:
             print(move.product_id)
             print(move.product_uom)
