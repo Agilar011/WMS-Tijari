@@ -332,18 +332,15 @@ class AcumaticaReceiptChangeItemLine(models.Model):
     def _find_warehouse(self, line):
             Warehouse = self.env['stock.location.acumatica']
             warehouse = False
-            if line.line_warehouse_code:
-                warehouse = Warehouse.search([('code', '=', line.line_warehouse_code)], limit=1)
-                if not warehouse:
-                    warehouse = Warehouse.search([('name', '=', line.line_warehouse_code)], limit=1)
-                else:
+            if line.warehouse_code:
+                warehouse = Warehouse.search([('code', '=', line.warehouse_code)], limit=1)
+                if warehouse:
                     if not warehouse.odoo_building_id:
                         warehouse = False
                     else:
                         warehouse = warehouse.odoo_building_id    
-                # else:
-                #     warehouse = Warehouse.search([('id', '=', 1)], limit=1)
-            return warehouse or Warehouse.search([], limit=1)
+
+            return warehouse
 
     def _find_internal_location(self, line, warehouse=False):
         Location = self.env['stock.location']
@@ -481,7 +478,7 @@ class AcumaticaReceiptChangeItemLine(models.Model):
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {receipt.warehouse_code}'
             error_messages.append(
-                f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
+                f'Operation Type for code incoming with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
             )
 
         if error_messages:
@@ -688,6 +685,72 @@ class AcumaticaReceiptChangeItemLine(models.Model):
             }
         }
 
+    def _resolve_error_tracking(self, first):
+        origin = first.origin or False
+        if not origin:
+            return
+
+        error_data = self.env['stock.picking.acumatica.error'].search([('origin', '=', origin)], limit=1)
+        if error_data:
+            error_data.write({'state': 'resolved'})
+
+    def _persist_error_tracking(self, first, error_messages, line_payloads=None, payload=None):
+        origin = first.origin or False
+        if not origin:
+            return False
+
+        line_payloads = line_payloads or []
+        payload_text = payload if payload is not None else {}
+
+        with self.env.registry.cursor() as cr:
+            error_env = api.Environment(cr, self.env.uid, dict(self.env.context))
+            Error = error_env['stock.picking.acumatica.error'].sudo()
+            ErrorLine = error_env['stock.picking.acumatica.error.line'].sudo()
+
+            error_data = Error.search([('origin', '=', origin)], limit=1)
+            error_values = {
+                'partner': first.vendor_code or False,
+                'operation_type': 'receipt',
+                'location': first.warehouse_code or False,
+                'location_dest': first.warehouse_dest_code or False,
+                'scheduled_date': first._parse_dt(first.scheduled_date),
+                'origin': origin,
+                'adt_total_qty': first._parse_float(first.total_qty),
+                'adt_actual_qty': first._parse_float(first.actual_qty),
+                'api_acumatica': 'po_receipt',
+                'error_message': '\n'.join(error_messages),
+                'payload': str(payload_text)[:1000],
+                'state': 'new',
+            }
+
+            if error_data:
+                error_data.write(error_values)
+            else:
+                error_data = Error.create(error_values)
+
+            for line_payload in line_payloads:
+                line_domain = [
+                    ('error_id', '=', error_data.id),
+                    ('inventory_id', '=', line_payload.get('inventory_id') or False),
+                    ('qty', '=', line_payload.get('qty') or False),
+                    ('uom', '=', line_payload.get('uom') or False),
+                ]
+                error_line = ErrorLine.search(line_domain, limit=1)
+                line_values = {
+                    'error_id': error_data.id,
+                    'inventory_id': line_payload.get('inventory_id') or False,
+                    'product_name': line_payload.get('product_name') or False,
+                    'qty': line_payload.get('qty') or False,
+                    'uom': line_payload.get('uom') or False,
+                    'payload': str(line_payload.get('payload') or {})[:1000],
+                }
+                if error_line:
+                    error_line.write(line_values)
+                else:
+                    ErrorLine.create(line_values)
+
+            cr.commit()
+            return error_data
 
 
 

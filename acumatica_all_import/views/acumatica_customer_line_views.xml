@@ -19,34 +19,34 @@
         <field name="model">acumatica.customer.line</field>
         <field name="arch" type="xml">
             <search string="Cari Customer">
-                <field name="customer_id"   string="CustomerID"/>
+                <field name="customer_id" string="CustomerID"/>
                 <field name="customer_name" string="CustomerName"/>
                 <field name="customer_class" string="CustomerClass"/>
-                <field name="status"        string="Status"/>
-                <field name="warehouse_id"  string="WarehouseID"/>
+                <field name="status" string="Status"/>
+                <field name="warehouse_id" string="WarehouseID"/>
 
                 <filter string="Belum Diimport" name="pending"
                         domain="[('import_state','=','pending')]"/>
-                <filter string="Sudah Dibuat"   name="imported"
+                <filter string="Sudah Dibuat" name="imported"
                         domain="[('import_state','=','imported')]"/>
-                <filter string="Diupdate"       name="updated"
+                <filter string="Diupdate" name="updated"
                         domain="[('import_state','=','updated')]"/>
-                <filter string="Error"          name="error"
+                <filter string="Error" name="error"
                         domain="[('import_state','=','error')]"/>
                 <separator/>
-                <filter string="Dipilih"        name="selected"
+                <filter string="Dipilih" name="selected"
                         domain="[('selected','=',True)]"/>
-                <filter string="Status Active"  name="active_only"
+                <filter string="Status Active" name="active_only"
                         domain="[('status','=ilike','active')]"/>
 
                 <group expand="0" string="Group By">
-                    <filter string="Status Import"  name="group_state"
+                    <filter string="Status Import" name="group_state"
                             context="{'group_by': 'import_state'}"/>
                     <filter string="Status Acumatica" name="group_status"
                             context="{'group_by': 'status'}"/>
                     <filter string="Customer Class" name="group_class"
                             context="{'group_by': 'customer_class'}"/>
-                    <filter string="Warehouse"      name="group_warehouse"
+                    <filter string="Warehouse" name="group_warehouse"
                             context="{'group_by': 'warehouse_id'}"/>
                 </group>
             </search>
@@ -124,34 +124,34 @@
                     <!-- ── Mandatory Fields ── -->
                     <group string="📋 Field Mandatory">
                         <group>
-                            <field name="customer_id"   string="CustomerID → company_registry"/>
-                            <field name="b_account_id"  string="BAccountID → property_b_account_id (to be)"/>
-                            <field name="customer_name" string="CustomerName → name"/>
-                            <field name="status"        string="Status → property_state_acumatica (to be)"/>
+                            <field name="customer_id"   string="CustomerID"/>
+                            <field name="b_account_id"  string="BAccountID"/>
+                            <field name="customer_name" string="CustomerName"/>
+                            <field name="status"        string="Status"/>
                         </group>
                         <group>
-                            <field name="warehouse_id"    string="WarehouseID → property_stock_supplier (to be)"/>
-                            <field name="shipping_zone_id" string="ShippingZoneID → property_shipping_zone_id (to be)"/>
-                            <field name="fob_point"        string="FOBPoint → property_fob_point (to be)"/>
+                            <field name="warehouse_id"    string="WarehouseID"/>
+                            <field name="shipping_zone_id" string="ShippingZoneID"/>
+                            <field name="fob_point"        string="FOBPoint"/>
                         </group>
                     </group>
 
                     <!-- ── Optional Fields ── -->
                     <group string="📝 Field Optional">
                         <group>
-                            <field name="customer_class"   string="CustomerClass → property_class (to be)"/>
-                            <field name="currency_id"      string="CurrencyID → property_currency_acumatica (to be)"/>
-                            <field name="location_name"    string="LocationName → name (contact)"/>
+                            <field name="customer_class"   string="CustomerClass"/>
+                            <field name="currency_id"      string="CurrencyID"/>
+                            <field name="location_name"    string="LocationName"/>
                         </group>
                         <group>
-                            <field name="created_datetime"        string="CreatedDateTime → property_created_datetime (to be)"/>
-                            <field name="last_modified_datetime"   string="LastModifiedDateTime → property_last_modified_datetime (to be)"/>
-                            <field name="note_id"                  string="NoteID → acumatica_note_id (to be)"/>
+                            <field name="created_datetime"        string="CreatedDateTime"/>
+                            <field name="last_modified_datetime"   string="LastModifiedDateTime"/>
+                            <field name="note_id"                  string="NoteID"/>
                         </group>
                     </group>
 
                     <group string="📝 Note">
-                        <field name="note" string="Note → acumatica_note (to be)" nolabel="1"/>
+                        <field name="note" string="Note" nolabel="1"/>
                     </group>
 
                     <!-- ── Hasil Import ── -->

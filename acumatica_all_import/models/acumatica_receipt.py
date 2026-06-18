@@ -361,7 +361,6 @@ class AcumaticaReceiptLine(models.Model):
         if line.warehouse_code:
             warehouse = Warehouse.search([('code', '=', line.warehouse_code), ('is_active', '=', True)], limit=1)
             if warehouse:
-                warehouse = Warehouse.search([('name', '=', line.warehouse_code)], limit=1)
                 if not warehouse.odoo_building_id:
                     warehouse = False
                 else:
@@ -458,7 +457,7 @@ class AcumaticaReceiptLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -605,6 +604,7 @@ class AcumaticaReceiptLine(models.Model):
                     'location_dest_id': picking.location_dest_id.id if picking else False,
                     'warehouse_id': warehouse.id if warehouse else False,
                     'description_picking': receipt_line.description or False,
+
                     'adt_line_external_id': receipt_line.line_external_id or False,
                     'adt_inventory_id': receipt_line.inventory_id or False,
                     'adt_line_nbr': receipt_line.line_nbr or False,
@@ -627,7 +627,6 @@ class AcumaticaReceiptLine(models.Model):
                 }
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
                 Move.create(move_vals)
-                picking.action_confirm()
 
             except ReceiptImportError:
                 raise
@@ -660,6 +659,7 @@ class AcumaticaReceiptLine(models.Model):
             'odoo_picking_id': picking.id if picking else False,
         })
         self._resolve_error_tracking(receipt)
+        picking.action_confirm()
         return action_state
 
     def _do_import(self):

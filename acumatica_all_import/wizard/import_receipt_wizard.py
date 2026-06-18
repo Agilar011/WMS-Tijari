@@ -15,7 +15,7 @@ class ImportReceiptWizard(models.TransientModel):
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
     receipt_nbr = fields.Char(string='Filter Receipt Number')
     last_modified_from = fields.Char(string='Filter Last Modified From', help="Contoh: 2025-01-01T00:00:00+07:00")
-    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    wh33_filter = fields.Boolean(string='Filter WH33', help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
     start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
     end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
     odata_filter = fields.Char(string='Custom OData Filter')
@@ -152,7 +152,7 @@ class ImportReceiptWizard(models.TransientModel):
             else:
                 filters.append(f"({self.config_id.odata_filter})")
             if filters:
-                params['$filter'] = ' and '.join(filters)       
+                params['$filter'] = ' and '.join(filters)
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:

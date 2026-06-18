@@ -49,8 +49,8 @@
             <list string="Data UoM dari Acumatica" multi_edit="1">
                 <field name="selected" optional="show"/>
                 <field name="row_number" string="No" optional="show"/>
-                <field name="unit_id" string="UnitID → Kategori UoM"/>
-                <field name="description" string="Description → Nama UoM"/>
+                <field name="unit_id" string="UnitID"/>
+                <field name="description" string="Description"/>
                 <field name="external_id" string="UUID Acumatica" optional="hide"/>
                 <field name="import_state" string="Status" widget="badge"
                        decoration-success="import_state == 'imported'"
@@ -91,13 +91,13 @@
                 </header>
                 <sheet>
                     <group>
-                        <group string="📦 Data dari Acumatica">
-                            <field name="unit_id" string="UnitID → Kategori UoM"/>
-                            <field name="description" string="Description → Nama UoM"/>
+                        <group string="Data dari Acumatica">
+                            <field name="unit_id" string="UnitID"/>
+                            <field name="description" string="UoM Name"/>
                             <field name="external_id"/>
                             <field name="row_number"/>
                         </group>
-                        <group string="🔗 Hasil di Odoo">
+                        <group string="Hasil di Odoo">
                             <field name="odoo_categ_id" string="Kategori UoM"/>
                             <field name="odoo_uom_id" string="Nama UoM"/>
                             <field name="import_message"/>

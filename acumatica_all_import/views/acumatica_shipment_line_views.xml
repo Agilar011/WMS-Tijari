@@ -16,7 +16,7 @@
         <field name="name">acumatica.shipment.line.search</field>
         <field name="model">acumatica.shipment.line</field>
         <field name="arch" type="xml">
-            <search>
+            <search string="Cari Data SO Return">
                 <!-- <field name="inventory_id"/> -->
                 <field name="import_state"/>
 
@@ -37,8 +37,7 @@
         <field name="name">acumatica.shipment.line.list</field>
         <field name="model">acumatica.shipment.line</field>
         <field name="arch" type="xml">
-            <list string="Data Shipment Receipt" multi_edit="1">
-                <field name="selected" widget="boolean_toggle"/>
+            <list string="Data SO Return" multi_edit="1">
                 <field name="shipment_nbr"/>
                 <field name="warehouse_code" string="Warehouse"/>
                 <field name="partner_code"/>
@@ -58,7 +57,7 @@
         <field name="name">acumatica.shipment.line.form</field>
         <field name="model">acumatica.shipment.line</field>
         <field name="arch" type="xml">
-            <form string="Data Shipment Receipt">
+            <form string="Data SO Return">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
                     <button name="action_open_picking" type="object" string="Open Receipt" class="btn-secondary" invisible="not odoo_picking_id"/>
@@ -109,7 +108,7 @@
     </record>
 
     <record id="action_acumatica_shipment_line" model="ir.actions.act_window">
-        <field name="name">Data Shipment Receipt</field>
+        <field name="name">Data SO Return</field>
         <field name="res_model">acumatica.shipment.line</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_shipment_line_search"/>

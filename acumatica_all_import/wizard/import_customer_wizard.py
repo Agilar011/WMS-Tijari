@@ -2,6 +2,7 @@ from odoo import models, fields
 from odoo.exceptions import UserError
 import logging
 import time
+from datetime import datetime, time
 
 _logger = logging.getLogger(__name__)
 
@@ -51,6 +52,10 @@ class ImportCustomerWizard(models.TransientModel):
     total_new      = fields.Integer(string='Customer Baru', readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
 
+    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
+
+
     # ─── Step 1: Tarik Data ──────────────────────────
     def action_fetch_data(self):
         self.ensure_one()
@@ -66,9 +71,17 @@ class ImportCustomerWizard(models.TransientModel):
 
         raw_list = []
         loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
+        params = []
+        start_datetime = datetime.combine(self.start_date, time.min).strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_datetime = datetime.combine(self.end_date, time.min).strftime('%Y-%m-%dT%H:%M:%SZ')
+        # start_datetime = fields.Datetime.to_datetime(self.start_date)
+        # end_datetime = fields.Datetime.to_datetime(self.end_date)
+        if self.start_date and self.end_date:
+            params.append(f"LastModifiedDateTime ge datetimeoffset'{self.start_date}' and LastModifiedDateTime le datetimeoffset'{self.end_date}'")
+
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_customer_data(limit=self.batch_size, skip=offset)
+            batch_data = self.config_id.fetch_customer_data(limit=self.batch_size, skip=offset, odata_filter=params if params else False)
             if not batch_data:
                 break
             raw_list.extend(batch_data)

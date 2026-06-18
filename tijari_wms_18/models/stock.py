@@ -94,11 +94,17 @@ class StockPicking(models.Model):
                 ("origin", "ilike", picking.name),
                 ("picking_type_id.code", "=", "internal"),
             ])
+            total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
+            picking.write({
+                'adt_total_qty': total_qty
+            })
 
+            total_qty_storage = sum(storage_pickings.move_ids.move_line_ids.mapped("quantity"))
             storage_pickings.write({
                 "adt_dest_location_id": picking.adt_dest_location_id,
                 "origin": picking.origin or picking.name,
-                "note" : picking.note
+                "note" : picking.note,
+                'adt_total_qty': total_qty_storage
             })
             
             for l in line:
@@ -756,5 +762,4 @@ class StockMove(models.Model):
                         ) % (total_qty, move.product_uom_qty),
                     }
                 }
-            
-                        
+
