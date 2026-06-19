@@ -22,6 +22,9 @@ class ImportSOShipmentWizard(models.TransientModel):
     total_new = fields.Integer(string='Receipt Baru', readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan ditambah)', readonly=True)
     fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
+    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
     def action_fetch_data(self):
         print(f"Self Limit: {self.fetch_limit}")

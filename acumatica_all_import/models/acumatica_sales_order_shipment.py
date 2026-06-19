@@ -267,6 +267,9 @@ class AcumaticaShipmentConfig(models.Model):
                 params['$filter'] = ' and '.join(filters)
 
             response = session.get(endpoint, params=params, timeout=90)
+            print("BODY:")
+            print(response.text)
+            
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Shipment Receipt (HTTP {response.status_code}): {response.text}')
 
