@@ -703,6 +703,7 @@ class StockMoveLine(models.Model):
             }
         }
 
+
 class StockMove(models.Model):
     _inherit = 'stock.move'
 
@@ -762,4 +763,18 @@ class StockMove(models.Model):
                         ) % (total_qty, move.product_uom_qty),
                     }
                 }
+            
+    def _update_total_qty(self):
+        for picking in self.mapped("picking_id"):
+            picking.adt_total_qty = sum(
+                picking.move_ids.mapped("quantity")
+            )
+
+    def write(self, vals):
+        res = super().write(vals)
+
+        if "quantity" in vals:
+            self._update_total_qty()
+
+        return res
 

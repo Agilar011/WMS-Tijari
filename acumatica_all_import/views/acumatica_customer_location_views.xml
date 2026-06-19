@@ -8,8 +8,8 @@
     <record id="action_import_selected_customer_location"
             model="ir.actions.server">
         <field name="name">Generate Data</field>
-        <field name="model_id" ref="model_acumatica_customer_location"/>
-        <field name="binding_model_id" ref="model_acumatica_customer_location"/>
+        <field name="model_id" ref="model_acumatica_customer_location_line"/>
+        <field name="binding_model_id" ref="model_acumatica_customer_location_line"/>
         <field name="binding_type">action</field>
         <field name="state">code</field>
         <field name="code">

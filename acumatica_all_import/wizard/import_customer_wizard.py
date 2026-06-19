@@ -72,10 +72,6 @@ class ImportCustomerWizard(models.TransientModel):
         raw_list = []
         loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
         params = []
-        start_datetime = datetime.combine(self.start_date, time.min).strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_datetime = datetime.combine(self.end_date, time.min).strftime('%Y-%m-%dT%H:%M:%SZ')
-        # start_datetime = fields.Datetime.to_datetime(self.start_date)
-        # end_datetime = fields.Datetime.to_datetime(self.end_date)
         if self.start_date and self.end_date:
             params.append(f"LastModifiedDateTime ge datetimeoffset'{self.start_date}' and LastModifiedDateTime le datetimeoffset'{self.end_date}'")
 
