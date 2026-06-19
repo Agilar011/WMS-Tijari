@@ -16,11 +16,10 @@
         <field name="name">acumatica.receipt.line.list</field>
         <field name="model">acumatica.receipt.line</field>
         <field name="arch" type="xml">
-            <list string="Data PO Receipt dari Acumatica">
+            <list string="Data PO Receipt">
                 <!-- <header>
                     <button name="action_import_selected" string="Import Selected Record" type="object" class="btn-primary"/>
                 </header> -->
-                <field name="selected" widget="boolean_toggle"/>
                 <field name="receipt_nbr"/>
                 <field name="vendor_code"/>
                 <field name="warehouse_code"/>
@@ -40,7 +39,7 @@
         <field name="name">acumatica.receipt.line.form</field>
         <field name="model">acumatica.receipt.line</field>
         <field name="arch" type="xml">
-            <form string="Inventory PO Line Acumatica">
+            <form string="Data PO Receipt">
                 <header>
                     <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
                     <button name="action_open_picking" string="Buka Receipt" type="object" invisible="not odoo_picking_id"/>

@@ -453,7 +453,7 @@ class AcumaticaShipmentLine(models.Model):
         return self._do_import()
 
     def _persist_error_tracking(self, first, error_messages, line_payloads=None, payload=None):
-        origin = first.receipt_nbr or False
+        origin = first.shipment_nbr or False
         if not origin:
             return False
 
@@ -467,7 +467,7 @@ class AcumaticaShipmentLine(models.Model):
 
             error_data = Error.search([('origin', '=', origin)], limit=1)
             error_values = {
-                'partner': first.vendor_code or False,
+                'partner': first.partner_code or False,
                 'operation_type': 'receipt',
                 'location': first.warehouse_code or False,
                 'location_dest': first.warehouse_dest_code or False,
@@ -511,7 +511,7 @@ class AcumaticaShipmentLine(models.Model):
             return error_data
 
     def _resolve_error_tracking(self, first):
-        origin = first.receipt_nbr or False
+        origin = first.shipment_nbr or False
         if not origin:
             return
 
@@ -605,7 +605,7 @@ class AcumaticaShipmentLine(models.Model):
                     error_line_payloads.append({
                         'inventory_id': shipment_line.inventory_id or False,
                         'product_name': shipment_line.description or False,
-                        'qty': shipment._parse_float(shipment_line.product_uom_qty),
+                        'qty': shipment._parse_float(shipment_line.shipped_qty),
                         'uom': shipment_line.uom_code or False,
                         'payload': shipment_line.read()[0] if shipment_line.exists() else {},
                     })
@@ -619,13 +619,13 @@ class AcumaticaShipmentLine(models.Model):
                     error_line_payloads.append({
                         'inventory_id': shipment_line.inventory_id or False,
                         'product_name': shipment_line.description or False,
-                        'qty': shipment._parse_float(shipment_line.product_uom_qty),
+                        'qty': shipment._parse_float(shipment_line.shipped_qty),
                         'uom': shipment_line.uom_code or False,
                         'payload': shipment_line.read()[0] if shipment_line.exists() else {},
                     })
                     continue
 
-                qty = shipment._parse_float(shipment_line.product_uom_qty)
+                qty = shipment._parse_float(shipment_line.shipped_qty)
                 existing = picking.move_ids.filtered(
                     lambda move: (
                         move.picking_id == picking.id
@@ -637,7 +637,7 @@ class AcumaticaShipmentLine(models.Model):
                     continue
 
                 move_vals = {
-                    'name': shipment_line.transaction_description or shipment_line.description or product.display_name,
+                    'name': shipment_line.description or product.display_name,
                     'picking_id': picking.id if picking else False,
                     'product_id': product.id,
                     'product_uom_qty': qty,
@@ -646,11 +646,11 @@ class AcumaticaShipmentLine(models.Model):
                     'location_dest_id': picking.location_dest_id.id if picking else False,
                     'warehouse_id': warehouse.id if warehouse else False,
                     'description_picking': shipment_line.description or False,
+                    'product_note': shipment_line.note or False,
                 }
 
-                move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
+                # move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
                 Move.create(move_vals)
-                picking.action_confirm()
 
             except ShipmentImportError:
                 raise
@@ -661,7 +661,7 @@ class AcumaticaShipmentLine(models.Model):
                 error_line_payloads.append({
                     'inventory_id': shipment_line.inventory_id or False,
                     'product_name': shipment_line.description or False,
-                    'qty': shipment._parse_float(shipment_line.product_uom_qty),
+                    'qty': shipment._parse_float(shipment_line.shipped_qty),
                     'uom': shipment_line.uom_code or False,
                     'payload': move_vals if move_vals else (shipment_line.read()[0] if shipment_line.exists() else {}),
                 })
@@ -683,6 +683,7 @@ class AcumaticaShipmentLine(models.Model):
             'odoo_picking_id': picking.id if picking else False,
         })
         self._resolve_error_tracking(shipment)
+        picking.action_confirm()
         return action_state
 
     def _do_import(self):

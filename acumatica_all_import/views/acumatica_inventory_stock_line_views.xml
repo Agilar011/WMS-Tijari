@@ -1,6 +1,6 @@
 <odoo>
     <record id="action_import_selected_inventory_stock" model="ir.actions.server">
-        <field name="name">Import Selected</field>
+        <field name="name">Generate Data</field>
         <field name="model_id" ref="model_acumatica_inventory_stock_line"/>
         <field name="binding_model_id" ref="model_acumatica_inventory_stock_line"/>
         <field name="binding_type">action</field>
@@ -21,11 +21,6 @@
                 <field name="inventory_id"/>
                 <field name="description"/>
                 <field name="on_hand_acumatica"/>
-                <field name="odoo_on_hand"/>
-                <field name="match_status" widget="badge"
-                       decoration-success="match_status == 'match'"
-                       decoration-danger="match_status in ('not_match', 'error')"
-                       decoration-warning="match_status in ('missing_product', 'missing_location')"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported', 'updated')"
                        decoration-danger="import_state == 'error'"

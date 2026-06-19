@@ -94,8 +94,8 @@ class AcumaticaCustomerLine(models.Model):
     def _find_existing_partner(self, rec):
         """Cari partner yang sudah ada berdasarkan UUID dulu, lalu CustomerID."""
         Partner = self.env['res.partner']
-        if rec.external_id:
-            found = Partner.search([('adt_external_id', '=', rec.external_id)], limit=1)
+        if rec.b_account_id:
+            found = Partner.search([('adt_b_account_id', '=', rec.b_account_id)], limit=1)
             if found:
                 return found
         if rec.customer_id:

@@ -214,7 +214,7 @@ class AcumaticaCustomerConfig(models.Model):
 
     # ─── Fetch Customer dari API ─────────────────────
 
-    def fetch_customer_data(self, limit=50, skip=0):
+    def fetch_customer_data(self, limit=50, skip=0, odata_filter=False):
         """
         Ambil data Customer dari Acumatica API.
         Endpoint: /Customer?$top={limit}&$skip={skip}
@@ -241,6 +241,8 @@ class AcumaticaCustomerConfig(models.Model):
                 "$top": limit,
                 "$skip": skip
             }
+            if odata_filter:
+                params['$filter'] = ' and '.join(odata_filter)
 
             print('==================================================')
             print('START FETCH CUSTOMER')
