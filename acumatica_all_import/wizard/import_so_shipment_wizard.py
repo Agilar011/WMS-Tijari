@@ -12,6 +12,9 @@ class ImportSOShipmentWizard(models.TransientModel):
     receipt_nbr = fields.Char(string='Filter Shipment Number')
     last_modified_from = fields.Char(string='Filter Last Modified From', help='Contoh: 2026-02-12T00:00:00+07:00')
     odata_filter = fields.Char(string='Custom OData Filter')
+    wh33_filter = fields.Boolean(string='WH33 Only', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    start_date = fields.Char(string="Start Date")
+    end_date = fields.Char(string="End Date")
     state = fields.Selection([
         ('draft', 'Siap'),
         ('fetched', 'Data Sudah Ditarik'),
@@ -33,63 +36,25 @@ class ImportSOShipmentWizard(models.TransientModel):
 
         import math
 
-        raw_list = []
-        loop_count = math.ceil(self.fetch_limit / self.batch_size)
-        print(f"Loop Count: {loop_count}")
+        shipment_gi_data, shipment_numbers = self.config_id.fetch_shipment_gi_data()
 
-        for i in range(loop_count):
-            print(f"Fetching batch {i+1}/{loop_count} with offset {self.fetch_skip + (i * self.batch_size)}")
-            offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_shipment_data(
-                limit=self.batch_size,
-                offset=offset,
-                receipt_nbr=self.receipt_nbr,
-                last_modified_from=self.last_modified_from,
-                odata_filter=self.odata_filter,
-            )
-
-            if not batch_data:
-                break
-
-            raw_list.extend(batch_data)
-            print(f"Batch {i+1}/{loop_count} fetched: {len(batch_data)} records (Total so far: {len(raw_list)})")
-
-        if not raw_list:
+        if not shipment_numbers:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        Picking = self.env['stock.picking']
-        existing_keys = set()
-        new_keys = set()
-        lines_to_create = []
 
-        for item in raw_list:
-            origin = item.get('receipt_nbr')
-            exists = bool(origin and Picking.search_count([('origin', '=', origin)]))
-            if exists:
-                existing_keys.add(origin)
-                msg = 'Sudah ada → move akan ditambahkan jika belum ada'
-            else:
-                new_keys.add(origin)
-                msg = ''
+        batch_data = self.config_id.fetch_shipment_data(
+            shipment_numbers=shipment_numbers,  # tambahan
+            odata_filter=self.odata_filter,
+        )
 
-            vals = dict(item)
-            vals.update({
-                'config_id': self.config_id.id,
-                'import_state': 'pending',
-                'import_message': msg,
-                'selected': True,
-                'sync_date': fields.Datetime.now(),
-            })
-            lines_to_create.append(vals)
-            print(f"Prepared line for origin '{origin}': exists={exists}, msg='{msg}'")
+        if not batch_data:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        
+        created_sales_order_shipment_record = self.config_id.create_staging_data(shipment_gi_data, batch_data)
 
-        self.env['acumatica.so.shipment.line'].create(lines_to_create)
-        print(f"Total lines created in staging: {len(lines_to_create)} (New: {len(new_keys)}, Existing: {len(existing_keys)})")
         self.write({
             'state': 'fetched',
-            'total_fetched': len(raw_list),
-            'total_new': len([x for x in new_keys if x]),
-            'total_existing': len([x for x in existing_keys if x]),
+            'total_fetched': len(batch_data),
         })
         return {
             'type': 'ir.actions.act_window',
