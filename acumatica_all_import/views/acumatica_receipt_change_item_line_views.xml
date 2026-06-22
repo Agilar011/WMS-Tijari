@@ -2,7 +2,7 @@
 
     <record id="action_import_selected_receipt_change_item"
             model="ir.actions.server">
-        <field name="name">Sellect All &amp; Generate</field>
+        <field name="name">Generate Data</field>
         <field name="model_id" ref="model_acumatica_receipt_change_item_line"/>
         <field name="binding_model_id" ref="model_acumatica_receipt_change_item_line"/>
         <field name="binding_type">action</field>
@@ -16,22 +16,18 @@
         <field name="name">acumatica.receipt.change.item.line.tree</field>
         <field name="model">acumatica.receipt.change.item.line</field>
         <field name="arch" type="xml">
-            <list string="Data Receipt Type Change Item" editable="bottom" default_order="origin asc, line_nbr asc">
-                <field name="selected"/>
-                <field name="import_state"/>
+            <list string="Data Receipt : Change Item" editable="bottom" default_order="origin asc, line_nbr asc">
                 <field name="origin"/>
-                <field name="line_nbr"/>
-                <field name="inventory_id"/>
-                <field name="line_description"/>
-                <field name="product_uom_qty"/>
-                <field name="uom_code"/>
                 <field name="location_code"/>
-                <field name="line_warehouse_code"/>
                 <field name="warehouse_code"/>
                 <field name="status"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-                <button name="action_import_this" string="Import" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
-                <button name="action_open_picking" string="Buka Picking" type="object" class="btn-secondary" invisible="not odoo_picking_id"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
             </list>
         </field>
     </record>
@@ -40,7 +36,7 @@
         <field name="name">acumatica.receipt.change.item.line.form</field>
         <field name="model">acumatica.receipt.change.item.line</field>
         <field name="arch" type="xml">
-            <form string="Data Receipt Type Change Item">
+            <form string="Data Receipt : Change Item">
                 <header>
                     <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
                     <button name="action_open_picking" string="Buka Picking" type="object" class="btn-secondary" invisible="not odoo_picking_id"/>
@@ -79,7 +75,7 @@
     </record>
 
     <record id="action_acumatica_receipt_change_item_line" model="ir.actions.act_window">
-        <field name="name">Data Receipt Type Change Item</field>
+        <field name="name">Data Receipt : Change Item</field>
         <field name="res_model">acumatica.receipt.change.item.line</field>
         <field name="view_mode">list,form</field>
     </record>

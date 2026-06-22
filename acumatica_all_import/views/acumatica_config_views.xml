@@ -19,6 +19,7 @@
                         <group string="🌐 Koneksi API">
                             <field name="base_url" placeholder="http://your-server/acumportal/entity"/>
                             <field name="api_version"/>
+                            <field name="config_type" />
                         </group>
                         <group string="🔑 Kredensial">
                             <field name="username"/>
@@ -30,6 +31,11 @@
                         <group string="📊 Info Sync">
                             <field name="last_sync" readonly="1"/>
                             <field name="active"/>
+                        </group>
+                        <group string="⚙️ OData Settings">
+                            <field name="odata_filter"/>
+                            <field name="odata_expand"/>
+                            <field name="odata_select"/>
                         </group>
                     </group>
                 </sheet>
@@ -44,6 +50,7 @@
         <field name="arch" type="xml">
             <list string="Konfigurasi Acumatica">
                 <field name="name"/>
+                <field name="config_type" />
                 <field name="base_url"/>
                 <field name="username"/>
                 <field name="company_code"/>

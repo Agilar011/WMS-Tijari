@@ -519,7 +519,7 @@ class AcumaticaCustomerLocationLine(models.Model):
 
                         vals = {
                             'adt_external_id': line.external_id or False,
-                            'name': line.location_id_acumatica or False,
+                            'name': line.name or line.location_id_acumatica or False,
                             'type': 'other',
                             'partner_type': 'customer',
                             'company_type': 'person',

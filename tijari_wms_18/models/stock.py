@@ -49,6 +49,7 @@ class StockPicking(models.Model):
     adt_external_ref = fields.Char(string='External Ref (Acumatica)')
     adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
+    operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
     def button_validate(self):
         res = super().button_validate()
@@ -94,22 +95,28 @@ class StockPicking(models.Model):
                 ("origin", "ilike", picking.name),
                 ("picking_type_id.code", "=", "internal"),
             ])
+            total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
+            picking.write({
+                'adt_total_qty': total_qty
+            })
 
+            total_qty_storage = sum(storage_pickings.move_ids.move_line_ids.mapped("quantity"))
             storage_pickings.write({
                 "adt_dest_location_id": picking.adt_dest_location_id,
-                "note" : picking.note
+                "origin": picking.origin or picking.name,
+                "note" : picking.note,
+                'adt_total_qty': total_qty_storage
             })
             
-            for l in line:
-                move_line = self.env['stock.move.line'].search([
-                    ("picking_id", "=", l.id),
-                    ("product_id", "=", l.product_id.id),
-                    ("quantity", "=", l.quantity)
-                ])
-                if move_line:
-                    move_line.write({
-                        "location_dest_id": l.allocation_storage
-                    })
+            for ml in picking.move_line_ids:  
+                for sp in storage_pickings.move_ids:
+                    move_line = self.env['stock.move.line'].search([
+                        ("picking_id", "=", sp.picking_id.id),
+                        ("product_id", "=", sp.product_id.id),
+                        ("quantity", "=", sp.quantity)
+                    ])
+                    if move_line:
+                        move_line.location_dest_id = ml.allocation_storage.id
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
@@ -119,7 +126,7 @@ class StockPicking(models.Model):
 
                     if receipt_move:
                         storage_move.write({
-                            "product_note": receipt_move.product_note
+                            "product_note": receipt_move.product_note,
                         })
 
             for move in picking.move_ids:
@@ -696,6 +703,7 @@ class StockMoveLine(models.Model):
             }
         }
 
+
 class StockMove(models.Model):
     _inherit = 'stock.move'
 
@@ -756,4 +764,17 @@ class StockMove(models.Model):
                     }
                 }
             
-                        
+    def _update_total_qty(self):
+        for picking in self.mapped("picking_id"):
+            picking.adt_total_qty = sum(
+                picking.move_ids.mapped("quantity")
+            )
+
+    def write(self, vals):
+        res = super().write(vals)
+
+        if "quantity" in vals:
+            self._update_total_qty()
+
+        return res
+

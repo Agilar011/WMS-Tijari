@@ -37,7 +37,7 @@
                         <field name="kit_assembly_config_id" invisible="import_type != 'kit_assembly'" required="import_type == 'kit_assembly'"/>
                         <field name="inventory_stock_config_id" invisible="import_type != 'inventory_stock'" required="import_type == 'inventory_stock'"/>
                     </group>
-                    <group string="Filter Fetch">
+                    <group string="Filter Fetch" invisible="import_type == 'inventory_stock'">
                         <field name="fetch_limit"/>
                         <field name="fetch_skip"/>
                         <field name="batch_size"/>
@@ -53,7 +53,7 @@
                         <field name="odata_expand"/>
                         <field name="odata_top"/>
                     </group>
-                    <group invisible="import_category != 'transaction'" string="Date Range">
+                    <group string="Date Range">
                         <field name="date_period"/>
                         <field name="start_date" invisible="date_period != True"/>
                         <field name="end_date" invisible="date_period != True"/>

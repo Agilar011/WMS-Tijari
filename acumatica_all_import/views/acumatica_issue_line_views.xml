@@ -1,7 +1,7 @@
 <odoo>
     <record id="action_import_selected_issue"
             model="ir.actions.server">
-        <field name="name">Select All &amp; Generate</field>
+        <field name="name">Generate Data</field>
         <field name="model_id" ref="model_acumatica_issue_line"/>
         <field name="binding_model_id" ref="model_acumatica_issue_line"/>
         <field name="binding_type">action</field>
@@ -15,7 +15,7 @@
         <field name="name">acumatica.issue.line.search</field>
         <field name="model">acumatica.issue.line</field>
         <field name="arch" type="xml">
-            <search string="Cari Data Issue Change Item">
+            <search string="Cari Data Issue : Change Item">
                 <field name="reference_nbr"/>
                 <field name="inventory_id"/>
                 <field name="line_description"/>
@@ -31,7 +31,7 @@
         <field name="name">acumatica.issue.line.list</field>
         <field name="model">acumatica.issue.line</field>
         <field name="arch" type="xml">
-            <list string="Data Issue Change Item" multi_edit="1">
+            <list string="Data Issue : Change Item" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="reference_nbr"/>
                 <field name="line_nbr"/>
@@ -51,7 +51,7 @@
         <field name="name">acumatica.issue.line.form</field>
         <field name="model">acumatica.issue.line</field>
         <field name="arch" type="xml">
-            <form string="Data Issue Change Item">
+            <form string="Data Issue : Change Item">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
                     <button name="action_open_picking" type="object" string="Open Delivery Order" class="btn-secondary" invisible="not odoo_picking_id"/>
@@ -98,7 +98,7 @@
     </record>
 
     <record id="action_acumatica_issue_line" model="ir.actions.act_window">
-        <field name="name">Data Issue Change Item</field>
+        <field name="name">Data Issue : Change Item</field>
         <field name="res_model">acumatica.issue.line</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_issue_line_search"/>

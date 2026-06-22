@@ -2,7 +2,7 @@
 
     <record id="action_import_selected_inventory_recieved"
             model="ir.actions.server">
-        <field name="name">Sellect All &amp; Generate</field>
+        <field name="name">Generate Data</field>
         <field name="model_id" ref="model_acumatica_inventory_recieved_line"/>
         <field name="binding_model_id" ref="model_acumatica_inventory_recieved_line"/>
         <field name="binding_type">action</field>
@@ -16,16 +16,18 @@
         <field name="name">acumatica.inventory.recieved.line.list</field>
         <field name="model">acumatica.inventory.recieved.line</field>
         <field name="arch" type="xml">
-            <list>
-                <field name="selected" widget="boolean_toggle"/>
+            <list string="Data Receipt : Inventory Receipt">
                 <field name="reference_nbr"/>
                 <field name="description"/>
                 <field name="warehouse_code"/>
                 <field name="warehouse_dest_code"/>
-                <field name="import_state"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-                <button name="action_import_this" type="object" string="Import" class="btn-primary" invisible="import_state != 'pending'"/>
-                <button name="action_open_picking" type="object" string="Open Picking" invisible="not odoo_picking_id"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
             </list>
         </field>
     </record>
@@ -34,7 +36,7 @@
         <field name="name">acumatica.inventory.recieved.line.form</field>
         <field name="model">acumatica.inventory.recieved.line</field>
         <field name="arch" type="xml">
-            <form string="Data Inventory Recieved Acumatica">
+            <form string="Data Receipt : Inventory Receipt">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state not in ['pending', 'error']"/>
                     <button name="action_open_picking" type="object" string="Open Picking"/>
@@ -87,7 +89,7 @@
     </record>
 
     <record id="action_acumatica_inventory_recieved_line" model="ir.actions.act_window">
-        <field name="name">Data Inventory Recieved</field>
+        <field name="name">Data Receipt : Inventory Receipt</field>
         <field name="res_model">acumatica.inventory.recieved.line</field>
         <field name="view_mode">list,form</field>
     </record>

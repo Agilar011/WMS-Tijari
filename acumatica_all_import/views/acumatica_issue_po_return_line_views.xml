@@ -1,7 +1,7 @@
 <odoo>
     <record id="action_import_selected_issue_po_return"
             model="ir.actions.server">
-        <field name="name">Select All &amp; Generate</field>
+        <field name="name">Generate Data</field>
         <field name="model_id" ref="model_acumatica_issue_po_return_line"/>
         <field name="binding_model_id" ref="model_acumatica_issue_po_return_line"/>
         <field name="binding_type">action</field>
@@ -15,7 +15,7 @@
         <field name="name">acumatica.issue.po.return.line.list</field>
         <field name="model">acumatica.issue.po.return.line</field>
         <field name="arch" type="xml">
-            <list string="Data Inventory Receipt dari Acumatica" create="0" delete="0">
+            <list string="Data PO Return" create="0" delete="0">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="receipt_nbr"/>
                 <field name="line_nbr"/>
@@ -41,7 +41,7 @@
         <field name="name">acumatica.issue.po.return.line.form</field>
         <field name="model">acumatica.issue.po.return.line</field>
         <field name="arch" type="xml">
-            <form string="Inventory Receipt Line Acumatica">
+            <form string="Data PO Return">
                 <header>
                     <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
                     <button name="action_open_picking" string="Buka Receipt" type="object" invisible="not odoo_picking_id"/>
@@ -102,7 +102,7 @@
     </record>
 
     <record id="action_acumatica_issue_po_return_line" model="ir.actions.act_window">
-        <field name="name">Data Inventory Receipt</field>
+        <field name="name">Data PO Return</field>
         <field name="res_model">acumatica.issue.po.return.line</field>
         <field name="view_mode">list,form</field>
     </record>

@@ -2,7 +2,7 @@
 <odoo>
     <record id="action_import_selected_shipvia"
             model="ir.actions.server">
-        <field name="name">Select All &amp; Generate</field>
+        <field name="name">Generate Data</field>
         <field name="model_id" ref="model_acumatica_shipvia_line"/>
         <field name="binding_model_id" ref="model_acumatica_shipvia_line"/>
         <field name="binding_type">action</field>
@@ -17,7 +17,7 @@
         <field name="name">acumatica.shipvia.line.search</field>
         <field name="model">acumatica.shipvia.line</field>
         <field name="arch" type="xml">
-            <search string="Cari ShipVia Acumatica">
+            <search string="Cari Shipping Carrier">
                 <field name="carrier_id"  string="Carrier ID"/>
                 <field name="description" string="Description"/>
                 <field name="city"        string="City"/>
@@ -53,7 +53,7 @@
         <field name="name">acumatica.shipvia.line.list</field>
         <field name="model">acumatica.shipvia.line</field>
         <field name="arch" type="xml">
-            <list string="Data ShipVia dari Acumatica" multi_edit="1">
+            <list string="Data Shipping Carrier" multi_edit="1">
                 <field name="selected"      optional="show"/>
                 <field name="row_number"    string="No"          optional="show"/>
                 <field name="carrier_id"    string="Carrier ID"   optional="show"/>
@@ -88,7 +88,7 @@
         <field name="name">acumatica.shipvia.line.form</field>
         <field name="model">acumatica.shipvia.line</field>
         <field name="arch" type="xml">
-            <form string="Detail Data ShipVia">
+            <form string="Detail Shipping Carrier">
                 <header>
                     <button name="action_import_this"
                             string="Import ke Odoo"
@@ -145,7 +145,7 @@
 
     <!-- ─── Action ─── -->
     <record id="action_acumatica_shipvia_line" model="ir.actions.act_window">
-        <field name="name">Data ShipVia Acumatica</field>
+        <field name="name">Data Shipping Carrier</field>
         <field name="res_model">acumatica.shipvia.line</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_shipvia_line_search"/>
