@@ -215,12 +215,223 @@ class AcumaticaShipmentGIStaging(models.Model):
                 print(f'Created Picking :{created_picking.id}')
 
 
-                if created_picking:
-                    self.env['stock.picking'].search([('id', '=', created_picking.id)]).unlink()
+                # if created_picking:
+                #     self.env['stock.picking'].search([('id', '=', created_picking.id)]).unlink()
 
-                # print(f"Warehouse: {warehouse}")
+                shipment_line_ids = self.env['acumatica.sales.order.shipment.staging.line'].search([
+                    ('shipment_id', '=', shipment_header.id)
+                ])
+                for item in shipment_line_ids:
+                    product = self._find_product(item)
+                    # product_uom = self._find_uom(item)
+                    created_vals = {
+
+                        # =====================================================
+                        # STANDARD ODOO
+                        # =====================================================
+
+                        # 'id': ,
+
+                        # 'sequence': 10,
+
+                        'company_id': warehouse.company_id.id,
+
+                        'product_id': product.id,
+                        'product_uom': product.uom_id.id,
+
+                        # Qty dari Acumatica
+                        'product_uom_qty': item.shippedqty or 0.0,
+
+                        'location_id': warehouse.lot_stock_id.id,
+                        'location_dest_id': created_picking.location_dest_id.id,
+
+                        # 'location_final_id': ,
+
+                        'partner_id': partner.id,
+
+                        'picking_id': created_picking.id,
+
+                        # 'scrap_id': ,
+                        # 'group_id': ,
+                        # 'rule_id': ,
+
+                        'picking_type_id': picking_type.id,
+
+                        # 'origin_returned_move_id': ,
+                        # 'restrict_partner_id': ,
+
+                        'warehouse_id': warehouse.id,
+
+                        # 'package_level_id': ,
+                        # 'next_serial_count': ,
+                        # 'orderpoint_id': ,
+                        # 'product_packaging_id': ,
+
+                        'create_uid': responsible_user.id,
+                        'write_uid': responsible_user.id,
+
+                        'name': product.display_name,
+
+                        # 'priority': '0',
+
+                        'state': 'draft',
+
+                        'origin': created_picking.origin,
+
+                        # 'procure_method': 'make_to_stock',
+
+                        'reference': created_picking.name,
+
+                        # 'next_serial': ,
+
+                        # 'reservation_date': ,
+
+                        # 'description_picking': ,
+
+                        # 'product_qty': item.orderedqty,
+                        # 'quantity': ,
+
+                        # qty_done pada move line
+                        # 'picked': False,
+
+                        # 'scrapped': False,
+
+                        # 'propagate_cancel': True,
+
+                        # 'is_inventory': False,
+
+                        # 'additional': False,
+
+                        'date': fields.Datetime.now(),
+
+                        'date_deadline': created_picking.date_deadline,
+
+                        # 'delay_alert_date': ,
+
+                        # 'create_date': fields.Datetime.now(),
+                        # 'write_date': fields.Datetime.now(),
+
+                        # 'price_unit': ,
+
+                        # =====================================================
+                        # CUSTOM ADT
+                        # =====================================================
+
+                        'adt_line_external_id': item.acumatica_id,
+
+                        'adt_inventory_id': item.inventoryid,
+
+                        'adt_line_nbr': item.rownumber,
+
+                        # 'adt_line_type': ,
+
+                        # 'adt_po_line_number': ,
+                        # 'adt_po_number': ,
+                        # 'adt_po_type': ,
+
+                        # 'adt_po_receipt_line_number': ,
+                        # 'adt_po_receipt_number': ,
+
+                        # 'adt_transfer_order_line_number': ,
+                        # 'adt_transfer_order_number': ,
+                        # 'adt_transfer_order_type': ,
+                        # 'adt_transfer_shipment_number': ,
+
+                        'adt_uom_code': item.uom,
+
+                        'adt_warehouse_dest_code': item.warehouseid,
+
+                        # 'adt_location_dest_code': ,
+
+                        'adt_line_note': item.note,
+
+                        'adt_open_qty': item.orderedqty,
+
+                        # 'adt_order_qty': item.orderedqty,
+
+                        # 'to_refund': False,
+
+                        # 'purchase_line_id': ,
+                        # 'sale_line_id': ,
+
+                        # 'weight': ,
+
+                        # 'adt_type': ,
+
+                        # 'is_done': False,
+
+                        # 'unit_factor': ,
+
+                        # 'manual_consumption': False,
+
+                        # =====================================================
+                        # MRP
+                        # =====================================================
+
+                        # 'created_production_id': ,
+                        # 'production_id': ,
+                        # 'raw_material_production_id': ,
+
+                        # 'unbuild_id': ,
+                        # 'consume_unbuild_id': ,
+
+                        # 'operation_id': ,
+                        # 'workorder_id': ,
+                        # 'bom_line_id': ,
+
+                        # 'byproduct_id': ,
+
+                        # 'order_finished_lot_id': ,
+
+                        # 'cost_share': ,
+
+                        # =====================================================
+                        # CUSTOM DETAIL
+                        # =====================================================
+
+                        'adt_line_description': item.description,
+
+                        # 'adt_to_location_code': ,
+                        # 'adt_from_location_code': ,
+
+                        'adt_quantity': item.shippedqty,
+
+                        # 'adt_acumatica_write_date': ,
+
+                        # =====================================================
+                        # ALLOCATION
+                        # =====================================================
+
+                        # 'allocation_SplitLineNbr': ,
+
+                        # 'allocation_id': ,
+
+                        # 'allocation_InventoryID': ,
+
+                        # 'allocation_LocationID': ,
+
+                        # 'allocation_UOM': ,
+
+                        # 'allocation_note': ,
+
+                        # 'allocation_Description': ,
+
+                        # 'allocation_Quantity': ,
+
+                        # =====================================================
+                        # CUSTOM
+                        # =====================================================
+
+                        # 'product_note': ,
+
+                        # 'adt_dest_location_id': ,
+                    }
+
+                    created_stock_move = self.env['stock.move'].create(created_vals)
+                    print(f"create stock move with id: {created_stock_move.id}, for product: {created_stock_move.product_id}" )
                 
                 
+                Picking.action_confirm()
                 print('='* 60)
                 print(f'Importing :{shipment.shipment_nbr}')
                 print(f"Warehouse: {warehouse}")
@@ -419,18 +630,18 @@ class AcumaticaShipmentGIStaging(models.Model):
     def _find_product(self, line):
         Product = self.env['product.product']
         product = False
-        if line.inventory_id:
-            product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
+        if line.inventoryid:
+            product = Product.search([('default_code', '=', line.inventoryid)], limit=1)
             if not product:
-                product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
+                product = Product.search([('barcode', '=', line.inventoryid)], limit=1)
         if not product and line.line_description:
             product = Product.search([('name', '=', line.line_description)], limit=1)
-        if not product:
-            product = Product.create({
-                'name': line.line_description or line.inventory_id or 'Unknown Product',
-                'default_code': line.inventory_id or False,
-                'type': 'consu',
-            })
+        # if not product:
+        #     product = Product.create({
+        #         'name': line.line_description or line.inventoryid or 'Unknown Product',
+        #         'default_code': line.inventoryid or False,
+        #         'type': 'consu',
+        #     })
         return product
 
     def _find_partner(self, line):
