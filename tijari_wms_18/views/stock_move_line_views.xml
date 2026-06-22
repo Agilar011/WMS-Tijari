@@ -67,6 +67,14 @@
 
             </xpath>
 
+            <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']"
+                            position="replace">
+
+                <field name="location_dest_id" column_invisible="parent.picking_code == 'incoming'" />
+                <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" />
+
+            </xpath>
+
         </field>
     </record>
 

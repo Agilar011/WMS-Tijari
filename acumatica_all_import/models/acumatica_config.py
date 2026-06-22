@@ -51,6 +51,45 @@ class AcumaticaConfig(models.Model):
         ('error', 'Error'),
     ], string='Status', default='draft', readonly=True)
 
+    odata_expand = fields.Char(
+        string='OData Expand',
+        help='Contoh: Details atau Details,OtherChild'
+    )
+    odata_select = fields.Char(
+        string='OData Select',
+        help='Optional: pilih field tertentu'
+    )
+    odata_filter = fields.Char(
+        string='OData Filter',
+    )
+    config_type = fields.Selection(
+        selection=[
+            ('po_receipt', 'PO Receipt'),
+            ('so_transfer', 'SO Transfer'),
+            ('receipt_change_item', 'Receipt Change Item'),
+            ('inventory_received', 'Inventory Received'),
+            ('shipment_so', 'Shipment SO Return'),
+            ('so_shipment', 'SO Shipment'),
+            ('transfer_shipment', 'Transfer Shipment'),
+            ('issue_change_item', 'Issue Change Item'),
+            ('inventory_issue', 'Inventory Issue'),
+            ('issue_po_return', 'Issue PO Return'),
+            ('transfer_one_step', 'Transfer One Step'),
+            ('transfer_two_step', 'Transfer Two Step'),
+            ('kit_assembly', 'Kit Assembly'),
+
+            ('customer', 'Customer'),
+            ('customer_location', 'Customer Location'),
+            ('shipvia', 'Ship Via'),
+            ('warehouse', 'Warehouse'),
+            ('stock_item', 'Stock Item'),
+            ('non_stock_item', 'Non Stock Item'),
+            ('uom', 'Unit of Measure'),
+            ('vendor', 'Vendor'),
+            ('inventory_stock', 'Inventory Stock'),
+        ], string='Master Data Type'
+    )
+
     # ─── Computed URLs ───────────────────────────────
     @property
     def api_url(self):
