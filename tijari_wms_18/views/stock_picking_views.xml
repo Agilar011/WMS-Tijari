@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
- 
+  <!-- Hide Delivery print -->
+     <record id="stock.action_report_delivery" model="ir.actions.report">
+         <field name="binding_model_id" eval="False"/>
+     </record>
+  
      <record id="view_picking_form_inherit_acumatica_header" model="ir.ui.view">
         <field name="name">stock.picking.form.acumatica.header</field>
         <field name="model">stock.picking</field>
@@ -14,6 +18,10 @@
                     class="btn-primary"                    
                     invisible="state != 'done'"/>
             </xpath>
+            
+            <!-- <xpath expr="//button[@name='209']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath> -->
 
             <xpath expr="//field[@name='location_dest_id']" position="after">
                 <field name="sync_state" readonly="1" decoration-danger="sync_state == 'not_ready'" invisible="sync_state != 'not_ready'"/>
