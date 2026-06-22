@@ -49,6 +49,7 @@ class StockPicking(models.Model):
     adt_external_ref = fields.Char(string='External Ref (Acumatica)')
     adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
+    operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
     def button_validate(self):
         res = super().button_validate()
@@ -107,16 +108,15 @@ class StockPicking(models.Model):
                 'adt_total_qty': total_qty_storage
             })
             
-            for l in line:
-                move_line = self.env['stock.move.line'].search([
-                    ("picking_id", "=", l.id),
-                    ("product_id", "=", l.product_id.id),
-                    ("quantity", "=", l.quantity)
-                ])
-                if move_line:
-                    move_line.write({
-                        "location_dest_id": l.allocation_storage
-                    })
+            for ml in picking.move_line_ids:  
+                for sp in storage_pickings.move_ids:
+                    move_line = self.env['stock.move.line'].search([
+                        ("picking_id", "=", sp.picking_id.id),
+                        ("product_id", "=", sp.product_id.id),
+                        ("quantity", "=", sp.quantity)
+                    ])
+                    if move_line:
+                        move_line.location_dest_id = ml.allocation_storage.id
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:

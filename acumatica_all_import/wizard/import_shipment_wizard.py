@@ -4,6 +4,8 @@ from odoo.exceptions import UserError
 import logging
 _logger = logging.getLogger(__name__)
 
+from datetime import datetime, time, timezone
+
 class ImportShipmentWizard(models.TransientModel):
     _name = 'import.shipment.wizard'
     _description = 'Wizard Import Shipment Receipt dari Acumatica'
@@ -37,12 +39,20 @@ class ImportShipmentWizard(models.TransientModel):
         raw_list = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
         params = []
-        start_date_datetime_str = self.start_date.strftime('%Y-%m-%dT%H:%M:%S') if self.start_date else None
-        end_date_datetime_str = self.end_date.strftime('%Y-%m-%dT%H:%M:%S') if self.end_date else None
         if self.wh33_filter:
             params.append("startswith(WarehouseID,'WH33')")
         if self.start_date and self.end_date:
-            params.append(f"ShipmentDate ge date'{start_date_datetime_str}' and ShipmentDate le date'{end_date_datetime_str}'")
+            start_date_datetime_str = datetime.combine(
+                fields.Date.to_date(self.start_date),
+                time.min,
+                tzinfo=timezone.utc,
+            ).isoformat().replace("+00:00", "Z")
+            end_date_datetime_str = datetime.combine(
+                fields.Date.to_date(self.end_date),
+                time.min,
+                tzinfo=timezone.utc,
+            ).isoformat().replace("+00:00", "Z")
+            params.append(f"ShipmentDate ge datetimeoffset'{start_date_datetime_str}' and ShipmentDate le datetimeoffset'{end_date_datetime_str}'")
         if self.odata_filter:
             params.append(self.odata_filter)
 
@@ -53,7 +63,6 @@ class ImportShipmentWizard(models.TransientModel):
                 limit=self.batch_size,
                 offset=offset,
                 shipment_nbr=self.shipment_nbr,
-                last_modified_from=self.last_modified_from,
                 odata_filter=params if params else None,
             )
 

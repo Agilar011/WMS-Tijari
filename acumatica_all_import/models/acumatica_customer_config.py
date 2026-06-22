@@ -1,10 +1,10 @@
 import requests
-import logging
 import time
 
 from odoo import models, fields
 from odoo.exceptions import UserError
 
+import logging
 _logger = logging.getLogger(__name__)
 
 

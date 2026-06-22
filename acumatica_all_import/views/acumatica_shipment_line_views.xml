@@ -66,13 +66,13 @@
                 <sheet>
                     <group string="Header">
                         <group>
-                            <!-- <field name="receipt_nbr" readonly="1"/> -->
+                            <field name="shipment_nbr" readonly="1"/>
                             <field name="shipment_type" readonly="1"/>
                             <field name="operation" readonly="1"/>
                             <field name="status" readonly="1"/>
-                            <!-- <field name="partner_code" readonly="1"/> -->
+                            <field name="partner_code" readonly="1"/>
                             <field name="warehouse_code" readonly="1"/>
-                            <field name="warehouse_dest_code" readonly="1"/>
+                            <!-- <field name="warehouse_dest_code" readonly="1"/> -->
                             <!-- <field name="header_location_code" readonly="1"/> -->
                         </group>
                         <group>

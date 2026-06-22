@@ -95,9 +95,17 @@ class StockPicking(models.Model):
 
         res = super().action_confirm()
 
-        _logger.info(">>> state after confirm = %s", self.mapped("state"))
+        for picking in self:
+            if picking.adt_dest_location_id:
+                warehouse = self.env['stock.warehouse'].search([
+                    ('view_location_id', 'parent_of', picking.adt_dest_location_id.id)
+                ], limit=1)
+                for move_line in picking.move_line_ids:
+                    move_line.allocation_storage = warehouse.lot_stock_id.id
+
 
         return res
+
     adt_dest_location_id = fields.Many2one(
         "stock.location",
         domain="[('usage', '=', 'internal')]",
