@@ -1,0 +1,107 @@
+
+<odoo>
+    <record id="action_import_selected_inventory_issue"
+            model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <field name="model_id" ref="model_acumatica_inventory_issue_line"/>
+        <field name="binding_model_id" ref="model_acumatica_inventory_issue_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
+    <record id="view_acumatica_inventory_issue_line_search" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.line.search</field>
+        <field name="model">acumatica.inventory.issue.line</field>
+        <field name="arch" type="xml">
+            <search string="Cari Data Issue : Inventory Issue">
+                <field name="reference_nbr"/>
+                <field name="inventory_id"/>
+                <field name="line_description"/>
+                <field name="import_state"/>
+                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
+                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_acumatica_inventory_issue_line_list" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.line.list</field>
+        <field name="model">acumatica.inventory.issue.line</field>
+        <field name="arch" type="xml">
+            <list string="Data Issue : Inventory Issue" multi_edit="1">
+                <field name="selected" widget="boolean_toggle"/>
+                <field name="reference_nbr"/>
+                <field name="line_nbr"/>
+                <field name="inventory_id"/>
+                <field name="line_description"/>
+                <field name="product_uom_qty"/>
+                <field name="uom_code"/>
+                <field name="warehouse_code"/>
+                <field name="location_code"/>
+                <field name="import_state"/>
+                <field name="import_message"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_acumatica_inventory_issue_line_form" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.line.form</field>
+        <field name="model">acumatica.inventory.issue.line</field>
+        <field name="arch" type="xml">
+            <form string="Data Issue : Inventory Issue">
+                <header>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <button name="action_open_picking" type="object" string="Open Delivery Order" class="btn-secondary" invisible="not odoo_picking_id"/>
+                    <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
+                </header>
+                <sheet>
+                    <group string="Header">
+                        <group>
+                            <field name="reference_nbr" readonly="1"/>
+                            <field name="scheduled_date" readonly="1"/>
+                            <field name="status" readonly="1"/>
+                            <field name="trans_type" readonly="1"/>
+                            <field name="actual_qty" readonly="1"/>
+                            <field name="total_qty" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="description" readonly="1"/>
+                            <field name="external_ref" readonly="1"/>
+                            <field name="post_period" readonly="1"/>
+                            <field name="acumatica_write_date" readonly="1"/>
+                            <field name="note" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Line">
+                        <group>
+                            <field name="line_nbr" readonly="1"/>
+                            <field name="inventory_id" readonly="1"/>
+                            <field name="line_description" readonly="1"/>
+                            <field name="product_uom_qty" readonly="1"/>
+                            <field name="uom_code" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="warehouse_code" readonly="1"/>
+                            <field name="location_code" readonly="1"/>
+                            <field name="line_trans_type" readonly="1"/>
+                            <field name="branch_warehouse" readonly="1"/>
+                            <field name="import_state" readonly="1"/>
+                            <field name="import_message" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_inventory_issue_line" model="ir.actions.act_window">
+        <field name="name">Data Issue : Inventory Issue</field>
+        <field name="res_model">acumatica.inventory.issue.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_acumatica_inventory_issue_line_search"/>
+    </record>
+</odoo>

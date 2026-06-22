@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_import_selected_vendor"
+            model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <field name="model_id" ref="model_acumatica_vendor_line"/>
+        <field name="binding_model_id" ref="model_acumatica_vendor_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
+    <!-- ─── Search View ─── -->
+    <record id="view_acumatica_vendor_line_search" model="ir.ui.view">
+        <field name="name">acumatica.vendor.line.search</field>
+        <field name="model">acumatica.vendor.line</field>
+        <field name="arch" type="xml">
+            <search string="Cari Vendor">
+                <field name="vendor_id"    string="VendorID"/>
+                <field name="vendor_name"  string="VendorName"/>
+                <field name="vendor_class" string="VendorClass"/>
+                <field name="status"       string="Status"/>
+
+                <filter string="Belum Diimport" name="pending"
+                        domain="[('import_state','=','pending')]"/>
+                <filter string="Sudah Dibuat"   name="imported"
+                        domain="[('import_state','=','imported')]"/>
+                <filter string="Diupdate"       name="updated"
+                        domain="[('import_state','=','updated')]"/>
+                <filter string="Error"          name="error"
+                        domain="[('import_state','=','error')]"/>
+                <separator/>
+                <filter string="Dipilih"        name="selected"
+                        domain="[('selected','=',True)]"/>
+                <filter string="Status Active"  name="active_only"
+                        domain="[('status','=ilike','active')]"/>
+
+                <group expand="0" string="Group By">
+                    <filter string="Status Import"    name="group_state"
+                            context="{'group_by': 'import_state'}"/>
+                    <filter string="Status Acumatica" name="group_status"
+                            context="{'group_by': 'status'}"/>
+                    <filter string="Vendor Class"     name="group_class"
+                            context="{'group_by': 'vendor_class'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ─── List View ─── -->
+    <record id="view_acumatica_vendor_line_list" model="ir.ui.view">
+        <field name="name">acumatica.vendor.line.list</field>
+        <field name="model">acumatica.vendor.line</field>
+        <field name="arch" type="xml">
+            <list string="Data Vendor dari Acumatica" multi_edit="1">
+                <field name="selected"      optional="show"/>
+                <field name="row_number"    string="No"          optional="show"/>
+                <field name="vendor_id"     string="VendorID"/>
+                <field name="vendor_name"   string="VendorName"/>
+                <field name="location_name" string="LocationName" optional="show"/>
+                <field name="status"        string="Status"
+                       decoration-success="status == 'Active'"
+                       decoration-muted="status == 'Inactive'"
+                       decoration-warning="status == 'Hold'"/>
+                <field name="vendor_class"   string="VendorClass"  optional="show"/>
+                <field name="lead_time_days" string="Lead Time"    optional="show"/>
+                <field name="fob_point"      string="FOBPoint"     optional="show"/>
+                <field name="import_state"   string="Status Import" widget="badge"
+                       decoration-success="import_state == 'imported'"
+                       decoration-info="import_state == 'updated'"
+                       decoration-warning="import_state == 'skipped'"
+                       decoration-danger="import_state == 'error'"
+                       decoration-muted="import_state == 'pending'"/>
+                <field name="odoo_partner_id" string="Partner di Odoo" optional="show"/>
+                <field name="import_message"  string="Keterangan"      optional="show"/>
+                <button name="action_import_this"
+                        string="Import"
+                        type="object"
+                        icon="fa-download"
+                        invisible="import_state != 'pending'"/>
+                <button name="action_open_partner"
+                        string="Lihat"
+                        type="object"
+                        icon="fa-external-link"
+                        invisible="not odoo_partner_id"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ─── Form View ─── -->
+    <record id="view_acumatica_vendor_line_form" model="ir.ui.view">
+        <field name="name">acumatica.vendor.line.form</field>
+        <field name="model">acumatica.vendor.line</field>
+        <field name="arch" type="xml">
+            <form string="Detail Data Vendor">
+                <header>
+                    <button name="action_import_this"
+                            string="Import ke Odoo"
+                            type="object" class="btn-primary"
+                            invisible="import_state != 'pending'"/>
+                    <button name="action_open_partner"
+                            string="Lihat Partner di Odoo"
+                            type="object" class="btn-secondary"
+                            invisible="not odoo_partner_id"/>
+                    <button name="action_reset_pending"
+                            string="Reset ke Pending"
+                            type="object"
+                            invisible="import_state == 'pending'"/>
+                    <field name="import_state" widget="statusbar"
+                           statusbar_visible="pending,imported,updated,error"/>
+                </header>
+                <sheet>
+                    <!-- Mandatory Fields -->
+                    <group string="Field Mandatory">
+                        <group>
+                            <field name="vendor_id"    string="VendorID → company_registry"/>
+                            <field name="vendor_name"  string="VendorName → name"/>
+                            <field name="location_name" string="LocationName → name"/>
+                            <field name="status"       string="Status → adt_state (to be)"/>
+                        </group>
+                        <group>
+                            <field name="lead_time_days" string="LeadTimedays → sale_delay"/>
+                            <field name="fob_point"      string="FOBPoint → adt_fob_point"/>
+                            <field name="last_modified_date_time"
+                                   string="LastModifiedDateTime → adt_last_modified_date_time"/>
+                        </group>
+                    </group>
+
+                    <!-- Optional Fields -->
+                    <group string="Field Optional">
+                        <group>
+                            <field name="vendor_class" string="VendorClass → adt_class (to be)"/>
+                        </group>
+                        <group>
+                            <field name="external_id" string="UUID Acumatica"/>
+                            <field name="sync_date"/>
+                            <field name="config_id"/>
+                        </group>
+                    </group>
+
+                    <group string="Note → internal_notes">
+                        <field name="note" nolabel="1"/>
+                    </group>
+
+                    <!-- Hasil Import -->
+                    <group string="Hasil di Odoo">
+                        <field name="odoo_partner_id"/>
+                        <field name="import_message"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ─── Action ─── -->
+    <record id="action_acumatica_vendor_line" model="ir.actions.act_window">
+        <field name="name">Data Vendor Acumatica</field>
+        <field name="res_model">acumatica.vendor.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_acumatica_vendor_line_search"/>
+        <field name="context">{'search_default_pending': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Belum ada data. Gunakan menu "Import Vendor" untuk menarik data dari Acumatica.
+            </p>
+        </field>
+    </record>
+
+</odoo>

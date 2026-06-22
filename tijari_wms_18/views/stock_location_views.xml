@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_stock_location_acumatica_list" model="ir.ui.view">
+        <field name="name">stock.location.acumatica.list</field>
+        <field name="model">stock.location.acumatica</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="building"/>
+                <field name="odoo_location_id" domain="[('is_location_mapping', '=', True)]"/>
+                <field name="odoo_building_id" domain="[('lot_stock_id', 'parent_of', odoo_location_id)]"/>
+                <field name="is_active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_stock_location_acumatica_list_error" model="ir.ui.view">
+        <field name="name">stock.location.acumatica.list.error</field>
+        <field name="model">stock.location.acumatica</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="building"/>
+                <field name="odoo_location_id"/>
+                <field name="odoo_building_id"/>
+                <field name="is_active"/>
+                <field name="error_message"/>
+                <field name="is_error" invisible="1"></field>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_location_form_wms_matching_v18" model="ir.ui.view">
+        <field name="name">stock.location.form.wms.unique.code</field>
+        <field name="model">stock.location</field>
+        <field name="inherit_id" ref="stock.view_location_form" />
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='usage']" position="before">
+                <label for="unique_code" string="Location Unique Code"/>
+                <div class="o_row">
+                    <field name="unique_code" readonly="1" force_save="1" />
+                    <button name="generate_unique_code" type="object" string="Generate" 
+                            class="btn-link" icon="fa-barcode" invisible="unique_code"/>
+                </div>
+                <field name="is_location_mapping" />
+                <field name="sequence" />
+            </xpath>
+        </field>
+    </record>
+    
+</odoo>

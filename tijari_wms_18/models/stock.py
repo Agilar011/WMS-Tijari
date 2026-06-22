@@ -7,6 +7,10 @@ import hashlib
 import base64
 from ast import literal_eval
 
+import logging
+_logger = logging.getLogger(__name__)
+
+
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
 
@@ -45,26 +49,120 @@ class StockPicking(models.Model):
     adt_external_ref = fields.Char(string='External Ref (Acumatica)')
     adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
+    operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
     def button_validate(self):
+        res = super().button_validate()
+
+
+
+        for rec in self:
+            print(rec.picking_type_id.operation_category)
+            for line in rec.move_line_ids:
+                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
+                line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
+                if not line.lot_name:
+                    print(f"Missing lot: {line}")
+                    raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
+            # if not rec.lot_name:
+            #     raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
         for picking in self:
             operation_category = picking.picking_type_id.operation_category
+            print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
 
             # Hanya enforce untuk PUT dan DELIVERY
             if operation_category in ['put', 'delivery']:
                 for line in picking.move_line_ids:
                     # Jika belum dicek (invisible), tidak dianggap ok
+                    print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+                    # line.matching = 'match'
+                    print(f">>> Matching status for line {line.id}: {line.matching}") # Cek di terminal Odoo
                     if line.matching != 'match':
                         raise UserError(_(
                             "Validation blocked.\n\n"
                             "Line:\n"
                             f"- Product: {line.product_id.display_name}\n"
-                            f"- Qty: {line.qty_done or line.product_uom_qty}\n\n"
+                            f"- Qty: {line.quantity or line.product_uom_qty}\n\n"
                             "Status: ❌ NOT MATCH\n\n"
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-        return super().button_validate()
+            pickings = self.env["stock.picking"].search([])
+            if picking.picking_type_id.code != "incoming":
+                continue
+
+            storage_pickings = self.env["stock.picking"].search([
+                ("origin", "ilike", picking.name),
+                ("picking_type_id.code", "=", "internal"),
+            ])
+            total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
+            picking.write({
+                'adt_total_qty': total_qty
+            })
+
+            total_qty_storage = sum(storage_pickings.move_ids.move_line_ids.mapped("quantity"))
+            storage_pickings.write({
+                "adt_dest_location_id": picking.adt_dest_location_id,
+                "origin": picking.origin or picking.name,
+                "note" : picking.note,
+                'adt_total_qty': total_qty_storage
+            })
+            
+            for ml in picking.move_line_ids:  
+                for sp in storage_pickings.move_ids:
+                    move_line = self.env['stock.move.line'].search([
+                        ("picking_id", "=", sp.picking_id.id),
+                        ("product_id", "=", sp.product_id.id),
+                        ("quantity", "=", sp.quantity)
+                    ])
+                    if move_line:
+                        move_line.location_dest_id = ml.allocation_storage.id
+
+            for storage in storage_pickings:
+                for storage_move in storage.move_ids:
+                    receipt_move = picking.move_ids.filtered(
+                        lambda m: m.product_id == storage_move.product_id
+                    )[:1]
+
+                    if receipt_move:
+                        storage_move.write({
+                            "product_note": receipt_move.product_note,
+                        })
+
+            for move in picking.move_ids:
+                if move.quantity > move.product_uom_qty:
+                    total_qty = sum(line.mapped("quantity"))
+                    raise UserError(
+                        _(
+                            "Product: %s\n"
+                            "Lot: %s\n"
+                            "Total QTY: %s\n"
+                            "Demand: %s\n\n"
+                            "Quantity exceeds demand."
+                        ) % (
+                            move.product_id.display_name,
+                            line.lot_id.name or "-",
+                            move.quantity,
+                            move.product_uom_qty,
+                        )
+                    )
+
+        return res
+
+    def action_print_warehouse_receipt(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/warehouse_receipt?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
+
+    def do_print_picking(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/warehouse_receipt?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
+
 
 class StockPickingType(models.Model):
     _inherit = 'stock.picking.type'
@@ -84,6 +182,7 @@ class StockLocation(models.Model):
 
     sequence = fields.Boolean(string='Sequence', default=False, help='Indicates if the location uses sequence for operations')
     unique_code = fields.Char(string='Unique Code', help='A unique code for the location')
+    is_location_mapping = fields.Boolean(string="Parent Mapping Location")
 
     def generate_unique_code(self):
         for location in self:
@@ -96,8 +195,16 @@ class StockMoveLine(models.Model):
     _inherit  = 'stock.move.line'
     # _inherit = ['portal.mixin', 'mail.thread', 'mail.activity.mixin']
     _description = "Stock Move Line"
-    
+
+    adt_dest_location_id = fields.Many2one(
+        "stock.location",
+        related="move_id.adt_dest_location_id",
+        store=True,
+        readonly=True,
+    )
+
     lot_button = fields.Char(string="Lot Button", compute="_compute_lot_button")
+    auto_input_code = fields.Boolean(string="Auto Input Code", compute="_compute_auto_input_code")
 
     confirmation_location_code = fields.Char(
         string='Confirmation Location Code',
@@ -118,7 +225,26 @@ class StockMoveLine(models.Model):
         compute='_compute_matching_html',
         store=False)
     operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
-    
+
+    allocation_storage = fields.Many2one(
+        "stock.location",
+        string="Allocation Storage",
+    )
+
+    allocation_id = fields.Char(string='Allocation ID')
+    allocation_note = fields.Text(string='Allocation Note')
+    allocation_Description = fields.Text(string='Allocation Description')
+    allocation_InventoryID = fields.Char(string='Allocation Inventory ID')
+    allocation_LocationID = fields.Char(string='Allocation Location ID')
+    allocation_Quantity = fields.Float(string='Allocation Quantity')
+    allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
+    allocation_UOM = fields.Char(string='Allocation UOM')
+
+    picking_code = fields.Selection(
+        related='picking_id.picking_type_code',
+        store=False,
+    )
+
     @api.depends(
         'confirmation_location_code',
         'confirmation_lot_code',
@@ -132,6 +258,7 @@ class StockMoveLine(models.Model):
     def _compute_matching(self):
         print(">>> Computing matching status...") # Cek di terminal Odoo
         for line in self:
+            print(f">>> Evaluating line {line.id} - Product: {line}") # Cek di terminal Odoo
             matching = ''
 
             picking_type = line.picking_id.picking_type_id
@@ -140,13 +267,18 @@ class StockMoveLine(models.Model):
 
             # Untuk PUT → cek unique_code lokasi (aku anggap DESTINATION location)
             if operation_category == 'put':
+                print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
                 print(f">>> Operation Category: PUT") # Cek di terminal Odoo
                 # kalau belum ada input, keep invisible
+                print(f">>> Line Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
+                print(f">>> Line Confirmation Lot Code: {line.confirmation_lot_code}") # Cek di terminal Odoo
                 if line.confirmation_location_code or line.confirmation_lot_code:
                     print(f">>> Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
                     print(f">>> Confirmation Lot Code: {line.confirmation_lot_code}") #
                     dest_loc = line.location_dest_id
                     dest_code = dest_loc.unique_code if dest_loc else False
+                    print(f">>> Destination Location unique code: {dest_code}") # Cek di terminal Odoo
+                    print(f">>> Line Lot ID: {line.lot_id}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
                     lot = line.lot_id
 
                     loc_ok = bool(dest_code and line.confirmation_location_code == dest_code)
@@ -161,17 +293,23 @@ class StockMoveLine(models.Model):
 
             # Untuk PACK → cek lot + unique_code (aku anggap SOURCE location)
             elif operation_category == 'delivery':
+                print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
                 print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
+                print(f">>> Evaluating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
                 # kalau belum ada input sama sekali, invisible
                 if line.confirmation_location_code or line.confirmation_lot_code:
-                    print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
-                    src_loc = line.location_id
-                    src_code = src_loc.unique_code if src_loc else False
-                    lot = line.lot_id
+                    loc_code = line.location_id.unique_code if line.location_id else (line.quant_id.location_id.unique_code if line.quant_id and line.quant_id.location_id else 'N/A')
+                    lot_code = line.lot_id.name if line.lot_id else (line.quant_id.lot_id.name if line.quant_id and line.quant_id.lot_id else 'N/A')
+                    print(f">>> Information to match : Lot Code = {lot_code}, Location Code = {loc_code}") # Cek di terminal Odoo
+                    # src_loc = line.location_id
+                    # src_code = src_loc.unique_code if src_loc else False
+                    # lot = line.lot_id
+                    # src_code = line.quant_id.location_id.unique_code if line.quant_id.location_id else False
+                    # lot = line.quant_id.lot_id.name
 
                     # kondisi match
-                    loc_ok = bool(src_code and line.confirmation_location_code == src_code)
-                    lot_ok = bool(lot and line.confirmation_lot_code and line.confirmation_lot_code == lot.name)
+                    loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
+                    lot_ok = bool(lot_code and line.confirmation_lot_code == lot_code)
 
                     if loc_ok and lot_ok:
                         matching = 'match'
@@ -192,24 +330,98 @@ class StockMoveLine(models.Model):
             else:
                 line.matching_html = False
 
+    @api.onchange('product_id')
+    def _onchange_product_copy_previous_lot(self):
+
+        if not self.move_id:
+            return
+
+        last_line = self.move_id.move_line_ids.filtered(
+            lambda l: l.lot_id
+        )
+
+        if last_line:
+            self.lot_id = last_line[-1].lot_id
+                
+    @api.onchange('quant_id')
+    def _onchange_move_line_ids(self):
+        for line in self:
+            if line.quant_id:
+                print(f">>> Onchange move_line_ids: quant_id changed for line {line.id}, new quant_id: {line.quant_id.id}, lot_id: {line.quant_id.lot_id.name if line.quant_id.lot_id else 'N/A'}") # Cek di terminal Odoo
+                # line.lot_id = line.quant_id.lot_id.name if line.quant_id.lot_id else line.lot_name
+                line.lot_name = line.quant_id.lot_id.name if line.quant_id.lot_id else line.lot_name
+                print(f">>> changed lot_name: {line.lot_name}") # Cek di terminal Odoo
+            if not line.lot_name and line.lot_id:
+                print(f">>> Onchange move_line_ids: setting lot_name for line {line.id} based on lot_id {line.lot_id.name}") # Cek di terminal Odoo
+                line.lot_name = line.lot_id.name
+
+            
+    @api.onchange('auto_input_code')
+    def _compute_auto_input_code(self):
+        for line in self:
+            if line.auto_input_code:
+                print(f">>> Auto input code triggered for line {line.id}") # Cek di terminal Odoo
+                line.matching = 'match'
+                sml = self.env['stock.move.line'].browse(line._origin.id)
+                sml.write({'matching': 'match'})
+
+
+    def action_generate_selected_lot(self):
+        for line in self:
+            line.generate_lot()
+
+        return True
+        
+    def generate_lot(self):
+        for line in self:
+            print(f"BEFORE product={line.product_id.display_name} move={line.move_id.product_id.display_name}")
+
+            vals = line.action_generate_or_pick_lot()
+
+            print(f"AFTER product={line.product_id.display_name} move={line.move_id.product_id.display_name}")
+
+            if vals.get('lot_id'):
+                line.lot_id = vals['lot_id']
+
+            if vals.get('lot_name'):
+                line.lot_name = vals['lot_name']
+
+            if vals.get('confirmation_location_code'):
+                line.confirmation_location_code = vals['confirmation_location_code']
+
+            if vals.get('confirmation_lot_code'):
+                line.confirmation_lot_code = vals['confirmation_lot_code']
+
     @api.onchange('lot_button')
     def _onchange_lot_button(self):
-        print(F">>> Self value : {self}") # Cek di terminal Odoo
         print(">>> TOMBOL GENERATE LOT DIKLIK!") # Cek di terminal Odoo
         for line in self:
             if line.lot_button:
-                # Jalankan logika generate/pick lot
-                print(f">>> Line confirmation_location_code before generate/pick: {line.confirmation_location_code}") # Cek di terminal Odoo
-                print(f">>> Line confirmation_lot_code before generate/pick: {line.confirmation_lot_code}") # Cek di terminal Odoo
                 vals = line.action_generate_or_pick_lot()
                 print(f">>> Values returned from action_generate_or_pick_lot: {vals}") # Cek di terminal Odoo
                 print(f">>> Line confirmation_location_code after generate/pick: {line.confirmation_location_code}") # Cek di terminal Odoo
                 print(f">>> Line confirmation_lot_code after generate/pick: {line.confirmation_lot_code}") # Cek di terminal Odoo
+                print(f">>> Line operation_category: {line.operation_category}") # Cek di terminal Odoo
+                print(f">>> Lot ID assigned: {line.lot_id}") # Cek di terminal Odoo
+                print(f">>> Lot Name assigned: {line.lot_name}") # Cek di terminal Odoo
+                print(f">>> Confirmation Location Code assigned: {line.confirmation_location_code}") # Cek di terminal Odoo
+                print(f">>> Confirmation Lot Code assigned: {line.confirmation_lot_code}") # Cek di terminal Odoo
+
                 if vals.get('lot_id'):
                     line.lot_id = vals['lot_id']
+                    print(f">>> Lot ID assigned: {line.lot_id}") # Cek di terminal Odoo
                 if vals.get('lot_name'):
                     line.lot_name = vals['lot_name']
+                    print(f">>> Lot Name assigned: {line.lot_name}") # Cek di terminal Odoo
+                if vals.get('confirmation_location_code'):
+                    line.confirmation_location_code = vals['confirmation_location_code']
+                    print(f">>> Confirmation Location Code assigned: {line.confirmation_location_code}") # Cek di terminal Odoo
+                if vals.get('confirmation_lot_code'):
+                    line.confirmation_lot_code = vals['confirmation_lot_code']
+                    print(f">>> Confirmation Lot Code assigned: {line.confirmation_lot_code}") # Cek di terminal Odoo
                 line.lot_button = False
+
+
 
     def _compute_lot_button(self):
         # field dummy, tidak dipakai
@@ -220,8 +432,10 @@ class StockMoveLine(models.Model):
     def _tjr_is_incoming_tracked(self):
         print(f">>> Checking if line {self.id} is incoming tracked...") # Cek di terminal Odoo
         self.ensure_one()
+        print(f">>> Line {self.id} - Product: {self.product_id.display_name} - Lot id {self.lot_id.name if self.lot_id else 'N/A'} - Stock Quantity: {self.quantity}") # Cek di terminal Odoo
         # Cek tipe picking dari berbagai sumber (picking_id atau dari context)
         picking_type = self.picking_id.picking_type_id or self.move_id.picking_type_id
+        print(f">>> Line {self.id} - Picking Type: {picking_type.name if picking_type else 'N/A'}") # Cek di terminal Odoo
         is_incoming = picking_type.code == 'incoming' or self._context.get('default_picking_type_code') == 'incoming'
         
         return (
@@ -231,7 +445,6 @@ class StockMoveLine(models.Model):
         )
 
     # def _tjr_is_incoming_tracked(self):
-    #     print(f">>> Checking if line {self.id} is incoming tracked...") # Cek di terminal Odoo
     #     self.ensure_one()
     #     return (
     #         self.picking_id
@@ -279,38 +492,17 @@ class StockMoveLine(models.Model):
         Outgoing/Internal : pick FIFO lot_id from stock.quant (source location).
         Fields lot_id & lot_name dibuat readonly di view; perubahan via tombol ini.
         """
-        print(">>> action_generate_or_pick_lot called!") # Cek di terminal Odoo
-        print(self.env.context) # Cek context di terminal Odoo
-
-        print(f">>> Warhouse des line: {self.location_dest_id.location_id.name}") # Cek di terminal Odoo
-        # kode_supplier = self.picking_id.partner_id.company_registry or (self.picking_id.partner_id.ref if self.picking_id.partner_id and self.picking_id.partner_id.ref else False)
-        # print(f">>> Kode Supplier: {kode_supplier}") # Cek di terminal Odoo
 
         Quant = self.env['stock.quant']
         for line in self:
-            print(f">>> Processing line {line.id} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
-            print(f">>> Tracking Product: {line.product_id.default_code}") # Cek di terminal Odoo
-            print(f">>> Tracking: {line.product_id.tracking}") # Cek di terminal Odoo
-            print(f">>> Tracking Status: {'Tracked' if line.product_id.tracking != 'none' else 'Not Tracked'}") # Cek di terminal Odoo
-            # if not line.product_id or line.product_id.tracking == 'none':
-            #     # tidak perlu lot
-            #     print(">>> Lot not found") # Cek di terminal Odoo
-                # continue
-
-            # Code generate lot untuk incoming
 
             is_incoming = self.env.context.get('default_picking_type_code') == 'incoming' or \
                           line.picking_id.picking_type_code == 'incoming' or \
                           line.picking_id.picking_type_id.code == 'incoming'
             
-            print(f">>> Is Incoming: {is_incoming}") # Cek di terminal Odoo
+            # print(f">>> Is Incoming: {is_incoming}") # Cek di terminal Odoo
 
             if is_incoming:
-                print(">>> Kondisi Terpenuhi: Dokumen adalah RECEIPT")
-                
-                # 1. Ambil KODE SUPPLIER
-                # Mengambil dari partner_id dokumen (ADT Vendor Code jika ada, jika tidak pakai Partner ID)
-                # partner = line.picking_id.partner_id
                 kode_supplier = self.picking_id.partner_id.company_registry or (self.picking_id.partner_id.ref if self.picking_id.partner_id and self.picking_id.partner_id.ref else False)
                 print(f">>> Kode Supplier: {kode_supplier}") # Cek di terminal Odoo
                 if not kode_supplier:
@@ -332,16 +524,17 @@ class StockMoveLine(models.Model):
 
                 # 4. Ambil SEQUENCE (Berdasarkan jumlah lot yang dibuat hari ini)
                 # Mencari lot dengan awalan yang sama untuk menghitung urutan
-                prefix = f"{kode_supplier}-{tanggal_masuk}-{kode_warehouse}"
-                
-                lot_count = self.env['stock.lot'].search_count([
-                    ('name', '=like', f"{prefix}%"),
-                    ('product_id', '=', line.product_id.id)
-                ])
-                sequence = str(lot_count + 1).zfill(3)  # Format sequence 3 digit, misal: 001, 002
+                kode_product = line.product_id.default_code or f"PROD{line.product_id.id}"
+                source_document = line.picking_id.origin or f"PICK{line.picking_id.id}"
+                prefix = f"{source_document}-{tanggal_masuk}-{kode_product}"
+
+                # lot_count = self.env['stock.lot'].search_count([
+                #     ('name', '=like', f"{prefix}%"),
+                #     ('product_id', '=', line.product_id.id)
+                # ])
 
                 # KOMPOSISI AKHIR LOT
-                new_lot_name = f"{prefix}{sequence}"
+                new_lot_name = f"{prefix}"
                 
                 # Masukkan ke dalam UI menggunakan update
                 print(f">>> Line Confirmation Location Code before update: {line.confirmation_location_code}") # Cek di terminal Odoo
@@ -359,11 +552,31 @@ class StockMoveLine(models.Model):
                 print(f">>> Line Confirmation Lot Code after update: {line.confirmation_lot_code}")
                 
                 print(f">>> SUCCESS: Generated lot name -> {new_lot_name}")
+                lot_data = {
+                    'name': line.lot_name,               # Nomor Lot
+                    'product_id': line.product_id.id,              # ID Produk
+                    'product_uom_id': line.product_id.uom_id.id,           # ID Satuan Unit
+                    'company_id': False,           # [NULL] di Odoo diwakili False
+                    'location_id': line.location_id.id,              # Lokasi awal/default (opsional tergantung versi)
+                    'ref': False,                  # Internal Reference [NULL]
+                    'note': False,                 # Catatan [NULL]
+                }
+                search_lot = self.env['stock.lot'].search([('name', '=', line.lot_name)])
+                lot_exist = search_lot
+                if not search_lot:
+                    new_lot = line.env['stock.lot'].create(lot_data)
+                    lot_exist = new_lot
+                    # search_lot
+
+                
+                line.lot_id = lot_exist.id
+                print(f">>> Created new lot with ID: {lot_exist.id} and Name: {lot_exist.name}") # Cek di terminal Odoo
+                line.update({
+                    'lot_id': lot_exist.id,
+                })
+                print(f">>> Lot ID assigned: {line.lot_id}") # Cek di terminal Odoo
+
                 continue
-
-
-
-
 
             # === Incoming: generate lot_name ===
             if line._tjr_is_incoming_tracked():
@@ -387,17 +600,21 @@ class StockMoveLine(models.Model):
             # - Jika qty_done sudah diisi, pakai itu.
             # - Jika kosong: untuk serial -> 1; untuk lot -> sisa qty di line (product_uom_qty/demand).
             uom_line = line.product_uom_id or line.product_id.uom_id
-            qty_needed_line_uom = line.qty_done
+            qty_needed_line_uom = line.quantity
+            print(f">>> Initial quantity needed (line UoM): {qty_needed_line_uom}") # Cek di terminal Odoo
+            # print(f">>> Product Tracking: {line.product_id.tracking}") # Cek di terminal Odoo   
             if not qty_needed_line_uom:
+                print(">>> Quantity needed is zero, calculating fallback...") # Cek di terminal Odoo
                 if line.product_id.tracking == 'serial':
                     qty_needed_line_uom = 1.0
                 else:
-                    qty_needed_line_uom = line.product_uom_qty or line.qty_reserved or 0.0
+                    qty_needed_line_uom = line.quantity or line.qty_reserved or 0.0
                     if not qty_needed_line_uom:
                         qty_needed_line_uom = 1.0  # fallback
 
             # konversi ke UoM produk (base) untuk hitung available quant
             qty_needed_base = uom_line._compute_quantity(qty_needed_line_uom, line.product_id.uom_id, rounding_method='HALF-UP')
+            print(f">>> Quantity needed (product UoM): {qty_needed_base}") # Cek di terminal Odoo
 
             # Ambil quants dengan lot yang punya stok available > 0 di lokasi sumber (FIFO)
             domain = [
@@ -416,14 +633,16 @@ class StockMoveLine(models.Model):
             chosen = False
             for q in quants:
                 # hitung available di lokasi quant (strict ke lokasi quant)
+                print(f"Product ID - {line.product_id.id}, Location ID - {q.location_id.id}, Lot ID - {q.lot_id.id if q.lot_id else 'N/A'}, Package ID - {q.package_id.id if q.package_id else 'N/A'}, Owner ID - {q.owner_id.id if q.owner_id else 'N/A'}") # Cek di terminal Odoo
                 avail = Quant._get_available_quantity(
-                    product=line.product_id,
-                    location=q.location_id,
+                    line.product_id,
+                    q.location_id,
                     lot_id=q.lot_id,
                     package_id=q.package_id or None,
                     owner_id=q.owner_id or None,
                     strict=True,
                 )
+                print(f">>> Evaluating quant {q.id} - Lot: {q.lot_id.name if q.lot_id else 'N/A'} - Available Qty: {avail}") # Cek di terminal Odoo                
                 if avail <= 0:
                     continue
 
@@ -436,6 +655,7 @@ class StockMoveLine(models.Model):
 
                     # Kalau qty_done 0, isi qty_done minimal 1 untuk serial, atau min(avail, qty_needed)
                     if not line.quantity:
+                        print(f">>> Line quantity before assignment: {line.quantity}") # Cek di terminal Odoo
                         print(f">>> Calculating quantity to assign for line {line.id}") # Cek di terminal Odoo
                         if line.product_id.tracking == 'serial':
                             # qty_to_write = 1.0
@@ -455,8 +675,10 @@ class StockMoveLine(models.Model):
                     # line.write(updates)
                     chosen = True
                     break
-
+                      
             if not chosen:
+                print(f">>> chosen {chosen}") # Cek di terminal Odoo
+                print(f">>> chosen lot {q.lot_id.name} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
                 # Tidak ada lot yg cukup → pilih lot tertua yang punya sedikit stok (sebagai hint)
                 partial = next((q for q in quants if Quant._get_available_quantity(
                     line.product_id, q.location_id, lot_id=q.lot_id,
@@ -464,9 +686,9 @@ class StockMoveLine(models.Model):
                 print(f">>> No sufficient lot found for line {line.id}. Partial suggestion: {partial.lot_id.name if partial else 'None'}") # Cek di terminal Odoo
                 if partial:
                     line.write({'lot_id': partial.lot_id.id, 'lot_name': False})
-                    # qty_done bila kosong isi seminimal mungkin agar user sadar (1 untuk serial, else 0)
-                    if not line.qty_done and line.product_id.tracking == 'serial':
-                        line.qty_done = 1.0
+                    # quantity bila kosong isi seminimal mungkin agar user sadar (1 untuk serial, else 0)
+                    if not line.quantity and line.product_id.tracking == 'serial':
+                        line.quantity = 1.0
                 else:
                     raise UserError(_("No available lots found for product %s in %s.") % (line.product_id.display_name, line.location_id.display_name))
 
@@ -480,6 +702,7 @@ class StockMoveLine(models.Model):
                 'sticky': False,
             }
         }
+
 
 class StockMove(models.Model):
     _inherit = 'stock.move'
@@ -503,3 +726,55 @@ class StockMove(models.Model):
     adt_warehouse_dest_code = fields.Char(string='Warehouse Dest (Acumatica)')
     adt_location_dest_code = fields.Char(string='Location Dest (Acumatica)')
     adt_line_note = fields.Text(string='Line Note (Acumatica)')
+    allocation_id = fields.Char(string='Allocation ID')
+    allocation_note = fields.Text(string='Allocation Note')
+    allocation_Description = fields.Text(string='Allocation Description')
+    allocation_InventoryID = fields.Char(string='Allocation Inventory ID')
+    allocation_LocationID = fields.Char(string='Allocation Location ID')
+    allocation_Quantity = fields.Float(string='Allocation Quantity')
+    allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
+    allocation_UOM = fields.Char(string='Allocation UOM')    
+    adt_dest_location_id = fields.Many2one(
+        related="picking_id.adt_dest_location_id",
+        store=True,
+    )
+
+
+    # lot_button = fields.Char(string="Lot Button")
+
+    def action_generate_lot(self):
+        for move in self:
+            print(move.product_id)
+            print(move.product_uom)
+            print(move.product_id.uom_id)
+            move.move_line_ids.generate_lot()
+
+    @api.onchange("move_line_ids")
+    def _onchange_move_line_ids(self):
+        for move in self:
+            total_qty = sum(move.move_line_ids.mapped("quantity"))
+
+            if total_qty > move.product_uom_qty:
+                return {
+                    "warning": {
+                        "title": _("Invalid Quantity"),
+                        "message": _(
+                            "The total quantity (%s) cannot exceed the demand (%s)."
+                        ) % (total_qty, move.product_uom_qty),
+                    }
+                }
+            
+    def _update_total_qty(self):
+        for picking in self.mapped("picking_id"):
+            picking.adt_total_qty = sum(
+                picking.move_ids.mapped("quantity")
+            )
+
+    def write(self, vals):
+        res = super().write(vals)
+
+        if "quantity" in vals:
+            self._update_total_qty()
+
+        return res
+

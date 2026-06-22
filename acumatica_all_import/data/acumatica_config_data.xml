@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Record konfigurasi default otomatis dibuat saat install -->
+        <record id="acumatica_config_default" model="acumatica.config">
+            <field name="name">Acumatica WMS - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
+    </data>
+</odoo>

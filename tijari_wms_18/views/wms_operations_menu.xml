@@ -99,12 +99,18 @@
             name="Transfer Pinjaman (1 Step)"
             parent="wms_operations_menu_outbound" 
             sequence="6" 
-            action="stock.method_action_picking_tree_internal"/>
+            action="action_wms_operations_transfer_pinjaman_1_step"/>
 
   <menuitem id="wms_operations_outbound_transfer_pinjaman_2_step"
             name="Transfer Pinjaman (2 Step)"
             parent="wms_operations_menu_outbound" 
             sequence="7" 
-            action="stock.method_action_picking_tree_internal"/>
+            action="action_wms_operations_transfer_pinjaman_2_step"/>
+
+  <menuitem id="wms_operations_kit_assembly"
+            name="Kit Assembly"
+            parent="wms_operations_menu_outbound" 
+            sequence="8" 
+            action="action_wms_kit_assembly"/>
 
 </odoo>

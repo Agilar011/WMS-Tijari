@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_users_form_inherit_acumatica" model="ir.ui.view">
+        <field name="name">res.users.form.inherit.acumatica</field>
+        <field name="model">res.users</field>
+        <field name="inherit_id" ref="base.view_users_form"/>
+        <field name="arch" type="xml">
+            
+            <xpath expr="//group[field[@name='company_ids']]"  position="after">
+                <group string="Multi Warehouse" >
+                    <field name="warehouse_ids" widget="many2many_tags"/>
+                    <field name="warehouse_id"/>
+                </group>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

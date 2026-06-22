@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+  <menuitem id="custom_master_menu" 
+      name="Master Data"
+      parent="stock.menu_stock_root" 
+      sequence="100"/>
+  
+  <menuitem id="custom_master_menu_customer" 
+          name="Customer"
+          parent="custom_master_menu" 
+          sequence="1" 
+          action="account.res_partner_action_customer"/>
+
+  <menuitem id="custom_master_menu_warehouse" 
+          name="Warehouse"
+          parent="custom_master_menu" 
+          sequence="2" 
+          action="stock.action_warehouse_form"/>
+
+  <menuitem id="custom_master_menu_product" 
+          name="Product"
+          parent="custom_master_menu" 
+          sequence="3" 
+          action="stock.product_template_action_product"/>
+
+  <menuitem id="custom_master_menu_uom" 
+          name="Units of Measure"
+          parent="stock.product_uom_menu" 
+          sequence="4" 
+          action="uom.product_uom_form_action"/>
+
+</odoo>

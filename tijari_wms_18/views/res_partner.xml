@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_partner_form_inherit_acumatica" model="ir.ui.view">
+        <field name="name">res.partner.form.inherit.acumatica</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            
+            <xpath expr="//sheet/notebook" position="inside">
+                <page string="Acumatica" invisible="partner_type == 'shipvia'">
+                    <group>
+                        
+                        <!-- Customer Fields -->
+                        <field name="adt_customer_class" invisible="partner_type != 'customer' and type != 'other'"/>
+                        <field name="adt_location_name" invisible="partner_type != 'customer' and type != 'other'"/>
+                        <field name="adt_shipping_zone_id" invisible="partner_type != 'customer' and type != 'other'"/>
+                        <field name="adt_tax_registration_id" invisible="partner_type != 'customer' and type != 'other'"/>
+                        <field name="adt_warehouse_id" invisible="partner_type != 'customer' and type != 'other'"/>
+
+                        <!-- General Fields -->
+                        <field name="adt_external_id"/>
+                        <field name="adt_fob_point"/>
+                        <field name="adt_acumatica_write_date"/>
+                        <field name="adt_note"/>
+
+                        <!-- Vendor Fields -->
+                        <field name="adt_vendor_id" invisible="partner_type != 'vendor'"/>
+                        <field name="adt_class" invisible="partner_type != 'vendor'"/>
+                        <field name="adt_account_ref" invisible="partner_type != 'vendor'"/>
+
+                        <!-- Vendor & Customer Fields -->
+                        <field name="adt_b_account_id" invisible="partner_type not in ['customer', 'vendor']"/>
+                        <field name="adt_location_name" invisible="partner_type not in ['customer', 'vendor']"/>
+                        <field name="adt_status" invisible="partner_type not in ['customer', 'vendor']"/>
+
+                        <!-- Vendor & Customer Location Fields -->
+                        <field name="adt_lead_time_days" invisible="partner_type not in ['vendor', 'customer_location']"/>
+
+                        <!-- Customer Location Fields -->
+                        <field name="adt_shipping_branch" invisible="partner_type != 'customer_location'"/>
+                        <field name="adt_order_priority" invisible="partner_type != 'customer_location'"/>
+                        <field name="adt_shipping_zone_id" invisible="partner_type != 'customer_location'"/>
+                        <field name="adt_ship_via" invisible="partner_type != 'customer_location'"/>
+                        <field name="adt_tax_exemption_number" invisible="partner_type != 'customer_location'"/>
+                        <field name="adt_tax_registration_id" invisible="partner_type != 'customer_location'"/>
+
+                        <!-- <field name="adt_currency_id"/>
+                        <field name="adt_warehouse_id"/>
+                        <field name="adt_shipping_zone_id"/>
+                        <field name="adt_created_datetime"/>
+                        <field name="adt_acumatica_write_date"/>
+                        <field name="adt_note_id"/>
+                        <field name="adt_note"/> -->
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <record id="view_partner_form_inherit_header_acumatica" model="ir.ui.view">
+        <field name="name">res.partner.form.inherit.header.acumatica</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='name']" position="after">
+
+                    <div style="font-size: 14px !important; line-height: 1.4; margin-top: 8px;">
+
+                        <div style="display: flex; gap: 16px;">
+                            <div>Code</div>
+                            <field name="company_registry"
+                                nolabel="1"
+                                class="oe_inline"/>
+                        </div>
+
+                        <div style="display: flex; gap: 16px;" >
+                            <div>Type</div>
+                            <field name="partner_type"
+                                nolabel="1"
+                                class="oe_inline"/>
+                        </div>
+
+                    </div>
+
+            </xpath>
+
+            <xpath expr="//field[@name='website']" position="after">
+                <field name="adt_location_id" string="Location ID"
+                    invisible="type != 'other'"/>
+            </xpath>
+
+
+        </field>
+    </record>
+
+    <!-- <record id="view_partner_form_inherit_acumatica_vendor" model="ir.ui.view">
+        <field name="name">res.partner.form.acumatica.vendor</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet/notebook" position="inside">
+                <page string="Acumatica">
+                    <group>
+                        <group string="Identitas">
+                            <field name="adt_external_id"/>
+                            <field name="adt_class"/>
+                            <field name="adt_vendor_state"/>
+                        </group>
+                        <group string="Logistik">
+                            <field name="adt_fob_point"/>
+                            <field name="adt_acumatica_write_date"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record> -->
+
+</odoo>

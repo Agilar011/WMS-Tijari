@@ -3,9 +3,57 @@ from odoo import http, _
 from odoo.http import request
 from odoo.exceptions import UserError
 import logging
-
 _logger = logging.getLogger(__name__)
+import json
 
+from odoo import http, models, fields, api, tools, service, modules, _
+from odoo.http import request, Response, content_disposition, serialize_exception
+import json
+from datetime import datetime, time, timedelta
+from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.service.db import list_dbs
+from num2words import num2words
+from collections import defaultdict
+from PIL import Image
+from lxml import etree
+from requests.exceptions import ConnectTimeout, ReadTimeout, ConnectionError, SSLError
+
+
+def format_tanggal_indo(dt):
+    if not dt:
+        return ''
+
+    hari = {
+        0: 'Senin',
+        1: 'Selasa',
+        2: 'Rabu',
+        3: 'Kamis',
+        4: 'Jumat',
+        5: 'Sabtu',
+        6: 'Minggu',
+    }
+
+    bulan = {
+        1: 'Januari',
+        2: 'Februari',
+        3: 'Maret',
+        4: 'April',
+        5: 'Mei',
+        6: 'Juni',
+        7: 'Juli',
+        8: 'Agustus',
+        9: 'September',
+        10: 'Oktober',
+        11: 'November',
+        12: 'Desember',
+    }
+
+    return (
+        f"{hari[dt.weekday()]}, "
+        f"{dt.day} "
+        f"{bulan[dt.month]} "
+        f"{dt.year}"
+    )
 
 class WmsApiController(http.Controller):
 
@@ -331,3 +379,66 @@ class WmsApiController(http.Controller):
         except Exception as e:
             _logger.exception("Unexpected error in /wms/api/delivery")
             return self._json_error(_("Unexpected server error: %s") % str(e), status=500)
+
+
+    @http.route('/print/warehouse_receipt', type='http', auth='user')
+    def PrintWarehouseReceipt(self, id, **kw):
+
+        receipt = request.env['stock.picking'].sudo().browse(int(id))
+
+        data = {
+            'type': receipt.picking_type_id.name or '',
+            'date': format_tanggal_indo(receipt.scheduled_date),
+            'no': receipt.name or '',
+            'vendor': receipt.partner_id.name or '',
+            'warehouse': '',
+            'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
+            'penerima': receipt.location_id.complete_name or '',
+            'note': receipt.note_ba or '',
+            'detail': []
+        }
+        for line in receipt.move_ids_without_package:
+            obj = {
+                'name': line.product_id.display_name or '',
+                'uom': line.product_uom.name if line.product_uom.name else '',
+                'demand': float(line.product_uom_qty or 0),
+                'demand1': float(line.quantity or 0),
+                'qty': float(line.quantity or 0),
+                'qty2': float(line.product_uom_qty or 0),
+                'ket': ''
+            }
+            data['detail'].append(obj)
+
+        data = json.dumps(data)
+
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/Penerimaan_Barang',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "warehouse_receipt.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])

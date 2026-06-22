@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_acumatica_unified_import_wizard_form" model="ir.ui.view">
+        <field name="name">acumatica.unified.import.wizard.form</field>
+        <field name="model">acumatica.unified.import.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Import Data API Acumatica">
+                <sheet>
+                    <group>
+                        <field name="import_category"/>
+                        <field name="import_type" invisible="1"/>
+                        <field name="import_type_transaction" invisible="import_category != 'transaction'"/>
+                        <field name="import_type_master" invisible="import_category != 'master'"/>
+                    </group>
+                    <group string="API Configuration">
+
+                        <field name="uom_config_id" invisible="import_type != 'uom'" required="import_type == 'uom'"/>
+                        <field name="customer_config_id" invisible="import_type != 'customer'" required="import_type == 'customer'"/>
+                        <field name="vendor_config_id" invisible="import_type != 'vendor'" required="import_type == 'vendor'"/>
+                        <field name="warehouse_config_id" invisible="import_type != 'warehouse'" required="import_type == 'warehouse'"/>
+                        <field name="stock_item_config_id" invisible="import_type != 'stock_item'" required="import_type == 'stock_item'"/>
+                        <field name="non_stock_item_config_id" invisible="import_type != 'non_stock_item'" required="import_type == 'non_stock_item'"/>
+                        <field name="customer_location_config_id" invisible="import_type != 'customer_location'" required="import_type == 'customer_location'"/>
+                        <field name="shipvia_config_id" invisible="import_type != 'shipvia'" required="import_type == 'shipvia'"/>
+                        <field name="receipt_config_id" invisible="import_type != 'po_receipt'" required="import_type == 'po_receipt'"/>
+                        <field name="issue_po_return_config_id" invisible="import_type != 'issue_po_return'" required="import_type == 'issue_po_return'"/>
+                        <field name="transfer_one_step_config_id" invisible="import_type != 'transfer_one_step'" required="import_type == 'transfer_one_step'"/>
+                        <field name="transfer_two_step_config_id" invisible="import_type != 'transfer_two_step'" required="import_type == 'transfer_two_step'"/>
+                        <field name="inventory_received_config_id" invisible="import_type != 'inventory_received'" required="import_type == 'inventory_received'"/>
+                        <field name="inventory_issue_config_id" invisible="import_type != 'inventory_issue'" required="import_type == 'inventory_issue'"/>
+                        <field name="receipt_change_item_config_id" invisible="import_type != 'receipt_change_item'" required="import_type == 'receipt_change_item'"/>
+                        <field name="issue_config_id" invisible="import_type != 'issue_change_item'" required="import_type == 'issue_change_item'"/>
+                        <field name="shipment_config_id" invisible="import_type != 'shipment_so'" required="import_type == 'shipment_so'"/>
+                        <field name="so_shipment_config_id" invisible="import_type != 'so_shipment'" required="import_type == 'so_shipment'"/>
+                        <field name="transfer_config_id" invisible="import_type != 'so_transfer'" required="import_type == 'so_transfer'"/>
+                        <field name="transfer_shipment_config_id" invisible="import_type != 'transfer_shipment'" required="import_type == 'transfer_shipment'"/>
+                        <field name="kit_assembly_config_id" invisible="import_type != 'kit_assembly'" required="import_type == 'kit_assembly'"/>
+                        <field name="inventory_stock_config_id" invisible="import_type != 'inventory_stock'" required="import_type == 'inventory_stock'"/>
+                    </group>
+                    <group string="Filter Fetch" invisible="import_type == 'inventory_stock'">
+                        <field name="fetch_limit"/>
+                        <field name="fetch_skip"/>
+                        <field name="batch_size"/>
+                        <field name="reference_nbr" invisible="import_type not in ['issue_po_return','transfer_one_step','transfer_two_step','inventory_received','inventory_issue','receipt_change_item','issue_change_item','so_transfer']"/>
+                        <field name="receipt_nbr" invisible="import_type != 'po_receipt'"/>
+                        <field name="shipment_nbr" invisible="import_type not in ['shipment_so','so_shipment','transfer_shipment']"/>
+                        <field name='wh33_filter' invisible="import_category != 'transaction'"/>
+                        <field name="odata_filter"/>
+                    </group>
+                    <group invisible="import_type != 'inventory_stock'" string="Inventory Stock Params">
+                        <field name="warehouse_value"/>
+                        <field name="inventory_id_value"/>
+                        <field name="odata_expand"/>
+                        <field name="odata_top"/>
+                    </group>
+                    <group string="Date Range">
+                        <field name="date_period"/>
+                        <field name="start_date" invisible="date_period != True"/>
+                        <field name="end_date" invisible="date_period != True"/>
+                    </group>                        <!-- <field name="last_modified_from"/> -->
+                    <!-- <group string="Batch Import"> -->
+                        <!-- <field name="auto_commit_batch"/> -->
+                    <!-- </group> -->
+                    <!-- <group string="Ringkasan">
+                        <field name="state" readonly="1"/>
+                        <field name="total_fetched" readonly="1"/>
+                        <field name="total_pending" readonly="1"/>
+                        <field name="total_imported" readonly="1"/>
+                        <field name="batch_count" readonly="1"/>
+                    </group> -->
+                    <group string="Log Messages">
+                        <field name="last_message" readonly="1" nolabel="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_fetch_data" string="1. Tarik Data" type="object" class="btn-primary"/>
+                    <button name="action_import_pending_batch" string="2. Import Pending per Batch" type="object" class="btn-secondary" invisible="state == 'draft'"/>
+                    <!-- <button name="action_fetch_and_import_batch" string="Tarik + Import Batch" type="object" class="btn-primary"/> -->
+                    <button name="action_view_staging" string="Lihat Staging" type="object" invisible="state == 'draft'"/>
+                    <button name="action_reset" string="Reset Wizard" type="object"/>
+                    <button string="Tutup" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_unified_import_wizard" model="ir.actions.act_window">
+        <field name="name">Import Data API Acumatica</field>
+        <field name="res_model">acumatica.unified.import.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

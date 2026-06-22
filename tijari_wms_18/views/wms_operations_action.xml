@@ -41,13 +41,33 @@
         ]</field>
     </record>
 
+    <record id="action_wms_operations_shipment_so_return" model="ir.actions.act_window">
+        <field name="name">Shipment SO Return</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'incoming'),
+            ('adt_type', '=', 'Shipment')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_sale_orders_shipment" model="ir.actions.act_window">
+        <field name="name">Sale Orders Shipment</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('adt_type', '=', 'Shipment')
+        ]</field>
+    </record>
+
     <record id="action_wms_operations_issue_type_change_items" model="ir.actions.act_window">
         <field name="name">Issue Type Change Item</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[
             ('picking_type_id.code', '=', 'outgoing'),
-            ('adt_type', '=', 'Issue')
+            ('adt_type', '=', 'Change Item')
         ]</field>
     </record>
 
@@ -56,9 +76,57 @@
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[
-            ('picking_type_id.code', '=', 'internal'),
+            ('picking_type_id.code', '=', 'outgoing'),
             ('adt_type', '=', 'Issue')
         ]</field>
     </record>
 
+    <record id="action_wms_operations_po_return" model="ir.actions.act_window">
+        <field name="name">Issue Type PO Return</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('adt_type', '=', 'Return')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_transfer_shipment" model="ir.actions.act_window">
+        <field name="name">Transfer Shipment</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'outgoing'),
+            ('adt_type', '=', 'Transfer')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_transfer_pinjaman_1_step" model="ir.actions.act_window">
+        <field name="name">Transfer Pinjaman (1 Step)</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'internal'),
+            ('adt_type', '=', 'Step 1')
+        ]</field>
+    </record>
+
+    <record id="action_wms_operations_transfer_pinjaman_2_step" model="ir.actions.act_window">
+        <field name="name">Transfer Pinjaman (2 Step)</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'internal'),
+            ('adt_type', '=', 'Step 2')
+        ]</field>
+    </record>
+
+    <record id="action_wms_kit_assembly" model="ir.actions.act_window">
+        <field name="name">Kit Assembly</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[
+            ('picking_type_id.code', '=', 'mrp_operation'),
+        ]</field>
+    </record>
 </odoo>

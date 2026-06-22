@@ -1,0 +1,122 @@
+<odoo>
+
+    <record id="action_import_selected_receipt"
+            model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <field name="model_id" ref="model_acumatica_receipt_line"/>
+        <field name="binding_model_id" ref="model_acumatica_receipt_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
+    <record id="view_acumatica_receipt_line_list" model="ir.ui.view">
+        <field name="name">acumatica.receipt.line.list</field>
+        <field name="model">acumatica.receipt.line</field>
+        <field name="arch" type="xml">
+            <list string="Data PO Receipt">
+                <!-- <header>
+                    <button name="action_import_selected" string="Import Selected Record" type="object" class="btn-primary"/>
+                </header> -->
+                <field name="receipt_nbr"/>
+                <field name="vendor_code"/>
+                <field name="warehouse_code"/>
+                <field name="total_qty"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
+                <field name="import_message"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_acumatica_receipt_line_form" model="ir.ui.view">
+        <field name="name">acumatica.receipt.line.form</field>
+        <field name="model">acumatica.receipt.line</field>
+        <field name="arch" type="xml">
+            <form string="Data PO Receipt">
+                <header>
+                    <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <button name="action_open_picking" string="Buka Receipt" type="object" invisible="not odoo_picking_id"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,updated,error"/>
+                </header>
+                <sheet>
+                    <group string="Header Receipt">
+                        <group>
+                            <field name="receipt_nbr"/>
+                            <field name="vendor_code"/>
+                            <field name="partner_ref"/>
+                            <field name="scheduled_date"/>
+                            <field name="warehouse_code"/>
+                            <field name="header_location_code"/>
+                            <field name="status"/>
+                            <field name="receipt_type"/>
+                        </group>
+                        <group>
+                            <field name="actual_qty"/>
+                            <field name="total_qty"/>
+                            <field name="is_hold"/>
+                            <field name="inventory_ref"/>
+                            <field name="post_period"/>
+                            <field name="acumatica_write_date"/>
+                            <field name="branch_warehouse"/>
+                            <field name="note"/>                            
+                        </group>
+                        <!-- <group string="Detail Line">
+                            <field name="line_nbr"/>
+                            <field name="inventory_id"/>
+                            <field name="transaction_description"/>
+                            <field name="description"/>
+                            <field name="line_type"/>
+                            <field name="location_dest_code"/>
+                            <field name="open_qty"/>
+                            <field name="order_qty"/>
+                            <field name="po_line_number"/>
+                            <field name="po_number"/>
+                            <field name="po_type"/>
+                            <field name="po_receipt_line_number"/>
+                            <field name="po_receipt_number"/>
+                            <field name="product_uom_qty"/>
+                            <field name="uom_code"/>
+                            <field name="warehouse_dest_code"/>
+                            <field name="transfer_order_line_number"/>
+                            <field name="transfer_order_number"/>
+                            <field name="transfer_order_type"/>
+                            <field name="transfer_shipment_number"/>
+                            <field name="line_note"/>
+                        </group> -->
+                    </group>
+                    <notebook>
+                        <page name="Details" string="Details">
+                            <field name="product_line_ids">
+                                <list>
+                                    <field name="inventory_id"/>
+                                    <field name="transaction_description"/>
+                                    <field name="warehouse_dest_code"/>
+                                    <field name="order_qty"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                    <group>
+                        <field name="import_message" readonly="1" widget="text"/>
+                        <field name="odoo_picking_id" readonly="1"/>
+                        <field name="exists_in_odoo" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_receipt_line" model="ir.actions.act_window">
+        <field name="name">Data PO Receipt</field>
+        <field name="res_model">acumatica.receipt.line</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+</odoo>

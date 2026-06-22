@@ -1,15 +1,186 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <record id="view_picking_form_tjr_acumatica_v18_REL_FIX" model="ir.ui.view">
-        <field name="name">stock.picking.form.tjr.acumatica</field>
+  <!-- Hide Delivery print -->
+     <record id="stock.action_report_delivery" model="ir.actions.report">
+         <field name="binding_model_id" eval="False"/>
+     </record>
+  
+     <record id="view_picking_form_inherit_acumatica_header" model="ir.ui.view">
+        <field name="name">stock.picking.form.acumatica.header</field>
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
-            <!-- Gunakan page name='extra' (Extra Info) agar tidak salah alamat ke Search View -->
-            <xpath expr="//page[@name='extra']" position="after">
-                <page string="Acumatica" name="acumatica_tab">
+            
+            <!-- <xpath expr="//button[@name='button_validate']" position="after">
+                <button name="action_print_warehouse_receipt"
+                    string="Print Receipt"
+                    type="object"
+                    class="btn-primary"                    
+                    invisible="state != 'done'"/>
+            </xpath> -->
+            <xpath expr="//button[@name='button_validate']" position="after">
+                <button name="action_print_warehouse_receipt"
+                string="Print Receipt"
+                type="object"
+                class="btn-primary"
+                invisible="state != 'done' or picking_type_code != 'incoming'"/>
+            </xpath>
+
+            <xpath expr="//button[@name='do_print_picking']" position="attributes">
+                <attribute name="invisible">state != 'assigned' or picking_type_code == 'incoming'</attribute>
+            </xpath>
+            
+            <!-- <xpath expr="//button[@name='209']" position="attributes">
+                <attribute name="invisible">True</attribute>
+            </xpath> -->
+
+            <xpath expr="//field[@name='location_dest_id']" position="after">
+                <field name="sync_state" readonly="1" decoration-danger="sync_state == 'not_ready'" invisible="sync_state != 'not_ready'"/>
+                <field name="sync_message" readonly="1" decoration-danger="sync_state == 'not_ready'" invisible="sync_state != 'not_ready'"/>
+            </xpath>
+            <xpath expr="//field[@name='origin']" position="after">
+                <!-- <field name="adt_type" readonly="1"/> -->
+                <field name="adt_total_qty"/>
+                <field name="adt_actual_qty"/>
+                <field name="adt_dest_location_id"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_picking_form_inherit_location_dest" model="ir.ui.view">
+        <field name="name">stock.picking.form.location.dest</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']"
+                position="replace">
+                <field name="operation_category" invisible="1" />
+
+                <!-- Default domain -->
+                <field name="location_dest_id"
+                    options="{'no_create': True}"
+                    groups="stock.group_stock_multi_locations"
+                    invisible="picking_type_code == 'internal' and operation_category == 'put'"
+                    readonly="state == 'done'"/>
+
+                <!-- Custom domain -->
+                <field name="location_dest_id"
+                    options="{'no_create': True}"
+                    groups="stock.group_stock_multi_locations"
+                    invisible="picking_type_code != 'internal' and operation_category != 'put'"
+                    readonly="state == 'done'"
+                    domain="[('id', 'child_of', adt_dest_location_id)]"/>
+
+            </xpath>
+
+        </field>
+    </record>
+
+    <record id="view_picking_form_inherit_note_ba" model="ir.ui.view">
+        <field name="name">stock.picking.form.note.ba</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Ba Notes">
+                    <field name="note_ba" no_label="1" />
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+
+    <record id="view_stock_picking_acumatica_error_list" model="ir.ui.view">
+        <field name="name">stock.picking.acumatica.error.list</field>
+        <field name="model">stock.picking.acumatica.error</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="partner"/>
+                <field name="operation_type"/>
+                <field name="origin"/>
+                <field name="scheduled_date"/>
+                <field name="state" widget="badge"
+                        decoration-success="state == 'resolved'"
+                        decoration-warning="state == 'new'"/>
+                <field name="api_acumatica"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_stock_picking_acumatica_error_form" model="ir.ui.view">
+        <field name="name">stock.picking.acumatica.error.form</field>
+        <field name="model">stock.picking.acumatica.error</field>
+        <field name="arch" type="xml">
+            <form string="Picking Import Error">
+
+                <header>
+                    <!-- <button name="action_retry"
+                            string="Retry Import"
+                            type="object"
+                            class="btn-primary"
+                            invisible="state == 'resolved'"/>
+                    <button name="action_resolve"
+                            string="Mark as Resolved"
+                            type="object"
+                            invisible="state == 'resolved'"/> -->
+                    <field name="state"
+                        widget="statusbar"
+                        statusbar_visible="new,resolved"/>
+                </header>
+                <sheet>
                     <group>
-                        <group name="acumatica_left">
+                        <group>
+                            <field name="partner" readonly="1"/>
+                            <field name="operation_type" readonly="1"/>
+                            <field name="location" readonly="1"/>
+                            <field name="location_dest" readonly="1"/>
+                            <field name="api_acumatica" readonly="1"/>
+                        </group>
+
+                        <group>
+                            <field name="scheduled_date" readonly="1"/>
+                            <field name="origin" readonly="1"/>
+                            <field name="adt_total_qty" readonly="1"/>
+                            <field name="adt_actual_qty" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Operations">
+                            <field name="line_ids" readonly="1">
+                                <list create="false" delete="false">
+                                    <field name="inventory_id"/>
+                                    <field name="product_name"/>
+                                    <field name="qty"/>
+                                    <field name="uom"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Error">
+                            <field name="error_message" readonly="1" nolabel="1" widget="text"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <menuitem
+        id="menu_stock_picking_acumatica_error"
+        name="Picking Import Errors"
+        parent="stock.menu_stock_root"
+        action="action_stock_picking_acumatica_error"
+        sequence="100"/>
+
+    <record id="view_picking_form_inherit_acumatica_receipt" model="ir.ui.view">
+        <field name="name">stock.picking.form.acumatica.receipt</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Acumatica">
+                    <group>
+                        <group>
                             <field name="adt_receipt_nbr"/>
                             <field name="adt_vendor_code"/>
                             <field name="adt_partner_ref"/>
@@ -17,16 +188,16 @@
                             <field name="adt_actual_qty"/>
                             <field name="adt_is_hold"/>
                             <field name="adt_inventory_ref"/>
-                        </group>
-                        <group name="acumatica_right">
                             <field name="adt_acumatica_write_date"/>
+                        </group>
+                        <group>
                             <field name="adt_header_location_code"/>
                             <field name="adt_post_period"/>
                             <field name="adt_status"/>
                             <field name="adt_total_qty"/>
-                            <field name="adt_receipt_type"/>
-                            <field name="adt_trans_type"/>
+                            <field name="adt_type"/>
                             <field name="adt_warehouse_code"/>
+                            <field name="adt_external_id"/>
                         </group>
                     </group>
                 </page>

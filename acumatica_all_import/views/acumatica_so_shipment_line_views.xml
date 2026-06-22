@@ -1,0 +1,114 @@
+<odoo>
+    <record id="action_import_selected_so_shipment"
+            model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <field name="model_id" ref="model_acumatica_so_shipment_line"/>
+        <field name="binding_model_id" ref="model_acumatica_so_shipment_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
+    <record id="view_acumatica_so_shipment_line_search" model="ir.ui.view">
+        <field name="name">acumatica.so.shipment.line.search</field>
+        <field name="model">acumatica.so.shipment.line</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="inventory_id"/>
+                <field name="import_state"/>
+
+                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
+                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
+
+                <group expand="0" string="Group By">
+                    <!-- <filter string="Shipment" name="group_receipt" context="{'group_by': 'receipt_nbr'}"/> -->
+                    <!-- <filter string="Customer" name="group_partner" context="{'group_by': 'partner_code'}"/> -->
+                    <filter string="Status" name="group_state" context="{'group_by': 'import_state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_acumatica_so_shipment_line_list" model="ir.ui.view">
+        <field name="name">acumatica.so.shipment.line.list</field>
+        <field name="model">acumatica.so.shipment.line</field>
+        <field name="arch" type="xml">
+            <list string="Data SO Shipment" multi_edit="1">
+                <field name="selected" widget="boolean_toggle"/>
+                <field name="line_nbr"/>
+                <field name="inventory_id"/>
+                <field name="uom_code"/>
+                <field name="warehouse_code"/>
+                <field name="location_dest_code"/>
+                <field name="import_state"/>
+                <field name="import_message"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_acumatica_so_shipment_line_form" model="ir.ui.view">
+        <field name="name">acumatica.so.shipment.line.form</field>
+        <field name="model">acumatica.so.shipment.line</field>
+        <field name="arch" type="xml">
+            <form string="Data SO Shipment">
+                <header>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <button name="action_open_picking" type="object" string="Open Receipt" class="btn-secondary" invisible="not odoo_picking_id"/>
+                    <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
+                </header>
+                <sheet>
+                    <group string="Header">
+                        <group>
+                            <!-- <field name="receipt_nbr" readonly="1"/> -->
+                            <field name="shipment_type" readonly="1"/>
+                            <field name="operation" readonly="1"/>
+                            <field name="status" readonly="1"/>
+                            <!-- <field name="partner_code" readonly="1"/> -->
+                            <field name="warehouse_code" readonly="1"/>
+                            <field name="warehouse_dest_code" readonly="1"/>
+                            <!-- <field name="header_location_code" readonly="1"/> -->
+                        </group>
+                        <group>
+                            <field name="scheduled_date" readonly="1"/>
+                            <field name="actual_qty" readonly="1"/>
+                            <!-- <field name="shipped_qty" readonly="1"/> -->
+                            <field name="acumatica_write_date" readonly="1"/>
+                            <field name="description" readonly="1"/>
+                            <field name="shipping_zone" readonly="1"/>
+                            <field name="ship_via" readonly="1"/>
+                        </group>
+                    </group>
+                    <group string="Line">
+                        <group>
+                            <field name="line_nbr" readonly="1"/>
+                            <!-- <field name="acumatica_line_number" readonly="1"/> -->
+                            <field name="inventory_id" readonly="1"/>
+                            <field name="uom_code" readonly="1"/>
+                            <!-- <field name="detail_warehouse_code" readonly="1"/> -->
+                        </group>
+                        <group>
+                            <field name="location_dest_code" readonly="1"/>
+                            <field name="order_number" readonly="1"/>
+                            <field name="order_line_number" readonly="1"/>
+                            <field name="order_type" readonly="1"/>
+                            <field name="open_qty" readonly="1"/>
+                            <field name="original_qty" readonly="1"/>
+                            <field name="import_state" readonly="1"/>
+                            <field name="import_message" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_so_shipment_line" model="ir.actions.act_window">
+        <field name="name">Data SO Shipment</field>
+        <field name="res_model">acumatica.so.shipment.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id"/>
+    </record>
+</odoo>
