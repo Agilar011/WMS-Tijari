@@ -105,6 +105,408 @@ class AcumaticaShipmentGIStaging(models.Model):
             'ID Number must be unique!'
         )
     ]
+    # Main Flow Function
+    def _do_import(self):
+        Picking = self.env['stock.picking']
+        Move = self.env['stock.move']
+        PickingType = self.env['stock.picking.type']
+
+        shipment_gi = self.env['acumatica.shipment.gi.staging']
+
+        to_import_so_shipment = shipment_gi.search([
+            ('odoo_picking_id', '=', False)
+        ])
+
+        imported = updated = error = 0
+
+        for shipment in to_import_so_shipment:
+
+            try:
+                shipment_header = self.env[
+                    'acumatica.sales.order.shipment.staging'
+                ].search([
+                    ('gi_id', '=', shipment.id)
+                ], limit=1)
+                warehouse = self._find_warehouse(shipment.warehouse_id)
+
+                print(warehouse)
+
+                if not warehouse:
+                    raise UserError(f'Warehouse tidak ditemukan untuk code: {shipment.warehouse_id or "-"}')
+                
+                code = 'outgoing'
+                picking_name = 'Delivery Orders'
+
+                picking_type = PickingType.search([
+                    ('warehouse_id', '=', warehouse.id),
+                    ('code', '=', code),
+                    ('name', '=', picking_name)
+                ], limit=1) or PickingType.search([('code', '=', code), ('name', '=', picking_name )], limit=1)
+                
+                print(picking_type)
+                
+                if not picking_type:
+                    raise UserError(f'Picking type {picking_name} dengan kode: {code} untuk warehouse: {warehouse.name} tidak ditemukan.')
+                
+                partner = self._find_partner(shipment.customer)
+
+                responsible_user = self._find_responsible()
+
+                print(partner)
+
+                if not partner:
+                    raise UserError(f'Customer tidak ditemukan untuk code: {shipment.customer or "-"}')
+
+
+                src_location = self._find_source_location(warehouse)
+
+                print(src_location)
+
+                created_vals ={
+                    'location_id' : warehouse.lot_stock_id.id,
+                    'picking_type_id' : picking_type.id,
+                    'partner_id' : partner.id,
+                    'user_id' : responsible_user.id,
+                    'owner_id': responsible_user.partner_id.id,
+                    'create_uid' : responsible_user.id,
+                    'write_uid' : responsible_user.id,
+                    # '"name'",
+                    'origin' : shipment.shipment_nbr,
+                    'note' : shipment.note,
+                    'scheduled_date' : shipment.ship_date,
+                    'date_deadline' : shipment.ship_date,
+                    'date' : shipment.ship_date,
+                    'create_date': fields.Datetime.now(),
+                    'write_date': fields.Datetime.now(),
+                    'adt_receipt_nbr' : shipment.shipment_nbr,
+                    'adt_partner_ref' : shipment.customer,
+                    'adt_branch_warehouse' : shipment.location,
+                    'adt_header_location_code' : shipment.location,
+                    'adt_status' : shipment.status,
+                    'adt_receipt_type' : shipment_header.operation,
+                    # 'adt_external_ref',
+                    'adt_trans_type' : shipment.shipment_type,
+                    'adt_warehouse_code': shipment.warehouse_id,
+                    'adt_external_id' : shipment.acumatica_id,
+                    'adt_is_hold' : shipment.hold,
+                    'adt_actual_qty' : shipment.shipped_quantity,
+                    'adt_type' : shipment.order_type,
+                    # 'batch_id',
+                    # 'batch_sequence',
+                    # 'carrier_id',
+                    # 'carrier_tracking_ref',
+                    # 'weight',
+                    # 'carrier_price',
+                    'adt_to_warehouse_code' :  shipment.location_name,
+                    'adt_from_warehouse_code' : shipment.warehouse_id,
+                    # 'adt_description',
+                    'adt_actual_amount' : shipment.shipped_quantity,
+                    # 'adt_total_amount',
+                    # 'adt_shipment_status',
+                    # 'sync_state',
+                    # 'sync_message',
+                    # 'adt_dest_location_id',
+                    # 'note_ba',
+                    # 'destination_location',
+                }
+
+                created_picking = Picking.create(created_vals)
+                print('='* 60)
+                print(f'Created Picking :{created_picking.id}')
+
+
+                if created_picking:
+                    self.env['stock.picking'].search([('id', '=', created_picking.id)]).unlink()
+
+                # print(f"Warehouse: {warehouse}")
+                
+                
+                print('='* 60)
+                print(f'Importing :{shipment.shipment_nbr}')
+                print(f"Warehouse: {warehouse}")
+
+            except Exception as e:
+                _logger.exception('Error import shipment receipt %s', shipment.shipment_nbr)
+                created_picking.write({'import_state': 'error', 'import_message': str(e)[:200]})
+                error += len(created_picking)
+
+                # dest_location = self._find_destination_location(shipment, warehouse)
+
+                # if not dest_location:
+                #     raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.location_dest_code or first.header_location_code or "-"}')
+
+                # if not src_location:
+                #     raise UserError('Location sumber supplier tidak ditemukan.')
+
+        # msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Shipment Receipt',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }
+                
+
+
+
+        # keys = [k for k in self.mapped('receipt_nbr') if k]
+        # for shipment_nbr in keys:
+        #     receipt_lines = self.filtered(lambda l: l.receipt_nbr == shipment_nbr and l.import_state == 'pending')
+        #     if not receipt_lines:
+        #         continue
+        #     first = receipt_lines[0]
+        #     try:
+        #         warehouse = self._find_warehouse(first)
+        #         if not warehouse:
+        #             raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
+                
+        #         code = 'outgoing'
+        #         picking_name = 'Delivery Orders'
+
+        #         print('='* 60)
+        #         print(f'Importing :{first.receipt_nbr}')
+        #         print(f"Warehouse: {warehouse}")
+
+        #         picking_type = PickingType.search([
+        #             ('warehouse_id', '=', warehouse.id),
+        #             ('code', '=', code),
+        #             ('name', '=', picking_name)
+        #         ], limit=1) or PickingType.search([('code', '=', code), ('name', '=', picking_name )], limit=1)
+        #         if not picking_type:
+        #             raise UserError(f'Picking type {picking_name} dengan kode: {code} untuk warehouse: {warehouse.name} tidak ditemukan.')
+
+        #         partner = self._find_partner(first)
+        #         dest_location = self._find_destination_location(first, warehouse)
+        #         if not dest_location:
+        #             raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.location_dest_code or first.header_location_code or "-"}')
+
+        #         src_location = self._find_source_location(warehouse)
+        #         if not src_location:
+        #             raise UserError('Location sumber supplier tidak ditemukan.')
+
+        #         vals = {
+        #             'origin': first.receipt_nbr,
+        #             'partner_id': partner.id if partner else False,
+        #             'picking_type_id': picking_type.id,
+        #             'location_id': src_location.id,
+        #             'location_dest_id': dest_location.id,
+        #             'scheduled_date': self._parse_dt(first.scheduled_date),
+        #             'note': first.note or first.description or False,
+        #             'adt_type': first.adt_type or False,
+        #             'note': first.note or False,
+
+        #             'adt_total_qty': self._parse_int(first.actual_qty),
+        #             'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
+        #             # 'adt_location_code': first.description,
+
+        #             # NANTI BUAT INHERIT KE STOCK.PICKING BERDASARKAN FIELD YANG ADA DI BAWAH INI
+        #             'adt_receipt_nbr': first.receipt_nbr,
+        #             'adt_vendor_code': first.partner_code,
+                    
+
+        #         }
+
+        #         picking = Picking.search([('origin', '=', first.receipt_nbr)], limit=1)
+        #         if picking:
+        #             if picking.state in ('done', 'cancel'):
+        #                 raise UserError(f'Receipt {first.receipt_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
+        #             picking.write(vals)
+        #             action_state = 'updated'
+        #             updated += 1
+        #         else:
+        #             picking = Picking.create(vals)
+        #             picking.action_confirm()
+        #             action_state = 'imported'
+        #             imported += 1
+
+
+        #         allocation_counter = 0  # Counter untuk jumlah total allocation yang diproses per receipt
+        #         for line in receipt_lines:
+        #             product = self._find_product(line)
+        #             uom = self._find_uom(line, product)
+        #             line_dest = self._find_destination_location(line, warehouse) or dest_location
+        #             qty = self._parse_int(line.detail_shipped_qty or line.order_qty or line.actual_qty)
+        #             allocations = ast.literal_eval(line.allocations or "[]")
+        #             print(f"Prases : {allocations}")  # Debug log untuk melihat data allocation yang akan diproses per line
+
+        #             for allocation in allocations:
+        #                 print(f"Allocation: {allocation}")  # Debug log untuk melihat struktur data allocation per line
+        #             # print(f"line allocation : {line.allocations}")  # Debug log untuk melihat data allocation per line
+        #             # print("TYPE:", type(line.allocations))
+        #             # print("REPR:", repr(line.allocations))
+        #             # for alloc in line.allocations:
+        #             #     print(f"Allocation: {alloc}")  # Debug log untuk melihat struktur data allocation per line
+
+        #             existing = Move.search([
+        #                 ('picking_id', '=', picking.id),
+        #                 ('product_id', '=', product.id),
+        #                 ('name', '=', line.line_description or product.display_name),
+        #                 ('product_uom_qty', '=', qty),
+        #             ], limit=1)
+        #             if existing:
+        #                 line.write({
+        #                     'import_state': action_state,
+        #                     'import_message': f'{action_state.title()}: {picking.name} (move sudah ada)',
+        #                     'odoo_picking_id': picking.id,
+        #                 })
+        #                 continue
+
+        #             Move.create({
+        #                 'name': line.line_description or product.display_name,
+        #                 'picking_id': picking.id,
+        #                 'product_id': product.id,
+        #                 'product_uom_qty': qty,
+        #                 'product_uom': uom.id if uom else product.uom_id.id,
+        #                 'location_id': picking.location_id.id,
+        #                 'location_dest_id': line_dest.id if line_dest else picking.location_dest_id.id,
+        #                 'description_picking': line.line_description or False,
+        #                 'allocation_id': allocation.get('allocation_line_external_id'),
+        #                 'allocation_note': allocation.get('allocation_detail_note'),
+        #                 'allocation_Description': allocation.get('allocation_line_description'),
+        #                 'allocation_InventoryID': allocation.get('allocation_inventory_id'),
+        #                 'allocation_LocationID': allocation.get('allocation_location_dest_code'),
+        #                 'allocation_Quantity': allocation.get('allocation_qty'),
+        #                 'allocation_SplitLineNbr': allocation.get('allocation_split_line_nbr'),
+        #                 'allocation_UOM': allocation.get('allocation_uom_code'),
+        #             })
+
+        #             print(f"Move with id {Move.id} created")
+        #             line.write({
+        #                 'import_state': action_state,
+        #                 'import_message': f'{action_state.title()}: {picking.name}',
+        #                 'odoo_picking_id': picking.id,
+
+        #                 # NANTI BUAT INHERIT KE STOCK.MOVE BERDASARKAN FIELD YANG ADA DI BAWAH INI
+        #                 # acumatica_row_number
+        #                 # adt_note
+        #                 # adt_description
+        #                 # adt_is_free_item
+        #                 # adt_acumatica_line_number
+        #                 # adt_order_line_number
+        #                 # adt_order_number
+        #                 # adt_order_type
+        #                 # adt_original_qty
+        #                 # adt_shipped_qty
+        #             })
+        #             # ABIS INI NGEBUAT ALLOCATION, NANTI BAKAL ADA MODELS BARU BUAT NAMPUNG DATA ALLOCATION DARI ACUMATICA
+        #             # id
+        #             # rowNumber
+        #             # note
+        #             # Description
+        #             # InventoryID
+        #             # LocationID
+        #             # Quantity
+        #             # SplitLineNbr
+        #             # UOM
+
+# Service Function
+    
+    def _find_responsible(self):
+        user = self.env['res.users'].search([('name', '=', 'System User')], limit=1)
+
+        if not user:
+            user = self.env['res.users'].create({
+                'name': 'System User',
+                'login': 'system.user@aditya_sarana_graha.com',
+            })
+
+        return user
+    
+    def _find_product(self, line):
+        Product = self.env['product.product']
+        product = False
+        if line.inventory_id:
+            product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
+            if not product:
+                product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
+        if not product and line.line_description:
+            product = Product.search([('name', '=', line.line_description)], limit=1)
+        if not product:
+            product = Product.create({
+                'name': line.line_description or line.inventory_id or 'Unknown Product',
+                'default_code': line.inventory_id or False,
+                'type': 'consu',
+            })
+        return product
+
+    def _find_partner(self, line):
+        Partner = self.env['res.partner']
+        partner = False
+        if line:
+            partner = Partner.search([('ref', '=', line)], limit=1)
+            if not partner:
+                partner = Partner.search([('name', '=', line)], limit=1)
+        return partner
+
+    def _find_warehouse(self, line):
+        Warehouse = self.env['stock.warehouse']
+        # code = line.warehouse_code
+        code = line
+        warehouse = False
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+            if not warehouse:
+                warehouse = Warehouse.search([('name', '=', code)], limit=1)
+        return warehouse or Warehouse.search([], limit=1)
+
+    def _find_destination_location(self, line, warehouse=False):
+        Location = self.env['stock.location']
+        code = line.warehouse_id
+        location = False
+        if code:
+            location = Location.search([('complete_name', '=', code)], limit=1)
+            if not location:
+                location = Location.search([('name', '=', code)], limit=1)
+        if not location and warehouse:
+            location = warehouse.lot_stock_id
+        return location
+
+    def _find_source_location(self, warehouse=False):
+        Location = self.env['stock.location']
+        supplier_loc = self.env.ref('stock.stock_location_suppliers', raise_if_not_found=False)
+        if supplier_loc:
+            return supplier_loc
+        return Location.search([('usage', '=', 'supplier')], limit=1) or (warehouse and warehouse.lot_stock_id)
+
+    def _find_uom(self, line, product=False):
+        Uom = self.env['uom.uom']
+        uom = False
+        if line.uom_code:
+            uom = Uom.search([('name', '=', line.uom_code)], limit=1)
+        if not uom and product:
+            uom = product.uom_id
+        return uom
+
+# Helper Function
+
+    @api.depends('shipment_nbr')
+    def _compute_exists_in_odoo(self):
+        Picking = self.env['stock.picking']
+        for rec in self:
+            rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('origin', '=', rec.receipt_nbr)]))
+
+    @staticmethod
+    def _parse_dt(dt_str):
+        if not dt_str:
+            return False
+        try:
+            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
+        except Exception:
+            return False
+
+    @staticmethod
+    def _parse_int(value):
+        try:
+            return int(value or 0)
+        except Exception:
+            return 0.0
+
+
+
 
 class AcumaticaSalesOrderShipmentStaging(models.Model):
     _name = 'acumatica.sales.order.shipment.staging'
@@ -912,8 +1314,7 @@ class AcumaticaShipmentConfig(models.Model):
             if existing:
 
                 vals.update({
-                    'import_state': 'updated',
-                    'import_message': 'Data diperbarui dari Acumatica',
+                    'import_message': 'Data staging diperbarui dari Acumatica',
                 })
 
                 existing.write(vals)
@@ -978,10 +1379,23 @@ class AcumaticaShipmentConfig(models.Model):
             for rec in existing_shipments
         }        
 
+        gi_map = {
+            rec.shipment_nbr: rec.id
+            for rec in staging_shipment_gi.search([])
+        }
+
         for shipment in batch_data:
 
             shipment_vals = dict(
                 shipment["header"]
+            )
+
+            shipment_nbr = shipment_vals.get(
+                "shipmentnbr"
+            )
+
+            shipment_vals["gi_id"] = gi_map.get(
+                shipment_nbr
             )
 
             shipment_vals.update({
@@ -1164,97 +1578,6 @@ class AcumaticaShipmentLine(models.Model):
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
     
 
-    @api.depends('receipt_nbr')
-    def _compute_exists_in_odoo(self):
-        Picking = self.env['stock.picking']
-        for rec in self:
-            rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('origin', '=', rec.receipt_nbr)]))
-
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
-
-    @staticmethod
-    def _parse_int(value):
-        try:
-            return int(value or 0)
-        except Exception:
-            return 0.0
-
-    def _find_product(self, line):
-        Product = self.env['product.product']
-        product = False
-        if line.inventory_id:
-            product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
-            if not product:
-                product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
-        if not product and line.line_description:
-            product = Product.search([('name', '=', line.line_description)], limit=1)
-        if not product:
-            product = Product.create({
-                'name': line.line_description or line.inventory_id or 'Unknown Product',
-                'default_code': line.inventory_id or False,
-                'type': 'consu',
-            })
-        return product
-
-    def _find_partner(self, line):
-        Partner = self.env['res.partner']
-        partner = False
-        if line.partner_code:
-            partner = Partner.search([('ref', '=', line.partner_code)], limit=1)
-            if not partner:
-                partner = Partner.search([('name', '=', line.partner_code)], limit=1)
-            if not partner:
-                partner = Partner.create({
-                    'name': line.partner_code,
-                    'ref': line.partner_code,
-                    'customer_rank': 1,
-                })
-        return partner
-
-    def _find_warehouse(self, line):
-        Warehouse = self.env['stock.warehouse']
-        code = line.warehouse_code
-        warehouse = False
-        if code:
-            warehouse = Warehouse.search([('code', '=', code)], limit=1)
-            if not warehouse:
-                warehouse = Warehouse.search([('name', '=', code)], limit=1)
-        return warehouse or Warehouse.search([], limit=1)
-
-    def _find_destination_location(self, line, warehouse=False):
-        Location = self.env['stock.location']
-        code = line.location_dest_code or line.header_location_code
-        location = False
-        if code:
-            location = Location.search([('complete_name', '=', code)], limit=1)
-            if not location:
-                location = Location.search([('name', '=', code)], limit=1)
-        if not location and warehouse:
-            location = warehouse.lot_stock_id
-        return location
-
-    def _find_source_location(self, warehouse=False):
-        Location = self.env['stock.location']
-        supplier_loc = self.env.ref('stock.stock_location_suppliers', raise_if_not_found=False)
-        if supplier_loc:
-            return supplier_loc
-        return Location.search([('usage', '=', 'supplier')], limit=1) or (warehouse and warehouse.lot_stock_id)
-
-    def _find_uom(self, line, product=False):
-        Uom = self.env['uom.uom']
-        uom = False
-        if line.uom_code:
-            uom = Uom.search([('name', '=', line.uom_code)], limit=1)
-        if not uom and product:
-            uom = product.uom_id
-        return uom
 
     def action_import_selected(self):
         lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
@@ -1266,179 +1589,7 @@ class AcumaticaShipmentLine(models.Model):
         self.ensure_one()
         return self._do_import()
 
-    def _do_import(self):
-        Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
-        PickingType = self.env['stock.picking.type']
-
-        imported = updated = error = 0
-
-        keys = [k for k in self.mapped('receipt_nbr') if k]
-        for shipment_nbr in keys:
-            receipt_lines = self.filtered(lambda l: l.receipt_nbr == shipment_nbr and l.import_state == 'pending')
-            if not receipt_lines:
-                continue
-            first = receipt_lines[0]
-            try:
-                warehouse = self._find_warehouse(first)
-                if not warehouse:
-                    raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
-                
-                code = 'outgoing'
-                picking_name = 'Delivery Orders'
-
-                print('='* 60)
-                print(f'Importing :{first.receipt_nbr}')
-                print(f"Warehouse: {warehouse}")
-
-                picking_type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', code),
-                    ('name', '=', picking_name)
-                ], limit=1) or PickingType.search([('code', '=', code), ('name', '=', picking_name )], limit=1)
-                if not picking_type:
-                    raise UserError(f'Picking type {picking_name} dengan kode: {code} untuk warehouse: {warehouse.name} tidak ditemukan.')
-
-                partner = self._find_partner(first)
-                dest_location = self._find_destination_location(first, warehouse)
-                if not dest_location:
-                    raise UserError(f'Location tujuan tidak ditemukan untuk code: {first.location_dest_code or first.header_location_code or "-"}')
-
-                src_location = self._find_source_location(warehouse)
-                if not src_location:
-                    raise UserError('Location sumber supplier tidak ditemukan.')
-
-                vals = {
-                    'origin': first.receipt_nbr,
-                    'partner_id': partner.id if partner else False,
-                    'picking_type_id': picking_type.id,
-                    'location_id': src_location.id,
-                    'location_dest_id': dest_location.id,
-                    'scheduled_date': self._parse_dt(first.scheduled_date),
-                    'note': first.note or first.description or False,
-                    'adt_type': first.adt_type or False,
-                    'note': first.note or False,
-
-                    'adt_total_qty': self._parse_int(first.actual_qty),
-                    'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
-                    # 'adt_location_code': first.description,
-
-                    # NANTI BUAT INHERIT KE STOCK.PICKING BERDASARKAN FIELD YANG ADA DI BAWAH INI
-                    'adt_receipt_nbr': first.receipt_nbr,
-                    'adt_vendor_code': first.partner_code,
-                    
-
-                }
-
-                picking = Picking.search([('origin', '=', first.receipt_nbr)], limit=1)
-                if picking:
-                    if picking.state in ('done', 'cancel'):
-                        raise UserError(f'Receipt {first.receipt_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
-                    picking.write(vals)
-                    action_state = 'updated'
-                    updated += 1
-                else:
-                    picking = Picking.create(vals)
-                    picking.action_confirm()
-                    action_state = 'imported'
-                    imported += 1
-
-
-                allocation_counter = 0  # Counter untuk jumlah total allocation yang diproses per receipt
-                for line in receipt_lines:
-                    product = self._find_product(line)
-                    uom = self._find_uom(line, product)
-                    line_dest = self._find_destination_location(line, warehouse) or dest_location
-                    qty = self._parse_int(line.detail_shipped_qty or line.order_qty or line.actual_qty)
-                    allocations = ast.literal_eval(line.allocations or "[]")
-                    print(f"Prases : {allocations}")  # Debug log untuk melihat data allocation yang akan diproses per line
-
-                    for allocation in allocations:
-                        print(f"Allocation: {allocation}")  # Debug log untuk melihat struktur data allocation per line
-                    # print(f"line allocation : {line.allocations}")  # Debug log untuk melihat data allocation per line
-                    # print("TYPE:", type(line.allocations))
-                    # print("REPR:", repr(line.allocations))
-                    # for alloc in line.allocations:
-                    #     print(f"Allocation: {alloc}")  # Debug log untuk melihat struktur data allocation per line
-
-                    existing = Move.search([
-                        ('picking_id', '=', picking.id),
-                        ('product_id', '=', product.id),
-                        ('name', '=', line.line_description or product.display_name),
-                        ('product_uom_qty', '=', qty),
-                    ], limit=1)
-                    if existing:
-                        line.write({
-                            'import_state': action_state,
-                            'import_message': f'{action_state.title()}: {picking.name} (move sudah ada)',
-                            'odoo_picking_id': picking.id,
-                        })
-                        continue
-
-                    Move.create({
-                        'name': line.line_description or product.display_name,
-                        'picking_id': picking.id,
-                        'product_id': product.id,
-                        'product_uom_qty': qty,
-                        'product_uom': uom.id if uom else product.uom_id.id,
-                        'location_id': picking.location_id.id,
-                        'location_dest_id': line_dest.id if line_dest else picking.location_dest_id.id,
-                        'description_picking': line.line_description or False,
-                        'allocation_id': allocation.get('allocation_line_external_id'),
-                        'allocation_note': allocation.get('allocation_detail_note'),
-                        'allocation_Description': allocation.get('allocation_line_description'),
-                        'allocation_InventoryID': allocation.get('allocation_inventory_id'),
-                        'allocation_LocationID': allocation.get('allocation_location_dest_code'),
-                        'allocation_Quantity': allocation.get('allocation_qty'),
-                        'allocation_SplitLineNbr': allocation.get('allocation_split_line_nbr'),
-                        'allocation_UOM': allocation.get('allocation_uom_code'),
-                    })
-
-                    print(f"Move with id {Move.id} created")
-                    line.write({
-                        'import_state': action_state,
-                        'import_message': f'{action_state.title()}: {picking.name}',
-                        'odoo_picking_id': picking.id,
-
-                        # NANTI BUAT INHERIT KE STOCK.MOVE BERDASARKAN FIELD YANG ADA DI BAWAH INI
-                        # acumatica_row_number
-                        # adt_note
-                        # adt_description
-                        # adt_is_free_item
-                        # adt_acumatica_line_number
-                        # adt_order_line_number
-                        # adt_order_number
-                        # adt_order_type
-                        # adt_original_qty
-                        # adt_shipped_qty
-                    })
-                    # ABIS INI NGEBUAT ALLOCATION, NANTI BAKAL ADA MODELS BARU BUAT NAMPUNG DATA ALLOCATION DARI ACUMATICA
-                    # id
-                    # rowNumber
-                    # note
-                    # Description
-                    # InventoryID
-                    # LocationID
-                    # Quantity
-                    # SplitLineNbr
-                    # UOM
-            except Exception as e:
-                _logger.exception('Error import shipment receipt %s', shipment_nbr)
-                receipt_lines.write({'import_state': 'error', 'import_message': str(e)[:200]})
-                error += len(receipt_lines)
-
-        msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Shipment Receipt',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
-
+    # Do Import from staging
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
 

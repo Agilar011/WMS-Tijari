@@ -77,7 +77,8 @@ class ImportSOShipmentWizard(models.TransientModel):
 
     def action_import_all_pending(self):
         self.ensure_one()
-        lines = self.env['acumatica.so.shipment.line'].search([
+        print(self.config_id.id)
+        lines = self.env['acumatica.shipment.gi.staging'].search([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
             ('selected', '=', True),
