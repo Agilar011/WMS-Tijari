@@ -256,9 +256,9 @@ class AcumaticaIssueLine(models.Model):
             return False
 
     @staticmethod
-    def _parse_float(value):
+    def _parse_int(value):
         try:
-            return float(value or 0)
+            return int(value or 0)
         except Exception:
             return 0.0
 
@@ -363,10 +363,10 @@ class AcumaticaIssueLine(models.Model):
 
                     'adt_receipt_nbr': first.reference_nbr or False,
                     'adt_branch_warehouse': first.branch_warehouse or False,
-                    'adt_actual_qty': self._parse_float(first.actual_qty),
+                    'adt_actual_qty': self._parse_int(first.actual_qty),
                     'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
                     'adt_post_period': first.post_period or False,
-                    'adt_total_qty': self._parse_float(first.total_qty),
+                    'adt_total_qty': self._parse_int(first.total_qty),
                     'adt_type': first.trans_type or False,
                     # 'adt_warehouse_code': first.warehouse_code or False,
                     'adt_external_id': first.external_id or False,
@@ -389,7 +389,7 @@ class AcumaticaIssueLine(models.Model):
                 for line in issue_lines:
                     product = self._find_product(line)
                     uom = self._find_uom(line, product)
-                    qty = self._parse_float(line.product_uom_qty)
+                    qty = self._parse_int(line.product_uom_qty)
 
                     existing = Move.search([
                         ('picking_id', '=', picking.id),

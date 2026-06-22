@@ -393,14 +393,14 @@ class AcumaticaInventoryIssueLine(models.Model):
                     # 'adt_vendor_code': first.vendor_code or False,
                     # 'adt_partner_ref': first.partner_ref or False,
                     'adt_branch_warehouse': first.branch_warehouse or False,
-                    # 'adt_actual_qty': self._parse_float(first.actual_qty),
+                    # 'adt_actual_qty': self._parse_int(first.actual_qty),
                     # 'adt_is_hold': str(first.is_hold or '').lower() in ('true', '1', 'yes'),
                     # 'adt_inventory_ref': first.inventory_ref or False,
                     'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
                     # 'adt_header_location_code': first.header_location_code or False,
                     'adt_post_period': first.post_period or False,
                     'adt_status': first.status or False,
-                    'adt_total_qty': self._parse_float(first.total_qty),
+                    'adt_total_qty': self._parse_int(first.total_qty),
                     'adt_warehouse_code': first.warehouse_code or False,
                     'adt_external_id': first.external_id or False,
 
@@ -420,13 +420,14 @@ class AcumaticaInventoryIssueLine(models.Model):
                 else:
                     picking = Picking.create(vals)
                     print(f'Created new picking {picking.name} for Inventory Issue with reference_nbr: {issue_key}')
+                    picking.action_confirm()
                     action_state = 'imported'
                     imported += 1
 
                 for line in issue_lines:
                     product = self._find_product(line)
                     uom = self._find_uom(line, product)
-                    qty = self._parse_float(line.product_uom_qty)
+                    qty = self._parse_int(line.product_uom_qty)
 
                     existing = Move.search([
                         ('picking_id', '=', picking.id),
@@ -512,9 +513,9 @@ class AcumaticaInventoryIssueLine(models.Model):
             return False
 
     @staticmethod
-    def _parse_float(value):
+    def _parse_int(value):
         try:
-            return float(value or 0)
+            return int(value or 0)
         except Exception:
             return 0.0
 
