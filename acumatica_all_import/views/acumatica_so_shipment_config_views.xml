@@ -15,12 +15,14 @@
                         <group>
                             <field name="username"/>
                             <field name="password" password="True"/>
+                            <field name="shipment_gi_endpoint"/>
                             <field name="endpoint_name"/>
                             <field name="active"/>
                         </group>
                     </group>
                     <group string="OData">
                         <group>
+                            <field name="shipment_gi_expand"/>
                             <field name="odata_expand"/>
                             <field name="odata_select"/>
                         </group>

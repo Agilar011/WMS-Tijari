@@ -30,6 +30,10 @@
                 <attribute name="invisible">state != 'assigned' or picking_type_code == 'incoming'</attribute>
             </xpath>
             
+            <xpath expr="//button[@name='%(stock.action_report_delivery)d']"
+                position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
             <!-- <xpath expr="//button[@name='209']" position="attributes">
                 <attribute name="invisible">True</attribute>
             </xpath> -->
