@@ -165,7 +165,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'label': 'SO Shipment',
             'wizard_model': 'import.so.shipment.wizard',
             'config_field': 'so_shipment_config_id',
-            'line_model': 'acumatica.so.shipment.line',
+            'line_model': 'acumatica.shipment.gi.staging',
             'result_name': 'Hasil Import SO Shipment',
             'staging_name': 'Data SO Shipment dari Acumatica',
             'extra_fields': ['shipment_nbr', 'last_modified_from', 'odata_filter'],
@@ -487,9 +487,11 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         self.ensure_one()
 
         info = self._get_import_info()
+                
         config = self._get_selected_config(info)
 
         Line = self.env[info['line_model']]
+        print(Line)
         pending_domain = self._get_pending_domain(config)
 
         total_pending_before = Line.search_count(pending_domain)
