@@ -19,6 +19,42 @@ from lxml import etree
 from requests.exceptions import ConnectTimeout, ReadTimeout, ConnectionError, SSLError
 
 
+def format_tanggal_indo(dt):
+    if not dt:
+        return ''
+
+    hari = {
+        0: 'Senin',
+        1: 'Selasa',
+        2: 'Rabu',
+        3: 'Kamis',
+        4: 'Jumat',
+        5: 'Sabtu',
+        6: 'Minggu',
+    }
+
+    bulan = {
+        1: 'Januari',
+        2: 'Februari',
+        3: 'Maret',
+        4: 'April',
+        5: 'Mei',
+        6: 'Juni',
+        7: 'Juli',
+        8: 'Agustus',
+        9: 'September',
+        10: 'Oktober',
+        11: 'November',
+        12: 'Desember',
+    }
+
+    return (
+        f"{hari[dt.weekday()]}, "
+        f"{dt.day} "
+        f"{bulan[dt.month]} "
+        f"{dt.year}"
+    )
+
 class WmsApiController(http.Controller):
 
     # ---------- Helper: API Key Auth ----------
@@ -352,12 +388,13 @@ class WmsApiController(http.Controller):
 
         data = {
             'type': receipt.picking_type_id.name or '',
-            'date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
+            'date': format_tanggal_indo(receipt.scheduled_date),
             'no': receipt.name or '',
             'vendor': receipt.partner_id.name or '',
             'warehouse': '',
             'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
             'penerima': receipt.location_id.complete_name or '',
+            'note': receipt.note_ba or '',
             'detail': []
         }
         for line in receipt.move_ids_without_package:
@@ -365,7 +402,9 @@ class WmsApiController(http.Controller):
                 'name': line.product_id.display_name or '',
                 'uom': line.product_uom.name if line.product_uom.name else '',
                 'demand': float(line.product_uom_qty or 0),
+                'demand1': float(line.quantity or 0),
                 'qty': float(line.quantity or 0),
+                'qty2': float(line.product_uom_qty or 0),
                 'ket': ''
             }
             data['detail'].append(obj)
@@ -403,4 +442,3 @@ class WmsApiController(http.Controller):
             resp = {'msg': msg, 'request_content': str(request_content)}
             resp = json.dumps(resp)
             return request.make_response(resp, [('Content-Type', 'application/json')])
-        
