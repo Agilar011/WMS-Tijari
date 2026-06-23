@@ -387,7 +387,7 @@ class WmsApiController(http.Controller):
         receipt = request.env['stock.picking'].sudo().browse(int(id))
 
         data = {
-            'type': receipt.picking_type_id.name or '',
+            'type': receipt.adt_type or '',
             'date': format_tanggal_indo(receipt.scheduled_date),
             'no': receipt.name or '',
             'vendor': receipt.partner_id.name or '',

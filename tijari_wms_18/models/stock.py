@@ -105,6 +105,7 @@ class StockPicking(models.Model):
                 "adt_dest_location_id": picking.adt_dest_location_id,
                 "origin": picking.origin or picking.name,
                 "note" : picking.note,
+                "adt_type": picking.adt_type,
                 'adt_total_qty': total_qty_storage
             })
             
