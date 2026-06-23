@@ -32,7 +32,7 @@ class ImportShipmentWizard(models.TransientModel):
 
     def action_fetch_data(self):
         self.ensure_one()
-        self.env['acumatica.shipment.line'].search([('config_id', '=', self.config_id.id)]).unlink()
+        # self.env['acumatica.shipment.line'].search([('config_id', '=', self.config_id.id)]).unlink()
 
         import math
 
