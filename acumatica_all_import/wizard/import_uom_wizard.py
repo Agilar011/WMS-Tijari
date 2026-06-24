@@ -55,54 +55,54 @@ class ImportUomWizard(models.TransientModel):
 
         import math
 
-        raw_list = []
+        raw_list = 0
         loop_count = math.ceil(self.fetch_limit / 200) if self.fetch_limit else 0
         for i in range(loop_count):
             offset = i * 200
-            batch_data = self.config_id.fetch_uom_data(limit=200, offset=offset)
-            if not batch_data:
-                break
-            raw_list.extend(batch_data)
+            batch_data = self.fetch_uom_data(limit=200, offset=offset)
+            raw_list += batch_data
+
+        self.total_fetched = raw_list
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
         # Hitung yang sudah ada di Odoo
-        new_count      = 0
-        existing_count = 0
+        # new_count      = 0
+        # existing_count = 0
 
-        lines_to_create = []
-        for item in raw_list:
-            existing = self.env['uom.uom'].search([
-                ('name', '=ilike', item['description'])
-            ], limit=1)
+        # lines_to_create = []
+        # for item in raw_list:
+        #     existing = self.env['uom.uom'].search([
+        #         ('name', '=ilike', item['description'])
+        #     ], limit=1)
 
-            lines_to_create.append({
-                'config_id':   self.config_id.id,
-                'row_number':  item['row_number'],
-                'unit_id':     item['unit_id'],
-                'description': item['description'],
-                'external_id': item['external_id'],
-                'import_state': 'skipped' if existing else 'pending',
-                'import_message': f'Sudah ada: {existing.name}' if existing else '',
-                'odoo_uom_id': existing.id if existing else False,
-                'selected':    not bool(existing),
-                'sync_date':   fields.Datetime.now(),
-            })
+        #     lines_to_create.append({
+        #         'config_id':   self.config_id.id,
+        #         'row_number':  item['row_number'],
+        #         'unit_id':     item['unit_id'],
+        #         'description': item['description'],
+        #         'external_id': item['external_id'],
+        #         'import_state': 'skipped' if existing else 'pending',
+        #         'import_message': f'Sudah ada: {existing.name}' if existing else '',
+        #         'odoo_uom_id': existing.id if existing else False,
+        #         'selected':    not bool(existing),
+        #         'sync_date':   fields.Datetime.now(),
+        #     })
 
-            if existing:
-                existing_count += 1
-            else:
-                new_count += 1
+        #     if existing:
+        #         existing_count += 1
+        #     else:
+        #         new_count += 1
 
-        self.env['acumatica.uom.line'].create(lines_to_create)
+        # self.env['acumatica.uom.line'].create(lines_to_create)
 
-        self.write({
-            'state':          'fetched',
-            'total_fetched':  len(raw_list),
-            'total_new':      new_count,
-            'total_existing': existing_count,
-        })
+        # self.write({
+        #     'state':          'fetched',
+        #     'total_fetched':  len(raw_list),
+        #     'total_new':      new_count,
+        #     'total_existing': existing_count,
+        # })
 
         # Reload wizard (supaya user bisa lihat summary & lanjut)
         return {
@@ -112,6 +112,65 @@ class ImportUomWizard(models.TransientModel):
             'view_mode': 'form',
             'target': 'new',
         }
+
+    def fetch_uom_data(self, limit=500, offset=0):
+        """
+        Ambil data Units of Measure dari Acumatica API.
+        Return: list of dict { unit_id, description, external_id }
+        """
+        self.ensure_one()
+        session = self.config_id._do_login()
+
+        try:
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
+            params = {"$top": limit, "$skip": offset}
+
+            response = session.get(endpoint, params=params, timeout=60)
+
+            if response.status_code != 200:
+                raise UserError(
+                    f'Gagal ambil data UoM (HTTP {response.status_code}): {response.text}'
+                )
+
+            raw_data = response.json()
+            _logger.info("Berhasil ambil %d records UoM dari Acumatica", len(raw_data))
+
+            result = []
+            for item in raw_data:
+                result.append({
+                    'unit_id': item.get("UnitID", {}).get("value", "") or "",
+                    'description': item.get("Description", {}).get("value", "") or "",
+                    'external_id': item.get("id", "") or "",
+                    'row_number': item.get("rowNumber", 0),
+                })
+
+            for item in result:
+                uom = self.env['acumatica.uom.line']
+                existing = uom.browse()
+                if item['unit_id']:
+                    existing = uom.search([('unit_id', '=', item['unit_id'])], limit=1)
+
+                # if existing:
+                #     continue
+
+                self.env['acumatica.uom.line'].create({
+                    'config_id': self.config_id.id,
+                    'row_number': item['row_number'],
+                    'external_id': item['external_id'],
+                    'unit_id': item['unit_id'],
+                    'description': item['description'],
+                    'import_state': 'pending',
+                    'import_message': f'Sudah ada → akan diupdate: {existing.name}' if existing else '',
+                    'selected': True,
+                    'sync_date': fields.Datetime.now(),
+                })
+
+            return len(result)
+
+
+        finally:
+            self.config_id._do_logout(session)
+            self.config_id.last_sync = fields.Datetime.now()
 
     # ─── Step 2: Buka List View Staging ──────────────
     def action_view_staging(self):

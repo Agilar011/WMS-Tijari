@@ -33,8 +33,6 @@
                 <filter string="Error"          name="error"
                         domain="[('import_state','=','error')]"/>
                 <separator/>
-                <filter string="Dipilih"        name="selected"
-                        domain="[('selected','=',True)]"/>
 
                 <group expand="0" string="Group By">
                     <filter string="Status Import"    name="group_state"
@@ -54,8 +52,6 @@
         <field name="model">acumatica.shipvia.line</field>
         <field name="arch" type="xml">
             <list string="Data Shipping Carrier" multi_edit="1">
-                <field name="selected"      optional="show"/>
-                <field name="row_number"    string="No"          optional="show"/>
                 <field name="carrier_id"    string="Carrier ID"   optional="show"/>
                 <field name="description"   string="Description"  optional="show"/>
                 <field name="city"          string="City"         optional="show"/>
@@ -107,29 +103,19 @@
                 </header>
                 <sheet>
                     <!-- Mandatory Fields -->
-                    <group string="Field Mandatory">
+                    <group string="Field Acumatica">
                         <group>
-                            <field name="description" string="Description → name"/>
-                            <field name="carrier_id"  string="Carrier ID → company_registry"/>
-                            <field name="city"        string="City → city"/>
-                            <field name="address"     string="Address → street"/>
+                            <field name="external_id" string="UUID Acumatica"/>
+                            <field name="description" string="Description"/>
+                            <field name="carrier_id" string="Carrier ID"/>
                         </group>
                         <group>
-                            <field name="phone"   string="Phone → phone"/>
+op                            <field name="phone" string="Phone"/>
                             <field name="note_id" string="Note ID"/>
                         </group>
                     </group>
 
-                    <!-- Optional Fields -->
-                    <group string="Field Optional">
-                        <group>
-                            <field name="external_id" string="UUID Acumatica"/>
-                            <field name="sync_date"/>
-                            <field name="config_id"/>
-                        </group>
-                    </group>
-
-                    <group string="Note → internal_notes">
+                    <group string="Notes">
                         <field name="note" nolabel="1"/>
                     </group>
 
@@ -137,6 +123,8 @@
                     <group string="Hasil di Odoo">
                         <field name="odoo_partner_id"/>
                         <field name="import_message"/>
+                        <field name="sync_date"/>
+                        <field name="config_id"/>
                     </group>
                 </sheet>
             </form>

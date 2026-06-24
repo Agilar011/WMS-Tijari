@@ -79,7 +79,7 @@ class AcumaticaNonStockItemLine(models.Model):
     selected        = fields.Boolean(string='Pilih',             default=True)
 
     config_id = fields.Many2one(
-        'acumatica.non.stock.item.config',
+        'acumatica.config',
         string='Konfigurasi',
         readonly=True,
         ondelete='cascade',

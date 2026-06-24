@@ -18,24 +18,24 @@
         <field name="model">acumatica.non.stock.item.line</field>
         <field name="arch" type="xml">
             <search string="Cari Non-Stock Item">
-                <field name="inventory_id"  string="InventoryID"/>
-                <field name="description"   string="Description"/>
-                <field name="item_class"    string="ItemClass"/>
-                <field name="item_status"   string="ItemStatus"/>
+                <field name="inventory_id" string="InventoryID"/>
+                <field name="description" string="Description"/>
+                <field name="item_class" string="ItemClass"/>
+                <field name="item_status" string="ItemStatus"/>
                 <field name="posting_class" string="PostingClass"/>
 
                 <filter string="Belum Diimport" name="pending"
                         domain="[('import_state','=','pending')]"/>
-                <filter string="Sudah Dibuat"   name="imported"
+                <filter string="Sudah Dibuat" name="imported"
                         domain="[('import_state','=','imported')]"/>
-                <filter string="Diupdate"       name="updated"
+                <filter string="Diupdate" name="updated"
                         domain="[('import_state','=','updated')]"/>
-                <filter string="Error"          name="error"
+                <filter string="Error" name="error"
                         domain="[('import_state','=','error')]"/>
                 <separator/>
-                <filter string="Dipilih"        name="selected"
+                <filter string="Dipilih" name="selected"
                         domain="[('selected','=',True)]"/>
-                <filter string="Is Kit"         name="is_kit"
+                <filter string="Is Kit" name="is_kit"
                         domain="[('is_kit','=',True)]"/>
 
                 <group expand="0" string="Group By">
@@ -116,33 +116,33 @@
                            statusbar_visible="pending,imported,updated,error"/>
                 </header>
                 <sheet>
-                    <group string="Field Mandatory">
+                    <group string="Field Acumatica">
                         <group>
-                            <field name="inventory_id"  string="InventoryID → default_code"/>
-                            <field name="description"   string="Description → name"/>
-                            <field name="item_type"     string="ItemType → adt_item_type (to be)"/>
-                            <field name="item_class"    string="ItemClass → adt_item_class (to be)"/>
-                            <field name="item_status"   string="ItemStatus → adt_item_status (to be)"/>
-                            <field name="base_unit"     string="BaseUnit → adt_base_unit (to be)"/>
-                            <field name="purchase_unit" string="PurchaseUnit → adt_purchase_unit (to be)"/>
-                            <field name="sales_unit"    string="SalesUnit → adt_sales_unit (to be)"/>
+                            <field name="inventory_id"  string="InventoryID"/>
+                            <field name="description"   string="Description"/>
+                            <field name="item_type"     string="ItemType"/>
+                            <field name="item_class"    string="ItemClass"/>
+                            <field name="item_status"   string="ItemStatus"/>
+                            <field name="base_unit"     string="BaseUnit"/>
+                            <field name="purchase_unit" string="PurchaseUnit"/>
+                            <field name="sales_unit"    string="SalesUnit"/>
                         </group>
                         <group>
-                            <field name="is_a_kit"      string="IsAKit → adt_is_a_kit" widget="boolean"/>
-                            <field name="is_kit"        string="IsKit → adt_is_kit"    widget="boolean"/>
-                            <field name="note_id"       string="NoteID → adt_note_id (to be)"/>
-                            <field name="posting_class" string="PostingClass → adt_posting_class (to be)"/>
-                            <field name="price_class"   string="PriceClass → adt_price_class (to be)"/>
+                            <field name="is_a_kit"      string="IsAKit" widget="boolean"/>
+                            <field name="is_kit"        string="IsKit"    widget="boolean"/>
+                            <field name="note_id"       string="NoteID"/>
+                            <field name="posting_class" string="PostingClass"/>
+                            <field name="price_class"   string="PriceClass"/>
                         </group>
                     </group>
 
                     <group string="Field Optional">
                         <group>
-                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_acumatica_write_date (to be)"/>
-                            <field name="volume"    string="Volume → volume"/>
-                            <field name="volume_uom" string="VolumeUOM → adt_volume_uom"/>
-                            <field name="weight"    string="Weight → weight"/>
-                            <field name="weight_uom" string="WeightUOM → adt_weight_uom"/>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime"/>
+                            <field name="volume"    string="Volume"/>
+                            <field name="volume_uom" string="VolumeUOM"/>
+                            <field name="weight"    string="Weight"/>
+                            <field name="weight_uom" string="WeightUOM"/>
                         </group>
                         <group>
                             <field name="external_id"/>
@@ -151,7 +151,7 @@
                         </group>
                     </group>
 
-                    <group string="Note → adt_note">
+                    <group string="Notes">
                         <field name="note" nolabel="1"/>
                     </group>
 

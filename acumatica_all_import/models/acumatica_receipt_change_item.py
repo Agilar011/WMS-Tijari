@@ -47,7 +47,6 @@ class AcumaticaReceiptChangeItemLine(models.Model):
 
     line_nbr = fields.Char(string='Line Number', readonly=True)
     line_description = fields.Char(string='Description Line', readonly=True)
-    # location_code = fields.Char(string='Location', readonly=True)
     inventory_id = fields.Char(string='InventoryID', readonly=True)
     product_uom_qty = fields.Float(string='Qty', readonly=True)
     line_warehouse_code = fields.Char(string='WarehouseID', readonly=True)
@@ -70,7 +69,7 @@ class AcumaticaReceiptChangeItemLine(models.Model):
     odoo_picking_id = fields.Many2one('stock.picking', string='Picking di Odoo', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.receipt.change.item.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -319,14 +318,8 @@ class AcumaticaReceiptChangeItemLine(models.Model):
             product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
             if not product:
                 product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
-        if not product and line.line_description:
-            product = Product.search([('name', '=', line.line_description)], limit=1)
-        if not product:
-            product = Product.create({
-                'name': line.line_description or line.inventory_id or 'Unknown Product',
-                'default_code': line.inventory_id or False,
-                'type': 'consu',
-            })
+        if not product and line.description:
+            product = Product.search([('name', '=', line.description)], limit=1)
         return product
 
     def _find_warehouse(self, line):
@@ -385,26 +378,6 @@ class AcumaticaReceiptChangeItemLine(models.Model):
                     location = location.odoo_location_id
         return location
     
-    # ---------------------------------------------------------
-    # HEADER
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # DETAIL
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # API MAPPING
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # API
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # HELPERS
-    # ---------------------------------------------------------
-
     @api.depends('origin')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
@@ -561,7 +534,7 @@ class AcumaticaReceiptChangeItemLine(models.Model):
                     continue
 
                 move_vals = {
-                    'name': receipt_line.transaction_description or receipt_line.description or product.display_name,
+                    'name': receipt_line.description or product.display_name,
                     'picking_id': picking.id if picking else False,
                     'product_id': product.id,
                     'product_uom_qty': qty,
@@ -575,12 +548,10 @@ class AcumaticaReceiptChangeItemLine(models.Model):
                     'adt_inventory_id': receipt_line.inventory_id or False,
                     'adt_line_nbr': receipt_line.line_nbr or False,
                     'adt_line_type': receipt_line.line_type or False,
-                    'adt_open_qty': self._parse_float(receipt_line.open_qty),
-                    'adt_order_qty': self._parse_float(receipt_line.order_qty),
                     'adt_po_line_number': receipt_line.line_nbr or False,
                     'adt_uom_code': receipt_line.uom_code or False,
                     'adt_warehouse_dest_code': receipt_line.warehouse_dest_code or False,
-                    'adt_location_dest_code': receipt_line.location_dest_code or False,
+                    'adt_location_dest_code': receipt_line.location_code or False,
                     'product_note': receipt_line.line_note or False,
                 }
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
@@ -786,8 +757,6 @@ class AcumaticaReceiptChangeItemLine(models.Model):
         self.search([]).write({'selected': False})
 
 
-
-
 class AcumaticaReceiptChangeItemProduct(models.Model):
     _name = 'acumatica.receipt.change.item.product'
     _description = 'Acumatica Receipt Change Item Line'
@@ -801,76 +770,14 @@ class AcumaticaReceiptChangeItemProduct(models.Model):
         index=True,
     )
 
-    header_external_id = fields.Char(
-        string='Header External ID',
-        readonly=True,
-        index=True,
-    )
-
-    line_external_id = fields.Char(
-        string='Line External ID',
-        readonly=True,
-        index=True,
-    )
-
-    line_note = fields.Text(
-        string='Line Note',
-        readonly=True,
-    )
-
-    description = fields.Char(
-        string='Description',
-        readonly=True,
-    )
-
-    inventory_id = fields.Char(
-        string='Inventory ID',
-        readonly=True,
-        index=True,
-    )
-
-    line_nbr = fields.Char(
-        string='Line Number',
-        readonly=True,
-    )
-
-    line_type = fields.Char(
-        string='Line Type',
-        readonly=True,
-    )
-
-    location_dest_code = fields.Char(
-        string='Location Destination',
-        readonly=True,
-    )
-
-    open_qty = fields.Float(
-        string='Open Qty',
-        readonly=True,
-    )
-
-    order_qty = fields.Float(
-        string='Order Qty',
-        readonly=True,
-    )
-
-    product_uom_qty = fields.Float(
-        string='Quantity',
-        readonly=True,
-    )
-
-    transaction_description = fields.Char(
-        string='Transaction Description',
-        readonly=True,
-    )
-
-    uom_code = fields.Char(
-        string='UOM',
-        readonly=True,
-    )
-
-    warehouse_dest_code = fields.Char(
-        string='Warehouse Destination',
-        readonly=True,
-    )
-
+    header_external_id = fields.Char(string='Header External ID',readonly=True,index=True,)
+    line_external_id = fields.Char(string='Line External ID',readonly=True,index=True,)
+    line_note = fields.Text(string='Line Note',readonly=True,)
+    description = fields.Char(string='Description', readonly=True)
+    inventory_id = fields.Char(string='Inventory ID', readonly=True,index=True)
+    line_nbr = fields.Char(string='Line Number', readonly=True)
+    line_type = fields.Char(string='Line Type', readonly=True)
+    location_code = fields.Char(string='Location Destination', readonly=True)
+    product_uom_qty = fields.Float(string='Quantity', readonly=True)
+    uom_code = fields.Char( string='UOM', readonly=True,)
+    warehouse_dest_code = fields.Char(string='Warehouse Destination', readonly=True,)

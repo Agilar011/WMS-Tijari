@@ -18,31 +18,29 @@
         <field name="model">acumatica.vendor.line</field>
         <field name="arch" type="xml">
             <search string="Cari Vendor">
-                <field name="vendor_id"    string="VendorID"/>
-                <field name="vendor_name"  string="VendorName"/>
+                <field name="vendor_id" string="VendorID"/>
+                <field name="vendor_name" string="VendorName"/>
                 <field name="vendor_class" string="VendorClass"/>
-                <field name="status"       string="Status"/>
+                <field name="status" string="Status"/>
 
                 <filter string="Belum Diimport" name="pending"
                         domain="[('import_state','=','pending')]"/>
-                <filter string="Sudah Dibuat"   name="imported"
+                <filter string="Sudah Dibuat" name="imported"
                         domain="[('import_state','=','imported')]"/>
-                <filter string="Diupdate"       name="updated"
+                <filter string="Diupdate" name="updated"
                         domain="[('import_state','=','updated')]"/>
-                <filter string="Error"          name="error"
+                <filter string="Error" name="error"
                         domain="[('import_state','=','error')]"/>
                 <separator/>
-                <filter string="Dipilih"        name="selected"
-                        domain="[('selected','=',True)]"/>
-                <filter string="Status Active"  name="active_only"
+                <filter string="Status Active" name="active_only"
                         domain="[('status','=ilike','active')]"/>
 
                 <group expand="0" string="Group By">
-                    <filter string="Status Import"    name="group_state"
+                    <filter string="Status Import" name="group_state"
                             context="{'group_by': 'import_state'}"/>
                     <filter string="Status Acumatica" name="group_status"
                             context="{'group_by': 'status'}"/>
-                    <filter string="Vendor Class"     name="group_class"
+                    <filter string="Vendor Class" name="group_class"
                             context="{'group_by': 'vendor_class'}"/>
                 </group>
             </search>
@@ -55,26 +53,23 @@
         <field name="model">acumatica.vendor.line</field>
         <field name="arch" type="xml">
             <list string="Data Vendor dari Acumatica" multi_edit="1">
-                <field name="selected"      optional="show"/>
-                <field name="row_number"    string="No"          optional="show"/>
-                <field name="vendor_id"     string="VendorID"/>
-                <field name="vendor_name"   string="VendorName"/>
+                <field name="vendor_id" string="VendorID"/>
+                <field name="vendor_name" string="VendorName"/>
                 <field name="location_name" string="LocationName" optional="show"/>
-                <field name="status"        string="Status"
+                <field name="status" string="Status"
                        decoration-success="status == 'Active'"
                        decoration-muted="status == 'Inactive'"
                        decoration-warning="status == 'Hold'"/>
-                <field name="vendor_class"   string="VendorClass"  optional="show"/>
-                <field name="lead_time_days" string="Lead Time"    optional="show"/>
-                <field name="fob_point"      string="FOBPoint"     optional="show"/>
-                <field name="import_state"   string="Status Import" widget="badge"
+                <field name="vendor_class" string="VendorClass" optional="show"/>
+                <field name="lead_time_days" string="Lead Time" optional="show"/>
+                <field name="fob_point" string="FOBPoint" optional="show"/>
+                <field name="import_state" string="Status Import" widget="badge"
                        decoration-success="import_state == 'imported'"
                        decoration-info="import_state == 'updated'"
                        decoration-warning="import_state == 'skipped'"
                        decoration-danger="import_state == 'error'"
                        decoration-muted="import_state == 'pending'"/>
-                <field name="odoo_partner_id" string="Partner di Odoo" optional="show"/>
-                <field name="import_message"  string="Keterangan"      optional="show"/>
+                <field name="import_message" string="Keterangan" optional="show"/>
                 <button name="action_import_this"
                         string="Import"
                         type="object"
@@ -112,42 +107,29 @@
                            statusbar_visible="pending,imported,updated,error"/>
                 </header>
                 <sheet>
-                    <!-- Mandatory Fields -->
-                    <group string="Field Mandatory">
-                        <group>
-                            <field name="vendor_id"    string="VendorID → company_registry"/>
-                            <field name="vendor_name"  string="VendorName → name"/>
-                            <field name="location_name" string="LocationName → name"/>
-                            <field name="status"       string="Status → adt_state (to be)"/>
-                        </group>
-                        <group>
-                            <field name="lead_time_days" string="LeadTimedays → sale_delay"/>
-                            <field name="fob_point"      string="FOBPoint → adt_fob_point"/>
-                            <field name="last_modified_date_time"
-                                   string="LastModifiedDateTime → adt_last_modified_date_time"/>
-                        </group>
-                    </group>
-
-                    <!-- Optional Fields -->
-                    <group string="Field Optional">
-                        <group>
-                            <field name="vendor_class" string="VendorClass → adt_class (to be)"/>
-                        </group>
+                    <group string="Field Acumatica">
                         <group>
                             <field name="external_id" string="UUID Acumatica"/>
-                            <field name="sync_date"/>
-                            <field name="config_id"/>
+                            <field name="vendor_id" string="VendorID"/>
+                            <field name="vendor_name" string="VendorName"/>
+                            <field name="location_name" string="LocationName"/>
+                            <field name="status" string="Status"/>
+                        </group>
+                        <group>
+                            <field name="lead_time_days" string="LeadTimedays"/>
+                            <field name="fob_point" string="FOBPoint"/>
+                            <field name="last_modified_date_time" string="LastModifiedDateTime"/>
+                            <field name="vendor_class" string="VendorClass"/>
                         </group>
                     </group>
-
-                    <group string="Note → internal_notes">
+                    <group string="Notes">
                         <field name="note" nolabel="1"/>
                     </group>
-
-                    <!-- Hasil Import -->
                     <group string="Hasil di Odoo">
                         <field name="odoo_partner_id"/>
                         <field name="import_message"/>
+                        <field name="sync_date"/>
+                        <field name="config_id"/>
                     </group>
                 </sheet>
             </form>

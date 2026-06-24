@@ -1,5 +1,7 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
+import requests
+import time
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -13,7 +15,7 @@ class ImportStockItemWizard(models.TransientModel):
     # INPUT
     # =========================
     config_id = fields.Many2one(
-        'acumatica.stock.item.config',
+        'acumatica.config',
         string='Konfigurasi API',
         required=True,
         domain=[('active', '=', True)],
@@ -79,12 +81,12 @@ class ImportStockItemWizard(models.TransientModel):
         # =========================
         import math
 
-        raw_list = []
+        raw_list = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_stock_item_data(
+            batch_data = self.fetch_stock_item_data(
                 limit=self.batch_size,
                 offset=offset,
                 # skip = self.fetch_skip,
@@ -93,91 +95,88 @@ class ImportStockItemWizard(models.TransientModel):
             if not batch_data:
                 break
 
-            raw_list.extend(batch_data)
+            raw_list += batch_data
 
+        self.total_fetched = raw_list
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        Product = self.env['product.template']
+        # new_count = existing_count = 0
+        # lines_to_create = []
+        # batch_num = 0
 
-        new_count = existing_count = 0
-        lines_to_create = []
-        batch_num = 0
+        # for item in raw_list:
+        #     existing = Product.browse()
+        #     batch_num += 1
 
-        for item in raw_list:
-            existing = Product.browse()
-            batch_num += 1
+        #     if item['external_id']:
+        #         existing = Product.search([
+        #             ('adt_external_id', '=', item['external_id'])
+        #         ], limit=1)
 
-            if item['external_id']:
-                existing = Product.search([
-                    ('adt_external_id', '=', item['external_id'])
-                ], limit=1)
+        #     if not existing and item['inventory_id']:
+        #         existing = Product.search([
+        #             ('default_code', '=', item['inventory_id'])
+        #         ], limit=1)
 
-            if not existing and item['inventory_id']:
-                existing = Product.search([
-                    ('default_code', '=', item['inventory_id'])
-                ], limit=1)
+        #     if existing:
+        #         existing_count += 1
+        #         msg = f'Sudah ada → akan diupdate: {existing.name}'
+        #     else:
+        #         new_count += 1
+        #         msg = ''
+        #     query = """
+        #         INSERT INTO acumatica_stock_item_line (config_id, row_number, external_id, inventory_id, description, item_type, item_class, item_status, base_uom, valuation_method, last_modified_datetime, import_state, import_message, odoo_product_id, selected, sync_date) 
+        #         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        #     """
+        #     params = (
+        #         self.config_id.id,
+        #         item['row_number'],
+        #         item['external_id'],
+        #         item['inventory_id'],
+        #         item['description'],
+        #         item['item_type'],
+        #         item['item_class'],
+        #         item['item_status'],
+        #         item['base_uom'],
+        #         item['valuation_method'],
+        #         item['last_modified_datetime'],
+        #         'pending',
+        #         msg,
+        #         existing.id if existing else None,
+        #         True,
+        #         fields.Datetime.now(),
+        #     )
+        #     self.env.cr.execute(query, params)
 
-            if existing:
-                existing_count += 1
-                msg = f'Sudah ada → akan diupdate: {existing.name}'
-            else:
-                new_count += 1
-                msg = ''
-            query = """
-                INSERT INTO acumatica_stock_item_line (config_id, row_number, external_id, inventory_id, description, item_type, item_class, item_status, base_uom, valuation_method, last_modified_datetime, import_state, import_message, odoo_product_id, selected, sync_date) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """
-            params = (
-                self.config_id.id,
-                item['row_number'],
-                item['external_id'],
-                item['inventory_id'],
-                item['description'],
-                item['item_type'],
-                item['item_class'],
-                item['item_status'],
-                item['base_uom'],
-                item['valuation_method'],
-                item['last_modified_datetime'],
-                'pending',
-                msg,
-                existing.id if existing else None,
-                True,
-                fields.Datetime.now(),
-            )
-            self.env.cr.execute(query, params)
+        #     self.env['acumatica.stock.item.line']._invalidate_cache()
+        #     print(f"DATA BERHASIL NAMBAH NIH - BATCH {batch_num}")
+        #     # lines_to_create.append({
+        #     #     'config_id':              self.config_id.id,
+        #     #     'row_number':             item['row_number'],
+        #     #     'external_id':            item['external_id'],
+        #     #     'inventory_id':           item['inventory_id'],
+        #     #     'description':            item['description'],
+        #     #     'item_type':              item['item_type'],
+        #     #     'item_class':             item['item_class'],
+        #     #     'item_status':            item['item_status'],
+        #     #     'base_uom':               item['base_uom'],
+        #     #     'valuation_method':       item['valuation_method'],
+        #     #     'last_modified_datetime': item['last_modified_datetime'],
+        #     #     'import_state':           'pending',
+        #     #     'import_message':         msg,
+        #     #     'odoo_product_id':        existing.id if existing else False,
+        #     #     'selected':               True,
+        #     #     'sync_date':              fields.Datetime.now(),
+        #     # })
 
-            self.env['acumatica.stock.item.line']._invalidate_cache()
-            print(f"DATA BERHASIL NAMBAH NIH - BATCH {batch_num}")
-            # lines_to_create.append({
-            #     'config_id':              self.config_id.id,
-            #     'row_number':             item['row_number'],
-            #     'external_id':            item['external_id'],
-            #     'inventory_id':           item['inventory_id'],
-            #     'description':            item['description'],
-            #     'item_type':              item['item_type'],
-            #     'item_class':             item['item_class'],
-            #     'item_status':            item['item_status'],
-            #     'base_uom':               item['base_uom'],
-            #     'valuation_method':       item['valuation_method'],
-            #     'last_modified_datetime': item['last_modified_datetime'],
-            #     'import_state':           'pending',
-            #     'import_message':         msg,
-            #     'odoo_product_id':        existing.id if existing else False,
-            #     'selected':               True,
-            #     'sync_date':              fields.Datetime.now(),
-            # })
-
-        # self.env['acumatica.stock.item.line'].create(lines_to_create)
-
-        self.write({
-            'state':          'fetched',
-            'total_fetched':  len(raw_list),
-            'total_new':      new_count,
-            'total_existing': existing_count,
-        })
+        # self.write({
+        #     'state':          'fetched',
+        #     'total_fetched':  len(raw_list),
+        #     'total_new':      new_count,
+        #     'total_existing': existing_count,
+        # })
 
         return {
             'type':      'ir.actions.act_window',
@@ -436,6 +435,359 @@ class ImportStockItemWizard(models.TransientModel):
             'target':    'new',
         }
 
+    def fetch_stock_item_data(self, limit=50, offset=0, skip=0, batch_no=1):
+        """
+        Fetch data Stock Item dengan:
+        - limit     = jumlah data per request
+        - offset    = offset batch internal
+        - skip      = starting row manual
+        - batch_no  = nomor batch untuk logging
+        """
+
+        self.ensure_one()
+
+        session = self.config_id._do_login()
+
+        max_retry = 3
+        retry_delay = 30
+
+        last_error = None
+
+        try:
+
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
+
+            # ==================================================
+            # REAL SKIP
+            # ==================================================
+            real_skip = offset + skip
+
+            print('==================================================')
+            print('START FETCH STOCK ITEM')
+            print(f'BATCH NO    : {batch_no}')
+            print(f'LIMIT       : {limit}')
+            print(f'OFFSET      : {offset}')
+            print(f'SKIP        : {skip}')
+            print(f'REAL SKIP   : {real_skip}')
+            print('==================================================')
+
+            params = {
+                "$top": limit,
+                "$skip": real_skip
+            }
+
+            print('REQUEST INFO')
+            print(f'ENDPOINT : {endpoint}')
+            print(f'PARAMS   : {params}')
+            print('==================================================')
+
+            # ==================================================
+            # RETRY LOOP
+            # ==================================================
+            for attempt in range(1, max_retry + 1):
+                try:
+                    print('==================================================')
+                    print(
+                        f'FETCH STOCK ITEM ATTEMPT '
+                        f'{attempt}/{max_retry}'
+                    )
+                    print(f'BATCH NO : {batch_no}')
+                    print('==================================================')
+
+                    _logger.info(
+                        'FETCH STOCK ITEM ATTEMPT %s/%s | '
+                        'BATCH=%s | OFFSET=%s | SKIP=%s',
+                        attempt,
+                        max_retry,
+                        batch_no,
+                        offset,
+                        skip
+                    )
+
+                    # ==========================================
+                    # GET API
+                    # ==========================================
+                    response = session.get(
+                        endpoint,
+                        params=params,
+                        timeout=60
+                    )
+
+                    print('RESPONSE RECEIVED')
+                    print(f'STATUS CODE : {response.status_code}')
+                    print('==================================================')
+
+                    # ==========================================
+                    # VALIDATE RESPONSE
+                    # ==========================================
+                    if response.status_code != 200:
+
+                        last_error = (
+                            f'Gagal ambil data Stock Item '
+                            f'(HTTP {response.status_code}): '
+                            f'{response.text}'
+                        )
+
+                        print('ERROR FETCH STOCK ITEM')
+                        print(last_error)
+                        print('==================================================')
+
+                        _logger.error(last_error)
+
+                        raise Exception(last_error)
+
+                    # ==========================================
+                    # SUCCESS
+                    # ==========================================
+                    raw_data = response.json()
+
+                    print(f'TOTAL RAW DATA : {len(raw_data)}')
+                    print('==================================================')
+
+                    all_results = []
+
+                    # ==========================================
+                    # HELPER
+                    # ==========================================
+                    def val(item, key):
+
+                        v = item.get(key, {})
+
+                        if isinstance(v, dict):
+                            return v.get("value", "") or ""
+
+                        return ""
+
+                    # ==========================================
+                    # PARSE
+                    # ==========================================
+                    item_no = 0
+
+                    for item in raw_data:
+
+                        item_no += 1
+
+                        parsed_vals = {
+                            'external_id':            item.get("id", "") or "",
+                            'row_number':             item.get("rowNumber", 0),
+                            'inventory_id':           val(item, "InventoryID"),
+                            'description':            val(item, "Description"),
+                            'item_type':              val(item, "ItemType"),
+                            'item_class':             val(item, "ItemClass"),
+                            'item_status':            val(item, "ItemStatus"),
+                            'base_uom':               val(item, "BaseUOM"),
+                            'valuation_method':       val(item, "ValuationMethod"),
+                            'last_modified_datetime': val(item, "LastModifiedDateTime"),
+                        }
+
+                        all_results.append(parsed_vals)
+
+                        print('--------------------------------------------------')
+                        print(f'BATCH        : {batch_no}')
+                        print(f'ITEM NO      : {item_no}')
+                        print(f'EXTERNAL ID  : {parsed_vals["external_id"]}')
+                        print(f'INVENTORY ID : {parsed_vals["inventory_id"]}')
+                        print(f'DESCRIPTION  : {parsed_vals["description"]}')
+                        print(f'ITEM TYPE    : {parsed_vals["item_type"]}')
+                        print(f'STATUS       : {parsed_vals["item_status"]}')
+                        print('--------------------------------------------------')
+
+                    # ==========================================
+                    # FINAL LOG
+                    # ==========================================
+                    print('==================================================')
+                    print('FETCH STOCK ITEM DONE')
+                    print(f'BATCH NO           : {batch_no}')
+                    print(f'OFFSET             : {offset}')
+                    print(f'SKIP               : {skip}')
+                    print(f'REAL SKIP          : {real_skip}')
+                    print(f'LIMIT              : {limit}')
+                    print(f'TOTAL STOCK ITEM   : {len(all_results)}')
+                    print('==================================================')
+
+                    _logger.info(
+                        'BATCH %s | OFFSET %s | SKIP %s | '
+                        'REAL SKIP %s | LIMIT %s | '
+                        'TOTAL STOCK ITEM: %s',
+                        batch_no,
+                        offset,
+                        skip,
+                        real_skip,
+                        limit,
+                        len(all_results)
+                    )
+
+                    Product = self.env['product.template']
+                    query = """
+                        INSERT INTO acumatica_stock_item_line (
+                            config_id,
+                            row_number,
+                            external_id,
+                            inventory_id,
+                            description,
+                            item_type,
+                            item_class,
+                            item_status,
+                            base_uom,
+                            valuation_method,
+                            last_modified_datetime,
+                            import_state,
+                            import_message,
+                            odoo_product_id,
+                            sync_date
+                        ) 
+                        VALUES (
+                            %s, %s, %s, %s,
+                            %s, %s, %s, %s,
+                            %s, %s, %s, %s,
+                            %s, %s, %s
+                        )
+                    """
+
+                    for item in all_results:
+                        staging_line = False
+                        staging_domain = []
+
+                        if item['external_id']:
+                            staging_domain = [('external_id', '=', item['external_id'])]
+
+                        if staging_domain:
+                            staging_line = self.env['acumatica.stock.item.line'].search(
+                                staging_domain,
+                                limit=1,
+                            )
+                            if staging_line:
+                                continue
+
+                        existing = False
+                        if item['external_id']:
+                            existing = Product.search([
+                                ('adt_external_id', '=', item['external_id'])
+                            ], limit=1)
+
+                        msg = 'Data sudah ada' if existing else ''
+                        state = 'pending'
+
+                        params = (
+                            self.config_id.id,
+                            item['row_number'],
+                            item['external_id'],
+                            item['inventory_id'],
+                            item['description'],
+                            item['item_type'],
+                            item['item_class'],
+                            item['item_status'],
+                            item['base_uom'],
+                            item['valuation_method'],
+                            item['last_modified_datetime'],
+                            state,
+                            msg,
+                            existing.id if existing else None,
+                            fields.Datetime.now(),
+                        )
+                        self.env.cr.execute(query, params)
+
+                    self.env['acumatica.stock.item.line']._invalidate_cache()
+                    return len(all_results)
+
+                # ==============================================
+                # CONNECTION ERROR
+                # ==============================================
+                except requests.exceptions.ConnectionError as e:
+
+                    last_error = (
+                        f'Tidak bisa terhubung ke server: '
+                        f'{self.base_url}'
+                    )
+
+                    print('==================================================')
+                    print('CONNECTION ERROR')
+                    print(last_error)
+                    print(str(e))
+                    print('==================================================')
+
+                    _logger.error(last_error)
+
+                # ==============================================
+                # TIMEOUT ERROR
+                # ==============================================
+                except requests.exceptions.Timeout as e:
+
+                    last_error = (
+                        'Timeout saat ambil data Stock Item '
+                        'dari Acumatica.'
+                    )
+
+                    print('==================================================')
+                    print('TIMEOUT ERROR')
+                    print(last_error)
+                    print(str(e))
+                    print('==================================================')
+
+                    _logger.error(last_error)
+
+                # ==============================================
+                # UNKNOWN ERROR
+                # ==============================================
+                except Exception as e:
+
+                    last_error = str(e)
+
+                    print('==================================================')
+                    print('UNKNOWN FETCH ERROR')
+                    print(last_error)
+                    print('==================================================')
+
+                    _logger.exception(e)
+
+                # ==============================================
+                # RETRY
+                # ==============================================
+                if attempt < max_retry:
+
+                    print('==================================================')
+                    print(
+                        f'RETRY FETCH STOCK ITEM '
+                        f'DALAM {retry_delay} DETIK'
+                    )
+                    print(f'NEXT ATTEMPT : {attempt + 1}')
+                    print('==================================================')
+
+                    _logger.warning(
+                        'FETCH STOCK ITEM FAILED - RETRY IN %s SECONDS '
+                        '(attempt %s/%s)',
+                        retry_delay,
+                        attempt,
+                        max_retry
+                    )
+
+                    time.sleep(retry_delay)
+
+            # ==================================================
+            # FINAL FAILED
+            # ==================================================
+            print('==================================================')
+            print('SEMUA FETCH STOCK ITEM RETRY GAGAL')
+            print(f'LAST ERROR : {last_error}')
+            print('==================================================')
+
+            _logger.error(
+                'ALL FETCH STOCK ITEM RETRY FAILED: %s',
+                last_error
+            )
+
+            raise UserError(last_error)
+
+        finally:
+
+            print('==================================================')
+            print('LOGOUT SESSION ACUMATICA')
+            print(f'BATCH NO : {batch_no}')
+            print('==================================================')
+
+            self.config_id._do_logout(session)
+
+            self.config_id.last_sync = fields.Datetime.now()
 
 
 
