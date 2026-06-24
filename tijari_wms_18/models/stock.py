@@ -63,7 +63,7 @@ class StockPicking(models.Model):
                 line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
                 if not line.lot_name:
                     print(f"Missing lot: {line}")
-                    raise UserError(_("Validation blocked.\n\Lot not Found Please generate lot for all lines before validating the picking."))
+                    raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
         for picking in self:
             operation_category = picking.picking_type_id.operation_category
             print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
