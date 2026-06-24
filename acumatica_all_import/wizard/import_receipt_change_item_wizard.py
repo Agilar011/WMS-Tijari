@@ -29,6 +29,7 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
     total_new = fields.Integer(string='Picking Baru', readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan ditambah)', readonly=True)
     fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
+    wh33_filter = fields.Boolean(string='WH33 Only', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
 
 
     # ---------------------------------------------------------
@@ -36,25 +37,19 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
     # ---------------------------------------------------------
 
     def action_fetch_data(self):
-        print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: action_fetch_data")
-        print("="*80)
-
         self.ensure_one()
-        # self.env['acumatica.receipt.change.item.line'].search([('config_id', '=', self.config_id.id)]).unlink()
-
         import math
 
         raw_list = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
         params = []
 
-        # if self.wh33_filter:
-        #     params.append("Details/Warehouse(d: startswith(Details/Warehouse, 'WH33'))")
-        #     print("="*80)
-        #     print(f"[DEBUG] Masuk ke proses filter warehouse jika field true, WH Filter: {self.wh33_filter}")
-        #     print(params)
-        #     print("="*80)
+        if self.wh33_filter:
+            params.append("Details/Warehouse(d: startswith(Details/Warehouse, 'WH33'))")
+            print("="*80)
+            print(f"[DEBUG] Masuk ke proses filter warehouse jika field true, WH Filter: {self.wh33_filter}")
+            print(params)
+            print("="*80)
 
         if self.start_date and self.end_date:
             params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
@@ -99,14 +94,7 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
     # ---------------------------------------------------------
 
     def fetch_receipt_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
-        print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: fetch_receipt_data")
-        print("="*80)
-        self.ensure_one()
-        print("="*80)
-        print("[DEBUG] MASUK Ke proses login")
-        print("="*80)
-        
+        self.ensure_one()        
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
@@ -115,11 +103,9 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-
             if self.config_id.odata_select:
                 params['$select'] = self.config_id.odata_select
             if reference_nbr:
-                print(f"receipt Number: {reference_nbr}")
                 filters.append(f"ReferenceNbr eq '{reference_nbr}'")
             if odata_filter:
                 filters.append(self.config_id.odata_filter)
@@ -135,10 +121,6 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
-                print("="*80)
-                print("[DEBUG] MASUK Ke proses get data api")
-                print("="*80)
-
                 raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
 
             raw_data = self._normalize_rows(response.json())
@@ -146,11 +128,6 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
             detail_result = []
 
             for row_number, item in enumerate(raw_data, start=1):
-
-                print("="*80)
-                print("[DEBUG] MASUK Ke proses deklarasi header")
-                print("="*80)
-
                 header = self._build_header_values(row_number, item)
 
 

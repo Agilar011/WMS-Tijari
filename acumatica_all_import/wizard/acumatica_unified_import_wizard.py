@@ -156,7 +156,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'label': 'SO Return',
             'wizard_model': 'import.shipment.wizard',
             'config_field': 'shipment_config_id',
-            'line_model': 'acumatica.shipment.line',
+            'line_model': 'acumatica.shipment.gi.staging',
             'result_name': 'Hasil Import SO Return',
             'staging_name': 'Data SO Return dari Acumatica',
             'extra_fields': ['shipment_nbr', 'last_modified_from', 'odata_filter'],
