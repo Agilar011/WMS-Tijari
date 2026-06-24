@@ -208,6 +208,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 f"Warehouse Found : "
                 f"{warehouse.id if warehouse else None} - "
                 f"{warehouse.name if warehouse else None}"
+                f"{shipment}"
             )
 
             if not warehouse:
@@ -376,6 +377,29 @@ class AcumaticaShipmentGIStaging(models.Model):
                         f"ID={picking.id}"
                     )
 
+                    shipment_header = self.env['acumatica.sales.order.shipment.staging'].search([
+                        'gi_id', '=', shipment.id
+                    ])
+
+                    shipment_line = self.env['acumatica.sales.order.shipment.staging.line'].search([
+                        'shipment_id', '=', shipment_header.id 
+                    ])
+
+                    for item in shipment_line:
+                        shipment_number = self.env['stock.move'].search([
+                            'picking_id', '=', 
+                        ])
+                        
+
+
+
+
+                    updated_move = self.env['stock.move'].search([
+                        'picking_id', '=', picking.id,
+                        ])
+                    
+
+
                     print(updated_vals)
 
                     picking.write(updated_vals)
@@ -475,12 +499,6 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'adt_external_id':
                     shipment.acumatica_id,
             }
-
- 
-            print("CREATE PICKING VALUES")
-            print(created_picking_vals)
-
-
 
 
             # =================================================
@@ -746,11 +764,11 @@ class AcumaticaShipmentGIStaging(models.Model):
 
             product = Product.search([
                 ('default_code', '=', line.inventoryid)
-            ], limit=1)
-        
+            ], limit=1)        
+            
         else:
             print(
-                f"PRODUCT NOT FOUND | "
+                # f"PRODUCT NOT FOUND | "Proses picking dibatalkan karena ada produk yang bermasalah
                 f"InventoryID={line.inventoryid}"
             )
 
@@ -768,11 +786,11 @@ class AcumaticaShipmentGIStaging(models.Model):
         # CHECK STOCK
         # =====================================================
 
+
         quants = Quant.search([
             ('product_id', '=', product.id),
-            ('location_id', 'child_of', source_location),
+            ('location_id', '=', source_location),
         ])
-
         available_qty = sum(
             q.quantity - q.reserved_quantity
             for q in quants
@@ -790,7 +808,6 @@ class AcumaticaShipmentGIStaging(models.Model):
                 f"Product={product.display_name}"
             )
             abort_picking = True
-
         return {
             'product': product,
             'abort_picking' : abort_picking
@@ -807,14 +824,35 @@ class AcumaticaShipmentGIStaging(models.Model):
 
     def _find_warehouse(self, line):
         Warehouse = self.env['stock.warehouse']
-        # code = line.warehouse_code
         code = line
+
+        # 1. Jalankan query SQL (Pastikan argumen dalam bentuk tuple/list)
+        self.env.cr.execute("""
+            SELECT id, code
+            FROM stock_warehouse
+            WHERE code = %s
+        """, (code,))
+        
+        # 2. Ambil hasilnya dan simpan ke dalam variabel (Hanya panggil fetchall SEKALI)
+        sql_result = self.env.cr.fetchall()
+        print(sql_result)
+
+        # raise UserError('checkpoint')
+        
         warehouse = False
-        if code:
-            warehouse = Warehouse.search([('code', '=', code)], limit=1)
-            if not warehouse:
-                warehouse = Warehouse.search([('name', '=', code)], limit=1)
-        return warehouse or Warehouse.search([], limit=1)
+        # 3. Jika SQL menemukan data, ambil ID dari elemen pertama
+        if sql_result:
+            warehouse_id = sql_result[0][0] # Mengambil angka 176 dari [(176, 'WH33-FG')]
+            
+            # 4. Cari menggunakan ORM berdasarkan ID yang didapat dari SQL
+            # Tambahkan context active_test=False untuk berjaga-jaga jika record di-archived
+            warehouse = Warehouse.sudo().with_context(active_test=False).search([('id', '=', warehouse_id)], limit=1)
+
+        # raise UserError('Checkpoint')
+        return warehouse
+
+
+
 
     def _find_destination_location(self, line, warehouse=False):
         Location = self.env['stock.location']
