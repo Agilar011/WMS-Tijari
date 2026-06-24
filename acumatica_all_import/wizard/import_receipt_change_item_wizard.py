@@ -237,7 +237,7 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
             'product_uom_qty': self._val(item, 'TotalQty'),
             'receipt_type': self._val(item, 'Type'),
             'vendor_code': self._val(item, 'Customer'),
-            # 'partner_ref': self._val(item, 'VendorRef'),
+            'transfer_type': self._val(item, 'TransType'),
             # 'warehouse_code': self._val(item, 'Warehouse'),
             }
 
