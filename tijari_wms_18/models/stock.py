@@ -110,14 +110,13 @@ class StockPicking(models.Model):
             })
             
             for ml in picking.move_line_ids:  
-                for sp in storage_pickings.move_ids:
-                    move_line = self.env['stock.move.line'].search([
-                        ("picking_id", "=", sp.picking_id.id),
-                        ("product_id", "=", sp.product_id.id),
-                        ("quantity", "=", sp.quantity)
-                    ])
-                    if move_line:
-                        move_line.location_dest_id = ml.allocation_storage.id
+                move_line = self.env['stock.move.line'].search([
+                    ("picking_id", "=", storage_pickings.id),
+                    ("product_id", "=", ml.product_id.id),
+                    ("quantity", "=", ml.quantity)
+                ])
+                if move_line:
+                    move_line.location_dest_id = ml.allocation_storage.id
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:

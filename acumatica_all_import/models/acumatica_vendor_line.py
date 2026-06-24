@@ -60,7 +60,7 @@ class AcumaticaVendorLine(models.Model):
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
-        'acumatica.vendor.config',
+        'acumatica.config',
         string='Konfigurasi',
         readonly=True,
         ondelete='cascade',

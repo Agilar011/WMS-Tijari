@@ -41,6 +41,7 @@
     <menuitem id="menu_acumatica_all_import_staging_stock_item" name="Stock Item" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_stock_item_line" sequence="5"/>
     <menuitem id="menu_acumatica_all_import_staging_non_stock_item" name="Non-Stock Item" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_non_stock_item_line" sequence="6"/>
     <menuitem id="menu_acumatica_all_import_staging_customer_location" name="Customer Location" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_customer_location_line" sequence="7"/>
+    <menuitem id="menu_acumatica_all_import_staging_shipvia" name="ShipVia" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_shipvia_line" sequence="8"/>
 
     <menuitem id="menu_acumatica_all_import_config_root" name="Konfigurasi API" parent="menu_acumatica_all_import_root" sequence="20"/>
     <menuitem id="menu_acumatica_all_import_config_inbound"

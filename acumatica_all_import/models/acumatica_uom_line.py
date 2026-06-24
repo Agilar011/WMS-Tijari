@@ -107,7 +107,7 @@ class AcumaticaUomLine(models.Model):
                 ], limit=1)
 
                 if existing:
-                    existing.categ_id = uom_categ.id  # Pastikan kategorinya sesuai
+                    existing.category_id = uom_categ.id  # Pastikan kategorinya sesuai
                     line.write({
                         'import_state':   'skipped',
                         'import_message': f'Sudah ada: {existing.name} (kategori: {uom_categ.name})',

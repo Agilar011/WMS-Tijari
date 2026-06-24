@@ -90,20 +90,18 @@
                            statusbar_visible="pending,imported,skipped,error"/>
                 </header>
                 <sheet>
-                    <group>
-                        <group string="Data dari Acumatica">
-                            <field name="unit_id" string="UnitID"/>
-                            <field name="description" string="UoM Name"/>
-                            <field name="external_id"/>
-                            <field name="row_number"/>
-                        </group>
-                        <group string="Hasil di Odoo">
-                            <field name="odoo_categ_id" string="Kategori UoM"/>
-                            <field name="odoo_uom_id" string="Nama UoM"/>
-                            <field name="import_message"/>
-                            <field name="sync_date"/>
-                            <field name="config_id"/>
-                        </group>
+                    <group string="Data dari Acumatica">
+                        <field name="unit_id" string="UnitID"/>
+                        <field name="description" string="UoM Name"/>
+                        <field name="external_id"/>
+                        <field name="row_number"/>
+                    </group>
+                    <group string="Hasil di Odoo">
+                        <field name="odoo_categ_id" string="Kategori UoM"/>
+                        <field name="odoo_uom_id" string="Nama UoM"/>
+                        <field name="import_message"/>
+                        <field name="sync_date"/>
+                        <field name="config_id"/>
                     </group>
                 </sheet>
             </form>

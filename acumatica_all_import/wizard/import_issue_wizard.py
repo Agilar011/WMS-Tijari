@@ -35,7 +35,7 @@ class ImportIssueWizard(models.TransientModel):
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_issue_data(
+            batch_data = self.fetch_issue_data(
                 limit=self.batch_size,
                 offset=offset,
                 reference_nbr=self.reference_nbr,

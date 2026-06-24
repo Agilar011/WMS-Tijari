@@ -19,7 +19,9 @@
                         <group string="🌐 Koneksi API">
                             <field name="base_url" placeholder="http://your-server/acumportal/entity"/>
                             <field name="api_version"/>
+                            <field name="endpoint_name"/>
                             <field name="config_type" />
+                            <field name="is_default"/>
                         </group>
                         <group string="🔑 Kredensial">
                             <field name="username"/>
@@ -51,6 +53,7 @@
             <list string="Konfigurasi Acumatica">
                 <field name="name"/>
                 <field name="config_type" />
+                <field name="is_default"/>
                 <field name="base_url"/>
                 <field name="username"/>
                 <field name="company_code"/>
@@ -74,6 +77,34 @@
                 Tambahkan konfigurasi koneksi Acumatica pertama Anda!
             </p>
         </field>
+    </record>
+
+    <record id="action_acumatica_customer_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica Customer</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'customer')]</field>
+    </record>
+
+    <record id="action_acumatica_customer_location_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica Customer Location</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'customer_location')]</field>
+    </record>
+
+    <record id="action_acumatica_shipvia_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica ShipVia</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'shipvia')]</field>
+    </record>
+
+    <record id="action_acumatica_vendor_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica Vendor</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'vendor')]</field>
     </record>
 
 </odoo>

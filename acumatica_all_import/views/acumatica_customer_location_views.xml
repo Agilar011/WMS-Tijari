@@ -22,20 +22,20 @@
         <field name="model">acumatica.customer.location</field>
         <field name="arch" type="xml">
             <search string="Cari Customer Location">
-                <field name="name"           string="Location Name"/>
+                <field name="name" string="Location Name"/>
                 <field name="adt_location_id" string="LocationID"/>
-                <field name="partner_id"     string="Customer"/>
-                <field name="warehouse_id"   string="Warehouse"/>
-                <filter string="Active"      name="active"
+                <field name="partner_id" string="Customer"/>
+                <field name="warehouse_id" string="Warehouse"/>
+                <filter string="Active" name="active"
                         domain="[('adt_is_active','=',True)]"/>
-                <filter string="Default"     name="default"
+                <filter string="Default" name="default"
                         domain="[('adt_default','=',True)]"/>
                 <group expand="0" string="Group By">
-                    <filter string="Customer"  name="group_partner"
+                    <filter string="Customer" name="group_partner"
                             context="{'group_by': 'partner_id'}"/>
                     <filter string="Warehouse" name="group_warehouse"
                             context="{'group_by': 'warehouse_id'}"/>
-                    <filter string="Status"    name="group_status"
+                    <filter string="Status" name="group_status"
                             context="{'group_by': 'adt_status'}"/>
                 </group>
             </search>
@@ -48,17 +48,17 @@
         <field name="arch" type="xml">
             <list string="Customer Location">
                 <field name="adt_location_id" string="LocationID"/>
-                <field name="name"            string="Location Name"/>
-                <field name="partner_id"      string="Customer"/>
-                <field name="warehouse_id"    string="Warehouse"      optional="show"/>
-                <field name="adt_status"      string="Status"
+                <field name="name" string="Location Name"/>
+                <field name="partner_id" string="Customer"/>
+                <field name="warehouse_id" string="Warehouse" optional="show"/>
+                <field name="adt_status" string="Status"
                        decoration-success="adt_status == 'Active'"
                        decoration-muted="adt_status == 'Inactive'"/>
-                <field name="adt_default"     string="Default"        widget="boolean" optional="show"/>
-                <field name="adt_is_active"   string="Active"         widget="boolean" optional="show"/>
-                <field name="city"            string="City"           optional="show"/>
+                <field name="adt_default" string="Default" widget="boolean" optional="show"/>
+                <field name="adt_is_active" string="Active" widget="boolean" optional="show"/>
+                <field name="city" string="City" optional="show"/>
                 <field name="adt_shipping_zone" string="Shipping Zone" optional="show"/>
-                <field name="adt_fob_point"   string="FOB Point"      optional="show"/>
+                <field name="adt_fob_point" string="FOB Point" optional="show"/>
             </list>
         </field>
     </record>
@@ -146,26 +146,24 @@
         <field name="model">acumatica.customer.location.line</field>
         <field name="arch" type="xml">
             <search string="Cari Staging Customer Location">
-                <field name="customer"              string="Customer"/>
+                <field name="customer" string="Customer"/>
                 <field name="location_id_acumatica" string="LocationID"/>
-                <field name="location_name"         string="Location Name"/>
+                <field name="location_name" string="Location Name"/>
                 <filter string="Belum Diimport" name="pending"
                         domain="[('import_state','=','pending')]"/>
-                <filter string="Sudah Dibuat"   name="imported"
+                <filter string="Sudah Dibuat" name="imported"
                         domain="[('import_state','=','imported')]"/>
-                <filter string="Diupdate"       name="updated"
+                <filter string="Diupdate" name="updated"
                         domain="[('import_state','=','updated')]"/>
-                <filter string="Error"          name="error"
+                <filter string="Error" name="error"
                         domain="[('import_state','=','error')]"/>
                 <separator/>
-                <filter string="Dipilih"        name="selected"
-                        domain="[('selected','=',True)]"/>
                 <group expand="0" string="Group By">
                     <filter string="Status Import" name="group_state"
                             context="{'group_by': 'import_state'}"/>
-                    <filter string="Customer"      name="group_customer"
+                    <filter string="Customer" name="group_customer"
                             context="{'group_by': 'customer'}"/>
-                    <filter string="Warehouse"     name="group_warehouse"
+                    <filter string="Warehouse" name="group_warehouse"
                             context="{'group_by': 'warehouse'}"/>
                 </group>
             </search>
@@ -177,23 +175,21 @@
         <field name="model">acumatica.customer.location.line</field>
         <field name="arch" type="xml">
             <list string="Staging Customer Location" multi_edit="1">
-                <field name="selected"              optional="show"/>
-                <field name="row_number"            string="No"            optional="show"/>
-                <field name="customer"              string="Customer"/>
+                <field name="customer" string="Customer"/>
                 <field name="location_id_acumatica" string="LocationID"/>
-                <field name="location_name"         string="Location Name"/>
-                <field name="warehouse"             string="Warehouse"     optional="show"/>
-                <field name="status"                string="Status"
+                <field name="location_name" string="Location Name"/>
+                <field name="warehouse" string="Warehouse" optional="show"/>
+                <field name="status" string="Status"
                        decoration-success="status == 'Active'"
                        decoration-muted="status == 'Inactive'"/>
-                <field name="city"                  string="City"          optional="show"/>
-                <field name="import_state"          string="Status Import" widget="badge"
+                <field name="city" string="City" optional="show"/>
+                <field name="import_state" string="Status Import" widget="badge"
                        decoration-success="import_state == 'imported'"
                        decoration-info="import_state == 'updated'"
                        decoration-danger="import_state == 'error'"
                        decoration-muted="import_state == 'pending'"/>
-                <field name="odoo_location_id"      string="Location di Odoo" optional="show"/>
-                <field name="import_message"        string="Keterangan"    optional="show"/>
+                <field name="odoo_location_id" string="Location di Odoo" optional="show"/>
+                <field name="import_message" string="Keterangan" optional="show"/>
                 <button name="action_import_this"
                         string="Import"
                         type="object"
@@ -232,33 +228,36 @@
                 <sheet>
                     <group string="Field Mandatory">
                         <group>
-                            <field name="customer"              string="Customer → partner_id (FK)"/>
-                            <field name="location_id_acumatica" string="LocationID → adt_location_id"/>
-                            <field name="location_name"         string="LocationName → name"/>
-                            <field name="is_active"             string="Active → adt_is_active"/>
-                            <field name="address_override"      string="AddressOverride → adt_address_override"/>
-                            <field name="fob_point"             string="FOBPoint → adt_fob_point"/>
-                            <field name="shipping_branch"       string="ShippingBranch → adt_shipping_branch"/>
-                            <field name="status"                string="Status → adt_status"/>
-                            <field name="warehouse"             string="Warehouse → warehouse_id (FK)"/>
+                            <field name="customer" string="Customer"/>
+                            <field name="location_id_acumatica" string="LocationID"/>
+                            <field name="location_name" string="LocationName"/>
+                            <field name="is_active" string="Active"/>
+                            <field name="address_override" string="AddressOverride"/>
+                            <field name="fob_point" string="FOBPoint"/>
+                            <field name="shipping_branch" string="ShippingBranch"/>
+                            <field name="status" string="Status"/>
+                            <field name="warehouse" string="Warehouse"/>
                         </group>
                         <group>
-                            <field name="is_default"            string="Default → adt_default"/>
-                            <field name="usage_type"            string="EntityUsageType → adt_usage_type"/>
-                            <field name="shipping_zone"         string="ShippingZone → adt_shipping_zone"/>
-                            <field name="ship_via"              string="ShipVia → adt_ship_via"/>
-                            <field name="lead_time_days"        string="LeadTimeDays → adt_lead_time_days"/>
-                            <field name="order_priority"        string="OrderPriority → adt_order_priority"/>
-                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_acumatica_write_date"/>
+                            <field name="is_default" string="Default"/>
+                            <field name="usage_type" string="EntityUsageType"/>
+                            <field name="shipping_zone" string="ShippingZone"/>
+                            <field name="ship_via" string="ShipVia"/>
+                            <field name="lead_time_days" string="LeadTimeDays"/>
+                            <field name="order_priority" string="OrderPriority"/>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime"/>
                         </group>
+                    </group>
+                    <group string="Note">
+                        <field name="note" nolabel="1"/>
                     </group>
                     <group string="Address (LocationContact/Address)">
                         <group>
-                            <field name="address_line1" string="AddressLine1 → street"/>
-                            <field name="city"          string="City → city"/>
-                            <field name="postal_code"   string="PostalCode → zip"/>
-                            <field name="state_code"    string="State → adt_state_code"/>
-                            <field name="country_code"  string="Country → adt_country_code"/>
+                            <field name="address_line1" string="AddressLine1"/>
+                            <field name="city" string="City"/>
+                            <field name="postal_code" string="PostalCode"/>
+                            <field name="state_code" string="State"/>
+                            <field name="country_code" string="Country"/>
                         </group>
                     </group>
                     <group string="Info Sync">
@@ -271,9 +270,6 @@
                             <field name="odoo_location_id"/>
                             <field name="import_message"/>
                         </group>
-                    </group>
-                    <group string="Note">
-                        <field name="note" nolabel="1"/>
                     </group>
                 </sheet>
             </form>
