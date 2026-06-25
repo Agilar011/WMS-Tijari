@@ -97,13 +97,17 @@ class StockPicking(models.Model):
         res = super().action_confirm()
 
         for picking in self:
+            domain_warehouse = []
             if picking.adt_dest_location_id:
-                warehouse = self.env['stock.warehouse'].search([
+                domain_warehouse.append(
                     ('view_location_id', 'parent_of', picking.adt_dest_location_id.id)
-                ], limit=1)
+                )
+                warehouse = self.env['stock.warehouse'].search(domain_warehouse, limit=1)
                 for move_line in picking.move_line_ids:
                     move_line.allocation_storage = warehouse.lot_stock_id.id
-
+            else:
+                for move_line in picking.move_line_ids:
+                    move_line.allocation_storage = picking.picking_type_id.warehouse_id.lot_stock_id.id
 
         return res
 
