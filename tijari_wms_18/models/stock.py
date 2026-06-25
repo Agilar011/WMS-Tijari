@@ -249,6 +249,12 @@ class StockMoveLine(models.Model):
         related='picking_id.picking_type_code',
         store=False,
     )
+    origin = fields.Char(
+        related='picking_id.origin',
+        string='Source Document',
+        readonly=True,
+        store=False,
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
