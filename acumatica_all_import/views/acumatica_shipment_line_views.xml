@@ -14,6 +14,11 @@
                 <field name="status"/>
                 <field name="import_state"/>
                 <field name="odoo_picking_id"/>
+                <button name="action_import_this"
+                        string="Import ke Odoo"
+                        type="object"
+                        class="btn-primary"
+                        invisible="import_state != 'pending'"/>              
             </list>
         </field>
     </record>

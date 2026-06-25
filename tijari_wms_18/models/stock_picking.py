@@ -62,7 +62,7 @@ class StockPicking(models.Model):
         )
 
         if not move_line_ids:
-            raise UserError(_(
+            raise UserError((
                 "There is nothing eligible to put in a pack."
             ))
 

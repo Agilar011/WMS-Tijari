@@ -44,12 +44,12 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
         params = []
 
-        if self.wh33_filter:
-            params.append("Details/Warehouse(d: startswith(Details/Warehouse, 'WH33'))")
-            print("="*80)
-            print(f"[DEBUG] Masuk ke proses filter warehouse jika field true, WH Filter: {self.wh33_filter}")
-            print(params)
-            print("="*80)
+        # if self.wh33_filter:
+        #     params.append("Details/Warehouse(d: startswith(Details/Warehouse, 'WH33'))")
+        #     print("="*80)
+        #     print(f"[DEBUG] Masuk ke proses filter warehouse jika field true, WH Filter: {self.wh33_filter}")
+        #     print(params)
+        #     print("="*80)
 
         if self.start_date and self.end_date:
             params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
