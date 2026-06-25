@@ -6,6 +6,7 @@ from odoo.tools import float_is_zero, float_compare
 import hashlib
 import base64
 from ast import literal_eval
+from odoo.tools.misc import OrderedSet
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -51,6 +52,13 @@ class StockPicking(models.Model):
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
     operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
+    def _sync_adt_quantities_from_moves(self):
+        for picking in self:
+            picking.update({
+                'adt_total_qty': sum(picking.move_ids.mapped('product_uom_qty')),
+                'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
+            })
+
     def button_validate(self):
         res = super().button_validate()
 
@@ -63,9 +71,7 @@ class StockPicking(models.Model):
                 line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
                 if not line.lot_name:
                     print(f"Missing lot: {line}")
-                    raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
-            # if not rec.lot_name:
-            #     raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
+                    raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
         for picking in self:
             operation_category = picking.picking_type_id.operation_category
             print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
@@ -92,7 +98,7 @@ class StockPicking(models.Model):
                 continue
 
             storage_pickings = self.env["stock.picking"].search([
-                ("origin", "ilike", picking.name),
+                ("origin", "ilike", picking.origin),
                 ("picking_type_id.code", "=", "internal"),
             ])
             total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
@@ -103,20 +109,17 @@ class StockPicking(models.Model):
             total_qty_storage = sum(storage_pickings.move_ids.move_line_ids.mapped("quantity"))
             storage_pickings.write({
                 "adt_dest_location_id": picking.adt_dest_location_id,
-                "origin": picking.origin or picking.name,
                 "note" : picking.note,
-                'adt_total_qty': total_qty_storage
             })
             
             for ml in picking.move_line_ids:  
-                for sp in storage_pickings.move_ids:
-                    move_line = self.env['stock.move.line'].search([
-                        ("picking_id", "=", sp.picking_id.id),
-                        ("product_id", "=", sp.product_id.id),
-                        ("quantity", "=", sp.quantity)
-                    ])
-                    if move_line:
-                        move_line.location_dest_id = ml.allocation_storage.id
+                move_line = self.env['stock.move.line'].search([
+                    ("picking_id", "=", storage_pickings.id),
+                    ("product_id", "=", ml.product_id.id),
+                    ("quantity", "=", ml.quantity)
+                ])
+                if move_line:
+                    move_line.location_dest_id = ml.allocation_storage.id
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
@@ -244,6 +247,28 @@ class StockMoveLine(models.Model):
         related='picking_id.picking_type_code',
         store=False,
     )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        move_lines = super().create(vals_list)
+        move_lines.mapped('picking_id')._sync_adt_quantities_from_moves()
+        return move_lines
+
+    def write(self, vals):
+        pickings = self.mapped('picking_id')
+        res = super().write(vals)
+        pickings |= self.mapped('picking_id')
+
+        if {'quantity', 'move_id', 'picking_id'} & set(vals):
+            pickings._sync_adt_quantities_from_moves()
+
+        return res
+
+    def unlink(self):
+        pickings = self.mapped('picking_id')
+        res = super().unlink()
+        pickings._sync_adt_quantities_from_moves()
+        return res
 
     @api.depends(
         'confirmation_location_code',
@@ -739,6 +764,28 @@ class StockMove(models.Model):
         store=True,
     )
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        moves = super().create(vals_list)
+        moves.mapped('picking_id')._sync_adt_quantities_from_moves()
+        return moves
+
+    def write(self, vals):
+        pickings = self.mapped('picking_id')
+        res = super().write(vals)
+        pickings |= self.mapped('picking_id')
+
+        if {'product_uom_qty', 'quantity', 'picking_id'} & set(vals):
+            pickings._sync_adt_quantities_from_moves()
+
+        return res
+
+    def unlink(self):
+        pickings = self.mapped('picking_id')
+        res = super().unlink()
+        pickings._sync_adt_quantities_from_moves()
+        return res
+
 
     # lot_button = fields.Char(string="Lot Button")
 
@@ -764,17 +811,11 @@ class StockMove(models.Model):
                     }
                 }
             
-    def _update_total_qty(self):
-        for picking in self.mapped("picking_id"):
-            picking.adt_total_qty = sum(
-                picking.move_ids.mapped("quantity")
-            )
+    @api.onchange('product_uom_qty', 'quantity')
+    def _onchange_sync_picking_quantities(self):
+        for move in self:
+            picking = move.picking_id
+            if not picking:
+                continue
 
-    def write(self, vals):
-        res = super().write(vals)
-
-        if "quantity" in vals:
-            self._update_total_qty()
-
-        return res
-
+            picking._sync_adt_quantities_from_moves()

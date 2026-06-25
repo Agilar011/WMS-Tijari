@@ -118,16 +118,16 @@
                 <sheet>
                     <group string="Field Mandatory">
                         <group>
-                            <field name="inventory_id"  string="InventoryID → default_code"/>
-                            <field name="description"   string="Description → name"/>
-                            <field name="item_type"     string="ItemType → type"/>
-                            <field name="item_status"   string="ItemStatus → adt_item_status (to be)"/>
+                            <field name="inventory_id"  string="InventoryID"/>
+                            <field name="description"   string="Description"/>
+                            <field name="item_type"     string="ItemType"/>
+                            <field name="item_status"   string="ItemStatus"/>
                         </group>
                         <group>
-                            <field name="item_class"        string="ItemClass → adt_item_class (to be)"/>
-                            <field name="base_uom"          string="BaseUOM → uom_id (lookup)"/>
-                            <field name="valuation_method"  string="ValuationMethod → adt_valuation_method (to be)"/>
-                            <field name="last_modified_datetime" string="LastModifiedDateTime → adt_acumatica_write_date (to be)"/>
+                            <field name="item_class"        string="ItemClass"/>
+                            <field name="base_uom"          string="BaseUOM"/>
+                            <field name="valuation_method"  string="ValuationMethod"/>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime"/>
                         </group>
                     </group>
 

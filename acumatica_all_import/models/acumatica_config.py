@@ -62,6 +62,15 @@ class AcumaticaConfig(models.Model):
     odata_filter = fields.Char(
         string='OData Filter',
     )
+    endpoint_name = fields.Char(
+        string='Endpoint Name',
+        help='Dipakai untuk transaksi yang butuh endpoint Acumatica spesifik.',
+    )
+    is_default = fields.Boolean(
+        string='Default',
+        default=False,
+        help='Dipakai sebagai config bawaan untuk tipe import yang sama.',
+    )
     config_type = fields.Selection(
         selection=[
             ('po_receipt', 'PO Receipt'),
@@ -87,8 +96,48 @@ class AcumaticaConfig(models.Model):
             ('uom', 'Unit of Measure'),
             ('vendor', 'Vendor'),
             ('inventory_stock', 'Inventory Stock'),
-        ], string='Master Data Type'
+        ], string='Config Type', required=True, default='uom',
     )
+
+    @api.model
+    def _get_default_config_for_type(self, config_type):
+        if not config_type:
+            return self.browse()
+
+        default_config = self.search([
+            ('config_type', '=', config_type),
+            ('is_default', '=', True),
+            ('active', '=', True),
+        ], limit=1)
+        if default_config:
+            return default_config
+
+        return self.search([
+            ('config_type', '=', config_type),
+            ('active', '=', True),
+        ], limit=1)
+
+    def _sync_default_flag(self):
+        for record in self.filtered(lambda config: config.is_default and config.config_type):
+            siblings = self.search([
+                ('id', '!=', record.id),
+                ('config_type', '=', record.config_type),
+                ('is_default', '=', True),
+            ])
+            if siblings:
+                siblings.write({'is_default': False})
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records._sync_default_flag()
+        return records
+
+    def write(self, vals):
+        result = super().write(vals)
+        if 'is_default' in vals or 'config_type' in vals:
+            self._sync_default_flag()
+        return result
 
     # ─── Computed URLs ───────────────────────────────
     @property

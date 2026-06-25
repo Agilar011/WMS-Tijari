@@ -292,9 +292,9 @@ class AcumaticaIssuePoReturnLine(models.Model):
             return False
 
     @staticmethod
-    def _parse_float(value):
+    def _parse_int(value):
         try:
-            return float(value or 0)
+            return int(value or 0)
         except Exception:
             return 0.0
 
@@ -453,7 +453,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     'adt_header_location_code': first.header_location_code or False,
                     'adt_post_period': first.post_period or False,
                     'adt_status': first.status or False,
-                    'adt_total_qty': self._parse_float(first.total_qty),
+                    'adt_total_qty': self._parse_int(first.total_qty),
                     'adt_type': first.receipt_type or False,
                     'adt_warehouse_code': first.warehouse_code or False,
                     'adt_external_id': first.external_id or False,
@@ -477,6 +477,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     updated += 1
                 else:
                     picking = Picking.create(vals)
+                    picking.action_confirm()
                     action_state = 'imported'
                     imported += 1
 
@@ -491,7 +492,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
 
                         uom = self._find_uom(line, product)
                         line_dest = self._find_location_dest(line, warehouse) or dest_location
-                        qty = self._parse_float(line.product_uom_qty)
+                        qty = self._parse_int(line.product_uom_qty)
 
                         # dedup move
                         move_domain = [('picking_id', '=', picking.id)]
@@ -526,8 +527,8 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             'adt_inventory_id': line.inventory_id or False,
                             'adt_line_nbr': line.line_nbr or False,
                             'adt_line_type': line.line_type or False,
-                            'adt_open_qty': self._parse_float(line.open_qty),
-                            'adt_order_qty': self._parse_float(line.order_qty),
+                            'adt_open_qty': self._parse_int(line.open_qty),
+                            'adt_order_qty': self._parse_int(line.order_qty),
                             'adt_po_line_number': line.po_line_number or False,
                             'adt_po_number': line.po_number or False,
                             'adt_po_type': line.po_type or False,

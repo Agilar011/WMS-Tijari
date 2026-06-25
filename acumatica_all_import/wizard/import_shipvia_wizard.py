@@ -15,7 +15,7 @@ class ImportShipviaWizard(models.TransientModel):
     _description = 'Wizard Import ShipVia dari Acumatica'
 
     config_id = fields.Many2one(
-        'acumatica.shipvia.config',
+        'acumatica.config',
         string='Konfigurasi API',
         required=True,
         domain=[('active', '=', True)],
@@ -37,8 +37,8 @@ class ImportShipviaWizard(models.TransientModel):
     ], default='draft')
 
     # Summary setelah fetch
-    total_fetched  = fields.Integer(string='Total Data Ditarik',       readonly=True)
-    total_new      = fields.Integer(string='ShipVia Baru',              readonly=True)
+    total_fetched  = fields.Integer(string='Total Data Ditarik', readonly=True)
+    total_new      = fields.Integer(string='ShipVia Baru', readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
     fetch_skip      = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
@@ -49,19 +49,19 @@ class ImportShipviaWizard(models.TransientModel):
             raise UserError('Pilih konfigurasi API terlebih dahulu.')
 
         # Hapus staging lama dari config ini
-        self.env['acumatica.shipvia.line'].search([
-            ('config_id', '=', self.config_id.id)
-        ]).unlink()
+        # self.env['acumatica.shipvia.line'].search([
+        #     ('config_id', '=', self.config_id.id)
+        # ]).unlink()
 
         # Teruskan parameter limit dan skip ke fungsi fetch
         import math
 
-        raw_list = []
+        raw_list = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_shipvia_data(
+            batch_data = self.fetch_shipvia_data(
                 limit=self.batch_size,
                 offset=offset,
             )
@@ -69,60 +69,12 @@ class ImportShipviaWizard(models.TransientModel):
             if not batch_data:
                 break
 
-            raw_list.extend(batch_data)
+            raw_list += batch_data
 
+        self.total_fetched = raw_list
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
-
-        new_count = existing_count = 0
-        lines_to_create = []
-
-        for item in raw_list:
-            # UUID-first lookup
-            Partner  = self.env['res.partner']
-            existing = Partner.browse()
-            if item['external_id']:
-                existing = Partner.search([
-                    ('adt_external_id', '=', item['external_id'])
-                ], limit=1)
-            if not existing and item['carrier_id']:
-                existing = Partner.search([
-                    ('company_registry', '=', item['carrier_id'])
-                ], limit=1)
-
-            if existing:
-                existing_count += 1
-                msg = f'Sudah ada → akan diupdate: {existing.name}'
-            else:
-                new_count += 1
-                msg = ''
-
-            lines_to_create.append({
-                'config_id':               self.config_id.id,
-                'external_id':             item['external_id'],
-                'note':                    item['note'],
-                'address':                 item['address'],
-                'carrier_id':              item['carrier_id'], 
-                'city':                    item['city'],
-                'description':             item['description'],
-                'note_id':                 item['note_id'],
-                'phone':                   item['phone'],
-                'import_state':            'pending',
-                'import_message':          msg,
-                'odoo_partner_id':         existing.id if existing else False,
-                'selected':                True,
-                'sync_date':               fields.Datetime.now(),
-            })
-
-        self.env['acumatica.shipvia.line'].create(lines_to_create)
-
-        self.write({
-            'state':          'fetched',
-            'total_fetched':  len(raw_list),
-            'total_new':      new_count,
-            'total_existing': existing_count,
-        })
 
         return {
             'type':      'ir.actions.act_window',
@@ -150,7 +102,6 @@ class ImportShipviaWizard(models.TransientModel):
         lines = self.env['acumatica.shipvia.line'].search([
             ('config_id',    '=', self.config_id.id),
             ('import_state', '=', 'pending'),
-            ('selected',     '=', True),
         ])
         if not lines:
             raise UserError('Tidak ada data pending yang dipilih untuk diimport.')
@@ -165,3 +116,155 @@ class ImportShipviaWizard(models.TransientModel):
             'view_mode': 'list,form',
             'domain':    [('config_id', '=', self.config_id.id)],
         }
+
+    def fetch_shipvia_data(self, limit=50, offset=0):
+        """
+        Ambil data ShipVia dari Acumatica API.
+        Endpoint: GET /ShipVia?$top={limit}&$skip={skip}
+
+        Field yang diambil (sesuai mapping):
+          note                  → internal_notes
+          Address               → street
+          CarrierID             → carrier_code
+          City                  → city
+          Description           → name
+          NoteID                → note_id
+          phone                 → phone
+
+        Return: list of dict
+        """
+        self.ensure_one()
+        session = self.config_id._do_login()
+
+        try:
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
+            
+            # Menambahkan $top dan $skip untuk pagination
+            params = {
+                "$top": limit,
+                "$skip": offset
+            }
+            
+            response = session.get(endpoint, params=params, timeout=60)
+
+            if response.status_code != 200:
+                raise UserError(
+                    f'Gagal ambil data ShipVia (HTTP {response.status_code}): {response.text}'
+                )
+
+            raw_data = response.json()
+            _logger.info(
+                "Berhasil ambil %d records ShipVia (Skip: %d) dari Acumatica", 
+                len(raw_data), offset
+            )
+
+            def val(item, key):
+                """Ambil .value dari response Acumatica, return '' jika kosong/None."""
+                v = item.get(key, {})
+                if isinstance(v, dict):
+                    return v.get("value", "") or ""
+                return ""
+
+            def ival(item, key):
+                """Integer value, return 0 jika kosong."""
+                v = item.get(key, {})
+                if isinstance(v, dict):
+                    raw = v.get("value", 0)
+                    try:
+                        return int(raw) if raw != "" else 0
+                    except (ValueError, TypeError):
+                        return 0
+                return 0
+
+            result = []
+            for row_number, item in enumerate(raw_data, start=1):
+                result.append({
+                    'external_id': item.get("id", "") or "",
+                    'row_number': item.get("rowNumber", row_number) or row_number,
+                    'note': item.get("note", {}).get("value", "") or "",
+                    'address': val(item, "Address"),
+                    'carrier_id': val(item, "CarrierID"),
+                    'city': val(item, "City"),
+                    'description': val(item, "Description"),
+                    'note_id': val(item, "NoteID"),
+                    'phone': val(item, "Phone"),
+                })
+            Partner = self.env['res.partner']
+            Staging = self.env['acumatica.shipvia.line']
+            new_count = existing_count = 0
+
+            query = """
+                INSERT INTO acumatica_shipvia_line
+                (
+                    config_id,
+                    row_number,
+                    external_id,
+                    note,
+                    address,
+                    carrier_id,
+                    city,
+                    description,
+                    note_id,
+                    phone,
+                    import_state,
+                    import_message,
+                    odoo_partner_id,
+                    sync_date
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s
+                )
+            """
+
+            for item in result:
+                staging_domain = []
+                if item['external_id'] and item['carrier_id']:
+                    staging_domain = ['|', ('external_id', '=', item['external_id']), ('carrier_id', '=', item['carrier_id'])]
+                elif item['external_id']:
+                    staging_domain = [('external_id', '=', item['external_id'])]
+                elif item['carrier_id']:
+                    staging_domain = [('carrier_id', '=', item['carrier_id'])]
+
+                if staging_domain and Staging.search(staging_domain, limit=1):
+                    continue
+
+                existing = False
+                if item['carrier_id']:
+                    existing = Partner.search([
+                        ('company_registry', '=', item['carrier_id'])
+                    ], limit=1)
+
+                if existing:
+                    existing_count += 1
+                    msg = 'Data sudah ada'
+                else:
+                    new_count += 1
+                    msg = ''
+
+                params = (
+                    self.config_id.id,
+                    item['row_number'],
+                    item['external_id'],
+                    item['note'],
+                    item['address'],
+                    item['carrier_id'],
+                    item['city'],
+                    item['description'],
+                    item['note_id'],
+                    item['phone'],
+                    'pending',
+                    msg,
+                    existing.id if existing else None,
+                    fields.Datetime.now()
+                )
+
+                self.env.cr.execute(query, params)
+                self.env['acumatica.shipvia.line']._invalidate_cache()
+
+            return len(result)
+
+
+        finally:
+            self.config_id._do_logout(session)
+            self.config_id.last_sync = fields.Datetime.now()

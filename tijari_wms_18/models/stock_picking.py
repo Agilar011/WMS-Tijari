@@ -42,6 +42,7 @@ class StockPicking(models.Model):
     ], string='Sync State', default='ready', readonly=True, help='Data acumatica yg tidak sesuai dengan master yg ada di wms akan masuk ke state Not Ready, dan record tidak bisa di proses sampai data master nya sudah sinkron.')
     sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
     adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
+    destination_location = fields.Char(string='to delete field')
 
     def action_put_in_pack(self, move_lines_to_pack=False):
         self.ensure_one()
@@ -142,7 +143,8 @@ class StockRule(models.Model):
         ):
             vals.update({
                 "location_dest_id": picking.adt_dest_location_id.id,
-                # "adt_dest_location_id": picking.adt_dest_location_id.id
+                "adt_dest_location_id": picking.adt_dest_location_id.id,
+                "origin": picking.origin
             })
 
         return vals

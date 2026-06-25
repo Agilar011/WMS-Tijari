@@ -30,6 +30,10 @@
                 <attribute name="invisible">state != 'assigned' or picking_type_code == 'incoming'</attribute>
             </xpath>
             
+            <xpath expr="//button[@name='%(stock.action_report_delivery)d']"
+                position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
             <!-- <xpath expr="//button[@name='209']" position="attributes">
                 <attribute name="invisible">True</attribute>
             </xpath> -->
@@ -53,6 +57,12 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
 
+            <xpath expr="//field[@name='picking_type_id']"
+                position="after">
+                <field name="adt_type" string="Transaction Type" />
+
+            </xpath>
+
             <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']"
                 position="replace">
                 <field name="operation_category" invisible="1" />
@@ -68,7 +78,7 @@
                 <field name="location_dest_id"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
-                    invisible="picking_type_code != 'internal' and operation_category != 'put'"
+                    invisible="picking_type_code != 'internal' or operation_category != 'put'"
                     readonly="state == 'done'"
                     domain="[('id', 'child_of', adt_dest_location_id)]"/>
 
@@ -82,9 +92,15 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
-            <xpath expr="//notebook" position="inside">
-                <page string="Ba Notes">
-                    <field name="note_ba" no_label="1" />
+            <xpath expr="//page[@name='note']" position="replace">
+                <page name="Notes" string="Notes">
+                    <group name="Transaction Notes" string="Transaction Notes">
+                        <field name="note" nolabel="1"/>
+                    </group>
+
+                    <group name="BA Notes" string="BA Notes">
+                        <field name="note_ba" nolabel="1"/>
+                    </group>
                 </page>
             </xpath>
         </field>

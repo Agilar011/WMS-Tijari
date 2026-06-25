@@ -34,8 +34,6 @@
                 <filter string="Error" name="error"
                         domain="[('import_state','=','error')]"/>
                 <separator/>
-                <filter string="Dipilih" name="selected"
-                        domain="[('selected','=',True)]"/>
                 <filter string="Status Active" name="active_only"
                         domain="[('status','=ilike','active')]"/>
 
@@ -59,29 +57,26 @@
         <field name="model">acumatica.customer.line</field>
         <field name="arch" type="xml">
             <list string="Data Customer dari Acumatica" multi_edit="1">
-                <field name="selected" optional="show"/>
-                <field name="row_number"    string="No"           optional="show"/>
-                <field name="customer_id"   string="CustomerID"   />
-                <field name="b_account_id"  string="BAccountID"   optional="show"/>
+                <field name="customer_id" string="CustomerID"   />
+                <field name="b_account_id" string="BAccountID" optional="show"/>
                 <field name="customer_name" string="CustomerName" />
                 <field name="customer_class" string="CustomerClass" optional="show"/>
-                <field name="status"        string="Status"
+                <field name="status" string="Status"
                        decoration-success="status == 'Active'"
                        decoration-muted="status == 'Inactive'"
                        decoration-warning="status == 'Hold'"/>
-                <field name="currency_id"   string="CurrencyID"   optional="show"/>
-                <field name="warehouse_id"  string="WarehouseID"  optional="show"/>
+                <field name="currency_id" string="CurrencyID" optional="show"/>
+                <field name="warehouse_id" string="WarehouseID" optional="show"/>
                 <field name="shipping_zone_id" string="ShippingZone" optional="show"/>
-                <field name="fob_point"     string="FOBPoint"     optional="show"/>
+                <field name="fob_point" string="FOBPoint" optional="show"/>
                 <field name="location_name" string="LocationName" optional="show"/>
-                <field name="import_state"  string="Status Import" widget="badge"
+                <field name="import_state" string="Status Import" widget="badge"
                        decoration-success="import_state == 'imported'"
                        decoration-info="import_state == 'updated'"
                        decoration-warning="import_state == 'skipped'"
                        decoration-danger="import_state == 'error'"
                        decoration-muted="import_state == 'pending'"/>
-                <field name="odoo_partner_id" string="Partner di Odoo" optional="show"/>
-                <field name="import_message"  string="Keterangan"      optional="show"/>
+                <field name="import_message" string="Keterangan" optional="show"/>
                 <button name="action_import_this"
                         string="Import"
                         type="object"
@@ -122,49 +117,40 @@
                 </header>
                 <sheet>
                     <!-- ── Mandatory Fields ── -->
-                    <group string="📋 Field Mandatory">
+                    <group string="Field Acumatica">
                         <group>
-                            <field name="customer_id"   string="CustomerID"/>
+                            <field name="customer_id" string="CustomerID"/>
                             <field name="b_account_id"  string="BAccountID"/>
                             <field name="customer_name" string="CustomerName"/>
-                            <field name="status"        string="Status"/>
+                            <field name="status" string="Status"/>
                         </group>
                         <group>
-                            <field name="warehouse_id"    string="WarehouseID"/>
+                            <field name="warehouse_id" string="WarehouseID"/>
                             <field name="shipping_zone_id" string="ShippingZoneID"/>
-                            <field name="fob_point"        string="FOBPoint"/>
-                        </group>
-                    </group>
-
-                    <!-- ── Optional Fields ── -->
-                    <group string="📝 Field Optional">
-                        <group>
-                            <field name="customer_class"   string="CustomerClass"/>
-                            <field name="currency_id"      string="CurrencyID"/>
-                            <field name="location_name"    string="LocationName"/>
+                            <field name="fob_point" string="FOBPoint"/>
                         </group>
                         <group>
-                            <field name="created_datetime"        string="CreatedDateTime"/>
-                            <field name="last_modified_datetime"   string="LastModifiedDateTime"/>
-                            <field name="note_id"                  string="NoteID"/>
+                            <field name="customer_class" string="CustomerClass"/>
+                            <field name="currency_id" string="CurrencyID"/>
+                            <field name="location_name" string="LocationName"/>
+                        </group>
+                        <group>
+                            <field name="created_datetime" string="CreatedDateTime"/>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime"/>
+                            <field name="note_id" string="NoteID"/>
                         </group>
                     </group>
-
-                    <group string="📝 Note">
+                    <group string="Notes">
                         <field name="note" string="Note" nolabel="1"/>
                     </group>
 
                     <!-- ── Hasil Import ── -->
-                    <group string="🔗 Hasil di Odoo">
+                    <group string="Hasil di Odoo">
                         <group>
                             <field name="odoo_partner_id"/>
                             <field name="import_message"/>
-                        </group>
-                        <group>
                             <field name="sync_date"/>
                             <field name="config_id"/>
-                            <field name="external_id"/>
-                            <field name="row_number"/>
                         </group>
                     </group>
                 </sheet>

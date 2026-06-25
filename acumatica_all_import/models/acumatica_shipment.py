@@ -530,7 +530,7 @@ class AcumaticaShipmentLine(models.Model):
         header_payload = shipment.read()[0] if shipment.exists() else {}
         error_messages = []
         error_line_payloads = []
-        picking = shipment.odoo_picking_id
+        picking = shipment.odoo_picking_id.id
         action_state = 'pending'
 
         partner = self._find_partner(shipment)
@@ -578,6 +578,7 @@ class AcumaticaShipmentLine(models.Model):
             'adt_acumatica_write_date': self._parse_dt(shipment.acumatica_write_date),
             'adt_total_qty': self._parse_float(shipment.actual_qty),
             'adt_actual_qty': self._parse_float(shipment.actual_qty),
+            'adt_type': shipment.shipment_type or False
 
         }
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}

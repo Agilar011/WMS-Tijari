@@ -13,7 +13,7 @@ class ImportCustomerLocationWizard(models.TransientModel):
     # INPUT USER
     # =========================
     config_id = fields.Many2one(
-        'acumatica.customer.location.config',
+        'acumatica.config',
         string='API Digunakan',
         required=True,
         domain=[('active', '=', True)],
@@ -75,7 +75,6 @@ class ImportCustomerLocationWizard(models.TransientModel):
         import math
 
         raw_list = 0
-        raw_list_count = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
@@ -84,14 +83,16 @@ class ImportCustomerLocationWizard(models.TransientModel):
                 limit=self.batch_size,
                 offset=offset,
             )
-            raw_list_count += batch_data
+            raw_list += batch_data
 
             if not batch_data:
                 break
             # print(f"Batch {i+1} - Data Diterima: {len(batch_data)} - Total so far: {raw_list_count}")
             # raw_list.extend(batch_data)
 
-        if not raw_list_count:
+        self.total_fetched = raw_list
+
+        if not raw_list:
             raise UserError('Tidak ada data dari API')
 
         # Partner = self.env['res.partner']
@@ -180,7 +181,6 @@ class ImportCustomerLocationWizard(models.TransientModel):
         lines = self.env['acumatica.customer.location.line'].search([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
-            ('selected', '=', True),
         ])
 
         if not lines:
@@ -195,7 +195,7 @@ class ImportCustomerLocationWizard(models.TransientModel):
         session = self.config_id._do_login()
 
         try:
-            endpoint = f"{self.config_id.api_url}/CustomerLocation"
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
 
             all_results = []
             params = {
@@ -290,6 +290,7 @@ class ImportCustomerLocationWizard(models.TransientModel):
 
             _logger.info("TOTAL FINAL: %d records", len(all_results))
             Partner = self.env['res.partner']
+            Staging = self.env['acumatica.customer.location.line']
 
             new_count = existing_count = no_customer_count = 0
             lines = []
@@ -297,24 +298,28 @@ class ImportCustomerLocationWizard(models.TransientModel):
             batch_num = 0
             for item in all_results:
                 batch_num += 1
-                existing = Partner.search([
-                    ('name', '=', item['location_id_acumatica']),
-                    ('parent_id.company_registry', '=', item['customer'])
-                ], limit=1)
+                staging_domain = []
+                if item['location_id_acumatica']:
+                    staging_domain = [
+                        '&',
+                        ('location_id_acumatica', '=', item['location_id_acumatica']),
+                        ('customer', '=', item['customer']),
+                    ]
+
+                if staging_domain and Staging.search(staging_domain, limit=1):
+                    continue
 
                 partner = Partner.search([
                     ('company_registry', '=', item['customer'])
                 ], limit=1)
 
-                if existing:
+                if partner:
                     existing_count += 1
-                    msg = 'Update'
-                elif not partner:
-                    no_customer_count += 1
-                    msg = 'Customer tidak ditemukan'
+                    msg = 'Data sudah ada'
                 else:
+                    no_customer_count += 1
+                    msg = ''
                     new_count += 1
-                    msg = 'New'
                 
                 query = """
                     INSERT INTO acumatica_customer_location_line 
@@ -359,14 +364,12 @@ class ImportCustomerLocationWizard(models.TransientModel):
                     location_id_acumatica,
                     location_name,
                     import_state, 
-                    import_message, 
-                    selected
+                    import_message
                     ) 
-                    VALUES (%s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s)
                 """
                 params = (
                     self.config_id.id,
@@ -408,8 +411,7 @@ class ImportCustomerLocationWizard(models.TransientModel):
                     item['location_id_acumatica'],
                     item['location_name'],
                     'pending',
-                    msg,
-                    True if msg in ['Update', 'New'] else False
+                    msg
                 )
                 self.env.cr.execute(query, params)
 
@@ -421,4 +423,3 @@ class ImportCustomerLocationWizard(models.TransientModel):
         finally:
             self.config_id._do_logout(session)
             self.config_id.last_sync = fields.Datetime.now()
-

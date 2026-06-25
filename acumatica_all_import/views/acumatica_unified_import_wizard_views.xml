@@ -13,7 +13,8 @@
                         <field name="import_type_master" invisible="import_category != 'master'"/>
                     </group>
                     <group string="API Configuration">
-
+                        <field name="config_id" domain="[('config_type', '=', import_type), ('active', '=', True)]" context="{'default_config_type': import_type}"/>
+                        <!-- OLD: field config per import type.
                         <field name="uom_config_id" invisible="import_type != 'uom'" required="import_type == 'uom'"/>
                         <field name="customer_config_id" invisible="import_type != 'customer'" required="import_type == 'customer'"/>
                         <field name="vendor_config_id" invisible="import_type != 'vendor'" required="import_type == 'vendor'"/>
@@ -36,6 +37,7 @@
                         <field name="transfer_shipment_config_id" invisible="import_type != 'transfer_shipment'" required="import_type == 'transfer_shipment'"/>
                         <field name="kit_assembly_config_id" invisible="import_type != 'kit_assembly'" required="import_type == 'kit_assembly'"/>
                         <field name="inventory_stock_config_id" invisible="import_type != 'inventory_stock'" required="import_type == 'inventory_stock'"/>
+                        -->
                     </group>
                     <group string="Filter Fetch" invisible="import_type == 'inventory_stock'">
                         <field name="fetch_limit"/>

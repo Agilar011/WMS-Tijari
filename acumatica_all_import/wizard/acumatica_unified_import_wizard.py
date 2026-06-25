@@ -1,5 +1,5 @@
 from odoo import api, fields, models, _
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 
 
 class AcumaticaUnifiedImportWizard(models.TransientModel):
@@ -156,7 +156,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'label': 'SO Return',
             'wizard_model': 'import.shipment.wizard',
             'config_field': 'shipment_config_id',
-            'line_model': 'acumatica.shipment.line',
+            'line_model': 'acumatica.shipment.gi.staging',
             'result_name': 'Hasil Import SO Return',
             'staging_name': 'Data SO Return dari Acumatica',
             'extra_fields': ['shipment_nbr', 'last_modified_from', 'odata_filter'],
@@ -165,7 +165,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'label': 'SO Shipment',
             'wizard_model': 'import.so.shipment.wizard',
             'config_field': 'so_shipment_config_id',
-            'line_model': 'acumatica.so.shipment.line',
+            'line_model': 'acumatica.shipment.gi.staging',
             'result_name': 'Hasil Import SO Shipment',
             'staging_name': 'Data SO Shipment dari Acumatica',
             'extra_fields': ['shipment_nbr', 'last_modified_from', 'odata_filter'],
@@ -272,6 +272,27 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         
         return selection
 
+    def _get_default_config_for_import_type(self, import_type):
+        return self.env['acumatica.config']._get_default_config_for_type(import_type)
+
+    @api.model
+    def default_get(self, fields_list):
+        res = super().default_get(fields_list)
+
+        import_type = res.get('import_type')
+        if not import_type:
+            if res.get('import_category') == 'master':
+                import_type = res.get('import_type_master') or 'customer'
+            else:
+                import_type = res.get('import_type_transaction') or 'po_receipt'
+
+        if 'config_id' in fields_list and not res.get('config_id'):
+            config = self._get_default_config_for_import_type(import_type)
+            if config:
+                res['config_id'] = config.id
+
+        return res
+
     @api.onchange('import_category', 'import_type_transaction', 'import_type_master')
     def _onchange_import_type_value(self):
         if self.import_category == 'transaction':
@@ -279,6 +300,9 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
         if self.import_category == 'master':
             self.import_type = self.import_type_master
+
+        config = self._get_default_config_for_import_type(self.import_type)
+        self.config_id = config if config else False
 
     import_category = fields.Selection([
         ('transaction', 'Transaction'),
@@ -327,29 +351,35 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     start_date = fields.Date(string='Start Date Filter', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
     end_date = fields.Date(string='End Date Filter', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
-    uom_config_id = fields.Many2one('acumatica.config', string='UoM Configuration', domain=[('active', '=', True)])
-    customer_config_id = fields.Many2one('acumatica.customer.config', string='Customer Configuration', domain=[('active', '=', True)])
-    vendor_config_id = fields.Many2one('acumatica.vendor.config', string='Vendor Configuration', domain=[('active', '=', True)])
-    warehouse_config_id = fields.Many2one('acumatica.warehouse.config', string='Warehouse Configuration', domain=[('active', '=', True)])
-    stock_item_config_id = fields.Many2one('acumatica.stock.item.config', string='Stock Item Configuration', domain=[('active', '=', True)])
-    non_stock_item_config_id = fields.Many2one('acumatica.non.stock.item.config', string='Non-Stock Item Configuration', domain=[('active', '=', True)])
-    customer_location_config_id = fields.Many2one('acumatica.customer.location.config', string='Customer Location Configuration', domain=[('active', '=', True)])
-    shipvia_config_id = fields.Many2one('acumatica.shipvia.config', string='ShipVia Configuration', domain=[('active', '=', True)])
-
-    receipt_config_id = fields.Many2one('acumatica.receipt.config', string='Receipt Configuration', domain=[('active', '=', True)])
-    issue_po_return_config_id = fields.Many2one('acumatica.issue.po.return.config', string='Issue PO Return Configuration', domain=[('active', '=', True)])
-    transfer_one_step_config_id = fields.Many2one('acumatica.transfer.one.step.config', string='Transfer One Step Configuration', domain=[('active', '=', True)])
-    transfer_two_step_config_id = fields.Many2one('acumatica.transfer.two.step.config', string='Transfer Two Step Configuration', domain=[('active', '=', True)])
-    inventory_received_config_id = fields.Many2one('acumatica.inventory.recieved.config', string='Inventory Received Configuration', domain=[('active', '=', True)])
-    inventory_issue_config_id = fields.Many2one('acumatica.inventory.issue.config', string='Inventory Issue Configuration', domain=[('active', '=', True)])
-    receipt_change_item_config_id = fields.Many2one('acumatica.receipt.change.item.config', string='Receipt Change Item Configuration', domain=[('active', '=', True)])
-    issue_config_id = fields.Many2one('acumatica.issue.config', string='Issue Change Item Configuration', domain=[('active', '=', True)])
-    shipment_config_id = fields.Many2one('acumatica.shipment.config', string='Shipment SO Configuration', domain=[('active', '=', True)])
-    so_shipment_config_id = fields.Many2one('acumatica.so.shipment.config', string='SO Shipment Configuration', domain=[('active', '=', True)])
-    transfer_config_id = fields.Many2one('acumatica.transfer.config', string='SO Transfer Configuration', domain=[('active', '=', True)])
-    transfer_shipment_config_id = fields.Many2one('acumatica.transfer.shipment.config', string='Transfer Shipment Configuration', domain=[('active', '=', True)])
-    kit_assembly_config_id = fields.Many2one('acumatica.kit.assembly.config', string='Kit Assembly Configuration', domain=[('active', '=', True)])
-    inventory_stock_config_id = fields.Many2one('acumatica.inventory.stock.config', string='Inventory Stock Configuration', domain=[('active', '=', True)])
+    # OLD: one config field per import type.
+    # uom_config_id = fields.Many2one('acumatica.config', string='UoM Configuration', domain=[('active', '=', True)])
+    # customer_config_id = fields.Many2one('acumatica.customer.config', string='Customer Configuration', domain=[('active', '=', True)])
+    # vendor_config_id = fields.Many2one('acumatica.vendor.config', string='Vendor Configuration', domain=[('active', '=', True)])
+    # warehouse_config_id = fields.Many2one('acumatica.warehouse.config', string='Warehouse Configuration', domain=[('active', '=', True)])
+    # stock_item_config_id = fields.Many2one('acumatica.stock.item.config', string='Stock Item Configuration', domain=[('active', '=', True)])
+    # non_stock_item_config_id = fields.Many2one('acumatica.non.stock.item.config', string='Non-Stock Item Configuration', domain=[('active', '=', True)])
+    # customer_location_config_id = fields.Many2one('acumatica.customer.location.config', string='Customer Location Configuration', domain=[('active', '=', True)])
+    # shipvia_config_id = fields.Many2one('acumatica.shipvia.config', string='ShipVia Configuration', domain=[('active', '=', True)])
+    # receipt_config_id = fields.Many2one('acumatica.receipt.config', string='Receipt Configuration', domain=[('active', '=', True)])
+    # issue_po_return_config_id = fields.Many2one('acumatica.issue.po.return.config', string='Issue PO Return Configuration', domain=[('active', '=', True)])
+    # transfer_one_step_config_id = fields.Many2one('acumatica.transfer.one.step.config', string='Transfer One Step Configuration', domain=[('active', '=', True)])
+    # transfer_two_step_config_id = fields.Many2one('acumatica.transfer.two.step.config', string='Transfer Two Step Configuration', domain=[('active', '=', True)])
+    # inventory_received_config_id = fields.Many2one('acumatica.inventory.recieved.config', string='Inventory Received Configuration', domain=[('active', '=', True)])
+    # inventory_issue_config_id = fields.Many2one('acumatica.inventory.issue.config', string='Inventory Issue Configuration', domain=[('active', '=', True)])
+    # receipt_change_item_config_id = fields.Many2one('acumatica.receipt.change.item.config', string='Receipt Change Item Configuration', domain=[('active', '=', True)])
+    # issue_config_id = fields.Many2one('acumatica.issue.config', string='Issue Change Item Configuration', domain=[('active', '=', True)])
+    # shipment_config_id = fields.Many2one('acumatica.shipment.config', string='Shipment SO Configuration', domain=[('active', '=', True)])
+    # so_shipment_config_id = fields.Many2one('acumatica.so.shipment.config', string='SO Shipment Configuration', domain=[('active', '=', True)])
+    # transfer_config_id = fields.Many2one('acumatica.transfer.config', string='SO Transfer Configuration', domain=[('active', '=', True)])
+    # transfer_shipment_config_id = fields.Many2one('acumatica.transfer.shipment.config', string='Transfer Shipment Configuration', domain=[('active', '=', True)])
+    # kit_assembly_config_id = fields.Many2one('acumatica.kit.assembly.config', string='Kit Assembly Configuration', domain=[('active', '=', True)])
+    # inventory_stock_config_id = fields.Many2one('acumatica.inventory.stock.config', string='Inventory Stock Configuration', domain=[('active', '=', True)])
+    config_id = fields.Many2one(
+        'acumatica.config',
+        string='API Configuration',
+        required=True,
+        domain=[('active', '=', True)],
+    )
 
     state = fields.Selection([('draft', 'Siap'), ('fetched', 'Data Sudah Ditarik'), ('done', 'Selesai')], default='draft')
     total_fetched = fields.Integer(string='Total Line Ditarik', readonly=True)
@@ -367,9 +397,14 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         return self.IMPORT_MAP[self.import_type]
 
     def _get_selected_config(self, info):
-        config = self[info['config_field']]
+        config = self.config_id
         if not config:
             raise UserError(_('Pilih konfigurasi API untuk %s terlebih dahulu.') % info['label'])
+        if not config.config_type or config.config_type != self.import_type:
+            raise UserError(
+                _('Konfigurasi API yang dipilih tidak sesuai dengan tipe import %s.')
+                % info['label']
+            )
         
         return config
 
@@ -396,14 +431,12 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         return self.env[info['line_model']].search([
             ('config_id', '=', config.id),
             ('import_state', '=', 'pending'),
-            ('selected', '=', True),
         ], order='id')
     
     def _get_pending_domain(self, config):
         return [
             ('config_id', '=', config.id),
             ('import_state', '=', 'pending'),
-            ('selected', '=', True),
         ]
 
 
@@ -487,9 +520,11 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         self.ensure_one()
 
         info = self._get_import_info()
+                
         config = self._get_selected_config(info)
 
         Line = self.env[info['line_model']]
+        print(Line)
         pending_domain = self._get_pending_domain(config)
 
         total_pending_before = Line.search_count(pending_domain)

@@ -48,11 +48,10 @@ class AcumaticaShipViaLine(models.Model):
 
     import_message  = fields.Char(string='Keterangan',       readonly=True)
     odoo_partner_id = fields.Many2one('res.partner', string='Partner di Odoo', readonly=True)
-    selected        = fields.Boolean(string='Pilih',          default=True)
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
-        'acumatica.shipvia.config',
+        'acumatica.config',
         string='Konfigurasi',
         readonly=True,
         ondelete='cascade',
@@ -85,7 +84,7 @@ class AcumaticaShipViaLine(models.Model):
         return self._do_import()
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
