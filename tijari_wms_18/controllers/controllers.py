@@ -528,9 +528,9 @@ class WmsApiController(http.Controller):
                     'lot_name': lot.name or '',
                     'product': move.product_id.name or '',
                     'product_code': move.product_id.default_code or '',
-                    'ref': '',
-                    'docs': lins.origin or '',
-                    'date': format_tanggal_indo(lots.scheduled_date()),
+                    'ref': "",
+                    'docs': lots.origin or '',
+                    'date': format_tanggal_indo(lots.scheduled_date),
                     'qrcode': (
                         lots.qr_code_image.decode('utf-8')
                         if lots.qr_code_image else blank_image
