@@ -119,6 +119,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//field[@name='quant_id']" position="after">
+                <field name="origin" string="Source Document"/>
 
                 <field name="confirmation_location_code"
                     password="1"
