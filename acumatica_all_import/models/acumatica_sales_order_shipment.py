@@ -189,11 +189,15 @@ class AcumaticaShipmentGIStaging(models.Model):
                     # 3. USER
                     responsible_user = self._find_responsible()
 
+                    # print(f"warehouse Found : {warehouse.id}")
+
                     # 4. PICKING TYPE
                     picking_type = PickingType.search([
                         ('warehouse_id', '=', warehouse.id),
-                        ('code', '=', 'outgoing')
+                        ('sequence_code', '=', 'PICK')
                     ], limit=1)
+
+                    # print(f"Picking Type found : {picking_type.id}")
                     
                     if not picking_type:
                         raise ValidationError(f"Picking Type 'outgoing' untuk Warehouse {warehouse.name} tidak ditemukan")
@@ -263,7 +267,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                         new_picking = Picking.create(new_picking_vals)
                         print(f"SUCCESS CREATING NEW PICKING: {new_picking.name} (ID: {new_picking.id})")
 
-                        print(f"Gi ID : {shipment.id}")
+                        # print(f"Gi ID : {shipment.id}")
 
                         
                         new_move_id = shipment_header.search([
@@ -280,10 +284,12 @@ class AcumaticaShipmentGIStaging(models.Model):
                             Product = self._find_product(item, picking_type.default_location_src_id.id)
                             product = Product['product']
 
+                            print(product)
+
                             new_move_vals = {
-                                'company_id' : warehouse.id,
-                                'product_id' : Product.id,
-                                'product_uom' : Product.produtc_tmpl_id.id ,
+                                'company_id' : warehouse.company_id.id,
+                                'product_id' : product.id,
+                                'product_uom' : product.product_tmpl_id.uom_id.id ,
                                 'location_id' : picking_type.default_location_src_id.id,
                                 'location_dest_id' : picking_type.default_location_dest_id.id,
                                 'partner_id' : partner.id,
@@ -293,13 +299,12 @@ class AcumaticaShipmentGIStaging(models.Model):
                                 'name' : item.description,
                                 'origin' : new_picking.origin,
                                 'description_picking' : item.description,
-                                'product_qty' : item.shippedqty,
                                 'product_uom_qty' : item.shippedqty,
                                 'date' : shipment.ship_date,
                                 'date_deadline' : shipment.ship_date,
                                 'adt_line_external_id' : item.acumatica_id,
                                 'adt_inventory_id' : item.inventoryid,
-                                'adt_po_line_number' : item.shipment,
+                                # 'adt_po_line_number' : item.shipment,
                                 'adt_uom_code' : item.uom,
                                 'adt_line_note' : item.note,
                                 'adt_open_qty' : item.shippedqty,
@@ -364,6 +369,7 @@ class AcumaticaShipmentGIStaging(models.Model):
 
         Product = self.env['product.product']
         Quant = self.env['stock.quant']
+        Location = self.env['stock.location']
 
         product = False
         abort_picking = False
@@ -384,6 +390,14 @@ class AcumaticaShipmentGIStaging(models.Model):
             )
 
             return False
+        
+        if source_location:
+            location = Location.search([
+                ('id', '=', source_location)
+            ])
+
+        else:
+            print(f"Lokasi dengan id: {source_location} Tidak ditemukan")
 
 
 
@@ -408,8 +422,9 @@ class AcumaticaShipmentGIStaging(models.Model):
         )
 
         print(
-            f"AVAILABLE QTY = {available_qty} | "
-            f"REQUIRED = {line.shippedqty}"
+            f" | AVAILABLE QTY = {available_qty} | "
+            f"REQUIRED = {line.shippedqty} | "
+            f"Location = {location.complete_name} | "
         )
 
         if line.shippedqty and available_qty < line.shippedqty:
