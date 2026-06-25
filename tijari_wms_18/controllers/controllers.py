@@ -412,6 +412,7 @@ class WmsApiController(http.Controller):
                 'name': line.product_id.display_name or '',
                 'uom': line.product_uom.name if line.product_uom.name else '',
                 'difference_quantity': float(line.difference_quantity or 0),
+                'difference_quantity_red': line.difference_quantity or '',
                 'demand': float(line.product_uom_qty or 0),
                 'demand1': float(line.quantity or 0),
                 'qty': float(line.quantity or 0),
