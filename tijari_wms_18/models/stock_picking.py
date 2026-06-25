@@ -144,7 +144,7 @@ class StockRule(models.Model):
             vals.update({
                 "location_dest_id": picking.adt_dest_location_id.id,
                 "adt_dest_location_id": picking.adt_dest_location_id.id,
-                "origin": picking.origin
+                "origin": picking.origin if picking.origin else picking.name
             })
 
         return vals

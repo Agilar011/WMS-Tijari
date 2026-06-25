@@ -98,7 +98,7 @@ class StockPicking(models.Model):
                 continue
 
             storage_pickings = self.env["stock.picking"].search([
-                ("origin", "ilike", picking.origin),
+                ("origin", "ilike", picking.origin or picking.name),
                 ("picking_type_id.code", "=", "internal"),
             ])
             total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
@@ -769,6 +769,11 @@ class StockMove(models.Model):
         related="picking_id.adt_dest_location_id",
         store=True,
     )
+    difference_quantity = fields.Float(
+        string='Difference Quantity',
+        compute='_compute_difference_quantity',
+        store=True,
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -791,6 +796,12 @@ class StockMove(models.Model):
         res = super().unlink()
         pickings._sync_adt_quantities_from_moves()
         return res
+
+    @api.depends('product_uom_qty', 'quantity')
+    def _compute_difference_quantity(self):
+        for move in self:
+            difference = move.product_uom_qty - move.quantity
+            move.difference_quantity = difference if difference > 0 else 0.0
 
 
     # lot_button = fields.Char(string="Lot Button")
