@@ -67,8 +67,25 @@ class StockPicking(models.Model):
     #     return action
 
     def action_print_lot_number_line(self):
-        for rec in self:
-            rec.create_qrcode_name()
+        self.ensure_one()
+
+        lot_names = list(set(
+            self.move_ids_without_package.mapped('lot_ids.name')
+        ))
+
+        if not lot_names:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Peringatan',
+                    'message': 'Lot Number belum tersedia.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        self.create_qrcode_name()
 
         ids = ",".join(map(str, self.ids))
 

@@ -521,23 +521,23 @@ class WmsApiController(http.Controller):
         }
 
         for move in lots.move_ids_without_package:
-            valid_lots = move.lot_ids.filtered(lambda l: l.name)
-            if not valid_lots:
-                continue
-            for lot in valid_lots:
-                obj = {
-                    'lot_name': lot.name or '',
-                    'product': move.product_id.name or '',
-                    'product_code': move.product_id.default_code or '',
-                    'ref': "",
-                    'docs': lots.origin or '',
-                    'date': format_tanggal_indo(lots.scheduled_date),
-                    'qrcode': (
-                        lots.qr_code_image.decode('utf-8')
-                        if lots.qr_code_image else blank_image
-                    ),
-                }
-                data['detail'].append(obj)
+            # valid_lots = move.lot_ids.filtered(lambda l: l.name)
+            # if not valid_lots:
+            #     continue
+            # for lot in valid_lots:
+            obj = {
+                'lot_name': move.lot_ids.name or '',
+                'product': move.product_id.name or '',
+                'product_code': move.product_id.default_code or '',
+                'ref': "",
+                'docs': lots.origin or '',
+                'date': format_tanggal_indo(lots.scheduled_date),
+                'qrcode': (
+                    lots.qr_code_image.decode('utf-8')
+                    if lots.qr_code_image else blank_image
+                ),
+            }
+            data['detail'].append(obj)
 
         data = json.dumps(data)
         usrnm = 'jasperadmin'
