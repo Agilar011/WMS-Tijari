@@ -147,7 +147,8 @@ class AcumaticaShipmentGIStaging(models.Model):
         # PICKING EXISTING
         # =====================================================
         existing_pickings = Picking.search([
-            ('origin', 'in', shipment_numbers)
+            ('origin', 'in', shipment_numbers),
+            ('state', '=',  'draft')
         ])
 
         print(f"Existing Picking Count : {len(existing_pickings)}")
@@ -158,6 +159,10 @@ class AcumaticaShipmentGIStaging(models.Model):
                 (picking.origin or '').strip(),
                 []
             ).append(picking)
+
+        print(pickings_by_origin)
+
+
 
         # =====================================================
         # PROCESS SHIPMENT
@@ -234,19 +239,79 @@ class AcumaticaShipmentGIStaging(models.Model):
                             picking.write(updated_vals)
                             print(f"SUCCESS UPDATING PICKING ID: {picking.id}")
 
-                            # shipment_line_to_update = shipment_line.search([
-                            #     'shipment_id', '=', shipment.id
-                            # ])
+                            move = shipment_line.search([
+                                ('shipment_id', '=', 'shipment.id')
+                            ])
 
-                            # for item in shipment_line_to_update:
-                            #     move = Move.serch
-                                
+                            for item in move:
+                                move_to_update = Move.seach({
+                                    ('picking_id', '=', picking.id),
+                                    ('adt_inventory_id', '=', item.inventoryid)
+                                })
 
-                            
+                                if move_to_update:
+                                     move_to_update_vals = {
+                                        'company_id' : warehouse.company_id.id,
+                                        'product_id' : product.id,
+                                        'product_uom' : product.product_tmpl_id.uom_id.id ,
+                                        'location_id' : picking_type.default_location_src_id.id,
+                                        'location_dest_id' : picking_type.default_location_dest_id.id,
+                                        'partner_id' : partner.id,
+                                        'picking_id' : new_picking.id,
+                                        'picking_type_id' : picking_type.id,
+                                        'warehouse_id' : picking_type.warehouse_id.id,
+                                        'name' : item.description,
+                                        'origin' : new_picking.origin,
+                                        'description_picking' : item.description,
+                                        'product_uom_qty' : item.shippedqty,
+                                        'date' : shipment.ship_date,
+                                        'date_deadline' : shipment.ship_date,
+                                        'adt_line_external_id' : item.acumatica_id,
+                                        'adt_inventory_id' : item.inventoryid,
+                                        # 'adt_po_line_number' : item.shipment,
+                                        'adt_uom_code' : item.uom,
+                                        'adt_line_note' : item.note,
+                                        'adt_open_qty' : item.shippedqty,
+                                        'adt_type' : 'Sales Order Shipmentitem.',
+                                        'adt_line_description' : item.description,
+                                     }
+
+                                     created_move = Move.write(move_to_update)
+
+                                else:
+                                     move_to_update_vals = {
+                                        'company_id' : warehouse.company_id.id,
+                                        'product_id' : product.id,
+                                        'product_uom' : product.product_tmpl_id.uom_id.id ,
+                                        'location_id' : picking_type.default_location_src_id.id,
+                                        'location_dest_id' : picking_type.default_location_dest_id.id,
+                                        'partner_id' : partner.id,
+                                        'picking_type_id' : picking_type.id,
+                                        'warehouse_id' : picking_type.warehouse_id.id,
+                                        'name' : item.description,
+                                        'origin' : new_picking.origin,
+                                        'description_picking' : item.description,
+                                        'product_uom_qty' : item.shippedqty,
+                                        'date' : shipment.ship_date,
+                                        'date_deadline' : shipment.ship_date,
+                                        'adt_line_external_id' : item.acumatica_id,
+                                        'adt_inventory_id' : item.inventoryid,
+                                        # 'adt_po_line_number' : item.shipment,
+                                        'adt_uom_code' : item.uom,
+                                        'adt_line_note' : item.note,
+                                        'adt_open_qty' : item.shippedqty,
+                                        'adt_type' : 'Sales Order Shipmentitem.',
+                                        'adt_line_description' : item.description,
+                                     }
+
+                                     created_move = Move.write(move_to_update)
+                                    
+                   
                     # =================================================
                     # CREATE PICKING BRANCH (JIKA TIDAK ADA ACTIVE PICKING)
                     # =================================================
-                    else:
+
+                        
                         print("\n" + ">" * 80 + "\nCREATE PICKING BRANCH\n" + ">" * 80)
                         
                         # Pastikan field mandatory location_id & location_dest_id terisi di level picking & move lines
