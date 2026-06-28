@@ -16,7 +16,7 @@
         <field name="name">acumatica.receipt.change.item.line.tree</field>
         <field name="model">acumatica.receipt.change.item.line</field>
         <field name="arch" type="xml">
-            <list string="Data Receipt : Change Item" editable="bottom" default_order="origin asc, line_nbr asc">
+            <list string="Data Receipt : Change Item">
                 <field name="origin"/>
                 <field name="location_code"/>
                 <field name="warehouse_code"/>
@@ -56,18 +56,23 @@
                             <field name="warehouse_code"/>
                             <field name="transfer_type"/>
                         </group>
-                        <group string="Detail">
-                            <field name="line_nbr"/>
-                            <field name="inventory_id"/>
-                            <field name="line_description"/>
-                            <field name="product_uom_qty"/>
-                            <field name="uom_code"/>
-                            <field name="location_code"/>
-                            <field name="line_warehouse_code"/>
-                            <field name="line_note"/>
-                            <field name="import_message"/>
-                            <field name="odoo_picking_id"/>
-                        </group>
+                    </group>
+                    <notebook>
+                        <page name="Details" string="Details">
+                            <field name="product_line_ids">
+                                <list>
+                                    <field name="inventory_id"/>
+                                    <field name="description"/>
+                                    <field name="warehouse_dest_code"/>
+                                    <field name="product_uom_qty"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                    <group>
+                        <field name="import_message" readonly="1" widget="text"/>
+                        <field name="odoo_picking_id" readonly="1"/>
+                        <field name="exists_in_odoo" readonly="1"/>
                     </group>
                 </sheet>
             </form>

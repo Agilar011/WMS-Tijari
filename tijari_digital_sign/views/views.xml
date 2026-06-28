@@ -1,0 +1,58 @@
+<odoo>
+  <data>
+
+    <record model="ir.actions.act_window" id="digital_signature_action">
+            <field name="name">Digital Signature</field>
+            <field name="res_model">digital.signature</field>
+            <field name="binding_view_types">form</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+
+
+
+    <record model="ir.ui.view" id="digital_signature_form_view">
+            <field name="name">digital.signature.form</field>
+            <field name="model">digital.signature</field>
+            <field name="arch" type="xml">
+                <form >
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="document_name"/>
+                            <field name="document_number"/>
+                            <field name="document_model"/>
+                            <field name="document_id"/>
+                            <field name="date"/>
+                            <field name="user_ident_number"/>
+                            <field name="user_name"/>
+                            <field name="user_position"/>
+                            <field name="url"/>
+                            <field name="qr" widget="image"/>
+                        </group>
+                    </group>
+                </form>
+            </field>
+        </record>
+
+        <record model="ir.ui.view" id="digital_signature_tree_view">
+            <field name="name">digital.signature.tree</field>
+            <field name="model">digital.signature</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="document_name"/>
+                    <field name="document_number"/>
+                    <field name="document_model"/>
+                    <field name="document_id"/>
+                    <field name="date"/>
+                    <field name="user_ident_number"/>
+                    <field name="user_name"/>
+                    <field name="user_position"/>
+                </tree>
+            </field>
+        </record>
+
+
+        <menuitem id="digital_signature_menu" name="Digital Signature" parent="base.menu_custom" sequence="1" action="digital_signature_action"/>
+  </data>
+</odoo>

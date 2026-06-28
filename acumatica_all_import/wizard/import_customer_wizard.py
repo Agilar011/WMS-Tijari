@@ -2,7 +2,8 @@ from odoo import models, fields
 from odoo.exceptions import UserError
 import logging
 import time
-from datetime import datetime, time
+from datetime import datetime
+import requests
 
 _logger = logging.getLogger(__name__)
 
@@ -18,7 +19,7 @@ class ImportCustomerWizard(models.TransientModel):
     _description = 'Wizard Import Customer dari Acumatica'
 
     config_id = fields.Many2one(
-        'acumatica.customer.config',
+        'acumatica.config',
         string='Konfigurasi API',
         required=True,
         domain=[('active', '=', True)],
@@ -63,13 +64,13 @@ class ImportCustomerWizard(models.TransientModel):
             raise UserError('Pilih konfigurasi API terlebih dahulu.')
 
         # Hapus staging lama dari config ini
-        self.env['acumatica.customer.line'].search([
-            ('config_id', '=', self.config_id.id)
-        ]).unlink()
+        # self.env['acumatica.customer.line'].search([
+        #     ('config_id', '=', self.config_id.id)
+        # ]).unlink()
 
         import math
 
-        raw_list = []
+        raw_list = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
         params = []
         if self.start_date and self.end_date:
@@ -77,177 +78,179 @@ class ImportCustomerWizard(models.TransientModel):
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_customer_data(limit=self.batch_size, skip=offset, odata_filter=params if params else False)
+            batch_data = self.fetch_customer_data(limit=self.batch_size, skip=offset, odata_filter=params if params else False)
             if not batch_data:
                 break
-            raw_list.extend(batch_data)
 
+            raw_list += batch_data
+
+        self.total_fetched = raw_list
         if not raw_list:
-            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+            raise UserError('Tidak ada data dari API')
 
-        new_count = existing_count = 0
-        lines_to_create = []
+        # new_count = existing_count = 0
+        # lines_to_create = []
 
-        for item in raw_list:
-            # Cek existing: cari by external_id dulu, lalu CustomerID
-            Partner = self.env['res.partner']
-            existing = False
-            if item['external_id']:
-                existing = Partner.search([
-                    ('adt_external_id', '=', item['external_id'])
-                ], limit=1)
-            if not existing and item['customer_id']:
-                existing = Partner.search([
-                    ('company_registry', '=', item['customer_id'])
-                ], limit=1)
+        # for item in raw_list:
+        #     # Cek existing: cari by external_id dulu, lalu CustomerID
+        #     Partner = self.env['res.partner']
+        #     existing = False
+        #     if item['external_id']:
+        #         existing = Partner.search([
+        #             ('adt_external_id', '=', item['external_id'])
+        #         ], limit=1)
+        #     if not existing and item['customer_id']:
+        #         existing = Partner.search([
+        #             ('company_registry', '=', item['customer_id'])
+        #         ], limit=1)
 
-            if existing:
-                existing_count += 1
-                state = 'pending'  # tetap pending agar bisa diupdate
-                msg   = f'Sudah ada → akan diupdate: {existing.name}'
-            else:
-                new_count += 1
-                state = 'pending'
-                msg   = ''
+        #     if existing:
+        #         existing_count += 1
+        #         state = 'pending'  # tetap pending agar bisa diupdate
+        #         msg   = f'Sudah ada → akan diupdate: {existing.name}'
+        #     else:
+        #         new_count += 1
+        #         state = 'pending'
+        #         msg   = ''
 
-            lines_to_create.append({
-                'config_id':             self.config_id.id,
-                'row_number':            item['row_number'],
-                'external_id':           item['external_id'],
-                'customer_id':           item['customer_id'],
-                'b_account_id':          item['b_account_id'],
-                'customer_name':         item['customer_name'],
-                'customer_class':        item['customer_class'],
-                'status':                item['status'],
-                'warehouse_id':          item['warehouse_id'],
-                'shipping_zone_id':      item['shipping_zone_id'],
-                'fob_point':             item['fob_point'],
-                'last_modified_datetime':item['last_modified_datetime'],
-                'note_id':               item['note_id'],
-                'note':                  item['note'],
-                'location_name':         item['location_name'],
-                'tax_registration_id':   item['tax_registration_id'],
-                'import_state':          state,
-                'import_message':        msg,
-                'odoo_partner_id':       existing.id if existing else False,
-                'selected':              True,
-                'sync_date':             fields.Datetime.now(),
-            })
+        #     lines_to_create.append({
+        #         'config_id':             self.config_id.id,
+        #         'row_number':            item['row_number'],
+        #         'external_id':           item['external_id'],
+        #         'customer_id':           item['customer_id'],
+        #         'b_account_id':          item['b_account_id'],
+        #         'customer_name':         item['customer_name'],
+        #         'customer_class':        item['customer_class'],
+        #         'status':                item['status'],
+        #         'warehouse_id':          item['warehouse_id'],
+        #         'shipping_zone_id':      item['shipping_zone_id'],
+        #         'fob_point':             item['fob_point'],
+        #         'last_modified_datetime':item['last_modified_datetime'],
+        #         'note_id':               item['note_id'],
+        #         'note':                  item['note'],
+        #         'location_name':         item['location_name'],
+        #         'tax_registration_id':   item['tax_registration_id'],
+        #         'import_state':          state,
+        #         'import_message':        msg,
+        #         'odoo_partner_id':       existing.id if existing else False,
+        #         'selected':              True,
+        #         'sync_date':             fields.Datetime.now(),
+        #     })
 
-        self.env['acumatica.customer.line'].create(lines_to_create)
+        # self.env['acumatica.customer.line'].create(lines_to_create)
 
-        self.write({
-            'state':          'fetched',
-            'total_fetched':  len(raw_list),
-            'total_new':      new_count,
-            'total_existing': existing_count,
-        })
+        # self.write({
+        #     'state':          'fetched',
+        #     'total_fetched':  len(raw_list),
+        #     'total_new':      new_count,
+        #     'total_existing': existing_count,
+        # })
 
-    def action_fetch_data_import_batch(self):
-        print('ACTION: FETCH DATA + IMPORT BATCH')
-        self.ensure_one()
-        if not self.config_id:
-            raise UserError('Pilih konfigurasi API terlebih dahulu.')
+    # def action_fetch_data_import_batch(self):
+    #     print('ACTION: FETCH DATA + IMPORT BATCH')
+    #     self.ensure_one()
+    #     if not self.config_id:
+    #         raise UserError('Pilih konfigurasi API terlebih dahulu.')
 
-        # Hapus staging lama dari config ini
-        self.env['acumatica.customer.line'].search([
-            ('config_id', '=', self.config_id.id)
-        ]).unlink()
+    #     # Hapus staging lama dari config ini
+    #     self.env['acumatica.customer.line'].search([
+    #         ('config_id', '=', self.config_id.id)
+    #     ]).unlink()
 
-        import math
+    #     import math
 
-        raw_list = []
-        loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
-        for i in range(loop_count):
-            print(f'FETCH BATCH {i+1}/{loop_count} (limit={self.batch_size}, offset={self.fetch_skip + (i * self.batch_size)})')
-            offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_customer_data(limit=self.batch_size, skip=offset)
-            if not batch_data:
-                break
-            raw_list.extend(batch_data)
+    #     raw_list = []
+    #     loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
+    #     for i in range(loop_count):
+    #         print(f'FETCH BATCH {i+1}/{loop_count} (limit={self.batch_size}, offset={self.fetch_skip + (i * self.batch_size)})')
+    #         offset = self.fetch_skip + (i * self.batch_size)
+    #         batch_data = self.config_id.fetch_customer_data(limit=self.batch_size, skip=offset)
+    #         if not batch_data:
+    #             break
+    #         raw_list.extend(batch_data)
 
-        if not raw_list:
-            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+    #     if not raw_list:
+    #         raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        new_count = existing_count = 0
-        lines_to_create = []
+    #     new_count = existing_count = 0
+    #     lines_to_create = []
 
-        for item in raw_list:
-            # Cek existing: cari by external_id dulu, lalu CustomerID
-            Partner = self.env['res.partner']
-            existing = False
-            if item['external_id']:
-                existing = Partner.search([
-                    ('adt_external_id', '=', item['external_id'])
-                ], limit=1)
-            if not existing and item['customer_id']:
-                existing = Partner.search([
-                    ('company_registry', '=', item['customer_id'])
-                ], limit=1)
+    #     for item in raw_list:
+    #         # Cek existing: cari by external_id dulu, lalu CustomerID
+    #         Partner = self.env['res.partner']
+    #         existing = False
+    #         if item['external_id']:
+    #             existing = Partner.search([
+    #                 ('adt_external_id', '=', item['external_id'])
+    #             ], limit=1)
+    #         if not existing and item['customer_id']:
+    #             existing = Partner.search([
+    #                 ('company_registry', '=', item['customer_id'])
+    #             ], limit=1)
 
-            if existing:
-                existing_count += 1
-                state = 'pending'  # tetap pending agar bisa diupdate
-                msg   = f'Sudah ada → akan diupdate: {existing.name}'
-            else:
-                new_count += 1
-                state = 'pending'
-                msg   = ''
+    #         if existing:
+    #             existing_count += 1
+    #             state = 'pending'  # tetap pending agar bisa diupdate
+    #             msg   = f'Sudah ada → akan diupdate: {existing.name}'
+    #         else:
+    #             new_count += 1
+    #             state = 'pending'
+    #             msg   = ''
 
-            lines_to_create.append({
-                'config_id':             self.config_id.id,
-                'row_number':            item['row_number'],
-                'external_id':           item['external_id'],
-                'customer_id':           item['customer_id'],
-                'b_account_id':          item['b_account_id'],
-                'customer_name':         item['customer_name'],
-                'customer_class':        item['customer_class'],
-                'status':                item['status'],
-                'warehouse_id':          item['warehouse_id'],
-                'shipping_zone_id':      item['shipping_zone_id'],
-                'fob_point':             item['fob_point'],
-                'last_modified_datetime':item['last_modified_datetime'],
-                'note_id':               item['note_id'],
-                'note':                  item['note'],
-                'location_name':         item['location_name'],
-                'tax_registration_id':   item['tax_registration_id'],
-                'import_state':          state,
-                'import_message':        msg,
-                'odoo_partner_id':       existing.id if existing else False,
-                'selected':              True,
-                'sync_date':             fields.Datetime.now(),
-            })
+    #         lines_to_create.append({
+    #             'config_id':             self.config_id.id,
+    #             'row_number':            item['row_number'],
+    #             'external_id':           item['external_id'],
+    #             'customer_id':           item['customer_id'],
+    #             'b_account_id':          item['b_account_id'],
+    #             'customer_name':         item['customer_name'],
+    #             'customer_class':        item['customer_class'],
+    #             'status':                item['status'],
+    #             'warehouse_id':          item['warehouse_id'],
+    #             'shipping_zone_id':      item['shipping_zone_id'],
+    #             'fob_point':             item['fob_point'],
+    #             'last_modified_datetime':item['last_modified_datetime'],
+    #             'note_id':               item['note_id'],
+    #             'note':                  item['note'],
+    #             'location_name':         item['location_name'],
+    #             'tax_registration_id':   item['tax_registration_id'],
+    #             'import_state':          state,
+    #             'import_message':        msg,
+    #             'odoo_partner_id':       existing.id if existing else False,
+    #             'selected':              True,
+    #             'sync_date':             fields.Datetime.now(),
+    #         })
 
-        self.env['acumatica.customer.line'].create(lines_to_create)
+    #     self.env['acumatica.customer.line'].create(lines_to_create)
 
-        self.write({
-            'state':          'fetched',
-            'total_fetched':  len(raw_list),
-            'total_new':      new_count,
-            'total_existing': existing_count,
-        })
-
-
-        lines = self.env['acumatica.customer.line'].search([
-            ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
-            ('selected', '=', True),
-        ])
-        if not lines:
-            raise UserError('Tidak ada data pending yang dipilih untuk diimport.')
-
-        lines._do_import()
-        self.state = 'done'
+    #     self.write({
+    #         'state':          'fetched',
+    #         'total_fetched':  len(raw_list),
+    #         'total_new':      new_count,
+    #         'total_existing': existing_count,
+    #     })
 
 
+    #     lines = self.env['acumatica.customer.line'].search([
+    #         ('config_id', '=', self.config_id.id),
+    #         ('import_state', '=', 'pending'),
+    #         ('selected', '=', True),
+    #     ])
+    #     if not lines:
+    #         raise UserError('Tidak ada data pending yang dipilih untuk diimport.')
 
-        return {
-            'type': 'ir.actions.act_window',
-            'res_model': 'import.customer.wizard',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'target': 'new',
-        }
+    #     lines._do_import()
+    #     self.state = 'done'
+
+
+
+    #     return {
+    #         'type': 'ir.actions.act_window',
+    #         'res_model': 'import.customer.wizard',
+    #         'res_id': self.id,
+    #         'view_mode': 'form',
+    #         'target': 'new',
+    #     }
 
     # ─── Step 2: Buka List Staging ───────────────────
     def action_view_staging(self):
@@ -267,7 +270,6 @@ class ImportCustomerWizard(models.TransientModel):
         lines = self.env['acumatica.customer.line'].search([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
-            ('selected', '=', True),
         ])
         if not lines:
             raise UserError('Tidak ada data pending yang dipilih untuk diimport.')
@@ -292,12 +294,12 @@ class ImportCustomerWizard(models.TransientModel):
 
         self.ensure_one()
 
-        session = self._do_login()
+        session = self.config_id._do_login()
         max_retry = 3
         retry_delay = 30
         last_error = None
         try:
-            endpoint = f"{self.api_url}/Customer"
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             # ==============================================
             # PARAMS
             # ==============================================
@@ -439,7 +441,100 @@ class ImportCustomerWizard(models.TransientModel):
                     print(f'TOTAL PARSED CUSTOMER : {len(result)}')
                     print('==================================================')
 
-                    return result
+                    # bikin sql script buat create acumatica.customer.location.line
+                    Partner = self.env['res.partner']
+                    query = """
+                        INSERT INTO acumatica_customer_line
+                        (
+                            config_id,
+                            row_number,
+                            external_id,
+                            customer_id,
+                            b_account_id,
+                            customer_name,
+                            status,
+                            warehouse_id,
+                            shipping_zone_id,
+                            fob_point,
+                            customer_class,
+                            currency_id,
+                            created_datetime,
+                            tax_registration_id,
+                            last_modified_datetime,
+                            note_id,
+                            note,
+                            location_name,
+                            import_state,
+                            import_message,
+                            odoo_partner_id,
+                            sync_date
+                        )
+                        VALUES (
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            %s, %s
+                        )
+                    """
+
+                    for item in result:
+                        staging_line = False
+                        staging_domain = []
+
+                        if item['b_account_id']:
+                            staging_domain = [('b_account_id', '=', item['b_account_id'])]
+                        elif item['customer_id']:
+                            staging_domain = [('customer_id', '=', item['customer_id'])]
+
+                        if staging_domain:
+                            staging_line = self.env['acumatica.customer.line'].search(
+                                staging_domain,
+                                limit=1,
+                            )
+                            if staging_line:
+                                continue
+
+                        existing = False
+                        if item['b_account_id']:
+                            existing = Partner.search([
+                                ('adt_b_account_id', '=', item['b_account_id'])
+                            ], limit=1)
+
+                        if not existing and item['customer_id']:
+                            existing = Partner.search([
+                                ('company_registry', '=', item['customer_id'])
+                            ], limit=1)
+
+                        msg = 'Data sudah ada' if existing else ''
+                        state = 'pending'
+
+                        params = (
+                            self.config_id.id,
+                            item['row_number'],
+                            item['external_id'],
+                            item['customer_id'],
+                            item['b_account_id'],
+                            item['customer_name'],
+                            item['status'],
+                            item['warehouse_id'],
+                            item['shipping_zone_id'],
+                            item['fob_point'],
+                            item['customer_class'],
+                            item.get('currency_id', '') or '',
+                            item.get('created_datetime', '') or '',
+                            item['tax_registration_id'],
+                            item['last_modified_datetime'],
+                            item['note_id'],
+                            item['note'],
+                            item['location_name'],
+                            state,
+                            msg,
+                            existing.id if existing else None,
+                            fields.Datetime.now(),
+                        )
+                        self.env.cr.execute(query, params)
+
+                    self.env['acumatica.customer.line']._invalidate_cache()
+                    return len(result)
 
                 # ==============================================
                 # CONNECTION ERROR
@@ -448,7 +543,7 @@ class ImportCustomerWizard(models.TransientModel):
 
                     last_error = (
                         f'Tidak bisa terhubung ke server: '
-                        f'{self.base_url}'
+                        f'{self.config_id.base_url}'
                     )
 
                     print('==================================================')
@@ -535,7 +630,6 @@ class ImportCustomerWizard(models.TransientModel):
             print('LOGOUT SESSION ACUMATICA')
             print('==================================================')
 
-            self._do_logout(session)
+            self.config_id._do_logout(session)
 
-            self.last_sync = fields.Datetime.now()
-
+            self.config_id.last_sync = fields.Datetime.now()

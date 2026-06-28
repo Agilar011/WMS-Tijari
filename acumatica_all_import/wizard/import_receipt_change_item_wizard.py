@@ -10,7 +10,7 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
     _name = 'import.receipt.change.item.wizard'
     _description = 'Wizard Import Receipt Type Change Item dari Acumatica'
 
-    config_id = fields.Many2one('acumatica.receipt.change.item.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
     reference_nbr = fields.Char(string='Filter Reference Number')
@@ -69,7 +69,6 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
                 limit=self.batch_size,
                 reference_nbr=self.reference_nbr,
                 offset=offset,
-                # last_modified_from=/.last_modified_from,
                 odata_filter=params if params else None,
             )
 
@@ -111,13 +110,9 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
                 filters.append(self.config_id.odata_filter)
                 filters.extend(odata_filter)
             else:
-                filters.append("(TransType eq 'Change Item' and (Status eq 'On Hold' or Status eq 'Balanced'))")
+                filters.append(self.config_id.odata_filter)
             if filters:
                 params['$filter'] = ' and '.join(filters)       
-
-            print(endpoint)
-            print(params)
-            # raise UserError(checkpoint)
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
@@ -130,7 +125,6 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
             for row_number, item in enumerate(raw_data, start=1):
                 header = self._build_header_values(row_number, item)
 
-
                 # Cek apakah Detail ada dan berbentuk list / dict / array
                 details = item.get('Details') or []
                 if isinstance(details, dict):
@@ -139,8 +133,6 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
                     details = []
                 header["warehouse_code"] = self._val(details[0], 'Warehouse')
                 result.append(dict(header))
-                print(f"Result: {result}")
-
 
                 print("="*80)
                 print("[DEBUG] MASUK Ke proses deklarasi detail")
@@ -209,14 +201,6 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
                 print(line_create)
                 self._create_receipt_lines_product(line_create, receipts)
 
-    # ---------------------------------------------------------
-    # Filter
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # HEADER
-    # ---------------------------------------------------------
-
     def _build_header_values(self, row_number, item):
 
         print("Created header value")
@@ -239,7 +223,7 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
             'product_uom_qty': self._val(item, 'TotalQty'),
             'receipt_type': self._val(item, 'Type'),
             'vendor_code': self._val(item, 'Customer'),
-            # 'partner_ref': self._val(item, 'VendorRef'),
+            'transfer_type': self._val(item, 'TransType'),
             # 'warehouse_code': self._val(item, 'Warehouse'),
             }
 
@@ -350,11 +334,8 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
             'description': self._val(detail, 'Description'),
             'inventory_id': self._val(detail, 'InventoryID'),
             'line_nbr': self._val(detail, 'LineNumber'),
-            # 'line_type': self._val(detail, 'LineNumber') or 0,
-            'location_dest_code': self._val(detail, 'Location'),
-            'open_qty': self._val(detail, 'Quantity'),
-            # 'product_uom_qty': self._val(detail, 'ReceiptQty'),
-            # 'transaction_description': self._val(detail, 'TransactionDescription'),
+            'location_code': self._val(detail, 'Location'),
+            'product_uom_qty': self._val(detail, 'Quantity'),
             'uom_code': self._val(detail, 'UOM'),
             'warehouse_dest_code': self._val(detail, 'Warehouse'),
         }

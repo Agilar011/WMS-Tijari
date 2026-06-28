@@ -3,9 +3,16 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Datetime as fDT
 from odoo.tools import float_is_zero, float_compare
+from odoo.modules.module import get_module_resource
 import hashlib
 import base64
 from ast import literal_eval
+from odoo.tools.misc import OrderedSet
+import os
+import psycopg2
+from PIL import Image
+import qrcode
+import io
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -52,6 +59,97 @@ class StockPicking(models.Model):
     operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
     adt_destination_location_address = fields.Char(string='Destination Address')
 
+    qr_code_image = fields.Binary(string='Sign')
+
+    # def action_print_lot_number_line(self):
+    #     action = {}
+    #     action['type'] = 'ir.actions.act_url'
+    #     action['url'] = '/print/lot_number_move_line?id=' + str(self.id)
+    #     action['target'] = 'new'
+    #     return action
+
+    def action_print_lot_number_line(self):
+        self.ensure_one()
+
+        lot_names = list(set(
+            self.move_ids_without_package.mapped('lot_ids.name')
+        ))
+
+        if not lot_names:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Peringatan',
+                    'message': 'Lot Number belum tersedia.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        self.create_qrcode_name()
+
+        ids = ",".join(map(str, self.ids))
+
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/print/lot_number_move_line?ids=%s' % ids,
+            'target': 'new',
+        }
+
+    def create_qrcode_name(self):
+        for rec in self:
+            lot_names = list(set(
+                rec.move_ids_without_package.mapped('lot_ids.name')
+            ))
+
+            text = ', '.join(filter(None, lot_names))
+
+            if text:
+                rec.qr_code_image = rec.create_qrcode(text)
+
+    def create_qrcode(self, text):
+        logo_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
+        )
+
+        logo = Image.open(logo_path)
+
+        basewidth = 80
+        wpercent = basewidth / float(logo.size[0])
+        hsize = int(float(logo.size[1]) * wpercent)
+
+        logo = logo.resize((basewidth, hsize))
+
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H
+        )
+
+        qr.add_data(text)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+        img = img.resize((300, 300))
+
+        pos = (
+            (img.size[0] - logo.size[0]) // 2,
+            (img.size[1] - logo.size[1]) // 2
+        )
+
+        img.paste(logo, pos)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+
+        return base64.b64encode(buffer.getvalue()).decode()
+
+    def _sync_adt_quantities_from_moves(self):
+        for picking in self:
+            picking.update({
+                'adt_total_qty': sum(picking.move_ids.mapped('product_uom_qty')),
+                'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
+            })
+
     def button_validate(self):
         res = super().button_validate()
 
@@ -91,7 +189,7 @@ class StockPicking(models.Model):
                 continue
 
             storage_pickings = self.env["stock.picking"].search([
-                ("origin", "ilike", picking.name),
+                ("origin", "ilike", picking.origin or picking.name),
                 ("picking_type_id.code", "=", "internal"),
             ])
             total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
@@ -102,21 +200,17 @@ class StockPicking(models.Model):
             total_qty_storage = sum(storage_pickings.move_ids.move_line_ids.mapped("quantity"))
             storage_pickings.write({
                 "adt_dest_location_id": picking.adt_dest_location_id,
-                "origin": picking.origin or picking.name,
                 "note" : picking.note,
-                "adt_type": picking.adt_type,
-                'adt_total_qty': total_qty_storage
             })
             
             for ml in picking.move_line_ids:  
-                for sp in storage_pickings.move_ids:
-                    move_line = self.env['stock.move.line'].search([
-                        ("picking_id", "=", sp.picking_id.id),
-                        ("product_id", "=", sp.product_id.id),
-                        ("quantity", "=", sp.quantity)
-                    ])
-                    if move_line:
-                        move_line.location_dest_id = ml.allocation_storage.id
+                move_line = self.env['stock.move.line'].search([
+                    ("picking_id", "=", storage_pickings.id),
+                    ("product_id", "=", ml.product_id.id),
+                    ("quantity", "=", ml.quantity)
+                ])
+                if move_line:
+                    move_line.location_dest_id = ml.allocation_storage.id
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
@@ -244,6 +338,34 @@ class StockMoveLine(models.Model):
         related='picking_id.picking_type_code',
         store=False,
     )
+    origin = fields.Char(
+        related='picking_id.origin',
+        string='Source Document',
+        readonly=True,
+        store=False,
+    )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        move_lines = super().create(vals_list)
+        move_lines.mapped('picking_id')._sync_adt_quantities_from_moves()
+        return move_lines
+
+    def write(self, vals):
+        pickings = self.mapped('picking_id')
+        res = super().write(vals)
+        pickings |= self.mapped('picking_id')
+
+        if {'quantity', 'move_id', 'picking_id'} & set(vals):
+            pickings._sync_adt_quantities_from_moves()
+
+        return res
+
+    def unlink(self):
+        pickings = self.mapped('picking_id')
+        res = super().unlink()
+        pickings._sync_adt_quantities_from_moves()
+        return res
 
     @api.depends(
         'confirmation_location_code',
@@ -738,6 +860,39 @@ class StockMove(models.Model):
         related="picking_id.adt_dest_location_id",
         store=True,
     )
+    difference_quantity = fields.Float(
+        string='Difference Quantity',
+        compute='_compute_difference_quantity',
+        store=True,
+    )
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        moves = super().create(vals_list)
+        moves.mapped('picking_id')._sync_adt_quantities_from_moves()
+        return moves
+
+    def write(self, vals):
+        pickings = self.mapped('picking_id')
+        res = super().write(vals)
+        pickings |= self.mapped('picking_id')
+
+        if {'product_uom_qty', 'quantity', 'picking_id'} & set(vals):
+            pickings._sync_adt_quantities_from_moves()
+
+        return res
+
+    def unlink(self):
+        pickings = self.mapped('picking_id')
+        res = super().unlink()
+        pickings._sync_adt_quantities_from_moves()
+        return res
+
+    @api.depends('product_uom_qty', 'quantity')
+    def _compute_difference_quantity(self):
+        for move in self:
+            difference = move.product_uom_qty - move.quantity
+            move.difference_quantity = difference if difference > 0 else 0.0
 
 
     # lot_button = fields.Char(string="Lot Button")
@@ -764,17 +919,68 @@ class StockMove(models.Model):
                     }
                 }
             
-    def _update_total_qty(self):
-        for picking in self.mapped("picking_id"):
-            picking.adt_total_qty = sum(
-                picking.move_ids.mapped("quantity")
-            )
+    @api.onchange('product_uom_qty', 'quantity')
+    def _onchange_sync_picking_quantities(self):
+        for move in self:
+            picking = move.picking_id
+            if not picking:
+                continue
 
-    def write(self, vals):
-        res = super().write(vals)
+            picking._sync_adt_quantities_from_moves()
 
-        if "quantity" in vals:
-            self._update_total_qty()
+class StockLot(models.Model):
+    _inherit = 'stock.lot'
 
-        return res
+    qr_code_image = fields.Binary(string='Sign')
 
+    def action_print_lot_number(self):
+        self.ensure_one()
+        self.create_qrcode_name()
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/print/lot_number?id=%s' % self.id,
+            'target': 'new',
+        }
+
+    def create_qrcode_name(self):
+        for record in self:
+            if record.name:
+                qr = record.create_qrcode(record.name)
+                record.write({
+                    'qr_code_image': qr
+                })
+
+    def create_qrcode(self, text):
+        logo_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
+        )
+
+        logo = Image.open(logo_path)
+
+        basewidth = 80
+        wpercent = basewidth / float(logo.size[0])
+        hsize = int(float(logo.size[1]) * wpercent)
+
+        logo = logo.resize((basewidth, hsize))
+
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H
+        )
+
+        qr.add_data(text)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+        img = img.resize((300, 300))
+
+        pos = (
+            (img.size[0] - logo.size[0]) // 2,
+            (img.size[1] - logo.size[1]) // 2
+        )
+
+        img.paste(logo, pos)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+
+        return base64.b64encode(buffer.getvalue()).decode()

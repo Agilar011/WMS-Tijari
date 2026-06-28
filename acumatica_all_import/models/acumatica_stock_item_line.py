@@ -51,7 +51,7 @@ class AcumaticaStockItemLine(models.Model):
     selected         = fields.Boolean(string='Pilih',           default=True)
 
     config_id = fields.Many2one(
-        'acumatica.stock.item.config',
+        'acumatica.config',
         string='Konfigurasi',
         readonly=True,
         ondelete='cascade',
@@ -276,7 +276,7 @@ class AcumaticaStockItemLine(models.Model):
         return self._do_import()
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
