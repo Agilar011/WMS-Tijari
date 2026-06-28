@@ -5,7 +5,6 @@ from odoo.exceptions import UserError
 import logging
 _logger = logging.getLogger(__name__)
 import json
-
 from odoo import http, models, fields, api, tools, service, modules, _
 from odoo.http import request, Response, content_disposition, serialize_exception
 import json
@@ -17,7 +16,18 @@ from collections import defaultdict
 from PIL import Image
 from lxml import etree
 from requests.exceptions import ConnectTimeout, ReadTimeout, ConnectionError, SSLError
+import os
+import psycopg2
+import qrcode
+import io
+import base64
 
+def create_blank_image():
+    blank_image = Image.new(mode="RGB", size=(200, 200), color=(255, 255, 255))
+    img_bytes = io.BytesIO()
+    blank_image.save(img_bytes, format='PNG')
+    qr = base64.b64encode(img_bytes.getvalue())
+    return qr.decode('utf-8')
 
 def format_tanggal_indo(dt):
     if not dt:
@@ -401,6 +411,8 @@ class WmsApiController(http.Controller):
             obj = {
                 'name': line.product_id.display_name or '',
                 'uom': line.product_uom.name if line.product_uom.name else '',
+                'difference_quantity': float(line.difference_quantity or 0),
+                'difference_quantity_red': line.difference_quantity or '',
                 'demand': float(line.product_uom_qty or 0),
                 'demand1': float(line.quantity or 0),
                 'qty': float(line.quantity or 0),
@@ -418,6 +430,123 @@ class WmsApiController(http.Controller):
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/Penerimaan_Barang',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "warehouse_receipt.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/lot_number', type='http', auth='user')
+    def PrintLotNumber(self, id, **kw):
+        blank_image = create_blank_image()
+        lot = request.env['stock.lot'].sudo().browse(int(id))
+        data = {
+            'lot_name': lot.name or '',
+            'product': lot.product_id.name if lot.product_id.name else "",
+            'product_code': lot.product_id.default_code if lot.product_id.default_code else "",
+            'ref': lot.ref if lot.ref else "",
+            'docs': "",
+            'date': format_tanggal_indo(fields.Date.today()),
+            'qrcode': (lot.qr_code_image.decode('utf-8') if lot.qr_code_image else blank_image),
+        #     'detail': []
+        }
+
+        data = json.dumps(data)
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/Lot_Number',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "warehouse_receipt.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/lot_number_move_line', type='http', auth='user')
+    def PrintLotNumberLine(self, ids=None, **kw):
+
+        if not ids:
+            return request.make_response(
+                json.dumps({'error': 'ids tidak ditemukan'}),
+                [('Content-Type', 'application/json')]
+            )
+
+        ids = [int(x) for x in ids.split(',') if x]
+
+        lots = request.env['stock.picking'].sudo().browse(ids)
+
+        data = {
+            'detail': []
+        }
+
+        for move in lots.move_ids_without_package:
+            # valid_lots = move.lot_ids.filtered(lambda l: l.name)
+            # if not valid_lots:
+            #     continue
+            # for lot in valid_lots:
+            obj = {
+                'lot_name': move.lot_ids.name or '',
+                'product': move.product_id.name or '',
+                'product_code': move.product_id.default_code or '',
+                'ref': "",
+                'docs': lots.origin or '',
+                'date': format_tanggal_indo(lots.scheduled_date),
+                'qrcode': (
+                    lots.qr_code_image.decode('utf-8')
+                    if lots.qr_code_image else blank_image
+                ),
+            }
+            data['detail'].append(obj)
+
+        data = json.dumps(data)
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/Lot_line',
                 'outputFormat': 'pdf',
                 'parameters': {
                     'reportParameter': [{

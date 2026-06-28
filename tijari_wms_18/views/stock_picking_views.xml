@@ -24,6 +24,7 @@
                 type="object"
                 class="btn-primary"
                 invisible="state != 'done' or picking_type_code != 'incoming'"/>
+                <button name="action_print_lot_number_line" string="Print Lot" type="object" class="oe_highlight" invisible="picking_type_code != 'incoming'"/>
             </xpath>
 
             <xpath expr="//button[@name='do_print_picking']" position="attributes">

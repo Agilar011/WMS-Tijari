@@ -80,6 +80,10 @@
                     />
 
             </xpath>
+            
+            <xpath expr="//field[@name='quantity']" position="after">
+                <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
+            </xpath>
 
         </field>
     </record>
