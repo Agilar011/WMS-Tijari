@@ -57,6 +57,8 @@ class StockPicking(models.Model):
     adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
     operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
+    adt_destination_location_address = fields.Char(string='Destination Address')
+
     qr_code_image = fields.Binary(string='Sign')
 
     # def action_print_lot_number_line(self):
