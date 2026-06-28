@@ -128,6 +128,35 @@ class AcumaticaShipmentGIStaging(models.Model):
         print("\n" + "=" * 120 + "\nSTART IMPORT SHIPMENT\n" + "=" * 120)
 
         # =====================================================
+        # update staging status
+        # =====================================================
+        pending_shipments = shipment_gi.search([
+            ('odoo_shipment_status', '=', 'pending')
+        ])
+
+        if not pending_shipments:
+            print("NO PENDING SHIPMENT FOUND")
+            return True
+
+        shipment_numbers = pending_shipments.mapped('shipment_nbr')
+        print(f"Shipment Numbers : {shipment_numbers}")
+
+        existing_pickings = Picking.search([
+            ('origin', 'in', shipment_numbers),
+            ('state', '!=',  'draft')
+        ])
+
+        processed_picking = existing_pickings.mapped('origin')
+
+        not_pending_shipment = shipment_gi.search([
+        ('shipment_nbr', 'in', processed_picking)
+        ])
+
+        not_pending_shipment.write({
+            'odoo_shipment_status': 'processed'
+        })
+
+        # =====================================================
         # GET STAGING PENDING
         # =====================================================
         pending_shipments = shipment_gi.search([
@@ -226,6 +255,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                         print("\n" + ">" * 80 + "\nUPDATE PICKING BRANCH\n" + ">" * 80)
                         
                         for picking in active_pickings:
+                            # if picking.state = 
+                            shipment_address = f"{shipment.address_line1 or ''} {shipment.address_line2 or ''}".strip()
                             updated_vals = {
                                 'partner_id': partner.id,
                                 'scheduled_date': shipment.ship_date,
@@ -235,12 +266,13 @@ class AcumaticaShipmentGIStaging(models.Model):
                                 'adt_status': shipment.status,
                                 'adt_trans_type': shipment.shipment_type,
                                 'adt_external_id': shipment.acumatica_id,
+                                'adt_destination_location_address' : shipment_address,
                             }
                             picking.write(updated_vals)
                             print(f"SUCCESS UPDATING PICKING ID: {picking.id}")
 
                             move = shipment_line.search([
-                                ('shipment_id', '=', 'shipment.id')
+                                ('shipment_id', '=', shipment.id)
                             ])
 
                             for item in move:
@@ -272,14 +304,15 @@ class AcumaticaShipmentGIStaging(models.Model):
                                         'adt_uom_code' : item.uom,
                                         'adt_line_note' : item.note,
                                         'adt_open_qty' : item.shippedqty,
-                                        'adt_type' : 'Sales Order Shipmentitem.',
+                                        'adt_type' : 'Sales Order Shipment',
                                         'adt_line_description' : item.description,
                                      }
 
                                      created_move = Move.write(move_to_update)
 
                                 else:
-                                     move_to_update_vals = {
+                                        
+                                        move_to_update_vals = {
                                         'company_id' : warehouse.company_id.id,
                                         'product_id' : product.id,
                                         'product_uom' : product.product_tmpl_id.uom_id.id ,
@@ -302,9 +335,9 @@ class AcumaticaShipmentGIStaging(models.Model):
                                         'adt_open_qty' : item.shippedqty,
                                         'adt_type' : 'Sales Order Shipmentitem.',
                                         'adt_line_description' : item.description,
-                                     }
+                                        }
 
-                                     created_move = Move.write(move_to_update)
+                                        created_move = Move.create(move_to_update_vals)
                                     
                    
                     # =================================================
@@ -312,73 +345,76 @@ class AcumaticaShipmentGIStaging(models.Model):
                     # =================================================
 
                         
-                        print("\n" + ">" * 80 + "\nCREATE PICKING BRANCH\n" + ">" * 80)
-                        
-                        # Pastikan field mandatory location_id & location_dest_id terisi di level picking & move lines
-                        new_picking_vals = {
-                            'picking_type_id': picking_type.id,
-                            'location_id': picking_type.default_location_src_id.id,
-                            'location_dest_id': default_dest_location,
-                            'partner_id': partner.id,
-                            'scheduled_date': shipment.ship_date,
-                            'origin': shipment_number,
-                            'note': shipment.note,
-                            'adt_receipt_nbr': shipment.shipment_nbr,
-                            'adt_partner_ref': shipment.customer,
-                            'adt_status': shipment.status,
-                            'adt_trans_type': shipment.shipment_type,
-                            'adt_external_id': shipment.acumatica_id,
+                    print("\n" + ">" * 80 + "\nCREATE PICKING BRANCH\n" + ">" * 80)
+                    
+                    # Pastikan field mandatory location_id & location_dest_id terisi di level picking & move lines
+                    shipment_address = f"{shipment.address_line1 or ''} {shipment.address_line2 or ''}".strip()
+                    new_picking_vals = {
+                        'picking_type_id': picking_type.id,
+                        'location_id': picking_type.default_location_src_id.id,
+                        'location_dest_id': default_dest_location,
+                        'partner_id': partner.id,
+                        'scheduled_date': shipment.ship_date,
+                        'origin': shipment_number,
+                        'note': shipment.note,
+                        'adt_receipt_nbr': shipment.shipment_nbr,
+                        'adt_partner_ref': shipment.customer,
+                        'adt_status': shipment.status,
+                        'adt_trans_type': shipment.shipment_type,
+                        'adt_external_id': shipment.acumatica_id,
+                        'adt_type' : 'Sales Order Shipment',
+                        'adt_destination_location_address' : shipment_address,
+                    }
+                    new_picking = Picking.create(new_picking_vals)
+                    print(f"SUCCESS CREATING NEW PICKING: {new_picking.name} (ID: {new_picking.id})")
+
+                    # print(f"Gi ID : {shipment.id}")
+
+                    
+                    new_move_id = shipment_header.search([
+                        ('gi_id', '=', shipment.id)
+                    ])
+
+                    new_move = shipment_line.search([
+                        ('shipment_id', '=', new_move_id.id)
+                    ])
+                    print(f"Shipment line to create: {new_move}")
+
+                    for item in new_move:
+                        # code = item.inventoryid
+                        Product = self._find_product(item, picking_type.default_location_src_id.id)
+                        product = Product['product']
+
+                        print(product)
+
+                        new_move_vals = {
+                            'company_id' : warehouse.company_id.id,
+                            'product_id' : product.id,
+                            'product_uom' : product.product_tmpl_id.uom_id.id ,
+                            'location_id' : picking_type.default_location_src_id.id,
+                            'location_dest_id' : picking_type.default_location_dest_id.id,
+                            'partner_id' : partner.id,
+                            'picking_id' : new_picking.id,
+                            'picking_type_id' : picking_type.id,
+                            'warehouse_id' : picking_type.warehouse_id.id,
+                            'name' : item.description,
+                            'origin' : new_picking.origin,
+                            'description_picking' : item.description,
+                            'product_uom_qty' : item.shippedqty,
+                            'date' : shipment.ship_date,
+                            'date_deadline' : shipment.ship_date,
+                            'adt_line_external_id' : item.acumatica_id,
+                            'adt_inventory_id' : item.inventoryid,
+                            # 'adt_po_line_number' : item.shipment,
+                            'adt_uom_code' : item.uom,
+                            'adt_line_note' : item.note,
+                            'adt_open_qty' : item.shippedqty,
+                            'adt_type' : 'Sales Order Shipment.',
+                            'adt_line_description' : item.description,
                         }
-                        new_picking = Picking.create(new_picking_vals)
-                        print(f"SUCCESS CREATING NEW PICKING: {new_picking.name} (ID: {new_picking.id})")
 
-                        # print(f"Gi ID : {shipment.id}")
-
-                        
-                        new_move_id = shipment_header.search([
-                            ('gi_id', '=', shipment.id)
-                        ])
-
-                        new_move = shipment_line.search([
-                            ('shipment_id', '=', new_move_id.id)
-                        ])
-                        print(f"Shipment line to create: {new_move}")
-
-                        for item in new_move:
-                            # code = item.inventoryid
-                            Product = self._find_product(item, picking_type.default_location_src_id.id)
-                            product = Product['product']
-
-                            print(product)
-
-                            new_move_vals = {
-                                'company_id' : warehouse.company_id.id,
-                                'product_id' : product.id,
-                                'product_uom' : product.product_tmpl_id.uom_id.id ,
-                                'location_id' : picking_type.default_location_src_id.id,
-                                'location_dest_id' : picking_type.default_location_dest_id.id,
-                                'partner_id' : partner.id,
-                                'picking_id' : new_picking.id,
-                                'picking_type_id' : picking_type.id,
-                                'warehouse_id' : picking_type.warehouse_id.id,
-                                'name' : item.description,
-                                'origin' : new_picking.origin,
-                                'description_picking' : item.description,
-                                'product_uom_qty' : item.shippedqty,
-                                'date' : shipment.ship_date,
-                                'date_deadline' : shipment.ship_date,
-                                'adt_line_external_id' : item.acumatica_id,
-                                'adt_inventory_id' : item.inventoryid,
-                                # 'adt_po_line_number' : item.shipment,
-                                'adt_uom_code' : item.uom,
-                                'adt_line_note' : item.note,
-                                'adt_open_qty' : item.shippedqty,
-                                'adt_type' : 'Sales Order Shipmentitem.',
-                                'adt_line_description' : item.description,
-                            }
-
-                            move = Move.create(new_move_vals)
-                            print(f"Success create Move : {move.id}")
+                        move = Move.create(new_move_vals)
+                        print(f"Success create Move : {move.id}")
 
                     # Jika sukses melintasi semua proses di atas tanpa crash, update status staging jadi success
                     shipment.write({
