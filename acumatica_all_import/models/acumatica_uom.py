@@ -18,7 +18,7 @@ class AcumaticaUomLine(models.Model):
 
     # ─── Data dari Acumatica ─────────────────────────
     row_number  = fields.Integer(string='No', readonly=True)
-    unit_id     = fields.Char(string='UnitID (→ Kategori)', required=True, readonly=True)
+    unit_id = fields.Char(string='UnitID (→ Kategori)', required=True, readonly=True)
     description = fields.Char(string='Description (→ Nama UoM)', readonly=True)
     external_id = fields.Char(string='UUID Acumatica', readonly=True)
 
@@ -30,10 +30,10 @@ class AcumaticaUomLine(models.Model):
         ('error',    'Error'),
     ], string='Status', default='pending', readonly=True)
 
-    import_message  = fields.Char(string='Keterangan', readonly=True)
-    odoo_uom_id     = fields.Many2one('uom.uom', string='UoM di Odoo', readonly=True)
-    odoo_categ_id   = fields.Many2one('uom.category', string='Kategori di Odoo', readonly=True)
-    selected        = fields.Boolean(string='Pilih', default=True)
+    import_message = fields.Char(string='Keterangan', readonly=True)
+    odoo_uom_id = fields.Many2one('uom.uom', string='UoM di Odoo', readonly=True)
+    odoo_categ_id = fields.Many2one('uom.category', string='Kategori di Odoo', readonly=True)
+    selected = fields.Boolean(string='Pilih', default=True)
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
@@ -64,7 +64,7 @@ class AcumaticaUomLine(models.Model):
 
     # ─── Action: Import baris yang dipilih ───────────
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -166,10 +166,3 @@ class AcumaticaUomLine(models.Model):
             'import_state': 'pending',
             'import_message': False,
         })
-
-    # ─── Select / Deselect all ───────────────────────
-    def action_select_all(self):
-        self.search([('import_state', '=', 'pending')]).write({'selected': True})
-
-    def action_deselect_all(self):
-        self.search([]).write({'selected': False})

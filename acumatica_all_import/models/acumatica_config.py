@@ -64,6 +64,7 @@ class AcumaticaConfig(models.Model):
     )
     endpoint_name = fields.Char(
         string='Endpoint Name',
+        required=True,
         help='Dipakai untuk transaksi yang butuh endpoint Acumatica spesifik.',
     )
     is_default = fields.Boolean(

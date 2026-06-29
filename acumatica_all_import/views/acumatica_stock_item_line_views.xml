@@ -34,8 +34,6 @@
                 <filter string="Error"          name="error"
                         domain="[('import_state','=','error')]"/>
                 <separator/>
-                <filter string="Dipilih"        name="selected"
-                        domain="[('selected','=',True)]"/>
                 <filter string="Status Active"  name="active_only"
                         domain="[('item_status','=ilike','active')]"/>
 
@@ -61,8 +59,6 @@
         <field name="model">acumatica.stock.item.line</field>
         <field name="arch" type="xml">
             <list string="Data Stock Item dari Acumatica" multi_edit="1">
-                <field name="selected"      optional="show"/>
-                <field name="row_number"    string="No"           optional="show"/>
                 <field name="inventory_id"  string="InventoryID"/>
                 <field name="description"   string="Description"/>
                 <field name="item_type"     string="ItemType"     optional="show"/>

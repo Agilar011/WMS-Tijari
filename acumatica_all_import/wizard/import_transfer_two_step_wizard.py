@@ -6,7 +6,7 @@ class ImportTransferTwoStepWizard(models.TransientModel):
     _name = 'import.transfer.two.step.wizard'
     _description = 'Wizard Import Transfer Two Step dari Acumatica'
 
-    config_id = fields.Many2one('acumatica.transfer.two.step.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
     reference_nbr = fields.Char(string='Filter Reference Number')

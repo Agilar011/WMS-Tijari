@@ -35,7 +35,7 @@ class ImportNonStockItemWizard(models.TransientModel):
 
         import math
 
-        raw_list = 0
+        count = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
@@ -43,72 +43,11 @@ class ImportNonStockItemWizard(models.TransientModel):
             if not batch_data:
                 break
 
-            raw_list += batch_data
+            count += batch_data
 
-        self.total_fetched = raw_list
-        if not raw_list:
+        self.total_fetched = count
+        if not count:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
-
-        # new_count = existing_count = 0
-        # lines_to_create = []
-        # Product = self.env['product.template']
-
-        # for item in raw_list:
-        #     existing = Product.browse()
-        #     if item['external_id']:
-        #         existing = Product.search([
-        #             ('adt_external_id', '=', item['external_id'])
-        #         ], limit=1)
-        #     if not existing and item['inventory_id']:
-        #         existing = Product.search([
-        #             ('default_code', '=', item['inventory_id'])
-        #         ], limit=1)
-
-        #     if existing:
-        #         existing_count += 1
-        #         msg = f'Sudah ada → akan diupdate: {existing.name}'
-        #     else:
-        #         new_count += 1
-        #         msg = ''
-
-        #     lines_to_create.append({
-        #         'config_id':             self.config_id.id,
-        #         'row_number':            item['row_number'],
-        #         'external_id':           item['external_id'],
-        #         'inventory_id':          item['inventory_id'],
-        #         'description':           item['description'],
-        #         'item_type':             item['item_type'],
-        #         'item_class':            item['item_class'],
-        #         'item_status':           item['item_status'],
-        #         'base_unit':             item['base_unit'],
-        #         'purchase_unit':         item['purchase_unit'],
-        #         'sales_unit':            item['sales_unit'],
-        #         'is_a_kit':              item['is_a_kit'],
-        #         'is_kit':                item['is_kit'],
-        #         'note_id':               item['note_id'],
-        #         'posting_class':         item['posting_class'],
-        #         'note':                  item['note'],
-        #         'last_modified_datetime': item['last_modified_datetime'],
-        #         'price_class':           item['price_class'],
-        #         'volume':                item['volume'],
-        #         'volume_uom':            item['volume_uom'],
-        #         'weight':                item['weight'],
-        #         'weight_uom':            item['weight_uom'],
-        #         'import_state':          'pending',
-        #         'import_message':        msg,
-        #         'odoo_product_id':       existing.id if existing else False,
-        #         'selected':              True,
-        #         'sync_date':             fields.Datetime.now(),
-        #     })
-
-        # self.env['acumatica.non.stock.item.line'].create(lines_to_create)
-
-        # self.write({
-        #     'state':          'fetched',
-        #     'total_fetched':  len(raw_list),
-        #     'total_new':      new_count,
-        #     'total_existing': existing_count,
-        # })
 
         return {
             'type':      'ir.actions.act_window',
@@ -149,6 +88,16 @@ class ImportNonStockItemWizard(models.TransientModel):
             'view_mode': 'list,form',
             'domain':    [('config_id', '=', self.config_id.id)],
         }
+
+    def _check_last_modified_staging(self, item):
+        Staging = self.env['acumatica.stock.item.line']
+        existing = Staging.search([
+            ('external_id', '=', item['external_id']),
+            ('last_modified_datetime', '!=', item['last_modified_datetime']),
+        ])
+        if existing:
+            item['state'] = 'pending'
+            existing.write(item)
 
     def fetch_non_stock_item_data(self, limit=50, offset=0):
         """
@@ -221,6 +170,7 @@ class ImportNonStockItemWizard(models.TransientModel):
                 })
     
             Product = self.env['product.template']
+            Staging = self.env['acumatica.non.stock.item.line']
             query = """
                 INSERT INTO acumatica_non_stock_item_line (
                     config_id,
@@ -259,31 +209,37 @@ class ImportNonStockItemWizard(models.TransientModel):
                 )
             """
 
+            product_by_inventory = {
+                p.adt_external_id: p.id
+                for p in Product.search([
+                    ('adt_external_id', '!=', False)
+                ])
+            }
+
+            staging_by_inventory = {
+                p.external_id: p.id
+                for p in Staging.search([
+                    ('external_id', '!=', False)
+                ])
+            }
+
+            params_list = []
             for item in result:
-                staging_line = False
-                staging_domain = []
-
+                existing_staging = False
                 if item['external_id']:
-                    staging_domain = [('external_id', '=', item['external_id'])]
+                    existing_staging = staging_by_inventory.get((item['external_id']))
+                if existing_staging:
+                    self._check_last_modified_staging(item)
+                    continue
+                
+                existing_product = False
+                if not existing_staging and item['external_id']:
+                    existing_product = product_by_inventory.get((item['external_id']))
 
-                if staging_domain:
-                    staging_line = self.env['acumatica.non.stock.item.line'].search(
-                        staging_domain,
-                        limit=1,
-                    )
-                    if staging_line:
-                        continue
-
-                existing = False
-                if item['external_id']:
-                    existing = Product.search([
-                        ('adt_external_id', '=', item['external_id'])
-                    ], limit=1)
-
-                msg = 'Data sudah ada' if existing else ''
+                msg = 'Data sudah ada' if existing_product else ''
                 state = 'pending'
 
-                params = (
+                params_list.append((
                     self.config_id.id,
                     item['row_number'],
                     item['external_id'],
@@ -308,13 +264,12 @@ class ImportNonStockItemWizard(models.TransientModel):
                     item['weight_uom'],
                     state,
                     msg,
-                    existing.id if existing else None,
+                    existing_product if existing_product else None,
                     True,
                     fields.Datetime.now(),
-                )
-                self.env.cr.execute(query, params)
+                ))
 
-            self.env['acumatica.non.stock.item.line']._invalidate_cache()
+            self.env.cr.executemany(query, params_list)
             return len(result)
 
         finally:

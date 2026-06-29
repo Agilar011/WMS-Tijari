@@ -181,6 +181,8 @@ class StockPickingType(models.Model):
         ('others', 'Others')
     ], string='Operation Category', required=False, default='others') 
 
+    is_default_api = fields.Boolean(string="Default Picking Type For API")
+
 
 class StockLocation(models.Model):
     _inherit = 'stock.location'
@@ -768,8 +770,9 @@ class StockMove(models.Model):
     allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
     allocation_UOM = fields.Char(string='Allocation UOM')    
     adt_dest_location_id = fields.Many2one(
-        related="picking_id.adt_dest_location_id",
-        store=True,
+        "stock.location",
+        domain="[('usage', '=', 'internal')]",
+        string="Mapped Location",
     )
     difference_quantity = fields.Float(
         string='Difference Quantity',
@@ -838,3 +841,5 @@ class StockMove(models.Model):
                 continue
 
             picking._sync_adt_quantities_from_moves()
+
+

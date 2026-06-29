@@ -13,7 +13,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
     # INPUT
     # =========================
     config_id = fields.Many2one(
-        'acumatica.kit.assembly.config',
+        'acumatica.config',
         string='Konfigurasi API',
         required=True,
         domain=[('active', '=', True)],

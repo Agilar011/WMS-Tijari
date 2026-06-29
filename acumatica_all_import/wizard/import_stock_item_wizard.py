@@ -11,77 +11,26 @@ class ImportStockItemWizard(models.TransientModel):
     _name        = 'import.stock.item.wizard'
     _description = 'Wizard Import Stock Item dari Acumatica'
 
-    # =========================
-    # INPUT
-    # =========================
-    config_id = fields.Many2one(
-        'acumatica.config',
-        string='Konfigurasi API',
-        required=True,
-        domain=[('active', '=', True)],
-    )
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
+    fetch_limit = fields.Integer(string='Batch Size', default=100)
+    batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
+    fetch_skip = fields.Integer(string='Mulai dari Data ke-', default=0)
+    total_target = fields.Integer(string='Total Data Diambil', help='Kosongkan untuk ambil semua data')
+    skip_size = fields.Integer(string='Skip Size', default=0, help='Jumlah data yang dilewati sebelum memulai import.')
+    state = fields.Selection(selection=[('draft','Siap'),('fetched','Data Sudah Ditarik'),('done','Selesai')], default='draft')
 
-    fetch_limit = fields.Integer(
-        string='Batch Size',
-        default=100
-    )
-    batch_size = fields.Integer(
-        string='Batch Size untuk Import',
-        default=20
-    )
-
-    fetch_skip = fields.Integer(
-        string='Mulai dari Data ke-',
-        default=0
-    )
-
-    total_target = fields.Integer(
-        string='Total Data Diambil',
-        help='Kosongkan untuk ambil semua data'
-    )
-    skip_size = fields.Integer(
-        string='Skip Size',
-        default=0,
-        help='Jumlah data yang dilewati sebelum memulai import.'
-    )
-
-    # =========================
-    # STATE
-    # =========================
-    state = fields.Selection([
-        ('draft',   'Siap'),
-        ('fetched', 'Data Sudah Ditarik'),
-        ('done',    'Selesai'),
-    ], default='draft')
-
-    # =========================
-    # SUMMARY
-    # =========================
     total_fetched  = fields.Integer(string='Total Data Ditarik', readonly=True)
     total_new      = fields.Integer(string='Item Baru', readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
 
-    # =========================
-    # FETCH
-    # =========================
     def action_fetch_data(self):
-        print('true action_fetch_data called')
         self.ensure_one()
-
         if not self.config_id:
             raise UserError('Pilih konfigurasi API terlebih dahulu.')
 
-        # cleanup staging
-        self.env['acumatica.stock.item.line'].search([
-            ('config_id', '=', self.config_id.id)
-        ]).unlink()
-
-        # =========================
-        # FETCH (AUTO LOOP)
-        # =========================
         import math
 
-        raw_list = 0
+        count = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
@@ -89,94 +38,18 @@ class ImportStockItemWizard(models.TransientModel):
             batch_data = self.fetch_stock_item_data(
                 limit=self.batch_size,
                 offset=offset,
-                # skip = self.fetch_skip,
+                fetch_skip = self.fetch_skip,
             )
 
             if not batch_data:
                 break
 
-            raw_list += batch_data
+            count += batch_data
 
-        self.total_fetched = raw_list
+        self.total_fetched = count
 
-        if not raw_list:
+        if not count:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
-
-        # new_count = existing_count = 0
-        # lines_to_create = []
-        # batch_num = 0
-
-        # for item in raw_list:
-        #     existing = Product.browse()
-        #     batch_num += 1
-
-        #     if item['external_id']:
-        #         existing = Product.search([
-        #             ('adt_external_id', '=', item['external_id'])
-        #         ], limit=1)
-
-        #     if not existing and item['inventory_id']:
-        #         existing = Product.search([
-        #             ('default_code', '=', item['inventory_id'])
-        #         ], limit=1)
-
-        #     if existing:
-        #         existing_count += 1
-        #         msg = f'Sudah ada → akan diupdate: {existing.name}'
-        #     else:
-        #         new_count += 1
-        #         msg = ''
-        #     query = """
-        #         INSERT INTO acumatica_stock_item_line (config_id, row_number, external_id, inventory_id, description, item_type, item_class, item_status, base_uom, valuation_method, last_modified_datetime, import_state, import_message, odoo_product_id, selected, sync_date) 
-        #         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        #     """
-        #     params = (
-        #         self.config_id.id,
-        #         item['row_number'],
-        #         item['external_id'],
-        #         item['inventory_id'],
-        #         item['description'],
-        #         item['item_type'],
-        #         item['item_class'],
-        #         item['item_status'],
-        #         item['base_uom'],
-        #         item['valuation_method'],
-        #         item['last_modified_datetime'],
-        #         'pending',
-        #         msg,
-        #         existing.id if existing else None,
-        #         True,
-        #         fields.Datetime.now(),
-        #     )
-        #     self.env.cr.execute(query, params)
-
-        #     self.env['acumatica.stock.item.line']._invalidate_cache()
-        #     print(f"DATA BERHASIL NAMBAH NIH - BATCH {batch_num}")
-        #     # lines_to_create.append({
-        #     #     'config_id':              self.config_id.id,
-        #     #     'row_number':             item['row_number'],
-        #     #     'external_id':            item['external_id'],
-        #     #     'inventory_id':           item['inventory_id'],
-        #     #     'description':            item['description'],
-        #     #     'item_type':              item['item_type'],
-        #     #     'item_class':             item['item_class'],
-        #     #     'item_status':            item['item_status'],
-        #     #     'base_uom':               item['base_uom'],
-        #     #     'valuation_method':       item['valuation_method'],
-        #     #     'last_modified_datetime': item['last_modified_datetime'],
-        #     #     'import_state':           'pending',
-        #     #     'import_message':         msg,
-        #     #     'odoo_product_id':        existing.id if existing else False,
-        #     #     'selected':               True,
-        #     #     'sync_date':              fields.Datetime.now(),
-        #     # })
-
-        # self.write({
-        #     'state':          'fetched',
-        #     'total_fetched':  len(raw_list),
-        #     'total_new':      new_count,
-        #     'total_existing': existing_count,
-        # })
 
         return {
             'type':      'ir.actions.act_window',
@@ -186,40 +59,13 @@ class ImportStockItemWizard(models.TransientModel):
             'target':    'new',
         }
     
-    # =========================
-    # FETCH & Import Sekaligus (tanpa staging)
-    # =========================
     def action_fetch_data_import_batch(self):
-        print('==================================================')
-        print('TRUE action_fetch_data_import_batch CALLED')
-        print('==================================================')
 
         self.ensure_one()
 
         if not self.config_id:
             raise UserError('Pilih konfigurasi API terlebih dahulu.')
-
-        # ==================================================
-        # CLEANUP STAGING
-        # ==================================================
-        print('==================================================')
-        print('CLEANUP STAGING DATA')
-        print(f'CONFIG ID : {self.config_id.id}')
-        print('==================================================')
-
-        old_lines = self.env['acumatica.stock.item.line'].search([
-            ('config_id', '=', self.config_id.id)
-        ])
-
-        print(f'TOTAL OLD STAGING : {len(old_lines)}')
-
-        old_lines.unlink()
-
-        print('OLD STAGING REMOVED')
-
-        # ==================================================
-        # PREPARE
-        # ==================================================
+        
         import math
 
         Product = self.env['product.template']
@@ -233,6 +79,14 @@ class ImportStockItemWizard(models.TransientModel):
         print(f'BATCH SIZE     : {self.batch_size}')
         print(f'LOOP COUNT     : {loop_count}')
         print('==================================================')
+        _logger.info(
+            'START FETCH + IMPORT PER BATCH | '
+            'FETCH LIMIT=%s | LOOP COUNT=%s',
+            self.fetch_limit,
+            self.batch_size,
+            loop_count,
+        )
+
 
         total_fetched = 0
         total_imported = 0
@@ -348,7 +202,6 @@ class ImportStockItemWizard(models.TransientModel):
                     'import_state':           'pending',
                     'import_message':         msg,
                     'odoo_product_id':        existing.id if existing else False,
-                    'selected':               True,
                     'sync_date':              fields.Datetime.now(),
                 }
 
@@ -415,8 +268,6 @@ class ImportStockItemWizard(models.TransientModel):
         self.write({
             'state':          'done',
             'total_fetched':  total_fetched,
-            'total_new':      total_new,
-            'total_existing': total_existing,
         })
 
         print('==================================================')
@@ -435,13 +286,22 @@ class ImportStockItemWizard(models.TransientModel):
             'target':    'new',
         }
 
-    def fetch_stock_item_data(self, limit=50, offset=0, skip=0, batch_no=1):
+    def _check_last_modified_staging(self, item):
+        Staging = self.env['acumatica.stock.item.line']
+        existing = Staging.search([
+            ('external_id', '=', item['external_id']),
+            ('last_modified_datetime', '!=', item['last_modified_datetime']),
+        ])
+        if existing:
+            item['state'] = 'pending'
+            existing.write(item)
+
+    def fetch_stock_item_data(self, limit=50, offset=0, skip=0):
         """
         Fetch data Stock Item dengan:
         - limit     = jumlah data per request
         - offset    = offset batch internal
         - skip      = starting row manual
-        - batch_no  = nomor batch untuk logging
         """
 
         self.ensure_one()
@@ -457,98 +317,63 @@ class ImportStockItemWizard(models.TransientModel):
 
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
 
-            # ==================================================
-            # REAL SKIP
-            # ==================================================
             real_skip = offset + skip
 
-            print('==================================================')
-            print('START FETCH STOCK ITEM')
-            print(f'BATCH NO    : {batch_no}')
-            print(f'LIMIT       : {limit}')
-            print(f'OFFSET      : {offset}')
-            print(f'SKIP        : {skip}')
-            print(f'REAL SKIP   : {real_skip}')
-            print('==================================================')
-
+            _logger.info(
+                'START FETCH STOCK ITEM | '
+                'LIMIT=%s | OFFSET=%s | SKIP=%s | REAL SKIP=%s',
+                limit,
+                offset,
+                skip,
+                real_skip
+            )
             params = {
                 "$top": limit,
                 "$skip": real_skip
             }
 
-            print('REQUEST INFO')
-            print(f'ENDPOINT : {endpoint}')
-            print(f'PARAMS   : {params}')
-            print('==================================================')
+            _logger.info(
+                'REQUEST INFO | '
+                'ENDPOINT=%d | PARAMS=%d',
+                attempt,
+                max_retry,
+            )
 
-            # ==================================================
-            # RETRY LOOP
-            # ==================================================
             for attempt in range(1, max_retry + 1):
                 try:
-                    print('==================================================')
-                    print(
-                        f'FETCH STOCK ITEM ATTEMPT '
-                        f'{attempt}/{max_retry}'
-                    )
-                    print(f'BATCH NO : {batch_no}')
-                    print('==================================================')
-
                     _logger.info(
                         'FETCH STOCK ITEM ATTEMPT %s/%s | '
-                        'BATCH=%s | OFFSET=%s | SKIP=%s',
+                        'OFFSET=%s | SKIP=%s',
                         attempt,
                         max_retry,
-                        batch_no,
                         offset,
                         skip
                     )
+                    response = session.get(endpoint, params=params, timeout=60)
 
-                    # ==========================================
-                    # GET API
-                    # ==========================================
-                    response = session.get(
-                        endpoint,
-                        params=params,
-                        timeout=60
+                    _logger.info(
+                        'RESPONSE RECEIVED | '
+                        'STATUS CODE=%d',
+                        response.status_code,
                     )
-
-                    print('RESPONSE RECEIVED')
-                    print(f'STATUS CODE : {response.status_code}')
-                    print('==================================================')
-
-                    # ==========================================
-                    # VALIDATE RESPONSE
-                    # ==========================================
                     if response.status_code != 200:
-
                         last_error = (
                             f'Gagal ambil data Stock Item '
                             f'(HTTP {response.status_code}): '
                             f'{response.text}'
                         )
-
-                        print('ERROR FETCH STOCK ITEM')
-                        print(last_error)
-                        print('==================================================')
-
                         _logger.error(last_error)
-
                         raise Exception(last_error)
 
-                    # ==========================================
-                    # SUCCESS
-                    # ==========================================
                     raw_data = response.json()
 
-                    print(f'TOTAL RAW DATA : {len(raw_data)}')
-                    print('==================================================')
-
+                    _logger.info(
+                        'TOTAL RAW DATA | '
+                        'STATUS CODE=%s',
+                        len(raw_data),
+                    )
                     all_results = []
 
-                    # ==========================================
-                    # HELPER
-                    # ==========================================
                     def val(item, key):
 
                         v = item.get(key, {})
@@ -558,9 +383,6 @@ class ImportStockItemWizard(models.TransientModel):
 
                         return ""
 
-                    # ==========================================
-                    # PARSE
-                    # ==========================================
                     item_no = 0
 
                     for item in raw_data:
@@ -568,22 +390,21 @@ class ImportStockItemWizard(models.TransientModel):
                         item_no += 1
 
                         parsed_vals = {
-                            'external_id':            item.get("id", "") or "",
-                            'row_number':             item.get("rowNumber", 0),
-                            'inventory_id':           val(item, "InventoryID"),
-                            'description':            val(item, "Description"),
-                            'item_type':              val(item, "ItemType"),
-                            'item_class':             val(item, "ItemClass"),
-                            'item_status':            val(item, "ItemStatus"),
-                            'base_uom':               val(item, "BaseUOM"),
-                            'valuation_method':       val(item, "ValuationMethod"),
+                            'external_id': item.get("id", "") or "",
+                            'row_number': item.get("rowNumber", 0),
+                            'inventory_id': val(item, "InventoryID"),
+                            'description': val(item, "Description"),
+                            'item_type': val(item, "ItemType"),
+                            'item_class': val(item, "ItemClass"),
+                            'item_status': val(item, "ItemStatus"),
+                            'base_uom': val(item, "BaseUOM"),
+                            'valuation_method': val(item, "ValuationMethod"),
                             'last_modified_datetime': val(item, "LastModifiedDateTime"),
                         }
 
                         all_results.append(parsed_vals)
 
                         print('--------------------------------------------------')
-                        print(f'BATCH        : {batch_no}')
                         print(f'ITEM NO      : {item_no}')
                         print(f'EXTERNAL ID  : {parsed_vals["external_id"]}')
                         print(f'INVENTORY ID : {parsed_vals["inventory_id"]}')
@@ -592,24 +413,10 @@ class ImportStockItemWizard(models.TransientModel):
                         print(f'STATUS       : {parsed_vals["item_status"]}')
                         print('--------------------------------------------------')
 
-                    # ==========================================
-                    # FINAL LOG
-                    # ==========================================
-                    print('==================================================')
-                    print('FETCH STOCK ITEM DONE')
-                    print(f'BATCH NO           : {batch_no}')
-                    print(f'OFFSET             : {offset}')
-                    print(f'SKIP               : {skip}')
-                    print(f'REAL SKIP          : {real_skip}')
-                    print(f'LIMIT              : {limit}')
-                    print(f'TOTAL STOCK ITEM   : {len(all_results)}')
-                    print('==================================================')
-
                     _logger.info(
-                        'BATCH %s | OFFSET %s | SKIP %s | '
+                        'OFFSET %s | SKIP %s | '
                         'REAL SKIP %s | LIMIT %s | '
                         'TOTAL STOCK ITEM: %s',
-                        batch_no,
                         offset,
                         skip,
                         real_skip,
@@ -618,6 +425,8 @@ class ImportStockItemWizard(models.TransientModel):
                     )
 
                     Product = self.env['product.template']
+                    Staging = self.env['acumatica.stock.item.line']
+
                     query = """
                         INSERT INTO acumatica_stock_item_line (
                             config_id,
@@ -644,31 +453,38 @@ class ImportStockItemWizard(models.TransientModel):
                         )
                     """
 
+                    product_by_inventory = {
+                        p.adt_external_id: p.id
+                        for p in Product.search([
+                            ('adt_external_id', '!=', False)
+                        ])
+                    }
+
+                    staging_by_inventory = {
+                        p.external_id: p.id
+                        for p in Staging.search([
+                            ('external_id', '!=', False)
+                        ])
+                    }
+
+                    params_list = []
                     for item in all_results:
-                        staging_line = False
-                        staging_domain = []
-
+                        existing_staging = False
                         if item['external_id']:
-                            staging_domain = [('external_id', '=', item['external_id'])]
+                            existing_staging = staging_by_inventory.get((item['external_id']))
+                        if existing_staging:
+                            self._check_last_modified_staging(item)
+                            continue
+                        
+                        existing_product = False
+                        if not existing_staging and item['external_id']:
+                            existing_product = product_by_inventory.get((item['external_id']))
 
-                        if staging_domain:
-                            staging_line = self.env['acumatica.stock.item.line'].search(
-                                staging_domain,
-                                limit=1,
-                            )
-                            if staging_line:
-                                continue
-
-                        existing = False
-                        if item['external_id']:
-                            existing = Product.search([
-                                ('adt_external_id', '=', item['external_id'])
-                            ], limit=1)
-
-                        msg = 'Data sudah ada' if existing else ''
+                        msg = 'Data sudah ada' if existing_product else ''
                         state = 'pending'
 
-                        params = (
+
+                        params_list.append((
                             self.config_id.id,
                             item['row_number'],
                             item['external_id'],
@@ -682,17 +498,13 @@ class ImportStockItemWizard(models.TransientModel):
                             item['last_modified_datetime'],
                             state,
                             msg,
-                            existing.id if existing else None,
+                            existing_product or None,
                             fields.Datetime.now(),
-                        )
-                        self.env.cr.execute(query, params)
+                        ))
 
-                    self.env['acumatica.stock.item.line']._invalidate_cache()
+                    self.env.cr.executemany(query, params_list)
                     return len(all_results)
 
-                # ==============================================
-                # CONNECTION ERROR
-                # ==============================================
                 except requests.exceptions.ConnectionError as e:
 
                     last_error = (
@@ -700,58 +512,28 @@ class ImportStockItemWizard(models.TransientModel):
                         f'{self.base_url}'
                     )
 
-                    print('==================================================')
-                    print('CONNECTION ERROR')
-                    print(last_error)
-                    print(str(e))
-                    print('==================================================')
-
                     _logger.error(last_error)
 
-                # ==============================================
-                # TIMEOUT ERROR
-                # ==============================================
                 except requests.exceptions.Timeout as e:
 
                     last_error = (
                         'Timeout saat ambil data Stock Item '
                         'dari Acumatica.'
                     )
-
-                    print('==================================================')
-                    print('TIMEOUT ERROR')
-                    print(last_error)
-                    print(str(e))
-                    print('==================================================')
-
                     _logger.error(last_error)
 
-                # ==============================================
-                # UNKNOWN ERROR
-                # ==============================================
                 except Exception as e:
 
                     last_error = str(e)
 
-                    print('==================================================')
-                    print('UNKNOWN FETCH ERROR')
-                    print(last_error)
-                    print('==================================================')
+                    _logger.info(
+                        'UNKNOWN FETCH ERROR=%s',
+                        last_error,
+                    )
 
                     _logger.exception(e)
 
-                # ==============================================
-                # RETRY
-                # ==============================================
                 if attempt < max_retry:
-
-                    print('==================================================')
-                    print(
-                        f'RETRY FETCH STOCK ITEM '
-                        f'DALAM {retry_delay} DETIK'
-                    )
-                    print(f'NEXT ATTEMPT : {attempt + 1}')
-                    print('==================================================')
 
                     _logger.warning(
                         'FETCH STOCK ITEM FAILED - RETRY IN %s SECONDS '
@@ -763,14 +545,6 @@ class ImportStockItemWizard(models.TransientModel):
 
                     time.sleep(retry_delay)
 
-            # ==================================================
-            # FINAL FAILED
-            # ==================================================
-            print('==================================================')
-            print('SEMUA FETCH STOCK ITEM RETRY GAGAL')
-            print(f'LAST ERROR : {last_error}')
-            print('==================================================')
-
             _logger.error(
                 'ALL FETCH STOCK ITEM RETRY FAILED: %s',
                 last_error
@@ -780,20 +554,14 @@ class ImportStockItemWizard(models.TransientModel):
 
         finally:
 
-            print('==================================================')
-            print('LOGOUT SESSION ACUMATICA')
-            print(f'BATCH NO : {batch_no}')
-            print('==================================================')
-
+            _logger.info(
+                'LOGOUT SESSION ACUMATICA'
+            )
             self.config_id._do_logout(session)
 
             self.config_id.last_sync = fields.Datetime.now()
 
 
-
-    # =========================
-    # VIEW STAGING
-    # =========================
     def action_view_staging(self):
         self.ensure_one()
         return {
@@ -805,9 +573,6 @@ class ImportStockItemWizard(models.TransientModel):
             'context':   {'default_config_id': self.config_id.id},
         }
 
-    # =========================
-    # IMPORT
-    # =========================
     def action_import_all_pending(self):
         self.ensure_one()
 
@@ -816,7 +581,6 @@ class ImportStockItemWizard(models.TransientModel):
         domain = [
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
-            ('selected', '=', True),
         ]
 
         total = Line.search_count(domain)
@@ -876,7 +640,6 @@ class ImportStockItemWizard(models.TransientModel):
         lines = self.env['acumatica.stock.item.line'].search([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
-            ('selected', '=', True),
         ], limit=BATCH_SIZE)
 
         if not lines:
@@ -886,7 +649,6 @@ class ImportStockItemWizard(models.TransientModel):
         total_before = self.env['acumatica.stock.item.line'].search_count([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
-            ('selected', '=', True),
         ])
 
         count_to_import = round(total_before / BATCH_SIZE)
@@ -901,7 +663,6 @@ class ImportStockItemWizard(models.TransientModel):
         total_after = self.env['acumatica.stock.item.line'].search_count([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
-            ('selected', '=', True),
         ])
 
         _logger.info(
@@ -920,3 +681,4 @@ class ImportStockItemWizard(models.TransientModel):
                 'sticky': False,
             },
         }
+
