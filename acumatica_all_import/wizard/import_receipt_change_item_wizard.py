@@ -102,6 +102,7 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
         if location:
             type = PickingType.search([
                 ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('code', '=', 'incoming'),
                 ('is_default_api', '=', True)
             ])
 
