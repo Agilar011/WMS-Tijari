@@ -211,6 +211,7 @@ class AcumaticaConfig(models.Model):
 
     # ─── Fetch UoM dari API ──────────────────────────
     def fetch_uom_data(self, limit=500, offset=0):
+        print('get uom data')
         """
         Ambil data Units of Measure dari Acumatica API.
         Return: list of dict { unit_id, description, external_id }
