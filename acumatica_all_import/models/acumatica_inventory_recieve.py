@@ -423,7 +423,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
         dest_location = receive._find_location_dest(receive)
         if not dest_location:
             error_messages.append(
-                f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                f'Location with code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
         # picking_type = PickingType.search([
@@ -448,7 +448,6 @@ class AcumaticaInventoryRecievedLine(models.Model):
         picking_vals = {
             'origin': origin,
             'picking_type_id': picking_type.id,
-            'location_dest_id': dest_location.id if dest_location else False,
             'adt_dest_location_id': dest_location.id if dest_location else False,
             'scheduled_date': receive._parse_dt(receive.scheduled_date),
             'note': receive.note or False,
