@@ -305,7 +305,7 @@ class AcumaticaShipmentLine(models.Model):
         dest_location = shipment._find_location_dest(shipment)
         if not dest_location:
             error_messages.append(
-                f'Location with code {shipment.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                f'Location with code {shipment.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
         # picking_type = PickingType.search([
