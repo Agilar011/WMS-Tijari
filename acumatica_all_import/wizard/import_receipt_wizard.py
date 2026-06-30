@@ -170,7 +170,7 @@ class ImportReceiptWizard(models.TransientModel):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
-                if not header['warehouse_code']:
+                if not header['warehouse_code'] and details:
                     header['warehouse_code'] = self._val(details[0], 'WarehouseID')
                     type = self._search_picking_type(header)
                     header['picking_type_id'] = type.id if type else None
