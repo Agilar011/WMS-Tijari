@@ -124,5 +124,5 @@ class ResPartner(models.Model):
         ('shipvia', 'Shipvia'),
         ('customer_location', 'Customer Location'),
         ('warehouse', 'Warehouse'),
-    ], string='Partner Type', default='customer', required=True)
+    ], string='Partner Type')
 

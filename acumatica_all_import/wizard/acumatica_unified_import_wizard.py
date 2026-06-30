@@ -529,7 +529,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
         total_pending_before = Line.search_count(pending_domain)
         if not total_pending_before:
-            raise UserError(_('Tidak ada data pending yang dipilih untuk diimport.'))
+            raise UserError(_('Tidak ada data pending di staging yang dapat diimport.'))
 
         processed = 0
         batch_count = 0

@@ -34,27 +34,25 @@ class AcumaticaCustomerLine(models.Model):
     _order = 'row_number asc'
 
     # ─── Data mentah dari Acumatica ──────────────────
-    row_number             = fields.Integer(string='No', readonly=True)
-    external_id            = fields.Char(string='UUID Acumatica', readonly=True)
+    row_number = fields.Integer(string='No', readonly=True)
+    external_id = fields.Char(string='UUID Acumatica', readonly=True)
 
     # Mandatory fields
-    customer_id            = fields.Char(string='CustomerID', readonly=True)
-    b_account_id           = fields.Char(string='BAccountID', readonly=True)
-    customer_name          = fields.Char(string='CustomerName', readonly=True)
-    status                 = fields.Char(string='Status', readonly=True)
-    warehouse_id           = fields.Char(string='WarehouseID', readonly=True)
-    shipping_zone_id       = fields.Char(string='ShippingZoneID', readonly=True)
-    fob_point              = fields.Char(string='FOBPoint', readonly=True)
+    customer_id = fields.Char(string='CustomerID', readonly=True)
+    b_account_id = fields.Char(string='BAccountID', readonly=True)
+    customer_name = fields.Char(string='CustomerName', readonly=True)
+    status = fields.Char(string='Status', readonly=True)
+    warehouse_id = fields.Char(string='WarehouseID', readonly=True)
+    shipping_zone_id = fields.Char(string='ShippingZoneID', readonly=True)
+    fob_point = fields.Char(string='FOBPoint', readonly=True)
 
     # Optional fields
-    customer_class         = fields.Char(string='CustomerClass', readonly=True)
-    currency_id            = fields.Char(string='CurrencyID', readonly=True)
-    created_datetime       = fields.Char(string='CreatedDateTime', readonly=True)
-    tax_registration_id    = fields.Char(string='TaxRegistrationID', readonly=True)
+    customer_class = fields.Char(string='CustomerClass', readonly=True)
+    tax_registration_id  = fields.Char(string='TaxRegistrationID', readonly=True)
     last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
-    note_id                = fields.Char(string='NoteID', readonly=True)
-    note                   = fields.Text(string='Note', readonly=True)
-    location_name          = fields.Char(string='LocationName', readonly=True)
+    note_id = fields.Char(string='NoteID', readonly=True)
+    note = fields.Text(string='Note', readonly=True)
+    location_name = fields.Char(string='LocationName', readonly=True)
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
@@ -65,8 +63,8 @@ class AcumaticaCustomerLine(models.Model):
         ('error',    'Error'),
     ], string='Status', default='pending', readonly=True)
 
-    import_message    = fields.Char(string='Keterangan', readonly=True)
-    odoo_partner_id   = fields.Many2one('res.partner', string='Partner di Odoo', readonly=True)
+    import_message = fields.Char(string='Keterangan', readonly=True)
+    odoo_partner_id = fields.Many2one('res.partner', string='Partner di Odoo', readonly=True)
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
@@ -151,6 +149,7 @@ class AcumaticaCustomerLine(models.Model):
                     'company_registry': line.customer_id or False,
                     # 'customer_rank':    1,
                     'is_company':       True,
+                    'active': False if line.status == "Inactive" else True,
 
                     # Field "to be" (custom) - semua diprefix acumatica_
                     # agar tidak conflict dengan field bawaan Odoo
@@ -174,9 +173,7 @@ class AcumaticaCustomerLine(models.Model):
                     status_map = {
                         'active':     'Active',
                         'inactive':   'Inactive',
-                        'hold':       'Hold',
                         'credithold': 'CreditHold',
-                        'onetime':    'OneTime',
                     }
                     normalized = line.status.lower().replace(' ', '')
                     vals['adt_status'] = status_map.get(normalized, line.status)

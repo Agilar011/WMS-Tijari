@@ -11,7 +11,7 @@ class ImportTransferWizard(models.TransientModel):
     _name = 'import.transfer.wizard'
     _description = 'Wizard Import Internal Transfer dari Acumatica'
 
-    config_id = fields.Many2one('acumatica.transfer.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
     fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')

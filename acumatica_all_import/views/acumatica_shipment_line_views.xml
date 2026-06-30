@@ -220,6 +220,7 @@
                     <group string="Header">
                         <group>
                             <field name="shipment_nbr" readonly="1"/>
+                            <field name="picking_type_id" />
                             <field name="shipment_type" readonly="1"/>
                             <field name="operation" readonly="1"/>
                             <field name="status" readonly="1"/>

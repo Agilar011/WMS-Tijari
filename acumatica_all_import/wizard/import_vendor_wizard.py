@@ -43,20 +43,12 @@ class ImportVendorWizard(models.TransientModel):
 
     # Summary setelah fetch
     total_fetched = fields.Integer(string='Total Data Ditarik', readonly=True)
-    total_new = fields.Integer(string='Vendor Baru', readonly=True)
-    total_existing = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
-    fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
     # ─── Step 1: Tarik Data ──────────────────────────
     def action_fetch_data(self):
         self.ensure_one()
         if not self.config_id:
             raise UserError('Pilih konfigurasi API terlebih dahulu.')
-
-        # Hapus staging lama dari config ini
-        # self.env['acumatica.vendor.line'].search([
-        #     ('config_id', '=', self.config_id.id)
-        # ]).unlink()
 
         import math
 
@@ -72,94 +64,6 @@ class ImportVendorWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        Partner = self.env['res.partner']
-        Staging = self.env['acumatica.vendor.line']
-
-        new_count = existing_count = 0
-        query = """
-            INSERT INTO acumatica_vendor_line
-            (
-                config_id,
-                row_number,
-                external_id,
-                vendor_id,
-                vendor_name,
-                location_name,
-                status,
-                lead_time_days,
-                fob_point,
-                last_modified_date_time,
-                note,
-                vendor_class,
-                account_ref,
-                import_state,
-                import_message,
-                odoo_partner_id,
-                selected,
-                sync_date
-            )
-            VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s
-            )
-        """
-
-        for item in raw_list:
-            staging_domain = []
-            if item['external_id'] and item['vendor_id']:
-                staging_domain = ['|', ('external_id', '=', item['external_id']), ('vendor_id', '=', item['vendor_id'])]
-            elif item['external_id']:
-                staging_domain = [('external_id', '=', item['external_id'])]
-            elif item['vendor_id']:
-                staging_domain = [('vendor_id', '=', item['vendor_id'])]
-
-            if staging_domain and Staging.search(staging_domain, limit=1):
-                continue
-
-            existing = False
-            if item['vendor_id']:
-                existing = Partner.search([
-                    ('company_registry', '=', item['vendor_id'])
-                ], limit=1)
-
-            if existing:
-                existing_count += 1
-                msg = 'Data sudah ada'
-            else:
-                new_count += 1
-                msg = ''
-
-            params = (
-                self.config_id.id,
-                item['row_number'],
-                item['external_id'],
-                item['vendor_id'],
-                item['vendor_name'],
-                item['location_name'],
-                item['status'],
-                item['lead_time_days'],
-                item['fob_point'],
-                item['last_modified_date_time'],
-                item['note'],
-                item['vendor_class'],
-                item['account_ref'],
-                'pending',
-                msg,
-                existing.id if existing else None,
-                True,
-                fields.Datetime.now(),
-            )
-            self.env.cr.execute(query, params)
-
-        self.env['acumatica.vendor.line']._invalidate_cache()
-
-        self.write({
-            'state':          'fetched',
-            'total_fetched':  len(raw_list),
-            'total_new':      new_count,
-            'total_existing': existing_count,
-        })
-
         return {
             'type':      'ir.actions.act_window',
             'res_model': 'import.vendor.wizard',
@@ -167,6 +71,16 @@ class ImportVendorWizard(models.TransientModel):
             'view_mode': 'form',
             'target':    'new',
         }
+
+    def _check_last_modified_staging(self, item):
+        Staging = self.env['acumatica.vendor.line']
+        existing = Staging.search([
+            ('vendor_id', '=', item['vendor_id']),
+            ('last_modified_datetime', '!=', item['last_modified_datetime']),
+        ])
+        if existing:
+            item['state'] = 'pending'
+            existing.write(item)
 
     def fetch_vendor_data(self, limit=50, skip=0):
         """
@@ -176,7 +90,7 @@ class ImportVendorWizard(models.TransientModel):
         Field yang diambil (sesuai mapping):
           note                  → internal_notes
           FOBPoint              → adt_fob_point
-          LastModifiedDateTime  → adt_last_modified_date_time
+          LastModifiedDateTime  → last_modified_datetime
           LeadTimedays          → sale_delay
           LocationName          → name
           Status                → adt_state
@@ -237,25 +151,109 @@ class ImportVendorWizard(models.TransientModel):
                     # Mandatory
                     'note':                    item.get("note", {}).get("value", "") or "",
                     'account_ref':             val(item,  "AccountRef"),
-                    'b_account_ref':           val(item,  "BAccountRef"),
-                    'vendor_id':               val(item,  "VendorID"),
-                    'vendor_name':             val(item,  "VendorName"),
+                    'b_account_id':           val(item,  "BAccountID"),
                     'fob_point':               val(item,  "FOBPoint"),
-                    'last_modified_date_time': val(item,  "LastModifiedDateTime"),
+                    'last_modified_datetime': val(item,  "LastModifiedDateTime"),
                     'lead_time_days':          ival(item, "LeadTimedays"),
                     'location_name':           val(item,  "LocationName"),
                     'status':                  val(item,  "Status"),
+                    'vendor_id':               val(item,  "VendorID"),
+                    'vendor_name':             val(item,  "VendorName"),
                     # Optional
                     'vendor_class':            val(item,  "VendorClass"),
                 })
 
+            Partner = self.env['res.partner']
+            Staging = self.env['acumatica.vendor.line']
+
+            query = """
+                INSERT INTO acumatica_vendor_line
+                (
+                    config_id,
+                    external_id,
+                    row_number,
+                    note,
+                    account_ref,
+                    b_account_id,
+                    fob_point,
+                    last_modified_datetime,
+                    lead_time_days,
+                    location_name,
+                    status,
+                    vendor_id,
+                    vendor_name,
+                    import_state,
+                    import_message,
+                    odoo_partner_id,
+                    selected,
+                    sync_date
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+            """
+
+            staging_by_vendor = {
+                p.vendor_id: p.id
+                for p in Staging.search([
+                    ('vendor_id', '!=', False)
+                ])
+            }
+
+            partner_by_vendor = {
+                p.adt_vendor_id: p.id
+                for p in Partner.search([
+                    ('adt_vendor_id', '!=', False)
+                ])
+            }
+
+            params_list = []
+            for item in result:
+                existing_staging = False
+                if item['vendor_id']:
+                    existing_staging = staging_by_vendor.get(item['vendor_id'])
+
+                if existing_staging:
+                    self._check_last_modified_staging(item)
+                    continue
+
+                existing_partner = False
+                if existing_staging:
+                    existing_partner = partner_by_vendor.get(item['vendor_id'])
+
+                msg = 'Data sudah ada' if existing_partner else ''
+                state = 'pending'
+
+                params_list.append((
+                    self.config_id.id,
+                    item['external_id'],
+                    item['row_number'],
+                    item['note'],
+                    item['account_ref'],
+                    item['b_account_id'],
+                    item['fob_point'],
+                    item['last_modified_datetime'],
+                    item['lead_time_days'],
+                    item['location_name'],
+                    item['status'],
+                    item['vendor_id'],
+                    item['vendor_name'],
+                    state,
+                    msg,
+                    existing_partner or None,
+                    True,
+                    fields.Datetime.now(),
+                ))
+
+            self.env.cr.executemany(query, params_list)
+            print(self.env.cr.rowcount)
             return result
 
         finally:
             self.config_id._do_logout(session)
             self.config_id.last_sync = fields.Datetime.now()
 
-    # ─── Step 2a: Buka List Staging ──────────────────
     def action_view_staging(self):
         self.ensure_one()
         return {
@@ -267,7 +265,6 @@ class ImportVendorWizard(models.TransientModel):
             'context':   {'default_config_id': self.config_id.id},
         }
 
-    # ─── Step 2b: Import Semua Pending ───────────────
     def action_import_all_pending(self):
         self.ensure_one()
         lines = self.env['acumatica.vendor.line'].search([
@@ -288,3 +285,4 @@ class ImportVendorWizard(models.TransientModel):
             'view_mode': 'list,form',
             'domain':    [('config_id', '=', self.config_id.id)],
         }
+

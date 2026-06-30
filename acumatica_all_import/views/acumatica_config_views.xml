@@ -107,4 +107,53 @@
         <field name="domain">[('config_type', '=', 'vendor')]</field>
     </record>
 
+    <record id="action_acumatica_uom_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica UoM</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'uom')]</field>
+    </record>
+
+    <record id="action_acumatica_warehouse_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica Warehouse</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'warehouse')]</field>
+    </record>
+
+    <record id="action_acumatica_stock_item_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica Stock Item</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'stock_item')]</field>
+    </record>
+
+    <record id="action_acumatica_non_stock_item_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica Non Stock Item</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'non_stock_item')]</field>
+    </record>
+
+    <record id="action_acumatica_receipt_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica PO Receipt</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'po_receipt')]</field>
+    </record>
+
+    <record id="action_acumatica_receipt_change_item_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica Receipt Type Change Item</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'receipt_change_item')]</field>
+    </record>
+
+    <record id="action_acumatica_shipment_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica SO Return</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'shipment_so')]</field>
+    </record>
+
 </odoo>

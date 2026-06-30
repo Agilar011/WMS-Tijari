@@ -49,10 +49,6 @@ class ImportUomWizard(models.TransientModel):
             raise UserError('Pilih konfigurasi API terlebih dahulu.')
 
         # Hapus staging lama (dari config ini)
-        self.env['acumatica.uom.line'].search([
-            ('config_id', '=', self.config_id.id)
-        ]).unlink()
-
         import math
 
         raw_list = 0
@@ -67,44 +63,6 @@ class ImportUomWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        # Hitung yang sudah ada di Odoo
-        # new_count      = 0
-        # existing_count = 0
-
-        # lines_to_create = []
-        # for item in raw_list:
-        #     existing = self.env['uom.uom'].search([
-        #         ('name', '=ilike', item['description'])
-        #     ], limit=1)
-
-        #     lines_to_create.append({
-        #         'config_id':   self.config_id.id,
-        #         'row_number':  item['row_number'],
-        #         'unit_id':     item['unit_id'],
-        #         'description': item['description'],
-        #         'external_id': item['external_id'],
-        #         'import_state': 'skipped' if existing else 'pending',
-        #         'import_message': f'Sudah ada: {existing.name}' if existing else '',
-        #         'odoo_uom_id': existing.id if existing else False,
-        #         'selected':    not bool(existing),
-        #         'sync_date':   fields.Datetime.now(),
-        #     })
-
-        #     if existing:
-        #         existing_count += 1
-        #     else:
-        #         new_count += 1
-
-        # self.env['acumatica.uom.line'].create(lines_to_create)
-
-        # self.write({
-        #     'state':          'fetched',
-        #     'total_fetched':  len(raw_list),
-        #     'total_new':      new_count,
-        #     'total_existing': existing_count,
-        # })
-
-        # Reload wizard (supaya user bisa lihat summary & lanjut)
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'import.uom.wizard',

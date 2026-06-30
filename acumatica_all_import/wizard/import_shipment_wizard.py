@@ -10,7 +10,7 @@ class ImportShipmentWizard(models.TransientModel):
     _name = 'import.shipment.wizard'
     _description = 'Wizard Import Shipment Receipt dari Acumatica'
 
-    config_id = fields.Many2one('acumatica.shipment.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
     shipment_nbr = fields.Char(string='Filter Shipment Number')
@@ -75,38 +75,6 @@ class ImportShipmentWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        # Picking = self.env['stock.picking']
-        # existing_keys = set()
-        # new_keys = set()
-        # lines_to_create = []
-
-        # for item in raw_list:
-        #     origin = item.get('receipt_nbr')
-        #     exists = bool(origin and Picking.search_count([('origin', '=', origin)]))
-        #     if exists:
-        #         existing_keys.add(origin)
-        #         msg = 'Sudah ada → move akan ditambahkan jika belum ada'
-        #     else:
-        #         new_keys.add(origin)
-        #         msg = ''
-
-        #     vals = dict(item)
-        #     vals.update({
-        #         'config_id': self.config_id.id,
-        #         'import_state': 'pending',
-        #         'import_message': msg,
-        #         'selected': True,
-        #         'sync_date': fields.Datetime.now(),
-        #     })
-        #     lines_to_create.append(vals)
-
-        # self.env['acumatica.shipment.line'].create(lines_to_create)
-        # self.write({
-        #     'state': 'fetched',
-        #     'total_fetched': len(raw_list),
-        #     'total_new': len([x for x in new_keys if x]),
-        #     'total_existing': len([x for x in existing_keys if x]),
-        # })
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'import.shipment.wizard',
@@ -163,6 +131,21 @@ class ImportShipmentWizard(models.TransientModel):
                 return payload.get('rows')
         return []
 
+    def _search_picking_type(self, header):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+
+        location = Location.search([
+            ('code', '=', header['warehouse_code'])
+        ])
+        if location:
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('is_default_api', '=', True)
+            ])
+
+        return type if type else None
+
     def fetch_shipment_data(self, limit=50, offset=0, shipment_nbr=False, last_modified_from=False, odata_filter=False):
         self.ensure_one()
         session = self.config_id._do_login()
@@ -178,8 +161,9 @@ class ImportShipmentWizard(models.TransientModel):
             if shipment_nbr:
                 filters.append(f"ShipmentNbr eq '{shipment_nbr}'")
             if odata_filter:
-                filters.append(self.config_id.odata_filter)
                 filters.extend(odata_filter)
+            if self.config_id.odata_filter:
+                filters.append(self.config_id.odata_filter)
             else:
                 filters.append("(Type eq 'Shipment' and Operation eq 'Receipt')")
 
@@ -247,6 +231,9 @@ class ImportShipmentWizard(models.TransientModel):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
+                if header['warehouse_code']:
+                    type = self._search_picking_type(header)
+                    header['picking_type_id'] = type.id if type else None
 
                 result.append(**header, **shipment_to_address) if shipment_to_address else result.append(header)
 

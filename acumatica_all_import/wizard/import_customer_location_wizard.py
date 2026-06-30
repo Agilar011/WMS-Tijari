@@ -35,11 +35,6 @@ class ImportCustomerLocationWizard(models.TransientModel):
         default=0
     )
 
-    total_target = fields.Integer(
-        string='Total Data Diambil',
-        help='Kosongkan / 0 untuk ambil semua data'
-    )
-
     # =========================
     # STATE
     # =========================
@@ -53,9 +48,6 @@ class ImportCustomerLocationWizard(models.TransientModel):
     # SUMMARY
     # =========================
     total_fetched     = fields.Integer(readonly=True)
-    total_new         = fields.Integer(readonly=True)
-    total_existing    = fields.Integer(readonly=True)
-    total_no_customer = fields.Integer(readonly=True)
 
     # =========================
     # ACTION FETCH
@@ -66,15 +58,9 @@ class ImportCustomerLocationWizard(models.TransientModel):
         if not self.config_id:
             raise UserError('Pilih API terlebih dahulu')
 
-        # cleanup staging
-        self.env['acumatica.customer.location.line'].search([
-            ('config_id', '=', self.config_id.id)
-        ]).unlink()
-
-        # fetch dari API
         import math
 
-        raw_list = 0
+        raw_count = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
         for i in range(loop_count):
@@ -83,86 +69,15 @@ class ImportCustomerLocationWizard(models.TransientModel):
                 limit=self.batch_size,
                 offset=offset,
             )
-            raw_list += batch_data
+            raw_count += batch_data
 
             if not batch_data:
                 break
-            # print(f"Batch {i+1} - Data Diterima: {len(batch_data)} - Total so far: {raw_list_count}")
-            # raw_list.extend(batch_data)
 
-        self.total_fetched = raw_list
+        self.total_fetched = raw_count
 
-        if not raw_list:
+        if not raw_count:
             raise UserError('Tidak ada data dari API')
-
-        # Partner = self.env['res.partner']
-
-        # new_count = existing_count = no_customer_count = 0
-        # lines = []
-
-        # batch_num = 0
-        # for item in raw_list:
-        #     batch_num += 1
-        #     existing = Partner.search([
-        #         ('name', '=', item['location_id_acumatica']),
-        #         ('parent_id.company_registry', '=', item['customer'])
-        #     ], limit=1)
-
-        #     partner = Partner.search([
-        #         ('company_registry', '=', item['customer'])
-        #     ], limit=1)
-
-        #     if existing:
-        #         existing_count += 1
-        #         msg = 'Update'
-        #     elif not partner:
-        #         no_customer_count += 1
-        #         msg = 'Customer tidak ditemukan'
-        #     else:
-        #         new_count += 1
-        #         msg = 'New'
-            
-        #     query = """
-        #         INSERT INTO acumatica_customer_location_line (config_id, row_number, external_id, customer, location_id_acumatica, location_name, import_state, import_message, selected) 
-        #         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        #     """
-        #     params = (
-        #         self.config_id.id,
-        #         item['row_number'],
-        #         item['external_id'],
-        #         item['customer'],
-        #         item['location_id_acumatica'],
-        #         item['location_name'],
-        #         'pending',
-        #         msg,
-        #          True if msg in ['Update', 'New'] else False
-        #     )
-        #     self.env.cr.execute(query, params)
-
-        #     self.env['acumatica.customer.location.line']._invalidate_cache()
-        #     print(f"DATA BERHASIL NAMBAH NIH - BATCH {batch_num}")
-
-        #     lines.append({
-        #         **item,
-        #         'config_id': self.config_id.id,
-        #         'external_id': item['external_id'],
-        #         'customer': item['customer'],
-        #         'location_id_acumatica': item['location_id_acumatica'],
-        #         'location_name': item['location_name'],
-        #         'import_state': 'pending',
-        #         'import_message': msg,
-        #         'selected': bool(partner),
-        #     })
-
-        # self.env['acumatica.customer.location.line'].create(lines)
-
-        # self.write({
-        #     'state': 'fetched',
-        #     'total_fetched': len(raw_list),
-        #     'total_new': new_count,
-        #     'total_existing': existing_count,
-        #     'total_no_customer': no_customer_count,
-        # })
 
         return {
             'type': 'ir.actions.act_window',
@@ -189,6 +104,16 @@ class ImportCustomerLocationWizard(models.TransientModel):
         lines._do_import()
         self.state = 'done'
 
+    def _check_last_modified_staging(self, item):
+        Staging = self.env['acumatica.customer.line']
+        existing = Staging.search([
+            ('customer', '=', item['customer']),
+            ('location_id_acumatica', '=', item['location_id_acumatica']),
+            ('last_modified_datetime', '!=', item['last_modified_datetime']),
+        ])
+        if existing:
+            item['state'] = 'pending'
+            existing.write(item)
 
     def fetch_customer_location_data(self, limit=100, offset=0):
         self.ensure_one()
@@ -238,6 +163,12 @@ class ImportCustomerLocationWizard(models.TransientModel):
                         return 0
                 return 0
 
+            def aval(key):
+                v = address.get(key, {})
+                if isinstance(v, dict):
+                    return v.get("value", "") or ""
+                return ""
+
             # =========================
             # PARSE
             # =========================
@@ -245,133 +176,133 @@ class ImportCustomerLocationWizard(models.TransientModel):
                 contact = item.get("Contact", {}) or {}
                 address = contact.get("Address", {}) or {}
 
-                def aval(key):
-                    v = address.get(key, {})
-                    if isinstance(v, dict):
-                        return v.get("value", "") or ""
-                    return ""
 
                 all_results.append({
-                    'external_id':          item.get("id", "") or "",
-                    'row_number':           item.get("rowNumber", 0),
-                    'note':                 item.get("note", {}).get("value", "") or "",
-                    'is_active':            bval(item, "Active"),
-                    'address_override':     bval(item, "AddressOverride"),
-                    'created_datetime':     val(item, "CreatedDateTime"),
-                    'customer':             val(item, "Customer"),
-                    'is_default':           bval(item, "Default"),
-                    'usage_type':           val(item, "EntityUsageType"),
-                    'ext_ref_number':       val(item, "ExtRefNbr"),
+                    'external_id': item.get("id", "") or "",
+                    'row_number': item.get("rowNumber", 0),
+                    'note': item.get("note", {}).get("value", "") or "",
+                    'is_active': bval(item, "Active"),
+                    'address_override': bval(item, "AddressOverride"),
+                    'created_datetime': val(item, "CreatedDateTime"),
+                    'customer': val(item, "Customer"),
+                    'is_default': bval(item, "Default"),
+                    'usage_type': val(item, "EntityUsageType"),
+                    'ext_ref_number': val(item, "ExtRefNbr"),
                     'fed_ex_ground_collect': bval(item, "FedExGroundCollect"),
-                    'fob_point':            val(item, "FOBPoint"),
-                    'insurance':            bval(item, "Insurance"),
+                    'fob_point': val(item, "FOBPoint"),
+                    'insurance': bval(item, "Insurance"),
                     'last_modified_datetime': val(item, "LastModifiedDateTime"),
-                    'lead_time_days':       ival(item, "LeadTimeDays"),
+                    'lead_time_days': ival(item, "LeadTimeDays"),
                     'location_id_acumatica': val(item, "LocationID"),
-                    'location_name':        val(item, "LocationName"),
-                    'order_priority':       ival(item, "OrderPriority"),
-                    'shipping_branch':      val(item, "ShippingBranch"),
-                    'shipping_zone':        val(item, "ShippingZone"),
-                    'ship_via':             val(item, "ShipVia"),
-                    'status':               val(item, "Status"),
+                    'location_name': val(item, "LocationName"),
+                    'order_priority': ival(item, "OrderPriority"),
+                    'shipping_branch': val(item, "ShippingBranch"),
+                    'shipping_zone':  val(item, "ShippingZone"),
+                    'ship_via': val(item, "ShipVia"),
+                    'status': val(item, "Status"),
                     'tax_exemption_number': val(item, "TaxExemptionNbr"),
-                    'tax_registration_id':   val(item, "TaxRegistrationID"),
-                    'warehouse':            val(item, "Warehouse"),
+                    'tax_registration_id': val(item, "TaxRegistrationID"),
+                    'warehouse': val(item, "Warehouse"),
 
-                    'note_id':              val(item, "NoteID"),
-                    'address_line1':        aval("AddressLine1"),
-                    'address_line2':        aval("AddressLine2"),
-                    'city':                 aval("City"),
-                    'country_code':         aval("Country"),
-                    'country_name':         aval("CountryName"),
-                    'postal_code':          aval("PostalCode"),
-                    'state_code':           aval("State"),
+                    'note_id': val(item, "NoteID"),
+                    'address_line1': aval("AddressLine1"),
+                    'address_line2': aval("AddressLine2"),
+                    'city': aval("City"),
+                    'country_code': aval("Country"),
+                    'country_name': aval("CountryName"),
+                    'postal_code': aval("PostalCode"),
+                    'state_code': aval("State"),
                 })
 
             _logger.info("TOTAL FINAL: %d records", len(all_results))
             Partner = self.env['res.partner']
             Staging = self.env['acumatica.customer.location.line']
 
-            new_count = existing_count = no_customer_count = 0
-            lines = []
-
             batch_num = 0
+            partner_by_location = {
+                (p.adt_location_id, p.company_registry): p.id
+                for p in Partner.search([
+                    ('company_registry', '!=', False),
+                    ('adt_location_id', '!=', False),
+                ])
+            }
+            staging_by_location = {
+                (p.location_id_acumatica, p.customer_id): p.id
+                for p in Staging.search([
+                    ('location_id_acumatica', '!=', False),
+                    ('customer_id', '!=', False)
+                ])
+            }
+
+            query = """
+                INSERT INTO acumatica_customer_location_line 
+                (
+                config_id,
+                external_id,
+                row_number,
+                customer,
+                
+                is_active,
+                address_override,
+                created_datetime,
+
+                is_default,
+                usage_type,
+                ext_ref_number,
+                fed_ex_ground_collect,
+                fob_point,
+                insurance,
+                last_modified_datetime,
+                lead_time_days,
+
+                order_priority,
+                shipping_branch,
+                shipping_zone,
+                ship_via,
+                status,
+                tax_exemption_number,
+                tax_registration_id,
+                warehouse,
+
+                note_id,
+                address_line1,
+                address_line2,
+                city,
+                country_code,
+                country_name,
+                postal_code,
+                state_code,
+
+
+                location_id_acumatica,
+                location_name,
+                import_state, 
+                import_message
+                ) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                        %s, %s, %s, %s, %s)
+            """
+
+            params_list = []
             for item in all_results:
                 batch_num += 1
-                staging_domain = []
-                if item['location_id_acumatica']:
-                    staging_domain = [
-                        '&',
-                        ('location_id_acumatica', '=', item['location_id_acumatica']),
-                        ('customer', '=', item['customer']),
-                    ]
-
-                if staging_domain and Staging.search(staging_domain, limit=1):
+                existing_staging = False
+                if item['location_id_acumatica'] and item['customer_id']:
+                    existing_staging = staging_by_location.get((item['location_id_acumatica'], item['customer_id']))
+                if existing_staging:
+                    self._check_last_modified_staging(item)
                     continue
-
-                partner = Partner.search([
-                    ('company_registry', '=', item['customer'])
-                ], limit=1)
-
-                if partner:
-                    existing_count += 1
-                    msg = 'Data sudah ada'
-                else:
-                    no_customer_count += 1
-                    msg = ''
-                    new_count += 1
                 
-                query = """
-                    INSERT INTO acumatica_customer_location_line 
-                    (
-                    config_id,
-                    external_id,
-                    row_number,
-                    customer,
-                    
-                    is_active,
-                    address_override,
-                    created_datetime,
+                existing_partner = False
+                if not existing_staging and item['customer_id']:
+                    existing_partner = partner_by_location.get((item['location_id_acumatica'], item['customer_id']))
 
-                    is_default,
-                    usage_type,
-                    ext_ref_number,
-                    fed_ex_ground_collect,
-                    fob_point,
-                    insurance,
-                    last_modified_datetime,
-                    lead_time_days,
+                msg = 'Data sudah ada' if existing_partner else ''
+                state = 'pending'
 
-                    order_priority,
-                    shipping_branch,
-                    shipping_zone,
-                    ship_via,
-                    status,
-                    tax_exemption_number,
-                    tax_registration_id,
-                    warehouse,
-
-                    note_id,
-                    address_line1,
-                    address_line2,
-                    city,
-                    country_code,
-                    country_name,
-                    postal_code,
-                    state_code,
-
-
-                    location_id_acumatica,
-                    location_name,
-                    import_state, 
-                    import_message
-                    ) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                            %s, %s, %s, %s, %s)
-                """
-                params = (
+                params_list.append((
                     self.config_id.id,
                     item['external_id'],
                     item['row_number'],
@@ -412,12 +343,11 @@ class ImportCustomerLocationWizard(models.TransientModel):
                     item['location_name'],
                     'pending',
                     msg
-                )
-                self.env.cr.execute(query, params)
+                ))
 
-                self.env['acumatica.customer.location.line']._invalidate_cache()
                 print(f"DATA BERHASIL NAMBAH NIH - BATCH {batch_num}")
 
+            self.env.cr.executemany(query, params_list)
             return len(all_results)
 
         finally:

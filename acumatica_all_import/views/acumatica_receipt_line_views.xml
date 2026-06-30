@@ -49,6 +49,7 @@
                     <group string="Header Receipt">
                         <group>
                             <field name="receipt_nbr"/>
+                            <field name="picking_type_id"/>
                             <field name="vendor_code"/>
                             <field name="partner_ref"/>
                             <field name="scheduled_date"/>

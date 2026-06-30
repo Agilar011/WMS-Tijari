@@ -26,49 +26,29 @@ class AcumaticaWarehouseLine(models.Model):
     _order = 'row_number asc'
  
     # ─── Data dari Acumatica ─────────────────────────
-    row_number           = fields.Integer(string='No', readonly=True)
-    external_id          = fields.Char(string='UUID Acumatica', readonly=True)
-    warehouse_id         = fields.Char(string='WarehouseID → code', readonly=True)
-    description          = fields.Char(string='Description → name', readonly=True)
-    active               = fields.Boolean(string='Active', readonly=True)
-    is_active            = fields.Boolean(string='Aktif (Active)')
-    note                 = fields.Text(string='Note', readonly=True)
+    row_number = fields.Integer(string='No', readonly=True)
+    external_id = fields.Char(string='UUID Acumatica', readonly=True)
+    warehouse_id = fields.Char(string='WarehouseID → code', readonly=True)
+    description = fields.Char(string='Description → name', readonly=True)
+    active = fields.Boolean(string='Active', readonly=True)
+    is_active = fields.Boolean(string='Aktif (Active)')
+    note = fields.Text(string='Note', readonly=True)
     drop_ship_location_id = fields.Char(string='DropShipLocationID', readonly=True)
-    last_modified_dt     = fields.Char(string='LastModifiedDateTime', readonly=True)
+    last_modified_dt = fields.Char(string='LastModifiedDateTime', readonly=True)
     receiving_location_id = fields.Char(string='ReceivingLocationID', readonly=True)
-    rma_location_id      = fields.Char(string='RMALocationID', readonly=True)
+    rma_location_id = fields.Char(string='RMALocationID', readonly=True)
     shipping_location_id = fields.Char(string='ShippingLocationID', readonly=True)
-    building_id          = fields.Char(string='BuildingID', readonly=True)
+    building_id = fields.Char(string='BuildingID', readonly=True)
 
-    # ─── Detail locations (one2many) ─────────────────
-    location_line_ids = fields.One2many(
-        'acumatica.warehouse.location.line',
-        'warehouse_line_id',
-        string='Locations',
-        readonly=True,
-    )
-    location_count = fields.Integer(
-        string='Jumlah Lokasi',
-        compute='_compute_location_count',
-        store=True,
-    )
-
-    @api.depends('location_line_ids')
-    def _compute_location_count(self):
-        for rec in self:
-            rec.location_count = len(rec.location_line_ids)
-
-    # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
-        ('pending',  'Belum Diimport'),
+        ('pending', 'Belum Diimport'),
         ('imported', 'Sudah Diimport'),
-        ('updated',  'Diupdate'),
-        ('error',    'Error'),
+        ('updated', 'Diupdate'),
+        ('error', 'Error'),
     ], string='Status', default='pending', readonly=True)
 
-    import_message    = fields.Char(string='Keterangan', readonly=True)
+    import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_warehouse_id = fields.Many2one('stock.warehouse', string='Warehouse di Odoo', readonly=True, ondelete='set null')
-    selected          = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one(
         'acumatica.config',
@@ -90,7 +70,7 @@ class AcumaticaWarehouseLine(models.Model):
 
 
     def _find_existing_location(self, rec):
-        """Cari warehouse code (BuildingID)."""
+        """Cari warehouse code (WarehouseID)."""
         location = self.env['stock.location.acumatica']
         if rec.warehouse_id:
             found = location.search([('code', '=', rec.warehouse_id)], limit=1)
@@ -113,10 +93,42 @@ class AcumaticaWarehouseLine(models.Model):
         return self._do_import()
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
+
+    def _create_partner(self, line):
+        Partner = self.env['res.partner']
+        wh_address = Partner.search([('name', '=', line.building_id)], limit=1)
+        if not wh_address:
+            company = self.env.company.partner_id
+            wh_address = Partner.create({
+                'name': line.building_id,
+                'partner_type': 'warehouse',
+                'type': 'other',
+                'company_type': 'person',
+                'parent_id': company.id
+            })
+
+        return wh_address or False
+
+
+    def _create_warehouse(self, line, address):
+        Warehouse = self.env['stock.warehouse']
+        code = (line.building_id or '').strip().upper()
+        wh_building = Warehouse.search([('code', '=', code)], limit=1)
+        if not wh_building:
+            wh_building = Warehouse.create({
+                'name': code,
+                'code': code,
+                'partner_id': address.id,
+                'company_id': self.env.company.id,
+                'reception_steps': 'two_steps',
+                'delivery_steps': 'pick_pack_ship',
+            })
+
+        return wh_building or False
 
     def _do_import(self):
         """
@@ -134,17 +146,17 @@ class AcumaticaWarehouseLine(models.Model):
             try:
                 if not line.warehouse_id or not line.description:
                     line.write({
-                        'import_state':   'error',
+                        'import_state': 'error',
                         'import_message': 'WarehouseID atau Description kosong',
                     })
                     error += 1
                     continue
 
                 vals = {
-                    'name':                    line.description,
-                    'code':                    line.warehouse_id,
-                    'building':                line.building_id,
-                    'is_active':               bool(line.building_id),
+                    'name': line.description,
+                    'code': line.warehouse_id,
+                    'building': line.building_id,
+                    'is_active': bool(line.building_id),
                 }
 
                 existing = self._find_existing_location(line)
@@ -160,7 +172,7 @@ class AcumaticaWarehouseLine(models.Model):
                     line.write({
                         'import_state':    'updated',
                         'import_message':  f'Diupdate: {existing.name} (code: {existing.code})',
-                        # 'odoo_warehouse_id': existing.id,
+                        'odoo_warehouse_id': warehouse_odoo.id if warehouse_odoo else None,
                     })
                     updated += 1
                 else:
@@ -185,46 +197,30 @@ class AcumaticaWarehouseLine(models.Model):
                             error += 1
                             vals['is_error'] = True
                             error_list.append('BuildingID kosong')
-                    # if not warehouse_odoo:
-                    #     line.write({
-                    #         'import_state': 'error',
-                    #         'import_message': f'Building {line.building_id} tidak ditemukan di Odoo, pastikan sudah dibuat sebagai warehouse sebelum mengimpor.',
-                    #     })
-                    #     error += 1
-                    #     vals['is_error'] = True
-                    #     error_list.append(f'Building {line.building_id} tidak ditemukan di Odoo')
+
                     new_location = self.env['stock.location.acumatica'].create(vals)
                     if error_list:
-                        new_location.write({'is_error': True, 'error_message': '; '.join(error_list)})
+                        new_location.write({
+                            'is_error': True, 
+                            'error_message': '; '.join(error_list)
+                        })
                     
                     if line.building_id:
-                        wh_address = self.env['res.partner'].search([('name', '=', line.building_id)], limit=1)
-                        if not wh_address:
-                            company = self.env.company.partner_id
-                            wh_address = self.env['res.partner'].create({'name': line.building_id, 'partner_type': 'warehouse', 'type': 'other', 'company_type': 'person', 'parent_id': company.id})
-                        code = (line.building_id or '').strip().upper()
-                        wh_building = self.env['stock.warehouse'].search([('code', '=', code)], limit=1)
-                        if not wh_building:
-                            wh_building = self.env['stock.warehouse'].create({
-                                'name': code,
-                                'code': code,
-                                'partner_id': wh_address.id,
-                                'company_id': self.env.company.id,
-                                'reception_steps': 'two_steps',
-                                'delivery_steps': 'pick_pack_ship',
+                        wh_address = self._create_partner(line)
+                        if wh_address: 
+                            wh_builidng = self._create_warehouse(line, wh_address)
+                        if wh_builidng:
+                            new_location.write({
+                                'is_error': False,
+                                'odoo_building_id': wh_builidng.id
                             })
-                            print(wh_building)
 
                     line.write({
                         'import_state':    'imported',
                         'import_message':  f'Dibuat: {new_location.name} (code: {new_location.code})',
-                        # 'odoo_warehouse_id': new_location.id,
+                        'odoo_warehouse_id': wh_builidng.id if wh_builidng else None,
                     })
                     imported += 1
-
-                # ── Import location lines ──
-                # if odoo_wh and line.location_line_ids:
-                #     line.location_line_ids._do_import(odoo_wh)
 
             except Exception as e:
                 _logger.error("Error import Warehouse %s: %s", line.warehouse_id, str(e))
@@ -252,9 +248,9 @@ class AcumaticaWarehouseLine(models.Model):
         return {
             'type': 'ir.actions.act_window',
             'name': f'Locations - {self.warehouse_id}',
-            'res_model': 'acumatica.warehouse.location.line',
+            'res_model': 'stock.location.acumatica',
             'view_mode': 'list,form',
-            'domain': [('warehouse_line_id', '=', self.id)],
+            'domain': [('code', '=', self.warehouse_id)],
         }
 
     def action_reset_pending(self):

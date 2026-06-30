@@ -35,8 +35,6 @@
                 <separator/>
                 <filter string="Active saja"    name="active_only"
                         domain="[('active','=',True)]"/>
-                <filter string="Dipilih"        name="selected"
-                        domain="[('selected','=',True)]"/>
                 <group expand="0" string="Group By">
                     <filter string="Status Import" name="group_state"
                             context="{'group_by': 'import_state'}"/>
@@ -51,13 +49,10 @@
         <field name="model">acumatica.warehouse.line</field>
         <field name="arch" type="xml">
             <list string="Data Warehouse &amp; Location" multi_edit="1">
-                <field name="selected"       optional="show"/>
-                <field name="row_number"     string="No"             optional="show"/>
-                <field name="warehouse_id"   string="WarehouseID → code"/>
+                <field name="warehouse_id" string="WarehouseID"/>
                 <field name="description"    string="Description → name"/>
                 <field name="active"         string="Active"         widget="boolean"
                        optional="show"/>
-                <field name="location_count" string="Lokasi"         optional="show"/>
                 <field name="rma_location_id"       string="RMA Loc"        optional="show"/>
                 <field name="receiving_location_id" string="Receiving Loc"  optional="show"/>
                 <field name="shipping_location_id"  string="Shipping Loc"   optional="show"/>
@@ -114,7 +109,6 @@
                         </group>
                         <group>
                             <field name="active"        string="Active"/>
-                            <field name="location_count" string="Jumlah Lokasi" readonly="1"/>
                         </group>
                     </group>
 
@@ -184,42 +178,6 @@
                 Belum ada data. Gunakan menu "Import Warehouse" untuk menarik data dari Acumatica.
             </p>
         </field>
-    </record>
-
-    <!-- ══════════════════════════════════════════════════ -->
-    <!-- DETAIL: acumatica.warehouse.location.line          -->
-    <!-- ══════════════════════════════════════════════════ -->
-
-    <record id="view_acumatica_warehouse_location_line_list" model="ir.ui.view">
-        <field name="name">acumatica.warehouse.location.line.list</field>
-        <field name="model">acumatica.warehouse.location.line</field>
-        <field name="arch" type="xml">
-            <list string="Locations dari Acumatica">
-                <field name="warehouse_line_id" string="Warehouse"    optional="show"/>
-                <field name="row_number"        string="No"           optional="show"/>
-                <field name="location_id"       string="LocationID → name"/>
-                <field name="description"       string="Description → adt_description"/>
-                <field name="active"            string="Active" widget="boolean"/>
-                <field name="import_state"      string="Status" widget="badge"
-                       decoration-success="import_state == 'imported'"
-                       decoration-info="import_state == 'updated'"
-                       decoration-danger="import_state == 'error'"
-                       decoration-muted="import_state == 'pending'"/>
-                <field name="odoo_location_id"  string="Location di Odoo" optional="show"/>
-                <field name="import_message"    string="Keterangan"       optional="show"/>
-                <button name="action_open_location"
-                        string="Lihat"
-                        type="object"
-                        icon="fa-external-link"
-                        invisible="not odoo_location_id"/>
-            </list>
-        </field>
-    </record>
-
-    <record id="action_acumatica_warehouse_location_line" model="ir.actions.act_window">
-        <field name="name">Data Warehouse &amp; Location</field>
-        <field name="res_model">acumatica.warehouse.location.line</field>
-        <field name="view_mode">list,form</field>
     </record>
 
 </odoo>
