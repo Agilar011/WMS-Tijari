@@ -40,8 +40,6 @@
                             context="{'group_by': 'import_state'}"/>
                     <filter string="Status Acumatica" name="group_status"
                             context="{'group_by': 'status'}"/>
-                    <filter string="Vendor Class" name="group_class"
-                            context="{'group_by': 'vendor_class'}"/>
                 </group>
             </search>
         </field>
@@ -60,7 +58,7 @@
                        decoration-success="status == 'Active'"
                        decoration-muted="status == 'Inactive'"
                        decoration-warning="status == 'Hold'"/>
-                <field name="vendor_class" string="VendorClass" optional="show"/>
+                <field name="b_account_id" string="BAccountID" optional="show"/>
                 <field name="lead_time_days" string="Lead Time" optional="show"/>
                 <field name="fob_point" string="FOBPoint" optional="show"/>
                 <field name="import_state" string="Status Import" widget="badge"
@@ -118,8 +116,8 @@
                         <group>
                             <field name="lead_time_days" string="LeadTimedays"/>
                             <field name="fob_point" string="FOBPoint"/>
-                            <field name="last_modified_date_time" string="LastModifiedDateTime"/>
-                            <field name="vendor_class" string="VendorClass"/>
+                            <field name="last_modified_datetime" string="LastModifiedDateTime"/>
+                            <field name="b_account_id" string="BAccountID"/>
                         </group>
                     </group>
                     <group string="Notes">

@@ -42,6 +42,16 @@ class ImportShipviaWizard(models.TransientModel):
     total_existing = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
     fetch_skip      = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
+    def _check_last_modified_staging(self, item):
+        Staging = self.env['acumatica.shipvia.line']
+        existing = Staging.search([
+            ('carrier_id', '=', item['carrier_id']),
+            ('last_modified_datetime', '!=', item['last_modified_datetime']),
+        ])
+        if existing:
+            item['state'] = 'pending'
+            existing.write(item)
+
     # ─── Step 1: Tarik Data ──────────────────────────
     def action_fetch_data(self):
         self.ensure_one()
@@ -191,7 +201,6 @@ class ImportShipviaWizard(models.TransientModel):
                 })
             Partner = self.env['res.partner']
             Staging = self.env['acumatica.shipvia.line']
-            new_count = existing_count = 0
 
             query = """
                 INSERT INTO acumatica_shipvia_line
@@ -216,31 +225,37 @@ class ImportShipviaWizard(models.TransientModel):
                     %s, %s, %s, %s
                 )
             """
+            staging_by_carrier = {
+                p.vendor_id: p.id
+                for p in Staging.search([
+                    ('carrier_id', '!=', False)
+                ])
+            }
 
+            partner_by_carrier = {
+                p.adt_vendor_id: p.id
+                for p in Partner.search([
+                    ('company_registry', '!=', False)
+                ])
+            }
+
+            params_list = []
             for item in result:
-                staging_domain = []
-                if item['external_id'] and item['carrier_id']:
-                    staging_domain = ['|', ('external_id', '=', item['external_id']), ('carrier_id', '=', item['carrier_id'])]
-                elif item['external_id']:
-                    staging_domain = [('external_id', '=', item['external_id'])]
-                elif item['carrier_id']:
-                    staging_domain = [('carrier_id', '=', item['carrier_id'])]
+                existing_staging = False
+                if item['vendor_id']:
+                    existing_staging = staging_by_carrier.get(item['carrier_id'])
 
-                if staging_domain and Staging.search(staging_domain, limit=1):
+                if existing_staging:
+                    self._check_last_modified_staging(item)
                     continue
 
-                existing = False
-                if item['carrier_id']:
-                    existing = Partner.search([
-                        ('company_registry', '=', item['carrier_id'])
-                    ], limit=1)
+                existing_partner = False
+                if existing_staging:
+                    existing_partner = partner_by_carrier.get(item['carrier_id'])
 
-                if existing:
-                    existing_count += 1
-                    msg = 'Data sudah ada'
-                else:
-                    new_count += 1
-                    msg = ''
+                msg = 'Data sudah ada' if existing_partner else ''
+                state = 'pending'
+
 
                 params = (
                     self.config_id.id,
@@ -253,15 +268,13 @@ class ImportShipviaWizard(models.TransientModel):
                     item['description'],
                     item['note_id'],
                     item['phone'],
-                    'pending',
+                    state,
                     msg,
-                    existing.id if existing else None,
+                    existing_partner or None,
                     fields.Datetime.now()
                 )
 
-                self.env.cr.execute(query, params)
-                self.env['acumatica.shipvia.line']._invalidate_cache()
-
+            self.env.cr.executemany(query, params_list)
             return len(result)
 
 

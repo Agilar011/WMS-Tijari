@@ -23,9 +23,6 @@ class ImportWarehouseWizard(models.TransientModel):
     ], default='draft')
 
     total_fetched        = fields.Integer(string='Total Warehouse', readonly=True)
-    total_new            = fields.Integer(string='Warehouse Baru', readonly=True)
-    total_existing       = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
-    total_locations      = fields.Integer(string='Total Locations', readonly=True)
     batch_size           = fields.Integer(string='Batch Size untuk Import', default=20)
     fetch_skip            = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
@@ -52,50 +49,6 @@ class ImportWarehouseWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        # new_count = existing_count = total_loc = 0
-        # WH = self.env['stock.location.acumatica']
-
-        # for item in raw_list:
-        #     # Cek existing warehouse
-        #     existing = WH.browse()
-        #     if item['warehouse_id']:
-        #         existing = WH.search([('code', '=', item['warehouse_id'])], limit=1)
-
-        #     if existing:
-        #         existing_count += 1
-        #     else:
-        #         new_count += 1
-
-        #     # Buat header line
-        #     wh_line = self.env['acumatica.warehouse.line'].create({
-        #         'config_id':             self.config_id.id,
-        #         'building_id':           item['building_id'],
-        #         'row_number':            item['row_number'],
-        #         'external_id':           item['external_id'],
-        #         'warehouse_id':          item['warehouse_id'],
-        #         'description':           item['description'],
-        #         'is_active':             item['active'],
-        #         'active':                True,
-        #         'note':                  item['note'],
-        #         'drop_ship_location_id': item['drop_ship_location_id'],
-        #         'last_modified_dt':      item['last_modified_dt'],
-        #         'receiving_location_id': item['receiving_location_id'],
-        #         'rma_location_id':       item['rma_location_id'],
-        #         'shipping_location_id':  item['shipping_location_id'],
-        #         'import_state':          'pending',
-        #         'import_message':        f'Sudah ada → akan diupdate: {existing.name}' if existing else '',
-        #         'selected':              True,
-        #         'sync_date':             fields.Datetime.now(),
-        #     })
-
-        # self.write({
-        #     'state':           'fetched',
-        #     'total_fetched':   len(raw_list),
-        #     'total_new':       new_count,
-        #     'total_existing':  existing_count,
-        #     'total_locations': total_loc,
-        # })
-
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'import.warehouse.wizard',
@@ -103,6 +56,16 @@ class ImportWarehouseWizard(models.TransientModel):
             'view_mode': 'form',
             'target': 'new',
         }
+
+    def _check_last_modified_staging(self, item):
+        Staging = self.env['acumatica.vendor.line']
+        existing = Staging.search([
+            ('warehouse_id', '=', item['warehouse_id']),
+            ('last_modified_dt', '!=', item['last_modified_dt']),
+        ])
+        if existing:
+            item['state'] = 'pending'
+            existing.write(item)
 
     def fetch_warehouse_data(self, limit=50, offset=0):
         """
@@ -134,15 +97,14 @@ class ImportWarehouseWizard(models.TransientModel):
                 return ""
 
             def bval(item, key):
-                """Boolean value"""
                 v = item.get(key, {})
                 if isinstance(v, dict):
-                    return v.get("value", False)
+                    return bool(v.get("value", False))
                 return False
 
             result = []
-            WH = self.env['stock.location.acumatica']
-            wh_line = self.env['acumatica.warehouse.line']
+            Location = self.env['stock.location.acumatica']
+            Staging = self.env['acumatica.warehouse.line']
 
             for item in raw_data:
                 result.append({
@@ -161,14 +123,36 @@ class ImportWarehouseWizard(models.TransientModel):
                     'warehouse_id':          val(item, "WarehouseID"),
                 })
 
+            staging_by_warehouse = {
+                p.warehouse_id: p.id
+                for p in Staging.search([
+                    ('warehouse_id', '!=', False)
+                ])
+            }
+
+            location_by_warehouse = {
+                p.warehouse_id: p.id
+                for p in Location.search([
+                    ('warehouse_id', '!=', False)
+                ])
+            }
+
             for item in result:
                 # Cek existing warehouse
-                existing = WH.browse()
+                existing_staging = False
                 if item['warehouse_id']:
-                    existing = WH.search([('code', '=', item['warehouse_id'])], limit=1)
+                    existing_staging = staging_by_warehouse.get(item['warehouse_id'])
 
-                # if existing:
-                #     continue
+                if existing_staging:
+                    self._check_last_modified_staging(item)
+                    continue
+
+                existing_location = False
+                if existing_staging:
+                    existing_location = location_by_warehouse.get(item['warehouse_id'])
+
+                msg = 'Data sudah ada' if existing_location else ''
+                state = 'pending'
 
                 self.env['acumatica.warehouse.line'].create({
                     'config_id':             self.config_id.id,
@@ -185,9 +169,8 @@ class ImportWarehouseWizard(models.TransientModel):
                     'receiving_location_id': item['receiving_location_id'],
                     'rma_location_id':       item['rma_location_id'],
                     'shipping_location_id':  item['shipping_location_id'],
-                    'import_state':          'pending',
-                    'import_message':        f'Sudah ada → akan diupdate: {existing.name}' if existing else '',
-                    'selected':              True,
+                    'import_state':          state,
+                    'import_message':        msg,
                     'sync_date':             fields.Datetime.now(),
                 })
 
@@ -213,7 +196,6 @@ class ImportWarehouseWizard(models.TransientModel):
         lines = self.env['acumatica.warehouse.line'].search([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
-            ('selected', '=', True),
         ])
         if not lines:
             raise UserError('Tidak ada data pending yang dipilih untuk diimport.')

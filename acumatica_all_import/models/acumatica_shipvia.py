@@ -116,12 +116,14 @@ class AcumaticaShipViaLine(models.Model):
 
                 vals = {
                     # ── Field standar Odoo ──────────────────
+                    'adt_external_id': line.external_id,
                     'comment': line.note or False, # internal_notes
-                    'name': line.description or False, # name
                     'street': line.address or False,
+                    'name': line.description or False, # name
                     'phone': line.phone or False,
+                    'mobile': line.phone or False,
                     'city': line.city or False,
-                    'is_company':       True,
+                    'is_company': True,
 
                     # ── Field custom adt_ ───────────────────
                     'company_registry': line.carrier_id or False,

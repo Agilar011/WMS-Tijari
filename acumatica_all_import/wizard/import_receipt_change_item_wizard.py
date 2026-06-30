@@ -92,6 +92,21 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
     # MAIN PROCESS
     # ---------------------------------------------------------
 
+    def _search_picking_type(self, header):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+
+        location = Location.search([
+            ('code', '=', header['warehouse_code'])
+        ])
+        if location:
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('is_default_api', '=', True)
+            ])
+
+        return type if type else None
+
     def fetch_receipt_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
         self.ensure_one()        
         session = self.config_id._do_login()
@@ -132,6 +147,8 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
                 if not isinstance(details, list):
                     details = []
                 header["warehouse_code"] = self._val(details[0], 'Warehouse')
+                type = self._search_picking_type(header)
+                header['picking_type_id'] = type.id if type else None
                 result.append(dict(header))
 
                 print("="*80)

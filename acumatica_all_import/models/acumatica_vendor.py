@@ -14,7 +14,7 @@ class AcumaticaVendorLine(models.Model):
     Mapping ke res.partner:
       note                  → internal_notes         (Mandatory)
       FOBPoint              → adt_fob_point           (Mandatory)
-      LastModifiedDateTime  → adt_last_modified_date_time (Mandatory)
+      LastModifiedDateTime  → last_modified_datetime (Mandatory)
       LeadTimedays          → sale_delay              (Mandatory)
       LocationName          → name                    (Mandatory)
       Status                → adt_state               (Mandatory, to be)
@@ -37,10 +37,10 @@ class AcumaticaVendorLine(models.Model):
     status                 = fields.Char(string='Status',          readonly=True)
     lead_time_days         = fields.Integer(string='LeadTimedays', readonly=True)
     fob_point              = fields.Char(string='FOBPoint',        readonly=True)
-    last_modified_date_time = fields.Char(string='LastModifiedDateTime', readonly=True)
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
     note                   = fields.Text(string='Note',            readonly=True)
     account_ref            = fields.Char(string='AccountRef',      readonly=True)
-    b_account_ref          = fields.Char(string='BAccountRef',     readonly=True)
+    b_account_id          = fields.Char(string='BAccountID',     readonly=True)
 
     # Optional
     vendor_class           = fields.Char(string='VendorClass',     readonly=True)
@@ -113,7 +113,7 @@ class AcumaticaVendorLine(models.Model):
           LeadTimedays → sale_delay
           LocationName → (diabaikan jika sama dengan VendorName, else disimpan di adt_location_name future)
           FOBPoint     → adt_fob_point
-          LastModifiedDateTime → adt_last_modified_date_time
+          LastModifiedDateTime → adt_acumatica_write_date
           Status       → adt_state
           VendorClass  → adt_class
         """
@@ -151,11 +151,11 @@ class AcumaticaVendorLine(models.Model):
                     'adt_external_id': line.external_id or False,
                     'adt_fob_point': line.fob_point or False,
                     'adt_lead_time_days': line.lead_time_days or 0,
-                    'adt_acumatica_write_date': self._parse_dt(line.last_modified_date_time),
+                    'adt_acumatica_write_date': self._parse_dt(line.last_modified_datetime),
                     'adt_vendor_id': line.vendor_id or False,
                     # 'adt_account_ref': line.account_ref or False,
                     'adt_note': line.note or False,
-                    'adt_b_account_id': line.b_account_ref or False,
+                    'adt_b_account_id': line.b_account_id or False,
                     'adt_location_name': line.location_name or False,
                     'adt_status': line.status or False,
                     'partner_type': 'vendor',
