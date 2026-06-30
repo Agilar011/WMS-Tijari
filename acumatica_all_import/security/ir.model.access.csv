@@ -84,3 +84,5 @@ access_acumatica_so_shipment,Acumatica Shipment Staging Line Access,model_acumat
 access_acumatica_so_shipment_line,Acumatica Shipment Staging Line Access,model_acumatica_sales_order_shipment_staging_line,base.group_user,1,1,1,1
 access_acumatica_so_shipment_staging_alloc,Acumatica Shipment Staging Allocation Access,model_acumatica_sales_order_shipment_staging_allocation,base.group_user,1,1,1,1
 access_acumatica_so_shipment_address_staging,Acumatica Shipment ShipToAddress Staging Access,model_acumatica_sales_order_shipment_shiptoaddress_staging,base.group_user,1,1,1,1
+
+access_acumatica_transfer_shipment_line_product,access.acumatica.transfer.shipment.line.product,model_acumatica_transfer_shipment_line_product,base.group_user,1,1,1,1
