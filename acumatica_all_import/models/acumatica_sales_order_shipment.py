@@ -4,10 +4,10 @@ from dateutil import parser as dateutil_parser
 from docutils.nodes import note
 import requests
 import ast
+import json
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
-
 
 _logger = logging.getLogger(__name__)
 
@@ -1003,11 +1003,6 @@ class AcumaticaShipmentConfig(models.Model):
 
 
     def fetch_shipment_gi_data(self):
-        import json
-        import logging
-        import traceback
-
-        _logger = logging.getLogger(__name__)
 
         print("fetching shipment GI data")
         # self.env['acumatica.shipment.gi.staging'].search([]).unlink()
