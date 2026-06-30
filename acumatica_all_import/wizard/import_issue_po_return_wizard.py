@@ -148,11 +148,20 @@ class ImportReceiptWizard(models.TransientModel):
 
                 # Cek apakah Detail ada dan berbentuk list / dict / array
                 details = item.get('Details') or []
+                print(details)
                 if isinstance(details, dict):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
-                header["warehouse_code"] = self._val(details[0], 'Warehouse')
+                print('detail')
+                raise UserError('checkpoint')
+                # if detail[]:
+                #     header["warehouse_code"] = self._val(details[0], 'Warehouse')
+
+                # else:
+                #     header["warehouse_code"] = "WH33-FG"
+                    
+
                 result.append(dict(header))
                 print(f"Result: {result}")
 

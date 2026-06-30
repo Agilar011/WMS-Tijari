@@ -1,5 +1,158 @@
 <odoo>
 
+    <!-- LIST VIEW -->
+    <record id="view_acumatica_shipment_gi_staging_list" model="ir.ui.view">
+        <field name="name">acumatica.shipment.gi.staging.list</field>
+        <field name="model">acumatica.shipment.gi.staging</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="shipment_nbr"/>
+                <field name="ship_date"/>
+                <field name="customer"/>
+                <field name="customer_name"/>
+                <field name="warehouse_id"/>
+                <field name="status"/>
+                <field name="import_state"/>
+                <field name="odoo_picking_id"/>
+                <button name="action_import_this"
+                        string="Import ke Odoo"
+                        type="object"
+                        class="btn-primary"
+                        invisible="import_state != 'pending'"/>              
+            </list>
+        </field>
+    </record>
+
+    <!-- FORM VIEW -->
+    <record id="view_acumatica_shipment_gi_staging_form" model="ir.ui.view">
+        <field name="name">acumatica.shipment.gi.staging.form</field>
+        <field name="model">acumatica.shipment.gi.staging</field>
+        <field name="arch" type="xml">
+            <form string="Acumatica Shipment">
+
+                <sheet>
+
+                    <group>
+                        <group>
+                            <field name="shipment_nbr"/>
+                            <field name="ship_date"/>
+                            <field name="customer"/>
+                            <field name="customer_name"/>
+                            <field name="warehouse_id"/>
+                            <field name="location"/>
+                            <field name="status"/>
+                            <field name="shipment_type"/>
+                        </group>
+
+                        <group>
+                            <field name="ship_via"/>
+                            <field name="fob_point"/>
+                            <field name="shipped_quantity"/>
+                            <field name="shipped_weight"/>
+                            <field name="shipped_volume"/>
+                            <field name="odoo_picking_id"/>
+                            <field name="import_state"/>
+                            <field name="import_message"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+
+                        <page string="Address">
+
+                            <group>
+                                <field name="address_line1"/>
+                                <field name="address_line2"/>
+                                <field name="address_line3"/>
+                                <field name="city"/>
+                                <field name="state"/>
+                                <field name="country"/>
+                                <field name="postal_code"/>
+                            </group>
+
+                        </page>
+
+                        <page string="Shipment Detail">
+
+                            <field name="shipment_ids">
+
+                                <list>
+                                    <field name="shipmentnbr"/>
+                                    <field name="customerid"/>
+                                    <field name="warehouseid"/>
+                                    <field name="locationid"/>
+                                    <field name="shipmentdate"/>
+                                    <field name="status"/>
+                                    <field name="shippedqty"/>
+                                    <field name="odoo_picking_id"/>
+                                </list>
+
+                            </field>
+
+                        </page>
+
+                    </notebook>
+
+                </sheet>
+
+            </form>
+        </field>
+    </record>
+
+    <!-- SEARCH VIEW -->
+    <record id="view_acumatica_shipment_gi_staging_search" model="ir.ui.view">
+        <field name="name">acumatica.shipment.gi.staging.search</field>
+        <field name="model">acumatica.shipment.gi.staging</field>
+        <field name="arch" type="xml">
+            <search>
+
+                <field name="shipment_nbr"/>
+                <field name="customer"/>
+                <field name="warehouse_id"/>
+                <field name="status"/>
+                <field name="import_state"/>
+
+                <filter
+                    name="pending"
+                    string="Pending"
+                    domain="[('import_state','=','pending')]"/>
+
+                <filter
+                    name="imported"
+                    string="Imported"
+                    domain="[('import_state','=','imported')]"/>
+
+                <group expand="0" string="Group By">
+
+                    <filter
+                        string="Warehouse"
+                        name="group_warehouse"
+                        context="{'group_by':'warehouse_id'}"/>
+
+                    <filter
+                        string="Status"
+                        name="group_status"
+                        context="{'group_by':'status'}"/>
+
+                    <filter
+                        string="Import State"
+                        name="group_import_state"
+                        context="{'group_by':'import_state'}"/>
+
+                </group>
+
+            </search>
+        </field>
+    </record>
+
+    <!-- ACTION -->
+    <record id="action_acumatica_shipment_gi_staging" model="ir.actions.act_window">
+        <field name="name">Shipment Receipt Staging</field>
+        <field name="res_model">acumatica.shipment.gi.staging</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+
     <record id="action_import_selected_shipment"
             model="ir.actions.server">
         <field name="name">Generate Data</field>

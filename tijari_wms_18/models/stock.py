@@ -3,10 +3,16 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Datetime as fDT
 from odoo.tools import float_is_zero, float_compare
+from odoo.modules.module import get_module_resource
 import hashlib
 import base64
 from ast import literal_eval
 from odoo.tools.misc import OrderedSet
+import os
+import psycopg2
+from PIL import Image
+import qrcode
+import io
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -51,6 +57,91 @@ class StockPicking(models.Model):
     adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
     adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
     operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
+    adt_destination_location_address = fields.Char(string='Destination Address')
+
+    qr_code_image = fields.Binary(string='Sign')
+
+    # def action_print_lot_number_line(self):
+    #     action = {}
+    #     action['type'] = 'ir.actions.act_url'
+    #     action['url'] = '/print/lot_number_move_line?id=' + str(self.id)
+    #     action['target'] = 'new'
+    #     return action
+
+    def action_print_lot_number_line(self):
+        self.ensure_one()
+
+        lot_names = list(set(
+            self.move_ids_without_package.mapped('lot_ids.name')
+        ))
+
+        if not lot_names:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Peringatan',
+                    'message': 'Lot Number belum tersedia.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        self.create_qrcode_name()
+
+        ids = ",".join(map(str, self.ids))
+
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/print/lot_number_move_line?ids=%s' % ids,
+            'target': 'new',
+        }
+
+    def create_qrcode_name(self):
+        for rec in self:
+            lot_names = list(set(
+                rec.move_ids_without_package.mapped('lot_ids.name')
+            ))
+
+            text = ', '.join(filter(None, lot_names))
+
+            if text:
+                rec.qr_code_image = rec.create_qrcode(text)
+
+    def create_qrcode(self, text):
+        logo_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
+        )
+
+        logo = Image.open(logo_path)
+
+        basewidth = 80
+        wpercent = basewidth / float(logo.size[0])
+        hsize = int(float(logo.size[1]) * wpercent)
+
+        logo = logo.resize((basewidth, hsize))
+
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H
+        )
+
+        qr.add_data(text)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+        img = img.resize((300, 300))
+
+        pos = (
+            (img.size[0] - logo.size[0]) // 2,
+            (img.size[1] - logo.size[1]) // 2
+        )
+
+        img.paste(logo, pos)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+
+        return base64.b64encode(buffer.getvalue()).decode()
 
     def _sync_adt_quantities_from_moves(self):
         for picking in self:
@@ -71,9 +162,7 @@ class StockPicking(models.Model):
                 line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
                 if not line.lot_name:
                     print(f"Missing lot: {line}")
-                    raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
-            # if not rec.lot_name:
-            #     raise UserError(_("Validation blocked.\n\nPlease generate lot for all lines before validating the picking."))
+                    raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
         for picking in self:
             operation_category = picking.picking_type_id.operation_category
             print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
@@ -843,3 +932,59 @@ class StockMove(models.Model):
             picking._sync_adt_quantities_from_moves()
 
 
+class StockLot(models.Model):
+    _inherit = 'stock.lot'
+
+    qr_code_image = fields.Binary(string='Sign')
+
+    def action_print_lot_number(self):
+        self.ensure_one()
+        self.create_qrcode_name()
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/print/lot_number?id=%s' % self.id,
+            'target': 'new',
+        }
+
+    def create_qrcode_name(self):
+        for record in self:
+            if record.name:
+                qr = record.create_qrcode(record.name)
+                record.write({
+                    'qr_code_image': qr
+                })
+
+    def create_qrcode(self, text):
+        logo_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
+        )
+
+        logo = Image.open(logo_path)
+
+        basewidth = 80
+        wpercent = basewidth / float(logo.size[0])
+        hsize = int(float(logo.size[1]) * wpercent)
+
+        logo = logo.resize((basewidth, hsize))
+
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H
+        )
+
+        qr.add_data(text)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+        img = img.resize((300, 300))
+
+        pos = (
+            (img.size[0] - logo.size[0]) // 2,
+            (img.size[1] - logo.size[1]) // 2
+        )
+
+        img.paste(logo, pos)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+
+        return base64.b64encode(buffer.getvalue()).decode()

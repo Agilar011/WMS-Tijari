@@ -287,7 +287,7 @@ class AcumaticaShipmentLine(models.Model):
         header_payload = shipment.read()[0] if shipment.exists() else {}
         error_messages = []
         error_line_payloads = []
-        picking = shipment.odoo_picking_id
+        picking = shipment.odoo_picking_id.id
         action_state = 'pending'
 
         partner = self._find_partner(shipment)

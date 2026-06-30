@@ -24,6 +24,7 @@
                 type="object"
                 class="btn-primary"
                 invisible="state != 'done' or picking_type_code != 'incoming'"/>
+                <button name="action_print_lot_number_line" string="Print Lot" type="object" class="oe_highlight" invisible="picking_type_code != 'incoming'"/>
             </xpath>
 
             <xpath expr="//button[@name='do_print_picking']" position="attributes">
@@ -41,6 +42,9 @@
             <xpath expr="//field[@name='location_dest_id']" position="after">
                 <field name="sync_state" readonly="1" decoration-danger="sync_state == 'not_ready'" invisible="sync_state != 'not_ready'"/>
                 <field name="sync_message" readonly="1" decoration-danger="sync_state == 'not_ready'" invisible="sync_state != 'not_ready'"/>
+            </xpath>
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="adt_destination_location_address" invisible="adt_type != 'Sales Order Shipment'"/>
             </xpath>
             <xpath expr="//field[@name='origin']" position="after">
                 <!-- <field name="adt_type" readonly="1"/> -->
