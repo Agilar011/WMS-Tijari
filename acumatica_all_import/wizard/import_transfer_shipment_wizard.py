@@ -60,7 +60,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
             filters = []
 
             if self.wh33_filter:
-                filters.append("startswith(Warehouse,'WH33')")
+                filters.append("startswith(WarehouseID,'WH33')")
             if self.start_date and self.end_date:
                 filters.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
 
@@ -80,7 +80,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
             if filters:
                 params['$filter'] = ' and '.join(filters)
 
-            logger.info("Filter API -> Endpoint: %s | Params: %s", endpoint, params)
+            _logger.info("Filter API -> Endpoint: %s | Params: %s", endpoint, params)
 
 
             response = session.get(endpoint, params=params, timeout=90)
