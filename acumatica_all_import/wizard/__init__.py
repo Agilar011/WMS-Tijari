@@ -2,6 +2,7 @@
 from . import acumatica_unified_import_wizard
 from . import import_inventory_issue_wizard
 from . import import_inventory_recieved_wizard
+from . import import_toko_pegang_do
 from . import import_issue_po_return_wizard
 from . import import_issue_wizard
 from . import import_receipt_change_item_wizard

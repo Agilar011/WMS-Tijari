@@ -253,7 +253,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     odoo_picking_id = fields.Many2one('stock.picking', string='Delivery Order di Odoo', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.inventory.recieved.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -352,7 +352,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
 
             error_data = Error.search([('origin', '=', origin)], limit=1)
             error_values = {
-                'operation_type': 'internal',
+                'operation_type': 'receipt',
                 'location': first.warehouse_code or False,
                 'location_dest': first.warehouse_dest_code or False,
                 'scheduled_date': first._parse_dt(first.scheduled_date),

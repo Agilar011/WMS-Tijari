@@ -1,5 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from datetime import date
 
 
 class AcumaticaUnifiedImportWizard(models.TransientModel):
@@ -125,6 +126,14 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Receipt : Inventory Receipt dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
+        'toko_pegang_do': {
+            'label': 'Receipt : Toko Pegang DO',
+            'wizard_model': 'import.toko.pegang.do.wizard',
+            'line_model': 'acumatica.toko.pegang.do.line',
+            'result_name': 'Hasil Import Receipt : Toko Pegang DO',
+            'staging_name': 'Data Receipt : Toko Pegang DO dari Acumatica',
+            'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
+        },
         'inventory_issue': {
             'label': 'Issue : Inventory Issue',
             'wizard_model': 'import.inventory.issue.wizard',
@@ -225,6 +234,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'so_transfer',
         'receipt_change_item',
         'inventory_received',
+        'toko_pegang_do',
         'shipment_so',
         'so_shipment',
         'transfer_shipment',
@@ -347,7 +357,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     odata_expand = fields.Char(string='OData Expand', default='InventorySiteInquiryDetails')
     odata_top = fields.Integer(string='OData Top', default=1)
     wh33_filter = fields.Boolean(string='WH33 Only', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
-    date_period = fields.Boolean(string="Enable Date Filter")
+    date_period = fields.Boolean(string="Enable Date Filter", help="Aktifkan filter berdasarkan tanggal. Start Date otomatis diisi 1 Januari tahun berjalan dan End Date diisi tanggal hari ini.")
     start_date = fields.Date(string='Start Date Filter', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
     end_date = fields.Date(string='End Date Filter', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
@@ -388,6 +398,17 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     batch_count = fields.Integer(string='Jumlah Batch', readonly=True)
     last_message = fields.Text(string='Pesan Terakhir', readonly=True)
 
+
+    @api.onchange("date_period")
+    def _onchange_date_period(self):
+        today = fields.Date.today()
+        if self.date_period:
+            self.start_date = date(today.year, 1, 1)  # 1 Januari tahun ini
+            self.end_date = today                      # Hari ini
+        else:
+            self.start_date = None
+            self.end_date = None 
+
     def _get_import_info(self):
         self.ensure_one()
         if not self.import_type or self.import_type not in self.IMPORT_MAP:
@@ -415,7 +436,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'batch_size': self.batch_size,
             'fetch_skip': self.fetch_skip,
         }
-        if self.import_type in ('po_receipt', 'so_transfer', 'shipment_so', 'so_shipment', 'inventory_received'):
+        if self.import_type in ('po_receipt', 'so_transfer', 'shipment_so', 'so_shipment', 'inventory_received', 'toko_pegang_do'):
             vals['wh33_filter'] = self.wh33_filter
             vals['start_date'] = self.start_date
             vals['end_date'] = self.end_date     

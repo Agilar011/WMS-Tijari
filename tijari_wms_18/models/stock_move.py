@@ -45,3 +45,28 @@ class StockMove(models.Model):
             ).id,
             'target': 'new',
         }
+
+    def _action_confirm(self, merge=True, merge_into=False):
+        moves_no_merge = self.filtered(
+            lambda m: m.picking_id
+            and m.picking_id.adt_type == "Receipt"
+        )
+
+        moves_normal = self - moves_no_merge
+
+        res = self.browse()
+
+        if moves_normal:
+            res |= super(StockMove, moves_normal)._action_confirm(
+                merge=merge,
+                merge_into=merge_into
+            )
+
+        if moves_no_merge:
+            res |= super(StockMove, moves_no_merge)._action_confirm(
+                merge=False,
+                merge_into=False
+            )
+
+        return res
+

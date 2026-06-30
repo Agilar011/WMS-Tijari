@@ -23,6 +23,7 @@ from . import acumatica_transfer_two_step
 from . import acumatica_kit_assembly
 # from . import acumatica_receipt_change_item
 from . import acumatica_inventory_recieve
+from . import acumatica_toko_pegang_do
 from . import acumatica_transfer
 from . import acumatica_receipt
 from . import acumatica_shipment

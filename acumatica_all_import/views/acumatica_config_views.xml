@@ -156,4 +156,18 @@
         <field name="domain">[('config_type', '=', 'shipment_so')]</field>
     </record>
 
+    <record id="action_acumatica_inventory_recieved_config" model="ir.actions.act_window">
+        <field name="name">API Config</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'inventory_received')]</field>
+    </record>
+
+    <record id="action_acumatica_toko_pegang_do_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica Toko Pegang DO</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'toko_pegang_do')]</field>
+    </record>
+
 </odoo>

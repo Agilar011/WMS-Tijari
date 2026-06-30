@@ -8,9 +8,10 @@ access_acumatica_transfer_one_step_config_user,acumatica.transfer.one.step.confi
 access_acumatica_transfer_one_step_line_manager,acumatica.transfer.one.step.line manager,model_acumatica_transfer_one_step_line,base.group_system,1,1,1,1
 access_acumatica_transfer_one_step_line_user,acumatica.transfer.one.step.line user,model_acumatica_transfer_one_step_line,base.group_user,1,1,1,1
 access_import_transfer_one_step_wizard_user,import.transfer.one.step.wizard user,model_import_transfer_one_step_wizard,base.group_user,1,1,1,1
-access_acumatica_inventory_recieved_config_user,acumatica.inventory.recieved.config,model_acumatica_inventory_recieved_config,base.group_user,1,1,1,1
 access_acumatica_inventory_recieved_line_user,acumatica.inventory.recieved.line,model_acumatica_inventory_recieved_line,base.group_user,1,1,1,1
 access_import_inventory_recieved_wizard_user,import.inventory.recieved.wizard,model_import_inventory_recieved_wizard,base.group_user,1,1,1,1
+access_acumatica_toko_pegang_do_line_user,acumatica.toko.pegang.do.line,model_acumatica_toko_pegang_do_line,base.group_user,1,1,1,1
+access_import_toko_pegang_do_wizard_user,import.toko.pegang.do.wizard,model_import_toko_pegang_do_wizard,base.group_user,1,1,1,1
 access_acumatica_inventory_issue_config_user,acumatica.inventory.issue.config,model_acumatica_inventory_issue_config,base.group_user,1,1,1,1
 access_acumatica_inventory_issue_line_user,acumatica.inventory.issue.line,model_acumatica_inventory_issue_line,base.group_user,1,1,1,1
 access_import_inventory_issue_wizard_user,import.inventory.issue.wizard,model_import_inventory_issue_wizard,base.group_user,1,1,1,1
@@ -74,6 +75,7 @@ access_import_transfer_wizard_user,import.transfer.wizard,model_import_transfer_
 access_acumatica_transfer_config_user,acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
 access_acumatica_transfer_line_user,acumatica.transfer.line,model_acumatica_transfer_line,base.group_user,1,1,1,1
 access_acumatica_inventory_recieved_product_line_user,acumatica.inventory.recieved.product.line,model_acumatica_inventory_recieved_product_line,base.group_user,1,1,1,1
+access_acumatica_toko_pegang_do_product_line_user,acumatica.toko.pegang.do.product.line,model_acumatica_toko_pegang_do_product_line,base.group_user,1,1,1,1
 access_import_transfer_wizard_user,import.transfer.wizard,model_import_transfer_wizard,base.group_user,1,1,1,1
 
 access_acumatica_shipment_product_line_user,acumatica.shipment.product.line,model_acumatica_shipment_product_line,base.group_user,1,1,1,1

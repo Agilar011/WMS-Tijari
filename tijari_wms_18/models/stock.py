@@ -183,7 +183,6 @@ class StockPicking(models.Model):
                             "Status: ❌ NOT MATCH\n\n"
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
-
             pickings = self.env["stock.picking"].search([])
             if picking.picking_type_id.code != "incoming":
                 continue
@@ -197,13 +196,14 @@ class StockPicking(models.Model):
                 'adt_total_qty': total_qty
             })
 
-            total_qty_storage = sum(storage_pickings.move_ids.move_line_ids.mapped("quantity"))
             storage_pickings.write({
                 "adt_dest_location_id": picking.adt_dest_location_id,
                 "note" : picking.note,
             })
             
             for ml in picking.move_line_ids:  
+                if not ml.allocation_storage:
+                    raise ValidationError(f'Isi Allocation Storage di line product {ml.product_id.name}.')
                 move_line = self.env['stock.move.line'].search([
                     ("picking_id", "=", storage_pickings.id),
                     ("product_id", "=", ml.product_id.id),
@@ -271,6 +271,17 @@ class StockPickingType(models.Model):
     ], string='Operation Category', required=False, default='others') 
 
     is_default_api = fields.Boolean(string="Default Picking Type For API")
+    
+    def get_action_picking_tree_ready(self):
+        action = self._get_action('stock.stock_picking_action_picking_type')
+
+        # ubah domain menjadi draft
+        action["domain"] = [
+            ("picking_type_id", "=", self.id),
+            ("state", "=", "draft"),
+        ]
+
+        return action
 
 
 class StockLocation(models.Model):

@@ -232,7 +232,7 @@ class AcumaticaShipmentLine(models.Model):
                 'origin': origin,
                 'adt_total_qty': first._parse_float(first.total_qty),
                 'adt_actual_qty': first._parse_float(first.actual_qty),
-                'api_acumatica': 'po_receipt',
+                'api_acumatica': 'shipment_so',
                 'error_message': '\n'.join(error_messages),
                 'payload': str(payload_text)[:1000],
                 'state': 'new',
@@ -443,7 +443,7 @@ class AcumaticaShipmentLine(models.Model):
             'odoo_picking_id': picking.id if picking else False,
         })
         self._resolve_error_tracking(shipment)
-        picking.action_confirm()
+        # picking.action_confirm()
         return action_state
 
     def _do_import(self):
