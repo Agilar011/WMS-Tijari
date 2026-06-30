@@ -86,136 +86,21 @@ class AcumaticaTransferShipmentConfig(models.Model):
         except Exception:
             pass
 
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
-
-    def fetch_transfer_shipment_data(self, limit=50, offset=0, shipment_nbr=False, last_modified_from=False, odata_filter=False):
-        self.ensure_one()
-        session = self._do_login()
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-            filters = []
-
-            if self.odata_expand:
-                params['$expand'] = self.odata_expand
-            if self.odata_select:
-                params['$select'] = self.odata_select
-            if shipment_nbr:
-                filters.append(f"ShipmentNbr eq '{shipment_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-            if odata_filter:
-                filters.append(f"({odata_filter})")
-            elif self.odata_filter:
-                filters.append(f"({self.odata_filter})")
-
-            if filters:
-                params['$filter'] = ' and '.join(filters)
-
-            response = session.get(endpoint, params=params, timeout=90)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Transfer Shipment (HTTP {response.status_code}): {response.text}')
-
-            raw_data = self._normalize_rows(response.json())
-            result = []
-
-            for row_number, item in enumerate(raw_data, start=1):
-                header = {
-                    'external_id': item.get('id', '') or '',
-                    'row_number': row_number,
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'actual_qty': self._val(item, 'ControlQty'),
-                    'partner_code': self._val(item, 'CustomerID'),
-                    'description': self._val(item, 'Description'),
-                    'fob_point': self._val(item, 'FOBPoint'),
-                    'is_hold': self._val(item, 'Hold'),
-                    'is_insurance': self._val(item, 'Insurance'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'header_location_code': self._val(item, 'LocationID'),
-                    'operation': self._val(item, 'Operation'),
-                    'package_count': self._val(item, 'PackageCount'),
-                    'package_weight': self._val(item, 'PackageWeight'),
-                    'is_picked': self._val(item, 'Picked'),
-                    'scheduled_date': self._val(item, 'ShipmentDate'),
-                    'shipment_nbr': self._val(item, 'ShipmentNbr'),
-                    'shipped_qty': self._val(item, 'ShippedQty'),
-                    'shipped_volume': self._val(item, 'ShippedVolume'),
-                    'shipped_weight': self._val(item, 'ShippedWeight'),
-                    'shipping_terms': self._val(item, 'ShippingTerms'),
-                    'shipping_zone': self._val(item, 'ShippingZoneID'),
-                    'ship_via': self._val(item, 'ShipVia'),
-                    'status': self._val(item, 'Status'),
-                    'warehouse_dest_code': self._val(item, 'ToWarehouseID'),
-                    'shipment_type': self._val(item, 'Type'),
-                    'warehouse_code': self._val(item, 'WarehouseID'),
-                    'is_unlimited_packages': self._val(item, 'UnlimitedPackages'),
-                }
-
-                details = item.get('Details') or item.get('details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-                if not details:
-                    result.append(dict(header, line_nbr='0'))
-                    continue
-
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    result.append({
-                        **header,
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'line_row_number': detail.get('rowNumber') or '',
-                        'line_description': self._val(detail, 'Description'),
-                        'is_free_item': self._val(detail, 'FreeItem'),
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'location_dest_code': self._val(detail, 'LocationID'),
-                        'open_qty': self._val(detail, 'OpenQty'),
-                        'order_qty': self._val(detail, 'OrderedQty'),
-                        'order_line_number': self._val(detail, 'OrderLineNbr'),
-                        'order_number': self._val(detail, 'OrderNbr'),
-                        'order_type': self._val(detail, 'OrderType'),
-                        'original_qty': self._val(detail, 'OriginalQty'),
-                        'product_uom_qty': self._val(detail, 'ShippedQty'),
-                        'uom_code': self._val(detail, 'UOM'),
-                        'line_warehouse_code': self._val(detail, 'WarehouseID'),
-                    })
-
-            return result
-        except Exception:
-            raise
-        finally:
-            self._do_logout(session)
-            self.last_sync = fields.Datetime.now()
-
 
 class AcumaticaTransferShipmentLine(models.Model):
     _name = 'acumatica.transfer.shipment.line'
     _description = 'Data Transfer Shipment dari Acumatica'
-    _order = 'shipment_nbr asc, line_nbr asc, id asc'
+    _order = 'shipment_nbr asc, id asc'
+
+    shipment_line_ids = fields.One2many(
+        'acumatica.transfer.shipment.line.product', 
+        'shipment_id', 
+        string='Shipment Lines'
+    )
+
 
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header', readonly=True)
-    line_external_id = fields.Char(string='UUID Line', readonly=True)
     line_row_number = fields.Char(string='Row Number Detail', readonly=True)
 
     shipment_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
@@ -245,21 +130,6 @@ class AcumaticaTransferShipmentLine(models.Model):
     actual_qty = fields.Char(string='Control Qty', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
 
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)
-    line_description = fields.Char(string='Description Detail', readonly=True)
-    is_free_item = fields.Char(string='Free Item', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    location_dest_code = fields.Char(string='LocationID', readonly=True)
-    open_qty = fields.Char(string='Open Qty', readonly=True)
-    order_qty = fields.Char(string='Ordered Qty', readonly=True)
-    order_line_number = fields.Char(string='Order Line Nbr', readonly=True)
-    order_number = fields.Char(string='Order Number', readonly=True, index=True)
-    order_type = fields.Char(string='Order Type', readonly=True)
-    original_qty = fields.Char(string='Original Qty', readonly=True)
-    product_uom_qty = fields.Char(string='Shipped Qty Detail', readonly=True)
-    uom_code = fields.Char(string='UOM', readonly=True)
-    line_warehouse_code = fields.Char(string='Warehouse Detail', readonly=True)
-    line_note = fields.Text(string='Line Note', readonly=True)
 
     import_state = fields.Selection([
         ('pending', 'Belum Diimport'),
@@ -477,3 +347,34 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+
+class AcumaticaTransferShipmentLineProduct(models.Model):
+    _name = 'acumatica.transfer.shipment.line.product'
+    _description = 'Data Product dari Transfer Shipment Acumatica'
+    _order = 'shipment_id asc, line_nbr asc, id asc'
+
+    
+    shipment_id = fields.Many2one(
+    'acumatica.transfer.shipment.line', 
+    string='Parent Shipment', 
+    ondelete='cascade', 
+    required=True)
+
+    line_external_id = fields.Char(string='UUID Line', readonly=True)
+    line_row_number = fields.Char(string='Line Nbr', readonly=True)
+    line_nbr = fields.Char(string='Line Nbr', readonly=True)    
+    line_description = fields.Char(string='Description Detail', readonly=True)
+    is_free_item = fields.Char(string='Free Item', readonly=True)
+    inventory_id = fields.Char(string='InventoryID', readonly=True)
+    location_dest_code = fields.Char(string='LocationID', readonly=True)
+    open_qty = fields.Char(string='Open Qty', readonly=True)
+    order_qty = fields.Char(string='Ordered Qty', readonly=True)
+    order_line_number = fields.Char(string='Order Line Nbr', readonly=True)
+    order_number = fields.Char(string='Order Number', readonly=True, index=True)
+    order_type = fields.Char(string='Order Type', readonly=True)
+    original_qty = fields.Char(string='Original Qty', readonly=True)
+    product_uom_qty = fields.Char(string='Shipped Qty Detail', readonly=True)
+    uom_code = fields.Char(string='UOM', readonly=True)
+    line_warehouse_code = fields.Char(string='Warehouse Detail', readonly=True)
+    line_note = fields.Text(string='Line Note', readonly=True)
+

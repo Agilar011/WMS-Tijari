@@ -17,8 +17,8 @@
         <field name="arch" type="xml">
             <search string="Cari Data Transfer - Inter Warehouse : OUT">
                 <field name="shipment_nbr"/>
-                <field name="order_number"/>
-                <field name="inventory_id"/>
+                <!-- <field name="order_number"/> -->
+                <!-- <field name="inventory_id"/> -->
                 <field name="warehouse_code"/>
                 <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
                 <filter string="Imported" name="imported" domain="[('import_state','in',('imported','updated'))]"/>
@@ -39,15 +39,15 @@
             <list string="Data Transfer - Inter Warehouse : OUT" multi_edit="1">
                 <field name="selected"/>
                 <field name="shipment_nbr"/>
-                <field name="order_number"/>
-                <field name="inventory_id"/>
-                <field name="line_description"/>
+                <!-- <field name="order_number"/>
+                <field name="inventory_id"/> -->
+                <!-- <field name="line_description"/>
                 <field name="product_uom_qty"/>
                 <field name="uom_code"/>
                 <field name="warehouse_code"/>
                 <field name="warehouse_dest_code"/>
                 <field name="location_dest_code"/>
-                <field name="scheduled_date"/>
+                <field name="scheduled_date"/> -->
                 <field name="import_state"/>
                 <field name="import_message"/>
                 <button name="action_import_this" type="object" string="Import" class="btn-primary" invisible="import_state != 'pending'"/>
@@ -70,7 +70,7 @@
                         <group>
                             <field name="selected"/>
                             <field name="shipment_nbr" readonly="1"/>
-                            <field name="order_number" readonly="1"/>
+                            <!-- <field name="order_number" readonly="1"/>
                             <field name="order_type" readonly="1"/>
                             <field name="inventory_id" readonly="1"/>
                             <field name="line_description" readonly="1"/>
@@ -79,7 +79,7 @@
                             <field name="warehouse_code" readonly="1"/>
                             <field name="warehouse_dest_code" readonly="1"/>
                             <field name="location_dest_code" readonly="1"/>
-                            <field name="scheduled_date" readonly="1"/>
+                            <field name="scheduled_date" readonly="1"/> -->
                             <field name="partner_code" readonly="1"/>
                             <field name="odoo_picking_id" readonly="1"/>
                         </group>
