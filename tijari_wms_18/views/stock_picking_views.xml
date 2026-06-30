@@ -43,6 +43,9 @@
                 <field name="sync_state" readonly="1" decoration-danger="sync_state == 'not_ready'" invisible="sync_state != 'not_ready'"/>
                 <field name="sync_message" readonly="1" decoration-danger="sync_state == 'not_ready'" invisible="sync_state != 'not_ready'"/>
             </xpath>
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="adt_destination_location_address" invisible="adt_type != 'Sales Order Shipment'"/>
+            </xpath>
             <xpath expr="//field[@name='origin']" position="after">
                 <!-- <field name="adt_type" readonly="1"/> -->
                 <field name="adt_total_qty"/>
