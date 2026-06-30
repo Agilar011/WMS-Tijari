@@ -11,12 +11,19 @@ class ImportTransferShipmentWizard(models.TransientModel):
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
     shipment_nbr = fields.Char(string='Filter Shipment Number')
     last_modified_from = fields.Char(string='Filter Last Modified From', help='Contoh: 2026-02-12T00:00:00+07:00')
+
+    wh33_filter = fields.Boolean(string='Filter WH33', help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
+    odata_filter = fields.Char(string='Custom OData Filter')
+
     odata_filter = fields.Char(string='Custom OData Filter')
     state = fields.Selection([
         ('draft', 'Siap'),
         ('fetched', 'Data Sudah Ditarik'),
         ('done', 'Selesai'),
     ], default='draft')
+
 
     total_fetched = fields.Integer(string='Total Line Ditarik', readonly=True)
     total_new = fields.Integer(string='Transfer Baru', readonly=True)
@@ -49,6 +56,11 @@ class ImportTransferShipmentWizard(models.TransientModel):
             params = {'$top': limit, '$skip': offset}
             filters = []
 
+            if self.wh33_filter:
+                params.append("startswith(Warehouse,'WH33')")
+            if self.start_date and self.end_date:
+                params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
             if self.config_id.odata_select:
@@ -64,6 +76,10 @@ class ImportTransferShipmentWizard(models.TransientModel):
 
             if filters:
                 params['$filter'] = ' and '.join(filters)
+
+            print("Filter API:")
+            print(endpoint)
+            print(params)
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
@@ -105,7 +121,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
                     'is_unlimited_packages': self._val(item, 'UnlimitedPackages'),
                 }
                 # print(header)
-                result.append(header)
+                # result.append(header)
 
                 details = item.get('Details') or item.get('details') or []
                 if isinstance(details, dict):
@@ -115,7 +131,15 @@ class ImportTransferShipmentWizard(models.TransientModel):
 
                 if not details:
                     result.append(dict(header, line_nbr='0'))
+
                     continue
+                if header['warehouse_code']:
+                    type = self._search_picking_type(header)
+
+                    print(type)
+                    header['picking_type_id'] = type.id if type else None
+                result.append(dict(header))
+
 
                 for detail in details:
                     line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
@@ -259,6 +283,28 @@ class ImportTransferShipmentWizard(models.TransientModel):
             'view_mode': 'form',
             'target': 'new',
         }
+    
+    def _search_picking_type(self, header):
+        print(f" Self: {self}")
+        print(f"Header : {header}")
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+
+        location = Location.search([
+            ('code', '=', header['warehouse_code'])
+        ])
+
+        
+        if location:
+            print(f"Building id: {location.odoo_building_id.id}")
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('code', '=', 'internal'),
+                ('is_default_api', '=', True)
+            ])
+
+        return type if type else None
+
 
     def action_view_staging(self):
         self.ensure_one()

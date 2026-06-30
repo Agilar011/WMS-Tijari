@@ -39,6 +39,7 @@
             <list string="Data Transfer - Inter Warehouse : OUT" multi_edit="1">
                 <field name="selected"/>
                 <field name="shipment_nbr"/>
+                <field name="picking_type_id"/>
                 <!-- <field name="order_number"/>
                 <field name="inventory_id"/> -->
                 <!-- <field name="line_description"/>
@@ -70,6 +71,7 @@
                         <group>
                             <field name="selected"/>
                             <field name="shipment_nbr" readonly="1"/>
+                            <field name="picking_type_id"/>
                             <!-- <field name="order_number" readonly="1"/>
                             <field name="order_type" readonly="1"/>
                             <field name="inventory_id" readonly="1"/>

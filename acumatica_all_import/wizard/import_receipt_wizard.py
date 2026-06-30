@@ -133,6 +133,10 @@ class ImportReceiptWizard(models.TransientModel):
             if filters:
                 params['$filter'] = ' and '.join(filters)
 
+            print("Filter API:")
+            print(endpoint)
+            print(params)
+
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')

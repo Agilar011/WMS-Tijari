@@ -98,6 +98,7 @@ class AcumaticaTransferShipmentLine(models.Model):
         string='Shipment Lines'
     )
 
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
 
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header', readonly=True)
