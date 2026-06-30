@@ -217,6 +217,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header', readonly=True)
     product_line_ids = fields.One2many('acumatica.inventory.recieved.product.line', 'inventory_line_id', string='Lines')
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
 
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
@@ -250,7 +251,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     odoo_picking_id = fields.Many2one('stock.picking', string='Delivery Order di Odoo', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.inventory.recieved.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -351,7 +352,6 @@ class AcumaticaInventoryRecievedLine(models.Model):
             error_values = {
                 'operation_type': 'internal',
                 'location': first.warehouse_code or False,
-                'location_dest': first.warehouse_dest_code or False,
                 'scheduled_date': first._parse_dt(first.scheduled_date),
                 'origin': origin,
                 'adt_total_qty': first._parse_float(first.total_qty),
@@ -423,14 +423,15 @@ class AcumaticaInventoryRecievedLine(models.Model):
         dest_location = receive._find_location_dest(receive)
         if not dest_location:
             error_messages.append(
-                f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                f'Location with code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
-        picking_type = PickingType.search([
-            ('warehouse_id', '=', warehouse.id if warehouse else False),
-            ('operation_category', '=', 'internal'),
-            ('code', '=', 'internal'),
-        ], limit=1)
+        # picking_type = PickingType.search([
+        #     ('warehouse_id', '=', warehouse.id if warehouse else False),
+        #     ('operation_category', '=', 'internal'),
+        #     ('code', '=', 'internal'),
+        # ], limit=1)
+        picking_type = self.picking_type_id
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {receive.warehouse_code}'
@@ -447,7 +448,6 @@ class AcumaticaInventoryRecievedLine(models.Model):
         picking_vals = {
             'origin': origin,
             'picking_type_id': picking_type.id,
-            'location_dest_id': dest_location.id if dest_location else False,
             'adt_dest_location_id': dest_location.id if dest_location else False,
             'scheduled_date': receive._parse_dt(receive.scheduled_date),
             'note': receive.note or False,
@@ -531,6 +531,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     'adt_line_nbr': receive_line.line_nbr or False,
                     'adt_uom_code': receive_line.uom_code or False,
                     'adt_warehouse_dest_code': receive_line.warehouse_dest_code or False,
+                    'adt_dest_location_id': picking.adt_dest_location_id.id if picking else False,
                 }
 
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}

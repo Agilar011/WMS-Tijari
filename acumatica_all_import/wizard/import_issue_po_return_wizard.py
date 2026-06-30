@@ -6,7 +6,7 @@ class ImportReceiptWizard(models.TransientModel):
     _name = 'import.issue.po.return.wizard'
     _description = 'Wizard Import Issue Type PO Return dari Acumatica'
 
-    config_id = fields.Many2one('acumatica.issue.po.return.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
     receipt_nbr = fields.Char(string='Filter Receipt Number')

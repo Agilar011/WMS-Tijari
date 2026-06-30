@@ -76,7 +76,6 @@ class AcumaticaNonStockItemLine(models.Model):
 
     import_message  = fields.Char(string='Keterangan',          readonly=True)
     odoo_product_id = fields.Many2one('product.template', string='Product di Odoo', readonly=True)
-    selected        = fields.Boolean(string='Pilih',             default=True)
 
     config_id = fields.Many2one(
         'acumatica.config',
@@ -138,7 +137,7 @@ class AcumaticaNonStockItemLine(models.Model):
         return self._do_import()
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()

@@ -14,7 +14,7 @@
     <menuitem id="menu_acumatica_all_import_staging_inventory_received" name="Inventory Received" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_recieved_line" sequence="40"/>
     <menuitem id="menu_acumatica_all_import_staging_shipment_so" name="Shipment SO" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_shipment_line" sequence="50"/>
     <menuitem id="menu_acumatica_all_import_staging_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_stock_line" sequence="60"/>
-    <menuitem id="menu_acumatica_all_import_staging_inventory_stock_import" name="Inventory Stock Import" parent="menu_acumatica_all_import_staging_inbound" action="action_import_inventory_stock_wizard" sequence="61"/>
+    <!-- <menuitem id="menu_acumatica_all_import_staging_inventory_stock_import" name="Inventory Stock Import" parent="menu_acumatica_all_import_staging_inbound" action="action_import_inventory_stock_wizard" sequence="61"/> -->
 
 
     <menuitem id="menu_acumatica_all_import_staging_outbound"
@@ -73,7 +73,8 @@
         name="Master Data"
         parent="menu_acumatica_all_import_config_root"
         sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_config_uom" name="UoM" parent="menu_acumatica_all_import_config_master" action="action_acumatica_config" sequence="1"/>
+    <menuitem id="menu_acumatica_all_import_config" name="All Config" parent="menu_acumatica_all_import_config_master" action="action_acumatica_config" sequence="0"/>
+    <menuitem id="menu_acumatica_all_import_config_uom" name="UoM" parent="menu_acumatica_all_import_config_master" action="action_acumatica_uom_config" sequence="1"/>
     <menuitem id="menu_acumatica_all_import_config_customer" name="Customer" parent="menu_acumatica_all_import_config_master" action="action_acumatica_customer_config" sequence="2"/>
     <menuitem id="menu_acumatica_all_import_config_vendor" name="Vendor" parent="menu_acumatica_all_import_config_master" action="action_acumatica_vendor_config" sequence="3"/>
     <menuitem id="menu_acumatica_all_import_config_warehouse" name="Warehouse" parent="menu_acumatica_all_import_config_master" action="action_acumatica_warehouse_config" sequence="4"/>

@@ -210,7 +210,7 @@ class AcumaticaInventoryStockLine(models.Model):
     on_hand_acumatica = fields.Float(string='On Hand Acumatica', readonly=True)
     note = fields.Text(string='Note', readonly=True)
 
-    config_id = fields.Many2one('acumatica.inventory.stock.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     selected = fields.Boolean(string='Pilih', default=True)

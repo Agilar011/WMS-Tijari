@@ -20,6 +20,7 @@ class AcumaticaReceiptChangeItemLine(models.Model):
     _description = 'Data Receipt Type Change Item dari Acumatica'
     _order = 'origin asc, line_nbr asc, id asc'
     product_line_ids = fields.One2many('acumatica.receipt.change.item.product', 'receipt_line_id', string='Lines')
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
     branch = fields.Char(string="branch", readonly=True)
 
     row_number = fields.Integer(string='No', readonly=True)
@@ -443,10 +444,11 @@ class AcumaticaReceiptChangeItemLine(models.Model):
                 f'Location with code {receipt.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
-        picking_type = PickingType.search([
-            ('warehouse_id', '=', warehouse.id if warehouse else False),
-            ('code', '=', 'incoming'),
-        ], limit=1)
+        # picking_type = PickingType.search([
+        #     ('warehouse_id', '=', warehouse.id if warehouse else False),
+        #     ('code', '=', 'incoming'),
+        # ], limit=1)
+        picking_type = self.picking_type_id
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {receipt.warehouse_code}'
@@ -552,6 +554,7 @@ class AcumaticaReceiptChangeItemLine(models.Model):
                     'adt_uom_code': receipt_line.uom_code or False,
                     'adt_warehouse_dest_code': receipt_line.warehouse_dest_code or False,
                     'adt_location_dest_code': receipt_line.location_code or False,
+                    'adt_dest_location_id': picking.adt_dest_location_id.id if picking else False,
                     'product_note': receipt_line.line_note or False,
                 }
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}

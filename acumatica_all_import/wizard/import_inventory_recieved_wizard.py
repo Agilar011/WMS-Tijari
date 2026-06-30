@@ -10,7 +10,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
     _name = 'import.inventory.recieved.wizard'
     _description = 'Wizard Import Inventory Recieved dari Acumatica'
 
-    config_id = fields.Many2one('acumatica.inventory.recieved.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
     reference_nbr = fields.Char(string='Filter Reference Number')
     last_modified_from = fields.Char(string='Filter Last Modified From', help='Contoh: 2026-02-12T00:00:00+07:00')
@@ -49,7 +49,6 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                 limit=self.batch_size,
                 offset=offset,
                 reference_nbr=self.reference_nbr,
-                last_modified_from=self.last_modified_from,
                 odata_filter=params if params else None,
             )
 
@@ -61,46 +60,6 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         self.total_fetched = raw_list
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
-
-        # Picking = self.env['stock.picking']
-        # existing_keys = set()
-        # new_keys = set()
-        # lines_to_create = []
-
-        # for item in raw_list:
-        #     origin = item.get('reference_nbr')
-        #     exists = bool(origin and Picking.search_count([('origin', '=', origin)]))
-        #     if exists:
-        #         existing_keys.add(origin)
-        #         msg = 'Sudah ada → move akan ditambahkan jika belum ada'
-        #     else:
-        #         new_keys.add(origin)
-        #         msg = ''
-
-        #     vals = dict(item)
-        #     vals.update({
-        #         'config_id': self.config_id.id,
-        #         'import_state': 'pending',
-        #         'import_message': msg,
-        #         'selected': True,
-        #         'sync_date': fields.Datetime.now(),
-        #     })
-        #     lines_to_create.append(vals)
-
-        # self.env['acumatica.inventory.recieved.line'].create(lines_to_create)
-        # self.write({
-        #     'state': 'fetched',
-        #     'total_fetched': len(raw_list),
-        #     'total_new': len([x for x in new_keys if x]),
-        #     'total_existing': len([x for x in existing_keys if x]),
-        # })
-        # return {
-        #     'type': 'ir.actions.act_window',
-        #     'res_model': 'import.inventory.recieved.wizard',
-        #     'res_id': self.id,
-        #     'view_mode': 'form',
-        #     'target': 'new',
-        # }
 
     @staticmethod
     def _val(item, key):
@@ -129,7 +88,24 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         except Exception:
             return False
 
-    def fetch_inventory_recieved_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
+    def _search_picking_type(self, header):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+        type = False
+
+        location = Location.search([
+            ('code', '=', header['warehouse_code'])
+        ])
+        if location:
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('code', '=', 'incoming'),
+                ('is_default_api', '=', True)
+            ])
+
+        return type if type else None
+
+    def fetch_inventory_recieved_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
         self.ensure_one()
         session = self.config_id._do_login()
         try:
@@ -181,6 +157,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                     'total_qty': str(self._val(item, 'TotalQty')),
                     'transfer_nbr': self._val(item, 'TransferNbr'),
                     'transfer_type': self._val(item, 'TransType'),
+                    'warehouse_code': self._val(item, 'Warehouse')
                 }
                 
                 details = item.get('Details') or []
@@ -190,15 +167,17 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                     details = []
 
 
-                transfer_nbr = header['transfer_nbr']
-                if transfer_nbr:
-                    dest_warehouse_data = self.search_dest_warehouse(transfer_nbr, session)
-                    if dest_warehouse_data:
-                        header["warehouse_code"] = dest_warehouse_data.get('source_warehouse')
+                # transfer_nbr = header['transfer_nbr']
+                # if transfer_nbr:
+                #     dest_warehouse_data = self.search_dest_warehouse(transfer_nbr, session)
+                #     if dest_warehouse_data:
+                #         header["warehouse_code"] = dest_warehouse_data.get('source_warehouse')
                         # header["warehouse_dest_code"] = dest_warehouse_data.get('dest_warehouse')
 
-                if details:
-                    header["warehouse_dest_code"] = self._val(details[0], 'Warehouse')
+                if not header['warehouse_code'] and details:
+                    header["warehouse_code"] = self._val(details[0], 'Warehouse')
+                    type = self._search_picking_type(header)
+                    header['picking_type_id'] = type.id if type else None
 
                 result.append(header)
 
@@ -226,36 +205,36 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         finally:
             self.config_id._do_logout(session)
 
-    def search_dest_warehouse(self, transfer_nbr, session):
-        self.ensure_one()
-        if not transfer_nbr:
-            return None
-        try:
-            endpoint = f"{self.config_id.api_url}/TransferOrder"
-            params = {
-                '$select': 'ToWarehouseID, FromWarehouseID, ReferenceNbr', 
-                '$filter': f"ReferenceNbr eq '{transfer_nbr}'"
-            }
+    # def search_dest_warehouse(self, transfer_nbr, session):
+    #     self.ensure_one()
+    #     if not transfer_nbr:
+    #         return None
+    #     try:
+    #         endpoint = f"{self.config_id.api_url}/TransferOrder"
+    #         params = {
+    #             '$select': 'ToWarehouseID, FromWarehouseID, ReferenceNbr', 
+    #             '$filter': f"ReferenceNbr eq '{transfer_nbr}'"
+    #         }
 
-            response = session.get(endpoint, params=params, timeout=90)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
+    #         response = session.get(endpoint, params=params, timeout=90)
+    #         if response.status_code != 200:
+    #             raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+    #         raw_data = self._normalize_rows(response.json())
 
-            item = raw_data[0]  # misal ambil data pertama
+    #         item = raw_data[0]  # misal ambil data pertama
 
-            result = {
-                'shipment_number': self._val(item, 'ShipmentNbr'),
-                'dest_warehouse': self._val(item, 'ToWarehouseID'),
-                'source_warehouse': self._val(item, 'FromWarehouseID'),
-            }
+    #         result = {
+    #             'shipment_number': self._val(item, 'ShipmentNbr'),
+    #             'dest_warehouse': self._val(item, 'ToWarehouseID'),
+    #             'source_warehouse': self._val(item, 'FromWarehouseID'),
+    #         }
 
-            _logger.info('Berhasil ambil data Warehouse dari Transfer', len(result))
-            return result
-        except Exception as e:
-            _logger.error('Gagal ambil data Warehouse dari Transfer: %s', str(e))
-            return None
+    #         _logger.info('Berhasil ambil data Warehouse dari Transfer', len(result))
+    #         return result
+    #     except Exception as e:
+    #         _logger.error('Gagal ambil data Warehouse dari Transfer: %s', str(e))
+    #         return None
 
     def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']

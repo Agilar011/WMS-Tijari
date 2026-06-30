@@ -20,7 +20,6 @@
                 <field name="reference_nbr"/>
                 <field name="description"/>
                 <field name="warehouse_code"/>
-                <field name="warehouse_dest_code"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"
                        decoration-warning="import_state == 'pending'"
@@ -46,6 +45,7 @@
                     <group string="Header">
                         <group>
                             <field name="reference_nbr"/>
+                            <field name="picking_type_id"/>
                             <field name="scheduled_date"/>
                             <field name="description"/>
                             <field name="actual_qty"/>
@@ -56,7 +56,6 @@
                             <field name="warehouse_code"/>
                         </group>
                         <group>
-                            <field name="warehouse_dest_code"/>
                             <field name="transfer_type"/>
                             <field name="note"/>
                             <field name="customer_code"/>
