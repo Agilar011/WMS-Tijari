@@ -134,16 +134,16 @@ class AcumaticaShipmentLine(models.Model):
         product = False
         if line.inventory_id:
             product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
-            if not product:
-                product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
-        if not product and line.line_description:
-            product = Product.search([('name', '=', line.line_description)], limit=1)
-        if not product:
-            product = Product.create({
-                'name': line.line_description or line.inventory_id or 'Unknown Product',
-                'default_code': line.inventory_id or False,
-                'type': 'consu',
-            })
+        #     if not product:
+        #         product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
+        # if not product and line.description:
+        #     product = Product.search([('name', '=', line.description)], limit=1)
+        # if not product:
+        #     product = Product.create({
+        #         'name': line.description or line.inventory_id or 'Unknown Product',
+        #         'default_code': line.inventory_id or False,
+        #         'type': 'consu',
+        #     })
         return product
 
     def _find_partner(self, line):
@@ -230,7 +230,7 @@ class AcumaticaShipmentLine(models.Model):
                 'location_dest': first.warehouse_dest_code or False,
                 'scheduled_date': first._parse_dt(first.scheduled_date),
                 'origin': origin,
-                'adt_total_qty': first._parse_float(first.total_qty),
+                'adt_total_qty': first._parse_float(first.shipped_qty),
                 'adt_actual_qty': first._parse_float(first.actual_qty),
                 'api_acumatica': 'shipment_so',
                 'error_message': '\n'.join(error_messages),
@@ -286,9 +286,18 @@ class AcumaticaShipmentLine(models.Model):
         origin = shipment.shipment_nbr or False
         header_payload = shipment.read()[0] if shipment.exists() else {}
         error_messages = []
-        error_line_payloads = []
+        all_line_payloads = []
         picking = shipment.odoo_picking_id.id
         action_state = 'pending'
+
+        for shipment_line in shipment.product_line_ids:
+            all_line_payloads.append({
+                'inventory_id': shipment_line.inventory_id or False,
+                'product_name': shipment_line.description or False,
+                'qty': shipment._parse_float(shipment_line.shipped_qty),
+                'uom': shipment_line.uom_code or False,
+                'payload': shipment_line.read()[0] if shipment_line.exists() else {},
+            })
 
         partner = self._find_partner(shipment)
         if not partner:
@@ -324,6 +333,7 @@ class AcumaticaShipmentLine(models.Model):
             raise ShipmentImportError(
                 '\n'.join(error_messages),
                 payload={'header': header_payload},
+                line_payloads=all_line_payloads
             )
 
         picking_vals = {
@@ -346,6 +356,7 @@ class AcumaticaShipmentLine(models.Model):
                 raise ShipmentImportError(
                     f'Shipment {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
+                    line_payloads=all_line_payloads
                 )
             picking.write(picking_vals)
             action_state = 'updated'
@@ -361,13 +372,13 @@ class AcumaticaShipmentLine(models.Model):
                     error_messages.append(
                         f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
                     )
-                    error_line_payloads.append({
-                        'inventory_id': shipment_line.inventory_id or False,
-                        'product_name': shipment_line.description or False,
-                        'qty': shipment._parse_float(shipment_line.shipped_qty),
-                        'uom': shipment_line.uom_code or False,
-                        'payload': shipment_line.read()[0] if shipment_line.exists() else {},
-                    })
+                    # error_line_payloads.append({
+                    #     'inventory_id': shipment_line.inventory_id or False,
+                    #     'product_name': shipment_line.description or False,
+                    #     'qty': shipment._parse_float(shipment_line.shipped_qty),
+                    #     'uom': shipment_line.uom_code or False,
+                    #     'payload': shipment_line.read()[0] if shipment_line.exists() else {},
+                    # })
                     continue
 
                 uom = shipment._find_uom(shipment_line, product)
@@ -375,13 +386,13 @@ class AcumaticaShipmentLine(models.Model):
                     error_messages.append(
                         f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
                     )
-                    error_line_payloads.append({
-                        'inventory_id': shipment_line.inventory_id or False,
-                        'product_name': shipment_line.description or False,
-                        'qty': shipment._parse_float(shipment_line.shipped_qty),
-                        'uom': shipment_line.uom_code or False,
-                        'payload': shipment_line.read()[0] if shipment_line.exists() else {},
-                    })
+                    # error_line_payloads.append({
+                    #     'inventory_id': shipment_line.inventory_id or False,
+                    #     'product_name': shipment_line.description or False,
+                    #     'qty': shipment._parse_float(shipment_line.shipped_qty),
+                    #     'uom': shipment_line.uom_code or False,
+                    #     'payload': shipment_line.read()[0] if shipment_line.exists() else {},
+                    # })
                     continue
 
                 qty = shipment._parse_float(shipment_line.shipped_qty)
@@ -418,7 +429,7 @@ class AcumaticaShipmentLine(models.Model):
             except Exception as line_error:
                 _logger.exception("Error import line %s", shipment.id)
                 error_messages.append(str(line_error))
-                error_line_payloads.append({
+                all_line_payloads.append({
                     'inventory_id': shipment_line.inventory_id or False,
                     'product_name': shipment_line.description or False,
                     'qty': shipment._parse_float(shipment_line.shipped_qty),
@@ -434,7 +445,7 @@ class AcumaticaShipmentLine(models.Model):
                     'picking_vals': picking_vals,
                     'picking_id': picking.id if picking else False,
                 },
-                line_payloads=error_line_payloads,
+                line_payloads=all_line_payloads,
             )
 
         shipment.write({
@@ -472,18 +483,18 @@ class AcumaticaShipmentLine(models.Model):
                 _logger.exception("Error import shipment %s", shipment.shipment_nbr or shipment.id)
                 if isinstance(exc, ShipmentImportError):
                     error_payload = exc.payload
-                    error_line_payloads = exc.line_payloads
+                    all_line_payloads = exc.line_payloads
                     error_message = str(exc)
                 else:
                     error_payload = {'header': shipment.read()[0] if shipment.exists() else {}}
-                    error_line_payloads = []
+                    all_line_payloads = []
                     error_message = str(exc)
 
                 try:
                     self._persist_error_tracking(
                         shipment,
                         [error_message],
-                        line_payloads=error_line_payloads,
+                        line_payloads=all_line_payloads,
                         payload=error_payload,
                     )
                 except Exception:
