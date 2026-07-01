@@ -1,5 +1,6 @@
 from odoo import fields, models
 from odoo.exceptions import UserError
+from dateutil import parser as dateutil_parser
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -294,6 +295,15 @@ class ImportShipmentWizard(models.TransientModel):
         finally:
             self.config_id._do_logout(session)
             self.config_id.last_sync = fields.Datetime.now()
+
+    @staticmethod
+    def _parse_dt(dt_str):
+        if not dt_str:
+            return False
+        try:
+            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
+        except Exception:
+            return False
 
     def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']

@@ -14,16 +14,34 @@
     </record>
 
     <record id="view_lot_form_inherit_custom" model="ir.ui.view">
-    <field name="name">stock.lot.form.inherit.custom</field>
-    <field name="model">stock.lot</field>
-    <field name="inherit_id" ref="stock.view_production_lot_form"/>
-    <field name="arch" type="xml">
-        <xpath expr="//sheet" position="before">
-            <div class="mb-2">
-                <button name="action_print_lot_number" string="Print Lot" type="object" class="btn btn-primary btn-sm"/>
-            </div>
-        </xpath>
-    </field>
-</record>
+        <field name="name">stock.lot.form.inherit.custom</field>
+        <field name="model">stock.lot</field>
+        <field name="inherit_id" ref="stock.view_production_lot_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="before">
+                <div class="mb-2">
+                    <button name="action_print_lot_number" string="Print Lot" type="object" class="btn btn-primary btn-sm"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_type_kanban_add_draft_button" model="ir.ui.view">
+        <field name="name">stock.picking.type.kanban.add.draft.button</field>
+        <field name="model">stock.picking.type</field>
+        <field name="inherit_id" ref="stock.stock_picking_type_kanban"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='get_action_picking_tree_ready']" position="replace">
+                <button name="get_action_picking_tree_draft" type="object" class="btn btn-primary" string="Draft">
+                    <span t-if="record.count_picking_draft.raw_value > 0">
+                        <field name="count_picking_draft"/>
+                        <t> To Receive</t>
+                    </span>
+                    <span t-else="">Open</span>
+                </button>
+
+            </xpath>
+        </field>
+    </record>
 
 </odoo>
