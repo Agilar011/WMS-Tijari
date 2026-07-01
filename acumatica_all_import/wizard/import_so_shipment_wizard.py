@@ -20,7 +20,6 @@ class ImportSOShipmentWizard(models.TransientModel):
     shipment_gi_expand = fields.Char(required=True, default="ShipmentGIDetails")
     endpoint_name = fields.Char(required=True, default='ShipmentGI')
 
-
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
@@ -137,6 +136,8 @@ class ImportSOShipmentWizard(models.TransientModel):
             for item in details:
                 ship_date = self._val(item, "ShipDate")
                 phrase_date = dateutil_parser.parse(ship_date).replace(tzinfo=None)
+                warehouse_id = self._val(item, "WarehouseID")
+                picking_type = self._search_picking_type(warehouse_id)
 
 
                 vals = {
@@ -211,7 +212,7 @@ class ImportSOShipmentWizard(models.TransientModel):
 
                     "shipment_type": self._val(item, "Type"),
 
-                    "warehouse_id": self._val(item, "WarehouseID"),
+                    "warehouse_id": warehouse_id,
                 }
 
                 shipment_numbers.append(self._val(item, "ShipmentNbr"))
@@ -829,6 +830,24 @@ class ImportSOShipmentWizard(models.TransientModel):
             last_error,
         )
 
+    def _search_picking_type(self, header):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+
+        location = Location.search([
+            ('code', '=', header['warehouse_code'])
+        ])
+
+        
+        if location:
+            print(f"Building id: {location.odoo_building_id.id}")
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('code', '=', 'internal'),
+                ('is_default_api', '=', True)
+            ])
+
+        return type if type else None
 
 # Helper Atribut
     @property

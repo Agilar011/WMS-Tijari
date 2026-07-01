@@ -287,8 +287,6 @@ class ImportTransferShipmentWizard(models.TransientModel):
         }
     
     def _search_picking_type(self, header):
-        print(f" Self: {self}")
-        print(f"Header : {header}")
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
 
