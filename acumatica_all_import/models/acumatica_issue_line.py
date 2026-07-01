@@ -201,6 +201,8 @@ class AcumaticaIssueLine(models.Model):
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)
 
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
     description = fields.Char(string='Header Description', readonly=True)
@@ -239,6 +241,8 @@ class AcumaticaIssueLine(models.Model):
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+
+
 
     @api.depends('reference_nbr')
     def _compute_exists_in_odoo(self):
@@ -460,3 +464,24 @@ class AcumaticaIssueLine(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
+
+class AcumaticaIssueLineProduct(models.Model):
+    _name = 'acumatica.issue.line.product'
+    _description = 'Data Issue Change Item dari Acumatica'
+    _order = 'reference_nbr asc, line_number asc, id asc' 
+    
+    issue_shipment_id = fields.Many2one('acumatica.issue.line', string='Issue Shipment', ondelete='cascade', index=True)
+    line_external_id = fields.Char(string='UUID Line', readonly=True)
+
+    note = fields.Text(string='Header Note', readonly=True)
+    branch = fields.Text(string='Branch Warehouse', readonly=True)
+    description = fields.Char(string='Header Description', readonly=True)
+    inventory_id = fields.Char(string='InventoryID', readonly=True)
+    line_number = fields.Integer(string='No', readonly=True)
+    location_code = fields.Char(string='Location', readonly=True)
+    note_id = fields.Char(string='Note ID', readonly=True)
+    product_uom_qty = fields.Char(string='Qty', readonly=True)
+    trans_type = fields.Char(string='Trans Type', readonly=True)
+    uom_code = fields.Char(string='UOM', readonly=True)
+    external_id = fields.Char(string='UUID Header', readonly=True)
+    warehouse_code = fields.Char(string='Warehouse', readonly=True)

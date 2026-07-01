@@ -219,6 +219,13 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
                 self._create_receipt_lines_product(line_create, receipts)
 
     def _build_header_values(self, row_number, item):
+        type = self._search_picking_type(item)
+        if type:
+            type = type.id
+        if not type:
+            type = None
+            print("="*80)
+            print('Picking Type ID tidak ditemukan untuk warehouse code:', self._val(item, 'Warehouse'))
 
         print("Created header value")
         print(f"Receipt number in header : {self._val(item, 'ReferenceNbr')}")
@@ -242,6 +249,7 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
             'vendor_code': self._val(item, 'Customer'),
             'transfer_type': self._val(item, 'TransType'),
             # 'warehouse_code': self._val(item, 'Warehouse'),
+            'picking_type_id': type
             }
 
 
@@ -432,6 +440,29 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
     # ---------------------------------------------------------
     # HELPERS
     # ---------------------------------------------------------    
+
+    def _search_picking_type(self, header):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+        warehouse_code = header.get('warehouse_code')
+        type = False
+
+        print(f"Warehouse Code: {warehouse_code}")
+
+        location = Location.search([
+            ('code', '=', warehouse_code)
+        ])
+
+        print(f"Location: {location}")
+
+        if location:
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('code', '=', 'outgoing'),                
+                ('is_default_api', '=', True)
+            ])
+
+        return type
 
     def _normalize_rows(self, payload):
         print("="*80)

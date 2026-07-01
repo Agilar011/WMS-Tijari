@@ -113,16 +113,24 @@ class ImportReceiptWizard(models.TransientModel):
             if reference_nbr:
                 # print(f"receipt Number: {reference_nbr}")
                 filters.append(f"ReceiptNbr eq '{reference_nbr}'")
-            if odata_filter:
+            if self.config_id.odata_filter:
+                print(f"Odata Filter: {self.config_id.odata_filter}")
                 filters.append(self.config_id.odata_filter)
-                filters.extend(odata_filter)
-            else:
-                filters.append("(Status eq 'On Hold' or Status eq 'Balanced')")
+                # filters.extend(odata_filter)
+                print(f"Filter: {filters}")
+            # else:
+            #     filters.append("(Status eq 'On Hold' or Status eq 'Balanced')")
             if filters:
                 params['$filter'] = ' and '.join(filters)       
 
-            print(endpoint)
-            print(params)
+            # --- TAMBAHKAN KODE INI UNTUK PRINT URL UTUH ---
+            from requests import Request
+            req = Request('GET', endpoint, params=params)
+            prepared_url = req.prepare().url
+            
+            print("="*80)
+            print(f"[DEBUG URL API ACUMATICA]:\n{prepared_url}")
+            print("="*80)
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
@@ -176,8 +184,11 @@ class ImportReceiptWizard(models.TransientModel):
                     detail_result.append(
                         self._build_detail_values(header_id, detail)
                     ) 
+                    print("="*80)
+                    print(f"Header ID: {header_id}")
+                    print(f"Detail Values: {detail_result}")               
+                    print("="*80)
 
-                print(f"Detail Values: {detail_result}")               
 
 
             # _logger.info("Berhasil ambil %s rows PO Receipt dari Acumatica", len(result))
@@ -204,7 +215,7 @@ class ImportReceiptWizard(models.TransientModel):
 
         for item in header_list:
             
-            lines_to_create.append({
+            lines_to_create = ({
                 **item, #header odoo
                 # 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
@@ -224,7 +235,7 @@ class ImportReceiptWizard(models.TransientModel):
             for move_item in to_create_move:
                 self.env['acumatica.issue.po.return.product'].create({
                     'receipt_line_id' : created_header.id,
-                    'line_external_id' : move_item.get('id'),
+                    'line_external_id' : move_item.get('line_external_id'),
                     'inventory_id' : move_item.get('inventory_id'),
                     'location_code' : move_item.get('location_code'),
                     'uom_code' : move_item.get('uom_code'),
@@ -232,9 +243,9 @@ class ImportReceiptWizard(models.TransientModel):
                     'branch_warehouse' : move_item.get('branch_warehouse'),
                     'line_description' : move_item.get('line_description'),
                     'line_nbr' : move_item.get('line_nbr'),
-                    'line_note' : move_item.get('note'),
-                    'product_uom_qty' : move_item.get('actual_qty'),
-                    'product_uom_qty' : move_item.get('total_qty'),
+                    'line_note' : move_item.get('line_note'),
+                    'product_uom_qty' : move_item.get('product_uom_qty'),
+                    # 'product_uom_qty' : move_item.get('total_qty'),
                     # 'scheduled_date' : move_item.get('scheduled_date'),
                     # 'post_period' : move_item.get('post_period'),
 
@@ -282,7 +293,16 @@ class ImportReceiptWizard(models.TransientModel):
     # ---------------------------------------------------------
 
     def _build_header_values(self, row_number, item):
+         
+        type = self._search_picking_type(item)
+        if type:
+            type = type.id
+        if not type:
+            type = None
+            print("="*80)
+            print('Picking Type ID tidak ditemukan untuk warehouse code:', self._val(item, 'Warehouse'))
 
+        # header['picking_type_id'] = type.id if type else None        
         print("Created header value")
         print(f"Receipt number in header : {self._val(item, 'ReferenceNbr')}")
 
@@ -302,6 +322,10 @@ class ImportReceiptWizard(models.TransientModel):
             # 'total_amount': self._val(item, 'TotalAmount'),
             # 'total_qty': self._val(item, 'TotalQty'),
             'po_type': self._val(item, 'Type'),
+            'vendor_code' : self._val(item, 'VendorID'),
+            'partner_ref' : self._val(item, 'VendorName'),
+            'picking_type_id': type
+
             }
 
 
@@ -416,7 +440,7 @@ class ImportReceiptWizard(models.TransientModel):
             'location_code': self._val(detail, 'Location'),
             'product_uom_qty': self._val(detail, 'ReceiptQty'),
             'uom_code': self._val(detail, 'UOM'),
-            'warehouse_code': self._val(detail, 'Warehouse'),
+            'warehouse_code': self._val(detail, 'WarehouseID'),
         }
 
         
@@ -495,6 +519,28 @@ class ImportReceiptWizard(models.TransientModel):
     # ---------------------------------------------------------
     # HELPERS
     # ---------------------------------------------------------    
+    def _search_picking_type(self, header):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+        warehouse_code = header.get('warehouse_code')
+        type = False
+
+        print(f"Warehouse Code: {warehouse_code}")
+
+        location = Location.search([
+            ('code', '=', warehouse_code)
+        ])
+
+        print(f"Location: {location}")
+
+        if location:
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('code', '=', 'outgoing'),                
+                ('is_default_api', '=', True)
+            ])
+
+        return type
 
     def _normalize_rows(self, payload):
         print("="*80)
