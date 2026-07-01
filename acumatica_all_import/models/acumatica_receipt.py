@@ -342,7 +342,7 @@ class AcumaticaReceiptLine(models.Model):
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 
         if picking:
-            if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+            if picking.state != 'draft':
                 raise ReceiptImportError(
                     f'Receipt {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
@@ -396,7 +396,7 @@ class AcumaticaReceiptLine(models.Model):
                 existing = picking.move_ids.filtered(
                     lambda move: (
                         move.picking_id.id == picking.id
-                        and move.adt_dest_location_id == adt_dest_location
+                        and move.adt_dest_location_id.id == adt_dest_location
                         and move.product_id.id == product.id
                         and move.product_uom_qty == qty
                     )

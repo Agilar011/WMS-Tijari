@@ -283,7 +283,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 
         if picking:
-            if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+            if picking.state != 'draft':
                 raise InventoryImportError(
                     f'receive {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
@@ -328,7 +328,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
                 qty = receive._parse_float(receive_line.product_uom_qty)
                 existing = picking.move_ids.filtered(
                     lambda move: (
-                        move.picking_id == picking.id
+                        move.picking_id.id == picking.id
                         and move.product_id.id == product.id
                         and move.product_uom_qty == qty
                     )

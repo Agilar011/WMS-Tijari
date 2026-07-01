@@ -100,7 +100,6 @@ class StockPicking(models.Model):
         res = super().action_confirm()
 
         for picking in self:
-            picking.move_ids.quantity = 0
             domain_warehouse = []
             if picking.adt_dest_location_id:
                 domain_warehouse.append(

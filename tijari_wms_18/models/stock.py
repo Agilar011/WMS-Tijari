@@ -13,6 +13,7 @@ import psycopg2
 from PIL import Image
 import qrcode
 import io
+from collections import defaultdict
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -200,8 +201,7 @@ class StockPicking(models.Model):
                 "adt_dest_location_id": picking.adt_dest_location_id,
                 "note" : picking.note,
             })
-            
-            for ml in picking.move_line_ids:  
+            for ml in picking.move_line_ids:
                 if not ml.allocation_storage:
                     raise ValidationError(f'Isi Allocation Storage di line product {ml.product_id.name}.')
                 move_line = self.env['stock.move.line'].search([
@@ -211,6 +211,15 @@ class StockPicking(models.Model):
                 ])
                 if move_line:
                     move_line.location_dest_id = ml.allocation_storage.id
+
+            Lot = self.env['stock.lot']
+            for lot_name in set(picking.move_line_ids.mapped('lot_name')):
+                qty = sum(
+                    picking.move_line_ids.filtered(lambda l: l.lot_name == lot_name).mapped('quantity')
+                )
+                lot = Lot.search([('name', '=', lot_name)], limit=1)
+                if lot:
+                    lot.product_qty = qty
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
