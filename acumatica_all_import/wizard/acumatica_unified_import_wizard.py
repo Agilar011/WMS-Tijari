@@ -436,7 +436,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'batch_size': self.batch_size,
             'fetch_skip': self.fetch_skip,
         }
-        if self.import_type in ('po_receipt', 'so_transfer', 'shipment_so', 'so_shipment', 'inventory_received', 'toko_pegang_do'):
+        if self.import_type in ('po_receipt', 'so_transfer', 'shipment_so', 'so_shipment', 'inventory_received', 'toko_pegang_do', 'transfer_shipment'):
             vals['wh33_filter'] = self.wh33_filter
             vals['start_date'] = self.start_date
             vals['end_date'] = self.end_date     
