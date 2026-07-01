@@ -191,7 +191,7 @@ class StockPicking(models.Model):
             storage_pickings = self.env["stock.picking"].search([
                 ("origin", "ilike", picking.origin or picking.name),
                 ("picking_type_id.code", "=", "internal"),
-            ])
+            ], limit=1)
             total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
             picking.write({
                 'adt_total_qty': total_qty
@@ -199,6 +199,7 @@ class StockPicking(models.Model):
 
             storage_pickings.write({
                 "adt_dest_location_id": picking.adt_dest_location_id,
+                "adt_type": picking.adt_type,
                 "note" : picking.note,
             })
             for ml in picking.move_line_ids:
@@ -212,14 +213,14 @@ class StockPicking(models.Model):
                 if move_line:
                     move_line.location_dest_id = ml.allocation_storage.id
 
-            Lot = self.env['stock.lot']
-            for lot_name in set(picking.move_line_ids.mapped('lot_name')):
-                qty = sum(
-                    picking.move_line_ids.filtered(lambda l: l.lot_name == lot_name).mapped('quantity')
-                )
-                lot = Lot.search([('name', '=', lot_name)], limit=1)
-                if lot:
-                    lot.product_qty = qty
+            # Lot = self.env['stock.lot']
+            # for lot_name in set(picking.move_line_ids.mapped('lot_name')):
+            #     qty = sum(
+            #         picking.move_line_ids.filtered(lambda l: l.lot_name == lot_name).mapped('quantity')
+            #     )
+            #     lot = Lot.search([('name', '=', lot_name)], limit=1)
+            #     if lot:
+            #         lot.product_qty = qty
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
@@ -280,6 +281,24 @@ class StockPickingType(models.Model):
     ], string='Operation Category', required=False, default='others') 
 
     is_default_api = fields.Boolean(string="Default Picking Type For API")
+
+    def get_action_picking_tree_draft(self):
+        self.ensure_one()
+
+        action = self._get_action("stock.stock_picking_action_picking_type")
+
+        ctx = action.get("context", {})
+        if isinstance(ctx, str):
+            from odoo.tools.safe_eval import safe_eval
+            ctx = safe_eval(ctx)
+
+        ctx.update({
+            "search_default_draft": 1,
+        })
+
+        action["context"] = ctx
+
+        return action
 
 
 class StockLocation(models.Model):

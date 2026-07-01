@@ -453,8 +453,8 @@ class AcumaticaReceiptChangeItemLine(models.Model):
             error_values = {
                 'partner': first.vendor_code or False,
                 'operation_type': 'receipt',
-                'location': first.warehouse_code or False,
-                'location_dest': first.warehouse_dest_code or False,
+                # 'location': first.warehouse_code or False,
+                'location_dest': first.warehouse_code or False,
                 'scheduled_date': first._parse_dt(first.scheduled_date),
                 'origin': origin,
                 'adt_total_qty': first._parse_float(first.total_qty),
