@@ -1,9 +1,12 @@
 from odoo import models, api, fields
-from odoo.exceptions import UserError
+from odoo.exceptions import ValidationError, UserError
+import base64
+
 
 import logging
 _logger = logging.getLogger(__name__)
 
+from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -97,6 +100,7 @@ class StockPicking(models.Model):
         res = super().action_confirm()
 
         for picking in self:
+            picking.move_ids.quantity = 0
             domain_warehouse = []
             if picking.adt_dest_location_id:
                 domain_warehouse.append(
@@ -123,6 +127,53 @@ class StockPicking(models.Model):
         # Untuk picking type incomine, kalo dibutuhkan untuk internal, manufacturing, dan lain lain bisa ditambahkan "self.picking_type_id.code in ["incoming", "internal", "manufacturing"]" atau yang lain sesuai kebutuhan
         return self.picking_type_id.code == "incoming"
 
+    def action_send_email_hasil_picking(self):
+        self.ensure_one()
+
+        # partner = self.partner_id
+        # if not partner or not partner.email:
+        #     raise ValidationError('Partner belum memiliki email.')
+
+        # Generate PDF dari report Odoo, lebih baik daripada panggil controller langsung
+        controller = WmsApiController()
+        response = controller.PrintWarehouseReceipt(id=self.id)
+
+        if response.status_code != 200:
+            raise UserError(f"Gagal mendapatkan PDF. Kode status: {response.status_code}")
+
+        pdf_content = response.data
+        pdf_base64 = base64.b64encode(pdf_content)
+
+        attachment_new = self.env['ir.attachment'].sudo().create({
+            'name': f"Picking {self.name}.pdf",
+            'datas': pdf_base64.decode('utf-8'),
+            'res_model': 'stock.picking',
+            'res_id': self.id,
+            'type': 'binary',
+            'mimetype': 'application/pdf',
+        })
+
+        template = self.env.ref(
+            'tijari_wms_18.email_template_stock_picking_custom',
+            raise_if_not_found=False
+        )
+
+        return {
+            'name': 'Kirim Email Berita Acara',
+            'type': 'ir.actions.act_window',
+            'res_model': 'mail.compose.message',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_model': 'stock.picking',
+                'default_res_ids': [self.id],
+                'default_use_template': bool(template),
+                'default_template_id': template.id if template else False,
+                'default_composition_mode': 'comment',
+                'default_attachment_ids': [(6, 0, [attachment_new.id])],
+            },
+        }
+
 
 class StockRule(models.Model):
     _inherit = "stock.rule"
@@ -148,6 +199,7 @@ class StockRule(models.Model):
             vals.update({
                 "location_dest_id": picking.adt_dest_location_id.id,
                 "adt_dest_location_id": picking.adt_dest_location_id.id,
+                "adt_dest_location_id": picking.move_ids.adt_dest_location_id.id,
                 "origin": picking.origin if picking.origin else picking.name
             })
 

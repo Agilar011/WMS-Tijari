@@ -24,6 +24,12 @@
                 type="object"
                 class="btn-primary"
                 invisible="state != 'done' or picking_type_code != 'incoming'"/>
+                <button name="action_send_email_hasil_picking"
+                    string="Send Email Berita Acara"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_code != 'incoming'"/>
+
                 <button name="action_print_lot_number_line" string="Print Lot" type="object" class="oe_highlight" invisible="picking_type_code != 'incoming'"/>
             </xpath>
 
@@ -50,7 +56,7 @@
                 <!-- <field name="adt_type" readonly="1"/> -->
                 <field name="adt_total_qty"/>
                 <field name="adt_actual_qty"/>
-                <field name="adt_dest_location_id"/>
+                <field name="adt_dest_location_id" invisible="adt_type == 'Receipt'"/>
             </xpath>
         </field>
     </record>
@@ -224,4 +230,19 @@
             </xpath>
         </field>
     </record>
+
+    <record id="email_template_stock_picking_custom" model="mail.template">
+        <field name="name">Email Picking Custom</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="subject">Lampiran Berita Acara</field>
+        <field name="email_to"></field>
+        <field name="body_html">
+            <![CDATA[
+                <p>Yth. Bapak/Ibu,</p>
+                <p>Berikut kami lampirkan dokumen Berita Acara untuk dapat ditindaklanjuti sebagaimana mestinya.</p>
+                <p>Terima kasih atas perhatian Bapak/Ibu.</p>
+            ]]>
+        </field>
+    </record>
+
 </odoo>

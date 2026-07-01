@@ -12,6 +12,7 @@
           'views/acumatica_inventory_stock_line_views.xml',
           'views/acumatica_inventory_recieved_config_views.xml',
           'views/acumatica_inventory_recieved_line_views.xml',
+          'views/acumatica_toko_pegang_do.xml',
           'views/acumatica_issue_config_views.xml',
           'views/acumatica_issue_line_views.xml',
           'views/acumatica_issue_po_return_config_views.xml',

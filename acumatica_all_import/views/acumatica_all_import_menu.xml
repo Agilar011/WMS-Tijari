@@ -9,10 +9,11 @@
         parent="menu_acumatica_all_import_staging_root"
         sequence="10"/>
     <menuitem id="menu_acumatica_all_import_staging_receipt" name="PO Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_line" sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_staging_so_transfer" name="SO Transfer" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_transfer_line" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_staging_receipt_change_item" name="Receipt Change Item" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_change_item_line" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_staging_inventory_received" name="Inventory Received" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_recieved_line" sequence="40"/>
-    <menuitem id="menu_acumatica_all_import_staging_shipment_so" name="Shipment SO" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_shipment_line" sequence="50"/>
+    <menuitem id="menu_acumatica_all_import_staging_so_transfer" name="Transfer - Inter Warehouse : IN" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_transfer_line" sequence="20"/>
+    <menuitem id="menu_acumatica_all_import_staging_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_change_item_line" sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_staging_inventory_received" name="Receipt : Inventory Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_recieved_line" sequence="40"/>
+    <menuitem id="menu_acumatica_all_import_staging_toko_pegang_do" name="Receipt : Toko Pegang DO" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_toko_pegang_do_line" sequence="41"/>
+    <menuitem id="menu_acumatica_all_import_staging_shipment_so" name="SO Return" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_shipment_line" sequence="50"/>
     <menuitem id="menu_acumatica_all_import_staging_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_stock_line" sequence="60"/>
     <!-- <menuitem id="menu_acumatica_all_import_staging_inventory_stock_import" name="Inventory Stock Import" parent="menu_acumatica_all_import_staging_inbound" action="action_import_inventory_stock_wizard" sequence="61"/> -->
 
@@ -22,12 +23,12 @@
         parent="menu_acumatica_all_import_staging_root"
         sequence="20"/>
     <menuitem id="menu_acumatica_all_import_staging_so_shipment" name="SO Shipment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_so_shipment_line" sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_staging_transfer_shipment" name="Transfer Shipment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_shipment_line" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_staging_issue_change_item" name="Issue Change Item" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_line" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_staging_inventory_issue" name="Inventory Issue" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inventory_issue_line" sequence="40"/>
-    <menuitem id="menu_acumatica_all_import_staging_issue_po_return" name="Issue PO Return" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_po_return_line" sequence="50"/>
-    <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer One Step" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_one_step_line" sequence="60"/>
-    <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer Two Step" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_two_step_line" sequence="70"/>
+    <menuitem id="menu_acumatica_all_import_staging_transfer_shipment" name="Transfer - Inter Warehouse : OUT" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_shipment_line" sequence="20"/>
+    <menuitem id="menu_acumatica_all_import_staging_issue_change_item" name="Issue : Change Item" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_line" sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_staging_inventory_issue" name="Issue : Inventory Issue" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inventory_issue_line" sequence="40"/>
+    <menuitem id="menu_acumatica_all_import_staging_issue_po_return" name="PO Return" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_po_return_line" sequence="50"/>
+    <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer - Intra Warehouse : OUT" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_one_step_line" sequence="60"/>
+    <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer - 2 Step : OUT" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_two_step_line" sequence="70"/>
 
 
     <menuitem id="menu_acumatica_all_import_staging_master"
@@ -49,10 +50,11 @@
         parent="menu_acumatica_all_import_config_root"
         sequence="10"/>
     <menuitem id="menu_acumatica_all_import_config_receipt" name="PO Receipt" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_receipt_config" sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_config_so_transfer" name="SO Transfer" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_transfer_config" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_config_receipt_change_item" name="Receipt Change Item" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_receipt_change_item_config" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_config_inventory_received" name="Inventory Received" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_recieved_config" sequence="40"/>
-    <menuitem id="menu_acumatica_all_import_config_shipment_so" name="Shipment SO" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_shipment_config" sequence="50"/>
+    <menuitem id="menu_acumatica_all_import_config_so_transfer" name="Transfer - Inter Warehouse : IN" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_transfer_config" sequence="20"/>
+    <menuitem id="menu_acumatica_all_import_config_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_receipt_change_item_config" sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_config_inventory_received" name="Receipt : Inventory Receipt" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_recieved_config" sequence="40"/>
+    <menuitem id="menu_acumatica_all_import_config_toko_pegang_do" name="Receipt : Toko Pegang DO" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_toko_pegang_do_config" sequence="41"/>
+    <menuitem id="menu_acumatica_all_import_config_shipment_so" name="SO Return" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_shipment_config" sequence="50"/>
     <menuitem id="menu_acumatica_all_import_config_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_stock_config" sequence="60"/>
 
 
@@ -61,12 +63,12 @@
         parent="menu_acumatica_all_import_config_root"
         sequence="20"/>
     <menuitem id="menu_acumatica_all_import_config_so_shipment" name="SO Shipment" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_so_shipment_config" sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_config_transfer_shipment" name="Transfer Shipment" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_transfer_shipment_config" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_config_issue_change_item" name="Issue Change Item" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_issue_config" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_config_inventory_issue" name="Inventory Issue" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_inventory_issue_config" sequence="40"/>
+    <menuitem id="menu_acumatica_all_import_config_transfer_shipment" name="Transfer - Inter Warehouse : OUT" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_transfer_shipment_config" sequence="20"/>
+    <menuitem id="menu_acumatica_all_import_config_issue_change_item" name="Issue : Change Item" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_issue_config" sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_config_inventory_issue" name="Issue : Inventory Issue" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_inventory_issue_config" sequence="40"/>
     <menuitem id="menu_acumatica_all_import_config_issue_po_return" name="Issue PO Return" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_issue_po_return_config" sequence="50"/>
-    <menuitem id="menu_acumatica_all_import_config_transfer_one_step" name="Transfer One Step" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_transfer_one_step_config" sequence="60"/>
-    <menuitem id="menu_acumatica_all_import_config_transfer_two_step" name="Transfer Two Step" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_transfer_two_step_config" sequence="70"/>
+    <menuitem id="menu_acumatica_all_import_config_transfer_one_step" name="Transfer - Intra Warehouse : OUT" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_transfer_one_step_config" sequence="60"/>
+    <menuitem id="menu_acumatica_all_import_config_transfer_two_step" name="Transfer - 2 Step : OUT" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_transfer_two_step_config" sequence="70"/>
 
 
     <menuitem id="menu_acumatica_all_import_config_master"

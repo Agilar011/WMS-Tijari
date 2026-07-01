@@ -70,7 +70,10 @@
             <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']"
                             position="replace">
 
-                <field name="location_dest_id" column_invisible="parent.picking_code == 'incoming'" />
+                <field name="location_dest_id"
+                    column_invisible="parent.picking_code == 'incoming'" 
+                    domain="[('id', 'child_of', adt_dest_location_id)]" 
+                />
                 <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" />
                 <field name="adt_dest_location_id" column_invisible="parent.picking_code != 'incoming'" />
 
@@ -110,6 +113,11 @@
 
             </xpath>
 
+            <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']" position="after">
+                <field name="allocation_storage" optional="hide" />
+            </xpath>
+
+
         </field>
     </record>
 
@@ -138,6 +146,19 @@
                 <field name="auto_input_code" widget="auto_input_code"
                     column_invisible="context.get('picking_code') == 'incoming'" readonly="state in ('done', 'cancel') and is_locked"/>
 
+            </xpath>
+        
+        </field>
+    </record>
+
+    <record id="view_stock_move_line_allocation_inherit" model="ir.ui.view">
+        <field name="name">stock.move.line.allocation.inherit</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_move_line_tree"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='location_dest_id']" position="after">
+                <field name="allocation_storage" optional="hide" />
             </xpath>
         
         </field>
