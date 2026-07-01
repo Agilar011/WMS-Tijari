@@ -119,11 +119,22 @@
     </record>
 
 
+    <record id="view_stock_picking_acumatica_error_search" model="ir.ui.view">
+        <field name="name">stock.picking.acumatica.error.search</field>
+        <field name="model">stock.picking.acumatica.error</field>
+        <field name="arch" type="xml">
+            <search string="Search Acumatica Error">
+                <field name="origin"/>
+            </search>
+        </field>
+    </record>
+
     <record id="view_stock_picking_acumatica_error_list" model="ir.ui.view">
         <field name="name">stock.picking.acumatica.error.list</field>
         <field name="model">stock.picking.acumatica.error</field>
         <field name="arch" type="xml">
             <list>
+                <field name="api_acumatica"/>
                 <field name="partner"/>
                 <field name="operation_type"/>
                 <field name="origin"/>
@@ -131,7 +142,6 @@
                 <field name="state" widget="badge"
                         decoration-success="state == 'resolved'"
                         decoration-warning="state == 'new'"/>
-                <field name="api_acumatica"/>
             </list>
         </field>
     </record>

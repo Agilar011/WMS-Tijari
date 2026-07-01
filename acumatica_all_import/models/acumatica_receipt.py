@@ -149,10 +149,10 @@ class AcumaticaReceiptLine(models.Model):
         product = False
         if line.inventory_id:
             product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
-            if not product:
-                product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
-        if not product and line.transaction_description:
-            product = Product.search([('name', '=', line.transaction_description)], limit=1)
+        #     if not product:
+        #         product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
+        # if not product and line.transaction_description:
+        #     product = Product.search([('name', '=', line.transaction_description)], limit=1)
         return product
 
     def _find_warehouse(self, line):
@@ -276,9 +276,18 @@ class AcumaticaReceiptLine(models.Model):
         origin = receipt.receipt_nbr or False
         header_payload = receipt.read()[0] if receipt.exists() else {}
         error_messages = []
-        error_line_payloads = []
+        all_line_payloads = []
         picking = receipt.odoo_picking_id
         action_state = 'pending'
+
+        for receipt_line in receipt.product_line_ids:
+            all_line_payloads.append({
+                'inventory_id': receipt_line.inventory_id or False,
+                'product_name': receipt_line.transaction_description or False,
+                'qty': receipt._parse_float(receipt_line.product_uom_qty),
+                'uom': receipt_line.uom_code or False,
+                'payload': receipt_line.read()[0] if receipt_line.exists() else {},
+            })
 
         vendor = receipt._find_vendor(receipt)
         if not vendor:
@@ -314,6 +323,7 @@ class AcumaticaReceiptLine(models.Model):
             raise ReceiptImportError(
                 '\n'.join(error_messages),
                 payload={'header': header_payload},
+                line_payloads=all_line_payloads,
             )
 
         picking_vals = {
@@ -346,6 +356,7 @@ class AcumaticaReceiptLine(models.Model):
                 raise ReceiptImportError(
                     f'Receipt {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
+                    line_payloads=all_line_payloads
                 )
             picking.write(picking_vals)
             action_state = 'updated'
@@ -361,13 +372,13 @@ class AcumaticaReceiptLine(models.Model):
                     error_messages.append(
                         f'Product with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
                     )
-                    error_line_payloads.append({
-                        'inventory_id': receipt_line.inventory_id or False,
-                        'product_name': receipt_line.description or False,
-                        'qty': receipt._parse_float(receipt_line.product_uom_qty),
-                        'uom': receipt_line.uom_code or False,
-                        'payload': receipt_line.read()[0] if receipt_line.exists() else {},
-                    })
+                    # all_line_payloads.append({
+                    #     'inventory_id': receipt_line.inventory_id or False,
+                    #     'product_name': receipt_line.description or False,
+                    #     'qty': receipt._parse_float(receipt_line.product_uom_qty),
+                    #     'uom': receipt_line.uom_code or False,
+                    #     'payload': receipt_line.read()[0] if receipt_line.exists() else {},
+                    # })
                     continue
 
                 uom = receipt._find_uom(receipt_line, product)
@@ -375,13 +386,13 @@ class AcumaticaReceiptLine(models.Model):
                     error_messages.append(
                         f'UOM with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER UOM.'
                     )
-                    error_line_payloads.append({
-                        'inventory_id': receipt_line.inventory_id or False,
-                        'product_name': receipt_line.description or False,
-                        'qty': receipt._parse_float(receipt_line.product_uom_qty),
-                        'uom': receipt_line.uom_code or False,
-                        'payload': receipt_line.read()[0] if receipt_line.exists() else {},
-                    })
+                    # all_line_payloads.append({
+                    #     'inventory_id': receipt_line.inventory_id or False,
+                    #     'product_name': receipt_line.description or False,
+                    #     'qty': receipt._parse_float(receipt_line.product_uom_qty),
+                    #     'uom': receipt_line.uom_code or False,
+                    #     'payload': receipt_line.read()[0] if receipt_line.exists() else {},
+                    # })
                     continue
 
                 dest_move_location = receipt._find_location_dest(receipt_line.warehouse_dest_code)
@@ -445,7 +456,7 @@ class AcumaticaReceiptLine(models.Model):
             except Exception as line_error:
                 _logger.exception("Error import line %s", receipt.id)
                 error_messages.append(str(line_error))
-                error_line_payloads.append({
+                all_line_payloads.append({
                     'inventory_id': receipt_line.inventory_id or False,
                     'product_name': receipt_line.description or False,
                     'qty': receipt._parse_float(receipt_line.product_uom_qty),
@@ -461,7 +472,7 @@ class AcumaticaReceiptLine(models.Model):
                     'picking_vals': picking_vals,
                     'picking_id': picking.id if picking else False,
                 },
-                line_payloads=error_line_payloads,
+                line_payloads=all_line_payloads,
             )
 
         receipt.write({
@@ -499,18 +510,18 @@ class AcumaticaReceiptLine(models.Model):
                 _logger.exception("Error import receipt %s", receipt.receipt_nbr or receipt.id)
                 if isinstance(exc, ReceiptImportError):
                     error_payload = exc.payload
-                    error_line_payloads = exc.line_payloads
+                    all_line_payloads = exc.line_payloads
                     error_message = str(exc)
                 else:
                     error_payload = {'header': receipt.read()[0] if receipt.exists() else {}}
-                    error_line_payloads = []
+                    all_line_payloads = []
                     error_message = str(exc)
 
                 try:
                     self._persist_error_tracking(
                         receipt,
                         [error_message],
-                        line_payloads=error_line_payloads,
+                        line_payloads=all_line_payloads,
                         payload=error_payload,
                     )
                 except Exception:
