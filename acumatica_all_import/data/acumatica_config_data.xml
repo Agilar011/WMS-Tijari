@@ -60,6 +60,21 @@
             <field name="active">True</field>
             <field name="state">draft</field>
         </record>
+        <record id="acumatica_config_toko_pegang_do_default" model="acumatica.config">
+            <field name="name">Acumatica Toko Pegang DO - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="config_type">toko_pegang_do</field>
+            <field name="endpoint_name">InventoryReceipt</field>
+            <field name="odata_expand">Details</field>
+            <field name="odata_filter">TransType eq 'Toko Pegang DO' and (Status eq 'On Hold' or Status eq 'Balanced')</field>
+            <field name="is_default">True</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
         <record id="acumatica_config_inventory_received_default" model="acumatica.config">
             <field name="name">Acumatica Inventory Received - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
