@@ -271,17 +271,6 @@ class StockPickingType(models.Model):
     ], string='Operation Category', required=False, default='others') 
 
     is_default_api = fields.Boolean(string="Default Picking Type For API")
-    
-    def get_action_picking_tree_ready(self):
-        action = self._get_action('stock.stock_picking_action_picking_type')
-
-        # ubah domain menjadi draft
-        action["domain"] = [
-            ("picking_type_id", "=", self.id),
-            ("state", "=", "draft"),
-        ]
-
-        return action
 
 
 class StockLocation(models.Model):
