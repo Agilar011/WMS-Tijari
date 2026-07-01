@@ -123,7 +123,6 @@ class ImportReceiptWizard(models.TransientModel):
 
             print(endpoint)
             print(params)
-            # raise UserError(checkpoint)
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
@@ -143,7 +142,11 @@ class ImportReceiptWizard(models.TransientModel):
                 print("[DEBUG] MASUK Ke proses deklarasi header")
                 print("="*80)
 
+                header_id = item.get('id', '')
+
                 header = self._build_header_values(row_number, item)
+
+                print(f"header : {header}")
 
 
                 # Cek apakah Detail ada dan berbentuk list / dict / array
@@ -153,8 +156,7 @@ class ImportReceiptWizard(models.TransientModel):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
-                print('detail')
-                raise UserError('checkpoint')
+                # print('detail')
                 # if detail[]:
                 #     header["warehouse_code"] = self._val(details[0], 'Warehouse')
 
@@ -163,7 +165,7 @@ class ImportReceiptWizard(models.TransientModel):
                     
 
                 result.append(dict(header))
-                print(f"Result: {result}")
+                # print(f"Result: {result}")
 
 
                 print("="*80)
@@ -172,12 +174,14 @@ class ImportReceiptWizard(models.TransientModel):
                 
                 for detail in details:
                     detail_result.append(
-                        self._build_detail_values(header, detail)
-                    )                
+                        self._build_detail_values(header_id, detail)
+                    ) 
+
+                print(f"Detail Values: {detail_result}")               
 
 
             # _logger.info("Berhasil ambil %s rows PO Receipt dari Acumatica", len(result))
-            self._validate_staging_against_picking(result, detail_result)
+            self._create_staging_data(result, detail_result)
             print(f"count result: {len(result)}")
             return len(result)
 
@@ -187,51 +191,87 @@ class ImportReceiptWizard(models.TransientModel):
             self.config_id.last_sync = fields.Datetime.now()
 
 
-    def _validate_staging_against_picking(self, header_list, line_list):
+    def _create_staging_data(self, header_list, line_list):
         print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: _validate_staging_against_picking")
+        print("[DEBUG] MASUK KE FUNGSI: _create_staging_data")
         print("="*80)
+        print(f"Header List: {header_list}")
+        print(f"Line List: {line_list}")
         Picking = self.env['stock.picking']
+        Move = self.env['stock.move']
         lines_to_create = []
         sync_data = fields.Datetime.now()
 
         for item in header_list:
             
-            reference_nbr = item.get('receipt_nbr')
-
-            exists = Picking.search_read(
-                domain=[('origin', '=', reference_nbr)],
-                fields=['id', 'origin'],
-                limit=1
-            )
-
-            # print(f"exsit data: {exists}")
             lines_to_create.append({
                 **item, #header odoo
-                'odoo_picking_id' : exists[0]['id'] if exists else False,
+                # 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
                 'import_state': 'pending',
-                'import_message': f'{reference_nbr}: Sudah ada → akan diupdate' if exists else '',
+                'import_message': "Data API Imported",
                 'selected': True,
                 'sync_date': sync_data,
             })
             print(f"line to create: {lines_to_create}")
 
-        if lines_to_create:
-            # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
-            unchanged, to_update, to_create = self._search_receipt_lines(lines_to_create)
-            # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
-            self._update_receipt_lines(to_update)
+            created_header = self.env['acumatica.issue.po.return.line'].create(lines_to_create)
 
-            receipts = self._create_receipt_lines(to_create)
-            line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
-            if line_update:
-                print(line_update)
-                self._update_receipt_lines_product(line_update, to_update)
+            # created_header.write({'odoo_picking_id': created_header.id})
 
-            if line_create:
-                print(line_create)
-                self._create_receipt_lines_product(line_create, receipts)
+            to_create_move = [move for move in line_list if move.get('header_external_id') == item.get('external_id')]
+
+            for move_item in to_create_move:
+                self.env['acumatica.issue.po.return.product'].create({
+                    'receipt_line_id' : created_header.id,
+                    'line_external_id' : move_item.get('id'),
+                    'inventory_id' : move_item.get('inventory_id'),
+                    'location_code' : move_item.get('location_code'),
+                    'uom_code' : move_item.get('uom_code'),
+                    'warehouse_code' : move_item.get('warehouse_code'),
+                    'branch_warehouse' : move_item.get('branch_warehouse'),
+                    'line_description' : move_item.get('line_description'),
+                    'line_nbr' : move_item.get('line_nbr'),
+                    'line_note' : move_item.get('note'),
+                    'product_uom_qty' : move_item.get('actual_qty'),
+                    'product_uom_qty' : move_item.get('total_qty'),
+                    # 'scheduled_date' : move_item.get('scheduled_date'),
+                    # 'post_period' : move_item.get('post_period'),
+
+                })
+
+
+
+
+        #     reference_nbr = item.get('receipt_nbr')
+
+        #     exists = Picking.search_read(
+        #         domain=[('origin', '=', reference_nbr)
+        #                 # ,('state', '=', 'draft')
+        #                 ],
+        #         fields=['id', 'origin', 'state'],
+        #         limit=1
+        #     )
+
+        #     existing_origins = [record['origin'] for record in exists if record.get('origin')]
+
+        #     # print(f"exsit data: {exists}")
+
+        # if lines_to_create:
+        #     # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
+        #     unchanged, to_update, to_create = self._search_receipt_lines(lines_to_create)
+        #     # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
+        #     self._update_receipt_lines(to_update)
+
+        #     receipts = self._create_receipt_lines(to_create)
+        #     line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
+        #     if line_update:
+        #         print(line_update)
+        #         self._update_receipt_lines_product(line_update, to_update)
+
+        #     if line_create:
+        #         print(line_create)
+        #         self._create_receipt_lines_product(line_create, receipts)
 
     # ---------------------------------------------------------
     # Filter
@@ -298,7 +338,7 @@ class ImportReceiptWizard(models.TransientModel):
         ])
 
         existing_map = {
-            line.origin: line
+            line.receipt_nbr: line
             for line in existing_lines
         }
 
@@ -361,10 +401,12 @@ class ImportReceiptWizard(models.TransientModel):
     # DETAIL
     # ---------------------------------------------------------
     
-    def _build_detail_values(self, header, detail):
+    def _build_detail_values(self, header_id,detail):
+
         
 
         return {
+            'header_external_id': header_id,
             'line_external_id': detail.get('id', '') or '',
             'line_note': detail.get('note', {}).get('value', '') or '',
             'branch_warehouse': self._val(detail, 'Branch'),

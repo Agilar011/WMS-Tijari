@@ -843,7 +843,7 @@ class ImportSOShipmentWizard(models.TransientModel):
             print(f"Building id: {location.odoo_building_id.id}")
             type = PickingType.search([
                 ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),
+                ('code', '=', 'outgoing'),
                 ('is_default_api', '=', True)
             ])
 

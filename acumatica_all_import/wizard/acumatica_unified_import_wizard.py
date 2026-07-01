@@ -489,6 +489,9 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             pending_lines = self._get_pending_lines(info, config)
             print(f"Pending lines fetched: {len(pending_lines)}")
 
+            print(f"Model: {info['line_model']}")
+            print(f"Config ID: {config}")
+
             total_data = len(self.env[info['line_model']].search([('config_id', '=', config.id)]))
             print(f"Total Data in staging: {total_data}")
 
