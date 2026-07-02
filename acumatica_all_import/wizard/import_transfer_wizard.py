@@ -23,7 +23,7 @@ class ImportTransferWizard(models.TransientModel):
         ('fetched', 'Data Sudah Ditarik'),
         ('done', 'Selesai'),
     ], default='draft')
-    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data shipment yang transaksi data ke WH33.')
     start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
     end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
@@ -104,6 +104,24 @@ class ImportTransferWizard(models.TransientModel):
         #     'view_mode': 'form',
         #     'target': 'new',
         # }
+    def _search_picking_type(self, header):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+
+        location = Location.search([
+            ('code', '=', header['warehouse_code'])
+        ])
+
+        
+        if location:
+            print(f"Building id: {location.odoo_building_id.id}")
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('code', '=', 'internal'),
+                ('is_default_api', '=', True)
+            ])
+
+        return type if type else None
 
     @staticmethod
     def _val(item, key):
@@ -165,6 +183,11 @@ class ImportTransferWizard(models.TransientModel):
             detail_result = []
 
             for row_number, item in enumerate(raw_data, start=1):
+                warehouse_code = self._val(item, 'Warehouse')
+                print(f"Processing row {row_number}: Warehouse Code = {warehouse_code}")
+                picking_type = self._search_picking_type(item)
+
+
                 header = {
                     'external_id': item.get('id', '') or '',
                     'row_number': row_number,
@@ -183,8 +206,7 @@ class ImportTransferWizard(models.TransientModel):
                     'receipt_type': self._val(item, 'Type'),
                     'vendor_code': self._val(item, 'VendorID'),
                     'partner_ref': self._val(item, 'VendorRef'),
-                    'warehouse_dest_code': self._val(item, 'Warehouse'),
-                }
+                    'warehouse_dest_code': self._val(item, 'Warehouse'),                }
 
                 details = item.get('Details') or []
                 if isinstance(details, dict):

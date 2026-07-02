@@ -196,12 +196,16 @@ class AcumaticaTransferShipmentLine(models.Model):
         return partner
 
     def _find_warehouse_by_code(self, code):
-        Warehouse = self.env['stock.warehouse']
-        if not code:
-            return Warehouse.search([], limit=1)
-        warehouse = Warehouse.search([('code', '=', code)], limit=1)
-        if not warehouse:
-            warehouse = Warehouse.search([('name', '=', code)], limit=1)
+        Warehouse = self.env['stock.location.acumatica']
+        warehouse = False
+        if code:
+            warehouse = Warehouse.search([('code', '=', code), ('is_active', '=', True)], limit=1)
+            if warehouse:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_building_id
+
         return warehouse
 
     def _find_location(self, code, warehouse=False, fallback_field='lot_stock_id'):
@@ -214,14 +218,41 @@ class AcumaticaTransferShipmentLine(models.Model):
         if not location and warehouse and hasattr(warehouse, fallback_field):
             location = getattr(warehouse, fallback_field)
         return location
+    
+    def _find_location2(self, code):
+        print("search product location")
+        Warehouse = self.env['stock.location.acumatica']
+        warehouse = False
+        if code.location_dest_code:
+            warehouse = Warehouse.search([('code', '=', code.location_dest_code), ('is_active', '=', True)], limit=1)
+            if warehouse:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_building_id
 
-    def _find_uom(self, line, product=False):
+        return warehouse
+
+
+        Location = self.env['stock.location']
+        location = False
+        if code:
+            location = Location.search([('complete_name', '=', code)], limit=1)
+            if not location:
+                location = Location.search([('name', '=', code)], limit=1)
+        if not location and warehouse and hasattr(warehouse, fallback_field):
+            location = getattr(warehouse, fallback_field)
+        return location
+
+    def _find_uom(self, line, product):
+        print("search product uom")
         Uom = self.env['uom.uom']
         uom = False
         if line.uom_code:
             uom = Uom.search([('name', '=', line.uom_code)], limit=1)
-        if not uom and product:
-            uom = product.uom_id
+            if not uom and product:
+                uom = product.uom_id
+            
         return uom
 
     def action_import_selected(self):
@@ -241,33 +272,55 @@ class AcumaticaTransferShipmentLine(models.Model):
 
         imported = updated = error = 0
         shipment_keys = [k for k in self.mapped('shipment_nbr') if k]
+        
+        print(f"debug : Memulai _do_import dengan total key shipment: {len(shipment_keys)}")
 
         for shipment_key in shipment_keys:
+            print(f"debug : [Shipment {shipment_key}] Memulai pencarian shipment_lines")
             shipment_lines = self.filtered(lambda l: l.shipment_nbr == shipment_key and l.import_state == 'pending')
             if not shipment_lines:
+                print(f"debug : [Shipment {shipment_key}] Dilewati karena tidak ada lines berstatus 'pending'")
                 continue
+            
             first = shipment_lines[0]
+            print(f"debug : [Shipment {shipment_key}] Mengambil record pertama (ID Odoo: {first.id})")
+            
             try:
+                first_data = first.read()[0]
+                print("--- SEMUA FIELD DAN NILAI DARI FIRST ---")
+                import pprint
+                pprint.pprint(first_data) # pprint membuat format json lebih rapi di terminal
+
+                print(f"debug : [Shipment {shipment_key}] Langkah 1: Mencari data warehouse (Source & Destination)")
                 source_wh = self._find_warehouse_by_code(first.warehouse_code or first.line_warehouse_code)
                 dest_wh = self._find_warehouse_by_code(first.warehouse_dest_code)
+                
                 if not source_wh:
+                    print(f"debug : [Shipment {shipment_key}] ERROR: Warehouse asal tidak ditemukan")
                     raise UserError(f'Warehouse asal tidak ditemukan untuk code: {first.warehouse_code or first.line_warehouse_code or "-"}')
+                print(f"debug : [Shipment {shipment_key}] Source WH: {source_wh.code} | Dest WH: {dest_wh.code if dest_wh else 'None'}")
 
+                print(f"debug : [Shipment {shipment_key}] Langkah 2: Mencari stock.picking.type (Outgoing)")
                 picking_type = PickingType.search([
                     ('warehouse_id', '=', source_wh.id),
                     ('code', '=', 'outgoing'),
                 ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
                 if not picking_type:
+                    print(f"debug : [Shipment {shipment_key}] ERROR: Picking type outgoing tidak ditemukan")
                     raise UserError('Picking type outgoing tidak ditemukan.')
+                print(f"debug : [Shipment {shipment_key}] Picking Type ID: {picking_type.id} ({picking_type.display_name})")
 
+                print(f"debug : [Shipment {shipment_key}] Langkah 3: Menentukan Source & Destination Location")
                 src_location = self._find_location(first.header_location_code, source_wh, 'lot_stock_id') or (picking_type.default_location_src_id or source_wh.lot_stock_id)
                 dest_location = False
                 if dest_wh:
                     dest_location = dest_wh.lot_stock_id
                 if not dest_location:
-                    dest_location = self._find_location(first.location_dest_code, source_wh, 'lot_stock_id')
+                    dest_location = self._find_location(first.warehouse_dest_code, source_wh, 'lot_stock_id')
                 dest_location = dest_location or picking_type.default_location_dest_id or source_wh.lot_stock_id
+                print(f"debug : [Shipment {shipment_key}] Src Loc: {src_location.display_name} | Dest Loc: {dest_location.display_name}")
 
+                print(f"debug : [Shipment {shipment_key}] Langkah 4: Menyusun dictionary data (vals) untuk Stock Picking")
                 vals = {
                     'origin': first.shipment_nbr,
                     'partner_id': self._find_partner(first).id if self._find_partner(first) else False,
@@ -276,64 +329,111 @@ class AcumaticaTransferShipmentLine(models.Model):
                     'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
                     'note': first.note or first.description or False,
-
-                    'adt_type': first.receipt_type or False,
+                    'adt_type': first.shipment_type or False,
                 }
 
+                print(f"debug : [Shipment {shipment_key}] Langkah 5: Cek apakah data stock.picking sudah ada di database")
                 picking = Picking.search([('origin', '=', first.shipment_nbr)], limit=1)
                 if picking:
+                    print(f"debug : [Shipment {shipment_key}] Data picking ditemukan (ID: {picking.id}, Name: {picking.name}), memeriksa state")
                     if picking.state in ('done', 'cancel'):
+                        print(f"debug : [Shipment {shipment_key}] ERROR: Picking sudah 'done' atau 'cancel'")
                         raise UserError(f'Transfer shipment {first.shipment_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
+                    
+                    print(f"debug : [Shipment {shipment_key}] Mengupdate data picking via .write()")
                     picking.write(vals)
                     action_state = 'updated'
                     updated += 1
                 else:
+                    print(f"debug : [Shipment {shipment_key}] Data picking tidak ditemukan, membuat baru via .create()")
                     picking = Picking.create(vals)
                     action_state = 'imported'
                     imported += 1
+                print(f"debug : [Shipment {shipment_key}] Berhasil memproses picking: {picking.name} | Action State: {action_state}")
 
-                for line in shipment_lines:
-                    product = self._find_product(line)
-                    uom = self._find_uom(line, product)
-                    line_dest = dest_wh.lot_stock_id if dest_wh else False
-                    if not line_dest:
-                        line_dest = self._find_location(line.location_dest_code, source_wh, 'lot_stock_id') or dest_location
-                    qty = self._parse_float(line.product_uom_qty)
+                print(f"debug : [Shipment {shipment_key}] Langkah 6: Mulai looping lines product (Total: {len(shipment_lines)} lines)")
+                for idx, line in enumerate(shipment_lines, start=1):
+                    product = self.env['acumatica.transfer.shipment.line.product'].search([('shipment_id', '=', line.id)])
 
-                    existing = Move.search([
-                        ('picking_id', '=', picking.id),
-                        ('product_id', '=', product.id),
-                        ('name', '=', line.line_description or product.display_name),
-                        ('product_uom_qty', '=', qty),
-                    ], limit=1)
-                    if existing:
-                        line.write({
-                            'import_state': action_state,
-                            'import_message': f'{action_state.title()}: {picking.name} (move sudah ada)',
-                            'odoo_picking_id': picking.id,
-                        })
-                        continue
+                    for item in product:
+                        print(f"debug : [Shipment {shipment_key}][Line {idx}] Memproses line: {item}")
+                        # product = self.env['acumatica.transfer.shipment.line.product'].search([('id', '=', item)])
+                        product = self._find_product(item)
+                        
+                        uom = self._find_uom(item, product)
 
-                    Move.create({
-                        'name': line.line_description or product.display_name,
-                        'picking_id': picking.id,
-                        'product_id': product.id,
-                        'product_uom_qty': qty,
-                        'product_uom': uom.id if uom else product.uom_id.id,
-                        'location_id': picking.location_id.id,
-                        'location_dest_id': line_dest.id if line_dest else picking.location_dest_id.id,
-                        'description_picking': line.line_description or False,
-                    })
+                        line_dest = dest_wh.lot_stock_id if dest_wh else False
+
+                        if not line_dest:
+                            line_dest = self._find_location2(item) or dest_location
+
+                        qty = self._parse_float(item.product_uom_qty)
+
+                        move_vals = {
+                            'name': item.line_description or product.display_name,
+                            'picking_id': picking.id,
+                            'product_id': product.id,
+                            'product_uom_qty': qty,
+                            'product_uom': uom.id if uom else product.uom_id.id,
+                            'location_id': picking.location_id.id,
+                            'location_dest_id': line_dest.id if line_dest else picking.location_dest_id.id,
+                            'description_picking': item.line_description or False,
+                         
+                        }
+                        created_move = Move.create(move_vals)
+                        print(f"debug : [Shipment {shipment_key}] Langkah 7: Create Move Line untuk picking: {picking.id} dengan move ID: {created_move.id}")
+                        # print(f"debug : [Shipment {shipment_key}][Line {idx}] Product: {product.display_name} | Qty: {qty}")
+
+
+                    # print(f"Memproses product dengan id: {product.id}")
+                    
+
+                    # print(f"debug : [Shipment {shipment_key}][Line {idx}] Memeriksa apakah stock.move yang sama sudah ada")
+                    # existing = Move.search([
+                    #     ('picking_id', '=', picking.id),
+                    #     ('product_id', '=', product.id),
+                    #     ('name', '=', line.line_description or product.display_name),
+                    #     ('product_uom_qty', '=', qty),
+                    # ], limit=1)
+                    
+                    # if existing:
+                    #     print(f"debug : [Shipment {shipment_key}][Line {idx}] Stock move sudah ada, skip pembuatan dan update import_state")
+                    #     line.write({
+                    #         'import_state': action_state,
+                    #         'import_message': f'{action_state.title()}: {picking.name} (move sudah ada)',
+                    #         'odoo_picking_id': picking.id,
+                    #     })
+                    #     continue
+
+                    # print(f"debug : [Shipment {shipment_key}][Line {idx}] Membuat stock.move baru")
+                    # # Move.create({
+                    # #     'name': line.line_description or product.display_name,
+                    # #     'picking_id': picking.id,
+                    # #     'product_id': product.id,
+                    # #     'product_uom_qty': qty,
+                    # #     'product_uom': uom.id if uom else product.uom_id.id,
+                    # #     'location_id': picking.location_id.id,
+                    # #     'location_dest_id': line_dest.id if line_dest else picking.location_dest_id.id,
+                    # #     'description_picking': line.line_description or False,
+                    # # })
+                    
+                    print(f"debug : [Shipment {shipment_key}][Line {idx}] Sukses buat move, update import_state pada line")
                     line.write({
                         'import_state': action_state,
                         'import_message': f'{action_state.title()}: {picking.name}',
                         'odoo_picking_id': picking.id,
                     })
+                    
+                # raise UserError(f'Panggil Agil udah berhasil')
+            
             except Exception as e:
+                print(f"debug : [Shipment {shipment_key}] TERJADI EXCEPTION ERROR: {str(e)}")
+                # raise UserError(f'Panggil Agil : {str(e)[:200]}')
                 _logger.exception('Error import transfer shipment %s', shipment_key)
                 shipment_lines.write({'import_state': 'error', 'import_message': str(e)[:200]})
                 error += len(shipment_lines)
 
+        print(f"debug : Selesai memproses _do_import. Summary -> Imported: {imported}, Updated: {updated}, Error: {error}")
         msg = f'Import selesai: {imported} transfer dibuat, {updated} transfer diupdate, {error} line error.'
         return {
             'type': 'ir.actions.client',
@@ -345,6 +445,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                 'sticky': True,
             }
         }
+
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})

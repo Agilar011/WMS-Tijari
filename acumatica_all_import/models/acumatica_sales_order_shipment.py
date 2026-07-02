@@ -102,6 +102,9 @@ class AcumaticaShipmentGIStaging(models.Model):
         ('processed', "Telah di Proses"),
     ], string='Status Odoo', default='pending')
 
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+
+
 
     _sql_constraints = [
         (

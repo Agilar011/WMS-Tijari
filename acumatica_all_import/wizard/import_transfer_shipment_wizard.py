@@ -1,6 +1,9 @@
 from odoo import fields, models
 from odoo.exceptions import UserError
 
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class ImportTransferShipmentWizard(models.TransientModel):
     _name = 'import.transfer.shipment.wizard'
@@ -57,9 +60,9 @@ class ImportTransferShipmentWizard(models.TransientModel):
             filters = []
 
             if self.wh33_filter:
-                params.append("startswith(Warehouse,'WH33')")
+                filters.append("startswith(WarehouseID,'WH33')")
             if self.start_date and self.end_date:
-                params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+                filters.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
@@ -77,9 +80,8 @@ class ImportTransferShipmentWizard(models.TransientModel):
             if filters:
                 params['$filter'] = ' and '.join(filters)
 
-            print("Filter API:")
-            print(endpoint)
-            print(params)
+            _logger.info("Filter API -> Endpoint: %s | Params: %s", endpoint, params)
+
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
@@ -285,8 +287,6 @@ class ImportTransferShipmentWizard(models.TransientModel):
         }
     
     def _search_picking_type(self, header):
-        print(f" Self: {self}")
-        print(f"Header : {header}")
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
 
