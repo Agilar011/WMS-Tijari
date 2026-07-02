@@ -56,6 +56,7 @@ class ImportIssueWizard(models.TransientModel):
 
             raw_data = self._normalize_rows(response.json())
             result = []
+            move_result = []
             print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched with params: {params}")
             for row_number, item in enumerate(raw_data, start=1):
 
@@ -70,7 +71,7 @@ class ImportIssueWizard(models.TransientModel):
 
                 result.append( {
                     'external_id': item.get('id', '') or '',
-                    'row_number': row_number,
+                    'row_number': item.get('rowNumber', '') or '', 
                     'note': item.get('note', {}).get('', '') or '',
                     'branch_warehouse': self._val(item, 'LocationID'),
                     'actual_amount': self._val(item, 'ControlQty'),
@@ -86,18 +87,20 @@ class ImportIssueWizard(models.TransientModel):
                     'warehouse_code': self._val(item, 'WarehouseID'),
                     'branch_warehouse': self._val(item, 'WarehouseName'),
                 })
-                print(f" Get data : {header['reference_nbr']}, Trans Type: {header['trans_type']}, Status: {header['status']}")
+                print(f" Get data : {item['ShipmentNbr']}, Trans Type: {item['Type']}, Status: {item['Status']}")
 
 
+                print(f"Result: {result[-1]}")
                 details = item.get('Details') or item.get('details') or []
                 if isinstance(details, dict):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
 
-                if not details:
-                    result.append(dict(header, line_nbr='0'))
-                    continue
+
+                # if not details:
+                #     result.append(dict(item, line_nbr='0'))
+                #     continue
 
                 for detail in details:
                     line_nbr = self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
@@ -134,13 +137,16 @@ class ImportIssueWizard(models.TransientModel):
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.fetch_issue_data(
+            batch_data, batch_move_data  = self.fetch_issue_data(
                 limit=self.batch_size,
                 offset=offset,
                 reference_nbr=self.reference_nbr,
                 last_modified_from=self.last_modified_from,
                 odata_filter=self.odata_filter,
             )
+
+            print(f"Batch Data: {batch_data}")
+            print(f"Batch Move Data: {batch_move_data}")
 
             if not batch_data:
                 break
@@ -173,7 +179,10 @@ class ImportIssueWizard(models.TransientModel):
                 'selected': True,
                 'sync_date': fields.Datetime.now(),
             })
+            print(f"vals: {vals}")
             lines_to_create.append(vals)
+            print(f"lines to create: {lines_to_create}")
+            # raise UserError(f"Debug:")
 
         self.env['acumatica.issue.line'].create(lines_to_create)
         self.write({

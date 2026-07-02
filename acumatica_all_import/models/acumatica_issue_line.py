@@ -343,10 +343,11 @@ class AcumaticaIssueLine(models.Model):
                 if not warehouse:
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
-                picking_type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'outgoing'),
-                ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
+                picking_type = first.picking_type_id.id
+                # picking_type = PickingType.search([
+                #     ('warehouse_id', '=', warehouse.id),
+                #     ('code', '=', 'outgoing'),
+                # ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
                 if not picking_type:
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
 
@@ -359,7 +360,7 @@ class AcumaticaIssueLine(models.Model):
 
                 vals = {
                     'origin': first.reference_nbr,
-                    'picking_type_id': picking_type.id,
+                    'picking_type_id': picking_type,
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
@@ -392,6 +393,8 @@ class AcumaticaIssueLine(models.Model):
 
                 for line in issue_lines:
                     product = self._find_product(line)
+                    if not product:
+                        raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.inventory_id or '-'}")
                     uom = self._find_uom(line, product)
                     qty = self._parse_int(line.product_uom_qty)
 
