@@ -159,7 +159,7 @@ class ImportReceiptWizard(models.TransientModel):
 
                 # Cek apakah Detail ada dan berbentuk list / dict / array
                 details = item.get('Details') or []
-                print(details)
+                # print(details)
                 if isinstance(details, dict):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
