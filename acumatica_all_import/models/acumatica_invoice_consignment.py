@@ -283,9 +283,9 @@ class AcumaticaInvoiceConsignment(models.Model):
         Partner = self.env['res.partner']
         vendor = False
         if line.vendor_code:
-            vendor = Partner.search([('ref', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
+            vendor = Partner.search([('ref', '=', line.adt_CustomerName), ('is_company', '=', True)], limit=1)
             if not vendor:
-                vendor = Partner.search([('name', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
+                vendor = Partner.search([('name', '=', line.adt_CustomerName), ('is_company', '=', True)], limit=1)
         return vendor
 
     # def _find_product(self, line):
@@ -304,21 +304,21 @@ class AcumaticaInvoiceConsignment(models.Model):
         product = False
 
         if line.inventory_id:
-            product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
+            product = Product.search([('default_code', '=', line.adt_InventoryID)], limit=1)
             if not product:
-                product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
+                product = Product.search([('barcode', '=', line.adt_InventoryID)], limit=1)
 
-        if not product and line.transaction_description:
-            product = Product.search([('name', '=', line.transaction_description)], limit=1)
+        if not product and line.adt_TransactionDescription:
+            product = Product.search([('name', '=', line.adt_TransactionDescription)], limit=1)
 
         if not product:
-            name = line.transaction_description or line.description or line.inventory_id or 'Unknown Product'
-            existing = Product.search([('default_code', '=', line.inventory_id)], limit=1)
+            name = line.adt_TransactionDescription or line.adt_InventoryID or 'Unknown Product'
+            existing = Product.search([('default_code', '=', line.adt_InventoryID)], limit=1)
             if existing:
                 return existing
             product = Product.create({
                 'name': name,
-                'default_code': line.inventory_id or False,
+                'default_code': line.adt_InventoryID or False,
                 'type': 'consu',  # stockable
             })
 
@@ -327,10 +327,10 @@ class AcumaticaInvoiceConsignment(models.Model):
     def _find_warehouse(self, line):
         Warehouse = self.env['stock.warehouse']
         warehouse = False
-        if line.warehouse_code:
-            warehouse = Warehouse.search([('code', '=', line.warehouse_code)], limit=1)
+        if line:
+            warehouse = Warehouse.search([('code', '=', line)], limit=1)
             if not warehouse:
-                warehouse = Warehouse.search([('name', '=', line.warehouse_code)], limit=1)
+                warehouse = Warehouse.search([('name', '=', line)], limit=1)
             else:
                 warehouse = Warehouse.search([('id', '=', 1)], limit=1)
         return warehouse or Warehouse.search([], limit=1)
@@ -338,10 +338,10 @@ class AcumaticaInvoiceConsignment(models.Model):
     def _find_location_dest(self, line, warehouse=False):
         Location = self.env['stock.location']
         location = False
-        if line.location_dest_code:
-            location = Location.search([('complete_name', '=', line.location_dest_code)], limit=1)
+        if line.adt_Warehouse:
+            location = Location.search([('complete_name', '=', line.adt_Warehouse)], limit=1)
             if not location:
-                location = Location.search([('name', '=', line.location_dest_code)], limit=1)
+                location = Location.search([('name', '=', line.adt_Warehouse)], limit=1)
         if not location and warehouse:
             location = warehouse.lot_stock_id
         return location
@@ -349,8 +349,8 @@ class AcumaticaInvoiceConsignment(models.Model):
     def _find_uom(self, line, product=False):
         Uom = self.env['uom.uom']
         uom = False
-        if line.uom_code:
-            uom = Uom.search([('name', '=', line.uom_code)], limit=1)
+        if line.adt_UOM:
+            uom = Uom.search([('name', '=', line.adt_UOM)], limit=1)
         if not uom and product:
             uom = product.uom_id
         return uom
@@ -389,7 +389,14 @@ class AcumaticaInvoiceConsignment(models.Model):
 
             try:
                 vendor = self._find_vendor(first)
-                warehouse = self._find_warehouse(first)
+                staging_line = self.env['acumatica.invoice.consignment.staging.line'].search([
+                    ('receipt_line_id', '=', first.id)
+                ], limit=1)
+
+                # Ambil nilai adt_Warehouse jika record-nya ditemukan agar tidak error (Safe-get)
+                warehouse_code = staging_line.adt_Warehouse if staging_line else False
+                branch_warehouse = staging_line.adt_Branch if staging_line else False
+                warehouse = self._find_warehouse(warehouse_code)
                 if not warehouse:
                     raise UserError(
                         f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}'
@@ -411,10 +418,10 @@ class AcumaticaInvoiceConsignment(models.Model):
                 if not dest_location:
                     raise UserError(
                         f'Location tujuan tidak ditemukan untuk code: '
-                        f'{first.location_dest_code or first.header_location_code or "-"}'
+                        # f'{first.location_dest_code or first.header_location_code or "-"}'
                     )
 
-                origin = first.receipt_nbr or first.po_number or False
+                origin = first.adt_ReferenceNbr or False
 
                 vals = {
                     'partner_id': vendor.id if vendor else False,
@@ -430,22 +437,22 @@ class AcumaticaInvoiceConsignment(models.Model):
                     'note': first.note or False,
 
                     # field custom, kalau ada di model
-                    'adt_receipt_nbr': first.receipt_nbr or False,
-                    'adt_vendor_code': first.vendor_code or False,
-                    'adt_partner_ref': first.partner_ref or False,
-                    'adt_branch_warehouse': first.branch_warehouse or False,
-                    'adt_is_hold': str(first.is_hold or '').lower() in ('true', '1', 'yes'),
-                    'adt_inventory_ref': first.inventory_ref or False,
-                    'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
-                    'adt_header_location_code': first.header_location_code or False,
-                    'adt_post_period': first.post_period or False,
-                    'adt_status': first.status or False,
-                    'adt_total_qty': self._parse_int(first.total_qty),
+                    'adt_receipt_nbr': first.adt_ReferenceNbr or False,
+                    'adt_vendor_code': first.adt_CustomerName or False,
+                    'adt_partner_ref': first.adt_LocationName or False,
+                    'adt_branch_warehouse': branch_warehouse or False,
+                    # 'adt_is_hold': str(first.is_hold or '').lower() in ('true', '1', 'yes'),
+                    # 'adt_inventory_ref': first.inventory_ref or False,
+                    'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
+                    # 'adt_header_location_code': first.header_location_code or False,
+                    # 'adt_post_period': first.post_period or False,
+                    'adt_status': first.adt_Status or False,
+                    # 'adt_total_qty': self._parse_int(first.total_qty),
                     'adt_type': first.receipt_type or False,
-                    'adt_warehouse_code': first.warehouse_code or False,
-                    'adt_external_id': first.external_id or False,
+                    'adt_warehouse_code': first.adt_Type or False,
+                    'adt_external_id': first.adt_id or False,
                 }
-                print(f"Get Issue PO Return data from Acumatica: Processing receipt {origin}, Vendor: {first.vendor_code}, Status: {first.status}, Type : {first.receipt_type}, Picking Type: {picking_type.name}")
+                print(f"Get Issue PO Return data from Acumatica: Processing receipt {origin}, Status: {first.adt_Status}, Type : {first.adt_Type}, Picking Type: {picking_type.name}")
 
                 # filter field yang bener-bener ada di stock.picking
                 vals = {k: v for k, v in vals.items() if k in Picking._fields}
@@ -480,7 +487,7 @@ class AcumaticaInvoiceConsignment(models.Model):
 
                         uom = self._find_uom(line, product)
                         line_dest = self._find_location_dest(line, warehouse) or dest_location
-                        qty = self._parse_int(line.product_uom_qty)
+                        qty = self._parse_int(line.adt_Qty)
 
                         # dedup move
                         move_domain = [('picking_id', '=', picking.id)]
@@ -502,34 +509,34 @@ class AcumaticaInvoiceConsignment(models.Model):
                             continue
 
                         move_vals = {
-                            'name': line.transaction_description or line.description or product.display_name,
+                            'name': line.adt_TransactionDescription or product.display_name,
                             'picking_id': picking.id,
                             'product_id': product.id,
                             'product_uom_qty': qty,
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': picking.location_id.id,
                             'location_dest_id': line_dest.id,
-                            'description_picking': line.description or False,
+                            'description_picking': line.adt_TransactionDescription or False,
 
-                            'adt_line_external_id': line.line_external_id or False,
-                            'adt_inventory_id': line.inventory_id or False,
-                            'adt_line_nbr': line.line_nbr or False,
-                            'adt_line_type': line.line_type or False,
-                            'adt_open_qty': self._parse_int(line.open_qty),
-                            'adt_order_qty': self._parse_int(line.order_qty),
-                            'adt_po_line_number': line.po_line_number or False,
-                            'adt_po_number': line.po_number or False,
-                            'adt_po_type': line.po_type or False,
-                            'adt_po_receipt_line_number': line.po_receipt_line_number or False,
-                            'adt_po_receipt_number': line.po_receipt_number or False,
-                            'adt_transfer_order_line_number': line.transfer_order_line_number or False,
-                            'adt_transfer_order_number': line.transfer_order_number or False,
-                            'adt_transfer_order_type': line.transfer_order_type or False,
-                            'adt_transfer_shipment_number': line.transfer_shipment_number or False,
-                            'adt_uom_code': line.uom_code or False,
-                            'adt_warehouse_dest_code': line.warehouse_dest_code or False,
-                            'adt_location_dest_code': line.location_dest_code or False,
-                            'adt_line_note': line.line_note or False,
+                            'adt_line_external_id': line.adt_external_id or False,
+                            'adt_inventory_id': line.adt_InventoryID or False,
+                            'adt_line_nbr': line.adt_rowNumber or False,
+                            # 'adt_line_type': line.line_type or False,
+                            'adt_open_qty': self._parse_int(line.adt_Qty),
+                            'adt_order_qty': self._parse_int(line.adt_Qty),
+                            # 'adt_po_line_number': line.po_line_number or False,
+                            # 'adt_po_number': line.po_number or False,
+                            # 'adt_po_type': line.po_type or False,
+                            # 'adt_po_receipt_line_number': line.po_receipt_line_number or False,
+                            # 'adt_po_receipt_number': line.po_receipt_number or False,
+                            # 'adt_transfer_order_line_number': line.transfer_order_line_number or False,
+                            # 'adt_transfer_order_number': line.transfer_order_number or False,
+                            # 'adt_transfer_order_type': line.transfer_order_type or False,
+                            # 'adt_transfer_shipment_number': line.transfer_shipment_number or False,
+                            'adt_uom_code': line.adt_UOM or False,
+                            # 'adt_warehouse_dest_code': line.warehouse_dest_code or False,
+                            # 'adt_location_dest_code': line.location_dest_code or False,
+                            'adt_line_note': line.adt_note or False,
                         }
 
                         # filter field yang ada di stock.move
