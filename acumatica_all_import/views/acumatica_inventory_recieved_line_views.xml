@@ -18,8 +18,10 @@
         <field name="arch" type="xml">
             <list string="Data Receipt : Inventory Receipt">
                 <field name="reference_nbr"/>
-                <field name="description"/>
+                <field name="customer_code"/>
                 <field name="warehouse_code"/>
+                <field name="total_qty"/>
+                <field name="status"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"
                        decoration-warning="import_state == 'pending'"
@@ -56,6 +58,7 @@
                             <field name="warehouse_code"/>
                         </group>
                         <group>
+                            <field name="branch_warehouse"/>
                             <field name="transfer_type"/>
                             <field name="note"/>
                             <field name="customer_code"/>

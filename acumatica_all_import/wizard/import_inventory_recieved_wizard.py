@@ -1,6 +1,8 @@
 from odoo import fields, models
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
+from datetime import datetime, time, timezone
+
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -39,7 +41,19 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
         params = []
         if self.start_date and self.end_date:
-            params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+            start_date_datetime_str = datetime.combine(
+                fields.Date.to_date(self.start_date),
+                time.min,
+                tzinfo=timezone.utc,
+            ).isoformat().replace("+00:00", "Z")
+            end_date_datetime_str = datetime.combine(
+                fields.Date.to_date(self.end_date),
+                time.min,
+                tzinfo=timezone.utc,
+            ).isoformat().replace("+00:00", "Z")
+            params.append(f"Date ge datetimeoffset'{start_date_datetime_str}' and Date le datetimeoffset'{end_date_datetime_str}'")
+
+            # params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
         if self.odata_filter:
             params.append(self.odata_filter)
 

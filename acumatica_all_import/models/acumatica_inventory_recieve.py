@@ -234,7 +234,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     transfer_type = fields.Char(string='Transfer Type', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
     external_ref = fields.Char(string='External Ref', readonly=True)
-    customer_code = fields.Char(string='Branch Warehouse', readonly=True)
+    customer_code = fields.Char(string='Customer Code', readonly=True)
     shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
     transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
     location_code = fields.Char(string='Location Code', readonly=True)
