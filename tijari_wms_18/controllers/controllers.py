@@ -517,30 +517,38 @@ class WmsApiController(http.Controller):
 
         ids = [int(x) for x in ids.split(',') if x]
 
-        lots = request.env['stock.picking'].sudo().browse(ids)
+        # lots = request.env['stock.picking'].sudo().browse(ids)
+        move = request.env['stock.move'].sudo().browse(ids)
 
         data = {
-            'detail': []
+            'lot_name': move.lot_ids.name or '',
+            'product': move.product_id.name or '',
+            'product_code': move.product_id.default_code or '',
+            'ref': "",
+            'docs': move.picking_id.origin or '',
+            'date': format_tanggal_indo(move.picking_id.scheduled_date),
+            'qrcode': (move.picking_id.qr_code_image.decode('utf-8') if move.qr_code_image else blank_image),
+            # 'detail': []
         }
 
-        for move in lots.move_ids_without_package:
-            # valid_lots = move.lot_ids.filtered(lambda l: l.name)
-            # if not valid_lots:
-            #     continue
-            # for lot in valid_lots:
-            obj = {
-                'lot_name': move.lot_ids.name or '',
-                'product': move.product_id.name or '',
-                'product_code': move.product_id.default_code or '',
-                'ref': "",
-                'docs': lots.origin or '',
-                'date': format_tanggal_indo(lots.scheduled_date),
-                'qrcode': (
-                    lots.qr_code_image.decode('utf-8')
-                    if lots.qr_code_image else blank_image
-                ),
-            }
-            data['detail'].append(obj)
+        # for move in lots.move_ids_without_package:
+        #     # valid_lots = move.lot_ids.filtered(lambda l: l.name)
+        #     # if not valid_lots:
+        #     #     continue
+        #     # for lot in valid_lots:
+        #     obj = {
+        #         'lot_name': move.lot_ids.name or '',
+        #         'product': move.product_id.name or '',
+        #         'product_code': move.product_id.default_code or '',
+        #         'ref': "",
+        #         'docs': lots.origin or '',
+        #         'date': format_tanggal_indo(lots.scheduled_date),
+        #         'qrcode': (
+        #             lots.qr_code_image.decode('utf-8')
+        #             if lots.qr_code_image else blank_image
+        #         ),
+        #     }
+        #     data['detail'].append(obj)
 
         data = json.dumps(data)
         usrnm = 'jasperadmin'
