@@ -95,9 +95,6 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         print("[DEBUG] MASUK KE FUNGSI: fetch_receipt_data")
         print("="*80)
         self.ensure_one()
-        print("="*80)
-        print("[DEBUG] MASUK Ke proses login")
-        print("="*80)
         
         session = self.config_id._do_login()
         try:
@@ -107,23 +104,15 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-
             if self.config_id.odata_select:
                 params['$select'] = self.config_id.odata_select
             if reference_nbr:
-                # print(f"receipt Number: {reference_nbr}")
                 filters.append(f"ReceiptNbr eq '{reference_nbr}'")
             if self.config_id.odata_filter:
-                print(f"Odata Filter: {self.config_id.odata_filter}")
                 filters.append(self.config_id.odata_filter)
-                # filters.extend(odata_filter)
-                print(f"Filter: {filters}")
-            # else:
-            #     filters.append("(Status eq 'On Hold' or Status eq 'Balanced')")
             if filters:
                 params['$filter'] = ' and '.join(filters)       
 
-            # --- TAMBAHKAN KODE INI UNTUK PRINT URL UTUH ---
             from requests import Request
             req = Request('GET', endpoint, params=params)
             prepared_url = req.prepare().url
@@ -134,156 +123,146 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
-                print("="*80)
-                print("[DEBUG] MASUK Ke proses get data api")
-                print("="*80)
-
                 raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
 
             raw_data = self._normalize_rows(response.json())
-            result = []
-            detail_result = []
+            
+            # PINDAHKAN KE LUAR PERULANGAN: Agar total record terhitung dengan benar
+            total_imported_headers = 0 
+            sync_data = fields.Datetime.now() # Pastikan variabel sync_data terdefinisi
 
             for row_number, item in enumerate(raw_data, start=1):
-
-                print("="*80)
-                print("[DEBUG] MASUK Ke proses deklarasi header")
-                print("="*80)
-
                 header_id = item.get('id', '')
-
                 header = self._build_header_values(row_number, item)
 
-                print(f"header : {header}")
+                lines_to_create = {
+                    **header,
+                    'config_id': self.config_id.id,
+                    'import_state': 'pending',
+                    'import_message': "Data API Imported",
+                    'selected': True,
+                    'sync_date': sync_data,
+                }
+                
+                # 1. Buat Header Staging Terlebih Dahulu
+                created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
+                total_imported_headers += 1
 
-
-                # Cek apakah Detail ada dan berbentuk list / dict / array
+                # 2. Normalisasi Data Detail/Lines
                 details = item.get('Details') or []
-                # print(details)
                 if isinstance(details, dict):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
-                # print('detail')
-                # if detail[]:
-                #     header["warehouse_code"] = self._val(details[0], 'Warehouse')
 
-                # else:
-                #     header["warehouse_code"] = "WH33-FG"
-                    
-
-                result.append(dict(header))
-                # print(f"Result: {result}")
-
-
-                print("="*80)
-                print("[DEBUG] MASUK Ke proses deklarasi detail")
-                print("="*80)
+                # PINDAHKAN KE DALAM: Kosongkan list detail khusus untuk header/invoice aktif saat ini
+                detail_to_create = [] 
                 
                 for detail in details:
-                    detail_result.append(
-                        self._build_detail_values(header_id, detail)
-                    ) 
-                    print("="*80)
-                    print(f"Header ID: {header_id}")
-                    print(f"Detail Values: {detail_result}")               
-                    print("="*80)
+                    # Ambil dictionary nilai detail data dari helper fungsi Anda
+                    vals_detail = self._build_detail_values(header_id, detail, created_header.adt_id)
+                    
+                    # LANGSUNG ISI RELASI ID: Kunci utama pencegah missmatch data antar invoice!
+                    vals_detail['receipt_line_id'] = created_header.id 
+                    
+                    detail_to_create.append(vals_detail)
 
+                # 3. Create Bulk Detail Lines (Jauh lebih cepat dan aman dari duplikasi/missmatch)
+                if detail_to_create:
+                    self.env['acumatica.invoice.consignment.staging.line'].create(detail_to_create)
 
+                print(f"[DEBUG] Berhasil memproses Header ID: {header_id} dengan {len(detail_to_create)} baris detail.")
 
-            # _logger.info("Berhasil ambil %s rows PO Receipt dari Acumatica", len(result))
-            self._create_staging_data(result, detail_result)
-            print(f"count result: {len(result)}")
-            return len(result)
-
+            print(f"Count result: {total_imported_headers}")
+            return total_imported_headers
 
         finally:
             self.config_id._do_logout(session)
             self.config_id.last_sync = fields.Datetime.now()
 
 
-    def _create_staging_data(self, header_list, line_list):
-        print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: _create_staging_data")
-        print("="*80)
-        print(f"Header List: {header_list}")
-        print(f"Line List: {line_list}")
-        Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
-        lines_to_create = []
-        sync_data = fields.Datetime.now()
+    # def _create_staging_data(self, header_list, line_list):
+    #     print("="*80)
+    #     print("[DEBUG] MASUK KE FUNGSI: _create_staging_data")
+    #     print("="*80)
+    #     print(f"Header List: {header_list}")
+    #     print(f"Line List: {line_list}")
+    #     Picking = self.env['stock.picking']
+    #     Move = self.env['stock.move']
+    #     lines_to_create = []
+    #     sync_data = fields.Datetime.now()
 
-        for item in header_list:
+    #     for item in header_list:
             
-            lines_to_create = ({
-                **item, #header odoo
-                # 'odoo_picking_id' : exists[0]['id'] if exists else False,
-                'config_id': self.config_id.id,
-                'import_state': 'pending',
-                'import_message': "Data API Imported",
-                'selected': True,
-                'sync_date': sync_data,
-            })
-            print(f"line to create: {lines_to_create}")
+    #         lines_to_create = ({
+    #             **item, #header odoo
+    #             # 'odoo_picking_id' : exists[0]['id'] if exists else False,
+    #             'config_id': self.config_id.id,
+    #             'import_state': 'pending',
+    #             'import_message': "Data API Imported",
+    #             'selected': True,
+    #             'sync_date': sync_data,
+    #         })
+    #         print(f"line to create: {lines_to_create}")
 
-            created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
+    #         created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
 
-            # created_header.write({'odoo_picking_id': created_header.id})
+    #         # created_header.write({'odoo_picking_id': created_header.id})
 
-            to_create_move = [move for move in line_list if move.get('header_external_id') == item.get('external_id')]
+    #         to_create_move = [move for move in line_list if move.get('header_external_id') == item.get('external_id')]
 
-            for move_item in to_create_move:
-                self.env['acumatica.invoice.consignment.staging.line'].create({
-                    **move_item, #detail odoo
-                    'receipt_line_id' : created_header.id,
-                    # 'line_external_id' : move_item.get('line_external_id'),
-                    # 'inventory_id' : move_item.get('inventory_id'),
-                    # 'location_code' : move_item.get('location_code'),
-                    # 'uom_code' : move_item.get('uom_code'),
-                    # 'warehouse_code' : move_item.get('warehouse_code'),
-                    # 'branch_warehouse' : move_item.get('branch_warehouse'),
-                    # 'line_description' : move_item.get('line_description'),
-                    # 'line_nbr' : move_item.get('line_nbr'),
-                    # 'line_note' : move_item.get('line_note'),
-                    # 'product_uom_qty' : move_item.get('product_uom_qty'),
-                    # 'product_uom_qty' : move_item.get('total_qty'),
-                    # 'scheduled_date' : move_item.get('scheduled_date'),
-                    # 'post_period' : move_item.get('post_period'),
+    #         for move_item in to_create_move:
+    #             self.env['acumatica.invoice.consignment.staging.line'].create({
+    #                 **move_item, #detail odoo
+    #                 'receipt_line_id' : created_header.id,
+    #                 # 'line_external_id' : move_item.get('line_external_id'),
+    #                 # 'inventory_id' : move_item.get('inventory_id'),
+    #                 # 'location_code' : move_item.get('location_code'),
+    #                 # 'uom_code' : move_item.get('uom_code'),
+    #                 # 'warehouse_code' : move_item.get('warehouse_code'),
+    #                 # 'branch_warehouse' : move_item.get('branch_warehouse'),
+    #                 # 'line_description' : move_item.get('line_description'),
+    #                 # 'line_nbr' : move_item.get('line_nbr'),
+    #                 # 'line_note' : move_item.get('line_note'),
+    #                 # 'product_uom_qty' : move_item.get('product_uom_qty'),
+    #                 # 'product_uom_qty' : move_item.get('total_qty'),
+    #                 # 'scheduled_date' : move_item.get('scheduled_date'),
+    #                 # 'post_period' : move_item.get('post_period'),
 
-                })
-
-
+    #             })
 
 
-        #     reference_nbr = item.get('receipt_nbr')
 
-        #     exists = Picking.search_read(
-        #         domain=[('origin', '=', reference_nbr)
-        #                 # ,('state', '=', 'draft')
-        #                 ],
-        #         fields=['id', 'origin', 'state'],
-        #         limit=1
-        #     )
 
-        #     existing_origins = [record['origin'] for record in exists if record.get('origin')]
+    #     #     reference_nbr = item.get('receipt_nbr')
 
-        #     # print(f"exsit data: {exists}")
+    #     #     exists = Picking.search_read(
+    #     #         domain=[('origin', '=', reference_nbr)
+    #     #                 # ,('state', '=', 'draft')
+    #     #                 ],
+    #     #         fields=['id', 'origin', 'state'],
+    #     #         limit=1
+    #     #     )
 
-        # if lines_to_create:
-        #     # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
-        #     unchanged, to_update, to_create = self._search_receipt_lines(lines_to_create)
-        #     # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
-        #     self._update_receipt_lines(to_update)
+    #     #     existing_origins = [record['origin'] for record in exists if record.get('origin')]
 
-        #     receipts = self._create_receipt_lines(to_create)
-        #     line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
-        #     if line_update:
-        #         print(line_update)
-        #         self._update_receipt_lines_product(line_update, to_update)
+    #     #     # print(f"exsit data: {exists}")
 
-        #     if line_create:
-        #         print(line_create)
-        #         self._create_receipt_lines_product(line_create, receipts)
+    #     # if lines_to_create:
+    #     #     # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
+    #     #     unchanged, to_update, to_create = self._search_receipt_lines(lines_to_create)
+    #     #     # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
+    #     #     self._update_receipt_lines(to_update)
+
+    #     #     receipts = self._create_receipt_lines(to_create)
+    #     #     line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
+    #     #     if line_update:
+    #     #         print(line_update)
+    #     #         self._update_receipt_lines_product(line_update, to_update)
+
+    #     #     if line_create:
+    #     #         print(line_create)
+    #     #         self._create_receipt_lines_product(line_create, receipts)
 
     # ---------------------------------------------------------
     # Filter
@@ -445,7 +424,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     # DETAIL
     # ---------------------------------------------------------
     
-    def _build_detail_values(self, header_id,detail):
+    def _build_detail_values(self, header_id,detail, header_id_id):
         # print(f"Detail: {detail}")
 
         # rownumber = detail.get('RowNumber')
@@ -454,7 +433,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         
 
         return {
-            'adt_id': header_id,
+            'adt_id': self._val(detail, 'id'),
             'adt_rowNumber': self._val(detail, 'rowNumber'),
             'adt_note': self._val(detail, 'Note'),
             'adt_Branch': self._val(detail, 'Branch'),
@@ -463,7 +442,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             'adt_TransactionDescription': self._val(detail, 'TransactionDescription'),
             'adt_UOM': self._val(detail, 'UOM'),
             'adt_Warehouse': self._val(detail, 'Warehouse'),
-            # 'header_external_id': header_id,
+            'adt_external_id': header_id_id,
             # 'line_external_id': detail.get('id', '') or '',
             # 'line_note': detail.get('note', {}).get('value', '') or '',
             # 'branch_warehouse': self._val(detail, 'Branch'),

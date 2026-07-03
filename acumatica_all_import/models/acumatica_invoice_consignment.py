@@ -282,7 +282,7 @@ class AcumaticaInvoiceConsignment(models.Model):
     def _find_vendor(self, line):
         Partner = self.env['res.partner']
         vendor = False
-        if line.vendor_code:
+        if line.adt_CustomerName:
             vendor = Partner.search([('ref', '=', line.adt_CustomerName), ('is_company', '=', True)], limit=1)
             if not vendor:
                 vendor = Partner.search([('name', '=', line.adt_CustomerName), ('is_company', '=', True)], limit=1)
@@ -336,12 +336,16 @@ class AcumaticaInvoiceConsignment(models.Model):
         return warehouse or Warehouse.search([], limit=1)
 
     def _find_location_dest(self, line, warehouse=False):
+        staging_line = self.env['acumatica.invoice.consignment.staging.line'].search([
+            ('receipt_line_id', '=', line.id)
+        ], limit=1)
+
         Location = self.env['stock.location']
         location = False
-        if line.adt_Warehouse:
-            location = Location.search([('complete_name', '=', line.adt_Warehouse)], limit=1)
+        if staging_line.adt_Warehouse:
+            location = Location.search([('complete_name', '=', staging_line.adt_Warehouse)], limit=1)
             if not location:
-                location = Location.search([('name', '=', line.adt_Warehouse)], limit=1)
+                location = Location.search([('name', '=', staging_line.adt_Warehouse)], limit=1)
         if not location and warehouse:
             location = warehouse.lot_stock_id
         return location
@@ -378,9 +382,9 @@ class AcumaticaInvoiceConsignment(models.Model):
         # raise UserError("Debug")
 
         # proses per receipt number
-        for receipt_nbr in self.mapped('receipt_nbr'):
+        for receipt_nbr in self.mapped('adt_ReferenceNbr'):
             receipt_lines = self.filtered(
-                lambda l: l.receipt_nbr == receipt_nbr and l.import_state == 'pending'
+                lambda l: l.adt_ReferenceNbr == receipt_nbr and l.import_state == 'pending'
             )
             if not receipt_lines:
                 continue
@@ -389,6 +393,10 @@ class AcumaticaInvoiceConsignment(models.Model):
 
             try:
                 vendor = self._find_vendor(first)
+
+                if not vendor:
+                    print(f"Vendor not found: {first.adt_CustomerName}")
+
                 staging_line = self.env['acumatica.invoice.consignment.staging.line'].search([
                     ('receipt_line_id', '=', first.id)
                 ], limit=1)
@@ -399,7 +407,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                 warehouse = self._find_warehouse(warehouse_code)
                 if not warehouse:
                     raise UserError(
-                        f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}'
+                        f'Warehouse tidak ditemukan untuk code: {staging_line.adt_Warehouse or "-"}'
                     )
 
                 # picking_type = PickingType.search([
@@ -432,9 +440,9 @@ class AcumaticaInvoiceConsignment(models.Model):
                         else self.env.ref('stock.stock_location_suppliers').id
                     ),
                     'location_dest_id': dest_location.id,
-                    'scheduled_date': self._parse_dt(first.scheduled_date),
+                    'scheduled_date': self._parse_dt(first.adt_Date),
                     'origin': origin,
-                    'note': first.note or False,
+                    'note': first.adt_note or False,
 
                     # field custom, kalau ada di model
                     'adt_receipt_nbr': first.adt_ReferenceNbr or False,
@@ -448,8 +456,8 @@ class AcumaticaInvoiceConsignment(models.Model):
                     # 'adt_post_period': first.post_period or False,
                     'adt_status': first.adt_Status or False,
                     # 'adt_total_qty': self._parse_int(first.total_qty),
-                    'adt_type': first.receipt_type or False,
-                    'adt_warehouse_code': first.adt_Type or False,
+                    'adt_type': first.adt_Type or False,
+                    # 'adt_warehouse_code': first.adt_Type or False,
                     'adt_external_id': first.adt_id or False,
                 }
                 print(f"Get Issue PO Return data from Acumatica: Processing receipt {origin}, Status: {first.adt_Status}, Type : {first.adt_Type}, Picking Type: {picking_type.name}")
@@ -570,6 +578,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                 error += len(receipt_lines)
 
         msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
+        # raise UserError('debug')
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -605,7 +614,7 @@ class AcumaticaInvoiceConsignment(models.Model):
 class AcumaticaInvoiceConsignmentLine(models.Model):
     _name = 'acumatica.invoice.consignment.staging.line'
     _description = 'Data Inventory Receipt dari Acumatica'
-    _order = 'receipt_nbr asc, line_nbr asc, id asc'
+    _order = 'adt_rowNumber asc, id asc'
 
     receipt_line_id = fields.Many2one(
         'acumatica.invoice.consignment.staging',
