@@ -27,3 +27,4 @@ from . import acumatica_toko_pegang_do
 from . import acumatica_transfer
 from . import acumatica_receipt
 from . import acumatica_shipment
+from . import acumatica_invoice_consignment
