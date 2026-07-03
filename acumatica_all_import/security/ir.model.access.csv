@@ -89,3 +89,7 @@ access_acumatica_transfer_shipment_line_product,access.acumatica.transfer.shipme
 access_issue_po_return_product_user,issue.po.return.product.user,model_acumatica_issue_po_return_product,base.group_user,1,1,1,1
 access_acumatica_issue_line_product_user,acumatica.issue.line.product.user,model_acumatica_issue_line_product,base.group_user,1,1,1,1
 access_acumatica_inventory_issue_product_user,access.acumatica.inventory.issue.product.user,model_acumatica_inventory_issue_product,base.group_user,1,1,1,1
+
+access_import_invoice_consignment_wizard,access.import.invoice.consignment.wizard,model_import_invoice_consignment_wizard,base.group_user,1,1,1,1
+access_acumatica_invoice_consignment_staging,access.acumatica.invoice.consignment.staging,model_acumatica_invoice_consignment_staging,base.group_user,1,1,1,1
+access_acumatica_invoice_consignment_staging_line,access.acumatica.invoice.consignment.staging.line,model_acumatica_invoice_consignment_staging_line,base.group_user,1,1,1,1

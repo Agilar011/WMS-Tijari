@@ -26,3 +26,4 @@ from . import acumatica_inventory_recieve
 from . import acumatica_transfer
 from . import acumatica_receipt
 from . import acumatica_shipment
+from . import acumatica_invoice_consignment

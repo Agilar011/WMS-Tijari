@@ -97,6 +97,7 @@ class AcumaticaConfig(models.Model):
             ('uom', 'Unit of Measure'),
             ('vendor', 'Vendor'),
             ('inventory_stock', 'Inventory Stock'),
+            ('invoice_consignment', 'Invoice Consignment'),
         ], string='Config Type', required=True, default='uom',
     )
 

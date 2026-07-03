@@ -206,6 +206,15 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Detail Stock Acumatica dari Acumatica',
             'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
         },
+        'invoice_consignment': {
+            'label': 'Invoice Consignment',
+            'wizard_model': 'import.invoice.consignment.wizard',
+            'config_field': 'invoice_consignment_config_id',
+            'line_model': 'acumatica.invoice.consignment.staging',
+            'result_name': 'Hasil Import Detail Invoice Consignment',
+            'staging_name': 'Data Detail Invoice Consignment dari Acumatica',
+            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
+        },
     }
 
     MASTER_DATA_TYPES = [
@@ -234,6 +243,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'transfer_one_step',
         'transfer_two_step',
         'kit_assembly',
+        'invoice_consignment',
     ]
 
     def _get_import_type_selection(self):
