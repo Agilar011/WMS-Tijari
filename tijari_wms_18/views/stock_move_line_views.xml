@@ -71,10 +71,9 @@
                             position="replace">
 
                 <field name="location_dest_id"
-                    column_invisible="parent.picking_code == 'incoming'" 
                     domain="[('id', 'child_of', adt_dest_location_id)]" 
                 />
-                <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" />
+                <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
                 <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
 
             </xpath>

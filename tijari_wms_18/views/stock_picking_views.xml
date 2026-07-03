@@ -257,4 +257,20 @@
         </field>
     </record>
 
+    <record id="stock_picking_view_adt_type_inherit" model="ir.ui.view">
+        <field name="name">stock.picking.view.adt.type.inherit</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.vpicktree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='origin']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="replace">
+                <field name="adt_type" />
+                <field name="name" />
+                <field name="origin" string="Transaction Type" />
+            </xpath>
+        </field>
+    </record>
+
 </odoo>

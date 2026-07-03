@@ -70,3 +70,10 @@ class StockMove(models.Model):
 
         return res
 
+    def create(self, vals):
+        res = super().create(vals)
+        for line in res:
+            if not line.adt_dest_location_id:
+                line.adt_dest_location_id = line.picking_id.adt_dest_location_id
+
+        return res

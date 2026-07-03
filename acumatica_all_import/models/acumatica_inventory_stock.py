@@ -376,7 +376,6 @@ class AcumaticaInventoryStockLine(models.Model):
         quants = Quant.search(quant_domain)
         if quants:
             quants.write({
-                'adt_on_hand_acumatica': on_hand_acumatica,
                 'adt_inventory_stock_status': status,
                 'adt_inventory_stock_message': message,
                 'adt_inventory_stock_sync_date': fields.Datetime.now(),
