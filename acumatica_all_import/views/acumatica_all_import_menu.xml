@@ -29,7 +29,8 @@
     <menuitem id="menu_acumatica_all_import_staging_issue_po_return" name="PO Return" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_po_return_line" sequence="50"/>
     <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer - Intra Warehouse : OUT" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_one_step_line" sequence="60"/>
     <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer - 2 Step : OUT" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_two_step_line" sequence="70"/>
-    <menuitem id="menu_acumatica_all_import_config_inv_issue_toko_pegang_do" name="Inventory Issue : Toko Pegang DO" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inv_issue_toko_pegang_do" sequence="80"/>
+    <menuitem id="menu_acumatica_all_import_staging_invoice_consignment" name="Invoice Consignment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_invoice_consignment" sequence="80"/>
+    <menuitem id="menu_acumatica_all_import_config_inv_issue_toko_pegang_do" name="Inventory Issue : Toko Pegang DO" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inv_issue_toko_pegang_do" sequence="90"/>
 
 
     <menuitem id="menu_acumatica_all_import_staging_master"
