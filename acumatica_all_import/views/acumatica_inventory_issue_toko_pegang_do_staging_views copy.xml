@@ -1,0 +1,100 @@
+<odoo>
+    <!--Server Action: Generate Data / Bulk Import -->
+   <!--  <record id="action_import_selected_inv_issue_toko_pegang_do" model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <field name="model_id" ref="model_acumatica_inventory_issue_toko_pegang_do_staging_line"/>
+        <field name="binding_model_id" ref="model_acumatica_inventory_issue_toko_pegang_do_staging_line"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_acumatica_inv_issue_toko_pegang_do_line_search" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.toko.pegang.do.staging.line.search</field>
+        <field name="model">acumatica.inventory.issue.toko.pegang.do.staging.line</field>
+        <field name="arch" type="xml">
+            <search string="Cari Data Issue : Toko Pegang DO">
+                <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="adt_InventoryID" string="Inventory ID"/>
+                <field name="adt_TransactionDescription" string="Description"/>
+                <field name="import_state"/>
+                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
+                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- List (Tree) View -->
+    <record id="view_acumatica_inv_issue_toko_pegang_do_line_list" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.toko.pegang.do.staging.line.list</field>
+        <field name="model">acumatica.inventory.issue.toko.pegang.do.staging.line</field>
+        <field name="arch" type="xml">
+            <list string="Data Issue : Toko Pegang DO" multi_edit="1">
+                <field name="selected" widget="boolean_toggle"/>
+                <field name="adt_ReferenceNbr"/>
+                <field name="adt_rowNumber"/>
+                <field name="adt_InventoryID"/>
+                <field name="adt_TransactionDescription"/>
+                <field name="adt_Qty"/>
+                <field name="adt_UOM"/>
+                <field name="adt_Warehouse"/>
+                <field name="import_state"/>
+                <field name="import_message"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_acumatica_inv_issue_toko_pegang_do_line_form" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.toko.pegang.do.staging.line.form</field>
+        <field name="model">acumatica.inventory.issue.toko.pegang.do.staging.line</field>
+        <field name="arch" type="xml">
+            <form string="Data Issue : Toko Pegang DO">
+                <header>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <button name="action_open_picking" type="object" string="Open Delivery Order" class="btn-secondary" invisible="not odoo_picking_id"/>
+                    <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
+                </header>
+                <sheet>
+                    <group string="Header Info (From Staging)">
+                        <group>
+                            <field name="adt_ReferenceNbr" readonly="1"/>
+                            <field name="receipt_line_id" readonly="1" string="Staging Header ID"/>
+                        </group>
+                        <group>
+                            <field name="create_date" readonly="1" string="Sync Date"/>
+                        </group>
+                    </group>
+                    <group string="Line Detail">
+                        <group>
+                            <field name="adt_rowNumber" readonly="1"/>
+                            <field name="adt_InventoryID" readonly="1"/>
+                            <field name="adt_TransactionDescription" readonly="1"/>
+                            <field name="adt_Qty" readonly="1"/>
+                            <field name="adt_UOM" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="adt_Warehouse" readonly="1"/>
+                            <field name="adt_Branch" readonly="1"/>
+                            <field name="adt_note" readonly="1"/>
+                            <field name="import_state" readonly="1"/>
+                            <field name="import_message" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record> -->
+
+    <!-- Window Action -->
+    <record id="action_acumatica_inv_issue_toko_pegang_do" model="ir.actions.act_window">
+        <field name="name">Data Issue : Toko Pegang DO</field>
+        <field name="res_model">acumatica.inventory.issue.toko.pegang.do.staging</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_acumatica_inv_issue_toko_pegang_do_line_search"/>
+    </record>
+</odoo>

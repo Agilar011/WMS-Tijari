@@ -69,7 +69,7 @@
                             <field name="adt_OrigRefNbr" readonly="1"/>
                             <field name="adt_ReferenceNbr" readonly="1"/>
                             <field name="adt_Status" readonly="1"/>
-                            <field name="adt_Type" readonly="1"/>
+                            <!-- <field name="adt_Type" readonly="1"/> -->
                             <field name="adt_TransType" readonly="1"/>
                             <field name="adt_post_period" readonly="1"/>
                             <field name="adt_document_only" readonly="1"/>
@@ -105,4 +105,17 @@
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_inv_issue_toko_pegang_do_search"/>
     </record>
+
+    <record id="action_import_selected_inv_issue_toko_pegang_do" model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <!-- Format penulisan ref model Odoo: model_ diikuti nama_model_dengan_titik_diganti_garis_bawah -->
+        <field name="model_id" ref="model_acumatica_inventory_issue_toko_pegang_do_staging"/>
+        <field name="binding_model_id" ref="model_acumatica_inventory_issue_toko_pegang_do_staging"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
 </odoo>
