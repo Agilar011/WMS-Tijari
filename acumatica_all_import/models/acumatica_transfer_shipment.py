@@ -147,6 +147,8 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+
     @api.depends('shipment_nbr')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
@@ -301,14 +303,14 @@ class AcumaticaTransferShipmentLine(models.Model):
                 print(f"debug : [Shipment {shipment_key}] Source WH: {source_wh.code} | Dest WH: {dest_wh.code if dest_wh else 'None'}")
 
                 print(f"debug : [Shipment {shipment_key}] Langkah 2: Mencari stock.picking.type (Outgoing)")
-                picking_type = PickingType.search([
-                    ('warehouse_id', '=', source_wh.id),
-                    ('code', '=', 'outgoing'),
-                ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
-                if not picking_type:
-                    print(f"debug : [Shipment {shipment_key}] ERROR: Picking type outgoing tidak ditemukan")
-                    raise UserError('Picking type outgoing tidak ditemukan.')
-                print(f"debug : [Shipment {shipment_key}] Picking Type ID: {picking_type.id} ({picking_type.display_name})")
+                # picking_type = PickingType.search([
+                #     ('warehouse_id', '=', source_wh.id),
+                #     ('code', '=', 'outgoing'),
+                # ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
+                # if not picking_type:
+                #     print(f"debug : [Shipment {shipment_key}] ERROR: Picking type outgoing tidak ditemukan")
+                #     raise UserError('Picking type outgoing tidak ditemukan.')
+                # print(f"debug : [Shipment {shipment_key}] Picking Type ID: {picking_type.id} ({picking_type.display_name})")
 
                 print(f"debug : [Shipment {shipment_key}] Langkah 3: Menentukan Source & Destination Location")
                 src_location = self._find_location(first.header_location_code, source_wh, 'lot_stock_id') or (picking_type.default_location_src_id or source_wh.lot_stock_id)
@@ -324,7 +326,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                 vals = {
                     'origin': first.shipment_nbr,
                     'partner_id': self._find_partner(first).id if self._find_partner(first) else False,
-                    'picking_type_id': picking_type.id,
+                    'picking_type_id': self.picking_type_id.id,
                     'location_id': src_location.id,
                     'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
