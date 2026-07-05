@@ -263,7 +263,7 @@ class AcumaticaInventoryIssueTokoPegangDO(models.Model):
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('adt_ReferenceNbr', '=', rec.receipt_nbr)]))
+            rec.exists_in_odoo = bool(rec.adt_ReferenceNbr and Picking.search_count([('origin', '=', rec.adt_ReferenceNbr)]))
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -611,6 +611,11 @@ class AcumaticaInventoryIssueTokoPegangDO(models.Model):
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})
+
+    # def action_import_this(self):
+    #     self.ensure_one()
+    #     return self._do_import()
+
 
 
 class AcumaticaInventoryIssueTokoPegangDOLine(models.Model):
