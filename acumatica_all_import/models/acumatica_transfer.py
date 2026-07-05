@@ -328,6 +328,8 @@ class AcumaticaTransferLine(models.Model):
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+
     @api.depends('receipt_nbr')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
@@ -506,17 +508,25 @@ class AcumaticaTransferLine(models.Model):
                 f'Location with code {receipt.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
-        picking_type = PickingType.search([
-            ('warehouse_id', '=', warehouse.id if warehouse else False),
-            ('operation_category', '=', 'internal'),
-            ('code', '=', 'internal'),
-        ], limit=1)
-        if not picking_type:
-            warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
-            location_txt = f'Location code {receipt.warehouse_code}'
-            error_messages.append(
-                f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
-            )
+        # picking_type = PickingType.search([
+        #     ('warehouse_id', '=', warehouse.id if warehouse else False),
+        #     ('operation_category', '=', 'internal'),
+        #     ('code', '=', 'internal'),
+        # ], limit=1)
+        # if not picking_type:
+        #     warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
+        #     location_txt = f'Location code {receipt.warehouse_code}'
+        #     error_messages.append(
+        #         f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
+        #     )
+
+        print(receipt.picking_type_id)
+        picking_type_id = False
+        if receipt.picking_type_id:
+            picking_type_id = receipt.picking_type_id.id
+
+        if not picking_type_id:
+            raise UserError('Picking_type not found')
 
         if error_messages:
             raise ReceiptImportError(
@@ -526,7 +536,7 @@ class AcumaticaTransferLine(models.Model):
 
         picking_vals = {
             # 'partner_id': vendor.id if vendor else False,
-            'picking_type_id': picking_type.id,
+            'picking_type_id': picking_type_id,
             'location_dest_id': dest_location.id if dest_location else False,
             'adt_dest_location_id': dest_location.id if dest_location else False,
             'scheduled_date': receipt._parse_dt(receipt.scheduled_date),
@@ -637,7 +647,7 @@ class AcumaticaTransferLine(models.Model):
 
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
                 Move.create(move_vals)
-                picking.action_confirm()
+                # picking.action_confirm()
 
             except ReceiptImportError:
                 raise

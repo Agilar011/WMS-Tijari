@@ -1,0 +1,110 @@
+<odoo>
+    <!-- 1. Search View -->
+    <record id="view_acumatica_invoice_consignment_search" model="ir.ui.view">
+        <field name="name">acumatica.invoice.consignment.staging.search</field>
+        <field name="model">acumatica.invoice.consignment.staging</field>
+        <field name="arch" type="xml">
+            <search string="Cari Data Invoice Consignment">
+                <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="import_state"/>
+                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
+                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- 2. List/Tree View Utama (Staging Header) -->
+    <record id="view_acumatica_invoice_consignment_list" model="ir.ui.view">
+        <field name="name">acumatica.invoice.consignment.staging.list</field>
+        <field name="model">acumatica.invoice.consignment.staging</field>
+        <field name="arch" type="xml">
+            <list string="Data Invoice Consignment">
+                <field name="id" string="ID"/>
+                <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="create_date" string="Sync Date"/>
+                <field name="odoo_picking_id" string="Delivery Order"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
+                <field name="import_message"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload" invisible="import_state != 'pending'"/>
+                <button name="action_open_picking" string="Open Picking" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- 3. Form View (Menampilkan Informasi Header dan Detail Lines) -->
+    <record id="view_acumatica_invoice_consignment_form" model="ir.ui.view">
+        <field name="name">acumatica.invoice.consignment.staging.form</field>
+        <field name="model">acumatica.invoice.consignment.staging</field>
+        <field name="arch" type="xml">
+            <form string="Detail Data Invoice Consignment">
+                <header>
+                    <button name="action_import_this" string="Import Data" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,error"/>
+                </header>
+                <sheet>
+                    <group string="Header Information">
+                        <group>
+                            <field name="id" readonly="1"/>
+                            <field name="picking_type_id" readonly="1"/>
+                            <field name="adt_id" readonly="1"/>
+                            <field name="adt_rowNumber" readonly="1"/>
+                            <field name="adt_note" readonly="1"/>
+                            <field name="adt_CreatedDateTime" readonly="1"/>
+                            <field name="adt_CustomerID" readonly="1"/>
+                            <field name="adt_CustomerName" readonly="1"/>
+                            <field name="adt_CustomerOrder" readonly="1"/>
+                            <field name="adt_Date" readonly="1"/>
+                            <field name="adt_Description" readonly="1"/>
+                        </group>
+
+                        <group>
+                            <field name="adt_DueDate" readonly="1"/>
+                            <field name="adt_LastModifiedDateTime" readonly="1"/>
+                            <field name="adt_LocationID" readonly="1"/>
+                            <field name="adt_LocationName" readonly="1"/>
+                            <field name="adt_OrigRefNbr" readonly="1"/>
+                            <field name="adt_ReferenceNbr" readonly="1"/>
+                            <field name="adt_Status" readonly="1"/>
+                            <field name="adt_Type" readonly="1"/>
+                            <field name="adt_ConsignmentType" readonly="1"/>
+                            <!-- <field name="adt_post_period" readonly="1"/> -->
+                            <!-- <field name="adt_document_only" readonly="1"/> -->
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="details" string="Details / Lines">
+                            <!-- Gantilah 'line_ids' di bawah dengan nama field One2many asli di model Python Anda jika berbeda -->
+                            <field name="product_line_ids" readonly="1">
+                                <list>
+                                    <field name="adt_rowNumber" string="No. Baris"/>
+                                    <field name="adt_InventoryID" string="ID Barang"/>
+                                    <field name="adt_TransactionDescription" string="Deskripsi"/>
+                                    <field name="adt_Qty" string="Kuantitas"/>
+                                    <field name="adt_UOM" string="Satuan"/>
+                                    <field name="adt_Warehouse" string="Gudang Asal"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                    <group>
+                        <field name="import_message" readonly="1" widget="text"/>
+                        <field name="odoo_picking_id" readonly="1"/>
+                        <field name="exists_in_odoo" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- 4. Window Action (Akan dipicu oleh menuitem Anda) -->
+    <record id="action_acumatica_invoice_consignment" model="ir.actions.act_window">
+        <field name="name">Invoice Consignment</field>
+        <field name="res_model">acumatica.invoice.consignment.staging</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_acumatica_invoice_consignment_search"/>
+    </record>
+</odoo>

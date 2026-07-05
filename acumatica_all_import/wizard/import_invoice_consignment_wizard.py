@@ -171,6 +171,13 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 if detail_to_create:
                     self.env['acumatica.invoice.consignment.staging.line'].create(detail_to_create)
 
+                warehouse_code = self.env['acumatica.invoice.consignment.staging.line'].search([('receipt_line_id', '=', created_header.id)], limit=1)
+
+                if warehouse_code:
+                    picking_type = self._search_picking_type(warehouse_code.adt_Warehouse)
+
+                    created_header.write({'picking_type_id': picking_type.id if picking_type else False})
+
                 print(f"[DEBUG] Berhasil memproses Header ID: {header_id} dengan {len(detail_to_create)} baris detail.")
 
             print(f"Count result: {total_imported_headers}")
@@ -274,13 +281,13 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
 
     def _build_header_values(self, row_number, item):
          
-        type = self._search_picking_type(item)
-        if type:
-            type = type.id
-        if not type:
-            type = None
-            print("="*80)
-            print('Picking Type ID tidak ditemukan untuk warehouse code:', self._val(item, 'Warehouse'))
+        # type = self._search_picking_type(item)
+        # if type:
+        #     type = type.id
+        # if not type:
+        #     type = None
+        #     print("="*80)
+        #     print('Picking Type ID tidak ditemukan untuk warehouse code:', self._val(item, 'Warehouse'))
 
         # header['picking_type_id'] = type.id if type else None        
         print("Created header value")
@@ -323,7 +330,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             # 'po_type': self._val(item, 'Type'),
             # 'vendor_code' : self._val(item, 'VendorID'),
             # 'partner_ref' : self._val(item, 'VendorName'),
-            'picking_type_id': type
+            # 'picking_type_id': type
 
             }
 
@@ -534,7 +541,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     def _search_picking_type(self, header):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        warehouse_code = header.get('warehouse_code')
+        warehouse_code = header
         type = False
 
         print(f"Warehouse Code: {warehouse_code}")

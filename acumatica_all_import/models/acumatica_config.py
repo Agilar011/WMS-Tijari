@@ -99,6 +99,8 @@ class AcumaticaConfig(models.Model):
             ('vendor', 'Vendor'),
             ('inventory_stock', 'Inventory Stock'),
             ('invoice_consignment', 'Invoice Consignment'),
+            ('inventory_issue_toko_pegang_do', 'Inventory Issue Toko Pegang DO'),
+
         ], string='Config Type', required=True, default='uom',
     )
 

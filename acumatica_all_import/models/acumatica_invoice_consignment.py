@@ -194,7 +194,7 @@ class AcumaticaInvoiceConsignmentConfig(models.Model):
                         'line_external_id': detail.get('id', '') or '',
                         'line_note': detail.get('note', {}).get('value', '') or '',
                         'description': description,
-                        'inventory_id': self._val(detail, 'InventoryID'),
+                        'adt_InventoryID': self._val(detail, 'InventoryID'),
                         'line_nbr': str(line_nbr),
                         'line_type': self._val(detail, 'LineType'),
                         'location_dest_code': self._val(detail, 'Location'),
@@ -275,9 +275,12 @@ class AcumaticaInvoiceConsignment(models.Model):
     @staticmethod
     def _parse_int(value):
         try:
-            return int(value or 0)
+            if not value:
+                return 0
+            # Konversi dulu ke float untuk menghilangkan tanda titik desimal, baru jadikan int
+            return int(float(value))
         except Exception:
-            return 0.0
+            return 0
 
     def _find_vendor(self, line):
         Partner = self.env['res.partner']
@@ -303,7 +306,7 @@ class AcumaticaInvoiceConsignment(models.Model):
 
         product = False
 
-        if line.inventory_id:
+        if line.adt_InventoryID:
             product = Product.search([('default_code', '=', line.adt_InventoryID)], limit=1)
             if not product:
                 product = Product.search([('barcode', '=', line.adt_InventoryID)], limit=1)
@@ -316,12 +319,7 @@ class AcumaticaInvoiceConsignment(models.Model):
             existing = Product.search([('default_code', '=', line.adt_InventoryID)], limit=1)
             if existing:
                 return existing
-            product = Product.create({
-                'name': name,
-                'default_code': line.adt_InventoryID or False,
-                'type': 'consu',  # stockable
-            })
-
+            
         return product
 
     def _find_warehouse(self, line):
@@ -379,144 +377,132 @@ class AcumaticaInvoiceConsignment(models.Model):
         error = 0
 
         print(f"self: {self}")
-        # raise UserError("Debug")
 
-        # proses per receipt number
-        for receipt_nbr in self.mapped('adt_ReferenceNbr'):
-            receipt_lines = self.filtered(
-                lambda l: l.adt_ReferenceNbr == receipt_nbr and l.import_state == 'pending'
-            )
-            if not receipt_lines:
+        # 1. Ambil seluruh data pending untuk referensi filtering
+        staging_records = self.env['acumatica.invoice.consignment.staging'].search([
+            ('import_state', '=', 'pending')
+        ]).mapped('adt_ReferenceNbr')
+
+        print(f"Staging to process: {staging_records}")
+
+        picking_to_update = self.env['stock.picking'].search([
+            ('state', '=', 'draft'),
+            ('origin', 'in', staging_records)
+        ]).mapped('origin')
+
+        print(f"Picking To Update: {picking_to_update}")
+
+        picking_to_skip = self.env['stock.picking'].search([
+            ('state', '!=', 'draft'),
+            ('origin', 'in', staging_records)
+        ]).mapped('origin')
+        
+        print(f"Picking to skip: {picking_to_skip}")
+        
+        picking_to_create = set(staging_records) - set(picking_to_update) - set(picking_to_skip)
+        print(f"Picking to create: {picking_to_create}")
+
+        # PERULANGAN UTAMA PER DOKUMEN STAGING
+        for first in self:
+        
+            # KOREKSI 1: Gunakan 'continue' (BUKAN return) agar dokumen lain tetap diproses
+            if first.adt_ReferenceNbr not in picking_to_create:
+                print(f"Receipt {first.adt_ReferenceNbr} dilewati karena statusnya masuk ke list update/skip.")
                 continue
 
-            first = receipt_lines[0]
-
             try:
-                vendor = self._find_vendor(first)
+                # 2. BUNGKUS DENGAN SAVEPOINT: Jika error, rollback hanya terjadi pada dokumen aktif ini
+                with self.env.cr.savepoint():
+                    print(f"Processing receipt {first.adt_ReferenceNbr}")
+                    vendor = self._find_vendor(first)
+                    if not vendor:
+                        print(f"Vendor not found: {first.adt_CustomerName}")
 
-                if not vendor:
-                    print(f"Vendor not found: {first.adt_CustomerName}")
+                    staging_line = self.env['acumatica.invoice.consignment.staging.line'].search([
+                        ('receipt_line_id', '=', first.id)
+                    ], limit=1)
 
-                staging_line = self.env['acumatica.invoice.consignment.staging.line'].search([
-                    ('receipt_line_id', '=', first.id)
-                ], limit=1)
-
-                # Ambil nilai adt_Warehouse jika record-nya ditemukan agar tidak error (Safe-get)
-                warehouse_code = staging_line.adt_Warehouse if staging_line else False
-                branch_warehouse = staging_line.adt_Branch if staging_line else False
-                warehouse = self._find_warehouse(warehouse_code)
-                if not warehouse:
-                    raise UserError(
-                        f'Warehouse tidak ditemukan untuk code: {staging_line.adt_Warehouse or "-"}'
-                    )
-
-                # picking_type = PickingType.search([
-                #     ('warehouse_id', '=', warehouse.id),
-                #     ('code', '=', 'outgoing'),
-                # ], limit=1) or PickingType.search([
-                #     ('code', '=', 'outgoing')
-                # ], limit=1)
-
-                picking_type = first.picking_type_id
-
-                if not picking_type:
-                    raise UserError('Picking type outgoing tidak ditemukan.')
-
-                dest_location = self._find_location_dest(first, warehouse)
-                if not dest_location:
-                    raise UserError(
-                        f'Location tujuan tidak ditemukan untuk code: '
-                        # f'{first.location_dest_code or first.header_location_code or "-"}'
-                    )
-
-                origin = first.adt_ReferenceNbr or False
-
-                vals = {
-                    'partner_id': vendor.id if vendor else False,
-                    'picking_type_id': picking_type.id,
-                    'location_id': (
-                        picking_type.default_location_src_id.id
-                        if picking_type.default_location_src_id
-                        else self.env.ref('stock.stock_location_suppliers').id
-                    ),
-                    'location_dest_id': dest_location.id,
-                    'scheduled_date': self._parse_dt(first.adt_Date),
-                    'origin': origin,
-                    'note': first.adt_note or False,
-
-                    # field custom, kalau ada di model
-                    'adt_receipt_nbr': first.adt_ReferenceNbr or False,
-                    'adt_vendor_code': first.adt_CustomerName or False,
-                    'adt_partner_ref': first.adt_LocationName or False,
-                    'adt_branch_warehouse': branch_warehouse or False,
-                    # 'adt_is_hold': str(first.is_hold or '').lower() in ('true', '1', 'yes'),
-                    # 'adt_inventory_ref': first.inventory_ref or False,
-                    'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
-                    # 'adt_header_location_code': first.header_location_code or False,
-                    # 'adt_post_period': first.post_period or False,
-                    'adt_status': first.adt_Status or False,
-                    # 'adt_total_qty': self._parse_int(first.total_qty),
-                    'adt_type': first.adt_Type or False,
-                    # 'adt_warehouse_code': first.adt_Type or False,
-                    'adt_external_id': first.adt_id or False,
-                }
-                print(f"Get Issue PO Return data from Acumatica: Processing receipt {origin}, Status: {first.adt_Status}, Type : {first.adt_Type}, Picking Type: {picking_type.name}")
-
-                # filter field yang bener-bener ada di stock.picking
-                vals = {k: v for k, v in vals.items() if k in Picking._fields}
-
-                # pakai origin buat dedup
-                picking = Picking.search([('origin', '=', origin)], limit=1)
-
-                if picking:
-                    if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                    warehouse_code = staging_line.adt_Warehouse if staging_line else False
+                    branch_warehouse = staging_line.adt_Branch if staging_line else False
+                    warehouse = self._find_warehouse(warehouse_code)
+                    if not warehouse:
                         raise UserError(
-                            f'Receipt {receipt_nbr} sudah ada di Odoo dengan state '
-                            f'{picking.state}, tidak bisa diupdate.'
+                            f'Warehouse tidak ditemukan untuk code: {staging_line.adt_Warehouse or "-"}'
                         )
-                    picking.write(vals)
-                    action_state = 'updated'
-                    updated += 1
-                else:
-                    picking = Picking.create(vals)
-                    # picking.action_confirm()
-                    action_state = 'imported'
-                    imported += 1
 
-                print(f"Line : {receipt_lines}")
-                for line in receipt_lines:
-                    try:
+                    picking_type = first.picking_type_id
+                    if not picking_type:
+                        raise UserError('Picking type outgoing tidak ditemukan.')
+
+                    origin = first.adt_ReferenceNbr or False
+
+                    vals = {
+                        'partner_id': vendor.id if vendor else False,
+                        'picking_type_id': picking_type.id,
+                        'location_id': (
+                            picking_type.default_location_src_id.id
+                            if picking_type.default_location_src_id
+                            else self.env.ref('stock.stock_location_suppliers').id
+                        ),
+                        'location_dest_id': picking_type.default_location_dest_id.id if picking_type.default_location_dest_id else None,
+                        'scheduled_date': self._parse_dt(first.adt_Date),
+                        'origin': origin,
+                        'note': first.adt_note or False,
+                        'adt_receipt_nbr': first.adt_ReferenceNbr or False,
+                        'adt_vendor_code': first.adt_CustomerName or False,
+                        'adt_partner_ref': first.adt_LocationName or False,
+                        'adt_branch_warehouse': branch_warehouse or False,
+                        'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
+                        'adt_status': first.adt_Status or False,
+                        'adt_type': first.adt_Type or False,
+                        'adt_external_id': first.adt_id or False,
+                    }
+                    
+                    vals = {k: v for k, v in vals.items() if k in Picking._fields}
+                    
+                    picking = Picking.create(vals)
+                    action_state = 'imported'
+
+                    to_create_move = self.env['acumatica.invoice.consignment.staging.line'].search([
+                        ('receipt_line_id', '=', first.id)
+                    ])
+
+                    print(f"Processing {len(to_create_move)} lines for receipt {first.adt_ReferenceNbr}")
+
+                    # Inisialisasi list kosong sebelum loop lines dimulai
+                    moves_to_create = []
+
+                    print(f"Processing {len(to_create_move)} lines for receipt {first.adt_ReferenceNbr}")
+
+                    # PERULANGAN LINES
+                    for line in to_create_move:
                         product = self._find_product(line)
                         if not product:
+                            # Jika produk tidak ketemu, raise error ini akan membatalkan (rollback) pembuatan picking!
                             raise UserError(
-                                f'Product tidak ditemukan untuk InventoryID: '
-                                f'{line.inventory_id or "-"}'
+                                f'Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or "-"}'
                             )
 
                         uom = self._find_uom(line, product)
-                        line_dest = self._find_location_dest(line, warehouse) or dest_location
+                        line_dest = self._find_location_dest(line, warehouse) or picking.location_dest_id
                         qty = self._parse_int(line.adt_Qty)
+                        print(f"Quantity: {qty} for actual value: {line.adt_Qty}")
 
-                        # dedup move
                         move_domain = [('picking_id', '=', picking.id)]
-                        if 'adt_line_external_id' in Move._fields and line.line_external_id:
-                            move_domain.append(('adt_line_external_id', '=', line.line_external_id))
+                        if 'adt_line_external_id' in Move._fields and line.adt_external_id:
+                            move_domain.append(('adt_line_external_id', '=', line.adt_external_id))
                         else:
                             move_domain += [
                                 ('product_id', '=', product.id),
-                                ('product_uom_qty', '=', qty),
+                                ('adt_line_nbr', '=', line.adt_rowNumber or False) 
                             ]
 
                         existing_move = Move.search(move_domain, limit=1)
                         if existing_move:
-                            line.write({
-                                'import_state': action_state,
-                                'import_message': f'Skip duplicate: {picking.name}',
-                                'odoo_picking_id': picking.id,
-                            })
                             continue
 
-                        move_vals = {
+                        # Buat dictionary data untuk satu baris barang
+                        single_move_vals = {
                             'name': line.adt_TransactionDescription or product.display_name,
                             'picking_id': picking.id,
                             'product_id': product.id,
@@ -525,70 +511,48 @@ class AcumaticaInvoiceConsignment(models.Model):
                             'location_id': picking.location_id.id,
                             'location_dest_id': line_dest.id,
                             'description_picking': line.adt_TransactionDescription or False,
-
                             'adt_line_external_id': line.adt_external_id or False,
                             'adt_inventory_id': line.adt_InventoryID or False,
                             'adt_line_nbr': line.adt_rowNumber or False,
-                            # 'adt_line_type': line.line_type or False,
-                            'adt_open_qty': self._parse_int(line.adt_Qty),
-                            'adt_order_qty': self._parse_int(line.adt_Qty),
-                            # 'adt_po_line_number': line.po_line_number or False,
-                            # 'adt_po_number': line.po_number or False,
-                            # 'adt_po_type': line.po_type or False,
-                            # 'adt_po_receipt_line_number': line.po_receipt_line_number or False,
-                            # 'adt_po_receipt_number': line.po_receipt_number or False,
-                            # 'adt_transfer_order_line_number': line.transfer_order_line_number or False,
-                            # 'adt_transfer_order_number': line.transfer_order_number or False,
-                            # 'adt_transfer_order_type': line.transfer_order_type or False,
-                            # 'adt_transfer_shipment_number': line.transfer_shipment_number or False,
+                            'adt_open_qty': qty,
+                            'adt_order_qty': qty,
                             'adt_uom_code': line.adt_UOM or False,
-                            # 'adt_warehouse_dest_code': line.warehouse_dest_code or False,
-                            # 'adt_location_dest_code': line.location_dest_code or False,
-                            'adt_line_note': line.adt_note or False,
                         }
+                        
+                        # Saring field yang benar-benar ada di tabel stock.move Odoo Anda
+                        single_move_vals = {k: v for k, v in single_move_vals.items() if k in Move._fields}
+                        
+                        # Masukkan ke dalam antrean list bulk create
+                        moves_to_create.append(single_move_vals)
 
-                        # filter field yang ada di stock.move
-                        move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
-                        print(f"Move to created: {move_vals}")
+                    # DI LUAR LOOP: Eksekusi pembuatan seluruh Stock Move secara massal (Bulk Create)
+                    if moves_to_create:
+                        Move.create(moves_to_create)
 
-                        # raise UserError('debug.')
-                        Move.create(move_vals)
 
-                        line.write({
-                            'import_state': action_state,
-                            'import_message': f'{action_state.title()}: {picking.name}',
-                            'odoo_picking_id': picking.id,
-                        })
-
-                    except Exception as line_e:
-                        _logger.exception("Error import line %s", line.id)
-                        line.write({
-                            'import_state': 'error',
-                            'import_message': str(line_e)[:200],
-                            'odoo_picking_id': picking.id if picking else False,
-                        })
-                        error += 1
+                    # Tulis status sukses ke tabel staging kustom
+                    first.write({
+                        'import_state': action_state,
+                        'import_message': f'Sukses diproses ke {picking.name}',
+                        'odoo_picking_id': picking.id,
+                    })
+                    
+                    imported += 1
 
             except Exception as e:
-                _logger.exception("Error import receipt %s", receipt_nbr)
-                receipt_lines.write({
+                # KOREKSI 2: Penanganan komplit jika dokumen ini gagal (Otomatis skip ke index loop selanjutnya)
+                error += 1
+                self.env.cr.rollback()  # Bersihkan state transaksi database yang gagal
+                
+                first.write({
                     'import_state': 'error',
-                    'import_message': str(e)[:200],
+                    'import_message': str(e),
                 })
-                error += len(receipt_lines)
+                print(f"[ERROR IMPORT] Dokumen {first.adt_ReferenceNbr} Gagal: {str(e)}")
 
-        msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
-        # raise UserError('debug')
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Inventory Receipt',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        print(f"[SUMMARY SINKRONISASI] Imported: {imported}, Updated: {updated}, Error: {error}")
+        return imported, updated, error
+
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})

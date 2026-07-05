@@ -62,54 +62,14 @@ class ImportTransferWizard(models.TransientModel):
 
         self.total_fetched = raw_list
 
-        # if not raw_list:
-        #     raise UserError('Tidak ada data yang diterima dari API Acumatica.')
-
-        # Picking = self.env['stock.picking']
-        # existing_keys = set()
-        # new_keys = set()
-        # lines_to_create = []
-
-        # for item in raw_list:
-        #     origin = item.get('transfer_order_number') or item.get('receipt_nbr')
-        #     exists = bool(origin and Picking.search_count([('origin', '=', origin)]))
-        #     if exists:
-        #         existing_keys.add(origin)
-        #         msg = 'Sudah ada → move akan ditambahkan jika belum ada'
-        #     else:
-        #         new_keys.add(origin)
-        #         msg = ''
-
-        #     vals = dict(item)
-        #     vals.update({
-        #         'config_id': self.config_id.id,
-        #         'import_state': 'pending',
-        #         'import_message': msg,
-        #         'selected': True,
-        #         'sync_date': fields.Datetime.now(),
-        #     })
-        #     lines_to_create.append(vals)
-
-        # self.env['acumatica.transfer.line'].create(lines_to_create)
-        # self.write({
-        #     'state': 'fetched',
-        #     'total_fetched': len(raw_list),
-        #     'total_new': len([x for x in new_keys if x]),
-        #     'total_existing': len([x for x in existing_keys if x]),
-        # })
-        # return {
-        #     'type': 'ir.actions.act_window',
-        #     'res_model': 'import.transfer.wizard',
-        #     'res_id': self.id,
-        #     'view_mode': 'form',
-        #     'target': 'new',
-        # }
-    def _search_picking_type(self, header):
+    def _search_picking_type(self, header, warehouse_code):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
+        # warehouse = 
+        type = False
 
         location = Location.search([
-            ('code', '=', header['warehouse_code'])
+            ('code', '=', warehouse_code)
         ])
 
         
@@ -121,7 +81,9 @@ class ImportTransferWizard(models.TransientModel):
                 ('is_default_api', '=', True)
             ])
 
-        return type if type else None
+        print(f"Type: {type}")
+
+        return type
 
     @staticmethod
     def _val(item, key):
@@ -174,18 +136,36 @@ class ImportTransferWizard(models.TransientModel):
             if filters:
                 params['$filter'] = ' and '.join(filters)
 
+            from requests import Request
+            req = Request('GET', endpoint, params=params)
+            prepared_url = req.prepare().url
+
+            print("="*80)
+            print(f"[DEBUG URL API ACUMATICA]:\n{prepared_url}")
+            print("="*80)
+
+
             response = session.get(endpoint, params=params, timeout=90)
+            print(f"Response: {response}")
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Transfer Receipt (HTTP {response.status_code}): {response.text}')
 
             raw_data = self._normalize_rows(response.json())
+            print(f"raw data: {raw_data}")
             result = []
             detail_result = []
 
             for row_number, item in enumerate(raw_data, start=1):
+                print(f"item to create: {item}")
                 warehouse_code = self._val(item, 'Warehouse')
                 print(f"Processing row {row_number}: Warehouse Code = {warehouse_code}")
-                picking_type = self._search_picking_type(item)
+                picking_type = self._search_picking_type(item, warehouse_code)
+
+                if picking_type:
+                    picking_type_id = picking_type.id
+
+                if not picking_type:
+                    picking_type_id = False
 
 
                 header = {
@@ -206,7 +186,10 @@ class ImportTransferWizard(models.TransientModel):
                     'receipt_type': self._val(item, 'Type'),
                     'vendor_code': self._val(item, 'VendorID'),
                     'partner_ref': self._val(item, 'VendorRef'),
-                    'warehouse_dest_code': self._val(item, 'Warehouse'),                }
+                    'warehouse_dest_code': self._val(item, 'Warehouse'),
+                    'picking_type_id': picking_type_id,
+
+                    }
 
                 details = item.get('Details') or []
                 if isinstance(details, dict):
