@@ -1,6 +1,9 @@
 from odoo import fields, models
 from odoo.exceptions import UserError
 
+import logging
+
+_logger = logging.getLogger(__name__)
 
 class ImportTransferShipmentWizard(models.TransientModel):
     _name = 'import.transfer.shipment.wizard'
@@ -57,9 +60,9 @@ class ImportTransferShipmentWizard(models.TransientModel):
             filters = []
 
             if self.wh33_filter:
-                params.append("startswith(Warehouse,'WH33')")
+                filters.append("startswith(WarehouseID,'WH33')")
             if self.start_date and self.end_date:
-                params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+                filters.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
@@ -77,9 +80,8 @@ class ImportTransferShipmentWizard(models.TransientModel):
             if filters:
                 params['$filter'] = ' and '.join(filters)
 
-            print("Filter API:")
-            print(endpoint)
-            print(params)
+            _logger.info("Filter API -> Endpoint: %s | Params: %s", endpoint, params)
+
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
@@ -90,6 +92,40 @@ class ImportTransferShipmentWizard(models.TransientModel):
             result_line = []
 
             for row_number, item in enumerate(raw_data, start=1):
+                PickingType = self.env['stock.picking.type']
+                
+                # KOREKSI 1: Ambil string kode gudang dari dictionary JSON Acumatica secara aman
+                warehouse_code = item.get('WarehouseID', {}).get('value') if item.get('WarehouseID') else False
+                
+                print(f"Warehouse Code: {warehouse_code}")                
+                # Inisialisasi variabel ID dengan nilai False (Standar Odoo)
+                picking_type_id = False
+
+                if warehouse_code:
+                    # KOREKSI 2: Gunakan tanda titik (.) untuk nama model Odoo di self.env
+                    # Pastikan nama model 'acumatica.transfer.shipment.inter.wh.out.staging.line' sesuai file py Anda
+                    staging_line_model = self.env['acumatica.transfer.shipment.line']
+                    
+                    source_wh = staging_line_model._find_warehouse_by_code(warehouse_code)
+
+                    print(f"source_wh: {source_wh}")
+                    
+                    if source_wh:
+                        picking_type = PickingType.search([
+                            ('warehouse_id', '=', source_wh.id),
+                            ('is_default_api', '=', True),
+                            ('code', '=', 'internal'),
+                        ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
+
+                        # KOREKSI 3: Gunakan variabel baru untuk menampung ID agar tidak menimpa recordset
+                        if picking_type:
+                            picking_type_id = picking_type.id
+                            print(f"Picking Type: {picking_type_id}")
+
+                if not picking_type_id:
+                    # print(f"debug : ERROR: Picking type outgoing tidak ditemukan")
+                    picking_type_id = False  # Gunakan False, bukan None
+
                 header = {
                     'external_id': item.get('id', '') or '',
                     'row_number': row_number,
@@ -119,6 +155,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
                     'shipment_type': self._val(item, 'Type'),
                     'warehouse_code': self._val(item, 'WarehouseID'),
                     'is_unlimited_packages': self._val(item, 'UnlimitedPackages'),
+                    'picking_type_id' : picking_type_id
                 }
                 # print(header)
                 # result.append(header)
@@ -133,11 +170,11 @@ class ImportTransferShipmentWizard(models.TransientModel):
                     result.append(dict(header, line_nbr='0'))
 
                     continue
-                if header['warehouse_code']:
-                    type = self._search_picking_type(header)
+                # if header['warehouse_code']:
+                #     type = self._search_picking_type(header)
 
-                    print(type)
-                    header['picking_type_id'] = type.id if type else None
+                #     print(type)
+                #     header['picking_type_id'] = type.id if type else None
                 result.append(dict(header))
 
 
@@ -235,6 +272,8 @@ class ImportTransferShipmentWizard(models.TransientModel):
                 'selected': True,
                 'sync_date': fields.Datetime.now(),
             })
+
+            print(f"vals staging: {vals}")
             # shipment_to_create.append(vals)
             created_shipment = self.env['acumatica.transfer.shipment.line'].create(vals)
             self.write({
@@ -285,8 +324,6 @@ class ImportTransferShipmentWizard(models.TransientModel):
         }
     
     def _search_picking_type(self, header):
-        print(f" Self: {self}")
-        print(f"Header : {header}")
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
 

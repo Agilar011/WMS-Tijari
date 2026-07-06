@@ -23,7 +23,7 @@ class ImportTransferWizard(models.TransientModel):
         ('fetched', 'Data Sudah Ditarik'),
         ('done', 'Selesai'),
     ], default='draft')
-    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data shipment yang transaksi data ke WH33.')
     start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
     end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
@@ -62,48 +62,28 @@ class ImportTransferWizard(models.TransientModel):
 
         self.total_fetched = raw_list
 
-        # if not raw_list:
-        #     raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+    def _search_picking_type(self, header, warehouse_code):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+        # warehouse = 
+        type = False
 
-        # Picking = self.env['stock.picking']
-        # existing_keys = set()
-        # new_keys = set()
-        # lines_to_create = []
+        location = Location.search([
+            ('code', '=', warehouse_code)
+        ])
 
-        # for item in raw_list:
-        #     origin = item.get('transfer_order_number') or item.get('receipt_nbr')
-        #     exists = bool(origin and Picking.search_count([('origin', '=', origin)]))
-        #     if exists:
-        #         existing_keys.add(origin)
-        #         msg = 'Sudah ada → move akan ditambahkan jika belum ada'
-        #     else:
-        #         new_keys.add(origin)
-        #         msg = ''
+        
+        if location:
+            print(f"Building id: {location.odoo_building_id.id}")
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('code', '=', 'internal'),
+                ('is_default_api', '=', True)
+            ])
 
-        #     vals = dict(item)
-        #     vals.update({
-        #         'config_id': self.config_id.id,
-        #         'import_state': 'pending',
-        #         'import_message': msg,
-        #         'selected': True,
-        #         'sync_date': fields.Datetime.now(),
-        #     })
-        #     lines_to_create.append(vals)
+        print(f"Type: {type}")
 
-        # self.env['acumatica.transfer.line'].create(lines_to_create)
-        # self.write({
-        #     'state': 'fetched',
-        #     'total_fetched': len(raw_list),
-        #     'total_new': len([x for x in new_keys if x]),
-        #     'total_existing': len([x for x in existing_keys if x]),
-        # })
-        # return {
-        #     'type': 'ir.actions.act_window',
-        #     'res_model': 'import.transfer.wizard',
-        #     'res_id': self.id,
-        #     'view_mode': 'form',
-        #     'target': 'new',
-        # }
+        return type
 
     @staticmethod
     def _val(item, key):
@@ -156,15 +136,38 @@ class ImportTransferWizard(models.TransientModel):
             if filters:
                 params['$filter'] = ' and '.join(filters)
 
+            from requests import Request
+            req = Request('GET', endpoint, params=params)
+            prepared_url = req.prepare().url
+
+            print("="*80)
+            print(f"[DEBUG URL API ACUMATICA]:\n{prepared_url}")
+            print("="*80)
+
+
             response = session.get(endpoint, params=params, timeout=90)
+            print(f"Response: {response}")
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Transfer Receipt (HTTP {response.status_code}): {response.text}')
 
             raw_data = self._normalize_rows(response.json())
+            print(f"raw data: {raw_data}")
             result = []
             detail_result = []
 
             for row_number, item in enumerate(raw_data, start=1):
+                print(f"item to create: {item}")
+                warehouse_code = self._val(item, 'Warehouse')
+                print(f"Processing row {row_number}: Warehouse Code = {warehouse_code}")
+                picking_type = self._search_picking_type(item, warehouse_code)
+
+                if picking_type:
+                    picking_type_id = picking_type.id
+
+                if not picking_type:
+                    picking_type_id = False
+
+
                 header = {
                     'external_id': item.get('id', '') or '',
                     'row_number': row_number,
@@ -184,7 +187,9 @@ class ImportTransferWizard(models.TransientModel):
                     'vendor_code': self._val(item, 'VendorID'),
                     'partner_ref': self._val(item, 'VendorRef'),
                     'warehouse_dest_code': self._val(item, 'Warehouse'),
-                }
+                    'picking_type_id': picking_type_id,
+
+                    }
 
                 details = item.get('Details') or []
                 if isinstance(details, dict):

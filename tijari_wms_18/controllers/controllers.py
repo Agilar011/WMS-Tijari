@@ -401,18 +401,21 @@ class WmsApiController(http.Controller):
             'date': format_tanggal_indo(receipt.scheduled_date),
             'no': receipt.name or '',
             'vendor': receipt.partner_id.name or '',
-            'warehouse': '',
+            'warehouse': receipt.picking_type_id.name or '',
+            'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
             'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
             'penerima': receipt.location_id.complete_name or '',
             'note': receipt.note_ba or '',
             'detail': []
         }
         for line in receipt.move_ids_without_package:
+            difference_qty = float(line.difference_quantity or 0)
+
             obj = {
                 'name': line.product_id.display_name or '',
-                'uom': line.product_uom.name if line.product_uom.name else '',
-                'difference_quantity': float(line.difference_quantity or 0),
-                'difference_quantity_red': line.difference_quantity or '',
+                'uom': line.product_uom.name or '',
+                'difference_quantity': difference_qty if difference_qty == 0 else 0,
+                'difference_quantity_red': difference_qty if difference_qty > 0 else "",
                 'demand': float(line.product_uom_qty or 0),
                 'demand1': float(line.quantity or 0),
                 'qty': float(line.quantity or 0),
@@ -514,30 +517,34 @@ class WmsApiController(http.Controller):
 
         ids = [int(x) for x in ids.split(',') if x]
 
-        lots = request.env['stock.picking'].sudo().browse(ids)
+        # lots = request.env['stock.picking'].sudo().browse(ids)
+        move = request.env['stock.move'].sudo().browse(ids)
 
         data = {
-            'detail': []
+            'lot_name': move.lot_ids.name or '',
+            'product': move.product_id.name or '',
+            'product_code': move.product_id.default_code or '',
+            'ref': "",
+            'docs': move.picking_id.origin or '',
+            'date': format_tanggal_indo(move.picking_id.scheduled_date),
+            'qrcode': (move.qr_code_image.decode('utf-8') if move.qr_code_image else blank_image),
+            # 'detail': []
         }
 
-        for move in lots.move_ids_without_package:
-            # valid_lots = move.lot_ids.filtered(lambda l: l.name)
-            # if not valid_lots:
-            #     continue
-            # for lot in valid_lots:
-            obj = {
-                'lot_name': move.lot_ids.name or '',
-                'product': move.product_id.name or '',
-                'product_code': move.product_id.default_code or '',
-                'ref': "",
-                'docs': lots.origin or '',
-                'date': format_tanggal_indo(lots.scheduled_date),
-                'qrcode': (
-                    lots.qr_code_image.decode('utf-8')
-                    if lots.qr_code_image else blank_image
-                ),
-            }
-            data['detail'].append(obj)
+        # for move in lots.move_ids_without_package:
+        #     obj = {
+        #         'lot_name': move.lot_ids.name or '',
+        #         'product': move.product_id.name or '',
+        #         'product_code': move.product_id.default_code or '',
+        #         'ref': "",
+        #         'docs': lots.origin or '',
+        #         'date': format_tanggal_indo(lots.scheduled_date),
+        #         'qrcode': (
+        #             lots.qr_code_image.decode('utf-8')
+        #             if lots.qr_code_image else blank_image
+        #         ),
+        #     }
+        #     data['detail'].append(obj)
 
         data = json.dumps(data)
         usrnm = 'jasperadmin'

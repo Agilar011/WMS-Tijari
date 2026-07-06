@@ -234,6 +234,9 @@ class AcumaticaInventoryIssueLine(models.Model):
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)
 
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+
+
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
     description = fields.Char(string='Header Description', readonly=True)

@@ -23,3 +23,5 @@ from . import import_uom_wizard
 from . import import_kit_assembly_wizard
 from . import import_shipvia_wizard
 from . import import_inventory_stock_wizard
+from . import import_invoice_consignment_wizard
+from . import import_inventory_issue_toko_pegang_do_wizard
