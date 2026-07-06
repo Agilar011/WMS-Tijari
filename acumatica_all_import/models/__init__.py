@@ -29,3 +29,4 @@ from . import acumatica_receipt
 from . import acumatica_shipment
 from . import acumatica_invoice_consignment
 from . import acumatica_inventory_issue_toko_pegang_do  
+from . import acumatica_direct_transfer

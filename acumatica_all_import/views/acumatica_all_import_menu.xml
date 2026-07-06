@@ -32,11 +32,18 @@
     <menuitem id="menu_acumatica_all_import_staging_invoice_consignment" name="Invoice Consignment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_invoice_consignment" sequence="80"/>
     <menuitem id="menu_acumatica_all_import_config_inv_issue_toko_pegang_do" name="Inventory Issue : Toko Pegang DO" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inv_issue_toko_pegang_do" sequence="90"/>
 
+    <menuitem id="menu_acumatica_all_import_staging_internal" name="Internal Transfer" parent="menu_acumatica_all_import_staging_root" sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_staging_direct_transfer" 
+              name="Direct Transfer" 
+              parent="menu_acumatica_all_import_staging_internal" 
+              action="action_acumatica_direct_transfer" 
+              sequence="10"/>
+
 
     <menuitem id="menu_acumatica_all_import_staging_master"
         name="Master Data"
         parent="menu_acumatica_all_import_staging_root"
-        sequence="30"/>
+        sequence="40"/>
     <menuitem id="menu_acumatica_all_import_staging_uom" name="UoM" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_uom_line" sequence="1"/>
     <menuitem id="menu_acumatica_all_import_staging_customer" name="Customer" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_customer_line" sequence="2"/>
     <menuitem id="menu_acumatica_all_import_staging_vendor" name="Vendor" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_vendor_line" sequence="3"/>
