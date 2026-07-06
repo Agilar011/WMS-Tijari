@@ -378,7 +378,7 @@ class ImportReceiptWizard(models.TransientModel):
         create_final = [line for line in data if line['header_external_id'] in create_ids]
 
         return update_final, create_final
-        
+
     def filter_by_receipt_lines(self, data, receipts):
         """
         Filter data berdasarkan header_external_id yang ada di receipts.
