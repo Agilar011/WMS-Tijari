@@ -44,6 +44,7 @@
           'views/acumatica_inventory_issue_toko_pegang_do_staging_views.xml',
           'views/acumatica_invoice_consignment_staging_views.xml',
           'views/acumatica_direct_transfer_staging_views.xml',
+          'views/acumatica_vendor_return_direct_transfer_staging_views.xml',
           'views/acumatica_all_import_wizard_views.xml',
           'views/acumatica_all_import_menu.xml',
           ],

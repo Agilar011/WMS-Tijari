@@ -2,6 +2,7 @@
     <!-- 1. Search View -->
     <record id="view_acumatica_direct_transfer_staging_search" model="ir.ui.view">
         <field name="name">acumatica.direct.transfer.staging.search</field>
+        <!-- Diperbaiki: Ditambahkan . -->
         <field name="model">acumatica.direct.transfer.staging</field>
         <field name="arch" type="xml">
             <search string="Cari Data Direct Transfer Staging">
@@ -14,9 +15,10 @@
         </field>
     </record>
 
-    <!-- 2. List/Tree View Utama (Staging Header) -->
+    <!-- 2. List/Tree View Utama -->
     <record id="view_acumatica_direct_transfer_staging_list" model="ir.ui.view">
         <field name="name">acumatica.direct.transfer.staging.list</field>
+        <!-- Diperbaiki: Ditambahkan . -->
         <field name="model">acumatica.direct.transfer.staging</field>
         <field name="arch" type="xml">
             <list string="Data Direct Transfer Staging">
@@ -30,21 +32,22 @@
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <!-- Tombol Open Picking disesuaikan namanya sesuai alur transfer -->
                 <button name="action_open_picking" string="Open Picking" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
             </list>
         </field>
     </record>
 
-    <!-- 3. Form View (Tempat Menampilkan Detail Lines Relasi dari Staging Line) -->
+    <!-- 3. Form View -->
     <record id="view_acumatica_direct_transfer_staging_form" model="ir.ui.view">
         <field name="name">acumatica.direct.transfer.staging.form</field>
+        <!-- Diperbaiki: Ditambahkan . -->
         <field name="model">acumatica.direct.transfer.staging</field>
         <field name="arch" type="xml">
             <form string="Detail Data Direct Transfer Staging">
                 <header>
                     <button name="action_import_this" string="Import" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
-                    <field name="import_state" widget="statusbar"/>
+                    <!-- Diperbaiki: Ditambahkan statusbar_visible agar memunculkan titik status -->
+                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,error"/>
                 </header>
                 <sheet>
                     <group>
@@ -75,8 +78,6 @@
 
                     <notebook>
                         <page name="details" string="Transfer Details / Lines">
-                            <!-- Field relasi One2many ke tabel acumatica.direct.transfer.staging.line -->
-                            <!-- Pastikan nama field One2many Anda di model .py disesuaikan (Contoh di bawah memakai line_ids) -->
                             <field name="line_ids" readonly="1">
                                 <list>
                                     <field name="adt_LineNumber" string="Line No"/>
@@ -107,15 +108,17 @@
 
     <!-- 4. Window Action -->
     <record id="action_acumatica_direct_transfer" model="ir.actions.act_window">
-        <field name="name">Direct Transfer Staging</field>
+        <field name="name">Vendor Return Direct Transfer Staging</field>
+        <!-- Diperbaiki: Ditambahkan . -->
         <field name="res_model">acumatica.direct.transfer.staging</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_direct_transfer_staging_search"/>
     </record>
 
-    <!-- 5. Server Action (Mass Action dari List View) -->
+    <!-- 5. Server Action -->
     <record id="action_import_selected_direct_transfer" model="ir.actions.server">
         <field name="name">Process Selected Import</field>
+        <!-- Diperbaiki: Menggunakan titik diganti underscore untuk referensi model internal Odoo -->
         <field name="model_id" ref="model_acumatica_direct_transfer_staging"/>
         <field name="binding_model_id" ref="model_acumatica_direct_transfer_staging"/>
         <field name="binding_type">action</field>

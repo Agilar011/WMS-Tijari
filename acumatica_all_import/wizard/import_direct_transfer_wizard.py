@@ -195,6 +195,18 @@ class ImportDirectTransferWizard(models.TransientModel):
                         print(f"header : {header}")
                         created_header = self.env['acumatica.direct.transfer.staging'].create(header)
 
+                        if created_header:
+                            sync_data = fields.Datetime.now()
+                            # Gunakan tanda kurung (), bukan sama dengan (=)
+                            created_header.write({
+                                'config_id': self.config_id.id,
+                                'import_state': 'pending',
+                                'import_message': "Data API Imported",
+                                'selected': True,
+                                'sync_date': sync_data,
+                            })
+
+
                         details = item.get('Details') or []
                         if isinstance(details, dict):
                             details = details.get('value', []) or []
