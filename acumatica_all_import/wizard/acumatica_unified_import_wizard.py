@@ -232,6 +232,16 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Inventory Issue Toko Pegang DO dari Acumatica',
             'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
         },
+        
+        'direct_transfer': {
+            'label': 'Direct Transfer',
+            'wizard_model': 'import.direct.transfer.wizard',
+            'line_model': 'acumatica.direct.transfer.staging',
+            'result_name': 'Hasil Import Direct Transfer',
+            'staging_name': 'Data Direct Transfer Acumatica',
+            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
+        },
+        
     }
 
     MASTER_DATA_TYPES = [
@@ -263,6 +273,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'kit_assembly',
         'invoice_consignment',
         'inventory_issue_toko_pegang_do',
+        'direct_transfer',
     ]
 
     def _get_import_type_selection(self):
