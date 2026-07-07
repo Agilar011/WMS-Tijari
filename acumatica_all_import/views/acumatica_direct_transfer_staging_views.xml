@@ -59,6 +59,8 @@
                             <field name="adt_FromWarehouseID" string="Acumatica FromWarehouseID" readonly="1"/>
                             <field name="adt_Hold" string="Acumatica Hold" readonly="1"/>
                             <field name="adt_LastModifiedDateTime" string="Acumatica LastModifiedDateTime" readonly="1"/>
+                        </group>
+                        <group>
                             <field name="adt_NoteID" string="Acumatica NoteID" readonly="1"/>
                             <field name="adt_PostPeriod" string="Acumatica PostPeriod" readonly="1"/>
                             <field name="adt_ReferenceNbr" string="Acumatica ReferenceNbr" readonly="1"/>

@@ -45,7 +45,7 @@
           'views/acumatica_invoice_consignment_staging_views.xml',
           'views/acumatica_direct_transfer_staging_views.xml',
           'views/acumatica_all_import_wizard_views.xml',
-        #   'views/acumatica_all_import_menu.xml',
+          'views/acumatica_all_import_menu.xml',
           ],
  'installable': True,
  'application': True,
