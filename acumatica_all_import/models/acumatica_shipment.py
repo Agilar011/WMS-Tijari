@@ -26,6 +26,7 @@ class AcumaticaShipmentProductLine(models.Model):
     shipment_line_id = fields.Many2one('acumatica.shipment.line', string='Receipt', ondelete='cascade')
     line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
 
+    shipment_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
     description = fields.Char(string='Description Line', readonly=True)
     note = fields.Text(string='Detail Note', readonly=True)
     is_free_item = fields.Char(string='Free Item', readonly=True)
@@ -41,6 +42,7 @@ class AcumaticaShipmentProductLine(models.Model):
     uom_code = fields.Char(string='UOM', readonly=True)
     original_qty = fields.Char(string='Original Qty', readonly=True)
     warehouse_dest_code = fields.Char(string='Warehouse Detail', readonly=True)
+    shipped_weight = fields.Char(string='Shipped Weight', readonly=True)
 
 
 class AcumaticaShipmentLine(models.Model):
@@ -54,6 +56,7 @@ class AcumaticaShipmentLine(models.Model):
 
     product_line_ids = fields.One2many('acumatica.shipment.product.line', 'shipment_line_id', string='Lines')
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    building_code = fields.Char(string='Building Code', readonly=True)
     shipment_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
     partner_code = fields.Char(string='CustomerID', readonly=True)
     scheduled_date = fields.Char(string='Shipment Date', readonly=True)

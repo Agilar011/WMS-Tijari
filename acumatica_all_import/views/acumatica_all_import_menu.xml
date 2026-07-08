@@ -13,8 +13,8 @@
     <menuitem id="menu_acumatica_all_import_staging_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_change_item_line" sequence="30"/>
     <menuitem id="menu_acumatica_all_import_staging_inventory_received" name="Receipt : Inventory Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_recieved_line" sequence="40"/>
     <menuitem id="menu_acumatica_all_import_staging_toko_pegang_do" name="Receipt : Toko Pegang DO" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_toko_pegang_do_line" sequence="41"/>
+    <menuitem id="menu_acumatica_all_import_staging_inventory_external" name="Inventory External (Change Item &amp; Inventory Receive)" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_external_line" sequence="42"/>
     <menuitem id="menu_acumatica_all_import_staging_shipment_so" name="SO Return" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_shipment_line" sequence="50"/>
-    <menuitem id="menu_acumatica_all_import_staging_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_stock_line" sequence="60"/>
     <!-- <menuitem id="menu_acumatica_all_import_staging_inventory_stock_import" name="Inventory Stock Import" parent="menu_acumatica_all_import_staging_inbound" action="action_import_inventory_stock_wizard" sequence="61"/> -->
 
 
@@ -52,6 +52,7 @@
     <menuitem id="menu_acumatica_all_import_staging_non_stock_item" name="Non-Stock Item" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_non_stock_item_line" sequence="6"/>
     <menuitem id="menu_acumatica_all_import_staging_customer_location" name="Customer Location" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_customer_location_line" sequence="7"/>
     <menuitem id="menu_acumatica_all_import_staging_shipvia" name="ShipVia" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_shipvia_line" sequence="8"/>
+    <menuitem id="menu_acumatica_all_import_staging_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_inventory_stock_line" sequence="9"/>
 
     <menuitem id="menu_acumatica_all_import_config_root" name="Konfigurasi API" parent="menu_acumatica_all_import_root" sequence="20"/>
     <menuitem id="menu_acumatica_all_import_config_inbound"
@@ -63,9 +64,8 @@
     <menuitem id="menu_acumatica_all_import_config_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_receipt_change_item_config" sequence="30"/>
     <menuitem id="menu_acumatica_all_import_config_inventory_received" name="Receipt : Inventory Receipt" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_recieved_config" sequence="40"/>
     <menuitem id="menu_acumatica_all_import_config_toko_pegang_do" name="Receipt : Toko Pegang DO" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_toko_pegang_do_config" sequence="41"/>
+    <menuitem id="menu_acumatica_all_import_config_inventory_external" name="Inventory External (Change Item &amp; Inventory Receive)" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_external_config" sequence="41"/>
     <menuitem id="menu_acumatica_all_import_config_shipment_so" name="SO Return" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_shipment_config" sequence="50"/>
-    <menuitem id="menu_acumatica_all_import_config_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_stock_config" sequence="60"/>
-
 
     <menuitem id="menu_acumatica_all_import_config_outbound"
         name="Outbound"
@@ -95,5 +95,6 @@
     <menuitem id="menu_acumatica_all_import_config_stock_item" name="Stock Item" parent="menu_acumatica_all_import_config_master" action="action_acumatica_stock_item_config" sequence="5"/>
     <menuitem id="menu_acumatica_all_import_config_non_stock_item" name="Non-Stock Item" parent="menu_acumatica_all_import_config_master" action="action_acumatica_non_stock_item_config" sequence="6"/>
     <menuitem id="menu_acumatica_all_import_config_customer_location" name="Customer Location" parent="menu_acumatica_all_import_config_master" action="action_acumatica_customer_location_config" sequence="7"/>
+    <menuitem id="menu_acumatica_all_import_config_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_config_master" action="action_acumatica_inventory_stock_config" sequence="8"/>
 
 </odoo>

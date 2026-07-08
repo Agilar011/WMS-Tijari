@@ -57,23 +57,34 @@ class ImportReceiptWizard(models.TransientModel):
             params.append(self.odata_filter)
 
 
-        for i in range(loop_count):
-            offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.fetch_receipt_data(
-                limit=self.batch_size,
-                offset=offset,
-                receipt_nbr=self.receipt_nbr,
-                odata_filter=params if params else None,
-            )
+        # for i in range(loop_count):
+        #     offset = self.fetch_skip + (i * self.batch_size)
+        #     batch_data = self.fetch_receipt_data(
+        #         limit=self.batch_size,
+        #         offset=offset,
+        #         receipt_nbr=self.receipt_nbr,
+        #         odata_filter=params if params else None,
+        #     )
 
-            if not batch_data:
-                break
+        #     if not batch_data:
+        #         break
 
-            count += batch_data
+        #     count += batch_data
+
+        batch_data = self.fetch_receipt_data(
+            limit=self.batch_size,
+            receipt_nbr=self.receipt_nbr,
+            odata_filter=params if params else None,
+        )
+
+        if not batch_data:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+
+        count += batch_data
 
         self.total_fetched = count
-        if not count:
-            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        # if not count:
+        #     raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
         return {
             'type': 'ir.actions.act_window',
@@ -108,16 +119,17 @@ class ImportReceiptWizard(models.TransientModel):
         except Exception:
             return False
 
-    def _search_picking_type(self, header):
+    def _search_picking_type(self, building_code):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
+        Warehouse = self.env['stock.warehouse']
 
-        location = Location.search([
-            ('code', '=', header['warehouse_code'])
+        warehouse = Warehouse.search([
+            ('code', '=', building_code)
         ])
-        if location:
+        if warehouse:
             type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('warehouse_id', '=', warehouse.id),
                 ('code', '=', 'incoming'),
                 ('is_default_api', '=', True)
             ])
@@ -134,85 +146,119 @@ class ImportReceiptWizard(models.TransientModel):
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-            if self.config_id.odata_select:
-                params['$select'] = self.config_id.odata_select
-            if receipt_nbr:
-                filters.append(f"ReceiptNbr eq '{receipt_nbr}'")
-            if odata_filter:
-                filters.extend(odata_filter)
-            if self.config_id.odata_filter:
-                filters.append(f"{self.config_id.odata_filter}")
-            if filters:
-                params['$filter'] = ' and '.join(filters)
+            # if self.config_id.odata_select:
+            #     params['$select'] = self.config_id.odata_select
+            # if receipt_nbr:
+            #     filters.append(f"ReceiptNbr eq '{receipt_nbr}'")
+            # if odata_filter:
+            #     filters.extend(odata_filter)
+            # if self.config_id.odata_filter:
+            #     filters.append(f"{self.config_id.odata_filter}")
+            # if filters:
+            #     params['$filter'] = ' and '.join(filters)
 
             print("Filter API:")
             print(endpoint)
             print(params)
-
-            response = session.get(endpoint, params=params, timeout=90)
+            body = {
+                "BuildingID": {
+                    "value": "WH33"
+                }
+            }
+            response = session.put(endpoint, params=params, json=body, timeout=90)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+            raw_data = response.json()
             result = []
             detail_result = []
 
-            for row_number, item in enumerate(raw_data, start=1):
-                header = {
-                    'external_id': item.get('id', '') or '',
-                    'row_number': row_number,
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'branch_warehouse': self._val(item, 'Branch'),
-                    'actual_qty': self._val(item, 'ControlQty'),
-                    'scheduled_date': self._val(item, 'Date'),
-                    'is_hold': self._val(item, 'Hold'),
-                    'inventory_ref': self._val(item, 'InventoryRefNbr'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'header_location_code': self._val(item, 'Location'),
-                    'post_period': self._val(item, 'PostPeriod'),
+            seen_receipts = set()
+
+            data = raw_data.get("PurchaseReceiptGIDetails", [])
+            for row_number, item in enumerate(data, start=1):
+                receipt_nbr = self._val(item, "ReceiptNbr")
+
+                if receipt_nbr not in seen_receipts:
+                    seen_receipts.add(receipt_nbr)
+                    building_code = self._val(item, "BuildingID")
+                    type = self._search_picking_type(building_code)
+                    result.append({
+                        'external_id': item.get('id', '') or '',
+                        'row_number': row_number,
+                        'note': item.get('NoteHeader', {}).get('value', '') or '',
+                        'branch_warehouse': self._val(item, 'Branch'),
+                        'building_code': building_code,
+                        'actual_qty': self._val(item, 'ControlQty'),
+                        'scheduled_date': self._val(item, 'Date'),
+                        'is_hold': self._val(item, 'Hold'),
+                        'inventory_ref': self._val(item, 'InventoryRefNbr'),
+                        'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+                        'header_location_code': self._val(item, 'Location'),
+                        'post_period': self._val(item, 'PostPeriod'),
+                        'receipt_nbr': self._val(item, 'ReceiptNbr'),
+                        'status': self._val(item, 'Status'),
+                        'total_qty': self._val(item, 'TotalQty'),
+                        'receipt_type': self._val(item, 'Type'),
+                        'vendor_code': self._val(item, 'VendorID'),
+                        'vendor_name': self._val(item, 'VendorName'),
+                        'partner_ref': self._val(item, 'VendorRef'),
+                        'warehouse_code': self._val(item, 'LineWarehouseID'),
+                        'picking_type_id': type.id if type else None,
+                    })
+
+                detail_result.append({
+                    'header_external_id': item.get('id', '') or '',
+                    # 'line_external_id': item.get('id', '') or '',
                     'receipt_nbr': self._val(item, 'ReceiptNbr'),
-                    'status': self._val(item, 'Status'),
-                    'total_qty': self._val(item, 'TotalQty'),
-                    'receipt_type': self._val(item, 'Type'),
-                    'vendor_code': self._val(item, 'VendorID'),
-                    'partner_ref': self._val(item, 'VendorRef'),
-                    'warehouse_code': self._val(item, 'Warehouse'),
-                }
+                    'line_note': item.get('LineNote', {}).get('value', '') or '',
+                    'description': self._val(item, 'LineDescription'),
+                    'inventory_id': self._val(item, 'LineInventoryID'),
+                    'line_nbr': self._val(item, 'LineNbr'),
+                    'line_type': self._val(item, 'LineType'),
+                    'location_dest_code': self._val(item, 'LineLocation'),
+                    'open_qty': self._val(item, 'LineOpenQty'),
+                    'order_qty': self._val(item, 'LineOrderedQty'),
+                    'product_uom_qty': self._val(item, 'LineReceiptQty'),
+                    'uom_code': self._val(item, 'LineUOM'),
+                    'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+                })
+
 
                 # Cek apakah Detail ada dan berbentuk list / dict / array
-                details = item.get('Details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-                if not header['warehouse_code'] and details:
-                    header['warehouse_code'] = self._val(details[0], 'WarehouseID')
-                    type = self._search_picking_type(header)
-                    header['picking_type_id'] = type.id if type else None
-                result.append(dict(header, line_nbr='0'))
+                # details = item.get('Details') or []
+                # if isinstance(details, dict):
+                #     details = details.get('value', []) or []
+                # if not isinstance(details, list):
+                #     details = []
+                # if not header['warehouse_code'] and details:
+                #     header['warehouse_code'] = self._val(details[0], 'WarehouseID')
+                #     type = self._search_picking_type(header)
+                #     header['picking_type_id'] = type.id if type else None
+                # result.append(dict(header, line_nbr='0'))
 
 
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    description = self._val(detail, 'Description')
-                    warehouse_dest_code = self._val(detail, 'WarehouseID')
+                # for detail in details:
+                #     line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
+                #     description = self._val(detail, 'Description')
+                #     warehouse_dest_code = self._val(detail, 'WarehouseID')
 
-                    detail_result.append({
-                        'header_external_id': header['external_id'],
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'description': description,
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'line_type': self._val(detail, 'LineType'),
-                        'location_dest_code': self._val(detail, 'Location'),
-                        'open_qty': self._val(detail, 'OpenQty'),
-                        'order_qty': self._val(detail, 'OrderedQty'),
-                        'product_uom_qty': self._val(detail, 'ReceiptQty'),
-                        'transaction_description': self._val(detail, 'TransactionDescription'),
-                        'uom_code': self._val(detail, 'UOM'),
-                        'warehouse_dest_code': warehouse_dest_code,
-                    })
+                #     detail_result.append({
+                #         'header_external_id': header['external_id'],
+                #         'line_external_id': detail.get('id', '') or '',
+                #         'line_note': detail.get('note', {}).get('value', '') or '',
+                #         'description': description,
+                #         'inventory_id': self._val(detail, 'InventoryID'),
+                #         'line_nbr': str(line_nbr),
+                #         'line_type': self._val(detail, 'LineType'),
+                #         'location_dest_code': self._val(detail, 'Location'),
+                #         'open_qty': self._val(detail, 'OpenQty'),
+                #         'order_qty': self._val(detail, 'OrderedQty'),
+                #         'product_uom_qty': self._val(detail, 'ReceiptQty'),
+                #         'transaction_description': self._val(detail, 'TransactionDescription'),
+                #         'uom_code': self._val(detail, 'UOM'),
+                #         'warehouse_dest_code': warehouse_dest_code,
+                #     })
 
             _logger.info("Berhasil ambil %s rows PO Receipt dari Acumatica", len(result))
             self._validate_staging_against_picking(result, detail_result)
@@ -354,64 +400,64 @@ class ImportReceiptWizard(models.TransientModel):
         return self.env['acumatica.receipt.line'].create(data)
 
     def filter_product_line(self, data, update, create):
-        # buat set dari semua external_id di update
+        # buat set dari semua receipt_nbr di update
         update_ids = {
-            item.get('vals', {}).get('external_id')
+            item.get('vals', {}).get('receipt_nbr')
             for item in update
-            if item.get('vals', {}).get('external_id')
+            if item.get('vals', {}).get('receipt_nbr')
         }
 
-        # filter data yang header_external_id ada di update_ids
+        # filter data yang receipt_nbr ada di update_ids
         update_final = [
             line 
             for line in data 
-            if line['header_external_id'] in update_ids
+            if line['receipt_nbr'] in update_ids
         ]
 
-        # buat set dari semua external_id di create
+        # buat set dari semua receipt_nbr di create
         create_ids = {
-            crt['external_id'] 
+            crt['receipt_nbr'] 
             for crt in create
         }
 
-        # filter data yang header_external_id ada di create_ids
-        create_final = [line for line in data if line['header_external_id'] in create_ids]
+        # filter data yang receipt_nbr ada di create_ids
+        create_final = [line for line in data if line['receipt_nbr'] in create_ids]
 
         return update_final, create_final
 
     def filter_by_receipt_lines(self, data, receipts):
         """
-        Filter data berdasarkan header_external_id yang ada di receipts.
-        
+        Filter data berdasarkan receipt_nbr yang ada di receipts.
+
         :param data: list of dict (to_create atau to_update)
         :param receipts: recordset receipt
-        :return: list of dict yang header_external_id-nya ada di receipts
+        :return: list of dict yang receipt_nbr-nya ada di receipts
         """
-        receipt_ids = {rec['external_id'] for rec in receipts}
+        receipt_ids = {rec['receipt_nbr'] for rec in receipts}
 
         filtered_data = [
             vals for vals in data
-            if vals.get('header_external_id') in receipt_ids
+            if vals.get('receipt_nbr') in receipt_ids
         ]
 
         return filtered_data
 
     def _create_receipt_lines_product(self, data, receipts):
         receipt_map = {
-            rec['external_id']: rec.id
+            rec['receipt_nbr']: rec.id
             for rec in receipts
         }
 
         for vals in data:
             vals['receipt_line_id'] = receipt_map.get(
-                vals['header_external_id']
+                vals['receipt_nbr']
             )
 
         self.env['acumatica.receipt.product.line'].create(data)
 
     def _update_receipt_lines_product(self, data, receipts):
         receipt_map = {
-            rec['vals']['external_id']: rec['record']['id']
+            rec['vals']['receipt_nbr']: rec['record']['id']
             for rec in receipts
             if rec.get('vals')
             and rec.get('record')
@@ -420,7 +466,7 @@ class ImportReceiptWizard(models.TransientModel):
         product_line = self.env['acumatica.receipt.product.line']
 
         for vals in data:
-            ext_id = vals.get('header_external_id')
+            ext_id = vals.get('receipt_nbr')
             vals['receipt_line_id'] = receipt_map.get(ext_id)
             if vals['receipt_line_id']:
                 product_line.browse(vals['receipt_line_id']).write(vals)
