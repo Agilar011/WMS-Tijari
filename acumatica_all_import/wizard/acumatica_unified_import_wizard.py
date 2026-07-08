@@ -249,6 +249,14 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Direct Transfer Acumatica',
             'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
         },
+        'credit_memo_consignment': {
+            'label': 'Credit Memo Consignment',
+            'wizard_model': 'import.credit.memo.consignment.wizard',
+            'line_model': 'acumatica.credit.memo.consignment.staging',
+            'result_name': 'Hasil Import Credit Memo Consignment',
+            'staging_name': 'Data Credit Memo Consignment Acumatica',
+            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
+        },
         
     }
 
@@ -283,6 +291,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'inventory_issue_toko_pegang_do',
         'vendor_return_direct_transfer',
         'vendor_return_document_direct_transfer',
+        'credit_memo_consignment'
     ]
 
     def _get_import_type_selection(self):
