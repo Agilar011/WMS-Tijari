@@ -76,6 +76,7 @@ class AcumaticaConfig(models.Model):
         selection=[
             ('po_receipt', 'PO Receipt'),
             ('so_transfer', 'SO Transfer'),
+            ('receipt_external', 'Receipt External'),
             ('receipt_change_item', 'Receipt Change Item'),
             ('inventory_received', 'Inventory Received'),
             ('toko_pegang_do', 'Toko Pegang DO'),

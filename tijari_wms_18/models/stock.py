@@ -202,16 +202,16 @@ class StockPicking(models.Model):
                 "adt_type": picking.adt_type,
                 "note" : picking.note,
             })
-            for ml in picking.move_line_ids:
-                if not ml.allocation_storage:
-                    raise ValidationError(f'Isi Allocation Storage di line product {ml.product_id.name}.')
-                move_line = self.env['stock.move.line'].search([
-                    ("picking_id", "=", storage_pickings.id),
-                    ("product_id", "=", ml.product_id.id),
-                    ("quantity", "=", ml.quantity)
-                ])
-                if move_line:
-                    move_line.location_dest_id = ml.allocation_storage.id
+            # for ml in picking.move_line_ids:
+                # if not ml.allocation_storage:
+                #     raise ValidationError(f'Isi Allocation Storage di line product {ml.product_id.name}.')
+                # move_line = self.env['stock.move.line'].search([
+                #     ("picking_id", "=", storage_pickings.id),
+                #     ("product_id", "=", ml.product_id.id),
+                #     ("quantity", "=", ml.quantity)
+                # ])
+                # if move_line:
+                #     move_line.location_dest_id = ml.allocation_storage.id
 
             # Lot = self.env['stock.lot']
             # for lot_name in set(picking.move_line_ids.mapped('lot_name')):

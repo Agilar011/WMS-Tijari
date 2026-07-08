@@ -16,16 +16,15 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_po_receipt_default" model="acumatica.config">
-            <field name="name">Acumatica PO Receipt - Default</field>
+            <field name="name">Acumatica PO Receipt V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">po_receipt</field>
-            <field name="endpoint_name">PurchaseReceipt</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">Status eq 'On Hold' and Type eq 'Receipt'</field>
+            <field name="endpoint_name">PurchaseReceiptGI</field>
+            <field name="odata_expand">PurchaseReceiptGIDetails</field>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
@@ -41,6 +40,20 @@
             <field name="endpoint_name">PurchaseReceipt</field>
             <field name="odata_expand">Details</field>
             <field name="odata_filter">Type eq 'Transfer Receipt' and Status eq 'On Hold'</field>
+            <field name="is_default">True</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
+        <record id="acumatica_config_receipt_external_default" model="acumatica.config">
+            <field name="name">Acumatica Receipt External - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="config_type">receipt_external</field>
+            <field name="endpoint_name">InventoryReceiptExternalGI</field>
+            <field name="odata_expand">InventoryReceiptExternalGIDetails</field>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
@@ -91,16 +104,15 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_shipment_so_default" model="acumatica.config">
-            <field name="name">Acumatica SO Return - Default</field>
+            <field name="name">Acumatica SO Return V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">shipment_so</field>
-            <field name="endpoint_name">Shipment</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">TransType eq 'Inventory Receive' and (Status eq 'On Hold' or Status eq 'Balanced')</field>
+            <field name="endpoint_name">ShipmentReturnGI</field>
+            <field name="odata_expand">ShipmentReturnGIDetails</field>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>

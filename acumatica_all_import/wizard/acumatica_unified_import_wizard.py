@@ -117,6 +117,13 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Transfer - 2 Step : OUT dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
+        'receipt_external': {
+            'label': 'Receipt External (Change Item & Inventory Receive)',
+            'wizard_model': 'import.receipt.external.wizard',
+            'line_model': 'acumatica.receipt.external.line',
+            'result_name': 'Hasil Import Receipt External (Change Item & Inventory Receive)',
+            'staging_name': 'Data Receipt External (Change Item & Inventory Receive) dari Acumatica',
+        },
         'inventory_received': {
             'label': 'Receipt : Inventory Receipt',
             'wizard_model': 'import.inventory.recieved.wizard',
@@ -250,6 +257,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'po_receipt',
         'so_transfer',
         'receipt_change_item',
+        'receipt_external',
         'inventory_received',
         'toko_pegang_do',
         'shipment_so',
@@ -469,7 +477,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
     def _get_pending_lines(self, info, config):
         return self.env[info['line_model']].search([
-            ('config_id', '=', config.id),
             ('import_state', '=', 'pending'),
         ], order='id')
     
@@ -529,7 +536,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             print(f"Model: {info['line_model']}")
             print(f"Config ID: {config}")
 
-            total_data = len(self.env[info['line_model']].search([('config_id', '=', config.id)]))
+            total_data = len(self.env[info['line_model']].search([]))
             print(f"Total Data in staging: {total_data}")
 
             total_fetched = source_wizard.total_fetched

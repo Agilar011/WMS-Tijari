@@ -105,14 +105,14 @@ class ImportCustomerLocationWizard(models.TransientModel):
         self.state = 'done'
 
     def _check_last_modified_staging(self, item):
-        Staging = self.env['acumatica.customer.line']
+        Staging = self.env['acumatica.customer.location.line']
         existing = Staging.search([
             ('customer', '=', item['customer']),
             ('location_id_acumatica', '=', item['location_id_acumatica']),
             ('last_modified_datetime', '!=', item['last_modified_datetime']),
         ])
         if existing:
-            item['state'] = 'pending'
+            item['import_state'] = 'pending'
             existing.write(item)
 
     def fetch_customer_location_data(self, limit=100, offset=0):
@@ -227,10 +227,10 @@ class ImportCustomerLocationWizard(models.TransientModel):
                 ])
             }
             staging_by_location = {
-                (p.location_id_acumatica, p.customer_id): p.id
+                (p.location_id_acumatica, p.customer): p.id
                 for p in Staging.search([
                     ('location_id_acumatica', '!=', False),
-                    ('customer_id', '!=', False)
+                    ('customer', '!=', False)
                 ])
             }
 
@@ -289,15 +289,15 @@ class ImportCustomerLocationWizard(models.TransientModel):
             for item in all_results:
                 batch_num += 1
                 existing_staging = False
-                if item['location_id_acumatica'] and item['customer_id']:
-                    existing_staging = staging_by_location.get((item['location_id_acumatica'], item['customer_id']))
+                if item['location_id_acumatica'] and item['customer']:
+                    existing_staging = staging_by_location.get((item['location_id_acumatica'], item['customer']))
                 if existing_staging:
                     self._check_last_modified_staging(item)
                     continue
                 
                 existing_partner = False
-                if not existing_staging and item['customer_id']:
-                    existing_partner = partner_by_location.get((item['location_id_acumatica'], item['customer_id']))
+                if not existing_staging and item['customer']:
+                    existing_partner = partner_by_location.get((item['location_id_acumatica'], item['customer']))
 
                 msg = 'Data sudah ada' if existing_partner else ''
                 state = 'pending'
