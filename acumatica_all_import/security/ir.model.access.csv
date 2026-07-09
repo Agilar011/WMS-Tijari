@@ -39,11 +39,15 @@ access_import_so_shipment_wizard_user,import.so.shipment.wizard,model_import_so_
 access_acumatica_receipt_line_manager,acumatica.receipt.line manager,model_acumatica_receipt_line,base.group_system,1,1,1,1
 access_acumatica_receipt_line_user,acumatica.receipt.line user,model_acumatica_receipt_line,base.group_user,1,1,1,1
 access_import_receipt_wizard_user,import.receipt.wizard user,model_import_receipt_wizard,base.group_user,1,1,1,1
+
 access_acumatica_transfer_two_step_config_manager,acumatica.transfer.two.step.config manager,model_acumatica_transfer_two_step_config,base.group_system,1,1,1,1
 access_acumatica_transfer_two_step_config_user,acumatica.transfer.two.step.config user,model_acumatica_transfer_two_step_config,base.group_user,1,0,0,0
+access_import_transfer_two_step_wizard_user,import.transfer.two.step.wizard user,model_import_transfer_two_step_wizard,base.group_user,1,1,1,1
 access_acumatica_transfer_two_step_line_manager,acumatica.transfer.two.step.line manager,model_acumatica_transfer_two_step_line,base.group_system,1,1,1,1
 access_acumatica_transfer_two_step_line_user,acumatica.transfer.two.step.line user,model_acumatica_transfer_two_step_line,base.group_user,1,1,1,1
-access_import_transfer_two_step_wizard_user,import.transfer.two.step.wizard user,model_import_transfer_two_step_wizard,base.group_user,1,1,1,1
+access_acumatica_transfer_two_step_line_product_manager,acumatica.transfer.two.step.line.product manager,model_acumatica_transfer_two_step_line_product,base.group_system,1,1,1,1
+access_acumatica_transfer_two_step_line_product_user,acumatica.transfer.two.step.line.product user,model_acumatica_transfer_two_step_line_product,base.group_user,1,1,1,1
+
 access_acumatica_unified_import_wizard,access.acumatica.unified.import.wizard,model_acumatica_unified_import_wizard,,1,1,1,1
 access_acumatica_vendor_line,acumatica.vendor.line,model_acumatica_vendor_line,base.group_user,1,1,1,1
 access_import_vendor_wizard,import.vendor.wizard,model_import_vendor_wizard,base.group_user,1,1,1,1

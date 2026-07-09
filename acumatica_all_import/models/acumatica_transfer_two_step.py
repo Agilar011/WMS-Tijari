@@ -213,6 +213,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+    picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
 
     @api.depends('reference_nbr')
     def _compute_exists_in_odoo(self):
@@ -322,6 +323,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
     def action_import_this(self):
         self.ensure_one()
         return self._do_import()
+    
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
@@ -351,10 +353,12 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
                 picking_type = PickingType.search([
                     ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'internal'),
+                    ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
                 ], limit=1) or PickingType.search([
-                    ('code', '=', 'internal')
+                    ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
                 ], limit=1)
+
+                print(picking_type.mapped('name'))
 
                 if not picking_type:
                     raise UserError('Picking type internal tidak ditemukan.')
@@ -507,6 +511,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 'sticky': True,
             }
         }
+
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})

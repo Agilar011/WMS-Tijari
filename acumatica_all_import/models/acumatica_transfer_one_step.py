@@ -125,7 +125,7 @@ class AcumaticaTransferOneStepLine(models.Model):
             product = Product.search([('name', '=', line.line_description)], limit=1)
 
         if not product:
-            name = line.line_description or line.description or line.inventory_id or 'Unknown Product'
+            name = line.line_description or line.line_description or line.inventory_id or 'Unknown Product'
             existing = Product.search([('default_code', '=', line.inventory_id)], limit=1)
             if existing:
                 return existing
@@ -178,6 +178,7 @@ class AcumaticaTransferOneStepLine(models.Model):
     def action_import_this(self):
         self.ensure_one()
         return self._do_import()
+    
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
@@ -188,6 +189,9 @@ class AcumaticaTransferOneStepLine(models.Model):
         error = 0
 
         # proses per receipt number
+        # print(f"self mapped: {self.mapped('reference_nbr')}")
+
+    
         for reference_nbr in self.mapped('reference_nbr'):
             receipt_lines = self.filtered(
                 lambda l: l.reference_nbr == reference_nbr and l.import_state == 'pending'
@@ -196,6 +200,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                 continue
 
             first = receipt_lines[0]
+            print(f"first: {first}")
 
             try:
                 # vendor = self._find_vendor(first)
@@ -260,20 +265,44 @@ class AcumaticaTransferOneStepLine(models.Model):
                 picking = Picking.search([('origin', '=', origin)], limit=1)
 
                 if picking:
-                    if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                    if picking.state != 'draft':
+                        action_state = 'error'
+                        error += 1
                         raise UserError(
                             f'Receipt {reference_nbr} sudah ada di Odoo dengan state '
                             f'{picking.state}, tidak bisa diupdate.'
                         )
-                    picking.write(vals)
-                    action_state = 'updated'
-                    updated += 1
+
+                    if picking.state == 'draft':
+                        action_state = 'updated'
+                        picking.write(vals)
+                        imported += 1
+
                 else:
                     picking = Picking.create(vals)
+                    # print(f"Picking : {picking} Created")
+                    # raise UserError("Checkpoint")
                     action_state = 'imported'
                     imported += 1
 
-                for line in receipt_lines:
+                if action_state == 'error':
+                    break
+
+                to_create_move = self.env['acumatica.transfer.one.step.product'].search([
+                        ('header_id', '=', first.id)
+                    ])
+
+                if action_state == 'updated' and picking:
+                    moves_to_delete = self.env['stock.move'].search([('picking_id', '=', picking.id)])
+                    if moves_to_delete:
+                        moves_to_delete.unlink()
+
+                for line in to_create_move:
+                    for field_name in line._fields:
+                        print(f"{field_name}: {line[field_name]}")
+                    print("="*50 + "\n")
+                    # raise UserError('Checkpoint')
+
                     try:
                         product = self._find_product(line)
                         if not product:
@@ -286,34 +315,37 @@ class AcumaticaTransferOneStepLine(models.Model):
                         line_dest = self._find_location_dest(line, warehouse) or dest_location
                         qty = self._parse_float(line.quantity)
 
+                        print(f"Convert : {line.quantity} to : {qty}")
+                        # raise UserError('Checkpoint')
+
                         # dedup move
                         move_domain = [('picking_id', '=', picking.id)]
-                        if 'adt_line_external_id' in Move._fields and line.line_external_id:
-                            move_domain.append(('adt_line_external_id', '=', line.line_external_id))
+                        if 'adt_line_external_id' in Move._fields and line.acumatica_header_id:
+                            move_domain.append(('adt_line_external_id', '=', line.acumatica_header_id))
                         else:
                             move_domain += [
                                 ('product_id', '=', product.id),
                                 ('product_uom_qty', '=', qty),
                             ]
 
-                        existing_move = Move.search(move_domain, limit=1)
-                        if existing_move:
-                            line.write({
-                                'import_state': action_state,
-                                'import_message': f'Skip duplicate: {picking.name}',
-                                'odoo_picking_id': picking.id,
-                            })
-                            continue
+                        # existing_move = Move.search(move_domain, limit=1)
+                        # if existing_move:
+                        #     first.write({
+                        #         'import_state': action_state,
+                        #         'import_message': f'Skip duplicate: {picking.name}',
+                        #         'odoo_picking_id': picking.id,
+                        #     })
+                        #     continue
 
                         move_vals = {
-                            'name': line.description or product.display_name,
+                            'name': line.line_description or product.display_name,
                             'picking_id': picking.id,
                             'product_id': product.id,
                             'product_uom_qty': qty,
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': picking.location_id.id,
                             'location_dest_id': line_dest.id,
-                            'description_picking': line.description or False,
+                            'description_picking': line.line_description or False,
 
                             'adt_line_nbr': line.line_nbr or False,
                             'adt_line_note': line.line_note or False,
@@ -329,9 +361,18 @@ class AcumaticaTransferOneStepLine(models.Model):
                         # filter field yang ada di stock.move
                         move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
 
-                        Move.create(move_vals)
+                        print(f"Move to create: {move_vals}")
 
-                        line.write({
+                        created_move = Move.create(move_vals)
+
+                        print("\n" + "="*50)
+                        print(f"DEBUG STOCK MOVE ID: {created_move.id}")
+                        print("="*50)
+                        for field_name in created_move._fields:
+                            print(f"{field_name}: {created_move[field_name]}")
+                        print("="*50 + "\n")
+
+                        first.write({
                             'import_state': action_state,
                             'import_message': f'{action_state.title()}: {picking.name}',
                             'odoo_picking_id': picking.id,
@@ -339,7 +380,8 @@ class AcumaticaTransferOneStepLine(models.Model):
 
                     except Exception as line_e:
                         _logger.exception("Error import line %s", line.id)
-                        line.write({
+                        raise UserError('Checkpoint')
+                        first.write({
                             'import_state': 'error',
                             'import_message': str(line_e)[:200],
                             'odoo_picking_id': picking.id if picking else False,
