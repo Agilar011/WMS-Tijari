@@ -28,6 +28,7 @@
         'views/stock_location_menu.xml',
         'views/stock_location_views.xml',
         'views/stock_move_line_views.xml',
+        'views/stock_move_scan_wizard_views.xml',
         'views/stock_move_views.xml',
         'views/stock_picking_action.xml',
         'views/stock_picking_type_views.xml',
@@ -43,6 +44,7 @@
         'web.assets_frontend': [
         ],
         'web.assets_backend': [
+            'tijari_wms_18/static/src/js/focus_move_line_field.js',
             'tijari_wms_18/static/src/js/generate_lot_button.js',
             'tijari_wms_18/static/src/xml/generate_lot_button.xml',
             'tijari_wms_18/static/src/xml/auto_input_code.xml',

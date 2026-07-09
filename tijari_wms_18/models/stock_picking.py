@@ -46,6 +46,9 @@ class StockPicking(models.Model):
     sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
     adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
     destination_location = fields.Char(string='to delete field')
+    all_moves_picked = fields.Boolean(
+        compute='_compute_all_moves_picked',
+    )
 
     def action_put_in_pack(self, move_lines_to_pack=False):
         self.ensure_one()
@@ -168,6 +171,29 @@ class StockPicking(models.Model):
             },
         }
 
+    def action_open_stock_move_scan_wizard(self):
+        self.ensure_one()
+
+        wizard = self.env['stock.move.scan.wizard'].create({
+            'picking_id': self.id,
+        })
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': ('Scan Product'),
+            'res_model': 'stock.move.scan.wizard',
+            'view_mode': 'form',
+            'res_id': wizard.id,
+            'target': 'new',
+        }
+
+    @api.depends('move_ids.picked')
+    def _compute_all_moves_picked(self):
+        for picking in self:
+            moves = picking.move_ids
+            picking.all_moves_picked = (
+                bool(moves) and all(move.picked for move in moves)
+            )
 
 class StockRule(models.Model):
     _inherit = "stock.rule"
