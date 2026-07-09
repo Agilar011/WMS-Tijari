@@ -78,6 +78,10 @@
 
             </xpath>
 
+            <xpath expr="//field[@name='lot_name']" position="before">
+                <field name="matching_html" />
+                <field name="matching" />
+            </xpath>
         </field>
     </record>
 

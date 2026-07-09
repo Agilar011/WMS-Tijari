@@ -6,5 +6,6 @@ access_stock_report_aging_generate_user,access.stock.report.aging.generate.user,
 
 access_stock_picking_acumatica_error_user,access.stock.picking.acumatica.error.user,model_stock_picking_acumatica_error,base.group_user,1,1,1,1
 access_stock_picking_acumatica_error_line_user,access.stock.picking.acumatica.error.line.user,model_stock_picking_acumatica_error_line,base.group_user,1,1,1,1
+access_stock_move_scan_wizard_user,access.stock.move.scan.wizard.user,model_stock_move_scan_wizard,base.group_user,1,1,1,1
 
 access_stock_location_acumatica_user,access.stock.location.acumatica.user,model_stock_location_acumatica,base.group_user,1,1,1,1

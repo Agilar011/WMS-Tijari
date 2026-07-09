@@ -267,6 +267,33 @@ class StockPicking(models.Model):
         action['target'] = 'new'
         return action
 
+    def action_confirm(self):
+        res = super().action_confirm()
+        self._adt_apply_dest_location_to_move_lines()
+        return res
+
+    def action_assign(self):
+        res = super().action_assign()
+        self._adt_apply_dest_location_to_move_lines()
+        return res
+
+    def _adt_apply_dest_location_to_move_lines(self):
+        for picking in self:
+            if not picking.adt_dest_location_id:
+                continue
+
+            for move in picking.move_ids_without_package:
+                final_dest_location = move._adt_get_final_dest_location()
+                if not final_dest_location:
+                    continue
+
+                move.location_dest_id = picking.adt_dest_location_id
+
+                if move.move_line_ids:
+                    move.move_line_ids.write({
+                        'location_dest_id': final_dest_location.id,
+                    })
+
 
 class StockPickingType(models.Model):
     _inherit = 'stock.picking.type'
@@ -332,11 +359,13 @@ class StockMoveLine(models.Model):
 
     confirmation_location_code = fields.Char(
         string='Confirmation Location Code',
-        help='Scanned / input location code for confirmation.'
+        help='Scanned / input location code for confirmation.',
+        store=True
     )
     confirmation_lot_code = fields.Char(
         string='Confirmation Lot Code',
-        help='Scanned / input lot code for confirmation.'
+        help='Scanned / input lot code for confirmation.',
+        store=True
     )
     matching = fields.Selection([
         ('match', 'Match'),
@@ -374,6 +403,16 @@ class StockMoveLine(models.Model):
         readonly=True,
         store=False,
     )
+    matching_lot_id = fields.Many2one(
+        comodel_name="stock.lot",
+        string="Matching Lot",
+        store=True
+    )
+    matching_loc_dest_id = fields.Many2one(
+        comodel_name="stock.location",
+        string="Matching Location Dest",
+        store=True
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -388,6 +427,8 @@ class StockMoveLine(models.Model):
 
         if {'quantity', 'move_id', 'picking_id'} & set(vals):
             pickings._sync_adt_quantities_from_moves()
+
+        self._update_move_picked()
 
         return res
 
@@ -470,6 +511,9 @@ class StockMoveLine(models.Model):
 
                     print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
 
+            if line.matching_lot_id.id == line.lot_id.id and line.matching_loc_dest_id.id == line.location_dest_id.id:
+                matching = 'match'
+
             line.matching = matching
 
     @api.depends('matching')
@@ -538,11 +582,11 @@ class StockMoveLine(models.Model):
             if vals.get('lot_name'):
                 line.lot_name = vals['lot_name']
 
-            if vals.get('confirmation_location_code'):
-                line.confirmation_location_code = vals['confirmation_location_code']
+            # if vals.get('confirmation_location_code'):
+            #     line.confirmation_location_code = vals['confirmation_location_code']
 
-            if vals.get('confirmation_lot_code'):
-                line.confirmation_lot_code = vals['confirmation_lot_code']
+            # if vals.get('confirmation_lot_code'):
+            #     line.confirmation_lot_code = vals['confirmation_lot_code']
 
     @api.onchange('lot_button')
     def _onchange_lot_button(self):
@@ -693,11 +737,11 @@ class StockMoveLine(models.Model):
                 print(f">>> Line Confirmation Lot Code before update: {line.confirmation_lot_code}") # Cek di terminal Odoo
                 line.update({
                     'lot_id': False,
-                    'confirmation_location_code': des_parent_code,
-                    'confirmation_lot_code': new_lot_name,
+                    # 'confirmation_location_code': des_parent_code,
+                    # 'confirmation_lot_code': new_lot_name,
                 })
-                line.confirmation_location_code = des_parent_code  # Update confirmation_location_code untuk menampilkan di UI
-                line.confirmation_lot_code = new_lot_name  # Update confirmation_lot_code untuk menampilkan di UI
+                # line.confirmation_location_code = des_parent_code  # Update confirmation_location_code untuk menampilkan di UI
+                # line.confirmation_lot_code = new_lot_name  # Update confirmation_lot_code untuk menampilkan di UI
                 line.lot_name = new_lot_name  # Update lot_name untuk menampilkan di UI
 
                 print(f">>> Line Confirmation Location Code after update: {line.confirmation_location_code}") # Cek di terminal Odoo
@@ -855,6 +899,91 @@ class StockMoveLine(models.Model):
             }
         }
 
+    def action_prepare_scan_lot(self):
+        self.ensure_one()
+        if not self.lot_id:
+            raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'adt_focus_move_line_field',
+            'params': {
+                'field_name': 'confirmation_lot_code',
+            },
+        }
+
+    def action_prepare_scan_location(self):
+        self.ensure_one()
+        if not self.lot_id:
+            raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'adt_focus_move_line_field',
+            'params': {
+                'field_name': 'confirmation_location_code',
+            },
+        }
+    
+    def _find_loc_by_scan_code(self, lot_code):
+        Loc = self.env['stock.location']
+
+        return Loc.search([
+            ('unique_code', '=', lot_code)
+        ], limit=1)
+
+    @api.onchange('matching')
+    def _onchange_matching(self):
+        for line in self:
+
+            line._update_move_picked()
+
+
+    @api.onchange('confirmation_location_code')
+    def _onchange_confirmation_location_code(self):
+        for wizard in self:
+
+            location = wizard._find_loc_by_scan_code(wizard.confirmation_location_code)
+
+            if not location:
+                continue
+
+            wizard.matching_loc_dest_id = location.id
+
+    def _find_lot_by_scan_code(self, lot_code):
+        Lot = self.env['stock.lot']
+
+        return Lot.search([
+            ('name', '=', lot_code)
+        ], limit=1)
+
+    @api.onchange('confirmation_lot_code')
+    def _onchange_confirmation_lot_code(self):
+        for wizard in self:
+
+            lot = wizard._find_lot_by_scan_code(wizard.confirmation_lot_code)
+
+            if not lot:
+                continue
+
+            wizard.matching_lot_id = lot.id
+
+    @api.onchange('matching_lot_id', 'matching_loc_dest_id')
+    def _onchange_update_matching_status(self):
+        for line in self:
+            if not line.matching_lot_id or not line.matching_loc_dest_id:
+                continue
+
+            lot_match = line.matching_lot_id.id == line.lot_id.id
+            location_match = line.matching_loc_dest_id.id == line.location_dest_id.id
+
+            line.matching = 'match' if lot_match and location_match else 'not_match'
+
+    def _update_move_picked(self):
+        for move in self.mapped('move_id'):
+            move.picked = (
+                move.move_line_ids
+                and all(line.matching == 'match' for line in move.move_line_ids)
+            )
+
 
 class StockMove(models.Model):
     _inherit = 'stock.move'
@@ -927,6 +1056,16 @@ class StockMove(models.Model):
 
 
     # lot_button = fields.Char(string="Lot Button")
+
+    def action_validate_lot(self):
+        for move in self:
+            for line in move.move_line_ids:
+                if not line.lot_id:
+                    raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
+                line.matching_lot_id = line.lot_id.id or False
+                line.matching_loc_dest_id = line.location_dest_id.id or False
+                line.confirmation_lot_code = line.lot_id.name or False
+                line.confirmation_location_code = line.location_dest_id.unique_code or False
 
     def action_generate_lot(self):
         for move in self:
