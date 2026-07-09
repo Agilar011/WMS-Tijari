@@ -92,7 +92,7 @@ class ImportTransferTwoStepWizard(models.TransientModel):
                 'total_existing': len([r for r in existing_receipts if r]),
             })
 
-            for line in raw_move_list:
+            for line in line_raw_list:
                 # Pastikan mencocokkan berdasarkan field referensi yang sama (misal: reference_nbr)
                 if line.get('acumatica_header_id') == header_id:
                     move_vals = dict(line)
@@ -101,7 +101,7 @@ class ImportTransferTwoStepWizard(models.TransientModel):
                     move_vals.update({
                         'header_id': created_picking.id,
                     })
-                    move_lines_to_create = self.env['acumatica.transfer.one.step.line.product'].create(move_vals)
+                    move_lines_to_create = self.env['acumatica.transfer.two.step.line.product'].create(move_vals)
 
         return {
             'type': 'ir.actions.act_window',
