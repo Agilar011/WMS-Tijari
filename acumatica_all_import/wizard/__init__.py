@@ -28,3 +28,4 @@ from . import import_inventory_issue_toko_pegang_do_wizard
 from . import import_direct_transfer_wizard
 from . import import_vendor_return_direct_transfer_wizard
 from . import import_credit_memo_consignment_wizard
+from . import import_inventory_receipt_transfer_wh_in_wizard

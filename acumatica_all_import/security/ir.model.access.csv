@@ -119,3 +119,7 @@ access_acumatica_credit_memo_consignment_staging_line_user,acumatica.credit.memo
 
 access_acumatica_transfer_one_step_product_user,acumatica.transfer.one.step.product.user,model_acumatica_transfer_one_step_product,base.group_user,1,1,1,1
 access_acumatica_transfer_one_step_line_user,acumatica.transfer.one.step.line.user,model_acumatica_transfer_one_step_line,base.group_user,1,1,1,1
+
+access_import_inventory_receipt_transfer_wh_in_wizard_user,import.inventory.receipt.transfer.wh.in.wizard.user,model_import_inventory_receipt_transfer_wh_in_wizard,base.group_user,1,1,1,1
+access_acumatica_inventory_receipt_transfer_wh_in_staging_user,acumatica.inventory.receipt.transfer.wh.in.staging.user,model_acumatica_inventory_receipt_transfer_wh_in_staging,base.group_user,1,1,1,1
+access_acumatica_inventory_receipt_transfer_wh_in_staging_line_user,acumatica.inventory.receipt.transfer.wh.in.staging.line.user,model_acumatica_inventory_receipt_transfer_wh_in_staging_line,base.group_user,1,1,1,1
