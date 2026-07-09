@@ -62,87 +62,87 @@ class StockPicking(models.Model):
 
     qr_code_image = fields.Binary(string='Sign')
 
+    # # def action_print_lot_number_line(self):
+    # #     action = {}
+    # #     action['type'] = 'ir.actions.act_url'
+    # #     action['url'] = '/print/lot_number_move_line?id=' + str(self.id)
+    # #     action['target'] = 'new'
+    # #     return action
+
     # def action_print_lot_number_line(self):
-    #     action = {}
-    #     action['type'] = 'ir.actions.act_url'
-    #     action['url'] = '/print/lot_number_move_line?id=' + str(self.id)
-    #     action['target'] = 'new'
-    #     return action
+    #     self.ensure_one()
 
-    def action_print_lot_number_line(self):
-        self.ensure_one()
+    #     lot_names = list(set(
+    #         self.move_ids_without_package.mapped('lot_ids.name')
+    #     ))
 
-        lot_names = list(set(
-            self.move_ids_without_package.mapped('lot_ids.name')
-        ))
+    #     if not lot_names:
+    #         return {
+    #             'type': 'ir.actions.client',
+    #             'tag': 'display_notification',
+    #             'params': {
+    #                 'title': 'Peringatan',
+    #                 'message': 'Lot Number belum tersedia.',
+    #                 'type': 'warning',
+    #                 'sticky': False,
+    #             }
+    #         }
 
-        if not lot_names:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Peringatan',
-                    'message': 'Lot Number belum tersedia.',
-                    'type': 'warning',
-                    'sticky': False,
-                }
-            }
+    #     self.create_qrcode_name()
 
-        self.create_qrcode_name()
+    #     ids = ",".join(map(str, self.ids))
 
-        ids = ",".join(map(str, self.ids))
+    #     return {
+    #         'type': 'ir.actions.act_url',
+    #         'url': '/print/lot_number_move_line?ids=%s' % ids,
+    #         'target': 'new',
+    #     }
 
-        return {
-            'type': 'ir.actions.act_url',
-            'url': '/print/lot_number_move_line?ids=%s' % ids,
-            'target': 'new',
-        }
+    # def create_qrcode_name(self):
+    #     for rec in self:
+    #         lot_names = list(set(
+    #             rec.move_ids_without_package.mapped('lot_ids.name')
+    #         ))
 
-    def create_qrcode_name(self):
-        for rec in self:
-            lot_names = list(set(
-                rec.move_ids_without_package.mapped('lot_ids.name')
-            ))
+    #         text = ', '.join(filter(None, lot_names))
 
-            text = ', '.join(filter(None, lot_names))
+    #         if text:
+    #             rec.qr_code_image = rec.create_qrcode(text)
 
-            if text:
-                rec.qr_code_image = rec.create_qrcode(text)
+    # def create_qrcode(self, text):
+    #     logo_path = os.path.abspath(
+    #         os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
+    #     )
 
-    def create_qrcode(self, text):
-        logo_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
-        )
+    #     logo = Image.open(logo_path)
 
-        logo = Image.open(logo_path)
+    #     basewidth = 80
+    #     wpercent = basewidth / float(logo.size[0])
+    #     hsize = int(float(logo.size[1]) * wpercent)
 
-        basewidth = 80
-        wpercent = basewidth / float(logo.size[0])
-        hsize = int(float(logo.size[1]) * wpercent)
+    #     logo = logo.resize((basewidth, hsize))
 
-        logo = logo.resize((basewidth, hsize))
+    #     qr = qrcode.QRCode(
+    #         error_correction=qrcode.constants.ERROR_CORRECT_H
+    #     )
 
-        qr = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_H
-        )
+    #     qr.add_data(text)
+    #     qr.make(fit=True)
 
-        qr.add_data(text)
-        qr.make(fit=True)
+    #     img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+    #     img = img.resize((300, 300))
 
-        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
-        img = img.resize((300, 300))
+    #     pos = (
+    #         (img.size[0] - logo.size[0]) // 2,
+    #         (img.size[1] - logo.size[1]) // 2
+    #     )
 
-        pos = (
-            (img.size[0] - logo.size[0]) // 2,
-            (img.size[1] - logo.size[1]) // 2
-        )
+    #     img.paste(logo, pos)
 
-        img.paste(logo, pos)
+    #     buffer = io.BytesIO()
+    #     img.save(buffer, format="PNG")
 
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
-
-        return base64.b64encode(buffer.getvalue()).decode()
+    #     return base64.b64encode(buffer.getvalue()).decode()
 
     def _sync_adt_quantities_from_moves(self):
         for picking in self:
@@ -202,16 +202,16 @@ class StockPicking(models.Model):
                 "adt_type": picking.adt_type,
                 "note" : picking.note,
             })
-            for ml in picking.move_line_ids:
-                if not ml.allocation_storage:
-                    raise ValidationError(f'Isi Allocation Storage di line product {ml.product_id.name}.')
-                move_line = self.env['stock.move.line'].search([
-                    ("picking_id", "=", storage_pickings.id),
-                    ("product_id", "=", ml.product_id.id),
-                    ("quantity", "=", ml.quantity)
-                ])
-                if move_line:
-                    move_line.location_dest_id = ml.allocation_storage.id
+            # for ml in picking.move_line_ids:
+                # if not ml.allocation_storage:
+                #     raise ValidationError(f'Isi Allocation Storage di line product {ml.product_id.name}.')
+                # move_line = self.env['stock.move.line'].search([
+                #     ("picking_id", "=", storage_pickings.id),
+                #     ("product_id", "=", ml.product_id.id),
+                #     ("quantity", "=", ml.quantity)
+                # ])
+                # if move_line:
+                #     move_line.location_dest_id = ml.allocation_storage.id
 
             # Lot = self.env['stock.lot']
             # for lot_name in set(picking.move_line_ids.mapped('lot_name')):

@@ -20,6 +20,7 @@ class AcumaticaReceiptProductLine(models.Model):
 
     header_external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
     receipt_line_id = fields.Many2one('acumatica.receipt.line', string='Receipt', ondelete='cascade')
+    receipt_nbr = fields.Char(string='Receipt Number', index=True)
     line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
     description = fields.Char(string='Description', readonly=True)
@@ -55,11 +56,13 @@ class AcumaticaReceiptLine(models.Model):
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
     line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
+    building_code = fields.Char(string='Building Code', readonly=True)
 
     product_line_ids = fields.One2many('acumatica.receipt.product.line', 'receipt_line_id', string='Lines')
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
     receipt_nbr = fields.Char(string='Receipt Number', index=True)
     vendor_code = fields.Char(string='VendorID', readonly=True)
+    vendor_name = fields.Char(string='Vendor Name', readonly=True)
     partner_ref = fields.Char(string='Vendor Ref', readonly=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
     warehouse_code = fields.Char(string='Warehouse')
@@ -156,16 +159,12 @@ class AcumaticaReceiptLine(models.Model):
         return product
 
     def _find_warehouse(self, line):
-        Warehouse = self.env['stock.location.acumatica']
+        Warehouse = self.env['stock.warehouse']
         warehouse = False
-        if line.warehouse_code:
-            warehouse = Warehouse.search([('code', '=', line.warehouse_code), ('is_active', '=', True)], limit=1)
-            if warehouse:
-                if not warehouse.odoo_building_id:
-                    warehouse = False
-                else:
-                    warehouse = warehouse.odoo_building_id
-
+        if line.building_code:
+            warehouse = Warehouse.search([
+                ('code', '=', line.building_code)
+            ])
         return warehouse
 
     def _find_location_dest(self, code):
@@ -283,7 +282,7 @@ class AcumaticaReceiptLine(models.Model):
         for receipt_line in receipt.product_line_ids:
             all_line_payloads.append({
                 'inventory_id': receipt_line.inventory_id or False,
-                'product_name': receipt_line.transaction_description or False,
+                'product_name': receipt_line.description or False,
                 'qty': receipt._parse_float(receipt_line.product_uom_qty),
                 'uom': receipt_line.uom_code or False,
                 'payload': receipt_line.read()[0] if receipt_line.exists() else {},
@@ -416,7 +415,7 @@ class AcumaticaReceiptLine(models.Model):
                     continue
 
                 move_vals = {
-                    'name': receipt_line.transaction_description or receipt_line.description or product.display_name,
+                    'name': receipt_line.description or product.display_name,
                     'picking_id': picking.id if picking else False,
                     'product_id': product.id,
                     'product_uom_qty': qty,

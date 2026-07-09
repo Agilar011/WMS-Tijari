@@ -15,192 +15,15 @@ class InventoryImportError(Exception):
         self.line_payloads = line_payloads or []
 
 
-class AcumaticaInventoryReceiptConfig(models.Model):
-    _name = 'acumatica.inventory.receipt.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Inventory Receipt'
-    _rec_name = 'name'
-
-    name = fields.Char(required=True, default='Acumatica Inventory Receipt')
-    base_url = fields.Char(required=True, help='Contoh: http://server/acumportal/entity')
-    api_version = fields.Char(required=True, default='25.200.002')
-    username = fields.Char(required=True)
-    password = fields.Char(required=True)
-    company_code = fields.Char(required=True)
-    endpoint_name = fields.Char(required=True, default='InventoryReceipt')
-    active = fields.Boolean(default=True)
-    last_sync = fields.Datetime(readonly=True)
-    state = fields.Selection([
-        ('draft', 'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error', 'Error'),
-    ], default='draft', readonly=True)
-
-    odata_expand = fields.Char(default='Details')
-    odata_select = fields.Char()
-    odata_filter = fields.Char(default="Status eq 'On Hold' or Status eq 'Balanced'")
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            self._do_logout(session)
-            self.state = 'connected'
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Koneksi Berhasil',
-                    'message': f'Berhasil terhubung ke {self.base_url}',
-                    'type': 'success',
-                    'sticky': False,
-                }
-            }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-    def _do_login(self):
-        self.ensure_one()
-        session = requests.Session()
-        response = session.post(
-            self.login_url,
-            json={
-                'name': self.username,
-                'password': self.password,
-                'company': self.company_code,
-            },
-            headers={'Content-Type': 'application/json'},
-            timeout=30,
-        )
-        if response.status_code == 204:
-            return session
-        raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
-
-    def _do_logout(self, session):
-        try:
-            session.post(self.logout_url, timeout=10)
-        except Exception:
-            pass
-
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
-
-    # def fetch_inventory_recieved_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
-    #     self.ensure_one()
-    #     session = self._do_login()
-    #     try:
-    #         endpoint = f"{self.api_url}/{self.endpoint_name}"
-    #         params = {'$top': limit, '$skip': offset}
-    #         filters = []
-
-    #         if self.odata_expand:
-    #             params['$expand'] = self.odata_expand
-    #         if self.odata_select:
-    #             params['$select'] = self.odata_select
-    #         if reference_nbr:
-    #             filters.append(f"ReferenceNbr eq '{reference_nbr}'")
-    #         if last_modified_from:
-    #             filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-    #         # if self.odata_filter:
-    #         #     filters.append(f"({self.odata_filter})")
-    #         if odata_filter:
-    #             filters.append(self.odata_filter)
-    #             filters.append(odata_filter)
-    #         else:
-    #             filters.append(f"({self.odata_filter})")
-    #         if filters:
-    #             params['$filter'] = ' and '.join(filters)
-
-    #         response = session.get(endpoint, params=params, timeout=60)
-    #         if response.status_code != 200:
-    #             raise UserError(f'Gagal fetch data (HTTP {response.status_code}): {response.text}')
-
-    #         raw_data = self._normalize_rows(response.json())
-    #         result = []
-
-    #         for row_number, item in enumerate(raw_data, start=1):
-    #             header = {
-    #                 'external_id': item.get('id', '') or '',
-    #                 'row_number': item.get('rowNumber', '') or '',
-    #                 'note': item.get('note', {}).get('value', '') or '',
-    #                 'branch_warehouse': self._val(item, 'Branch'),
-    #                 # ChangeItemRefNbr
-    #                 'actual_qty': self._val(item, 'ControlQty'),
-    #                 # Customer
-    #                 'scheduled_date': self._val(item, 'Date'),
-    #                 'header_description': self._val(header, 'Description'),
-    #                 # DocumentOnly
-    #                 # ExternalRef
-    #                 'acumatica_write_date': self._val(header, 'LastModifiedDateTime'),
-    #                 # Location
-    #                 'post_period': str(self._val(header, 'PostPeriod')),
-    #                 'reference_nbr': self._val(item, 'ReferenceNbr'),
-    #                 # ShipmentNbr
-    #                 'status': self._val(item, 'Status'),
-    #                 'total_qty': str(self._val(item, 'TotalQty')),
-    #                 # TransferNbr
-    #                 'transfer_type': self._val(item, 'TransType'),
-    #             }
-                
-    #             details = self._normalize_rows(header.get('Details') or header.get('details') or [])
-    #             if not details:
-    #                 details = [{}]
-
-    #             for detail in details:
-    #                 result.append({        
-    #                     'line_external_id': item.get('id', '') or '',
-    #                     'line_note': self._val(detail, 'note'),
-    #                     'branch_warehouse': self._val(item, 'Branch'),
-    #                     'line_description': self._val(detail, 'Description'),
-    #                     'inventory_id': self._val(detail, 'InventoryID'),
-    #                     'line_nbr': str(self._val(detail, 'LineNbr')),
-    #                     'location_code': self._val(detail, 'Location'),
-    #                     'product_uom_qty': str(self._val(detail, 'Qty')),
-    #                     'uom_code': self._val(detail, 'UOM'),
-    #                     'warehouse_dest_code': self._val(detail, 'Warehouse'),
-    #                 })
-    #                 row_number += 1
-    #         self.last_sync = fields.Datetime.now()
-    #         return result
-    #     finally:
-    #         self._do_logout(session)
-
-
-class AcumaticaReceiptProductLine(models.Model):
-    _name = 'acumatica.inventory.recieved.product.line'
-    _description = 'Data Product Inventory Recieve dari Acumatica'
+class AcumaticaReceiptExternalProductLine(models.Model):
+    _name = 'acumatica.receipt.external.product.line'
+    _description = 'Data Product Receipt External dari Acumatica'
 
     header_external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
-    inventory_line_id = fields.Many2one('acumatica.inventory.recieved.line', string='Receipt', ondelete='cascade')
+    inventory_line_id = fields.Many2one('acumatica.receipt.external.line', string='Receipt', ondelete='cascade')
 
     line_external_id = fields.Char(string='UUID Line', readonly=True)
+    reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     line_note = fields.Text(string='Line Note', readonly=True)
     branch_warehouse = fields.Char(string='Branch', readonly=True)
     line_description = fields.Char(string='Description', readonly=True)
@@ -212,14 +35,16 @@ class AcumaticaReceiptProductLine(models.Model):
     warehouse_dest_code = fields.Char(string='Warehouse Dest', readonly=True)
 
 
-class AcumaticaInventoryRecievedLine(models.Model):
-    _name = 'acumatica.inventory.recieved.line'
-    _description = 'Data Inventory Recieved dari Acumatica'
+class AcumaticaReceiptExternalLine(models.Model):
+    _name = 'acumatica.receipt.external.line'
+    _description = 'Data Receipt External dari Acumatica'
     _order = 'reference_nbr asc, id asc'
 
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header', readonly=True)
-    product_line_ids = fields.One2many('acumatica.inventory.recieved.product.line', 'inventory_line_id', string='Lines')
+    product_line_ids = fields.One2many('acumatica.receipt.external.product.line', 'inventory_line_id', string='Lines')
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    building_code = fields.Char(string='Building Code', readonly=True)
 
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
@@ -236,7 +61,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     transfer_type = fields.Char(string='Transfer Type', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
     external_ref = fields.Char(string='External Ref', readonly=True)
-    customer_code = fields.Char(string='Branch Warehouse', readonly=True)
+    customer_code = fields.Char(string='Customer Code', readonly=True)
     shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
     transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
     location_code = fields.Char(string='Location Code', readonly=True)
@@ -279,6 +104,15 @@ class AcumaticaInventoryRecievedLine(models.Model):
             return float(value or 0)
         except Exception:
             return 0.0
+
+    def _find_customer(self, line):
+        Partner = self.env['res.partner']
+        partner = False
+        if line.customer_code:
+            partner = Partner.search([('company_registry', '=', line.customer_code), ('is_company', '=', True)], limit=1)
+            if not partner:
+                partner = Partner.search([('name', '=', line.customer_name), ('is_company', '=', True)], limit=1)
+        return partner
 
     def _find_product(self, line):
         Product = self.env['product.product']
@@ -417,6 +251,14 @@ class AcumaticaInventoryRecievedLine(models.Model):
         picking = receive.odoo_picking_id
         action_state = 'pending'
 
+        customer = False
+        if receive.transfer_type == 'Change Item':
+            customer = receive._find_customer(receive)
+            if not customer:
+                error_messages.append(
+                    f'Customer with code {receive.customer_code} was not found in the WMS | WMS Dependency : MASTER CUSTOMER.'
+                )
+
         warehouse = receive._find_warehouse(receive)
         if not warehouse:
             error_messages.append(
@@ -426,14 +268,15 @@ class AcumaticaInventoryRecievedLine(models.Model):
         dest_location = receive._find_location_dest(receive)
         if not dest_location:
             error_messages.append(
-                f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                f'Location with code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
-        picking_type = PickingType.search([
-            ('warehouse_id', '=', warehouse.id if warehouse else False),
-            ('operation_category', '=', 'internal'),
-            ('code', '=', 'internal'),
-        ], limit=1)
+        # picking_type = PickingType.search([
+        #     ('warehouse_id', '=', warehouse.id if warehouse else False),
+        #     ('operation_category', '=', 'internal'),
+        #     ('code', '=', 'internal'),
+        # ], limit=1)
+        picking_type = self.picking_type_id
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {receive.warehouse_code}'
@@ -448,6 +291,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
             )
 
         picking_vals = {
+            'partner_id': customer.id if customer else False,
             'origin': origin,
             'picking_type_id': picking_type.id,
             'location_dest_id': dest_location.id if dest_location else False,

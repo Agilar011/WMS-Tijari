@@ -18,6 +18,7 @@
           'views/acumatica_issue_po_return_config_views.xml',
           'views/acumatica_issue_po_return_line_views.xml',
           'views/acumatica_receipt_change_item_line_views.xml',
+          'views/acumatica_receipt_external_view.xml',
           'views/acumatica_receipt_line_views.xml',
           'views/acumatica_shipment_line_views.xml',
           'views/acumatica_so_shipment_config_views.xml',
