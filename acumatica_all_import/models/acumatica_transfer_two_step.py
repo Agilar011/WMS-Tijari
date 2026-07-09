@@ -159,93 +159,18 @@ class AcumaticaTransferTwoStepConfig(models.Model):
                 return payload.get('rows')
         return []
 
-    def fetch_receipt_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
-        self.ensure_one()
-        session = self._do_login()
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-            filters = []
-
-            if self.odata_expand:
-                params['$expand'] = self.odata_expand
-
-            if self.odata_select:
-                params['$select'] = self.odata_select
-            if reference_nbr:
-                filters.append(f"ReferenceNbr eq '{reference_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-            if self.odata_filter:
-                filters.append(f"({self.odata_filter})")
-            else:
-                filters.append("(TransferType eq '1-Step')")
-
-            if filters:
-                params['$filter'] = ' and '.join(filters)       
-
-            response = session.get(endpoint, params=params, timeout=90)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Transfer Order (HTTP {response.status_code}): {response.text}')
-
-            raw_data = self._normalize_rows(response.json())
-            result = []
-
-            for row_number, item in enumerate(raw_data, start=1):
-                header = {
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'scheduled_date': self._val(item, 'Date'),
-                    'is_hold': self._val(item, 'Hold'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'post_period': self._val(item, 'PostPeriod'),
-                    'status': self._val(item, 'Status'),
-                    'total_qty': self._val(item, 'TotalQty'),
-                    'transfer_type': self._val(item, 'TransferType'),
-                    'reference_nbr': self._val(item, 'ReferenceNbr'),
-                    'to_warehouse_code': self._val(item, 'ToWarehouseID'),
-                    'from_warehouse_code': self._val(item, 'FromWarehouseID'),
-                    'description': self._val(item, 'Description'),
-                    'trans_type': self._val(item, 'TransType'),
-                }
-
-                details = item.get('Details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-                if not details:
-                    result.append(dict(header, line_nbr='0'))
-                    continue
-
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    description = self._val(detail, 'Description') or self._val(detail, 'TransactionDescription')
-                    warehouse_dest_code = self._val(detail, 'Warehouse') or header.get('warehouse_code')
-
-                    result.append({
-                        **header,
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'line_description': self._val(detail, 'Description'),
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'from_location_code': self._val(detail, 'FromLocationID'),
-                        'to_location_code': self._val(detail, 'ToLocationID'),
-                        'quantity': self._val(detail, 'Quantity'),
-                        'uom_code': self._val(detail, 'UOM'),
-                    })
-
-            _logger.info("Berhasil ambil %s rows Transfer Order dari Acumatica", len(result))
-            return result
-        finally:
-            self._do_logout(session)
-            self.last_sync = fields.Datetime.now()
 
 
 class AcumaticaTransferTwoStepLine(models.Model):
     _name = 'acumatica.transfer.two.step.line'
     _description = 'Data Transfer Order dari Acumatica'
     _order = 'reference_nbr asc, line_nbr asc, id asc'
+
+    line_ids = fields.One2many(
+        'acumatica.transfer.two.step.line.product', 
+        'header_id', 
+        string="Detail Lines"
+    )    
 
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
@@ -602,3 +527,46 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})
+
+
+class AcumaticaTransferTwoStepLineProduct(models.Model):
+    _name = 'acumatica.transfer.two.step.line.product'
+    _description = 'Data Transfer Order dari Acumatica'
+    _order = 'header_id asc, id asc'
+
+    header_id = fields.Many2one(
+        'acumatica.transfer.two.step.line', 
+        string="Header Reference", 
+        ondelete='cascade', 
+        index=True
+    )
+
+    acumatica_header_id = fields.Char(string="Acumatica Header ID")
+    adt_rowNumber = fields.Char(string="Acumatica rowNumber")
+    adt_note = fields.Char(string="Acumatica note")
+    adt_Description = fields.Char(string="Acumatica Description")
+    adt_FromLocationID = fields.Char(string="Acumatica FromLocationID")
+    adt_InventoryID = fields.Char(string="Acumatica InventoryID")
+    adt_LineNumber = fields.Char(string="Acumatica LineNumber")
+    adt_NoteID = fields.Char(string="Acumatica NoteID")
+    adt_Quantity = fields.Char(string="Acumatica Quantity")
+    adt_SOOrderNbr = fields.Char(string="Acumatica SOOrderNbr")
+    adt_SOOrderType = fields.Char(string="Acumatica SOOrderType")
+    adt_SOShipmentNbr = fields.Char(string="Acumatica SOShipmentNbr")
+    adt_ToLocationID = fields.Char(string="Acumatica ToLocationID")
+    adt_UOM = fields.Char(string="Acumatica UOM")
+
+    import_state = fields.Selection([
+        ('pending', 'Belum Diimport'),
+        ('imported', 'Sudah Diimport'),
+        ('updated', 'Diupdate'),
+        ('error', 'Error'),
+    ], string='Status', default='pending', readonly=True)
+    import_message = fields.Char(string='Keterangan', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    selected = fields.Boolean(string='Pilih', default=True)
+
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+
+    exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
