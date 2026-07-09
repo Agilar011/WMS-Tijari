@@ -33,6 +33,7 @@ class ImportDirectTransferWizard(models.TransientModel):
     end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
     def action_fetch_data(self):
+        print('Run function get data direct transfer')
         self.ensure_one()
 
         import math
@@ -102,10 +103,10 @@ class ImportDirectTransferWizard(models.TransientModel):
         Location = self.env['stock.location.acumatica']
         type = False
 
-        print(f"Warehouse: {header['warehouse_code']}")
+        print(f"Warehouse: {header['adt_FromWarehouseID']}")
 
         location = Location.search([
-            ('code', '=', header['warehouse_code'])
+            ('code', '=', header['adt_FromWarehouseID'])
         ])
 
             
@@ -156,79 +157,151 @@ class ImportDirectTransferWizard(models.TransientModel):
             detail_result = []
 
             for row_number, item in enumerate(raw_data, start=1):
-                with self.env.cr.savepoint():
-                    # PERBAIKAN: Mapping diselaraskan dengan key JSON Direct Transfer asli Anda
-                    header = {
-                        'external_id': item.get('id', '') or '',
-                        'row_number': item.get('rowNumber', '') or '',
-                        'note': item.get('note', {}).get('value', '') or '',
-                        'branch_warehouse': self._val(item, 'Branch'),
-                        'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
-                        'actual_qty': self._val(item, 'ControlQty'),
-                        'customer_code': self._val(item, 'CustomerID'), # JSON Anda menggunakan CustomerID
-                        'scheduled_date': self._val(item, 'Date'),
-                        'description': self._val(item, 'Description'),
-                        'external_ref': self._val(item, 'ExternalRef'),
-                        'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                        'location_code': str(self._val(item, 'LocationID') or ''), # JSON menggunakan LocationID
-                        'post_period': str(self._val(item, 'PostPeriod') or ''),
-                        'reference_nbr': self._val(item, 'ReferenceNbr'),
-                        'status': self._val(item, 'Status'),
-                        'total_qty': str(self._val(item, 'TotalQty') or '0.0'),
-                        'transfer_type': self._val(item, 'TransferType'), # JSON menggunakan TransferType
-                        
-                        # KOREKSI 2: Sesuaikan key pencarian ke payload API murni ('FromWarehouseID' & 'ToWarehouseID')
-                        'warehouse_code': self._val(item, 'FromWarehouseID'),
-                        'warehouse_dest_code': self._val(item, 'ToWarehouseID'),
-                    }
+                try:
+                    with self.env.cr.savepoint():
+                        # PERBAIKAN: Mapping diselaraskan dengan key JSON Direct Transfer asli Anda
+                        header = {
+                            'adt_id': item.get('id', '') or '',
+                            'adt_rowNumber': item.get('rowNumber', '') or '',
+                            'adt_note': item.get('note', {}).get('value', '') or '',
+                            # 'branch_warehouse': self._val(item, 'Branch'),
+                            # 'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
+                            # 'actual_qty': self._val(item, 'ControlQty'),
+                            # 'customer_code': self._val(item, 'CustomerID'), # JSON Anda menggunakan CustomerID
+                            'adt_Date': self._val(item, 'Date'),
+                            'adt_Description': self._val(item, 'Description'),
+                            'adt_ExternalRef': self._val(item, 'ExternalRef'),
+                            'adt_LastModifiedDateTime': self._val(item, 'LastModifiedDateTime'),
+                            # 'location_code': str(self._val(item, 'LocationID') or ''), # JSON menggunakan LocationID
+                            'adt_PostPeriod': str(self._val(item, 'PostPeriod') or ''),
+                            'adt_ReferenceNbr': self._val(item, 'ReferenceNbr'),
+                            'adt_Status': self._val(item, 'Status'),
+                            'adt_TotalQty': str(self._val(item, 'TotalQty') or '0.0'),
+                            'adt_TransferType': self._val(item, 'TransferType'), # JSON menggunakan TransferType
+                            
+                            # KOREKSI 2: Sesuaikan key pencarian ke payload API murni ('FromWarehouseID' & 'ToWarehouseID')
+                            'adt_FromWarehouseID': self._val(item, 'FromWarehouseID'),
+                            'adt_ToWarehouseID': self._val(item, 'ToWarehouseID'),
+                        }
 
-                    if header.get('warehouse_code'):
-                        # Kirim data header ke fungsi pembantu
-                        type_record = self._search_picking_type(header)
+                        if header.get('adt_FromWarehouseID'):
+                            # Kirim data header ke fungsi pembantu
+                            type_record = self._search_picking_type(header)
 
-                        # print(f"")
-                        # Ambil ID integer secara aman, gunakan False standar Odoo (bukan None)
-                        header['picking_type_id'] = type_record.id if type_record else False
+                            # print(f"")
+                            # Ambil ID integer secara aman, gunakan False standar Odoo (bukan None)
+                            header['picking_type_id'] = type_record.id if type_record else False
+
+                        print(f"header : {header}")
+                        created_header = self.env['acumatica.direct.transfer.staging'].create(header)
+
+                        if created_header:
+                            sync_data = fields.Datetime.now()
+                            # Gunakan tanda kurung (), bukan sama dengan (=)
+                            created_header.write({
+                                'config_id': self.config_id.id,
+                                'import_state': 'pending',
+                                'import_message': "Data API Imported",
+                                'selected': True,
+                                'sync_date': sync_data,
+                            })
 
 
-                    details = item.get('Details') or []
-                    if isinstance(details, dict):
-                        details = details.get('value', []) or []
-                    if not isinstance(details, list):
-                        details = []
+                        details = item.get('Details') or []
+                        if isinstance(details, dict):
+                            details = details.get('value', []) or []
+                        if not isinstance(details, list):
+                            details = []
+                    
+                        # print(f"Header: {header}")
+                        result.append(header)
+
+                        if not details:
+                            raise UserError('Data Detail tidak ditemukan')
+
+                        for detail in details:
+                            print(f"detail : {detail}")
+                            vals = {      
+                                'adt_id' : detail.get('id', ''),
+                                'adt_rowNumber' : detail.get('rowNumber', ''), 
+                                'adt_note' : self._val(detail, 'note'), 
+                                'adt_Description' : self._val(detail, 'Description'), 
+                                'adt_FromLocationID' : self._val(detail, 'FromLocationID'), 
+                                'adt_InventoryID' : self._val(detail, 'InventoryID'), 
+                                'adt_LineNumber' : self._val(detail, 'LineNumber'), 
+                                'adt_NoteID' : self._val(detail, 'NoteID'), 
+                                'adt_Quantity' : self._val(detail, 'Quantity'), 
+                                'adt_SOOrderNbr' : self._val(detail, 'SOOrderNbr'), 
+                                'adt_SOOrderType' : self._val(detail, 'SOOrderType'), 
+                                'adt_SOShipmentNbr' : self._val(detail, 'SOShipmentNbr'), 
+                                'adt_ToLocationID' : self._val(detail, 'ToLocationID'), 
+                                'adt_UOM' : self._val(detail, 'UOM'), 
+                                'receipt_line_id' : created_header.id
+
+                                # 'header_external_id': item.get('id', ''),
+                                # 'line_external_id': detail.get('id', '') or '',
+                                # # Pada JSON Direct Transfer detail Anda, nomor baris menggunakan 'LineNumber' bukan 'LineNbr'
+                                # 'line_nbr': str(self._val(detail, 'LineNumber') or ''), 
+                                # 'line_note': detail.get('note', {}).get('value', '') or '',
+                                # 'line_description': self._val(detail, 'Description'),
+                                # 'inventory_id': self._val(detail, 'InventoryID'),
+                                # 'from_location_code': self._val(detail, 'FromLocationID'), # Ditambahkan sesuai JSON
+                                # 'to_location_code': self._val(detail, 'ToLocationID'),     # Ditambahkan sesuai JSON
+                                # 'product_uom_qty': str(self._val(detail, 'Quantity') or '0.0'),
+                                # 'uom_code': self._val(detail, 'UOM'),
+                                # 'so_order_nbr': self._val(detail, 'SOOrderNbr'),
+                                # 'so_shipment_nbr': self._val(detail, 'SOShipmentNbr'),
+                            }
+
+                            detail_result.append(vals)
+
+                        self.config_id.last_sync = fields.Datetime.now()
+                        print(f"="*60)
+                        print(f"All detail result")
+                        print(f"="*60)
+
+                        for item in detail_result:
+                            self.env['acumatica.direct.transfer.staging.line'].create(item)
+                            print(item)
+                            print(f"="*60)
+
+
+
+                        _logger.info("Berhasil ambil %s rows PO inventory dari Acumatica", len(result))
                 
-                    print(f"Header: {header}")
-                    result.append(header)
+                        # raise UserError('debug')
 
-                    for detail in details:
-                        detail_result.append({        
-                            'header_external_id': item.get('id', ''),
-                            'line_external_id': detail.get('id', '') or '',
-                            # Pada JSON Direct Transfer detail Anda, nomor baris menggunakan 'LineNumber' bukan 'LineNbr'
-                            'line_nbr': str(self._val(detail, 'LineNumber') or ''), 
-                            'line_note': detail.get('note', {}).get('value', '') or '',
-                            'line_description': self._val(detail, 'Description'),
-                            'inventory_id': self._val(detail, 'InventoryID'),
-                            'from_location_code': self._val(detail, 'FromLocationID'), # Ditambahkan sesuai JSON
-                            'to_location_code': self._val(detail, 'ToLocationID'),     # Ditambahkan sesuai JSON
-                            'product_uom_qty': str(self._val(detail, 'Quantity') or '0.0'),
-                            'uom_code': self._val(detail, 'UOM'),
-                            'so_order_nbr': self._val(detail, 'SOOrderNbr'),
-                            'so_shipment_nbr': self._val(detail, 'SOShipmentNbr'),
-                        })
+                except Exception as e:
+                    print("=" * 80)
+                    print(f"ERROR IMPORT HEADER KE-{row_number}")
+                    print(f"Reference Number : {item.get('ReferenceNbr', {}).get('value', '')}")
+                    print(f"Header UUID      : {item.get('id', '')}")
+                    print(f"Error Type       : {type(e).__name__}")
+                    print(f"Error Message    : {str(e)}")
+                    print("Header Data :")
+                    print(header if 'header' in locals() else item)
+                    print("=" * 80)
 
-            self.config_id.last_sync = fields.Datetime.now()
-            _logger.info("Berhasil ambil %s rows PO inventory dari Acumatica", len(result))
-            
+                    _logger.exception(
+                        "Error import Direct Transfer %s",
+                        item.get('ReferenceNbr', {}).get('value', '')
+                    )
+        finally:
+            if session:
+                self.config_id._do_logout(session)
+        
+        return len(result)
+
+                        
+
+
+
+
             # Jangan lupa return hasil akhirnya di paling bawah fungsi Anda jika dibutuhkan oleh fungsi wizard induk!
             # return result, detail_result
 
-        finally:
-            # Pastikan proses logout ditaruh di blok finally agar session tidak menggantung di Acumatica jika terjadi crash
-            if session:
-                self.config_id._do_logout(session)
-            self._validate_staging_against_picking(result, detail_result)
-            return len(result)
+        #     # Pastikan proses logout ditaruh di blok finally agar session tidak menggantung di Acumatica jika terjadi crash
+        #     self._validate_staging_against_picking(result, detail_result)
 
     def _validate_staging_against_picking(self, header_list, line_list):
         print("Running validate picking function")
@@ -444,6 +517,7 @@ class ImportDirectTransferWizard(models.TransientModel):
         cleaned_data = []
 
         for vals in data:
+            print(f"Vals: {vals}")
             # Petakan link ID staging header ke field receipt_line_id
             current_id = vals.get('external_id') or vals.get('adt_id')
             vals['receipt_line_id'] = inventory_map.get(current_id)
@@ -461,8 +535,27 @@ class ImportDirectTransferWizard(models.TransientModel):
             line_vals = {
                 key: value for key, value in vals.items() if key in valid_line_fields
             }
+
+            # move_vals = {
+            #     'adt_id' : vals['external_id'],
+            #     'adt_rowNumber' : vals['row_number']
+            #     'adt_note' : vals['note']
+            #     'adt_Description' : vals['description']
+            #     'adt_FromLocationID' : vals['warehouse_code']
+            #     'adt_InventoryID' : vals['']
+            #     'adt_LineNumber' : vals['']
+            #     'adt_NoteID' : vals['']
+            #     'adt_Quantity' : vals['']
+            #     'adt_SOOrderNbr' : vals['']
+            #     'adt_SOOrderType' : vals['']
+            #     'adt_SOShipmentNbr' : vals['']
+            #     'adt_ToLocationID' : vals['']
+            #     'adt_UOM'                 : vals['']
+            # }
             
             cleaned_data.append(line_vals)
+
+
 
         print(f"Data Bersih Siap Create: {cleaned_data}")
 
