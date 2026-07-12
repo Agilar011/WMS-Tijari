@@ -12,11 +12,11 @@
     </record>
 
     <record id="view_acumatica_so_shipment_line_search" model="ir.ui.view">
-        <field name="name">acumatica.so.shipment.line.search</field>
-        <field name="model">acumatica.so.shipment.line</field>
+        <field name="name">acumatica.shipment.gi.staging.search</field>
+        <field name="model">acumatica.shipment.gi.staging</field>
         <field name="arch" type="xml">
             <search>
-                <field name="inventory_id"/>
+                <!-- <field name="inventory_id"/> -->
                 <field name="import_state"/>
 
                 <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
@@ -33,16 +33,16 @@
     </record>
 
     <record id="view_acumatica_so_shipment_line_list" model="ir.ui.view">
-        <field name="name">acumatica.so.shipment.line.list</field>
-        <field name="model">acumatica.so.shipment.line</field>
+        <field name="name">acumatica.shipment.gi.staging.list</field>
+        <field name="model">acumatica.shipment.gi.staging</field>
         <field name="arch" type="xml">
             <list string="Data SO Shipment" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
-                <field name="line_nbr"/>
-                <field name="inventory_id"/>
-                <field name="uom_code"/>
-                <field name="warehouse_code"/>
-                <field name="location_dest_code"/>
+                <field name="row_number"/>
+                <!-- <field name="inventory_id"/> -->
+                <!-- <field name="uom_code"/> -->
+                <field name="to_warehouse_id"/>
+                <!-- <field name="location_dest_code"/> -->
                 <field name="import_state"/>
                 <field name="import_message"/>
             </list>
@@ -50,8 +50,8 @@
     </record>
 
     <record id="view_acumatica_so_shipment_line_form" model="ir.ui.view">
-        <field name="name">acumatica.so.shipment.line.form</field>
-        <field name="model">acumatica.so.shipment.line</field>
+        <field name="name">acumatica.shipment.gi.staging.form</field>
+        <field name="model">acumatica.shipment.gi.staging</field>
         <field name="arch" type="xml">
             <form string="Data SO Shipment">
                 <header>
@@ -62,44 +62,87 @@
                 <sheet>
                     <group string="Header">
                         <group>
-                            <!-- <field name="receipt_nbr" readonly="1"/> -->
-                            <field name="shipment_type" readonly="1"/>
-                            <field name="operation" readonly="1"/>
+                            <field name="id" readonly="1"/>
+                            <field name="row_number" readonly="1"/>
+                            <field name="odoo_picking_id" readonly="1"/>
+                            <field name="config_id" readonly="1"/>
+                            <field name="create_uid" readonly="1"/>
+                            <field name="write_uid" readonly="1"/>
+                            <field name="acumatica_id" readonly="1"/>
+                            <field name="shipment_nbr" readonly="1"/>
+                            <field name="customer" readonly="1"/>
+                            <field name="customer_name" readonly="1"/>
+                            <field name="warehouse_id" readonly="1"/>
+                            <field name="location" readonly="1"/>
+                            <field name="location_name" readonly="1"/>
+                        </group>
+                        <group>
                             <field name="status" readonly="1"/>
-                            <!-- <field name="partner_code" readonly="1"/> -->
-                            <field name="warehouse_code" readonly="1"/>
-                            <field name="warehouse_dest_code" readonly="1"/>
-                            <!-- <field name="header_location_code" readonly="1"/> -->
-                        </group>
-                        <group>
-                            <field name="scheduled_date" readonly="1"/>
-                            <field name="actual_qty" readonly="1"/>
-                            <!-- <field name="shipped_qty" readonly="1"/> -->
-                            <field name="acumatica_write_date" readonly="1"/>
-                            <field name="description" readonly="1"/>
-                            <field name="shipping_zone" readonly="1"/>
+                            <field name="shipment_type" readonly="1"/>
+                            <field name="address_id" readonly="1"/>
+                            <field name="address_line1" readonly="1"/>
+                            <field name="address_line2" readonly="1"/>
+                            <field name="address_line3" readonly="1"/>
+                            <field name="city" readonly="1"/>
+                            <field name="state" readonly="1"/>
+                            <field name="state_name" readonly="1"/>
+                            <field name="country" readonly="1"/>
+                            <field name="country_name" readonly="1"/>
+                            <field name="postal_code" readonly="1"/>
                             <field name="ship_via" readonly="1"/>
-                        </group>
-                    </group>
-                    <group string="Line">
-                        <group>
-                            <field name="line_nbr" readonly="1"/>
-                            <!-- <field name="acumatica_line_number" readonly="1"/> -->
-                            <field name="inventory_id" readonly="1"/>
-                            <field name="uom_code" readonly="1"/>
-                            <!-- <field name="detail_warehouse_code" readonly="1"/> -->
+                            <field name="ship_via_description" readonly="1"/>
+                            <field name="ship_via_address" readonly="1"/>
+                            <field name="ship_via_city" readonly="1"/>
+                            <field name="ship_via_phone" readonly="1"/>
+                            <field name="ship_via_status" readonly="1"/>
+                            <field name="fob_point" readonly="1"/>
+                            <field name="fob_point_description" readonly="1"/>
                         </group>
                         <group>
-                            <field name="location_dest_code" readonly="1"/>
-                            <field name="order_number" readonly="1"/>
-                            <field name="order_line_number" readonly="1"/>
+                            <field name="note_ship_via" readonly="1"/>
                             <field name="order_type" readonly="1"/>
-                            <field name="open_qty" readonly="1"/>
-                            <field name="original_qty" readonly="1"/>
+                            <field name="site_id_description" readonly="1"/>
+                            <field name="to_warehouse_id" readonly="1"/>
                             <field name="import_state" readonly="1"/>
                             <field name="import_message" readonly="1"/>
+                            <field name="note" readonly="1"/>
+                            <field name="confirmed" readonly="1"/>
+                            <field name="hold" readonly="1"/>
+                            <field name="document_only" readonly="1"/>
+                            <field name="override_address" readonly="1"/>
+                            <field name="active" readonly="1"/>
+                            <field name="selected" readonly="1"/>
+                            <field name="ship_date" readonly="1"/>
+                            <field name="sync_date" readonly="1"/>
+                            <field name="create_date" readonly="1"/>
+                            <field name="write_date" readonly="1"/>
+                            <field name="shipped_quantity" readonly="1"/>
+                            <field name="shipped_weight" readonly="1"/>
+                            <field name="shipped_volume" readonly="1"/>
+                            <field name="odoo_shipment_status" readonly="1"/>
+                            <field name="picking_type_id" readonly="1"/>
                         </group>
+
                     </group>
+                    <!-- <group string="Line"> -->
+                        <!-- <group> -->
+                            <!-- <field name="line_nbr" readonly="1"/> -->
+                            <!-- <field name="acumatica_line_number" readonly="1"/> -->
+                            <!-- <field name="inventory_id" readonly="1"/> -->
+                            <!-- <field name="uom_code" readonly="1"/> -->
+                            <!-- <field name="detail_warehouse_code" readonly="1"/> -->
+                        <!-- </group> -->
+                        <!-- <group> -->
+                            <!-- <field name="location_dest_code" readonly="1"/> -->
+                            <!-- <field name="order_number" readonly="1"/> -->
+                            <!-- <field name="order_line_number" readonly="1"/> -->
+                            <!-- <field name="order_type" readonly="1"/> -->
+                            <!-- <field name="open_qty" readonly="1"/> -->
+                            <!-- <field name="original_qty" readonly="1"/> -->
+                            <!-- <field name="import_state" readonly="1"/> -->
+                            <!-- <field name="import_message" readonly="1"/> -->
+                        <!-- </group> -->
+                    <!-- </group> -->
                 </sheet>
             </form>
         </field>
