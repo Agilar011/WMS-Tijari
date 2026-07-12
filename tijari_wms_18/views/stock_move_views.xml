@@ -80,6 +80,9 @@
                     />
 
             </xpath>
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after">
+                <button name="action_print_lot_number_line" type="object" title="Print" icon="fa-print"/>
+            </xpath>
             
             <xpath expr="//field[@name='quantity']" position="after">
                 <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>

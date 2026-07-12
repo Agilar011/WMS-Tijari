@@ -22,7 +22,7 @@
                 </header> -->
                 <field name="receipt_nbr"/>
                 <field name="vendor_code"/>
-                <field name="warehouse_code"/>
+                <field name="building_code"/>
                 <field name="total_qty"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"
@@ -53,7 +53,7 @@
                             <field name="vendor_code"/>
                             <field name="partner_ref"/>
                             <field name="scheduled_date"/>
-                            <field name="warehouse_code"/>
+                            <field name="building_code"/>
                             <field name="header_location_code"/>
                             <field name="status"/>
                             <field name="receipt_type"/>
@@ -97,9 +97,9 @@
                             <field name="product_line_ids">
                                 <list>
                                     <field name="inventory_id"/>
-                                    <field name="transaction_description"/>
+                                    <field name="description"/>
                                     <field name="warehouse_dest_code"/>
-                                    <field name="order_qty"/>
+                                    <field name="product_uom_qty"/>
                                 </list>
                             </field>
                         </page>

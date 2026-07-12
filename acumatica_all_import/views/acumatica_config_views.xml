@@ -170,4 +170,11 @@
         <field name="domain">[('config_type', '=', 'toko_pegang_do')]</field>
     </record>
 
+    <record id="action_acumatica_inventory_external_config" model="ir.actions.act_window">
+        <field name="name">Konfigurasi Acumatica Inventory External</field>
+        <field name="res_model">acumatica.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'inventory_external')]</field>
+    </record>
+
 </odoo>

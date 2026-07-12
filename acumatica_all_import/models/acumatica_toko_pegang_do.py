@@ -59,7 +59,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
     transfer_type = fields.Char(string='Transfer Type', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
     external_ref = fields.Char(string='External Ref', readonly=True)
-    customer_code = fields.Char(string='Branch Warehouse', readonly=True)
+    customer_code = fields.Char(string='Customer Code', readonly=True)
     shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
     transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
     location_code = fields.Char(string='Location Code', readonly=True)
@@ -102,6 +102,16 @@ class AcumaticaTokoPegangDOLine(models.Model):
             return float(value or 0)
         except Exception:
             return 0.0
+
+    def _find_vendor(self, line):
+        Partner = self.env['res.partner']
+        vendor = False
+        if line.customer_code:
+            # vendor = Partner.search([('ref', '=', line.customer_code), ('is_company', '=', True)], limit=1)
+            vendor = Partner.search([('company_registry', '=', line.customer_code), ('is_company', '=', True)], limit=1)
+            if not vendor:
+                vendor = Partner.search([('name', '=', line.customer_code), ('is_company', '=', True)], limit=1)
+        return vendor
 
     def _find_product(self, line):
         Product = self.env['product.product']
@@ -175,6 +185,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
 
             error_data = Error.search([('origin', '=', origin)], limit=1)
             error_values = {
+                'partner': first.customer_code or False,
                 'operation_type': 'internal',
                 'location': first.warehouse_code or False,
                 'scheduled_date': first._parse_dt(first.scheduled_date),
@@ -239,6 +250,12 @@ class AcumaticaTokoPegangDOLine(models.Model):
         picking = receive.odoo_picking_id
         action_state = 'pending'
 
+        vendor = receive._find_vendor(receive)
+        if not vendor:
+            error_messages.append(
+                f'Customer with CustomerID {receive.customer_code} was not found in the WMS | WMS Dependency : MASTER CUSTOMER.'
+            )
+
         warehouse = receive._find_warehouse(receive)
         if not warehouse:
             error_messages.append(
@@ -266,6 +283,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
             )
 
         picking_vals = {
+            'partner_id': vendor.id if vendor else False,
             'origin': origin,
             'picking_type_id': picking_type.id,
             'adt_dest_location_id': dest_location.id if dest_location else False,
@@ -279,6 +297,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
             'adt_total_qty': self._parse_float(receive.total_qty),
             'adt_type': receive.transfer_type or False,
             'adt_external_ref': receive.external_ref or False,
+            'owner_id': vendor.id if vendor else False,
         }
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 

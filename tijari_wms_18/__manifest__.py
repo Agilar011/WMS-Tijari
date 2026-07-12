@@ -17,6 +17,7 @@
         'product',
     ],
     'data': [
+        'security/ir.model.access.csv',
         'views/assets.xml',
         'views/hide_menu.xml',
         'views/master_menu_view.xml',
