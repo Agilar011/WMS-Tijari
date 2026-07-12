@@ -14,82 +14,12 @@ _logger = logging.getLogger(__name__)
 class AcumaticaShipmentGIStaging(models.Model):
     _name = 'acumatica.shipment.gi.staging'
     _description = 'Acumatica Shipment GI'
-    _rec_name = 'shipment_nbr'
+    _rec_name = 'adt_ShipmentNbr'
 
-    shipment_ids = fields.One2many(
-            'acumatica.sales.order.shipment.staging',
-            'gi_id',
-            string='Shipments'
-        )
-    
-    all_line_ids = fields.One2many(
-        'acumatica.sales.order.shipment.staging.line',
-        compute='_compute_all_line_ids',
-        string='All Shipment Details'
-    )
-
-    @api.depends('shipment_ids.line_ids')
-    def _compute_all_line_ids(self):
-        for rec in self:
-            # Ambil semua record line_ids dari setiap shipment di dalam shipment_ids
-            rec.all_line_ids = rec.shipment_ids.mapped('line_ids')
-
-    acumatica_id = fields.Char('Acumatica ID')
-    row_number = fields.Integer('Row Number')
-    shipment_nbr = fields.Char('Shipment Number')
-    ship_date = fields.Datetime('Ship Date')
-    customer = fields.Char('Customer')
-    customer_name = fields.Char('Customer Name')
-    warehouse_id = fields.Char('Warehouse')
-    location = fields.Char('Location')
-    location_name = fields.Char('Location Name')
-    status = fields.Char('Status')
-    shipment_type = fields.Char('Type')
-    confirmed = fields.Boolean('Confirmed')
-    hold = fields.Boolean('Hold')
-    document_only = fields.Boolean('Document Only')
-    override_address = fields.Boolean('Override Address')
-
-    address_id = fields.Char('Address ID')
-    address_line1 = fields.Char('Address Line 1')
-    address_line2 = fields.Char('Address Line 2')
-    address_line3 = fields.Char('Address Line 3')
-
-    city = fields.Char('City')
-    state = fields.Char('State')
-    state_name = fields.Char('State Name')
-
-    country = fields.Char('Country')
-    country_name = fields.Char('Country Name')
-
-    postal_code = fields.Char('Postal Code')
-
-    ship_via = fields.Char('Ship Via')
-    ship_via_description = fields.Char('Ship Via Description')
-    ship_via_address = fields.Char('Ship Via Address')
-    ship_via_city = fields.Char('Ship Via City')
-    ship_via_phone = fields.Char('Ship Via Phone')
-    ship_via_status = fields.Char('Ship Via Status')
-
-    fob_point = fields.Char('FOB Point')
-    fob_point_description = fields.Char('FOB Point Description')
-
-    note_ship_via = fields.Char('Note Ship Via')
-
-    order_type = fields.Char('Order Type')
-
-    shipped_quantity = fields.Float('Shipped Quantity')
-    shipped_weight = fields.Float('Shipped Weight')
-    shipped_volume = fields.Float('Shipped Volume')
-
-    site_id_description = fields.Char('Site Description')
-    to_warehouse_id = fields.Char('To Warehouse')
-
-    note = fields.Text('Note')
-
+    # shipment_ids = fields.One2many('acumatica.sales.order.shipment.staging','gi_id',string='Shipments')
+    all_line_ids = fields.One2many('acumatica.sales.order.shipment.staging.line', 'gi_id',string='All Shipment Details')
     active = fields.Boolean(default=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
-
     import_state = fields.Selection([
         ('pending', 'Belum Diimport'),
         ('imported', 'Sudah Diimport'),
@@ -98,33 +28,77 @@ class AcumaticaShipmentGIStaging(models.Model):
     ], string='Status', default='pending', readonly=True)
     import_message = fields.Char(string='Keterangan', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
-
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
-
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
-    
     odoo_shipment_status = fields.Selection([
         ('pending', "Belum di Proses"),
         ('processed', "Telah di Proses"),
     ], string='Status Odoo', default='pending')
-
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    total_qty = fields.Float(string='Total Quantity',compute='_compute_total_qty',store=True,digits=(16, 2))
 
-    total_qty = fields.Float(
-        string='Total Quantity',
-        compute='_compute_total_qty',
-        store=True,
-        digits=(16, 2) # Sesuaikan presisi angka desimalnya
-    )
-    @api.depends('shipment_ids.total_qty') # Ganti 'total_qty' dengan nama field qty asli di model tujuan Anda
+    acumatica_id = fields.Char(string="atica_id")
+    adt_rowNumber = fields.Char(string="rowNumber")
+    adt_note = fields.Char(string="note")
+    adt_AddressID = fields.Char(string="AddressID")
+    adt_AddressLine = fields.Char(string="AddressLine")
+    adt_BuildingID = fields.Char(string="BuildingID")
+    adt_City = fields.Char(string="City")
+    adt_Country = fields.Char(string="Country")
+    adt_CountryName = fields.Char(string="CountryName")
+    adt_CustomerID = fields.Char(string="CustomerID")
+    adt_CustomerName = fields.Char(string="CustomerName")
+    adt_DocumentOnly = fields.Char(string="DocumentOnly")
+    adt_FOBPoint = fields.Char(string="FOBPoint")
+    adt_FOBPointDescription = fields.Char(string="FOBPointDescription")
+    adt_LineDescription = fields.Char(string="LineDescription")
+    adt_LineFreeItem = fields.Char(string="LineFreeItem")
+    adt_LineInventoryID = fields.Char(string="LineInventoryID")
+    adt_LineLocation = fields.Char(string="LineLocation")
+    adt_LineNbr = fields.Char(string="LineNbr")
+    adt_LineNote = fields.Char(string="LineNote")
+    adt_LineNoteID = fields.Char(string="LineNoteID")
+    adt_LineQuantity = fields.Char(string="LineQuantity")
+    adt_LineUOM = fields.Char(string="LineUOM")
+    adt_LocationID = fields.Char(string="LocationID")
+    adt_LocationName = fields.Char(string="LocationName")
+    adt_NoteHeader = fields.Char(string="NoteHeader")
+    adt_NoteHeaderID = fields.Char(string="NoteHeaderID")
+    adt_OrderType = fields.Char(string="OrderType")
+    adt_Phone = fields.Char(string="Phone")
+    adt_PostalCode = fields.Char(string="PostalCode")
+    adt_ShipDate = fields.Char(string="ShipDate")
+    adt_ShipmentNbr = fields.Char(string="ShipmentNbr")
+    adt_ShipmentQty = fields.Char(string="ShipmentQty")
+    adt_ShipmentType = fields.Char(string="ShipmentType")
+    adt_ShipmentVolume = fields.Char(string="ShipmentVolume")
+    adt_ShipmentWeight = fields.Char(string="ShipmentWeight")
+    adt_ShipVia = fields.Char(string="ShipVia")
+    adt_SiteIDDescription = fields.Char(string="SiteIDDescription")
+    adt_State = fields.Char(string="State")
+    adt_StateName = fields.Char(string="StateName")
+    adt_Status = fields.Char(string="Status")
+    adt_ToWarehouseID = fields.Char(string="ToWarehouseID")
+    adt_WarehouseID = fields.Char(string="WarehouseID")
+
+    # @api.depends('shipment_ids.line_ids')
+    # def _compute_all_line_ids(self):
+    #     for rec in self:
+    #         # Ambil semua record line_ids dari setiap shipment di dalam shipment_ids
+    #         rec.all_line_ids = rec.shipment_ids.mapped('line_ids')
+
+    @api.depends('all_line_ids.adt_ShipmentQty')
     def _compute_total_qty(self):
         for rec in self:
-            # Gunakan mapped() untuk mengambil semua nilai total_qty lalu dijumlahkan dengan sum()
-            # Pastikan nama field 'total_qty' di bawah ini sama dengan field di acumatica.sales.order.shipment.staging
-            rec.total_qty = sum(rec.shipment_ids.mapped('total_qty'))
-
-
+            # Konversi setiap nilai secara paksa ke float untuk mengantisipasi tipe data str di DB
+            total = 0.0
+            for line in rec.all_line_ids:
+                try:
+                    total += float(line.adt_ShipmentQty or 0.0)
+                except (ValueError, TypeError):
+                    total += 0.0
+            rec.total_qty = total
 
     _sql_constraints = [
         (
@@ -133,6 +107,7 @@ class AcumaticaShipmentGIStaging(models.Model):
             'ID Number must be unique!'
         )
     ]
+
 # =====================================================================================================================================================================
     # Main Flow Function
 # =====================================================================================================================================================================
@@ -155,13 +130,13 @@ class AcumaticaShipmentGIStaging(models.Model):
         # =====================================================
         # update staging status
         # =====================================================
-        pending_shipments = self.mapped('shipment_nbr')
+        pending_shipments = self.mapped('adt_ShipmentNbr')
 
         if not pending_shipments:
             print("NO PENDING SHIPMENT FOUND")
             return True
 
-        shipment_numbers = pending_shipments.mapped('shipment_nbr')
+        shipment_numbers = pending_shipments.mapped('adt_ShipmentNbr')
         print(f"Shipment Numbers : {shipment_numbers}")
 
         existing_pickings = Picking.search([
@@ -172,7 +147,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         processed_picking = existing_pickings.mapped('origin')
 
         not_pending_shipment = shipment_gi.search([
-        ('shipment_nbr', 'in', processed_picking)
+        ('adt_ShipmentNbr', 'in', processed_picking)
         ])
 
         for staging_rec in not_pending_shipment:
@@ -180,13 +155,13 @@ class AcumaticaShipmentGIStaging(models.Model):
             staging_rec.write({
                 'odoo_shipment_status': 'processed',
                 'import_state': 'error',
-                'import_message': f'Receipt {staging_rec.shipment_nbr} sudah ada di Odoo dengan state done, tidak bisa diupdate.'
+                'import_message': f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state done, tidak bisa diupdate.'
             })
 
         # =====================================================
         # GET STAGING PENDING
         # =====================================================
-        pending_shipments = self.filtered(lambda r: r.odoo_shipment_status == 'pending').mapped('shipment_nbr')
+        pending_shipments = self.filtered(lambda r: r.odoo_shipment_status == 'pending').mapped('adt_ShipmentNbr')
 
         print(f"Pending Shipment Count : {len(pending_shipments)}")
 
@@ -194,7 +169,7 @@ class AcumaticaShipmentGIStaging(models.Model):
             print("NO PENDING SHIPMENT FOUND")
             return True
 
-        shipment_numbers = pending_shipments.mapped('shipment_nbr')
+        shipment_numbers = pending_shipments.mapped('adt_ShipmentNbr')
         print(f"Shipment Numbers : {shipment_numbers}")
 
         # =====================================================
@@ -222,9 +197,9 @@ class AcumaticaShipmentGIStaging(models.Model):
         # PROCESS SHIPMENT
         # =====================================================
         for shipment in pending_shipments:
-            print("\n" + "#" * 120 + f"\nPROCESS SHIPMENT : {shipment.shipment_nbr}\n" + "#" * 120)
+            print("\n" + "#" * 120 + f"\nPROCESS SHIPMENT : {shipment.adt_ShipmentNbr}\n" + "#" * 120)
             
-            shipment_number = (shipment.shipment_nbr or '').strip()
+            shipment_number = (shipment.adt_ShipmentNbr or '').strip()
 
             # MEKANISME SAVEPOINT DIMULAI DISINI
             # Jika terjadi error di dalam blok 'with', Odoo hanya me-rollback perubahan untuk shipment ini saja.
@@ -291,7 +266,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                                 'partner_id': partner.id,
                                 'scheduled_date': shipment.ship_date,
                                 'note': shipment.note,
-                                'adt_receipt_nbr': shipment.shipment_nbr,
+                                'adt_receipt_nbr': shipment.adt_ShipmentNbr,
                                 'adt_partner_ref': shipment.customer,
                                 'adt_status': shipment.status,
                                 'adt_trans_type': shipment.shipment_type,
@@ -387,7 +362,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'scheduled_date': shipment.ship_date,
                         'origin': shipment_number,
                         'note': shipment.note,
-                        'adt_receipt_nbr': shipment.shipment_nbr,
+                        'adt_receipt_nbr': shipment.adt_ShipmentNbr,
                         'adt_partner_ref': shipment.customer,
                         'adt_status': shipment.status,
                         'adt_trans_type': shipment.shipment_type,
@@ -661,11 +636,11 @@ class AcumaticaShipmentGIStaging(models.Model):
 
 # Helper Function
 
-    @api.depends('shipment_nbr')
+    @api.depends('adt_ShipmentNbr')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('origin', '=', rec.receipt_nbr)]))
+            rec.exists_in_odoo = bool(rec.adt_ShipmentNbr and Picking.search_count([('origin', '=', rec.adt_ShipmentNbr)]))
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -718,18 +693,6 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
     _name = 'acumatica.sales.order.shipment.staging'
     _description = 'Staging Data Shipment Receipt dari Acumatica'
 
-    gi_id = fields.Many2one(
-        'acumatica.shipment.gi.staging'
-    )
-
-    shipto_address_id = fields.Many2one(
-        'acumatica.sales.order.shipment.shiptoaddress.staging'
-    )
-
-    line_ids = fields.One2many(
-        'acumatica.sales.order.shipment.staging.line',
-        'shipment_id'
-    )
 
     config_id = fields.Char()
 
@@ -785,25 +748,6 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
-
-    @api.depends('odoo_picking_id')
-    def _compute_exists_in_odoo(self):
-        for rec in self:
-            rec.exists_in_odoo = bool(rec.odoo_picking_id)
-
-    total_qty = fields.Float(
-        string='Total Quantity',
-        compute='_compute_total_qty',
-        store=True,
-        digits=(16, 2) # Sesuaikan presisi angka desimalnya
-    )
-    @api.depends('line_ids.shippedqty') # Ganti 'quantity' dengan nama field qty asli di model tujuan Anda
-    def _compute_total_qty(self):
-        for rec in self:
-            # Gunakan mapped() untuk mengambil semua nilai quantity lalu dijumlahkan dengan sum()
-            # Pastikan nama field 'quantity' di bawah ini sama dengan field di acumatica.sales.order.shipment.staging
-            rec.total_qty = sum(rec.line_ids.mapped('shippedqty'))
-
 
     def _do_import(self):
         print("Menjalankan fungsi do import so shipment")
@@ -1356,33 +1300,24 @@ class AcumaticaSalesOrderShipmentStagingLine(models.Model):
     _name = 'acumatica.sales.order.shipment.staging.line'
     _description = 'Staging Data Detail Shipment Receipt dari Acumatica'
 
-    shipment_id = fields.Many2one(
-        'acumatica.sales.order.shipment.staging'
-    )
-
-    allocation_ids = fields.One2many(
-        'acumatica.sales.order.shipment.staging.allocation',
-        'line_id'
+    gi_id = fields.Many2one(
+        'acumatica.shipment.gi.staging',
+        string='GI Reference',
+        ondelete='cascade'
     )
 
     noteid = fields.Char()    
 
-    acumatica_id = fields.Char(string='ID', readonly=True)
-    rownumber = fields.Integer(string='Row Number', readonly=True)
-    note = fields.Text(string='Note', readonly=True)
-    description = fields.Text(string='Description', readonly=True)
-    freeitem = fields.Boolean(string='Free Item', readonly=True)
-    inventoryid = fields.Char(string='Inventory ID', readonly=True)
-    linenbr = fields.Integer(string='Line Number', readonly=True)
-    location = fields.Char(string='Location', readonly=True)
-    openorderqty = fields.Float(string='Open Order Qty', readonly=True)
-    orderedqty = fields.Float(string='Ordered Qty', readonly=True)
-    orderlinenbr = fields.Integer(string='Order Line Number', readonly=True)
-    ordernbr = fields.Char(string='Order Number', readonly=True)
-    ordertype = fields.Char(string='Order Type', readonly=True)
-    shippedqty = fields.Float(string='Shipped Qty', readonly=True)
-    uom = fields.Char(string='UOM', readonly=True)
-    warehouseid = fields.Char(string='Warehouse ID', readonly=True)
+    acumatica_id = fields.Char(string="acumatica_id")
+    adt_rowNumber = fields.Char(string="rowNumber")
+    adt_LineInventoryID = fields.Char(string="LineInventoryID")
+    adt_LineDescription = fields.Char(string="LineDescription")
+    adt_LineLocation = fields.Char(string="LineLocation")
+    adt_LineNbr = fields.Char(string="LineNbr")
+    adt_ShipmentQty = fields.Char(string="ShipmentQty")
+    adt_LineUOM = fields.Char(string="LineUOM")
+    adt_WarehouseID = fields.Char(string="WarehouseID")
+
     selected = fields.Boolean(string='Pilih', default=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
 
@@ -1398,7 +1333,7 @@ class AcumaticaSalesOrderShipmentStagingLine(models.Model):
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
-    exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+    # exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
 
 class AcumaticaSalesOrderShipmentStagingAllocation(models.Model):
@@ -1440,11 +1375,11 @@ class AcumaticaSalesOrderShipmentShipToAddressStaging(models.Model):
     _name = 'acumatica.sales.order.shipment.shiptoaddress.staging'
     _description = 'Staging Data Ship To Address Detail Shipment Receipt dari Acumatica'
 
-    shipment_id = fields.Many2one(
-        'acumatica.sales.order.shipment.staging',
-        required=True,
-        ondelete='cascade'
-    )
+    # shipment_id = fields.Many2one(
+    #     'acumatica.sales.order.shipment.staging',
+    #     required=True,
+    #     ondelete='cascade'
+    # )
 
     acumatica_id = fields.Char()
     rownumber = fields.Integer()
