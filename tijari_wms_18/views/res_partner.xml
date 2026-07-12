@@ -54,6 +54,14 @@
                         <field name="adt_note"/> -->
                     </group>
                 </page>
+                <page name="e_signature" string="Digital Signature">
+                    <group>
+                        <label for="digital_signature" string="Digital Signature" class="oe_edit_only"/>
+                        <h2>
+                            <field name="digital_signature" widget="signature"/>
+                        </h2>
+                    </group>
+                </page>
             </xpath>
 
         </field>

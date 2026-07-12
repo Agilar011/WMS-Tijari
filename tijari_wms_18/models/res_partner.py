@@ -125,4 +125,4 @@ class ResPartner(models.Model):
         ('customer_location', 'Customer Location'),
         ('warehouse', 'Warehouse'),
     ], string='Partner Type')
-
+    digital_signature = fields.Binary(string="Signature")

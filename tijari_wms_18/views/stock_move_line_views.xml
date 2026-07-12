@@ -27,6 +27,8 @@
                 <field name="matching" column_invisible="1"/>
                 <!-- <field name="operation_category" column_invisible="0"/> -->
                 <field name="package_id" column_invisible="0"/>
+                <field name="confirmation_lot_code" />
+                <field name="confirmation_location_code" />
             </xpath>
 
             <!-- Lock lot fields -->
@@ -75,8 +77,6 @@
                 />
                 <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
                 <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
-                <field name="confirmation_lot_code" />
-                <field name="confirmation_location_code" />
                 <field name="matching_lot_id" column_invisible="1" force_save="1"/>
                 <field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
 
