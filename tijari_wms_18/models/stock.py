@@ -1005,8 +1005,8 @@ class StockMoveLine(models.Model):
         lot = Lot.search([
             ('name', '=', lot_code)
         ], limit=1)
-        if not lot:
-            raise ValidationError("Lot Tidak Ditemukan")
+        # if not lot:
+        #     raise ValidationError("Lot Tidak Ditemukan")
         return lot
 
     @api.onchange('confirmation_lot_code')
@@ -1024,8 +1024,8 @@ class StockMoveLine(models.Model):
         loc = Loc.search([
             ('unique_code', '=', lot_code)
         ], limit=1)
-        if not loc:
-            raise ValidationError("Lokasi Tidak Ditemukan")
+        # if not loc:
+        #     raise ValidationError("Lokasi Tidak Ditemukan")
 
         return loc
 
