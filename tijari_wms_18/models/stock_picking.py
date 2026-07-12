@@ -79,8 +79,7 @@ class StockPicking(models.Model):
                 "There is nothing eligible to put in a pack."
             ))
 
-        packages = self.env['stock.quant.package']
-
+        # packages = self.env['stock.quant.package']
         # for move in move_line_ids.mapped('move_id'):
 
         #     lines = move_line_ids.filtered(
@@ -91,30 +90,110 @@ class StockPicking(models.Model):
 
         #     packages |= package
 
-        move_lines = self.move_line_ids.filtered(
-            lambda line: line.quantity
-            and not line.result_package_id
+        # return True
+
+        move_line_ids = move_line_ids.filtered(
+            lambda line:
+                line.quantity > 0
+                and not line.result_package_id
         )
 
-        if not move_lines:
-            return False
+        if not move_line_ids:
+            raise UserError(
+                _("There is nothing eligible to put in a pack.")
+            )
 
+        # Group move line berdasarkan destination location.
         lines_by_destination = defaultdict(
             lambda: self.env["stock.move.line"]
         )
 
-        for line in move_lines:
-            lines_by_destination[line.location_dest_id.id] |= line
+        for move_line in move_line_ids:
+            if not move_line.location_dest_id:
+                raise UserError(
+                    _(
+                        "Destination location is missing for product %s."
+                    ) % move_line.product_id.display_name
+                )
+
+            lines_by_destination[
+                move_line.location_dest_id.id
+            ] |= move_line
 
         packages = self.env["stock.quant.package"]
 
-        for lines in lines_by_destination.values():
-            packages |= self._put_in_pack(lines)
+        # Setiap destination diproses sebagai package terpisah.
+        for grouped_move_lines in lines_by_destination.values():
+            package = self._put_in_pack(grouped_move_lines)
+            packages |= package
 
+        # Mengikuti pola return dari method packing:
+        # return package terakhir yang dibuat.
         return packages[-1] if packages else False
 
-        return True
     
+    def _put_in_pack(self, move_line_ids):
+        """
+        Create a package and package level for move lines that have
+        the same destination location.
+
+        Custom behavior:
+        - Preserve the existing `location_dest_id`.
+        - Do not recalculate putaway strategy during packing.
+        """
+        self.ensure_one()
+
+        if not move_line_ids:
+            raise UserError(
+                _("No move lines were provided for packaging.")
+            )
+
+        # _put_in_pack hanya boleh menerima satu destination.
+        destination_locations = move_line_ids.mapped(
+            "location_dest_id"
+        )
+
+        if len(destination_locations) != 1:
+            raise UserError(
+                _(
+                    "Move lines with different destination locations "
+                    "cannot be inserted into the same package."
+                )
+            )
+
+        package = self._get_put_in_pack_package()
+
+        # Ambil package type dari product packaging jika seluruh line
+        # menghasilkan satu package type yang sama.
+        package_types = move_line_ids.mapped(
+            "move_id.product_packaging_id.package_type_id"
+        )
+
+        if len(package_types) == 1:
+            package.package_type_id = package_types
+
+        # Hubungkan seluruh move line ke package hasil.
+        move_line_ids.write({
+            "result_package_id": package.id,
+        })
+
+        # Buat package level untuk package tersebut.
+        self.env["stock.package_level"].with_context(
+            from_put_in_pack=True
+        ).create({
+            "package_id": package.id,
+            "picking_id": self.id,
+            "location_id": False,
+            "location_dest_id": destination_locations.id,
+            "move_line_ids": [
+                (6, 0, move_line_ids.ids)
+            ],
+            "company_id": self.company_id.id,
+        })
+
+        return package
+
+
     def _check_sync_state(self):
         for picking in self:
             if picking.sync_state == 'not_ready':
