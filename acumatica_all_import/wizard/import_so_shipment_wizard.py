@@ -358,11 +358,18 @@ class ImportSOShipmentWizard(models.TransientModel):
                 ship_date = self._val(item, "ShipDate")
                 phrase_date = dateutil_parser.parse(ship_date).replace(tzinfo=None)
                 warehouse_id = self._val(item, "WarehouseID")
+                OrderType = self._val(item, "OrderType")
                 print(f"Warehouse ID : {warehouse_id}")
-                picking_type = self._search_picking_type(warehouse_id)
+
+                if OrderType == 'CO':
+                    code = 'incoming'
+                else:
+                    code = 'outgoing'
+
+                print(f"Transaction Type: {code}")
+
+                picking_type = self._search_picking_type(warehouse_id, code)
                 picking_type_id = picking_type.id if picking_type else None
-
-
 
                 vals = {
                     "acumatica_id": item.get("id", ""),
@@ -1061,7 +1068,7 @@ class ImportSOShipmentWizard(models.TransientModel):
             last_error,
         )
 
-    def _search_picking_type(self, header):
+    def _search_picking_type(self, header, code):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
 
@@ -1074,7 +1081,7 @@ class ImportSOShipmentWizard(models.TransientModel):
             print(f"Building id: {location.odoo_building_id.id}")
             type = PickingType.search([
                 ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'outgoing'),
+                ('code', '=', code),
                 ('is_default_api', '=', True)
             ])
             print(f"Type: {type}")
