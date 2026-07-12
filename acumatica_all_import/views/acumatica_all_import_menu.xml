@@ -10,8 +10,8 @@
         sequence="10"/>
     <menuitem id="menu_acumatica_all_import_staging_receipt" name="PO Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_line" sequence="10"/>
     <menuitem id="menu_acumatica_all_import_staging_so_transfer" name="Transfer - Inter Warehouse : IN" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_transfer_line" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_staging_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_change_item_line" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_staging_inventory_received" name="Receipt : Inventory Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_recieved_line" sequence="40"/>
+    <!-- <menuitem id="menu_acumatica_all_import_staging_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_change_item_line" sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_staging_inventory_received" name="Receipt : Inventory Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_recieved_line" sequence="40"/> -->
     <menuitem id="menu_acumatica_all_import_staging_toko_pegang_do" name="Receipt : Toko Pegang DO" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_toko_pegang_do_line" sequence="41"/>
     <menuitem id="menu_acumatica_all_import_staging_inventory_external" name="Inventory External (Change Item &amp; Inventory Receive)" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_external_line" sequence="42"/>
     <menuitem id="menu_acumatica_all_import_staging_shipment_so" name="SO Return" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_shipment_line" sequence="50"/>
@@ -64,8 +64,8 @@
         sequence="10"/>
     <menuitem id="menu_acumatica_all_import_config_receipt" name="PO Receipt" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_receipt_config" sequence="10"/>
     <menuitem id="menu_acumatica_all_import_config_so_transfer" name="Transfer - Inter Warehouse : IN" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_transfer_config" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_config_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_receipt_change_item_config" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_config_inventory_received" name="Receipt : Inventory Receipt" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_recieved_config" sequence="40"/>
+    <!-- <menuitem id="menu_acumatica_all_import_config_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_receipt_change_item_config" sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_config_inventory_received" name="Receipt : Inventory Receipt" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_recieved_config" sequence="40"/> -->
     <menuitem id="menu_acumatica_all_import_config_toko_pegang_do" name="Receipt : Toko Pegang DO" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_toko_pegang_do_config" sequence="41"/>
     <menuitem id="menu_acumatica_all_import_config_inventory_external" name="Inventory External (Change Item &amp; Inventory Receive)" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_external_config" sequence="41"/>
     <menuitem id="menu_acumatica_all_import_config_shipment_so" name="SO Return" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_shipment_config" sequence="50"/>

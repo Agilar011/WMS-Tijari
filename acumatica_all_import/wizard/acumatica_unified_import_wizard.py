@@ -290,9 +290,9 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     TRANSACTION_TYPES = [
         'po_receipt',
         'so_transfer',
-        'receipt_change_item',
+        # 'receipt_change_item',
         'receipt_external',
-        'inventory_received',
+        # 'inventory_received',
         'toko_pegang_do',
         'shipment_so',
         'so_shipment',

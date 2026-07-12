@@ -26,7 +26,7 @@
         </field>
     </record>
 
-    <record id="stock_picking_type_kanban_add_draft_button" model="ir.ui.view">
+    <!-- <record id="stock_picking_type_kanban_add_draft_button" model="ir.ui.view">
         <field name="name">stock.picking.type.kanban.add.draft.button</field>
         <field name="model">stock.picking.type</field>
         <field name="inherit_id" ref="stock.stock_picking_type_kanban"/>
@@ -42,6 +42,6 @@
 
             </xpath>
         </field>
-    </record>
+    </record> -->
 
 </odoo>

@@ -203,7 +203,12 @@ class AcumaticaShipmentLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(
+            lambda l: (
+                l.import_state in ['pending', 'error'] 
+                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+            )
+        )
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -513,17 +518,17 @@ class AcumaticaShipmentLine(models.Model):
                 error += 1
                 continue
 
-        msg = f'Import done: {imported} shipment created, {updated} shipment updated, {error} shipment error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Shipment SO Return',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        # msg = f'Import done: {imported} shipment created, {updated} shipment updated, {error} shipment error.'
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Shipment SO Return',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})

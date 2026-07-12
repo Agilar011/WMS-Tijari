@@ -165,6 +165,7 @@ class StockPicking(models.Model):
                     print(f"Missing lot: {line}")
                     raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
         for picking in self:
+            picking._check_validate_requirements()
             operation_category = picking.picking_type_id.operation_category
             print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
 
@@ -253,6 +254,63 @@ class StockPicking(models.Model):
 
         return res
 
+    def _check_validate_requirements(self):
+        self.ensure_one()
+
+        active_moves = self.move_ids.filtered(
+            lambda move: move.state != "cancel"
+        )
+
+        unpicked_moves = active_moves.filtered(
+            lambda move: not move.picked
+        )
+
+        unmatched_move_lines = active_moves.move_line_ids.filtered(
+            lambda line: line.matching != "match"
+        )
+
+        error_messages = []
+
+        if unpicked_moves:
+            products = "\n".join(
+                f"- {move.product_id.display_name}"
+                for move in unpicked_moves
+            )
+
+            error_messages.append(
+                _(
+                    "Semua product harus dalam kondisi picked.\n"
+                    "Move yang belum picked:\n%s"
+                )
+                % products
+            )
+
+        if unmatched_move_lines:
+            lines = "\n".join(
+                "- %s | Lot/Serial: %s | Matching: %s"
+                % (
+                    line.product_id.display_name,
+                    line.lot_id.name or line.lot_name or "-",
+                    dict(line._fields["matching"].selection).get(
+                        line.matching,
+                        line.matching or "-"
+                    ),
+                )
+                for line in unmatched_move_lines
+            )
+
+            error_messages.append(
+                _(
+                    "Semua product harus memiliki status matching "
+                    "'Match'.\n"
+                    "Move line yang belum match:\n%s"
+                )
+                % lines
+            )
+
+        if error_messages:
+            raise UserError("\n\n".join(error_messages))
+
     def action_print_warehouse_receipt(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
@@ -309,23 +367,23 @@ class StockPickingType(models.Model):
 
     is_default_api = fields.Boolean(string="Default Picking Type For API")
 
-    def get_action_picking_tree_draft(self):
-        self.ensure_one()
+    # def get_action_picking_tree_draft(self):
+    #     self.ensure_one()
 
-        action = self._get_action("stock.stock_picking_action_picking_type")
+    #     action = self._get_action("stock.stock_picking_action_picking_type")
 
-        ctx = action.get("context", {})
-        if isinstance(ctx, str):
-            from odoo.tools.safe_eval import safe_eval
-            ctx = safe_eval(ctx)
+    #     ctx = action.get("context", {})
+    #     if isinstance(ctx, str):
+    #         from odoo.tools.safe_eval import safe_eval
+    #         ctx = safe_eval(ctx)
 
-        ctx.update({
-            "search_default_draft": 1,
-        })
+    #     ctx.update({
+    #         "search_default_draft": 1,
+    #     })
 
-        action["context"] = ctx
+    #     action["context"] = ctx
 
-        return action
+    #     return action
 
 
 class StockLocation(models.Model):
@@ -908,6 +966,7 @@ class StockMoveLine(models.Model):
             'tag': 'adt_focus_move_line_field',
             'params': {
                 'field_name': 'confirmation_lot_code',
+                'move_line_id': self.id,
             },
         }
 
@@ -920,15 +979,9 @@ class StockMoveLine(models.Model):
             'tag': 'adt_focus_move_line_field',
             'params': {
                 'field_name': 'confirmation_location_code',
+                'move_line_id': self.id,
             },
         }
-    
-    def _find_loc_by_scan_code(self, lot_code):
-        Loc = self.env['stock.location']
-
-        return Loc.search([
-            ('unique_code', '=', lot_code)
-        ], limit=1)
 
     @api.onchange('matching')
     def _onchange_matching(self):
@@ -943,17 +996,18 @@ class StockMoveLine(models.Model):
 
             location = wizard._find_loc_by_scan_code(wizard.confirmation_location_code)
 
-            if not location:
-                continue
-
-            wizard.matching_loc_dest_id = location.id
+            wizard.matching_loc_dest_id = location.id if location else False
 
     def _find_lot_by_scan_code(self, lot_code):
+        lot = False
         Lot = self.env['stock.lot']
 
-        return Lot.search([
+        lot = Lot.search([
             ('name', '=', lot_code)
         ], limit=1)
+        if not lot:
+            raise ValidationError("Lot Tidak Ditemukan")
+        return lot
 
     @api.onchange('confirmation_lot_code')
     def _onchange_confirmation_lot_code(self):
@@ -961,10 +1015,19 @@ class StockMoveLine(models.Model):
 
             lot = wizard._find_lot_by_scan_code(wizard.confirmation_lot_code)
 
-            if not lot:
-                continue
+            wizard.matching_lot_id = lot.id if lot else False
 
-            wizard.matching_lot_id = lot.id
+    def _find_loc_by_scan_code(self, lot_code):
+        loc = False
+        Loc = self.env['stock.location']
+
+        loc = Loc.search([
+            ('unique_code', '=', lot_code)
+        ], limit=1)
+        if not loc:
+            raise ValidationError("Lokasi Tidak Ditemukan")
+
+        return loc
 
     @api.onchange('matching_lot_id', 'matching_loc_dest_id')
     def _onchange_update_matching_status(self):

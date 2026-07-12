@@ -6,19 +6,49 @@ function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function findRowById(recordId) {
+    if (!recordId) {
+        return null;
+    }
+
+    const rows = Array.from(
+        document.querySelectorAll("tr.o_data_row")
+    ).filter((row) => row.offsetParent !== null);
+
+    return rows.find((row) => {
+        const idCell = row.querySelector('td[name="id"]');
+
+        if (!idCell) {
+            return false;
+        }
+
+        const input = idCell.querySelector("input, .o_input");
+
+        const value = input
+            ? input.value
+            : idCell.textContent.trim();
+
+        return Number(value) === Number(recordId);
+    });
+}
+
 async function focusMoveLineField(env, action) {
     const params = action.params || {};
     const fieldName = params.field_name;
+    const moveLineId = params.move_line_id;
 
-    if (!fieldName) {
+    if (!fieldName || !moveLineId) {
         return;
     }
 
     await delay(100);
 
-    let activeRow = document.querySelector(
-        "tr.o_selected_row, tr.table-active, tr:focus-within"
-    );
+    // let activeRow = document.querySelector(
+    //     "tr.o_selected_row, tr.table-active, tr:focus-within"
+    // );
+
+    const activeRow = findRowById(moveLineId);
+
 
     let targetCell = null;
 
