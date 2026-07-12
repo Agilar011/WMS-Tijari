@@ -190,6 +190,7 @@ class AcumaticaReceiptExternalLine(models.Model):
             ErrorLine = error_env['stock.picking.acumatica.error.line'].sudo()
 
             error_data = Error.search([('origin', '=', origin)], limit=1)
+            type = 'receipt_change_item' if first.transfer_type == 'Change Item' else 'inventory_received'
             error_values = {
                 'operation_type': 'receipt',
                 'location': first.warehouse_code or False,
@@ -198,7 +199,7 @@ class AcumaticaReceiptExternalLine(models.Model):
                 'origin': origin,
                 'adt_total_qty': first._parse_float(first.total_qty),
                 'adt_actual_qty': first._parse_float(first.actual_qty),
-                'api_acumatica': 'inventory_received',
+                'api_acumatica': type,
                 'error_message': '\n'.join(error_messages),
                 'payload': str(payload_text)[:1000],
                 'state': 'new',
@@ -252,9 +253,18 @@ class AcumaticaReceiptExternalLine(models.Model):
         origin = receive.reference_nbr or False
         header_payload = receive.read()[0] if receive.exists() else {}
         error_messages = []
-        error_line_payloads = []
+        all_line_payloads = []
         picking = receive.odoo_picking_id
         action_state = 'pending'
+
+        for receive_line in receive.product_line_ids:
+            all_line_payloads.append({
+                'inventory_id': receive_line.inventory_id or False,
+                'product_name': receive_line.description or False,
+                'qty': receive._parse_float(receive_line.product_uom_qty),
+                'uom': receive_line.uom_code or False,
+                'payload': receive_line.read()[0] if receive_line.exists() else {},
+            })
 
         customer = False
         if receive.transfer_type == 'Change Item':
@@ -334,13 +344,13 @@ class AcumaticaReceiptExternalLine(models.Model):
                     error_messages.append(
                         f'Product with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
                     )
-                    error_line_payloads.append({
-                        'inventory_id': receive_line.inventory_id or False,
-                        'product_name': receive_line.description or False,
-                        'qty': receive._parse_float(receive_line.product_uom_qty),
-                        'uom': receive_line.uom_code or False,
-                        'payload': receive_line.read()[0] if receive_line.exists() else {},
-                    })
+                    # error_line_payloads.append({
+                    #     'inventory_id': receive_line.inventory_id or False,
+                    #     'product_name': receive_line.description or False,
+                    #     'qty': receive._parse_float(receive_line.product_uom_qty),
+                    #     'uom': receive_line.uom_code or False,
+                    #     'payload': receive_line.read()[0] if receive_line.exists() else {},
+                    # })
                     continue
 
                 uom = receive._find_uom(receive_line, product)
@@ -348,13 +358,13 @@ class AcumaticaReceiptExternalLine(models.Model):
                     error_messages.append(
                         f'UOM with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER UOM.'
                     )
-                    error_line_payloads.append({
-                        'inventory_id': receive_line.inventory_id or False,
-                        'product_name': receive_line.description or False,
-                        'qty': receive._parse_float(receive_line.product_uom_qty),
-                        'uom': receive_line.uom_code or False,
-                        'payload': receive_line.read()[0] if receive_line.exists() else {},
-                    })
+                    # error_line_payloads.append({
+                    #     'inventory_id': receive_line.inventory_id or False,
+                    #     'product_name': receive_line.description or False,
+                    #     'qty': receive._parse_float(receive_line.product_uom_qty),
+                    #     'uom': receive_line.uom_code or False,
+                    #     'payload': receive_line.read()[0] if receive_line.exists() else {},
+                    # })
                     continue
 
                 qty = receive._parse_float(receive_line.product_uom_qty)
@@ -395,7 +405,7 @@ class AcumaticaReceiptExternalLine(models.Model):
             except Exception as line_error:
                 _logger.exception("Error import line %s", receive.id)
                 error_messages.append(str(line_error))
-                error_line_payloads.append({
+                all_line_payloads.append({
                     'inventory_id': receive_line.inventory_id or False,
                     'product_name': receive_line.line_description or False,
                     'qty': receive._parse_float(receive_line.product_uom_qty),
@@ -411,7 +421,7 @@ class AcumaticaReceiptExternalLine(models.Model):
                     'picking_vals': picking_vals,
                     'picking_id': picking.id if picking else False,
                 },
-                line_payloads=error_line_payloads,
+                line_payloads=all_line_payloads,
             )
 
         receive.write({
@@ -448,18 +458,18 @@ class AcumaticaReceiptExternalLine(models.Model):
                 _logger.exception("Error import Inventory Receipt %s", receive.reference_nbr or receive.id)
                 if isinstance(exc, InventoryImportError):
                     error_payload = exc.payload
-                    error_line_payloads = exc.line_payloads
+                    all_line_payloads = exc.line_payloads
                     error_message = str(exc)
                 else:
                     error_payload = {'header': receive.read()[0] if receive.exists() else {}}
-                    error_line_payloads = []
+                    all_line_payloads = []
                     error_message = str(exc)
 
                 try:
                     self._persist_error_tracking(
                         receive,
                         [error_message],
-                        line_payloads=error_line_payloads,
+                        line_payloads=all_line_payloads,
                         payload=error_payload,
                     )
                 except Exception:

@@ -20,11 +20,11 @@
             </xpath> -->
             <xpath expr="//button[@name='button_validate']" position="after">
 
-                <!-- <button name="action_print_warehouse_receipt"
+                <button name="action_print_warehouse_receipt"
                 string="Print Receipt"
                 type="object"
                 class="btn-primary"
-                invisible="state != 'done' or picking_type_code != 'incoming'"/> -->
+                invisible="state != 'done' or picking_type_code != 'incoming'"/>
 
                 <button name="action_send_email_hasil_picking"
                     string="Send Email"

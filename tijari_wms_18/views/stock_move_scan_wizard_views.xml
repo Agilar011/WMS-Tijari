@@ -37,7 +37,6 @@
 
 							<field name="id" string="Line ID"/>
 							<field name="matching_html" readonly="1" force_save="1"/>
-							<field name="product_id" readonly="1"/>
 							<field name="lot_id" readonly="1"/>
 							<field name="matching_lot_id" column_invisible="1" force_save="1"/>
 
@@ -46,12 +45,12 @@
 							<field name="location_dest_id" readonly="1"/>
 							<field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
 
-							<field name="confirmation_lot_code"/>
-							<field name="confirmation_location_code"/>
 
 							<field name="quantity" readonly="1"/>
 							<field name="product_uom_id" readonly="1"/>
 							<field name="matching" column_invisible="1" force_save="1"/>
+							<field name="confirmation_lot_code"/>
+							<field name="confirmation_location_code"/>
 
 						</list>
 					</field>

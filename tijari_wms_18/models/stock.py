@@ -1125,6 +1125,8 @@ class StockMove(models.Model):
             for line in move.move_line_ids:
                 if not line.lot_id:
                     raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
+                if not line.location_dest_id.unique_code:
+                    raise ValidationError(f"Unique Code untuk location {line.location_dest_id.name} kosong, Silahkan generate location terlebih dahulu")
                 line.matching_lot_id = line.lot_id.id or False
                 line.matching_loc_dest_id = line.location_dest_id.id or False
                 line.confirmation_lot_code = line.lot_id.name or False
