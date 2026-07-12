@@ -20,7 +20,19 @@ class AcumaticaShipmentGIStaging(models.Model):
             'acumatica.sales.order.shipment.staging',
             'gi_id',
             string='Shipments'
-        )    
+        )
+    
+    all_line_ids = fields.One2many(
+        'acumatica.sales.order.shipment.staging.line',
+        compute='_compute_all_line_ids',
+        string='All Shipment Details'
+    )
+
+    @api.depends('shipment_ids.line_ids')
+    def _compute_all_line_ids(self):
+        for rec in self:
+            # Ambil semua record line_ids dari setiap shipment di dalam shipment_ids
+            rec.all_line_ids = rec.shipment_ids.mapped('line_ids')
 
     acumatica_id = fields.Char('Acumatica ID')
     row_number = fields.Integer('Row Number')
@@ -99,6 +111,19 @@ class AcumaticaShipmentGIStaging(models.Model):
 
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
 
+    total_qty = fields.Float(
+        string='Total Quantity',
+        compute='_compute_total_qty',
+        store=True,
+        digits=(16, 2) # Sesuaikan presisi angka desimalnya
+    )
+    @api.depends('shipment_ids.total_qty') # Ganti 'total_qty' dengan nama field qty asli di model tujuan Anda
+    def _compute_total_qty(self):
+        for rec in self:
+            # Gunakan mapped() untuk mengambil semua nilai total_qty lalu dijumlahkan dengan sum()
+            # Pastikan nama field 'total_qty' di bawah ini sama dengan field di acumatica.sales.order.shipment.staging
+            rec.total_qty = sum(rec.shipment_ids.mapped('total_qty'))
+
 
 
     _sql_constraints = [
@@ -113,6 +138,8 @@ class AcumaticaShipmentGIStaging(models.Model):
 # =====================================================================================================================================================================
 
     def _do_import(self):
+        print("Menjalankan fungsi do import so shipment")
+        print(self)
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         PickingType = self.env['stock.picking.type']
@@ -128,9 +155,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         # =====================================================
         # update staging status
         # =====================================================
-        pending_shipments = shipment_gi.search([
-            ('odoo_shipment_status', '=', 'pending')
-        ])
+        pending_shipments = self.mapped('shipment_nbr')
 
         if not pending_shipments:
             print("NO PENDING SHIPMENT FOUND")
@@ -150,16 +175,18 @@ class AcumaticaShipmentGIStaging(models.Model):
         ('shipment_nbr', 'in', processed_picking)
         ])
 
-        not_pending_shipment.write({
-            'odoo_shipment_status': 'processed'
-        })
+        for staging_rec in not_pending_shipment:
+            # Gunakan f-string (tanda f sebelum petik) agar variabel terbaca dinamis
+            staging_rec.write({
+                'odoo_shipment_status': 'processed',
+                'import_state': 'error',
+                'import_message': f'Receipt {staging_rec.shipment_nbr} sudah ada di Odoo dengan state done, tidak bisa diupdate.'
+            })
 
         # =====================================================
         # GET STAGING PENDING
         # =====================================================
-        pending_shipments = shipment_gi.search([
-            ('odoo_shipment_status', '=', 'pending')
-        ])
+        pending_shipments = self.filtered(lambda r: r.odoo_shipment_status == 'pending').mapped('shipment_nbr')
 
         print(f"Pending Shipment Count : {len(pending_shipments)}")
 
@@ -210,13 +237,15 @@ class AcumaticaShipmentGIStaging(models.Model):
                     
                     # 1. WAREHOUSE
                     warehouse = self._find_warehouse(shipment.warehouse_id)
+                    print(warehouse)
+
                     if not warehouse:
                         raise ValidationError(f"Warehouse {shipment.warehouse_id} tidak ditemukan")
 
                     # 2. PARTNER
-                    partner = self._find_partner(shipment.customer)
+                    partner = self._find_partner(shipment.customer_name)
                     if not partner:
-                        raise ValidationError(f"Customer {shipment.customer} tidak ditemukan")
+                        raise ValidationError(f"Customer {shipment.customer_name} tidak ditemukan")
 
                     # 3. USER
                     responsible_user = self._find_responsible()
@@ -224,15 +253,17 @@ class AcumaticaShipmentGIStaging(models.Model):
                     # print(f"warehouse Found : {warehouse.id}")
 
                     # 4. PICKING TYPE
-                    picking_type = PickingType.search([
-                        ('warehouse_id', '=', warehouse.id),
-                        ('sequence_code', '=', 'PICK')
-                    ], limit=1)
+                    # picking_type = PickingType.search([
+                    #     ('warehouse_id', '=', warehouse.id),
+                    #     ('sequence_code', '=', 'PICK')
+                    # ], limit=1)
 
-                    # print(f"Picking Type found : {picking_type.id}")
+                    picking_type = self.picking_type_id
+
+                    print(f"Picking Type found : {picking_type}")
                     
                     if not picking_type:
-                        raise ValidationError(f"Picking Type 'outgoing' untuk Warehouse {warehouse.name} tidak ditemukan")
+                        raise picking_type(f"Picking Type 'outgoing' untuk Warehouse {warehouse.name} tidak ditemukan")
 
                     # Ambil Default Destination Location untuk mencegah error mandatory 'To' (location_dest_id)
                     # Odoo 18 membutuhkan default destination location pada stock move line
@@ -256,6 +287,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                             # if picking.state = 
                             shipment_address = f"{shipment.address_line1 or ''} {shipment.address_line2 or ''}".strip()
                             updated_vals = {
+                                'picking_type_id' : picking_type.id,
                                 'partner_id': partner.id,
                                 'scheduled_date': shipment.ship_date,
                                 'note': shipment.note,
@@ -365,6 +397,9 @@ class AcumaticaShipmentGIStaging(models.Model):
                     }
                     new_picking = Picking.create(new_picking_vals)
                     print(f"SUCCESS CREATING NEW PICKING: {new_picking.name} (ID: {new_picking.id})")
+                    self.write({
+                        'odoo_picking_id': new_picking.id})
+
 
                     # print(f"Gi ID : {shipment.id}")
 
@@ -429,7 +464,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                 
                 # 1. Update status staging menjadi 'failed' agar tidak di-proses ulang langsung
                 shipment.write({
-                    'import_message': f'Error: {error_msg}'
+                    'import_message': f'Error: {error_msg}',
+                    'import_state': 'error'
                 })
 
                 # 2. Buat record baru di tabel error_picking sebagai log audit
@@ -534,8 +570,8 @@ class AcumaticaShipmentGIStaging(models.Model):
             )
             abort_picking = True
 
-        if abort_picking:
-            raise ValueError(f"Stock pada warehouse untuk product {product.display_name} Kosong")
+        # if abort_picking:
+        #     raise ValueError(f"Stock pada warehouse untuk product {product.display_name} Kosong")
 
         return {
             'product': product,
@@ -552,31 +588,45 @@ class AcumaticaShipmentGIStaging(models.Model):
         return partner
 
     def _find_warehouse(self, line):
-        Warehouse = self.env['stock.warehouse']
-        code = line
-
-        # 1. Jalankan query SQL (Pastikan argumen dalam bentuk tuple/list)
-        self.env.cr.execute("""
-            SELECT id, code
-            FROM stock_warehouse
-            WHERE code = %s
-        """, (code,))
-        
-        # 2. Ambil hasilnya dan simpan ke dalam variabel (Hanya panggil fetchall SEKALI)
-        sql_result = self.env.cr.fetchall()
-        # raise UserError('checkpoint')
-        
+        Warehouse = self.env['stock.location.acumatica']
         warehouse = False
-        # 3. Jika SQL menemukan data, ambil ID dari elemen pertama
-        if sql_result:
-            warehouse_id = sql_result[0][0] # Mengambil angka 176 dari [(176, 'WH33-FG')]
-            
-            # 4. Cari menggunakan ORM berdasarkan ID yang didapat dari SQL
-            # Tambahkan context active_test=False untuk berjaga-jaga jika record di-archived
-            warehouse = Warehouse.sudo().with_context(active_test=False).search([('id', '=', warehouse_id)], limit=1)
+        code = line
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+            if warehouse:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_building_id
 
-        # raise UserError('Checkpoint')
         return warehouse
+
+        # Warehouse = self.env['stock.warehouse']
+        # code = line
+
+        # # 1. Jalankan query SQL (Pastikan argumen dalam bentuk tuple/list)
+        # self.env.cr.execute("""
+        #     SELECT id
+        #     FROM stock_warehouse
+        #     WHERE code = %s
+        # """, (code,))
+        
+        # # 2. Ambil hasilnya dan simpan ke dalam variabel (Hanya panggil fetchall SEKALI)
+        # sql_result = self.env.cr.fetchall()
+        # print(sql_result)
+        # # raise UserError('checkpoint')
+        
+        # warehouse = False
+        # # 3. Jika SQL menemukan data, ambil ID dari elemen pertama
+        # if sql_result:
+        #     warehouse_id = sql_result[0][0] # Mengambil angka 176 dari [(176, 'WH33-FG')]
+            
+        #     # 4. Cari menggunakan ORM berdasarkan ID yang didapat dari SQL
+        #     # Tambahkan context active_test=False untuk berjaga-jaga jika record di-archived
+        #     warehouse = Warehouse.sudo().with_context(active_test=False).search([('id', '=', warehouse_id)], limit=1)
+
+        # # raise UserError('Checkpoint')
+        # return warehouse
 
 
 
@@ -633,8 +683,20 @@ class AcumaticaShipmentGIStaging(models.Model):
         except Exception:
             return 0.0
         
+    def action_import_selected(self):
+        lines = self.filtered(
+            lambda l: (
+                l.import_state in ['pending', 'error'] 
+                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+            )
+        )
+        if not lines:
+            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
+        return lines._do_import()
+        
     def action_import_this(self):
         self.ensure_one()
+        print(self)
         return self._do_import()
 
     def action_open_picking(self):
@@ -650,9 +712,6 @@ class AcumaticaShipmentGIStaging(models.Model):
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
-
-
-
 
 
 class AcumaticaSalesOrderShipmentStaging(models.Model):
@@ -725,12 +784,572 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
 
     @api.depends('odoo_picking_id')
     def _compute_exists_in_odoo(self):
         for rec in self:
             rec.exists_in_odoo = bool(rec.odoo_picking_id)
 
+    total_qty = fields.Float(
+        string='Total Quantity',
+        compute='_compute_total_qty',
+        store=True,
+        digits=(16, 2) # Sesuaikan presisi angka desimalnya
+    )
+    @api.depends('line_ids.shippedqty') # Ganti 'quantity' dengan nama field qty asli di model tujuan Anda
+    def _compute_total_qty(self):
+        for rec in self:
+            # Gunakan mapped() untuk mengambil semua nilai quantity lalu dijumlahkan dengan sum()
+            # Pastikan nama field 'quantity' di bawah ini sama dengan field di acumatica.sales.order.shipment.staging
+            rec.total_qty = sum(rec.line_ids.mapped('shippedqty'))
+
+
+    def _do_import(self):
+        print("Menjalankan fungsi do import so shipment")
+        print(self)
+        Picking = self.env['stock.picking']
+        Move = self.env['stock.move']
+        PickingType = self.env['stock.picking.type']
+        Product = self.env['product.product']
+        ErrorPicking = self.env['stock.picking.acumatica.error']  # Pastikan nama model error_picking disesuaikan dengan manifest Anda
+
+        shipment_gi = self.env['acumatica.shipment.gi.staging']
+        shipment_header = self.env['acumatica.sales.order.shipment.staging']
+        shipment_line = self.env['acumatica.sales.order.shipment.staging.line']
+
+        print("\n" + "=" * 120 + "\nSTART IMPORT SHIPMENT\n" + "=" * 120)
+
+        # =====================================================
+        # update staging status
+        # =====================================================
+        pending_shipments = self.mapped('shipment_nbr')
+
+        if not pending_shipments:
+            print("NO PENDING SHIPMENT FOUND")
+            return True
+
+        shipment_numbers = pending_shipments.mapped('shipment_nbr')
+        print(f"Shipment Numbers : {shipment_numbers}")
+
+        existing_pickings = Picking.search([
+            ('origin', 'in', shipment_numbers),
+            ('state', '!=',  'draft')
+        ])
+
+        processed_picking = existing_pickings.mapped('origin')
+
+        not_pending_shipment = shipment_gi.search([
+        ('shipment_nbr', 'in', processed_picking)
+        ])
+
+        for staging_rec in not_pending_shipment:
+            # Gunakan f-string (tanda f sebelum petik) agar variabel terbaca dinamis
+            staging_rec.write({
+                'odoo_shipment_status': 'processed',
+                'import_state': 'error',
+                'import_message': f'Receipt {staging_rec.shipment_nbr} sudah ada di Odoo dengan state done, tidak bisa diupdate.'
+            })
+
+        # =====================================================
+        # GET STAGING PENDING
+        # =====================================================
+        pending_shipments = self.filtered(lambda r: r.odoo_shipment_status == 'pending').mapped('shipment_nbr')
+
+        print(f"Pending Shipment Count : {len(pending_shipments)}")
+
+        if not pending_shipments:
+            print("NO PENDING SHIPMENT FOUND")
+            return True
+
+        shipment_numbers = pending_shipments.mapped('shipment_nbr')
+        print(f"Shipment Numbers : {shipment_numbers}")
+
+        # =====================================================
+        # PICKING EXISTING
+        # =====================================================
+        existing_pickings = Picking.search([
+            ('origin', 'in', shipment_numbers),
+            ('state', '=',  'draft')
+        ])
+
+        print(f"Existing Picking Count : {len(existing_pickings)}")
+
+        pickings_by_origin = {}
+        for picking in existing_pickings:
+            pickings_by_origin.setdefault(
+                (picking.origin or '').strip(),
+                []
+            ).append(picking)
+
+        print(pickings_by_origin)
+
+
+
+        # =====================================================
+        # PROCESS SHIPMENT
+        # =====================================================
+        for shipment in pending_shipments:
+            print("\n" + "#" * 120 + f"\nPROCESS SHIPMENT : {shipment.shipment_nbr}\n" + "#" * 120)
+            
+            shipment_number = (shipment.shipment_nbr or '').strip()
+
+            # MEKANISME SAVEPOINT DIMULAI DISINI
+            # Jika terjadi error di dalam blok 'with', Odoo hanya me-rollback perubahan untuk shipment ini saja.
+            try:
+                with self.env.cr.savepoint():
+                    
+                    # =================================================
+                    # VALIDASI DATA MANUAL (RAISE ERROR JIKA GAGAL)
+                    # =================================================
+                    
+                    # 1. WAREHOUSE
+                    warehouse = self._find_warehouse(shipment.warehouse_id)
+                    print(warehouse)
+
+                    if not warehouse:
+                        raise ValidationError(f"Warehouse {shipment.warehouse_id} tidak ditemukan")
+
+                    # 2. PARTNER
+                    partner = self._find_partner(shipment.customer_name)
+                    if not partner:
+                        raise ValidationError(f"Customer {shipment.customer_name} tidak ditemukan")
+
+                    # 3. USER
+                    responsible_user = self._find_responsible()
+
+                    # print(f"warehouse Found : {warehouse.id}")
+
+                    # 4. PICKING TYPE
+                    # picking_type = PickingType.search([
+                    #     ('warehouse_id', '=', warehouse.id),
+                    #     ('sequence_code', '=', 'PICK')
+                    # ], limit=1)
+
+                    picking_type = self.picking_type_id
+
+                    print(f"Picking Type found : {picking_type}")
+                    
+                    if not picking_type:
+                        raise picking_type(f"Picking Type 'outgoing' untuk Warehouse {warehouse.name} tidak ditemukan")
+
+                    # Ambil Default Destination Location untuk mencegah error mandatory 'To' (location_dest_id)
+                    # Odoo 18 membutuhkan default destination location pada stock move line
+                    default_dest_location = picking_type.default_location_dest_id.id
+                    if not default_dest_location:
+                        raise ValidationError(f"Default Destination Location pada Picking Type {picking_type.name} belum diatur.")
+
+                    # =================================================
+                    # RELATED & ACTIVE PICKINGS
+                    # =================================================
+                    related_pickings = pickings_by_origin.get(shipment_number, [])
+                    active_pickings = [p for p in related_pickings if p.state in ('draft', 'assigned')]
+
+                    # =================================================
+                    # UPDATE PICKING BRANCH
+                    # =================================================
+                    if active_pickings:
+                        print("\n" + ">" * 80 + "\nUPDATE PICKING BRANCH\n" + ">" * 80)
+                        
+                        for picking in active_pickings:
+                            # if picking.state = 
+                            shipment_address = f"{shipment.address_line1 or ''} {shipment.address_line2 or ''}".strip()
+                            updated_vals = {
+                                'picking_type_id' : picking_type.id,
+                                'partner_id': partner.id,
+                                'scheduled_date': shipment.ship_date,
+                                'note': shipment.note,
+                                'adt_receipt_nbr': shipment.shipment_nbr,
+                                'adt_partner_ref': shipment.customer,
+                                'adt_status': shipment.status,
+                                'adt_trans_type': shipment.shipment_type,
+                                'adt_external_id': shipment.acumatica_id,
+                                'adt_destination_location_address' : shipment_address,
+                            }
+                            picking.write(updated_vals)
+                            print(f"SUCCESS UPDATING PICKING ID: {picking.id}")
+
+                            move = shipment_line.search([
+                                ('shipment_id', '=', shipment.id)
+                            ])
+
+                            for item in move:
+                                move_to_update = Move.seach({
+                                    ('picking_id', '=', picking.id),
+                                    ('adt_inventory_id', '=', item.inventoryid)
+                                })
+
+                                if move_to_update:
+                                     move_to_update_vals = {
+                                        'company_id' : warehouse.company_id.id,
+                                        'product_id' : product.id,
+                                        'product_uom' : product.product_tmpl_id.uom_id.id ,
+                                        'location_id' : picking_type.default_location_src_id.id,
+                                        'location_dest_id' : picking_type.default_location_dest_id.id,
+                                        'partner_id' : partner.id,
+                                        'picking_id' : new_picking.id,
+                                        'picking_type_id' : picking_type.id,
+                                        'warehouse_id' : picking_type.warehouse_id.id,
+                                        'name' : item.description,
+                                        'origin' : new_picking.origin,
+                                        'description_picking' : item.description,
+                                        'product_uom_qty' : item.shippedqty,
+                                        'date' : shipment.ship_date,
+                                        'date_deadline' : shipment.ship_date,
+                                        'adt_line_external_id' : item.acumatica_id,
+                                        'adt_inventory_id' : item.inventoryid,
+                                        # 'adt_po_line_number' : item.shipment,
+                                        'adt_uom_code' : item.uom,
+                                        'adt_line_note' : item.note,
+                                        'adt_open_qty' : item.shippedqty,
+                                        'adt_type' : 'Sales Order Shipment',
+                                        'adt_line_description' : item.description,
+                                     }
+
+                                     created_move = Move.write(move_to_update)
+
+                                else:
+                                        
+                                        move_to_update_vals = {
+                                        'company_id' : warehouse.company_id.id,
+                                        'product_id' : product.id,
+                                        'product_uom' : product.product_tmpl_id.uom_id.id ,
+                                        'location_id' : picking_type.default_location_src_id.id,
+                                        'location_dest_id' : picking_type.default_location_dest_id.id,
+                                        'partner_id' : partner.id,
+                                        'picking_type_id' : picking_type.id,
+                                        'warehouse_id' : picking_type.warehouse_id.id,
+                                        'name' : item.description,
+                                        'origin' : new_picking.origin,
+                                        'description_picking' : item.description,
+                                        'product_uom_qty' : item.shippedqty,
+                                        'date' : shipment.ship_date,
+                                        'date_deadline' : shipment.ship_date,
+                                        'adt_line_external_id' : item.acumatica_id,
+                                        'adt_inventory_id' : item.inventoryid,
+                                        # 'adt_po_line_number' : item.shipment,
+                                        'adt_uom_code' : item.uom,
+                                        'adt_line_note' : item.note,
+                                        'adt_open_qty' : item.shippedqty,
+                                        'adt_type' : 'Sales Order Shipmentitem.',
+                                        'adt_line_description' : item.description,
+                                        }
+
+                                        created_move = Move.create(move_to_update_vals)
+                                    
+                   
+                    # =================================================
+                    # CREATE PICKING BRANCH (JIKA TIDAK ADA ACTIVE PICKING)
+                    # =================================================
+
+                        
+                    print("\n" + ">" * 80 + "\nCREATE PICKING BRANCH\n" + ">" * 80)
+                    
+                    # Pastikan field mandatory location_id & location_dest_id terisi di level picking & move lines
+                    shipment_address = f"{shipment.address_line1 or ''} {shipment.address_line2 or ''}".strip()
+                    new_picking_vals = {
+                        'picking_type_id': picking_type.id,
+                        'location_id': picking_type.default_location_src_id.id,
+                        'location_dest_id': default_dest_location,
+                        'partner_id': partner.id,
+                        'scheduled_date': shipment.ship_date,
+                        'origin': shipment_number,
+                        'note': shipment.note,
+                        'adt_receipt_nbr': shipment.shipment_nbr,
+                        'adt_partner_ref': shipment.customer,
+                        'adt_status': shipment.status,
+                        'adt_trans_type': shipment.shipment_type,
+                        'adt_external_id': shipment.acumatica_id,
+                        'adt_type' : 'Sales Order Shipment',
+                        'adt_destination_location_address' : shipment_address,
+                    }
+                    new_picking = Picking.create(new_picking_vals)
+                    print(f"SUCCESS CREATING NEW PICKING: {new_picking.name} (ID: {new_picking.id})")
+                    self.write({
+                        'odoo_picking_id': new_picking.id})
+
+
+                    # print(f"Gi ID : {shipment.id}")
+
+                    
+                    new_move_id = shipment_header.search([
+                        ('gi_id', '=', shipment.id)
+                    ])
+
+                    new_move = shipment_line.search([
+                        ('shipment_id', '=', new_move_id.id)
+                    ])
+                    print(f"Shipment line to create: {new_move}")
+
+                    for item in new_move:
+                        # code = item.inventoryid
+                        Product = self._find_product(item, picking_type.default_location_src_id.id)
+                        product = Product['product']
+
+                        print(product)
+
+                        new_move_vals = {
+                            'company_id' : warehouse.company_id.id,
+                            'product_id' : product.id,
+                            'product_uom' : product.product_tmpl_id.uom_id.id ,
+                            'location_id' : picking_type.default_location_src_id.id,
+                            'location_dest_id' : picking_type.default_location_dest_id.id,
+                            'partner_id' : partner.id,
+                            'picking_id' : new_picking.id,
+                            'picking_type_id' : picking_type.id,
+                            'warehouse_id' : picking_type.warehouse_id.id,
+                            'name' : item.description,
+                            'origin' : new_picking.origin,
+                            'description_picking' : item.description,
+                            'product_uom_qty' : item.shippedqty,
+                            'date' : shipment.ship_date,
+                            'date_deadline' : shipment.ship_date,
+                            'adt_line_external_id' : item.acumatica_id,
+                            'adt_inventory_id' : item.inventoryid,
+                            # 'adt_po_line_number' : item.shipment,
+                            'adt_uom_code' : item.uom,
+                            'adt_line_note' : item.note,
+                            'adt_open_qty' : item.shippedqty,
+                            'adt_type' : 'Sales Order Shipment.',
+                            'adt_line_description' : item.description,
+                        }
+
+                        move = Move.create(new_move_vals)
+                        print(f"Success create Move : {move.id}")
+
+                    # Jika sukses melintasi semua proses di atas tanpa crash, update status staging jadi success
+                    shipment.write({
+                        'import_message': 'Import berhasil tanpa error'
+                    })
+
+            # =====================================================
+            # MEKANISME ABORT & ERROR LOGGING (UNTUK 1 SHIPMENT)
+            # =====================================================
+            except Exception as e:
+                # Mengambil pesan error teks
+                error_msg = str(e)
+                print(f"!!! ERROR DETECTED ON SHIPMENT {shipment_number}: {error_msg}")
+                
+                # 1. Update status staging menjadi 'failed' agar tidak di-proses ulang langsung
+                shipment.write({
+                    'import_message': f'Error: {error_msg}',
+                    'import_state': 'error'
+                })
+
+                # 2. Buat record baru di tabel error_picking sebagai log audit
+                # Sesuai instruksi Anda: "Jika ada error maka create di model error_picking"
+                ErrorPicking.create({
+                    'origin': shipment_number,
+                    'partner': shipment.customer,
+                    'api_acumatica' : 'so_shipment'
+                    # 'warehouse_id': shipment.warehouse_id,
+                    # 'error_reason': error_msg,
+                    # Tambahkan field lain yang ada di model error_picking Anda di bawah ini
+                })
+                
+                # Gunakan continue agar jika shipment ke-1 error, perulangan ke shipment ke-2 tetap berjalan
+                continue
+
+        return True
+
+# =====================================================================================================================================================================
+    # Service Function
+# =====================================================================================================================================================================
+    
+    def _find_responsible(self):
+        user = self.env['res.users'].search([('name', '=', 'System User')], limit=1)
+
+        if not user:
+            user = self.env['res.users'].create({
+                'name': 'System User',
+                'login': 'system.user@aditya_sarana_graha.com',
+            })
+
+        return user
+    
+    def _find_product(self, line, source_location):
+        print('Starting search product')
+
+        Product = self.env['product.product']
+        Quant = self.env['stock.quant']
+        Location = self.env['stock.location']
+
+        product = False
+        abort_picking = False
+        # =====================================================
+        # FIND PRODUCT
+        # =====================================================
+
+        if line:
+
+            product = Product.search([
+                ('default_code', '=', line.inventoryid)
+            ], limit=1)        
+            
+        else:
+            print(
+                # f"PRODUCT NOT FOUND | "Proses picking dibatalkan karena ada produk yang bermasalah
+                f"InventoryID={line.inventoryid}"
+            )
+
+            return False
+        
+        if source_location:
+            location = Location.search([
+                ('id', '=', source_location)
+            ])
+
+        else:
+            print(f"Lokasi dengan id: {source_location} Tidak ditemukan")
+
+
+
+        print(
+            f"PRODUCT FOUND | "
+            f"ID={product.id} | "
+            f"CODE={product.default_code} | "
+        )
+
+        # =====================================================
+        # CHECK STOCK
+        # =====================================================
+
+
+        quants = Quant.search([
+            ('product_id', '=', product.id),
+            ('location_id', '=', source_location),
+        ])
+        available_qty = sum(
+            q.quantity - q.reserved_quantity
+            for q in quants
+        )
+
+        print(
+            f" | AVAILABLE QTY = {available_qty} | "
+            f"REQUIRED = {line.shippedqty} | "
+            f"Location = {location.complete_name} | "
+        )
+
+        if line.shippedqty and available_qty < line.shippedqty:
+
+            print(
+                f"INSUFFICIENT STOCK | "
+                f"Product={product.display_name}"
+            )
+            abort_picking = True
+
+        # if abort_picking:
+        #     raise ValueError(f"Stock pada warehouse untuk product {product.display_name} Kosong")
+
+        return {
+            'product': product,
+            'abort_picking' : abort_picking
+        }
+
+    def _find_partner(self, line):
+        Partner = self.env['res.partner']
+        partner = False
+        if line:
+            partner = Partner.search([('ref', '=', line)], limit=1)
+            if not partner:
+                partner = Partner.search([('name', '=', line)], limit=1)
+        return partner
+
+    def _find_warehouse(self, line):
+        Warehouse = self.env['stock.location.acumatica']
+        warehouse = False
+        code = line
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+            if warehouse:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_building_id
+
+        return warehouse
+
+    def _find_destination_location(self, line, warehouse=False):
+        Location = self.env['stock.location']
+        code = line.warehouse_id
+        location = False
+        if code:
+            location = Location.search([('complete_name', '=', code)], limit=1)
+            if not location:
+                location = Location.search([('name', '=', code)], limit=1)
+        if not location and warehouse:
+            location = warehouse.lot_stock_id
+        return location
+
+    def _find_source_location(self, warehouse=False):
+        Location = self.env['stock.location']
+        supplier_loc = self.env.ref('stock.stock_location_suppliers', raise_if_not_found=False)
+        if supplier_loc:
+            return supplier_loc
+        return Location.search([('usage', '=', 'supplier')], limit=1) or (warehouse and warehouse.lot_stock_id)
+
+    def _find_uom(self, line, product=False):
+        Uom = self.env['uom.uom']
+        uom = False
+        if line.uom_code:
+            uom = Uom.search([('name', '=', line.uom_code)], limit=1)
+        if not uom and product:
+            uom = product.uom_id
+        return uom
+
+# Helper Function
+
+    @api.depends('shipmentnbr')
+    def _compute_exists_in_odoo(self):
+        Picking = self.env['stock.picking']
+        for rec in self:
+            rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('origin', '=', rec.receipt_nbr)]))
+
+    @staticmethod
+    def _parse_dt(dt_str):
+        if not dt_str:
+            return False
+        try:
+            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
+        except Exception:
+            return False
+
+    @staticmethod
+    def _parse_int(value):
+        try:
+            return int(value or 0)
+        except Exception:
+            return 0.0
+        
+    def action_import_selected(self):
+        lines = self.filtered(
+            lambda l: (
+                l.import_state in ['pending', 'error'] 
+                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+            )
+        )
+        if not lines:
+            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
+        return lines._do_import()
+        
+    def action_import_this(self):
+        self.ensure_one()
+        print(self)
+        return self._do_import()
+
+    def action_open_picking(self):
+        self.ensure_one()
+        if not self.odoo_picking_id:
+            raise UserError('Belum diimport, belum ada receipt di Odoo.')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.picking',
+            'res_id': self.odoo_picking_id.id,
+            'view_mode': 'form',
+        }
+
+    def action_reset_pending(self):
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
 
 
 class AcumaticaSalesOrderShipmentStagingLine(models.Model):

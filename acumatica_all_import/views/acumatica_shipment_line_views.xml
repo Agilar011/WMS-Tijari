@@ -1,5 +1,17 @@
 <odoo>
 
+    <record id="action_import_selected_shipment"
+            model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <field name="model_id" ref="model_acumatica_shipment_gi_staging"/>
+        <field name="binding_model_id" ref="model_acumatica_shipment_gi_staging"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
     <!-- LIST VIEW -->
     <record id="view_acumatica_shipment_gi_staging_list" model="ir.ui.view">
         <field name="name">acumatica.shipment.gi.staging.list</field>
@@ -7,18 +19,16 @@
         <field name="arch" type="xml">
             <list>
                 <field name="shipment_nbr"/>
-                <field name="ship_date"/>
                 <field name="customer"/>
-                <field name="customer_name"/>
                 <field name="warehouse_id"/>
-                <field name="status"/>
-                <field name="import_state"/>
-                <field name="odoo_picking_id"/>
-                <button name="action_import_this"
-                        string="Import ke Odoo"
-                        type="object"
-                        class="btn-primary"
-                        invisible="import_state != 'pending'"/>              
+                <field name="total_qty"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
+                <field name="import_message"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
             </list>
         </field>
     </record>
@@ -29,53 +39,72 @@
         <field name="model">acumatica.shipment.gi.staging</field>
         <field name="arch" type="xml">
             <form string="Acumatica Shipment">
+                <header>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <button name="action_open_picking" type="object" string="Open Receipt" class="btn-secondary" invisible="not odoo_picking_id"/>
+                    <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
+                </header>
 
                 <sheet>
+                    <!-- Mengamankan field status agar bisa dibaca oleh tombol header -->
+                    <field name="import_state" invisible="1"/>
+                    <field name="odoo_picking_id" invisible="1"/>
 
                     <group>
-                        <group>
-                            <field name="shipment_nbr"/>
-                            <field name="ship_date"/>
-                            <field name="customer"/>
-                            <field name="customer_name"/>
-                            <field name="warehouse_id"/>
-                            <field name="location"/>
-                            <field name="status"/>
-                            <field name="shipment_type"/>
+                        <group string="Info Utama">
+                            <field name="id" readonly="1"/>
+                            <field name="shipment_nbr" readonly="1"/>
+                            <field name="acumatica_id" readonly="1"/>
+                            <field name="row_number" readonly="1"/>
+                            <field name="customer" readonly="1"/>
+                            <field name="customer_name" readonly="1"/>
+                            <field name="warehouse_id" readonly="1"/>
+                            <field name="location" readonly="1"/>
+                            <field name="location_name" readonly="1"/>
+                            <field name="config_id" readonly="1"/>
+                            <field name="picking_type_id" readonly="1"/>
+                            <field name="create_uid" readonly="1"/>
+                            <field name="write_uid" readonly="1"/>
                         </group>
-
-                        <group>
-                            <field name="ship_via"/>
-                            <field name="fob_point"/>
-                            <field name="shipped_quantity"/>
-                            <field name="shipped_weight"/>
-                            <field name="shipped_volume"/>
-                            <field name="odoo_picking_id"/>
-                            <field name="import_state"/>
-                            <field name="import_message"/>
+                        <group string="Status &amp; Pengiriman">
+                            <field name="status" readonly="1"/>
+                            <field name="shipment_type" readonly="1"/>
+                            <field name="address_id" readonly="1"/>
+                            <field name="city" readonly="1"/>
+                            <field name="state" readonly="1"/>
+                            <field name="state_name" readonly="1"/>
+                            <field name="country" readonly="1"/>
+                            <field name="country_name" readonly="1"/>
+                            <field name="postal_code" readonly="1"/>
+                            <field name="ship_via" readonly="1"/>
+                            <field name="ship_via_description" readonly="1"/>
+                            <field name="ship_via_address" readonly="1"/>
+                            <field name="ship_via_city" readonly="1"/>
+                            <field name="ship_via_phone" readonly="1"/>
+                            <field name="ship_via_status" readonly="1"/>
+                            <field name="fob_point" readonly="1"/>
+                            <field name="fob_point_description" readonly="1"/>
                         </group>
                     </group>
 
+                    <!-- PERBAIKAN: Hanya ada SATU notebook dengan banyak page -->
                     <notebook>
-
-                        <page string="Address">
-
+                        <!-- Tab 1: Alamat -->
+                        <page string="Address" name="address">
                             <group>
-                                <field name="address_line1"/>
-                                <field name="address_line2"/>
-                                <field name="address_line3"/>
-                                <field name="city"/>
-                                <field name="state"/>
-                                <field name="country"/>
-                                <field name="postal_code"/>
+                                <field name="address_line1" readonly="1"/>
+                                <field name="address_line2" readonly="1"/>
+                                <field name="address_line3" readonly="1"/>
+                                <field name="city" readonly="1"/>
+                                <field name="state" readonly="1"/>
+                                <field name="country" readonly="1"/>
+                                <field name="postal_code" readonly="1"/>
                             </group>
-
                         </page>
 
-                        <page string="Shipment Detail">
-
-                            <field name="shipment_ids">
-
+                        <!-- Tab 2: Ringkasan Dokumen Shipment -->
+                        <page string="Shipment Docs" name="shipment_docs">
+                            <field name="shipment_ids" readonly="1">
                                 <list>
                                     <field name="shipmentnbr"/>
                                     <field name="customerid"/>
@@ -86,18 +115,53 @@
                                     <field name="shippedqty"/>
                                     <field name="odoo_picking_id"/>
                                 </list>
-
                             </field>
-
                         </page>
 
+                        <!-- Tab 3: Seluruh Detail Isi Barang -->
+                        <page string="All Shipment Lines" name="all_shipment_lines">
+                            <field name="all_line_ids" readonly="1">
+                                <list string="All Lines">
+                                    <field name="shipment_id" string="Ref Shipment"/> 
+                                    <field name="ordernbr"/>
+                                    <field name="inventoryid"/>
+                                    <field name="description"/>
+                                    <field name="warehouseid"/>
+                                    <field name="location"/>
+                                    <field name="orderedqty" sum="Total Ordered"/>
+                                    <field name="shippedqty" sum="Total Shipped"/>
+                                    <field name="uom"/>
+                                    <field name="import_state" widget="badge"/>
+                                </list>
+                            </field>
+                        </page>
                     </notebook>
 
-                </sheet>
+                    <!-- Informasi Sync & Integrasi di bagian bawah -->
+                    <group string="Log Integrasi Odoo" class="mt-4">
+                        <group>
+                            <field name="odoo_picking_id" readonly="1" string="Link Picking Real"/>
+                            <field name="import_state" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="import_message" readonly="1"/>
+                        </group>
+                    </group>
 
+                </sheet>
             </form>
         </field>
     </record>
+
+
+
+
+
+
+
+
+
+
 
     <!-- SEARCH VIEW -->
     <record id="view_acumatica_shipment_gi_staging_search" model="ir.ui.view">
@@ -153,17 +217,6 @@
     </record>
 
 
-    <record id="action_import_selected_shipment"
-            model="ir.actions.server">
-        <field name="name">Generate Data</field>
-        <field name="model_id" ref="model_acumatica_shipment_line"/>
-        <field name="binding_model_id" ref="model_acumatica_shipment_line"/>
-        <field name="binding_type">action</field>
-        <field name="state">code</field>
-        <field name="code">
-            records.action_import_selected()
-        </field>
-    </record>
 
     <record id="view_acumatica_shipment_line_search" model="ir.ui.view">
         <field name="name">acumatica.shipment.line.search</field>

@@ -57,7 +57,7 @@ class ImportSOShipmentWizard(models.TransientModel):
         if not shipment_numbers:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        print("To run fetch shipment data")
+        
         batch_data = self.fetch_shipment_data(
             shipment_numbers=shipment_numbers,  # tambahan
             odata_filter=self.odata_filter,
@@ -83,7 +83,7 @@ class ImportSOShipmentWizard(models.TransientModel):
     def fetch_shipment_data(self, shipment_numbers=None, odata_filter=None):
         print('Runnning fetch data')
         self.ensure_one()
-        print(f"Self config: {self.config_id}")
+        # print(f"Self config: {self.config_id}")
 
         session = self.config_id._do_login()
 
@@ -140,9 +140,9 @@ class ImportSOShipmentWizard(models.TransientModel):
                 if filters:
                     params["$filter"] = " and ".join(filters)
 
-                print("--- Mengirim Request Chunk ---")
-                print("Endpoint: ", endpoint)
-                print("params: ", params)
+                # print("--- Mengirim Request Chunk ---")
+                # print("Endpoint: ", endpoint)
+                # print("params: ", params)
 
                 response = session.get(
                     endpoint,
@@ -245,6 +245,9 @@ class ImportSOShipmentWizard(models.TransientModel):
                     item.get("Details")
                     or []
                 )
+
+                if not details:
+                    raise UserError("Detail Tidak Boleh Kosong")
 
                 for detail in details:
 
@@ -359,16 +362,16 @@ class ImportSOShipmentWizard(models.TransientModel):
                 phrase_date = dateutil_parser.parse(ship_date).replace(tzinfo=None)
                 warehouse_id = self._val(item, "WarehouseID")
                 OrderType = self._val(item, "OrderType")
-                print(f"Warehouse ID : {warehouse_id}")
+                # print(f"Warehouse ID : {warehouse_id}")
 
-                if OrderType == 'CO':
-                    code = 'incoming'
-                else:
-                    code = 'outgoing'
+                # if OrderType == 'CO':
+                #     code = 'incoming'
+                # else:
+                #     code = 'outgoing'
 
-                print(f"Transaction Type: {code}")
+                # print(f"Transaction Type: {code}")
 
-                picking_type = self._search_picking_type(warehouse_id, code)
+                picking_type = self._search_picking_type(warehouse_id, OrderType)
                 picking_type_id = picking_type.id if picking_type else None
 
                 vals = {
@@ -461,207 +464,6 @@ class ImportSOShipmentWizard(models.TransientModel):
         finally:
             self._do_logout(session)
 
-    # def fetch_shipment_data(
-    #     self,
-    #     shipment_numbers=None,
-    #     odata_filter=None,
-    # ):
-    #     self.ensure_one()
-
-    #     session = self._do_login()
-
-    #     try:
-    #         endpoint = f"{self.api_url}/{self.endpoint_name}"
-
-    #         params = {}
-    #         filters = []
-
-    #         if self.odata_expand:
-    #             params["$expand"] = self.odata_expand
-
-    #         if self.odata_select:
-    #             params["$select"] = self.odata_select
-
-    #         # =====================================================
-    #         # FILTER SHIPMENT NUMBER
-    #         # =====================================================
-
-    #         if shipment_numbers:
-
-    #             shipment_filter = " or ".join([
-    #                 f"ShipmentNbr eq '{nbr}'"
-    #                 for nbr in shipment_numbers
-    #                 if nbr
-    #             ])
-
-    #             if shipment_filter:
-    #                 filters.append(f"({shipment_filter})")
-
-    #         if odata_filter:
-    #             filters.append(f"({odata_filter})")
-
-    #         elif self.odata_filter:
-    #             filters.append(f"({self.odata_filter})")
-
-    #         if filters:
-    #             params["$filter"] = " and ".join(filters)
-
-    #         response = session.get(
-    #             endpoint,
-    #             params=params,
-    #             timeout=90
-    #         )
-
-    #         if response.status_code != 200:
-    #             raise UserError(
-    #                 f"Gagal ambil Shipment "
-    #                 f"(HTTP {response.status_code}): "
-    #                 f"{response.text}"
-    #             )
-
-    #         raw_data = self._normalize_rows(
-    #             response.json()
-    #         )
-
-    #         result = []
-
-    #         # =====================================================
-    #         # SHIPMENT LOOP
-    #         # =====================================================
-
-    #         for item in raw_data:
-
-    #             shipment_dict = {
-
-    #                 "header": {
-    #                     "acumatica_id":item.get("id"),
-    #                     "rownumber":item.get("rowNumber"),
-    #                     "note":self._val(item, "note"),
-    #                     "controlqty":self._val(item, "ControlQty"),
-    #                     "customerid":self._val(item, "CustomerID"),
-    #                     "description":self._val(item, "Description"),
-    #                     "fobpoint":self._val(item, "FOBPoint"),
-    #                     "fobpointdescription":self._val(item,"FOBPointDescription"),
-    #                     "hold":self._val(item, "Hold"),
-    #                     "insurance":self._val(item, "Insurance"),
-    #                     "lastmodifieddatetime":self._parse_dt(self._val(item,"LastModifiedDateTime")),
-    #                     "locationid":self._val(item, "LocationID"),
-    #                     "locationname":self._val(item, "LocationName"),
-    #                     "operation":self._val(item, "Operation"),
-    #                     "packagecount":self._val(item, "PackageCount"),
-    #                     "packageweight":self._val(item, "PackageWeight"),
-    #                     "shipmentdate":self._parse_dt(self._val(item,"ShipmentDate")),
-    #                     "shipmentnbr":self._val(item, "ShipmentNbr"),
-    #                     "shippedqty":self._val(item, "ShippedQty"),
-    #                     "shippedvolume":self._val(item, "ShippedVolume"),
-    #                     "shippedweight":self._val(item, "ShippedWeight"),
-    #                     "shippingzoneid":self._val(item, "ShippingZoneID"),
-    #                     "shipvia":self._val(item, "ShipVia"),
-    #                     "status":self._val(item, "Status"),
-    #                     "towarehouseid":self._val(item, "ToWarehouseID"),
-    #                     "type":self._val(item, "Type"),
-    #                     "unlimitedpackages":self._val(item, "UnlimitedPackages"),
-    #                     "warehouseid":self._val(item, "WarehouseID"),
-    #                     "warehousename":self._val(item, "WarehouseName"),
-    #                 },
-
-    #                 "shipto_address": {},
-
-    #                 "details": []
-    #             }
-
-    #             # =================================================
-    #             # SHIP TO ADDRESS
-    #             # =================================================
-
-    #             shipping_settings = (
-    #                 item.get("ShippingSettings")
-    #                 or {}
-    #             )
-
-    #             shipto = (
-    #                 shipping_settings.get(
-    #                     "ShipToAddress"
-    #                 )
-    #                 or {}
-    #             )
-
-    #             if shipto:
-
-    #                 shipment_dict[
-    #                     "shipto_address"
-    #                 ] = {
-    #                     "addressline1":self._val(shipto,"AddressLine1"),
-    #                     "addressline2":self._val(shipto,"AddressLine2"),
-    #                     "city":self._val(shipto,"City"),
-    #                     "country":self._val(shipto,"Country"),
-    #                     "countryname":self._val(shipto,"CountryName"),
-    #                     "postalcode":self._val(shipto,"PostalCode"),
-    #                     "state":self._val(shipto,"State"),
-    #                 }
-
-    #             # =================================================
-    #             # DETAILS
-    #             # =================================================
-
-    #             details = (
-    #                 item.get("Details")
-    #                 or []
-    #             )
-
-    #             for detail in details:
-
-    #                 detail_dict = {
-
-    #                     "detail": {
-    #                         "acumatica_id": detail.get("id"),
-    #                         "rownumber": detail.get("rowNumber"),
-    #                         "note": self._val(detail, "note"),
-    #                         "description": self._val(detail, "Description"),
-    #                         "freeitem": self._val(detail, "FreeItem"),
-    #                         "inventoryid": self._val(detail, "InventoryID"),
-    #                         "linenbr": self._val(detail, "LineNbr"),
-    #                         "location": self._val(detail, "Location"),
-    #                         "openorderqty": self._val(detail, "OpenOrderQty"),
-    #                         "orderedqty": self._val(detail, "OrderedQty"),
-    #                         "orderlinenbr": self._val(detail, "OrderLineNbr"),
-    #                         "ordernbr": self._val(detail, "OrderNbr"),
-    #                         "ordertype": self._val(detail, "OrderType"),
-    #                         "shippedqty": self._val(detail, "ShippedQty"),
-    #                         "uom": self._val(detail, "UOM"),
-    #                         "warehouseid": self._val(detail, "WarehouseID"),
-    #                     },
-
-    #                     "allocations": []}
-
-    #                 allocations = (detail.get("Allocations")or [])
-
-    #                 for alloc in allocations:
-
-    #                     detail_dict[
-    #                         "allocations"
-    #                     ].append(
-    #                     {
-    #                         "acumatica_id": alloc.get("id"),
-    #                         "rownumber": alloc.get("rowNumber"),
-    #                         "note": self._val(alloc, "note"),
-    #                         "description": self._val(alloc, "Description"),
-    #                         "inventoryid": self._val(alloc, "InventoryID"),
-    #                         "location": self._val(alloc, "Location"),
-    #                         "quantity": self._val(alloc, "Quantity"),
-    #                         "splitlinenbr": self._val(alloc, "SplitLineNbr"),
-    #                         "uom": self._val(alloc, "UOM"),
-    #                     })
-
-    #                 shipment_dict["details"].append(detail_dict)
-
-    #             result.append(shipment_dict)
-
-    #         return result
-
-    #     finally:
-    #         self._do_logout(session)
-
     def create_staging_data(self, shipment_gi_data, batch_data):
         staging_shipment_gi = self.env['acumatica.shipment.gi.staging']
         staging_so_shipment= self.env['acumatica.sales.order.shipment.staging']
@@ -698,8 +500,8 @@ class ImportSOShipmentWizard(models.TransientModel):
         for item in shipment_gi_data:
             acumatica_id = item.get('acumatica_id')
             picking_type_id = item.get('picking_type_id')
-            if picking_type_id:
-                print(f"shipemnt GI: {item}")
+            # if picking_type_id:
+            #     print(f"shipemnt GI: {item}")
 
 
 
@@ -805,13 +607,13 @@ class ImportSOShipmentWizard(models.TransientModel):
 
                 created_count += 1
 
-                print(
-                    f"CREATED | "
-                    f"ID={new_rec.id} | "
-                    f"Shipment={new_rec.shipment_nbr} | "
-                    f"Acumatica={acumatica_id} | "
-                    f"Picking Type ={picking_type_id} "
-                )
+                # print(
+                #     f"CREATED | "
+                #     f"ID={new_rec.id} | "
+                #     f"Shipment={new_rec.shipment_nbr} | "
+                #     f"Acumatica={acumatica_id} | "
+                #     f"Picking Type ={picking_type_id} "
+                # )
 
         # ==========================================================
         # SUMMARY
@@ -883,17 +685,17 @@ class ImportSOShipmentWizard(models.TransientModel):
 
                 existing.write(shipment_vals)
                 shipment_rec = existing
-                print(f"Shipment Updated: {existing.id} with row number {existing.rownumber}")
+                # print(f"Shipment Updated: {existing.id} with row number {existing.rownumber}")
             
             else:
                 shipment_rec = staging_so_shipment.create(
                     shipment_vals
                 )
-                print(
-                    f"Shipment Created: "
-                    f"{shipment_rec.id} "
-                    f"{shipment_rec.shipmentnbr}"
-                )
+                # print(
+                #     f"Shipment Created: "
+                #     f"{shipment_rec.id} "
+                #     f"{shipment_rec.shipmentnbr}"
+                # )
 
 
 
@@ -902,6 +704,9 @@ class ImportSOShipmentWizard(models.TransientModel):
             # ==================================================
 
             shipto_rec = False
+
+            if not shipment.get("shipto_address"):
+                print(f'shipto_address kosong untuk : {shipment_rec}')
 
             if shipment.get("shipto_address"):
                 shipto_vals = dict(
@@ -918,6 +723,9 @@ class ImportSOShipmentWizard(models.TransientModel):
             # DETAILS
             # ==================================================
 
+            if not shipment["details"]:
+                print(f'details ksoong untuk : {shipment_rec}')
+
             for detail_data in shipment["details"]:
 
                 detail_vals = dict(
@@ -932,14 +740,17 @@ class ImportSOShipmentWizard(models.TransientModel):
                     detail_vals
                 )
 
-                print(
-                    f"  Detail Created: "
-                    f"{detail_rec.id}"
-                )
+                # print(
+                #     f"  Detail Created: "
+                #     f"{detail_rec.id}"
+                # )
 
                 # ==============================================
                 # ALLOCATIONS
                 # ==============================================
+
+                if not detail_data['allocations']:
+                    print(f"allocation kosong untuk:{detail_rec} ")
 
                 for alloc in detail_data[
                     "allocations"
@@ -1076,15 +887,27 @@ class ImportSOShipmentWizard(models.TransientModel):
             ('code', '=', header)
         ])
 
+        if code == 'CO':
+            if location:
+                # print(f"Building id: {location.odoo_building_id.id}")
+                type = PickingType.search([
+                    ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                    ('code', '=', 'internal'),
+                    ('is_default_api', '=', True)
+                ])
+                # print(f"Type: {type}")
+
+        else:
+            if location:
+                # print(f"Building id: {location.odoo_building_id.id}")
+                type = PickingType.search([
+                    ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                    ('code', '=', 'internal'),
+                    ('is_default_api', '=', True)
+                ])
+                # print(f"Type: {type}")
+
         
-        if location:
-            print(f"Building id: {location.odoo_building_id.id}")
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', code),
-                ('is_default_api', '=', True)
-            ])
-            print(f"Type: {type}")
 
         return type if type else None
 
