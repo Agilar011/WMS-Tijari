@@ -162,7 +162,12 @@ class AcumaticaReceiptExternalLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(
+            lambda l: (
+                l.import_state in ['pending', 'error'] 
+                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+            )
+        )
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -382,7 +387,7 @@ class AcumaticaReceiptExternalLine(models.Model):
 
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
                 Move.create(move_vals)
-                picking.action_confirm()
+                # picking.action_confirm()
 
             except InventoryImportError:
                 raise
@@ -470,17 +475,17 @@ class AcumaticaReceiptExternalLine(models.Model):
                 error += 1
                 continue
 
-        msg = f'Import done: {imported} receive created, {updated} receive updated, {error} receive error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Inventory Receive',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        # msg = f'Import done: {imported} receive created, {updated} receive updated, {error} receive error.'
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Inventory Receive',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})

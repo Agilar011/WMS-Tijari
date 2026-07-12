@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+	<record id="view_stock_move_scan_wizard_form" model="ir.ui.view">
+		<field name="name">stock.move.scan.wizard.form</field>
+		<field name="model">stock.move.scan.wizard</field>
+		<field name="arch" type="xml">
+			<form string="Scan Product">
+				<sheet>
+
+					<group>
+						<field name="picking_id" invisible="1"/>
+						<field name="scan_code"
+							placeholder="Scan product QR / barcode..."
+							default_focus="1"/>
+						<field name="lot_product_id"/>
+						<field name="allowed_product_ids" invisible="1"/>
+						<field name="product_id" force_save="1"/>
+					</group>
+
+					<field name="move_line_ids" options="{'no_create': True, 'no_create_edit': True, 'no_quick_create': True}">
+						<list editable="bottom" create="0" delete="0" edit="1">
+
+							<button name="action_prepare_scan_lot"
+									type="object"
+									icon="fa-barcode"
+									title="Validate Lot"
+									invisible="matching == 'match'"
+									class="btn-secondary"/>
+
+							<button name="action_prepare_scan_location"
+									type="object"
+									icon="fa-map-marker"
+									title="Validate Location"
+									invisible="matching == 'match'"
+									class="btn-secondary"/>
+
+							<field name="id" string="Line ID"/>
+							<field name="matching_html" readonly="1" force_save="1"/>
+							<field name="product_id" readonly="1"/>
+							<field name="lot_id" readonly="1"/>
+							<field name="matching_lot_id" column_invisible="1" force_save="1"/>
+
+
+							<field name="location_id" readonly="1"/>
+							<field name="location_dest_id" readonly="1"/>
+							<field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
+
+							<field name="confirmation_lot_code"/>
+							<field name="confirmation_location_code"/>
+
+							<field name="quantity" readonly="1"/>
+							<field name="product_uom_id" readonly="1"/>
+							<field name="matching" column_invisible="1" force_save="1"/>
+
+						</list>
+					</field>
+				</sheet>
+
+				<footer>
+
+					<button string="Save"
+							special="save"
+							class="btn-primary"/>
+
+					<button string="Close"
+							special="cancel"
+							class="btn-secondary"/>
+				</footer>
+			</form>
+		</field>
+	</record>
+
+</odoo>

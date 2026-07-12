@@ -226,14 +226,14 @@ class ImportShipviaWizard(models.TransientModel):
                 )
             """
             staging_by_carrier = {
-                p.vendor_id: p.id
+                p.carrier_id: p.id
                 for p in Staging.search([
                     ('carrier_id', '!=', False)
                 ])
             }
 
             partner_by_carrier = {
-                p.adt_vendor_id: p.id
+                p.company_registry: p.id
                 for p in Partner.search([
                     ('company_registry', '!=', False)
                 ])
@@ -242,7 +242,7 @@ class ImportShipviaWizard(models.TransientModel):
             params_list = []
             for item in result:
                 existing_staging = False
-                if item['vendor_id']:
+                if item['carrier_id']:
                     existing_staging = staging_by_carrier.get(item['carrier_id'])
 
                 if existing_staging:
@@ -257,7 +257,7 @@ class ImportShipviaWizard(models.TransientModel):
                 state = 'pending'
 
 
-                params = (
+                params_list.append((
                     self.config_id.id,
                     item['row_number'],
                     item['external_id'],
@@ -272,10 +272,10 @@ class ImportShipviaWizard(models.TransientModel):
                     msg,
                     existing_partner or None,
                     fields.Datetime.now()
-                )
+                ))
 
             self.env.cr.executemany(query, params_list)
-            return len(result)
+            return len(params_list)
 
 
         finally:
