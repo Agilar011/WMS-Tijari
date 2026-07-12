@@ -3,6 +3,12 @@ from odoo.exceptions import ValidationError, UserError
 import base64
 
 
+import os
+from PIL import Image
+import qrcode
+import io
+
+
 import logging
 _logger = logging.getLogger(__name__)
 
@@ -168,6 +174,94 @@ class StockPicking(models.Model):
             },
         }
 
+# ================================================================================================
+# Temp Storage function create move line qr code        
+# ================================================================================================
+
+    def action_print_lot_number_line(self):
+        self.ensure_one()
+
+        if not self.lot_ids:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Peringatan',
+                    'message': 'Lot Number belum tersedia.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        lot_names = list({
+            lot.name for lot in self.lot_ids if lot.name
+        })
+
+        if not lot_names:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Peringatan',
+                    'message': 'Lot Number belum tersedia.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        self.create_qrcode_name()
+
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/print/lot_number_move_line?ids=%s' % self.id,
+            'target': 'new',
+        }
+
+    def create_qrcode_name(self):
+        for rec in self:
+            lot_names = list(set(
+                rec.lot_ids.mapped('name')
+            ))
+
+            text = ', '.join(filter(None, lot_names))
+
+            if text:
+                rec.qr_code_image = rec.create_qrcode(text)
+
+    def create_qrcode(self, text):
+        logo_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
+        )
+
+        logo = Image.open(logo_path)
+
+        basewidth = 80
+        wpercent = basewidth / float(logo.size[0])
+        hsize = int(float(logo.size[1]) * wpercent)
+
+        logo = logo.resize((basewidth, hsize))
+
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H
+        )
+
+        qr.add_data(text)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+        img = img.resize((300, 300))
+
+        pos = (
+            (img.size[0] - logo.size[0]) // 2,
+            (img.size[1] - logo.size[1]) // 2
+        )
+
+        img.paste(logo, pos)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+
+        return base64.b64encode(buffer.getvalue()).decode()
 
 class StockRule(models.Model):
     _inherit = "stock.rule"
