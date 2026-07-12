@@ -24,20 +24,15 @@ class AcumaticaShipmentGIStaging(models.Model):
 
     acumatica_id = fields.Char('Acumatica ID')
     row_number = fields.Integer('Row Number')
-
     shipment_nbr = fields.Char('Shipment Number')
     ship_date = fields.Datetime('Ship Date')
-
     customer = fields.Char('Customer')
     customer_name = fields.Char('Customer Name')
-
     warehouse_id = fields.Char('Warehouse')
     location = fields.Char('Location')
     location_name = fields.Char('Location Name')
-
     status = fields.Char('Status')
     shipment_type = fields.Char('Type')
-
     confirmed = fields.Boolean('Confirmed')
     hold = fields.Boolean('Hold')
     document_only = fields.Boolean('Document Only')
@@ -92,7 +87,7 @@ class AcumaticaShipmentGIStaging(models.Model):
     import_message = fields.Char(string='Keterangan', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.receipt.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -642,6 +637,20 @@ class AcumaticaShipmentGIStaging(models.Model):
         self.ensure_one()
         return self._do_import()
 
+    def action_open_picking(self):
+        self.ensure_one()
+        if not self.odoo_picking_id:
+            raise UserError('Belum diimport, belum ada receipt di Odoo.')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.picking',
+            'res_id': self.odoo_picking_id.id,
+            'view_mode': 'form',
+        }
+
+    def action_reset_pending(self):
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+
 
 
 
@@ -712,7 +721,7 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
     import_message = fields.Char(string='Keterangan', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.receipt.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -767,7 +776,7 @@ class AcumaticaSalesOrderShipmentStagingLine(models.Model):
     import_message = fields.Char(string='Keterangan', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.receipt.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -802,7 +811,7 @@ class AcumaticaSalesOrderShipmentStagingAllocation(models.Model):
     import_message = fields.Char(string='Keterangan', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.receipt.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -841,7 +850,7 @@ class AcumaticaSalesOrderShipmentShipToAddressStaging(models.Model):
     import_message = fields.Char(string='Keterangan', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.receipt.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -1142,206 +1151,6 @@ class AcumaticaShipmentConfig(models.Model):
         finally:
             self._do_logout(session)
 
-    def fetch_shipment_data(
-        self,
-        shipment_numbers=None,
-        odata_filter=None,
-    ):
-        self.ensure_one()
-
-        session = self._do_login()
-
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name}"
-
-            params = {}
-            filters = []
-
-            if self.odata_expand:
-                params["$expand"] = self.odata_expand
-
-            if self.odata_select:
-                params["$select"] = self.odata_select
-
-            # =====================================================
-            # FILTER SHIPMENT NUMBER
-            # =====================================================
-
-            if shipment_numbers:
-
-                shipment_filter = " or ".join([
-                    f"ShipmentNbr eq '{nbr}'"
-                    for nbr in shipment_numbers
-                    if nbr
-                ])
-
-                if shipment_filter:
-                    filters.append(f"({shipment_filter})")
-
-            if odata_filter:
-                filters.append(f"({odata_filter})")
-
-            elif self.odata_filter:
-                filters.append(f"({self.odata_filter})")
-
-            if filters:
-                params["$filter"] = " and ".join(filters)
-
-            response = session.get(
-                endpoint,
-                params=params,
-                timeout=90
-            )
-
-            if response.status_code != 200:
-                raise UserError(
-                    f"Gagal ambil Shipment "
-                    f"(HTTP {response.status_code}): "
-                    f"{response.text}"
-                )
-
-            raw_data = self._normalize_rows(
-                response.json()
-            )
-
-            result = []
-
-            # =====================================================
-            # SHIPMENT LOOP
-            # =====================================================
-
-            for item in raw_data:
-
-                shipment_dict = {
-
-                    "header": {
-                        "acumatica_id":item.get("id"),
-                        "rownumber":item.get("rowNumber"),
-                        "note":self._val(item, "note"),
-                        "controlqty":self._val(item, "ControlQty"),
-                        "customerid":self._val(item, "CustomerID"),
-                        "description":self._val(item, "Description"),
-                        "fobpoint":self._val(item, "FOBPoint"),
-                        "fobpointdescription":self._val(item,"FOBPointDescription"),
-                        "hold":self._val(item, "Hold"),
-                        "insurance":self._val(item, "Insurance"),
-                        "lastmodifieddatetime":self._parse_dt(self._val(item,"LastModifiedDateTime")),
-                        "locationid":self._val(item, "LocationID"),
-                        "locationname":self._val(item, "LocationName"),
-                        "operation":self._val(item, "Operation"),
-                        "packagecount":self._val(item, "PackageCount"),
-                        "packageweight":self._val(item, "PackageWeight"),
-                        "shipmentdate":self._parse_dt(self._val(item,"ShipmentDate")),
-                        "shipmentnbr":self._val(item, "ShipmentNbr"),
-                        "shippedqty":self._val(item, "ShippedQty"),
-                        "shippedvolume":self._val(item, "ShippedVolume"),
-                        "shippedweight":self._val(item, "ShippedWeight"),
-                        "shippingzoneid":self._val(item, "ShippingZoneID"),
-                        "shipvia":self._val(item, "ShipVia"),
-                        "status":self._val(item, "Status"),
-                        "towarehouseid":self._val(item, "ToWarehouseID"),
-                        "type":self._val(item, "Type"),
-                        "unlimitedpackages":self._val(item, "UnlimitedPackages"),
-                        "warehouseid":self._val(item, "WarehouseID"),
-                        "warehousename":self._val(item, "WarehouseName"),
-                    },
-
-                    "shipto_address": {},
-
-                    "details": []
-                }
-
-                # =================================================
-                # SHIP TO ADDRESS
-                # =================================================
-
-                shipping_settings = (
-                    item.get("ShippingSettings")
-                    or {}
-                )
-
-                shipto = (
-                    shipping_settings.get(
-                        "ShipToAddress"
-                    )
-                    or {}
-                )
-
-                if shipto:
-
-                    shipment_dict[
-                        "shipto_address"
-                    ] = {
-                        "addressline1":self._val(shipto,"AddressLine1"),
-                        "addressline2":self._val(shipto,"AddressLine2"),
-                        "city":self._val(shipto,"City"),
-                        "country":self._val(shipto,"Country"),
-                        "countryname":self._val(shipto,"CountryName"),
-                        "postalcode":self._val(shipto,"PostalCode"),
-                        "state":self._val(shipto,"State"),
-                    }
-
-                # =================================================
-                # DETAILS
-                # =================================================
-
-                details = (
-                    item.get("Details")
-                    or []
-                )
-
-                for detail in details:
-
-                    detail_dict = {
-
-                        "detail": {
-                            "acumatica_id": detail.get("id"),
-                            "rownumber": detail.get("rowNumber"),
-                            "note": self._val(detail, "note"),
-                            "description": self._val(detail, "Description"),
-                            "freeitem": self._val(detail, "FreeItem"),
-                            "inventoryid": self._val(detail, "InventoryID"),
-                            "linenbr": self._val(detail, "LineNbr"),
-                            "location": self._val(detail, "Location"),
-                            "openorderqty": self._val(detail, "OpenOrderQty"),
-                            "orderedqty": self._val(detail, "OrderedQty"),
-                            "orderlinenbr": self._val(detail, "OrderLineNbr"),
-                            "ordernbr": self._val(detail, "OrderNbr"),
-                            "ordertype": self._val(detail, "OrderType"),
-                            "shippedqty": self._val(detail, "ShippedQty"),
-                            "uom": self._val(detail, "UOM"),
-                            "warehouseid": self._val(detail, "WarehouseID"),
-                        },
-
-                        "allocations": []}
-
-                    allocations = (detail.get("Allocations")or [])
-
-                    for alloc in allocations:
-
-                        detail_dict[
-                            "allocations"
-                        ].append(
-                        {
-                            "acumatica_id": alloc.get("id"),
-                            "rownumber": alloc.get("rowNumber"),
-                            "note": self._val(alloc, "note"),
-                            "description": self._val(alloc, "Description"),
-                            "inventoryid": self._val(alloc, "InventoryID"),
-                            "location": self._val(alloc, "Location"),
-                            "quantity": self._val(alloc, "Quantity"),
-                            "splitlinenbr": self._val(alloc, "SplitLineNbr"),
-                            "uom": self._val(alloc, "UOM"),
-                        })
-
-                    shipment_dict["details"].append(detail_dict)
-
-                result.append(shipment_dict)
-
-            return result
-
-        finally:
-            self._do_logout(session)
 
     def create_staging_data(self, shipment_gi_data, batch_data):
         staging_shipment_gi = self.env['acumatica.shipment.gi.staging']
@@ -1710,7 +1519,7 @@ class AcumaticaShipmentLine(models.Model):
     odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.so.shipment.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')

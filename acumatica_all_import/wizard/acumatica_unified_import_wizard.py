@@ -594,7 +594,9 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     def action_view_staging(self):
         self.ensure_one()
         info = self._get_import_info()
+        print(f"Info: {info}")
         config = self._get_selected_config(info)
+        print(f"Config: {config}")
         return {
             'type': 'ir.actions.act_window',
             'name': info['staging_name'],
