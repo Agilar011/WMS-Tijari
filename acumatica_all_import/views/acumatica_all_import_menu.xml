@@ -34,12 +34,13 @@
         name="Internal Transfer" 
         parent="menu_acumatica_all_import_staging_root" 
         sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_staging_direct_transfer" name="Direct Transfer" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_direct_transfer" sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_staging_vendor_return_direct_transfer" name="Vendor return Direct Transfer" parent="menu_acumatica_all_import_staging_internal" action="action_vendor_return_acumatica_direct_transfer" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_staging_credit_memo_consignment" name="Credit Memo Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_credit_memo_consignment" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer - Intra Warehouse : OUT" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_one_step_line" sequence="40"/>
-    <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer - 2 Step : OUT" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_two_step_line" sequence="50"/>
-    <menuitem id="menu_acumatica_all_inventory_receipt_transfer_wh_in" name="Inventory Receipt Transfer Wh In" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_inventory_receipt_transfer_wh_in_staging" sequence="60"/>
+    <menuitem id="menu_acumatica_all_import_staging_so_shipment_co" name="SO Shipment Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_so_shipment_consignment_line" sequence="10"/>
+    <menuitem id="menu_acumatica_all_import_staging_direct_transfer" name="Direct Transfer" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_direct_transfer" sequence="20"/>
+    <menuitem id="menu_acumatica_all_import_staging_vendor_return_direct_transfer" name="Vendor return Direct Transfer" parent="menu_acumatica_all_import_staging_internal" action="action_vendor_return_acumatica_direct_transfer" sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_staging_credit_memo_consignment" name="Credit Memo Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_credit_memo_consignment" sequence="40"/>
+    <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer - Intra Warehouse : OUT" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_one_step_line" sequence="50"/>
+    <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer - 2 Step : OUT" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_two_step_line" sequence="60"/>
+    <menuitem id="menu_acumatica_all_inventory_receipt_transfer_wh_in" name="Inventory Receipt Transfer Wh In" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_inventory_receipt_transfer_wh_in_staging" sequence="70"/>
 
 
 
