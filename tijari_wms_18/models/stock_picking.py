@@ -7,6 +7,7 @@ import logging
 _logger = logging.getLogger(__name__)
 
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
+from collections import defaultdict
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -74,15 +75,37 @@ class StockPicking(models.Model):
 
         packages = self.env['stock.quant.package']
 
-        for move in move_line_ids.mapped('move_id'):
+        # for move in move_line_ids.mapped('move_id'):
 
-            lines = move_line_ids.filtered(
-                lambda ml: ml.move_id == move
-            )
+        #     lines = move_line_ids.filtered(
+        #         lambda ml: ml.move_id == move
+        #     )
 
-            package = self._put_in_pack(lines)
+        #     package = self._put_in_pack(lines)
 
-            packages |= package
+        #     packages |= package
+
+        move_lines = self.move_line_ids.filtered(
+            lambda line: line.quantity
+            and not line.result_package_id
+        )
+
+        if not move_lines:
+            return False
+
+        lines_by_destination = defaultdict(
+            lambda: self.env["stock.move.line"]
+        )
+
+        for line in move_lines:
+            lines_by_destination[line.location_dest_id.id] |= line
+
+        packages = self.env["stock.quant.package"]
+
+        for lines in lines_by_destination.values():
+            packages |= self._put_in_pack(lines)
+
+        return packages[-1] if packages else False
 
         return True
     
@@ -101,14 +124,6 @@ class StockPicking(models.Model):
         _logger.info(">>> action_confirm CALLED %s", self.ids)
 
         res = super().action_confirm()
-
-        for picking in self:
-            if picking.adt_dest_location_id:
-                for move_line in picking.move_line_ids:
-                    move_line.allocation_storage = move_line.adt_dest_location_id.id
-            else:
-                for move_line in picking.move_line_ids:
-                    move_line.allocation_storage = picking.picking_type_id.warehouse_id.lot_stock_id.id
 
         return res
 

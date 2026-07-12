@@ -25,7 +25,7 @@
             <xpath expr="//list" position="inside">
                 <field name="picking_type_id" column_invisible="1"/>
                 <field name="matching" column_invisible="1"/>
-                <field name="operation_category" column_invisible="0"/>
+                <!-- <field name="operation_category" column_invisible="0"/> -->
                 <field name="package_id" column_invisible="0"/>
             </xpath>
 
@@ -62,8 +62,8 @@
                     readonly="1"
                     column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
                     
-                <field name="auto_input_code" widget="auto_input_code"
-                    invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+                <!-- <field name="auto_input_code" widget="auto_input_code"
+                    invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/> -->
 
             </xpath>
 
@@ -75,13 +75,33 @@
                 />
                 <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
                 <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
+                <field name="confirmation_lot_code" />
+                <field name="confirmation_location_code" />
+                <field name="matching_lot_id" column_invisible="1" force_save="1"/>
+                <field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
 
             </xpath>
 
             <xpath expr="//field[@name='lot_name']" position="before">
+                <button name="action_prepare_scan_lot"
+                        type="object"
+                        icon="fa-barcode"
+                        title="Validate Lot"
+                        invisible="matching == 'match'"
+                        class="btn-secondary"/>
+
+                <button name="action_prepare_scan_location"
+                        type="object"
+                        icon="fa-map-marker"
+                        title="Validate Location"
+                        invisible="matching == 'match'"
+                        class="btn-secondary"/>
+
+                <field name="id" string="Line ID" />
                 <field name="matching_html" />
-                <field name="matching" />
+                <field name="matching" column_invisible="1" force_save="1"/>
             </xpath>
+
         </field>
     </record>
 
@@ -118,7 +138,7 @@
 
             <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']" position="replace">
                 <field name="location_dest_id" optional="hide" />
-                <field name="allocation_storage" domain="[('id', 'child_of', adt_dest_location_id)]" />
+                <!-- <field name="allocation_storage" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
                 <field name="adt_dest_location_id" optional="hide" />
             </xpath>
 
@@ -160,7 +180,7 @@
         </field>
     </record>
 
-    <record id="view_stock_move_line_allocation_inherit" model="ir.ui.view">
+    <!-- <record id="view_stock_move_line_allocation_inherit" model="ir.ui.view">
         <field name="name">stock.move.line.allocation.inherit</field>
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock.view_move_line_tree"/>
@@ -170,6 +190,6 @@
             </xpath>
         
         </field>
-    </record>
+    </record> -->
 
 </odoo>
