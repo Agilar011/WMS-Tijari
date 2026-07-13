@@ -202,6 +202,13 @@ class AcumaticaIssueLine(models.Model):
     line_external_id = fields.Char(string='UUID Line', readonly=True)
 
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    # product_line_ids = fields.Many2one('acumatica.issue.line', string='Issue Header', ondelete='cascade')
+    product_line_ids = fields.One2many(
+        'acumatica.issue.line.product',  # Model tujuan (detail)
+        'issue_shipment_id',             # Field Many2one yang ada di model detail
+        string='Product Lines'
+    )
+
 
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
