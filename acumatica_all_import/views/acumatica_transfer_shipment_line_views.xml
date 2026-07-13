@@ -39,19 +39,16 @@
             <list string="Data Transfer - Inter Warehouse : OUT" multi_edit="1">
                 <field name="selected"/>
                 <field name="shipment_nbr"/>
-                <field name="picking_type_id"/>
-                <!-- <field name="order_number"/>
-                <field name="inventory_id"/> -->
-                <!-- <field name="line_description"/>
-                <field name="product_uom_qty"/>
-                <field name="uom_code"/>
+                <!-- <field name="partner_code"/> -->
                 <field name="warehouse_code"/>
-                <field name="warehouse_dest_code"/>
-                <field name="location_dest_code"/>
-                <field name="scheduled_date"/> -->
-                <field name="import_state"/>
+                <field name="actual_qty"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-                <button name="action_import_this" type="object" string="Import" class="btn-primary" invisible="import_state != 'pending'"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
             </list>
         </field>
     </record>
@@ -100,6 +97,24 @@
                             <field name="import_message" readonly="1"/>
                             <field name="note" readonly="1"/>
                         </group>
+                    </group>
+                    <notebook>
+                        <page name="details" string="Details/Lines">
+                            <!-- Field relasi One2many ditaruh di sini secara aman -->
+                            <field name="shipment_line_ids" readonly="1">
+                                <list>
+                                    <field name="inventory_id"/>
+                                    <field name="line_description"/>
+                                    <field name="line_warehouse_code"/>
+                                    <field name="product_uom_qty"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                    <group>
+                        <field name="import_message" readonly="1" widget="text"/>
+                        <field name="odoo_picking_id" readonly="1"/>
+                        <field name="exists_in_odoo" readonly="1"/>
                     </group>
                 </sheet>
             </form>

@@ -163,14 +163,7 @@ class ImportReceiptWizard(models.TransientModel):
                 if isinstance(details, dict):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
-                    details = []
-                # print('detail')
-                # if detail[]:
-                #     header["warehouse_code"] = self._val(details[0], 'Warehouse')
-
-                # else:
-                #     header["warehouse_code"] = "WH33-FG"
-                    
+                    details = []                    
 
                 result.append(dict(header))
                 # print(f"Result: {result}")
@@ -201,83 +194,63 @@ class ImportReceiptWizard(models.TransientModel):
         print("="*80)
         print("[DEBUG] MASUK KE FUNGSI: _create_staging_data")
         print("="*80)
-        # print(f"Header List: {header_list}")
-        # print(f"Line List: {line_list}")
-        Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
-        lines_to_create = []
+        
         sync_data = fields.Datetime.now()
+        created_headers = []
 
-        for item in header_list:
-            
-            lines_to_create = ({
-                **item, #header odoo
-                # 'odoo_picking_id' : exists[0]['id'] if exists else False,
+        for header_item in header_list:
+            # 1. CARI DAN KUMPULKAN BARIS PRODUK YANG COCOK DENGAN HEADER INI
+            to_create_move = [
+                move for move in line_list 
+                if move.get('header_external_id') == header_item.get('external_id')
+            ]
+
+            # 2. LOGIKA UTAMA: ISI WAREHOUSE_CODE HEADER DARI LINE JIKA BAWAANNYA KOSONG
+            # Ganti 'warehouse_code' di bawah sesuai dengan nama key asli di header_list Anda (misal 'adt_WarehouseID' atau 'warehouse_code')
+            if not header_item.get('warehouse_code') and to_create_move:
+                # Ambil kode gudang dari baris pertama yang ditemukan di dalam list produk
+                first_line_warehouse = to_create_move[0].get('warehouse_code')
+                if first_line_warehouse:
+                    header_item['warehouse_code'] = first_line_warehouse
+                    picking_type = self._search_picking_type(header_item)
+                    header_item['picking_type_id'] = picking_type.id if picking_type else None
+                    print(f"--> [FIX] Warehouse kosong pada header {header_item.get('external_id')}, diisi otomatis dari line: {first_line_warehouse}")
+
+            # 3. SUSUN VALUES UNTUK STAGING HEADER
+            lines_to_create = {
+                **header_item,
                 'config_id': self.config_id.id,
                 'import_state': 'pending',
                 'import_message': "Data API Imported",
                 'selected': True,
                 'sync_date': sync_data,
-            })
-            # print(f"line to create: {lines_to_create}")
+            }
 
+            # 4. CREATE DATA HEADER STAGING
             created_header = self.env['acumatica.issue.po.return.line'].create(lines_to_create)
+            created_headers.append(created_header)
 
-            # created_header.write({'odoo_picking_id': created_header.id})
-
-            to_create_move = [move for move in line_list if move.get('header_external_id') == item.get('external_id')]
-
+            # 5. CREATE DATA DETAIL BARANG (CHILD)
             for move_item in to_create_move:
                 self.env['acumatica.issue.po.return.product'].create({
-                    'receipt_line_id' : created_header.id,
-                    'line_external_id' : move_item.get('line_external_id'),
-                    'inventory_id' : move_item.get('inventory_id'),
-                    'location_code' : move_item.get('location_code'),
-                    'uom_code' : move_item.get('uom_code'),
-                    'warehouse_code' : move_item.get('warehouse_code'),
-                    'branch_warehouse' : move_item.get('branch_warehouse'),
-                    'line_description' : move_item.get('line_description'),
-                    'line_nbr' : move_item.get('line_nbr'),
-                    'line_note' : move_item.get('line_note'),
-                    'product_uom_qty' : move_item.get('product_uom_qty'),
-                    # 'product_uom_qty' : move_item.get('total_qty'),
-                    # 'scheduled_date' : move_item.get('scheduled_date'),
-                    # 'post_period' : move_item.get('post_period'),
-
+                    'receipt_line_id': created_header.id,
+                    'line_external_id': move_item.get('line_external_id'),
+                    'inventory_id': move_item.get('inventory_id'),
+                    'location_code': move_item.get('location_code'),
+                    'uom_code': move_item.get('uom_code'),
+                    'warehouse_code': move_item.get('warehouse_code'),
+                    'branch_warehouse': move_item.get('branch_warehouse'),
+                    'line_description': move_item.get('line_description'),
+                    'line_nbr': move_item.get('line_nbr'),
+                    'line_note': move_item.get('line_note'),
+                    'product_uom_qty': move_item.get('product_uom_qty'),
                 })
 
+        # return created_headers
+
+                    
 
 
-
-        #     reference_nbr = item.get('receipt_nbr')
-
-        #     exists = Picking.search_read(
-        #         domain=[('origin', '=', reference_nbr)
-        #                 # ,('state', '=', 'draft')
-        #                 ],
-        #         fields=['id', 'origin', 'state'],
-        #         limit=1
-        #     )
-
-        #     existing_origins = [record['origin'] for record in exists if record.get('origin')]
-
-        #     # print(f"exsit data: {exists}")
-
-        # if lines_to_create:
-        #     # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
-        #     unchanged, to_update, to_create = self._search_receipt_lines(lines_to_create)
-        #     # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
-        #     self._update_receipt_lines(to_update)
-
-        #     receipts = self._create_receipt_lines(to_create)
-        #     line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
-        #     if line_update:
-        #         print(line_update)
-        #         self._update_receipt_lines_product(line_update, to_update)
-
-        #     if line_create:
-        #         print(line_create)
-        #         self._create_receipt_lines_product(line_create, receipts)
 
     # ---------------------------------------------------------
     # Filter
@@ -308,7 +281,7 @@ class ImportReceiptWizard(models.TransientModel):
             'actual_qty': self._val(item, 'ControlQty'),
             'total_qty': self._val(item, 'TotalQty'),
             'scheduled_date': self._val(item, 'Date'),
-            # 'description': self._val(item, 'Description'),
+            # 'warehouse_code': self._val(item, 'Description'),
             # 'external_ref': self._val(item, 'ExternalRef'),
             # 'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
             'post_period': self._val(item, 'PostPeriod'),
@@ -318,6 +291,7 @@ class ImportReceiptWizard(models.TransientModel):
             # 'total_qty': self._val(item, 'TotalQty'),
             'po_type': self._val(item, 'Type'),
             'vendor_code' : self._val(item, 'VendorID'),
+            'partner_ref' : self._val(item, 'VendorName'),
             'partner_ref' : self._val(item, 'VendorName'),
             'picking_type_id': type
 
@@ -518,34 +492,15 @@ class ImportReceiptWizard(models.TransientModel):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         warehouse_code = header.get('warehouse_code')
-        details = header.get('Details') or []
+        # details = header.get('Details') or []
         type = False
 
         if not warehouse_code:
             # Normalkan struktur jika details berupa bungkus dictionary OData (mengandung key 'value')
-            if isinstance(details, dict):
-                if 'WarehouseID' in details:
-                    warehouse_code = details.get('WarehouseID', {}).get('value') if isinstance(details.get('WarehouseID'), dict) else details.get('WarehouseID')
-                else:
-                    details = details.get('value', []) or []
-            
-            # Pastikan setelah dinormalkan formatnya wajib berupa List
-            if not isinstance(details, list):
-                details = []
-
-            # Ambil 1 value WarehouseID dari elemen pertama di dalam list
-            if details:
-                first_detail = details[0] # Ambil baris pertama
-                if isinstance(first_detail, dict):
-                    raw_warehouse = first_detail.get('WarehouseID')
-                    
-                    # Antisipasi jika WarehouseID bertipe objek kompleks {"value": "WH33-MO"}
-                    if isinstance(raw_warehouse, dict):
-                        warehouse_code = raw_warehouse.get('value')
-                    else:
-                        warehouse_code = raw_warehouse
+            print("Error warehouse tidak ditemukan")
 
         print(warehouse_code)
+
         location = Location.search([
             ('code', '=', warehouse_code)
         ])
@@ -555,7 +510,7 @@ class ImportReceiptWizard(models.TransientModel):
         if location:
             type = PickingType.search([
                 ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'outgoing'),                
+                ('code', '=', 'internal'),                
                 ('is_default_api', '=', True)
             ])
 

@@ -38,11 +38,10 @@
                 <field name="selected" widget="boolean_toggle"/>
 
                 <!-- Field Header dari Acumatica (Ganti adt_ReferenceNbr jika ada nama field lain) -->
-                <!-- <field name="adt_ReferenceNbr"/>
-                <field name="config_id"/>
-                <field name="total_fetched"/>
-                <field name="total_new"/>
-                <field name="total_existing"/> -->
+                <field name="adt_ReferenceNbr"/>
+                <!-- <field name="adt_Customer"/> -->
+                <field name="adt_Branch"/> 
+                <field name="adt_TotalQty"/> 
 
                 <!-- Status Import Data ke Odoo -->
                 <field name="import_state" widget="badge"
