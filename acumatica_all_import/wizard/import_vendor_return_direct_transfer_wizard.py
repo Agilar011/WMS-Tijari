@@ -127,6 +127,11 @@ class ImportDirectTransferWizard(models.TransientModel):
         self.ensure_one()
         Picking = self.env['stock.picking']
         session = self.config_id._do_login()
+        
+        # Penampung pesan error agar bisa ditampilkan di akhir proses jika ada yang gagal
+        error_messages = [] 
+        result = []
+
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {'$top': limit, '$skip': offset}
@@ -153,53 +158,40 @@ class ImportDirectTransferWizard(models.TransientModel):
 
             raw_data = self._normalize_rows(response.json())
             print(f"Raw Data: {raw_data}")
-            result = []
-            detail_result = []
 
             for row_number, item in enumerate(raw_data, start=1):
+                # Gunakan savepoint untuk membungkus satu siklus baris data
                 try:
                     with self.env.cr.savepoint():
-                        # PERBAIKAN: Mapping diselaraskan dengan key JSON Direct Transfer asli Anda
                         header = {
                             'adt_id': item.get('id', '') or '',
                             'adt_rowNumber': item.get('rowNumber', '') or '',
                             'adt_note': item.get('note', {}).get('value', '') or '',
-                            # 'branch_warehouse': self._val(item, 'Branch'),
-                            # 'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
-                            # 'actual_qty': self._val(item, 'ControlQty'),
-                            # 'customer_code': self._val(item, 'CustomerID'), # JSON Anda menggunakan CustomerID
                             'adt_Date': self._val(item, 'Date'),
                             'adt_Description': self._val(item, 'Description'),
                             'adt_ExternalRef': self._val(item, 'ExternalRef'),
                             'adt_LastModifiedDateTime': self._val(item, 'LastModifiedDateTime'),
-                            # 'location_code': str(self._val(item, 'LocationID') or ''), # JSON menggunakan LocationID
                             'adt_PostPeriod': str(self._val(item, 'PostPeriod') or ''),
                             'adt_ReferenceNbr': self._val(item, 'ReferenceNbr'),
                             'adt_Status': self._val(item, 'Status'),
                             'adt_TotalQty': str(self._val(item, 'TotalQty') or '0.0'),
-                            'adt_TransferType': self._val(item, 'TransferType'), # JSON menggunakan TransferType
-                            
-                            # KOREKSI 2: Sesuaikan key pencarian ke payload API murni ('FromWarehouseID' & 'ToWarehouseID')
+                            'adt_TransferType': self._val(item, 'TransferType'), 
                             'adt_FromWarehouseID': self._val(item, 'FromWarehouseID'),
                             'adt_ToWarehouseID': self._val(item, 'ToWarehouseID'),
                         }
 
                         if header.get('adt_FromWarehouseID'):
-                            # Kirim data header ke fungsi pembantu
                             type_record = self._search_picking_type(header)
-
-                            # print(f"")
-                            # Ambil ID integer secara aman, gunakan False standar Odoo (bukan None)
                             header['picking_type_id'] = type_record.id if type_record else False
 
                         if not header['picking_type_id']:
                             raise UserError("Picking type untuk warehouse tersebut tidak ditemukan")
+                        
                         print(f"header : {header}")
                         created_header = self.env['acumatica.vendor.return.direct.transfer.staging'].create(header)
 
                         if created_header:
                             sync_data = fields.Datetime.now()
-                            # Gunakan tanda kurung (), bukan sama dengan (=)
                             created_header.write({
                                 'config_id': self.config_id.id,
                                 'import_state': 'pending',
@@ -208,19 +200,17 @@ class ImportDirectTransferWizard(models.TransientModel):
                                 'sync_date': sync_data,
                             })
 
-
                         details = item.get('Details') or []
                         if isinstance(details, dict):
                             details = details.get('value', []) or []
                         if not isinstance(details, list):
                             details = []
                     
-                        # print(f"Header: {header}")
-                        result.append(header)
-
                         if not details:
                             raise UserError('Data Detail tidak ditemukan')
 
+                        # Array detail_result dipindah ke dalam loop agar ter-reset per dokumen
+                        detail_result = []
                         for detail in details:
                             print(f"detail : {detail}")
                             vals = {      
@@ -239,73 +229,44 @@ class ImportDirectTransferWizard(models.TransientModel):
                                 'adt_ToLocationID' : self._val(detail, 'ToLocationID'), 
                                 'adt_UOM' : self._val(detail, 'UOM'), 
                                 'receipt_line_id' : created_header.id
-
-                                # 'header_external_id': item.get('id', ''),
-                                # 'line_external_id': detail.get('id', '') or '',
-                                # # Pada JSON Direct Transfer detail Anda, nomor baris menggunakan 'LineNumber' bukan 'LineNbr'
-                                # 'line_nbr': str(self._val(detail, 'LineNumber') or ''), 
-                                # 'line_note': detail.get('note', {}).get('value', '') or '',
-                                # 'line_description': self._val(detail, 'Description'),
-                                # 'inventory_id': self._val(detail, 'InventoryID'),
-                                # 'from_location_code': self._val(detail, 'FromLocationID'), # Ditambahkan sesuai JSON
-                                # 'to_location_code': self._val(detail, 'ToLocationID'),     # Ditambahkan sesuai JSON
-                                # 'product_uom_qty': str(self._val(detail, 'Quantity') or '0.0'),
-                                # 'uom_code': self._val(detail, 'UOM'),
-                                # 'so_order_nbr': self._val(detail, 'SOOrderNbr'),
-                                # 'so_shipment_nbr': self._val(detail, 'SOShipmentNbr'),
                             }
-
                             detail_result.append(vals)
 
-                        self.config_id.last_sync = fields.Datetime.now()
                         print(f"="*60)
                         print(f"All detail result")
                         print(f"="*60)
 
-                        for item in detail_result:
-                            self.env['acumatica.vendor.return.direct.transfer.staging.line'].create(item)
-                            print(item)
+                        for detail_item in detail_result:
+                            self.env['acumatica.vendor.return.direct.transfer.staging.line'].create(detail_item)
+                            print(detail_item)
                             print(f"="*60)
 
+                        self.config_id.last_sync = fields.Datetime.now()
+                        result.append(header)
+                        _logger.info("Berhasil ambil data ke-%s (Ref: %s) dari Acumatica", row_number, header.get('adt_ReferenceNbr'))
 
-
-                        _logger.info("Berhasil ambil %s rows PO inventory dari Acumatica", len(result))
-                
-                        # raise UserError('debug')
+                    # === PENTING: Commit jika satu siklus header + detail sukses tanpa error ===
+                    self.env.cr.commit()
 
                 except Exception as e:
-                    print("=" * 80)
-                    print(f"ERROR IMPORT HEADER KE-{row_number}")
-                    print(f"Reference Number : {item.get('ReferenceNbr', {}).get('value', '')}")
-                    print(f"Header UUID      : {item.get('id', '')}")
-                    print(f"Error Type       : {type(e).__name__}")
-                    print(f"Error Message    : {str(e)}")
-                    print("Header Data :")
-                    print(header if 'header' in locals() else item)
-                    print("=" * 80)
+                    # Jika error, context manager `with savepoint()` otomatis me-rollback perubahan dokumen ini saja
+                    err_msg = f"Gagal import baris ke-{row_number} (Ref: {item.get('ReferenceNbr', {}).get('value', 'N/A')}): {str(e)}"
+                    _logger.error(err_msg)
+                    error_messages.append(err_msg)
+                    continue  # Lanjutkan ke data berikutnya tanpa menghentikan loop
 
-                    raise UserError(f"ERROR IMPORT HEADER KE-{row_number} dengan error message: {str(e)}")
-
-                    _logger.exception(
-                        "Error import Direct Transfer %s",
-                        item.get('ReferenceNbr', {}).get('value', '')
-                    )
         finally:
             if session:
                 self.config_id._do_logout(session)
+
+        # Jika di akhir proses ada data yang error, kita tampilkan semua informasinya
+        if error_messages:
+            summary = "\n".join(error_messages[:10])  # Batasi tampilkan 10 baris saja agar pop-up tidak penuh
+            if len(error_messages) > 10:
+                summary += f"\n... dan {len(error_messages) - 10} error lainnya."
+            # raise UserError(f"Proses fetch selesai dengan beberapa error:\n{summary}")
         
         return len(result)
-
-                        
-
-
-
-
-            # Jangan lupa return hasil akhirnya di paling bawah fungsi Anda jika dibutuhkan oleh fungsi wizard induk!
-            # return result, detail_result
-
-        #     # Pastikan proses logout ditaruh di blok finally agar session tidak menggantung di Acumatica jika terjadi crash
-        #     self._validate_staging_against_picking(result, detail_result)
 
     def _validate_staging_against_picking(self, header_list, line_list):
         print("Running validate picking function")

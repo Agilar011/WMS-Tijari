@@ -20,16 +20,8 @@
                 <field name="selected" widget="boolean_toggle"/>
 
                 <field name="reference_nbr"/>
-                <field name="scheduled_date"/>
                 <field name="from_warehouse_code"/>
-                <field name="to_warehouse_code"/>
-                <field name="inventory_id"/>
-                <field name="quantity"/>
-                <field name="uom_code"/>
-                <field name="from_location_code"/>
-                <field name="to_location_code"/>
-                <field name="status"/>
-                <field name="transfer_type"/>
+                <field name="total_qty"/>
 
                 <field name="import_state" widget="badge"
                     decoration-success="import_state in ('imported','updated')"
@@ -90,19 +82,20 @@
                             <field name="acumatica_write_date"/>
                             <field name="note"/>
                         </group>
-
-                        <group string="Detail Line">
-                            <field name="line_nbr"/>
-                            <field name="inventory_id"/>
-                            <field name="line_description"/>
-                            <field name="from_location_code"/>
-                            <field name="to_location_code"/>
-                            <field name="quantity"/>
-                            <field name="uom_code"/>
-                            <field name="line_note"/>
-                        </group>
                     </group>
-
+                    <notebook>
+                        <page name="details" string="Details/Lines">
+                            <!-- Field relasi One2many ditaruh di sini secara aman -->
+                            <field name="line_ids" readonly="1">
+                                <list>
+                                    <field name="inventory_id"/>
+                                    <field name="line_description"/>
+                                    <field name="from_location_code"/>
+                                    <field name="quantity"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                     <group string="Import Odoo">
                         <field name="import_message" readonly="1"/>
                         <field name="odoo_picking_id" readonly="1"/>

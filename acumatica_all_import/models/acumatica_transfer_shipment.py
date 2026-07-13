@@ -263,6 +263,17 @@ class AcumaticaTransferShipmentLine(models.Model):
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
 
+    def action_open_picking(self):
+        self.ensure_one()
+        if not self.odoo_picking_id:
+            raise UserError('Belum diimport, belum ada receipt di Odoo.')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'stock.picking',
+            'res_id': self.odoo_picking_id.id,
+            'view_mode': 'form',
+        }
+
     def action_import_this(self):
         self.ensure_one()
         return self._do_import()

@@ -23,7 +23,7 @@
                 <!-- <field name="id" string="ID"/> -->
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
                 <field name="adt_CustomerID" string="Customer ID"/>
-                <!-- <field name="odoo_picking_id" string="Delivery Order"/> -->
+                <field name="total_qty" string="total Quantity"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"
                        decoration-warning="import_state == 'pending'"

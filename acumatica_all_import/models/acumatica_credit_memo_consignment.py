@@ -52,6 +52,25 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_Status = fields.Char(string="Acumatica Status")
     adt_Type = fields.Char(string="Acumatica Type")
 
+    total_qty = fields.Float(
+        string="Total Qty (Lines)", 
+        compute="_compute_total_qty", 
+        store=True
+    )
+
+    # Tambahkan fungsi compute ini di bagian bawah kelas
+    @api.depends('line_ids.adt_Qty')  # Pastikan nama field di child table sesuai (adt_Quantity atau adt_Qty)
+    def _compute_total_qty(self):
+        for rec in self:
+            total = 0.0
+            for line in rec.line_ids:
+                try:
+                    # Ambil nilai kuantitas dari line, ubah ke float jika tipenya Char/String di database
+                    total += float(line.adt_Qty or 0.0)
+                except (ValueError, TypeError):
+                    total += 0.0
+            rec.total_qty = total
+
     # =========================================================================
     # CORE PROCESS FUNCTIONS FOR Credit Memo Consignment IMPORT
     # =========================================================================
