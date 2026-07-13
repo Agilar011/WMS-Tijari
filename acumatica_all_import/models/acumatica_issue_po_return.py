@@ -620,7 +620,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
 class AcumaticaIssuePoReturnProduct(models.Model):
     _name = 'acumatica.issue.po.return.product'
     _description = 'Data Inventory Receipt dari Acumatica'
-    _order = 'receipt_nbr asc, line_nbr asc, id asc'
+    _order = 'line_nbr asc, id asc'
 
     receipt_line_id = fields.Many2one(
         'acumatica.issue.po.return.line',

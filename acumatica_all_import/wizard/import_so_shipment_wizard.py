@@ -362,6 +362,8 @@ class ImportSOShipmentWizard(models.TransientModel):
             for item in details:
                 ship_date = self._val(item, "ShipDate")
                 phrase_date = dateutil_parser.parse(ship_date).replace(tzinfo=None)
+                if phrase_date:
+                    print(phrase_date)
                 warehouse_id = self._val(item, "WarehouseID")
                 OrderType = self._val(item, "OrderType")
                 # print(f"Warehouse ID : {warehouse_id}")
@@ -375,6 +377,8 @@ class ImportSOShipmentWizard(models.TransientModel):
 
                 picking_type = self._search_picking_type(warehouse_id, OrderType)
                 picking_type_id = picking_type.id if picking_type else None
+                # print(picking_type_id)
+                
 
                 vals = {
                     'acumatica_id' : item.get('id'),
@@ -440,7 +444,7 @@ class ImportSOShipmentWizard(models.TransientModel):
 
     def create_staging_data(self, shipment_gi_data, total_count):
         if not shipment_gi_data:
-            return False
+            return total_count
 
         GIStaging = self.env['acumatica.shipment.gi.staging']
         LineStaging = self.env['acumatica.sales.order.shipment.staging.line']
@@ -457,7 +461,6 @@ class ImportSOShipmentWizard(models.TransientModel):
                 continue
 
             if not grouped_shipments[shipment_nbr]['header']:
-                picking_type = self._search_picking_type()
                 grouped_shipments[shipment_nbr]['header'] = {
                     'adt_ShipmentNbr': shipment_nbr,
                     'config_id': self.config_id.id,
@@ -468,6 +471,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_WarehouseID': row.get("adt_WarehouseID"),
                     'adt_LocationID': row.get("adt_LocationID"),
                     'adt_LocationName': row.get("adt_LocationName"),
+                    'adt_AddressLine': row.get("adt_AddressLine"),
                     'adt_Status': row.get("adt_Status"),
                     'adt_ShipmentType': row.get("adt_ShipmentType"),
                     'adt_City': row.get("adt_City"),
@@ -475,6 +479,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_StateName': row.get("adt_StateName"),
                     'adt_Country': row.get("adt_Country"),
                     'adt_CountryName': row.get("adt_CountryName"),
+                    'adt_ShipDate': row.get("adt_ShipDate"),
                     'adt_PostalCode': row.get("adt_PostalCode"),
                     'adt_ShipVia': row.get("adt_ShipVia"),
                     'adt_FOBPoint': row.get("adt_FOBPoint"),
@@ -484,7 +489,6 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_ToWarehouseID': row.get("adt_ToWarehouseID"),
                     'adt_NoteHeader': row.get("adt_NoteHeader"),
                     'picking_type_id': row.get("picking_type_id"),
-
                 }
 
             line_data = {
@@ -497,7 +501,6 @@ class ImportSOShipmentWizard(models.TransientModel):
                 'adt_ShipmentQty': row.get("adt_ShipmentQty"),
                 'adt_LineUOM': row.get("adt_LineUOM"),
                 'adt_WarehouseID': row.get("adt_WarehouseID"),
-                # 'config_id': self.id,
             }
 
             grouped_shipments[shipment_nbr]['lines'].append(line_data)
@@ -505,64 +508,63 @@ class ImportSOShipmentWizard(models.TransientModel):
         # =====================================================
         # STEP 2: OPTIMASI SEARCH EXISTING (MASSAL)
         # =====================================================
-        # Ambil semua nomor shipment dari data batch saat ini
         all_shipment_numbers = list(grouped_shipments.keys())
-        
-        # Cari data lama yang sudah ada di database Odoo sekaligus
         existing_records = GIStaging.search([
             ('adt_ShipmentNbr', 'in', all_shipment_numbers)
         ])
-        
-        # Petakan nomor shipment ke object record Odoo-nya ke dalam memori RAM
         existing_map = {rec.adt_ShipmentNbr: rec for rec in existing_records}
 
         # =====================================================
-        # STEP 3: PROSES SIMPAN / UPDATE & RECREATE LINE
+        # STEP 3: PROSES SIMPAN / UPDATE & RECREATE LINE (DENGAN TRY-EXCEPT)
         # =====================================================
         for shipment_nbr, data in grouped_shipments.items():
             gi_vals = data['header']
             lines_vals = data['lines']
 
-            # Cek apakah nomor shipment sudah ada di peta memori
+            # Cek memori RAM untuk data lama
             existing_gi = existing_map.get(shipment_nbr)
 
-            if existing_gi:
-                # -------------------------------------------------
-                # KONDISI A: DATA SUDAH ADA -> UPDATE & RECREATE
-                # -------------------------------------------------
-                # 1. Update data info header lama dengan data terbaru dari API
-                existing_gi.write(gi_vals)
+            # Buka savepoint SQL baru khusus untuk record ini agar aman dari batasan database
+            # Jika baris ini error, Odoo hanya membatalkan savepoint ini, bukan seluruh fungsi
+            with self.env.cr.savepoint():
+                try:
+                    if existing_gi:
+                        # -------------------------------------------------
+                        # KONDISI A: DATA SUDAH ADA -> UPDATE & RECREATE
+                        # -------------------------------------------------
+                        existing_gi.write(gi_vals)
+                        existing_gi.all_line_ids.unlink()
 
-                # 2. Hapus seluruh data anak (lines) lama milik record ini
-                # Pastikan nama field One2many pada model acumatica.shipment.gi.staging Anda adalah 'all_line_ids'
-                existing_gi.all_line_ids.unlink()
+                        for line in lines_vals:
+                            line.update({
+                                'gi_id': existing_gi.id
+                            })
+                            LineStaging.create(line)
 
-                # 3. Buat ulang (recreate) data lines baru menggunakan loop manual terpisah
-                for line in lines_vals:
-                    # Pasangkan kembali ID induk Many2one ('shipment_id') ke line baru
-                    line.update({
-                        'shipment_id': existing_gi.id
-                    })
-                    LineStaging.create(line)
+                        print(f"--> SUCCESS UPDATED SHIPMENT & RECREATED LINES: {shipment_nbr}")
 
-                print(f"--> SUCCESS UPDATED SHIPMENT & RECREATED LINES: {shipment_nbr}")
+                    else:
+                        # -------------------------------------------------
+                        # KONDISI B: DATA BARU -> CREATE FRESH ALL
+                        # -------------------------------------------------
+                        line_commands = [(0, 0, line) for line in lines_vals]
+                        gi_vals.update({
+                            'all_line_ids': line_commands
+                        })
+                        GIStaging.create(gi_vals)
+                        
+                        print(f"--> SUCCESS CREATED NEW FRESH SHIPMENT: {shipment_nbr}")
 
-            else:
-                # -------------------------------------------------
-                # KONDISI B: DATA BARU -> CREATE FRESH ALL
-                # -------------------------------------------------
-                # Bungkus line baru ke format One2many command Odoo (0, 0, vals) untuk data baru
-                line_commands = [(0, 0, line) for line in lines_vals]
-                gi_vals.update({
-                    'all_line_ids': line_commands
-                })
-                GIStaging.create(gi_vals)
-                
-                print(f"--> SUCCESS CREATED NEW FRESH SHIPMENT: {shipment_nbr}")
+                except Exception as e:
+                    # Tangkap error agar tidak merusak perulangan dokumen lain
+                    error_msg = f"!!! DATABASE CRASH ON STAGING RECORD {shipment_nbr}: {str(e)}"
+                    _logger.error(error_msg)
+                    print(error_msg)
+                    
+                    # Logika Opsional: Anda bisa memasukkan pesan error ini ke model log khusus jika diperlukan
+                    continue
 
         return total_count
-
-
 
     def action_view_staging(self):
         self.ensure_one()

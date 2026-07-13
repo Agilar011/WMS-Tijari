@@ -184,11 +184,6 @@ class ImportReceiptWizard(models.TransientModel):
                     detail_result.append(
                         self._build_detail_values(header_id, detail)
                     ) 
-                    print("="*80)
-                    print(f"Header ID: {header_id}")
-                    print(f"Detail Values: {detail_result}")               
-                    print("="*80)
-
 
 
             # _logger.info("Berhasil ambil %s rows PO Receipt dari Acumatica", len(result))
@@ -206,8 +201,8 @@ class ImportReceiptWizard(models.TransientModel):
         print("="*80)
         print("[DEBUG] MASUK KE FUNGSI: _create_staging_data")
         print("="*80)
-        print(f"Header List: {header_list}")
-        print(f"Line List: {line_list}")
+        # print(f"Header List: {header_list}")
+        # print(f"Line List: {line_list}")
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         lines_to_create = []
@@ -224,7 +219,7 @@ class ImportReceiptWizard(models.TransientModel):
                 'selected': True,
                 'sync_date': sync_data,
             })
-            print(f"line to create: {lines_to_create}")
+            # print(f"line to create: {lines_to_create}")
 
             created_header = self.env['acumatica.issue.po.return.line'].create(lines_to_create)
 
@@ -303,8 +298,8 @@ class ImportReceiptWizard(models.TransientModel):
             print('Picking Type ID tidak ditemukan untuk warehouse code:', self._val(item, 'Warehouse'))
 
         # header['picking_type_id'] = type.id if type else None        
-        print("Created header value")
-        print(f"Receipt number in header : {self._val(item, 'ReferenceNbr')}")
+        # print("Created header value")
+        # print(f"Receipt number in header : {self._val(item, 'ReferenceNbr')}")
 
         return {
             'external_id': item.get('id', '') or '',
@@ -523,10 +518,34 @@ class ImportReceiptWizard(models.TransientModel):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         warehouse_code = header.get('warehouse_code')
+        details = header.get('Details') or []
         type = False
 
-        print(f"Warehouse Code: {warehouse_code}")
+        if not warehouse_code:
+            # Normalkan struktur jika details berupa bungkus dictionary OData (mengandung key 'value')
+            if isinstance(details, dict):
+                if 'WarehouseID' in details:
+                    warehouse_code = details.get('WarehouseID', {}).get('value') if isinstance(details.get('WarehouseID'), dict) else details.get('WarehouseID')
+                else:
+                    details = details.get('value', []) or []
+            
+            # Pastikan setelah dinormalkan formatnya wajib berupa List
+            if not isinstance(details, list):
+                details = []
 
+            # Ambil 1 value WarehouseID dari elemen pertama di dalam list
+            if details:
+                first_detail = details[0] # Ambil baris pertama
+                if isinstance(first_detail, dict):
+                    raw_warehouse = first_detail.get('WarehouseID')
+                    
+                    # Antisipasi jika WarehouseID bertipe objek kompleks {"value": "WH33-MO"}
+                    if isinstance(raw_warehouse, dict):
+                        warehouse_code = raw_warehouse.get('value')
+                    else:
+                        warehouse_code = raw_warehouse
+
+        print(warehouse_code)
         location = Location.search([
             ('code', '=', warehouse_code)
         ])
