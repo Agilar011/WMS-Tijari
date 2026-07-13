@@ -76,8 +76,10 @@ class AcumaticaConfig(models.Model):
         selection=[
             ('po_receipt', 'PO Receipt'),
             ('so_transfer', 'SO Transfer'),
+            ('receipt_external', 'Receipt External'),
             ('receipt_change_item', 'Receipt Change Item'),
             ('inventory_received', 'Inventory Received'),
+            ('toko_pegang_do', 'Toko Pegang DO'),
             ('shipment_so', 'Shipment SO Return'),
             ('so_shipment', 'SO Shipment'),
             ('transfer_shipment', 'Transfer Shipment'),
@@ -97,6 +99,9 @@ class AcumaticaConfig(models.Model):
             ('uom', 'Unit of Measure'),
             ('vendor', 'Vendor'),
             ('inventory_stock', 'Inventory Stock'),
+            ('invoice_consignment', 'Invoice Consignment'),
+            ('inventory_issue_toko_pegang_do', 'Inventory Issue Toko Pegang DO'),
+
         ], string='Config Type', required=True, default='uom',
     )
 
@@ -212,6 +217,7 @@ class AcumaticaConfig(models.Model):
 
     # ─── Fetch UoM dari API ──────────────────────────
     def fetch_uom_data(self, limit=500, offset=0):
+        print('get uom data')
         """
         Ambil data Units of Measure dari Acumatica API.
         Return: list of dict { unit_id, description, external_id }

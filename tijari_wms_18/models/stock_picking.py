@@ -1,9 +1,19 @@
 from odoo import models, api, fields
-from odoo.exceptions import UserError
+from odoo.exceptions import ValidationError, UserError
+import base64
+
+
+import os
+from PIL import Image
+import qrcode
+import io
+
 
 import logging
 _logger = logging.getLogger(__name__)
 
+from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
+from collections import defaultdict
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -43,6 +53,9 @@ class StockPicking(models.Model):
     sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
     adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
     destination_location = fields.Char(string='to delete field')
+    all_moves_picked = fields.Boolean(
+        compute='_compute_all_moves_picked',
+    )
 
     def action_put_in_pack(self, move_lines_to_pack=False):
         self.ensure_one()
@@ -66,20 +79,121 @@ class StockPicking(models.Model):
                 "There is nothing eligible to put in a pack."
             ))
 
-        packages = self.env['stock.quant.package']
+        # packages = self.env['stock.quant.package']
+        # for move in move_line_ids.mapped('move_id'):
 
-        for move in move_line_ids.mapped('move_id'):
+        #     lines = move_line_ids.filtered(
+        #         lambda ml: ml.move_id == move
+        #     )
 
-            lines = move_line_ids.filtered(
-                lambda ml: ml.move_id == move
+        #     package = self._put_in_pack(lines)
+
+        #     packages |= package
+
+        # return True
+
+        move_line_ids = move_line_ids.filtered(
+            lambda line:
+                line.quantity > 0
+                and not line.result_package_id
+        )
+
+        if not move_line_ids:
+            raise UserError(
+                _("There is nothing eligible to put in a pack.")
             )
 
-            package = self._put_in_pack(lines)
+        # Group move line berdasarkan destination location.
+        lines_by_destination = defaultdict(
+            lambda: self.env["stock.move.line"]
+        )
 
+        for move_line in move_line_ids:
+            if not move_line.location_dest_id:
+                raise UserError(
+                    _(
+                        "Destination location is missing for product %s."
+                    ) % move_line.product_id.display_name
+                )
+
+            lines_by_destination[
+                move_line.location_dest_id.id
+            ] |= move_line
+
+        packages = self.env["stock.quant.package"]
+
+        # Setiap destination diproses sebagai package terpisah.
+        for grouped_move_lines in lines_by_destination.values():
+            package = self._put_in_pack(grouped_move_lines)
             packages |= package
 
-        return True
+        # Mengikuti pola return dari method packing:
+        # return package terakhir yang dibuat.
+        return packages[-1] if packages else False
+
     
+    def _put_in_pack(self, move_line_ids):
+        """
+        Create a package and package level for move lines that have
+        the same destination location.
+
+        Custom behavior:
+        - Preserve the existing `location_dest_id`.
+        - Do not recalculate putaway strategy during packing.
+        """
+        self.ensure_one()
+
+        if not move_line_ids:
+            raise UserError(
+                _("No move lines were provided for packaging.")
+            )
+
+        # _put_in_pack hanya boleh menerima satu destination.
+        destination_locations = move_line_ids.mapped(
+            "location_dest_id"
+        )
+
+        if len(destination_locations) != 1:
+            raise UserError(
+                _(
+                    "Move lines with different destination locations "
+                    "cannot be inserted into the same package."
+                )
+            )
+
+        package = self._get_put_in_pack_package()
+
+        # Ambil package type dari product packaging jika seluruh line
+        # menghasilkan satu package type yang sama.
+        package_types = move_line_ids.mapped(
+            "move_id.product_packaging_id.package_type_id"
+        )
+
+        if len(package_types) == 1:
+            package.package_type_id = package_types
+
+        # Hubungkan seluruh move line ke package hasil.
+        move_line_ids.write({
+            "result_package_id": package.id,
+        })
+
+        # Buat package level untuk package tersebut.
+        self.env["stock.package_level"].with_context(
+            from_put_in_pack=True
+        ).create({
+            "package_id": package.id,
+            "picking_id": self.id,
+            "location_id": False,
+            "location_dest_id": destination_locations.id,
+            "move_line_ids": [
+                (6, 0, move_line_ids.ids)
+            ],
+            "company_id": self.company_id.id,
+        })
+
+        return package
+
+
     def _check_sync_state(self):
         for picking in self:
             if picking.sync_state == 'not_ready':
@@ -96,19 +210,6 @@ class StockPicking(models.Model):
 
         res = super().action_confirm()
 
-        for picking in self:
-            domain_warehouse = []
-            if picking.adt_dest_location_id:
-                domain_warehouse.append(
-                    ('view_location_id', 'parent_of', picking.adt_dest_location_id.id)
-                )
-                warehouse = self.env['stock.warehouse'].search(domain_warehouse, limit=1)
-                for move_line in picking.move_line_ids:
-                    move_line.allocation_storage = warehouse.lot_stock_id.id
-            else:
-                for move_line in picking.move_line_ids:
-                    move_line.allocation_storage = picking.picking_type_id.warehouse_id.lot_stock_id.id
-
         return res
 
     adt_dest_location_id = fields.Many2one(
@@ -123,6 +224,164 @@ class StockPicking(models.Model):
         # Untuk picking type incomine, kalo dibutuhkan untuk internal, manufacturing, dan lain lain bisa ditambahkan "self.picking_type_id.code in ["incoming", "internal", "manufacturing"]" atau yang lain sesuai kebutuhan
         return self.picking_type_id.code == "incoming"
 
+    def action_send_email_hasil_picking(self):
+        self.ensure_one()
+
+        # partner = self.partner_id
+        # if not partner or not partner.email:
+        #     raise ValidationError('Partner belum memiliki email.')
+
+        # Generate PDF dari report Odoo, lebih baik daripada panggil controller langsung
+        controller = WmsApiController()
+        response = controller.PrintWarehouseReceipt(id=self.id)
+
+        if response.status_code != 200:
+            raise UserError(f"Gagal mendapatkan PDF. Kode status: {response.status_code}")
+
+        pdf_content = response.data
+        pdf_base64 = base64.b64encode(pdf_content)
+
+        attachment_new = self.env['ir.attachment'].sudo().create({
+            'name': f"Picking {self.name}.pdf",
+            'datas': pdf_base64.decode('utf-8'),
+            'res_model': 'stock.picking',
+            'res_id': self.id,
+            'type': 'binary',
+            'mimetype': 'application/pdf',
+        })
+
+        template = self.env.ref(
+            'tijari_wms_18.email_template_stock_picking_custom',
+            raise_if_not_found=False
+        )
+
+        return {
+            'name': 'Kirim Email Berita Acara',
+            'type': 'ir.actions.act_window',
+            'res_model': 'mail.compose.message',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_model': 'stock.picking',
+                'default_res_ids': [self.id],
+                'default_use_template': bool(template),
+                'default_template_id': template.id if template else False,
+                'default_composition_mode': 'comment',
+                'default_attachment_ids': [(6, 0, [attachment_new.id])],
+            },
+        }
+
+    def action_open_stock_move_scan_wizard(self):
+        self.ensure_one()
+
+        wizard = self.env['stock.move.scan.wizard'].create({
+            'picking_id': self.id,
+        })
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': ('Scan Product'),
+            'res_model': 'stock.move.scan.wizard',
+            'view_mode': 'form',
+            'res_id': wizard.id,
+            'target': 'new',
+        }
+
+    @api.depends('move_ids.picked')
+    def _compute_all_moves_picked(self):
+        for picking in self:
+            moves = picking.move_ids
+            picking.all_moves_picked = (
+                bool(moves) and all(move.picked for move in moves)
+            )
+# ================================================================================================
+# Temp Storage function create move line qr code        
+# ================================================================================================
+
+    def action_print_lot_number_line(self):
+        self.ensure_one()
+
+        if not self.lot_ids:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Peringatan',
+                    'message': 'Lot Number belum tersedia.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        lot_names = list({
+            lot.name for lot in self.lot_ids if lot.name
+        })
+
+        if not lot_names:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Peringatan',
+                    'message': 'Lot Number belum tersedia.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        self.create_qrcode_name()
+
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/print/lot_number_move_line?ids=%s' % self.id,
+            'target': 'new',
+        }
+
+    def create_qrcode_name(self):
+        for rec in self:
+            lot_names = list(set(
+                rec.lot_ids.mapped('name')
+            ))
+
+            text = ', '.join(filter(None, lot_names))
+
+            if text:
+                rec.qr_code_image = rec.create_qrcode(text)
+
+    def create_qrcode(self, text):
+        logo_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
+        )
+
+        logo = Image.open(logo_path)
+
+        basewidth = 80
+        wpercent = basewidth / float(logo.size[0])
+        hsize = int(float(logo.size[1]) * wpercent)
+
+        logo = logo.resize((basewidth, hsize))
+
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H
+        )
+
+        qr.add_data(text)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+        img = img.resize((300, 300))
+
+        pos = (
+            (img.size[0] - logo.size[0]) // 2,
+            (img.size[1] - logo.size[1]) // 2
+        )
+
+        img.paste(logo, pos)
+
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+
+        return base64.b64encode(buffer.getvalue()).decode()
 
 class StockRule(models.Model):
     _inherit = "stock.rule"
@@ -148,6 +407,7 @@ class StockRule(models.Model):
             vals.update({
                 "location_dest_id": picking.adt_dest_location_id.id,
                 "adt_dest_location_id": picking.adt_dest_location_id.id,
+                "adt_dest_location_id": picking.move_ids.adt_dest_location_id.id,
                 "origin": picking.origin if picking.origin else picking.name
             })
 

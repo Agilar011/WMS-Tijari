@@ -44,11 +44,19 @@
            
 
             <xpath expr="//widget[@name='import_lots']" position="after">
-                <button name="action_generate_lot"
+                <span class="d-inline-flex gap-1">
+                    <button name="action_generate_lot"
                         type="object"
                         string="Generate Lot"
                         class="btn-warning"
                         invisible="not display_assign_serial"/>
+
+                    <button name="action_validate_lot"
+                        type="object"
+                        string="Validate Lot"
+                        class="btn-warning"
+                        invisible="not display_assign_serial"/>
+                </span>
             </xpath>
 
             <xpath expr="//widget[@name='generate_serials']" position="replace">
@@ -79,6 +87,9 @@
                     title="Note"
                     />
 
+            </xpath>
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after">
+                <button name="action_print_lot_number_line" type="object" title="Print" icon="fa-print"/>
             </xpath>
             
             <xpath expr="//field[@name='quantity']" position="after">

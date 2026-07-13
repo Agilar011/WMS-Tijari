@@ -159,93 +159,18 @@ class AcumaticaTransferTwoStepConfig(models.Model):
                 return payload.get('rows')
         return []
 
-    def fetch_receipt_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
-        self.ensure_one()
-        session = self._do_login()
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-            filters = []
-
-            if self.odata_expand:
-                params['$expand'] = self.odata_expand
-
-            if self.odata_select:
-                params['$select'] = self.odata_select
-            if reference_nbr:
-                filters.append(f"ReferenceNbr eq '{reference_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-            if self.odata_filter:
-                filters.append(f"({self.odata_filter})")
-            else:
-                filters.append("(TransferType eq '1-Step')")
-
-            if filters:
-                params['$filter'] = ' and '.join(filters)       
-
-            response = session.get(endpoint, params=params, timeout=90)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Transfer Order (HTTP {response.status_code}): {response.text}')
-
-            raw_data = self._normalize_rows(response.json())
-            result = []
-
-            for row_number, item in enumerate(raw_data, start=1):
-                header = {
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'scheduled_date': self._val(item, 'Date'),
-                    'is_hold': self._val(item, 'Hold'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'post_period': self._val(item, 'PostPeriod'),
-                    'status': self._val(item, 'Status'),
-                    'total_qty': self._val(item, 'TotalQty'),
-                    'transfer_type': self._val(item, 'TransferType'),
-                    'reference_nbr': self._val(item, 'ReferenceNbr'),
-                    'to_warehouse_code': self._val(item, 'ToWarehouseID'),
-                    'from_warehouse_code': self._val(item, 'FromWarehouseID'),
-                    'description': self._val(item, 'Description'),
-                    'trans_type': self._val(item, 'TransType'),
-                }
-
-                details = item.get('Details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-                if not details:
-                    result.append(dict(header, line_nbr='0'))
-                    continue
-
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    description = self._val(detail, 'Description') or self._val(detail, 'TransactionDescription')
-                    warehouse_dest_code = self._val(detail, 'Warehouse') or header.get('warehouse_code')
-
-                    result.append({
-                        **header,
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'line_description': self._val(detail, 'Description'),
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'from_location_code': self._val(detail, 'FromLocationID'),
-                        'to_location_code': self._val(detail, 'ToLocationID'),
-                        'quantity': self._val(detail, 'Quantity'),
-                        'uom_code': self._val(detail, 'UOM'),
-                    })
-
-            _logger.info("Berhasil ambil %s rows Transfer Order dari Acumatica", len(result))
-            return result
-        finally:
-            self._do_logout(session)
-            self.last_sync = fields.Datetime.now()
 
 
 class AcumaticaTransferTwoStepLine(models.Model):
     _name = 'acumatica.transfer.two.step.line'
     _description = 'Data Transfer Order dari Acumatica'
     _order = 'reference_nbr asc, line_nbr asc, id asc'
+
+    line_ids = fields.One2many(
+        'acumatica.transfer.two.step.line.product', 
+        'header_id', 
+        string="Detail Lines"
+    )    
 
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
@@ -288,6 +213,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+    picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
 
     @api.depends('reference_nbr')
     def _compute_exists_in_odoo(self):
@@ -323,10 +249,10 @@ class AcumaticaTransferTwoStepLine(models.Model):
     # def _find_product(self, line):
     #     Product = self.env['product.product']
     #     product = False
-    #     if line.inventory_id:
-    #         product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
+    #     if line.adt_InventoryID:
+    #         product = Product.search([('default_code', '=', line.adt_InventoryID)], limit=1)
     #         if not product:
-    #             product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
+    #             product = Product.search([('barcode', '=', line.adt_InventoryID)], limit=1)
     #     if not product and line.transaction_description:
     #         product = Product.search([('name', '=', line.transaction_description)], limit=1)
     #     return product
@@ -335,22 +261,22 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
         product = False
 
-        if line.inventory_id:
-            product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
+        if line.adt_InventoryID:
+            product = Product.search([('default_code', '=', line.adt_InventoryID)], limit=1)
             if not product:
-                product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
+                product = Product.search([('barcode', '=', line.adt_InventoryID)], limit=1)
 
-        if not product and line.line_description:
-            product = Product.search([('name', '=', line.line_description)], limit=1)
+        if not product and line.adt_Description:
+            product = Product.search([('name', '=', line.adt_Description)], limit=1)
 
         if not product:
-            name = line.line_description or line.description or line.inventory_id or 'Unknown Product'
-            existing = Product.search([('default_code', '=', line.inventory_id)], limit=1)
+            name = line.adt_Description or line.description or line.adt_InventoryID or 'Unknown Product'
+            existing = Product.search([('default_code', '=', line.adt_InventoryID)], limit=1)
             if existing:
                 return existing
             product = Product.create({
                 'name': name,
-                'default_code': line.inventory_id or False,
+                'default_code': line.adt_InventoryID or False,
                 'type': 'consu',  # stockable
             })
 
@@ -371,10 +297,10 @@ class AcumaticaTransferTwoStepLine(models.Model):
     def _find_location_dest(self, line, warehouse=False):
         Location = self.env['stock.location']
         location = False
-        if line.to_location_code:
-            location = Location.search([('complete_name', '=', line.to_location_code)], limit=1)
+        if line:
+            location = Location.search([('complete_name', '=', line)], limit=1)
             if not location:
-                location = Location.search([('name', '=', line.to_location_code)], limit=1)
+                location = Location.search([('name', '=', line)], limit=1)
         if not location and warehouse:
             location = warehouse.lot_stock_id
         return location
@@ -382,8 +308,8 @@ class AcumaticaTransferTwoStepLine(models.Model):
     def _find_uom(self, line, product=False):
         Uom = self.env['uom.uom']
         uom = False
-        if line.uom_code:
-            uom = Uom.search([('name', '=', line.uom_code)], limit=1)
+        if line.adt_UOM:
+            uom = Uom.search([('name', '=', line.adt_UOM)], limit=1)
         if not uom and product:
             uom = product.uom_id
         return uom
@@ -397,6 +323,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
     def action_import_this(self):
         self.ensure_one()
         return self._do_import()
+    
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
@@ -407,6 +334,9 @@ class AcumaticaTransferTwoStepLine(models.Model):
         error = 0
 
         # proses per receipt number
+        # print(f"self mapped: {self.mapped('reference_nbr')}")
+
+    
         for reference_nbr in self.mapped('reference_nbr'):
             receipt_lines = self.filtered(
                 lambda l: l.reference_nbr == reference_nbr and l.import_state == 'pending'
@@ -415,6 +345,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 continue
 
             first = receipt_lines[0]
+            print(f"first: {first}")
 
             try:
                 # vendor = self._find_vendor(first)
@@ -426,15 +357,17 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
                 picking_type = PickingType.search([
                     ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'internal'),
+                    ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
                 ], limit=1) or PickingType.search([
-                    ('code', '=', 'internal')
+                    ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
                 ], limit=1)
+
+                print(picking_type.mapped('name'))
 
                 if not picking_type:
                     raise UserError('Picking type internal tidak ditemukan.')
 
-                dest_location = self._find_location_dest(first, warehouse)
+                dest_location = self._find_location_dest(first.to_warehouse_code, warehouse)
                 if not dest_location:
                     raise UserError(
                         f'Location tujuan tidak ditemukan untuk code: '
@@ -477,78 +410,122 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 picking = Picking.search([('origin', '=', origin)], limit=1)
 
                 if picking:
-                    if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                    if picking.state != 'draft':
+                        action_state = 'error'
+                        error += 1
                         raise UserError(
                             f'Receipt {reference_nbr} sudah ada di Odoo dengan state '
                             f'{picking.state}, tidak bisa diupdate.'
                         )
-                    picking.write(vals)
-                    action_state = 'updated'
-                    updated += 1
+
+                    if picking.state == 'draft':
+                        print(f"Update Picking : {picking}")
+                        action_state = 'updated'
+
+                        first.write({
+                            'import_state': action_state,
+                            'import_message': f'Update picking : {picking.name}',
+                            'odoo_picking_id': picking.id,
+                        })
+
+                        picking.write(vals)
+                        imported += 1
+
                 else:
                     picking = Picking.create(vals)
+                    print(f"Picking : {picking} Created")
+                    # raise UserError("Checkpoint")
                     action_state = 'imported'
                     imported += 1
 
-                for line in receipt_lines:
+                if action_state == 'error':
+                    break
+
+                to_create_move = self.env['acumatica.transfer.two.step.line.product'].search([
+                        ('header_id', '=', first.id)
+                    ])
+
+                if action_state == 'updated' and picking:
+                    moves_to_delete = self.env['stock.move'].search([('picking_id', '=', picking.id)])
+                    if moves_to_delete:
+                        moves_to_delete.unlink()
+
+                for line in to_create_move:
+                    for field_name in line._fields:
+                        print(f"{field_name}: {line[field_name]}")
+                    print("="*50 + "\n")
+                    # raise UserError('Checkpoint')
+
                     try:
                         product = self._find_product(line)
                         if not product:
                             raise UserError(
                                 f'Product tidak ditemukan untuk InventoryID: '
-                                f'{line.inventory_id or "-"}'
+                                f'{line.adt_InventoryID or "-"}'
                             )
 
                         uom = self._find_uom(line, product)
-                        line_dest = self._find_location_dest(line, warehouse) or dest_location
-                        qty = self._parse_float(line.quantity)
+                        line_dest = self._find_location_dest(line.adt_ToLocationID, warehouse) or dest_location
+                        qty = self._parse_float(line.adt_Quantity)
+
+                        print(f"Convert : {line.adt_Quantity} to : {qty}")
+                        # raise UserError('Checkpoint')
 
                         # dedup move
                         move_domain = [('picking_id', '=', picking.id)]
-                        if 'adt_line_external_id' in Move._fields and line.line_external_id:
-                            move_domain.append(('adt_line_external_id', '=', line.line_external_id))
+                        if 'adt_line_external_id' in Move._fields and line.acumatica_header_id:
+                            move_domain.append(('adt_line_external_id', '=', line.acumatica_header_id))
                         else:
                             move_domain += [
                                 ('product_id', '=', product.id),
                                 ('product_uom_qty', '=', qty),
                             ]
 
-                        existing_move = Move.search(move_domain, limit=1)
-                        if existing_move:
-                            line.write({
-                                'import_state': action_state,
-                                'import_message': f'Skip duplicate: {picking.name}',
-                                'odoo_picking_id': picking.id,
-                            })
-                            continue
+                        # existing_move = Move.search(move_domain, limit=1)
+                        # if existing_move:
+                        #     first.write({
+                        #         'import_state': action_state,
+                        #         'import_message': f'Skip duplicate: {picking.name}',
+                        #         'odoo_picking_id': picking.id,
+                        #     })
+                        #     continue
 
                         move_vals = {
-                            'name': line.description or product.display_name,
+                            'name': line.adt_Description or product.display_name,
                             'picking_id': picking.id,
                             'product_id': product.id,
                             'product_uom_qty': qty,
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': picking.location_id.id,
                             'location_dest_id': line_dest.id,
-                            'description_picking': line.description or False,
+                            'description_picking': line.adt_Description or False,
 
-                            'adt_line_nbr': line.line_nbr or False,
-                            'adt_line_note': line.line_note or False,
-                            'adt_inventory_id': line.inventory_id or False,
-                            'adt_uom_code': line.uom_code or False,
-                            'adt_line_description': line.line_description or False,
-                            'adt_to_location_code': line.to_location_code or False,
-                            'adt_from_location_code': line.from_location_code or False,
-                            'adt_quantity': self._parse_float(line.quantity),
+                            'adt_line_nbr': line.adt_LineNumber or False,
+                            'adt_line_note': line.adt_note or False,
+                            'adt_inventory_id': line.adt_InventoryID or False,
+                            'adt_uom_code': line.adt_UOM or False,
+                            'adt_line_description': line.adt_Description or False,
+                            'adt_to_location_code': line.adt_ToLocationID or False,
+                            'adt_from_location_code': line.adt_FromLocationID or False,
+                            'adt_quantity': self._parse_float(line.adt_Quantity),
 
                         }
 
                         # filter field yang ada di stock.move
                         move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
 
-                        Move.create(move_vals)
+                        print(f"Move to create: {move_vals}")
 
-                        line.write({
+                        created_move = Move.create(move_vals)
+
+                        print("\n" + "="*50)
+                        print(f"DEBUG STOCK MOVE ID: {created_move.id}")
+                        print("="*50)
+                        for field_name in created_move._fields:
+                            print(f"{field_name}: {created_move[field_name]}")
+                        print("="*50 + "\n")
+
+                        first.write({
                             'import_state': action_state,
                             'import_message': f'{action_state.title()}: {picking.name}',
                             'odoo_picking_id': picking.id,
@@ -556,7 +533,8 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
                     except Exception as line_e:
                         _logger.exception("Error import line %s", line.id)
-                        line.write({
+                        raise UserError('Checkpoint')
+                        first.write({
                             'import_state': 'error',
                             'import_message': str(line_e)[:200],
                             'odoo_picking_id': picking.id if picking else False,
@@ -583,6 +561,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
             }
         }
 
+
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
 
@@ -602,3 +581,46 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})
+
+
+class AcumaticaTransferTwoStepLineProduct(models.Model):
+    _name = 'acumatica.transfer.two.step.line.product'
+    _description = 'Data Transfer Order dari Acumatica'
+    _order = 'header_id asc, id asc'
+
+    header_id = fields.Many2one(
+        'acumatica.transfer.two.step.line', 
+        string="Header Reference", 
+        ondelete='cascade', 
+        index=True
+    )
+
+    acumatica_header_id = fields.Char(string="Acumatica Header ID")
+    adt_rowNumber = fields.Char(string="Acumatica rowNumber")
+    adt_note = fields.Char(string="Acumatica note")
+    adt_Description = fields.Char(string="Acumatica Description")
+    adt_FromLocationID = fields.Char(string="Acumatica FromLocationID")
+    adt_InventoryID = fields.Char(string="Acumatica InventoryID")
+    adt_LineNumber = fields.Char(string="Acumatica LineNumber")
+    adt_NoteID = fields.Char(string="Acumatica NoteID")
+    adt_Quantity = fields.Char(string="Acumatica Quantity")
+    adt_SOOrderNbr = fields.Char(string="Acumatica SOOrderNbr")
+    adt_SOOrderType = fields.Char(string="Acumatica SOOrderType")
+    adt_SOShipmentNbr = fields.Char(string="Acumatica SOShipmentNbr")
+    adt_ToLocationID = fields.Char(string="Acumatica ToLocationID")
+    adt_UOM = fields.Char(string="Acumatica UOM")
+
+    import_state = fields.Selection([
+        ('pending', 'Belum Diimport'),
+        ('imported', 'Sudah Diimport'),
+        ('updated', 'Diupdate'),
+        ('error', 'Error'),
+    ], string='Status', default='pending', readonly=True)
+    import_message = fields.Char(string='Keterangan', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    selected = fields.Boolean(string='Pilih', default=True)
+
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+
+    # exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')

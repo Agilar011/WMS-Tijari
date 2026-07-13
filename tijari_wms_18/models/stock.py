@@ -13,6 +13,7 @@ import psycopg2
 from PIL import Image
 import qrcode
 import io
+from collections import defaultdict
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -61,87 +62,87 @@ class StockPicking(models.Model):
 
     qr_code_image = fields.Binary(string='Sign')
 
+    # # def action_print_lot_number_line(self):
+    # #     action = {}
+    # #     action['type'] = 'ir.actions.act_url'
+    # #     action['url'] = '/print/lot_number_move_line?id=' + str(self.id)
+    # #     action['target'] = 'new'
+    # #     return action
+
     # def action_print_lot_number_line(self):
-    #     action = {}
-    #     action['type'] = 'ir.actions.act_url'
-    #     action['url'] = '/print/lot_number_move_line?id=' + str(self.id)
-    #     action['target'] = 'new'
-    #     return action
+    #     self.ensure_one()
 
-    def action_print_lot_number_line(self):
-        self.ensure_one()
+    #     lot_names = list(set(
+    #         self.move_ids_without_package.mapped('lot_ids.name')
+    #     ))
 
-        lot_names = list(set(
-            self.move_ids_without_package.mapped('lot_ids.name')
-        ))
+    #     if not lot_names:
+    #         return {
+    #             'type': 'ir.actions.client',
+    #             'tag': 'display_notification',
+    #             'params': {
+    #                 'title': 'Peringatan',
+    #                 'message': 'Lot Number belum tersedia.',
+    #                 'type': 'warning',
+    #                 'sticky': False,
+    #             }
+    #         }
 
-        if not lot_names:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Peringatan',
-                    'message': 'Lot Number belum tersedia.',
-                    'type': 'warning',
-                    'sticky': False,
-                }
-            }
+    #     self.create_qrcode_name()
 
-        self.create_qrcode_name()
+    #     ids = ",".join(map(str, self.ids))
 
-        ids = ",".join(map(str, self.ids))
+    #     return {
+    #         'type': 'ir.actions.act_url',
+    #         'url': '/print/lot_number_move_line?ids=%s' % ids,
+    #         'target': 'new',
+    #     }
 
-        return {
-            'type': 'ir.actions.act_url',
-            'url': '/print/lot_number_move_line?ids=%s' % ids,
-            'target': 'new',
-        }
+    # def create_qrcode_name(self):
+    #     for rec in self:
+    #         lot_names = list(set(
+    #             rec.move_ids_without_package.mapped('lot_ids.name')
+    #         ))
 
-    def create_qrcode_name(self):
-        for rec in self:
-            lot_names = list(set(
-                rec.move_ids_without_package.mapped('lot_ids.name')
-            ))
+    #         text = ', '.join(filter(None, lot_names))
 
-            text = ', '.join(filter(None, lot_names))
+    #         if text:
+    #             rec.qr_code_image = rec.create_qrcode(text)
 
-            if text:
-                rec.qr_code_image = rec.create_qrcode(text)
+    # def create_qrcode(self, text):
+    #     logo_path = os.path.abspath(
+    #         os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
+    #     )
 
-    def create_qrcode(self, text):
-        logo_path = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), '../static/src/img/logo-company.png')
-        )
+    #     logo = Image.open(logo_path)
 
-        logo = Image.open(logo_path)
+    #     basewidth = 80
+    #     wpercent = basewidth / float(logo.size[0])
+    #     hsize = int(float(logo.size[1]) * wpercent)
 
-        basewidth = 80
-        wpercent = basewidth / float(logo.size[0])
-        hsize = int(float(logo.size[1]) * wpercent)
+    #     logo = logo.resize((basewidth, hsize))
 
-        logo = logo.resize((basewidth, hsize))
+    #     qr = qrcode.QRCode(
+    #         error_correction=qrcode.constants.ERROR_CORRECT_H
+    #     )
 
-        qr = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_H
-        )
+    #     qr.add_data(text)
+    #     qr.make(fit=True)
 
-        qr.add_data(text)
-        qr.make(fit=True)
+    #     img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
+    #     img = img.resize((300, 300))
 
-        img = qr.make_image(fill_color="black", back_color="white").convert('RGB')
-        img = img.resize((300, 300))
+    #     pos = (
+    #         (img.size[0] - logo.size[0]) // 2,
+    #         (img.size[1] - logo.size[1]) // 2
+    #     )
 
-        pos = (
-            (img.size[0] - logo.size[0]) // 2,
-            (img.size[1] - logo.size[1]) // 2
-        )
+    #     img.paste(logo, pos)
 
-        img.paste(logo, pos)
+    #     buffer = io.BytesIO()
+    #     img.save(buffer, format="PNG")
 
-        buffer = io.BytesIO()
-        img.save(buffer, format="PNG")
-
-        return base64.b64encode(buffer.getvalue()).decode()
+    #     return base64.b64encode(buffer.getvalue()).decode()
 
     def _sync_adt_quantities_from_moves(self):
         for picking in self:
@@ -164,6 +165,7 @@ class StockPicking(models.Model):
                     print(f"Missing lot: {line}")
                     raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
         for picking in self:
+            picking._check_validate_requirements()
             operation_category = picking.picking_type_id.operation_category
             print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
 
@@ -183,7 +185,6 @@ class StockPicking(models.Model):
                             "Status: ❌ NOT MATCH\n\n"
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
-
             pickings = self.env["stock.picking"].search([])
             if picking.picking_type_id.code != "incoming":
                 continue
@@ -191,26 +192,36 @@ class StockPicking(models.Model):
             storage_pickings = self.env["stock.picking"].search([
                 ("origin", "ilike", picking.origin or picking.name),
                 ("picking_type_id.code", "=", "internal"),
-            ])
+            ], limit=1)
             total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
             picking.write({
                 'adt_total_qty': total_qty
             })
 
-            total_qty_storage = sum(storage_pickings.move_ids.move_line_ids.mapped("quantity"))
             storage_pickings.write({
                 "adt_dest_location_id": picking.adt_dest_location_id,
+                "adt_type": picking.adt_type,
                 "note" : picking.note,
             })
-            
-            for ml in picking.move_line_ids:  
-                move_line = self.env['stock.move.line'].search([
-                    ("picking_id", "=", storage_pickings.id),
-                    ("product_id", "=", ml.product_id.id),
-                    ("quantity", "=", ml.quantity)
-                ])
-                if move_line:
-                    move_line.location_dest_id = ml.allocation_storage.id
+            # for ml in picking.move_line_ids:
+                # if not ml.allocation_storage:
+                #     raise ValidationError(f'Isi Allocation Storage di line product {ml.product_id.name}.')
+                # move_line = self.env['stock.move.line'].search([
+                #     ("picking_id", "=", storage_pickings.id),
+                #     ("product_id", "=", ml.product_id.id),
+                #     ("quantity", "=", ml.quantity)
+                # ])
+                # if move_line:
+                #     move_line.location_dest_id = ml.allocation_storage.id
+
+            # Lot = self.env['stock.lot']
+            # for lot_name in set(picking.move_line_ids.mapped('lot_name')):
+            #     qty = sum(
+            #         picking.move_line_ids.filtered(lambda l: l.lot_name == lot_name).mapped('quantity')
+            #     )
+            #     lot = Lot.search([('name', '=', lot_name)], limit=1)
+            #     if lot:
+            #         lot.product_qty = qty
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
@@ -243,6 +254,63 @@ class StockPicking(models.Model):
 
         return res
 
+    def _check_validate_requirements(self):
+        self.ensure_one()
+
+        active_moves = self.move_ids.filtered(
+            lambda move: move.state != "cancel"
+        )
+
+        unpicked_moves = active_moves.filtered(
+            lambda move: not move.picked
+        )
+
+        unmatched_move_lines = active_moves.move_line_ids.filtered(
+            lambda line: line.matching != "match"
+        )
+
+        error_messages = []
+
+        if unpicked_moves:
+            products = "\n".join(
+                f"- {move.product_id.display_name}"
+                for move in unpicked_moves
+            )
+
+            error_messages.append(
+                _(
+                    "Semua product harus dalam kondisi picked.\n"
+                    "Move yang belum picked:\n%s"
+                )
+                % products
+            )
+
+        if unmatched_move_lines:
+            lines = "\n".join(
+                "- %s | Lot/Serial: %s | Matching: %s"
+                % (
+                    line.product_id.display_name,
+                    line.lot_id.name or line.lot_name or "-",
+                    dict(line._fields["matching"].selection).get(
+                        line.matching,
+                        line.matching or "-"
+                    ),
+                )
+                for line in unmatched_move_lines
+            )
+
+            error_messages.append(
+                _(
+                    "Semua product harus memiliki status matching "
+                    "'Match'.\n"
+                    "Move line yang belum match:\n%s"
+                )
+                % lines
+            )
+
+        if error_messages:
+            raise UserError("\n\n".join(error_messages))
+
     def action_print_warehouse_receipt(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
@@ -256,6 +324,33 @@ class StockPicking(models.Model):
         action['url'] = '/print/warehouse_receipt?id=' + str(self.id)
         action['target'] = 'new'
         return action
+
+    def action_confirm(self):
+        res = super().action_confirm()
+        self._adt_apply_dest_location_to_move_lines()
+        return res
+
+    def action_assign(self):
+        res = super().action_assign()
+        self._adt_apply_dest_location_to_move_lines()
+        return res
+
+    def _adt_apply_dest_location_to_move_lines(self):
+        for picking in self:
+            if not picking.adt_dest_location_id:
+                continue
+
+            for move in picking.move_ids_without_package:
+                final_dest_location = move._adt_get_final_dest_location()
+                if not final_dest_location:
+                    continue
+
+                move.location_dest_id = picking.adt_dest_location_id
+
+                if move.move_line_ids:
+                    move.move_line_ids.write({
+                        'location_dest_id': final_dest_location.id,
+                    })
 
 
 class StockPickingType(models.Model):
@@ -271,6 +366,24 @@ class StockPickingType(models.Model):
     ], string='Operation Category', required=False, default='others') 
 
     is_default_api = fields.Boolean(string="Default Picking Type For API")
+
+    # def get_action_picking_tree_draft(self):
+    #     self.ensure_one()
+
+    #     action = self._get_action("stock.stock_picking_action_picking_type")
+
+    #     ctx = action.get("context", {})
+    #     if isinstance(ctx, str):
+    #         from odoo.tools.safe_eval import safe_eval
+    #         ctx = safe_eval(ctx)
+
+    #     ctx.update({
+    #         "search_default_draft": 1,
+    #     })
+
+    #     action["context"] = ctx
+
+    #     return action
 
 
 class StockLocation(models.Model):
@@ -304,11 +417,13 @@ class StockMoveLine(models.Model):
 
     confirmation_location_code = fields.Char(
         string='Confirmation Location Code',
-        help='Scanned / input location code for confirmation.'
+        help='Scanned / input location code for confirmation.',
+        store=True
     )
     confirmation_lot_code = fields.Char(
         string='Confirmation Lot Code',
-        help='Scanned / input lot code for confirmation.'
+        help='Scanned / input lot code for confirmation.',
+        store=True
     )
     matching = fields.Selection([
         ('match', 'Match'),
@@ -346,6 +461,16 @@ class StockMoveLine(models.Model):
         readonly=True,
         store=False,
     )
+    matching_lot_id = fields.Many2one(
+        comodel_name="stock.lot",
+        string="Matching Lot",
+        store=True
+    )
+    matching_loc_dest_id = fields.Many2one(
+        comodel_name="stock.location",
+        string="Matching Location Dest",
+        store=True
+    )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -360,6 +485,8 @@ class StockMoveLine(models.Model):
 
         if {'quantity', 'move_id', 'picking_id'} & set(vals):
             pickings._sync_adt_quantities_from_moves()
+
+        self._update_move_picked()
 
         return res
 
@@ -442,6 +569,9 @@ class StockMoveLine(models.Model):
 
                     print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
 
+            if line.matching_lot_id.id == line.lot_id.id and line.matching_loc_dest_id.id == line.location_dest_id.id:
+                matching = 'match'
+
             line.matching = matching
 
     @api.depends('matching')
@@ -510,11 +640,11 @@ class StockMoveLine(models.Model):
             if vals.get('lot_name'):
                 line.lot_name = vals['lot_name']
 
-            if vals.get('confirmation_location_code'):
-                line.confirmation_location_code = vals['confirmation_location_code']
+            # if vals.get('confirmation_location_code'):
+            #     line.confirmation_location_code = vals['confirmation_location_code']
 
-            if vals.get('confirmation_lot_code'):
-                line.confirmation_lot_code = vals['confirmation_lot_code']
+            # if vals.get('confirmation_lot_code'):
+            #     line.confirmation_lot_code = vals['confirmation_lot_code']
 
     @api.onchange('lot_button')
     def _onchange_lot_button(self):
@@ -665,11 +795,11 @@ class StockMoveLine(models.Model):
                 print(f">>> Line Confirmation Lot Code before update: {line.confirmation_lot_code}") # Cek di terminal Odoo
                 line.update({
                     'lot_id': False,
-                    'confirmation_location_code': des_parent_code,
-                    'confirmation_lot_code': new_lot_name,
+                    # 'confirmation_location_code': des_parent_code,
+                    # 'confirmation_lot_code': new_lot_name,
                 })
-                line.confirmation_location_code = des_parent_code  # Update confirmation_location_code untuk menampilkan di UI
-                line.confirmation_lot_code = new_lot_name  # Update confirmation_lot_code untuk menampilkan di UI
+                # line.confirmation_location_code = des_parent_code  # Update confirmation_location_code untuk menampilkan di UI
+                # line.confirmation_lot_code = new_lot_name  # Update confirmation_lot_code untuk menampilkan di UI
                 line.lot_name = new_lot_name  # Update lot_name untuk menampilkan di UI
 
                 print(f">>> Line Confirmation Location Code after update: {line.confirmation_location_code}") # Cek di terminal Odoo
@@ -827,6 +957,96 @@ class StockMoveLine(models.Model):
             }
         }
 
+    def action_prepare_scan_lot(self):
+        self.ensure_one()
+        if not self.lot_id:
+            raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'adt_focus_move_line_field',
+            'params': {
+                'field_name': 'confirmation_lot_code',
+                'move_line_id': self.id,
+            },
+        }
+
+    def action_prepare_scan_location(self):
+        self.ensure_one()
+        if not self.lot_id:
+            raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'adt_focus_move_line_field',
+            'params': {
+                'field_name': 'confirmation_location_code',
+                'move_line_id': self.id,
+            },
+        }
+
+    @api.onchange('matching')
+    def _onchange_matching(self):
+        for line in self:
+
+            line._update_move_picked()
+
+
+    @api.onchange('confirmation_location_code')
+    def _onchange_confirmation_location_code(self):
+        for wizard in self:
+
+            location = wizard._find_loc_by_scan_code(wizard.confirmation_location_code)
+
+            wizard.matching_loc_dest_id = location.id if location else False
+
+    def _find_lot_by_scan_code(self, lot_code):
+        lot = False
+        Lot = self.env['stock.lot']
+
+        lot = Lot.search([
+            ('name', '=', lot_code)
+        ], limit=1)
+        # if not lot:
+        #     raise ValidationError("Lot Tidak Ditemukan")
+        return lot
+
+    @api.onchange('confirmation_lot_code')
+    def _onchange_confirmation_lot_code(self):
+        for wizard in self:
+
+            lot = wizard._find_lot_by_scan_code(wizard.confirmation_lot_code)
+
+            wizard.matching_lot_id = lot.id if lot else False
+
+    def _find_loc_by_scan_code(self, lot_code):
+        loc = False
+        Loc = self.env['stock.location']
+
+        loc = Loc.search([
+            ('unique_code', '=', lot_code)
+        ], limit=1)
+        # if not loc:
+        #     raise ValidationError("Lokasi Tidak Ditemukan")
+
+        return loc
+
+    @api.onchange('matching_lot_id', 'matching_loc_dest_id')
+    def _onchange_update_matching_status(self):
+        for line in self:
+            if not line.matching_lot_id or not line.matching_loc_dest_id:
+                continue
+
+            lot_match = line.matching_lot_id.id == line.lot_id.id
+            location_match = line.matching_loc_dest_id.id == line.location_dest_id.id
+
+            line.matching = 'match' if lot_match and location_match else 'not_match'
+
+    def _update_move_picked(self):
+        for move in self.mapped('move_id'):
+            move.picked = (
+                move.move_line_ids
+                and all(line.matching == 'match' for line in move.move_line_ids)
+            )
+
 
 class StockMove(models.Model):
     _inherit = 'stock.move'
@@ -899,6 +1119,18 @@ class StockMove(models.Model):
 
 
     # lot_button = fields.Char(string="Lot Button")
+
+    def action_validate_lot(self):
+        for move in self:
+            for line in move.move_line_ids:
+                if not line.lot_id:
+                    raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
+                if not line.location_dest_id.unique_code:
+                    raise ValidationError(f"Unique Code untuk location {line.location_dest_id.name} kosong, Silahkan generate location terlebih dahulu")
+                line.matching_lot_id = line.lot_id.id or False
+                line.matching_loc_dest_id = line.location_dest_id.id or False
+                line.confirmation_lot_code = line.lot_id.name or False
+                line.confirmation_location_code = line.location_dest_id.unique_code or False
 
     def action_generate_lot(self):
         for move in self:

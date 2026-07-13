@@ -234,6 +234,9 @@ class AcumaticaInventoryIssueLine(models.Model):
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)
 
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+
+
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
     description = fields.Char(string='Header Description', readonly=True)
@@ -364,11 +367,12 @@ class AcumaticaInventoryIssueLine(models.Model):
                     print(f'Warehouse not found for code: {first.warehouse_code}')
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
-                picking_type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'outgoing'),
-                ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
-                print(f'Found picking type: {picking_type.name if picking_type else "None"} for warehouse: {warehouse.name}')
+                picking_type = first.picking_type_id.id
+                # picking_type = PickingType.search([
+                #     ('warehouse_id', '=', warehouse.id),
+                #     ('code', '=', 'outgoing'),
+                # ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
+                # print(f'Found picking type: {picking_type.name if picking_type else "None"} for warehouse: {warehouse.name}')
                 if not picking_type:
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
 

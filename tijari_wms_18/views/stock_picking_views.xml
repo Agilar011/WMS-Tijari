@@ -19,12 +19,26 @@
                     invisible="state != 'done'"/>
             </xpath> -->
             <xpath expr="//button[@name='button_validate']" position="after">
+
                 <button name="action_print_warehouse_receipt"
                 string="Print Receipt"
                 type="object"
                 class="btn-primary"
                 invisible="state != 'done' or picking_type_code != 'incoming'"/>
-                <button name="action_print_lot_number_line" string="Print Lot" type="object" class="oe_highlight" invisible="picking_type_code != 'incoming'"/>
+
+                <button name="action_send_email_hasil_picking"
+                    string="Send Email"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_code != 'incoming'"/>
+                
+                    <button name="action_open_stock_move_scan_wizard"
+                        type="object"
+                        string="Scan Product"
+                        class="btn-primary"
+                        invisible="state != 'assigned'"/>
+
+                <!-- <button name="action_print_lot_number_line" string="Print Lot" type="object" class="oe_highlight" invisible="picking_type_code != 'incoming'"/> -->
             </xpath>
 
             <xpath expr="//button[@name='do_print_picking']" position="attributes">
@@ -50,7 +64,14 @@
                 <!-- <field name="adt_type" readonly="1"/> -->
                 <field name="adt_total_qty"/>
                 <field name="adt_actual_qty"/>
-                <field name="adt_dest_location_id"/>
+                <field name="adt_dest_location_id" invisible="adt_type == 'Receipt'"/>
+                <field name="all_moves_picked" invisible="1"/>
+            </xpath>
+
+            <xpath expr="//button[@name='action_put_in_pack']" position="attributes">
+                <attribute name="invisible">
+                    not all_moves_picked or state in ('draft', 'done', 'cancel')
+                </attribute>
             </xpath>
         </field>
     </record>
@@ -111,11 +132,22 @@
     </record>
 
 
+    <record id="view_stock_picking_acumatica_error_search" model="ir.ui.view">
+        <field name="name">stock.picking.acumatica.error.search</field>
+        <field name="model">stock.picking.acumatica.error</field>
+        <field name="arch" type="xml">
+            <search string="Search Acumatica Error">
+                <field name="origin"/>
+            </search>
+        </field>
+    </record>
+
     <record id="view_stock_picking_acumatica_error_list" model="ir.ui.view">
         <field name="name">stock.picking.acumatica.error.list</field>
         <field name="model">stock.picking.acumatica.error</field>
         <field name="arch" type="xml">
             <list>
+                <field name="api_acumatica"/>
                 <field name="partner"/>
                 <field name="operation_type"/>
                 <field name="origin"/>
@@ -123,7 +155,6 @@
                 <field name="state" widget="badge"
                         decoration-success="state == 'resolved'"
                         decoration-warning="state == 'new'"/>
-                <field name="api_acumatica"/>
             </list>
         </field>
     </record>
@@ -224,4 +255,48 @@
             </xpath>
         </field>
     </record>
+
+    <record id="email_template_stock_picking_custom" model="mail.template">
+        <field name="name">Email Picking Custom</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="subject">Lampiran Berita Acara</field>
+        <field name="email_to"></field>
+        <field name="body_html">
+            <![CDATA[
+                <p>Yth. Bapak/Ibu,</p>
+                <p>Berikut kami lampirkan dokumen Berita Acara untuk dapat ditindaklanjuti sebagaimana mestinya.</p>
+                <p>Terima kasih atas perhatian Bapak/Ibu.</p>
+            ]]>
+        </field>
+    </record>
+
+    <record id="stock_picking_view_adt_type_inherit" model="ir.ui.view">
+        <field name="name">stock.picking.view.adt.type.inherit</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.vpicktree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='origin']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="replace">
+                <field name="adt_type" />
+                <field name="name" />
+                <field name="origin" string="Transaction Type" />
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_picking_form_inherit_change_lot_ids_label" model="ir.ui.view">
+        <field name="name">stock.picking.form.inherit.change.lot.ids.label</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='move_ids_without_package']//field[@name='lot_ids']" position="attributes">
+                <attribute name="string">Lot / Serial Number</attribute>
+            </xpath>
+
+        </field>
+    </record>
+
 </odoo>

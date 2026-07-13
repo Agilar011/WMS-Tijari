@@ -222,6 +222,9 @@ class AcumaticaIssuePoReturnLine(models.Model):
     external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
     line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
 
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+
+
     receipt_nbr = fields.Char(string='Receipt Number', readonly=True, index=True)
     vendor_code = fields.Char(string='VendorID', readonly=True)
     partner_ref = fields.Char(string='Vendor Ref', readonly=True)
@@ -383,6 +386,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
     def action_import_this(self):
         self.ensure_one()
         return self._do_import()
+    
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
@@ -391,6 +395,9 @@ class AcumaticaIssuePoReturnLine(models.Model):
         imported = 0
         updated = 0
         error = 0
+
+        print(f"self: {self}")
+        # raise UserError("Debug")
 
         # proses per receipt number
         for receipt_nbr in self.mapped('receipt_nbr'):
@@ -410,12 +417,14 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}'
                     )
 
-                picking_type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'outgoing'),
-                ], limit=1) or PickingType.search([
-                    ('code', '=', 'outgoing')
-                ], limit=1)
+                # picking_type = PickingType.search([
+                #     ('warehouse_id', '=', warehouse.id),
+                #     ('code', '=', 'outgoing'),
+                # ], limit=1) or PickingType.search([
+                #     ('code', '=', 'outgoing')
+                # ], limit=1)
+
+                picking_type = first.picking_type_id
 
                 if not picking_type:
                     raise UserError('Picking type outgoing tidak ditemukan.')
@@ -477,10 +486,11 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     updated += 1
                 else:
                     picking = Picking.create(vals)
-                    picking.action_confirm()
+                    # picking.action_confirm()
                     action_state = 'imported'
                     imported += 1
 
+                print(f"Line : {receipt_lines}")
                 for line in receipt_lines:
                     try:
                         product = self._find_product(line)
@@ -546,7 +556,9 @@ class AcumaticaIssuePoReturnLine(models.Model):
 
                         # filter field yang ada di stock.move
                         move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
+                        print(f"Move to created: {move_vals}")
 
+                        # raise UserError('debug.')
                         Move.create(move_vals)
 
                         line.write({
@@ -608,7 +620,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
 class AcumaticaIssuePoReturnProduct(models.Model):
     _name = 'acumatica.issue.po.return.product'
     _description = 'Data Inventory Receipt dari Acumatica'
-    _order = 'receipt_nbr asc, line_nbr asc, id asc'
+    _order = 'line_nbr asc, id asc'
 
     receipt_line_id = fields.Many2one(
         'acumatica.issue.po.return.line',

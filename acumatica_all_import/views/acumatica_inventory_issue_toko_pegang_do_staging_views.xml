@@ -1,0 +1,121 @@
+<odoo>
+    <!-- 1. Search View -->
+    <record id="view_acumatica_inv_issue_toko_pegang_do_search" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.toko.pegang.do.staging.search</field>
+        <field name="model">acumatica.inventory.issue.toko.pegang.do.staging</field>
+        <field name="arch" type="xml">
+            <search string="Cari Data Issue : Toko Pegang DO">
+                <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="import_state"/>
+                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
+                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- 2. List/Tree View Utama (Staging Header) -->
+    <record id="view_acumatica_inv_issue_toko_pegang_do_list" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.toko.pegang.do.staging.list</field>
+        <field name="model">acumatica.inventory.issue.toko.pegang.do.staging</field>
+        <field name="arch" type="xml">
+            <list string="Data Issue : Toko Pegang DO">
+                <field name="id" string="ID"/>
+                <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="create_date" string="Date"/>
+                <field name="odoo_picking_id" string="Delivery Order"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
+                <field name="import_message"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- 3. Form View (Tempat Menampilkan Detail Lines/Relasi dari Staging Line) -->
+    <record id="view_acumatica_inv_issue_toko_pegang_do_form" model="ir.ui.view">
+        <field name="name">acumatica.inventory.issue.toko.pegang.do.staging.form</field>
+        <field name="model">acumatica.inventory.issue.toko.pegang.do.staging</field>
+        <field name="arch" type="xml">
+            <form string="Detail Data Issue : Toko Pegang DO">
+                <header>
+                    <button name="action_import_this" string="Import" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <field name="import_state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="id" readonly="1"/>
+                            <field name="picking_type_id" readonly="1"/>
+                            <field name="adt_id" readonly="1"/>
+                            <field name="adt_rowNumber" readonly="1"/>
+                            <field name="adt_note" readonly="1"/>
+                            <field name="adt_CreatedDateTime" readonly="1"/>
+                            <field name="adt_CustomerID" readonly="1"/>
+                            <field name="adt_CustomerName" readonly="1"/>
+                            <field name="adt_CustomerOrder" readonly="1"/>
+                            <field name="adt_Date" readonly="1"/>
+                            <field name="adt_Description" readonly="1"/>
+                        </group>
+
+                        <group>
+                            <field name="adt_DueDate" readonly="1"/>
+                            <field name="adt_LastModifiedDateTime" readonly="1"/>
+                            <field name="adt_LocationID" readonly="1"/>
+                            <field name="adt_LocationName" readonly="1"/>
+                            <field name="adt_OrigRefNbr" readonly="1"/>
+                            <field name="adt_ReferenceNbr" readonly="1"/>
+                            <field name="adt_Status" readonly="1"/>
+                            <!-- <field name="adt_Type" readonly="1"/> -->
+                            <field name="adt_TransType" readonly="1"/>
+                            <field name="adt_post_period" readonly="1"/>
+                            <field name="adt_document_only" readonly="1"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page name="details" string="Details/Lines">
+                            <!-- Field relasi One2many ditaruh di sini secara aman -->
+                            <field name="product_line_ids" readonly="1">
+                                <list>
+                                    <field name="adt_InventoryID"/>
+                                    <field name="adt_TransactionDescription"/>
+                                    <field name="adt_Warehouse"/>
+                                    <field name="adt_Qty"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                    <group>
+                        <field name="import_message" readonly="1" widget="text"/>
+                        <field name="odoo_picking_id" readonly="1"/>
+                        <field name="exists_in_odoo" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- 4. Window Action -->
+    <record id="action_acumatica_inv_issue_toko_pegang_do" model="ir.actions.act_window">
+        <field name="name">Data Issue : Toko Pegang DO</field>
+        <field name="res_model">acumatica.inventory.issue.toko.pegang.do.staging</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_acumatica_inv_issue_toko_pegang_do_search"/>
+    </record>
+
+    <record id="action_import_selected_inv_issue_toko_pegang_do" model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <!-- Format penulisan ref model Odoo: model_ diikuti nama_model_dengan_titik_diganti_garis_bawah -->
+        <field name="model_id" ref="model_acumatica_inventory_issue_toko_pegang_do_staging"/>
+        <field name="binding_model_id" ref="model_acumatica_inventory_issue_toko_pegang_do_staging"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
+</odoo>

@@ -58,13 +58,13 @@ class ImportWarehouseWizard(models.TransientModel):
         }
 
     def _check_last_modified_staging(self, item):
-        Staging = self.env['acumatica.vendor.line']
+        Staging = self.env['acumatica.warehouse.line']
         existing = Staging.search([
             ('warehouse_id', '=', item['warehouse_id']),
-            ('last_modified_dt', '!=', item['last_modified_dt']),
+            ('last_modified_dt', '!=', item['last_modified_dt'])
         ])
         if existing:
-            item['state'] = 'pending'
+            item['import_state'] = 'pending'
             existing.write(item)
 
     def fetch_warehouse_data(self, limit=50, offset=0):
@@ -113,7 +113,7 @@ class ImportWarehouseWizard(models.TransientModel):
                     'building_id':           val(item, "BuildingID"),
                     'row_number':            item.get("rowNumber", 0),
                     'note':                  item.get("note", {}).get("value", "") or "",
-                    'active':                bval(item, "Active"),
+                    'is_active':             bval(item, "Active"),
                     'description':           val(item, "Description"),
                     'drop_ship_location_id': val(item, "DropShipLocationID"),
                     'last_modified_dt':      val(item, "LastModifiedDateTime"),
@@ -131,9 +131,9 @@ class ImportWarehouseWizard(models.TransientModel):
             }
 
             location_by_warehouse = {
-                p.warehouse_id: p.id
+                p.code: p.id
                 for p in Location.search([
-                    ('warehouse_id', '!=', False)
+                    ('code', '!=', False)
                 ])
             }
 
@@ -161,7 +161,7 @@ class ImportWarehouseWizard(models.TransientModel):
                     'external_id':           item['external_id'],
                     'warehouse_id':          item['warehouse_id'],
                     'description':           item['description'],
-                    'is_active':             item['active'],
+                    'is_active':             item['is_active'],
                     'active':                True,
                     'note':                  item['note'],
                     'drop_ship_location_id': item['drop_ship_location_id'],

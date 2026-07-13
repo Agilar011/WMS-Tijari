@@ -201,6 +201,8 @@ class AcumaticaIssueLine(models.Model):
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)
 
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
     description = fields.Char(string='Header Description', readonly=True)
@@ -239,6 +241,8 @@ class AcumaticaIssueLine(models.Model):
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+
+
 
     @api.depends('reference_nbr')
     def _compute_exists_in_odoo(self):
@@ -339,10 +343,11 @@ class AcumaticaIssueLine(models.Model):
                 if not warehouse:
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
-                picking_type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'outgoing'),
-                ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
+                picking_type = first.picking_type_id.id
+                # picking_type = PickingType.search([
+                #     ('warehouse_id', '=', warehouse.id),
+                #     ('code', '=', 'outgoing'),
+                # ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
                 if not picking_type:
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
 
@@ -355,7 +360,7 @@ class AcumaticaIssueLine(models.Model):
 
                 vals = {
                     'origin': first.reference_nbr,
-                    'picking_type_id': picking_type.id,
+                    'picking_type_id': picking_type,
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
@@ -388,6 +393,8 @@ class AcumaticaIssueLine(models.Model):
 
                 for line in issue_lines:
                     product = self._find_product(line)
+                    if not product:
+                        raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.inventory_id or '-'}")
                     uom = self._find_uom(line, product)
                     qty = self._parse_int(line.product_uom_qty)
 
@@ -460,3 +467,24 @@ class AcumaticaIssueLine(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
+
+class AcumaticaIssueLineProduct(models.Model):
+    _name = 'acumatica.issue.line.product'
+    _description = 'Data Issue Change Item dari Acumatica'
+    _order = 'reference_nbr asc, line_number asc, id asc' 
+    
+    issue_shipment_id = fields.Many2one('acumatica.issue.line', string='Issue Shipment', ondelete='cascade', index=True)
+    line_external_id = fields.Char(string='UUID Line', readonly=True)
+
+    note = fields.Text(string='Header Note', readonly=True)
+    branch = fields.Text(string='Branch Warehouse', readonly=True)
+    description = fields.Char(string='Header Description', readonly=True)
+    inventory_id = fields.Char(string='InventoryID', readonly=True)
+    line_number = fields.Integer(string='No', readonly=True)
+    location_code = fields.Char(string='Location', readonly=True)
+    note_id = fields.Char(string='Note ID', readonly=True)
+    product_uom_qty = fields.Char(string='Qty', readonly=True)
+    trans_type = fields.Char(string='Trans Type', readonly=True)
+    uom_code = fields.Char(string='UOM', readonly=True)
+    external_id = fields.Char(string='UUID Header', readonly=True)
+    warehouse_code = fields.Char(string='Warehouse', readonly=True)

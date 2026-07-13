@@ -22,25 +22,27 @@ class AcumaticaShipmentProductLine(models.Model):
     _name = 'acumatica.shipment.product.line'
     _description = 'Data Shipment Receipt dari Acumatica'
 
-    header_external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
+    header_external_id = fields.Char(string='UUID Header Acumatica')
     shipment_line_id = fields.Many2one('acumatica.shipment.line', string='Receipt', ondelete='cascade')
-    line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
+    line_external_id = fields.Char(string='UUID Line Acumatica')
 
-    description = fields.Char(string='Description Line', readonly=True)
-    note = fields.Text(string='Detail Note', readonly=True)
-    is_free_item = fields.Char(string='Free Item', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)
-    location_dest_code = fields.Char(string='Location Detail', readonly=True)
-    open_qty = fields.Char(string='Open Qty', readonly=True)
-    order_qty = fields.Char(string='Ordered Qty', readonly=True)
-    order_line_number = fields.Char(string='Order Line Nbr', readonly=True)
-    order_number = fields.Char(string='Order Nbr', readonly=True)
-    order_type = fields.Char(string='Order Type', readonly=True)
-    shipped_qty = fields.Char(string='Shipped Qty Detail', readonly=True)
-    uom_code = fields.Char(string='UOM', readonly=True)
-    original_qty = fields.Char(string='Original Qty', readonly=True)
-    warehouse_dest_code = fields.Char(string='Warehouse Detail', readonly=True)
+    shipment_nbr = fields.Char(string='Shipment Number', index=True)
+    description = fields.Char(string='Description Line')
+    note = fields.Text(string='Detail Note')
+    is_free_item = fields.Char(string='Free Item')
+    inventory_id = fields.Char(string='InventoryID')
+    line_nbr = fields.Char(string='Line Nbr')
+    location_dest_code = fields.Char(string='Location Detail')
+    open_qty = fields.Char(string='Open Qty')
+    order_qty = fields.Char(string='Ordered Qty')
+    order_line_number = fields.Char(string='Order Line Nbr')
+    order_number = fields.Char(string='Order Nbr')
+    order_type = fields.Char(string='Order Type')
+    shipped_qty = fields.Char(string='Shipped Qty Detail')
+    uom_code = fields.Char(string='UOM')
+    original_qty = fields.Char(string='Original Qty')
+    warehouse_dest_code = fields.Char(string='Warehouse Detail')
+    shipped_weight = fields.Char(string='Shipped Weight')
 
 
 class AcumaticaShipmentLine(models.Model):
@@ -48,49 +50,50 @@ class AcumaticaShipmentLine(models.Model):
     _description = 'Data Shipment Receipt dari Acumatica'
     _order = 'shipment_nbr asc, id asc'
 
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Header', readonly=True)
-    line_external_id = fields.Char(string='UUID Line', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Header')
+    line_external_id = fields.Char(string='UUID Line')
 
     product_line_ids = fields.One2many('acumatica.shipment.product.line', 'shipment_line_id', string='Lines')
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
-    shipment_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
-    partner_code = fields.Char(string='CustomerID', readonly=True)
-    scheduled_date = fields.Char(string='Shipment Date', readonly=True)
-    warehouse_code = fields.Char(string='Warehouse Asal', readonly=True)
-    warehouse_name = fields.Char(string='Warehouse Name', readonly=True)
-    warehouse_dest_code = fields.Char(string='Warehouse Tujuan', readonly=True)
-    header_location_code = fields.Char(string='Location Header', readonly=True)
-    header_location_name = fields.Char(string='Location Header Name', readonly=True)
-    status = fields.Char(string='Status', readonly=True)
-    shipment_type = fields.Char(string='Type', readonly=True)
-    operation = fields.Char(string='Operation', readonly=True)
+    building_code = fields.Char(string='Building Code')
+    shipment_nbr = fields.Char(string='Shipment Number', index=True)
+    partner_code = fields.Char(string='CustomerID')
+    scheduled_date = fields.Char(string='Shipment Date')
+    warehouse_code = fields.Char(string='Warehouse Asal')
+    warehouse_name = fields.Char(string='Warehouse Name')
+    warehouse_dest_code = fields.Char(string='Warehouse Tujuan')
+    header_location_code = fields.Char(string='Location Header')
+    header_location_name = fields.Char(string='Location Header Name')
+    status = fields.Char(string='Status')
+    shipment_type = fields.Char(string='Type')
+    operation = fields.Char(string='Operation')
 
-    note = fields.Text(string='Header Note', readonly=True)
-    actual_qty = fields.Char(string='Control Qty', readonly=True)
-    description = fields.Char(string='Description Header', readonly=True)
-    fob_point = fields.Char(string='FOB Point', readonly=True)
-    fob_point_description = fields.Char(string='FOB Point Description', readonly=True)
-    is_hold = fields.Char(string='Hold', readonly=True)
-    is_insurance = fields.Char(string='Insurance', readonly=True)
-    acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
-    package_count = fields.Char(string='Package Count', readonly=True)
-    package_weight = fields.Char(string='Package Weight', readonly=True)
-    is_picked = fields.Char(string='Picked', readonly=True)
-    shipped_qty = fields.Char(string='Shipped Qty Header', readonly=True)
-    shipped_volume = fields.Char(string='Shipped Volume', readonly=True)
-    shipped_weight = fields.Char(string='Shipped Weight', readonly=True)
-    shipping_terms = fields.Char(string='Shipping Terms', readonly=True)
-    shipping_settings = fields.Char(string='Shipping Settings', readonly=True)
-    shipping_zone = fields.Char(string='Shipping Zone', readonly=True)
-    ship_via = fields.Char(string='Ship Via', readonly=True)
-    unlimited_packages = fields.Char(string='Unlimited Packages', readonly=True)
+    note = fields.Text(string='Header Note')
+    actual_qty = fields.Char(string='Control Qty')
+    description = fields.Char(string='Description Header')
+    fob_point = fields.Char(string='FOB Point')
+    fob_point_description = fields.Char(string='FOB Point Description')
+    is_hold = fields.Char(string='Hold')
+    is_insurance = fields.Char(string='Insurance')
+    acumatica_write_date = fields.Char(string='Last Modified')
+    package_count = fields.Char(string='Package Count')
+    package_weight = fields.Char(string='Package Weight')
+    is_picked = fields.Char(string='Picked')
+    shipped_qty = fields.Char(string='Shipped Qty Header')
+    shipped_volume = fields.Char(string='Shipped Volume')
+    shipped_weight = fields.Char(string='Shipped Weight')
+    shipping_terms = fields.Char(string='Shipping Terms')
+    shipping_settings = fields.Char(string='Shipping Settings')
+    shipping_zone = fields.Char(string='Shipping Zone')
+    ship_via = fields.Char(string='Ship Via')
+    unlimited_packages = fields.Char(string='Unlimited Packages')
     allocations = fields.Text(string='Allocations JSON')
 
-    acumatica_id = fields.Char(string='Acumatica ID', readonly=True)
-    acumatica_row_number = fields.Integer(string='Acumatica Row Number', readonly=True)
-    acumatica_line_number = fields.Char(string='Acumatica Line Number', readonly=True)
-    original_qty = fields.Char(string='Original Qty', readonly=True)
+    acumatica_id = fields.Char(string='Acumatica ID')
+    acumatica_row_number = fields.Integer(string='Acumatica Row Number')
+    acumatica_line_number = fields.Char(string='Acumatica Line Number')
+    original_qty = fields.Char(string='Original Qty')
 
     import_state = fields.Selection([
         ('pending', 'Belum Diimport'),
@@ -134,16 +137,16 @@ class AcumaticaShipmentLine(models.Model):
         product = False
         if line.inventory_id:
             product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
-            if not product:
-                product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
-        if not product and line.line_description:
-            product = Product.search([('name', '=', line.line_description)], limit=1)
-        if not product:
-            product = Product.create({
-                'name': line.line_description or line.inventory_id or 'Unknown Product',
-                'default_code': line.inventory_id or False,
-                'type': 'consu',
-            })
+        #     if not product:
+        #         product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
+        # if not product and line.description:
+        #     product = Product.search([('name', '=', line.description)], limit=1)
+        # if not product:
+        #     product = Product.create({
+        #         'name': line.description or line.inventory_id or 'Unknown Product',
+        #         'default_code': line.inventory_id or False,
+        #         'type': 'consu',
+        #     })
         return product
 
     def _find_partner(self, line):
@@ -200,7 +203,12 @@ class AcumaticaShipmentLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(
+            lambda l: (
+                l.import_state in ['pending', 'error'] 
+                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+            )
+        )
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -230,9 +238,9 @@ class AcumaticaShipmentLine(models.Model):
                 'location_dest': first.warehouse_dest_code or False,
                 'scheduled_date': first._parse_dt(first.scheduled_date),
                 'origin': origin,
-                'adt_total_qty': first._parse_float(first.total_qty),
+                'adt_total_qty': first._parse_float(first.shipped_qty),
                 'adt_actual_qty': first._parse_float(first.actual_qty),
-                'api_acumatica': 'po_receipt',
+                'api_acumatica': 'shipment_so',
                 'error_message': '\n'.join(error_messages),
                 'payload': str(payload_text)[:1000],
                 'state': 'new',
@@ -286,9 +294,18 @@ class AcumaticaShipmentLine(models.Model):
         origin = shipment.shipment_nbr or False
         header_payload = shipment.read()[0] if shipment.exists() else {}
         error_messages = []
-        error_line_payloads = []
+        all_line_payloads = []
         picking = shipment.odoo_picking_id.id
         action_state = 'pending'
+
+        for shipment_line in shipment.product_line_ids:
+            all_line_payloads.append({
+                'inventory_id': shipment_line.inventory_id or False,
+                'product_name': shipment_line.description or False,
+                'qty': shipment._parse_float(shipment_line.shipped_qty),
+                'uom': shipment_line.uom_code or False,
+                'payload': shipment_line.read()[0] if shipment_line.exists() else {},
+            })
 
         partner = self._find_partner(shipment)
         if not partner:
@@ -324,6 +341,7 @@ class AcumaticaShipmentLine(models.Model):
             raise ShipmentImportError(
                 '\n'.join(error_messages),
                 payload={'header': header_payload},
+                line_payloads=all_line_payloads
             )
 
         picking_vals = {
@@ -342,10 +360,11 @@ class AcumaticaShipmentLine(models.Model):
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 
         if picking:
-            if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+            if picking.state != 'draft':
                 raise ShipmentImportError(
                     f'Shipment {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
+                    line_payloads=all_line_payloads
                 )
             picking.write(picking_vals)
             action_state = 'updated'
@@ -361,13 +380,13 @@ class AcumaticaShipmentLine(models.Model):
                     error_messages.append(
                         f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
                     )
-                    error_line_payloads.append({
-                        'inventory_id': shipment_line.inventory_id or False,
-                        'product_name': shipment_line.description or False,
-                        'qty': shipment._parse_float(shipment_line.shipped_qty),
-                        'uom': shipment_line.uom_code or False,
-                        'payload': shipment_line.read()[0] if shipment_line.exists() else {},
-                    })
+                    # error_line_payloads.append({
+                    #     'inventory_id': shipment_line.inventory_id or False,
+                    #     'product_name': shipment_line.description or False,
+                    #     'qty': shipment._parse_float(shipment_line.shipped_qty),
+                    #     'uom': shipment_line.uom_code or False,
+                    #     'payload': shipment_line.read()[0] if shipment_line.exists() else {},
+                    # })
                     continue
 
                 uom = shipment._find_uom(shipment_line, product)
@@ -375,19 +394,19 @@ class AcumaticaShipmentLine(models.Model):
                     error_messages.append(
                         f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
                     )
-                    error_line_payloads.append({
-                        'inventory_id': shipment_line.inventory_id or False,
-                        'product_name': shipment_line.description or False,
-                        'qty': shipment._parse_float(shipment_line.shipped_qty),
-                        'uom': shipment_line.uom_code or False,
-                        'payload': shipment_line.read()[0] if shipment_line.exists() else {},
-                    })
+                    # error_line_payloads.append({
+                    #     'inventory_id': shipment_line.inventory_id or False,
+                    #     'product_name': shipment_line.description or False,
+                    #     'qty': shipment._parse_float(shipment_line.shipped_qty),
+                    #     'uom': shipment_line.uom_code or False,
+                    #     'payload': shipment_line.read()[0] if shipment_line.exists() else {},
+                    # })
                     continue
 
                 qty = shipment._parse_float(shipment_line.shipped_qty)
                 existing = picking.move_ids.filtered(
                     lambda move: (
-                        move.picking_id == picking.id
+                        move.picking_id.id == picking.id
                         and move.product_id.id == product.id
                         and move.product_uom_qty == qty
                     )
@@ -418,7 +437,7 @@ class AcumaticaShipmentLine(models.Model):
             except Exception as line_error:
                 _logger.exception("Error import line %s", shipment.id)
                 error_messages.append(str(line_error))
-                error_line_payloads.append({
+                all_line_payloads.append({
                     'inventory_id': shipment_line.inventory_id or False,
                     'product_name': shipment_line.description or False,
                     'qty': shipment._parse_float(shipment_line.shipped_qty),
@@ -434,7 +453,7 @@ class AcumaticaShipmentLine(models.Model):
                     'picking_vals': picking_vals,
                     'picking_id': picking.id if picking else False,
                 },
-                line_payloads=error_line_payloads,
+                line_payloads=all_line_payloads,
             )
 
         shipment.write({
@@ -443,7 +462,7 @@ class AcumaticaShipmentLine(models.Model):
             'odoo_picking_id': picking.id if picking else False,
         })
         self._resolve_error_tracking(shipment)
-        picking.action_confirm()
+        # picking.action_confirm()
         return action_state
 
     def _do_import(self):
@@ -472,18 +491,18 @@ class AcumaticaShipmentLine(models.Model):
                 _logger.exception("Error import shipment %s", shipment.shipment_nbr or shipment.id)
                 if isinstance(exc, ShipmentImportError):
                     error_payload = exc.payload
-                    error_line_payloads = exc.line_payloads
+                    all_line_payloads = exc.line_payloads
                     error_message = str(exc)
                 else:
                     error_payload = {'header': shipment.read()[0] if shipment.exists() else {}}
-                    error_line_payloads = []
+                    all_line_payloads = []
                     error_message = str(exc)
 
                 try:
                     self._persist_error_tracking(
                         shipment,
                         [error_message],
-                        line_payloads=error_line_payloads,
+                        line_payloads=all_line_payloads,
                         payload=error_payload,
                     )
                 except Exception:
@@ -499,17 +518,17 @@ class AcumaticaShipmentLine(models.Model):
                 error += 1
                 continue
 
-        msg = f'Import done: {imported} shipment created, {updated} shipment updated, {error} shipment error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Shipment SO Return',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        # msg = f'Import done: {imported} shipment created, {updated} shipment updated, {error} shipment error.'
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Shipment SO Return',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})

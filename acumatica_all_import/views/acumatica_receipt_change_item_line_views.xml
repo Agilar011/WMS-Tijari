@@ -18,8 +18,9 @@
         <field name="arch" type="xml">
             <list string="Data Receipt : Change Item">
                 <field name="origin"/>
-                <field name="location_code"/>
+                <field name="customer_code"/>
                 <field name="warehouse_code"/>
+                <field name="total_qty"/>
                 <field name="status"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"

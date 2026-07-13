@@ -6,9 +6,11 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-class ImportInventoryReceiptWizard(models.TransientModel):
-    _name = 'import.inventory.receipt.wizard'
-    _description = 'Wizard Import Inventory Receipt dari Acumatica'
+# toko.pegang.do
+# toko_pegang_do
+class ImportTokoPegangDOWizard(models.TransientModel):
+    _name = 'import.toko.pegang.do.wizard'
+    _description = 'Wizard Import Inventory Recieved dari Acumatica'
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
@@ -45,11 +47,10 @@ class ImportInventoryReceiptWizard(models.TransientModel):
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.fetch_inventory_recieved_data(
+            batch_data = self.fetch_toko_pegang_do_data(
                 limit=self.batch_size,
                 offset=offset,
                 reference_nbr=self.reference_nbr,
-                last_modified_from=self.last_modified_from,
                 odata_filter=params if params else None,
             )
 
@@ -61,7 +62,6 @@ class ImportInventoryReceiptWizard(models.TransientModel):
         self.total_fetched = raw_list
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
-
 
     @staticmethod
     def _val(item, key):
@@ -90,7 +90,24 @@ class ImportInventoryReceiptWizard(models.TransientModel):
         except Exception:
             return False
 
-    def fetch_inventory_recieved_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
+    def _search_picking_type(self, header):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+        type = False
+
+        location = Location.search([
+            ('code', '=', header['warehouse_code'])
+        ])
+        if location:
+            type = PickingType.search([
+                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                ('code', '=', 'incoming'),
+                ('is_default_api', '=', True)
+            ])
+
+        return type if type else None
+
+    def fetch_toko_pegang_do_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
         self.ensure_one()
         session = self.config_id._do_login()
         try:
@@ -142,6 +159,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
                     'total_qty': str(self._val(item, 'TotalQty')),
                     'transfer_nbr': self._val(item, 'TransferNbr'),
                     'transfer_type': self._val(item, 'TransType'),
+                    'warehouse_code': self._val(item, 'Warehouse')
                 }
                 
                 details = item.get('Details') or []
@@ -151,15 +169,16 @@ class ImportInventoryReceiptWizard(models.TransientModel):
                     details = []
 
 
-                transfer_nbr = header['transfer_nbr']
-                if transfer_nbr:
-                    dest_warehouse_data = self.search_dest_warehouse(transfer_nbr, session)
-                    if dest_warehouse_data:
-                        header["warehouse_code"] = dest_warehouse_data.get('source_warehouse')
+                # transfer_nbr = header['transfer_nbr']
+                # if transfer_nbr:
+                #     dest_warehouse_data = self.search_dest_warehouse(transfer_nbr, session)
+                #     if dest_warehouse_data:
+                #         header["warehouse_code"] = dest_warehouse_data.get('source_warehouse')
                         # header["warehouse_dest_code"] = dest_warehouse_data.get('dest_warehouse')
 
-                if details:
-                    header["warehouse_dest_code"] = self._val(details[0], 'Warehouse')
+                if header['warehouse_code']:
+                    type = self._search_picking_type(header)
+                    header['picking_type_id'] = type.id if type else None
 
                 result.append(header)
 
@@ -187,36 +206,36 @@ class ImportInventoryReceiptWizard(models.TransientModel):
         finally:
             self.config_id._do_logout(session)
 
-    def search_dest_warehouse(self, transfer_nbr, session):
-        self.ensure_one()
-        if not transfer_nbr:
-            return None
-        try:
-            endpoint = f"{self.config_id.api_url}/TransferOrder"
-            params = {
-                '$select': 'ToWarehouseID, FromWarehouseID, ReferenceNbr', 
-                '$filter': f"ReferenceNbr eq '{transfer_nbr}'"
-            }
+    # def search_dest_warehouse(self, transfer_nbr, session):
+    #     self.ensure_one()
+    #     if not transfer_nbr:
+    #         return None
+    #     try:
+    #         endpoint = f"{self.config_id.api_url}/TransferOrder"
+    #         params = {
+    #             '$select': 'ToWarehouseID, FromWarehouseID, ReferenceNbr', 
+    #             '$filter': f"ReferenceNbr eq '{transfer_nbr}'"
+    #         }
 
-            response = session.get(endpoint, params=params, timeout=90)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
+    #         response = session.get(endpoint, params=params, timeout=90)
+    #         if response.status_code != 200:
+    #             raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+    #         raw_data = self._normalize_rows(response.json())
 
-            item = raw_data[0]  # misal ambil data pertama
+    #         item = raw_data[0]  # misal ambil data pertama
 
-            result = {
-                'shipment_number': self._val(item, 'ShipmentNbr'),
-                'dest_warehouse': self._val(item, 'ToWarehouseID'),
-                'source_warehouse': self._val(item, 'FromWarehouseID'),
-            }
+    #         result = {
+    #             'shipment_number': self._val(item, 'ShipmentNbr'),
+    #             'dest_warehouse': self._val(item, 'ToWarehouseID'),
+    #             'source_warehouse': self._val(item, 'FromWarehouseID'),
+    #         }
 
-            _logger.info('Berhasil ambil data Warehouse dari Transfer', len(result))
-            return result
-        except Exception as e:
-            _logger.error('Gagal ambil data Warehouse dari Transfer: %s', str(e))
-            return None
+    #         _logger.info('Berhasil ambil data Warehouse dari Transfer', len(result))
+    #         return result
+    #     except Exception as e:
+    #         _logger.error('Gagal ambil data Warehouse dari Transfer: %s', str(e))
+    #         return None
 
     def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']
@@ -263,7 +282,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
             for d in data
             if d.get('reference_nbr')
         ]
-        existing_lines = self.env['acumatica.inventory.recieved.line'].search([
+        existing_lines = self.env['acumatica.toko.pegang.do.line'].search([
             ('reference_nbr', 'in', reference_nbrs)
         ])
 
@@ -309,7 +328,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
         if not data:
             return False
 
-        return self.env['acumatica.inventory.recieved.line'].create(data)
+        return self.env['acumatica.toko.pegang.do.line'].create(data)
 
     def filter_product_line(self, data, update, create):
         # buat set dari semua external_id di update
@@ -365,7 +384,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
                 vals['header_external_id']
             )
 
-        self.env['acumatica.inventory.recieved.product.line'].create(data)
+        self.env['acumatica.toko.pegang.do.product.line'].create(data)
 
     def _update_inventory_lines_product(self, data, inventory):
         inventory_map = {
@@ -375,7 +394,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
             and rec.get('record')
         }
 
-        product_line = self.env['acumatica.inventory.recieved.product.line']
+        product_line = self.env['acumatica.toko.pegang.do.product.line']
 
         for vals in data:
             ext_id = vals.get('header_external_id')
@@ -389,7 +408,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
         return {
             'type': 'ir.actions.act_window',
             'name': 'Data Inventory Recieved dari Acumatica',
-            'res_model': 'acumatica.inventory.recieved.line',
+            'res_model': 'acumatica.toko.pegang.do.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
             'context': {'default_config_id': self.config_id.id},
@@ -397,7 +416,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
 
     def action_import_all_pending(self):
         self.ensure_one()
-        lines = self.env['acumatica.inventory.recieved.line'].search([
+        lines = self.env['acumatica.toko.pegang.do.line'].search([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
             ('selected', '=', True),
@@ -409,7 +428,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
         return {
             'type': 'ir.actions.act_window',
             'name': 'Hasil Import Inventory Recieved',
-            'res_model': 'acumatica.inventory.recieved.line',
+            'res_model': 'acumatica.toko.pegang.do.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
         }

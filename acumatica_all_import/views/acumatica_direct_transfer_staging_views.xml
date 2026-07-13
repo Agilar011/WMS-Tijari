@@ -1,0 +1,131 @@
+<odoo>
+    <!-- 1. Search View -->
+    <record id="view_acumatica_direct_transfer_staging_search" model="ir.ui.view">
+        <field name="name">acumatica.direct.transfer.staging.search</field>
+        <!-- Diperbaiki: Ditambahkan . -->
+        <field name="model">acumatica.direct.transfer.staging</field>
+        <field name="arch" type="xml">
+            <search string="Cari Data Direct Transfer Staging">
+                <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="import_state"/>
+                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
+                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- 2. List/Tree View Utama -->
+    <record id="view_acumatica_direct_transfer_staging_list" model="ir.ui.view">
+        <field name="name">acumatica.direct.transfer.staging.list</field>
+        <!-- Diperbaiki: Ditambahkan . -->
+        <field name="model">acumatica.direct.transfer.staging</field>
+        <field name="arch" type="xml">
+            <list string="Data Direct Transfer Staging">
+                <field name="id" string="ID"/>
+                <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="create_date" string="Sync Date"/>
+                <field name="odoo_picking_id" string="Odoo Picking"/>
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
+                <field name="import_message"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Picking" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- 3. Form View -->
+    <record id="view_acumatica_direct_transfer_staging_form" model="ir.ui.view">
+        <field name="name">acumatica.direct.transfer.staging.form</field>
+        <!-- Diperbaiki: Ditambahkan . -->
+        <field name="model">acumatica.direct.transfer.staging</field>
+        <field name="arch" type="xml">
+            <form string="Detail Data Direct Transfer Staging">
+                <header>
+                    <button name="action_import_this" string="Import" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <!-- Diperbaiki: Ditambahkan statusbar_visible agar memunculkan titik status -->
+                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,error"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group string="Informasi Dokumen">
+                            <field name="adt_id" string="Acumatica ID" readonly="1"/>
+                            <field name="adt_rowNumber" string="Acumatica Row Number" readonly="1"/>
+                            <field name="adt_note" string="Acumatica Note" readonly="1"/>
+                            <field name="adt_Date" string="Acumatica Date" readonly="1"/>
+                            <field name="adt_Description" string="Acumatica Description" readonly="1"/>
+                            <field name="adt_DocumentOnly" string="Acumatica DocumentOnly" readonly="1"/>
+                            <field name="adt_ExternalRef" string="Acumatica ExternalRef" readonly="1"/>
+                            <field name="adt_FromWarehouseID" string="Acumatica FromWarehouseID" readonly="1"/>
+                            <field name="adt_Hold" string="Acumatica Hold" readonly="1"/>
+                            <field name="adt_LastModifiedDateTime" string="Acumatica LastModifiedDateTime" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="adt_NoteID" string="Acumatica NoteID" readonly="1"/>
+                            <field name="adt_PostPeriod" string="Acumatica PostPeriod" readonly="1"/>
+                            <field name="adt_ReferenceNbr" string="Acumatica ReferenceNbr" readonly="1"/>
+                            <field name="adt_ReturnType" string="Acumatica ReturnType" readonly="1"/>
+                            <field name="adt_Status" string="Acumatica Status" readonly="1"/>
+                            <field name="adt_TotalQty" string="Acumatica TotalQty" readonly="1"/>
+                            <field name="adt_ToWarehouseID" string="Acumatica ToWarehouseID" readonly="1"/>
+                            <field name="adt_TransferType" string="Acumatica TransferType" readonly="1"/>
+                            <field name="adt_TransType" string="Acumatica TransType" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page name="details" string="Transfer Details / Lines">
+                            <field name="line_ids" readonly="1">
+                                <list>
+                                    <field name="adt_LineNumber" string="Line No"/>
+                                    <field name="adt_rowNumber" string="Row No"/>
+                                    <field name="adt_InventoryID" string="Product Code"/>
+                                    <field name="adt_Description" string="Description"/>
+                                    <field name="adt_FromLocationID" string="From Location"/>
+                                    <field name="adt_ToLocationID" string="To Location"/>
+                                    <field name="adt_Quantity" string="Quantity"/>
+                                    <field name="adt_UOM" string="UOM"/>
+                                    <field name="adt_SOOrderNbr" string="SO Nbr"/>
+                                    <field name="adt_SOShipmentNbr" string="Shipment Nbr"/>
+                                    <field name="adt_note" string="Line Note"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+
+                    <group string="Status Integrasi Odoo">
+                        <field name="import_message" readonly="1" widget="text"/>
+                        <field name="odoo_picking_id" readonly="1"/>
+                        <field name="sync_date" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- 4. Window Action -->
+    <record id="action_acumatica_direct_transfer" model="ir.actions.act_window">
+        <field name="name">Vendor Return Direct Transfer Staging</field>
+        <!-- Diperbaiki: Ditambahkan . -->
+        <field name="res_model">acumatica.direct.transfer.staging</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_acumatica_direct_transfer_staging_search"/>
+    </record>
+
+    <!-- 5. Server Action -->
+    <record id="action_import_selected_direct_transfer" model="ir.actions.server">
+        <field name="name">Process Selected Import</field>
+        <!-- Diperbaiki: Menggunakan titik diganti underscore untuk referensi model internal Odoo -->
+        <field name="model_id" ref="model_acumatica_direct_transfer_staging"/>
+        <field name="binding_model_id" ref="model_acumatica_direct_transfer_staging"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">
+            records.action_import_selected()
+        </field>
+    </record>
+
+</odoo>

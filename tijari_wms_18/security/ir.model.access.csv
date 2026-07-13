@@ -1,10 +1,11 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_tijari_wms_16_tijari_wms_16,tijari_wms_16.tijari_wms_16,model_tijari_wms_16_tijari_wms_16,base.group_user,1,1,1,1
 access_stock_report_velocity_line_user,access.stock.report.velocity.line.user,model_stock_report_velocity_line,base.group_user,1,0,0,0
 access_stock_report_velocity_generate_user,access.stock.report.velocity.generate.user,model_stock_report_velocity_generate,base.group_user,1,1,1,1
 access_stock_report_aging_line_user,access.stock.report.aging.line.user,model_stock_report_aging_line,base.group_user,1,0,0,0
 access_stock_report_aging_generate_user,access.stock.report.aging.generate.user,model_stock_report_aging_generate,base.group_user,1,1,1,1
+
 access_stock_picking_acumatica_error_user,access.stock.picking.acumatica.error.user,model_stock_picking_acumatica_error,base.group_user,1,1,1,1
 access_stock_picking_acumatica_error_line_user,access.stock.picking.acumatica.error.line.user,model_stock_picking_acumatica_error_line,base.group_user,1,1,1,1
+access_stock_move_scan_wizard_user,access.stock.move.scan.wizard.user,model_stock_move_scan_wizard,base.group_user,1,1,1,1
 
 access_stock_location_acumatica_user,access.stock.location.acumatica.user,model_stock_location_acumatica,base.group_user,1,1,1,1
