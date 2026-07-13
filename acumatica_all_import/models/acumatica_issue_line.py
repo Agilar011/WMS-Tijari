@@ -343,7 +343,7 @@ class AcumaticaIssueLine(models.Model):
                 if not warehouse:
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
-                picking_type = first.picking_type_id.id
+                picking_type = first.picking_type_id
                 # picking_type = PickingType.search([
                 #     ('warehouse_id', '=', warehouse.id),
                 #     ('code', '=', 'outgoing'),
@@ -360,7 +360,7 @@ class AcumaticaIssueLine(models.Model):
 
                 vals = {
                     'origin': first.reference_nbr,
-                    'picking_type_id': picking_type,
+                    'picking_type_id': picking_type.id,
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
@@ -471,7 +471,7 @@ class AcumaticaIssueLine(models.Model):
 class AcumaticaIssueLineProduct(models.Model):
     _name = 'acumatica.issue.line.product'
     _description = 'Data Issue Change Item dari Acumatica'
-    _order = 'reference_nbr asc, line_number asc, id asc' 
+    _order = 'line_number asc, id asc' 
     
     issue_shipment_id = fields.Many2one('acumatica.issue.line', string='Issue Shipment', ondelete='cascade', index=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)

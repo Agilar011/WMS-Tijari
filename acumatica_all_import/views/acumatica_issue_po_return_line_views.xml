@@ -43,6 +43,7 @@
         <field name="arch" type="xml">
             <form string="Data PO Return">
                 <header>
+                    <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
                     <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
                     <button name="action_open_picking" string="Buka Receipt" type="object" invisible="not odoo_picking_id"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,updated,error"/>

@@ -34,15 +34,24 @@
             <list string="Data Issue : Change Item" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="reference_nbr"/>
-                <field name="line_nbr"/>
-                <field name="inventory_id"/>
-                <field name="line_description"/>
-                <field name="product_uom_qty"/>
-                <field name="uom_code"/>
                 <field name="warehouse_code"/>
-                <field name="location_code"/>
-                <field name="import_state"/>
+                <field name="total_qty"/>
+                <!-- <field name="line_description"/> -->
+                <!-- <field name="product_uom_qty"/> -->
+                <!-- <field name="uom_code"/> -->
+                <!-- <field name="warehouse_code"/> -->
+                <!-- <field name="location_code"/> -->
+                <!-- <field name="import_state"/> -->
+                <!-- <field name="import_message"/> -->
+
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+
             </list>
         </field>
     </record>
