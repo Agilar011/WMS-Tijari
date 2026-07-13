@@ -20,10 +20,10 @@
         <field name="model">acumatica.inventory.issue.toko.pegang.do.staging</field>
         <field name="arch" type="xml">
             <list string="Data Issue : Toko Pegang DO">
-                <field name="id" string="ID"/>
+                <!-- <field name="id" string="ID"/> -->
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
-                <field name="create_date" string="Date"/>
-                <field name="odoo_picking_id" string="Delivery Order"/>
+                <!-- <field name="create_date" string="Date"/> -->
+                <!-- <field name="odoo_picking_id" string="Delivery Order"/> -->
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('imported','updated')"
                        decoration-warning="import_state == 'pending'"
