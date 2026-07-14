@@ -139,11 +139,11 @@ class AcumaticaTokoPegangDOLine(models.Model):
 
         return warehouse
 
-    def _find_location_dest(self, line):
+    def _find_location_dest(self, code):
         Location = self.env['stock.location.acumatica']
         location = False
-        if line.warehouse_code:
-            location = Location.search([('code', '=', line.warehouse_code)], limit=1)
+        if code:
+            location = Location.search([('code', '=', code)], limit=1)
             if location:
                 if not location.odoo_location_id:
                     location = False
@@ -267,7 +267,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
                 f'Warehouse with location code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
-        dest_location = receive._find_location_dest(receive)
+        dest_location = receive._find_location_dest(receive.warehouse_code)
         if not dest_location:
             error_messages.append(
                 f'Location with code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
@@ -349,6 +349,14 @@ class AcumaticaTokoPegangDOLine(models.Model):
                     })
                     continue
 
+                dest_move_location = receive._find_location_dest(receive_line.warehouse_dest_code)
+                if not dest_move_location:
+                    error_messages.append(
+                        f'Location with code {receive_line.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                    )
+
+                adt_dest_location = dest_move_location.id or picking.adt_dest_location_id.id or False
+
                 qty = receive._parse_float(receive_line.product_uom_qty)
                 existing = picking.move_ids.filtered(
                     lambda move: (
@@ -370,6 +378,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
                     'location_dest_id': picking.location_dest_id.id if picking else False,
                     'warehouse_id': warehouse.id if warehouse else False,
                     'description_picking': receive_line.line_description or False,
+                    'adt_dest_location_id': adt_dest_location,
 
                     'adt_inventory_id': receive_line.line_note or False,
                     'adt_line_nbr': receive_line.line_nbr or False,

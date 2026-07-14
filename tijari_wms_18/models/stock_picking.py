@@ -193,6 +193,8 @@ class StockPicking(models.Model):
 
         return package
 
+    def _get_put_in_pack_package(self):
+        return self.env['stock.quant.package'].create({})
 
     def _check_sync_state(self):
         for picking in self:
