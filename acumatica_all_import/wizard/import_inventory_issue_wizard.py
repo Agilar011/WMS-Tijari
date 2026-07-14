@@ -289,7 +289,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
                 })
                 if not created_header.warehouse_code:
-                    created_header.write('warehouse_code', created_move.warehouse_code )
+                    created_header.write({'warehouse_code': created_move.warehouse_code})
+
 
 
 
@@ -356,22 +357,23 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'external_id': item.get('id', '') or '',
             'row_number': row_number,
             'note': item.get('note', {}).get('value', '') or '',
-            # 'actual_amount': self._val(item, 'ControlAmount'),
-            'actual_qty': self._val(item, 'ShippedQty'),
-            'scheduled_date': self._val(item, 'ShipmentDate'),
+            'actual_qty': self._val(item, 'TotalQty'),
+            'total_qty': self._val(item, 'TotalQty'),
+            'scheduled_date': self._val(item, 'Date'),
             'description': self._val(item, 'Description'),
-            # 'external_ref': self._val(item, 'ExternalRef'),
-            # 'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
             'post_period': self._val(item, 'PostPeriod'),
-            'reference_nbr': self._val(item, 'ShipmentNbr'),
-            # 'reference_nbr': self._val(item, 'ReferenceNbr'),
+            'reference_nbr': self._val(item, 'ReferenceNbr'),
             'status': self._val(item, 'Status'),
+            'trans_type': self._val(item, 'TransType'),
+            'warehouse_code' : warehouse_code,
+            'picking_type_id': type,
+            'external_ref': self._val(item, 'ExternalRef'),
+            'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+            # 'actual_amount': self._val(item, 'ControlAmount'),
+            # 'reference_nbr': self._val(item, 'ReferenceNbr'),
             # 'total_amount': self._val(item, 'TotalAmount'),
             # 'total_qty': self._val(item, 'TotalQty'),
-            'trans_type': self._val(item, 'Type'),
-            'warehouse_code' : warehouse_code,
-            # 'partner_ref' : self._val(item, 'CustomerID'),
-            'picking_type_id': type
+            # 'partner_ref' : self._val(item, 'CustomerID'),            
             }
 
 
@@ -486,7 +488,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'inventory_id': self._val(detail, 'InventoryID'),
             'line_nbr': self._val(detail, 'LineNbr'),
             'location_code': self._val(detail, 'Location'),
-            'product_uom_qty': self._val(detail, 'ShippedQty'),
+            'product_uom_qty': self._val(detail, 'Qty'),
             'uom_code': self._val(detail, 'UOM'),
             'warehouse_code': self._val(detail, 'WarehouseID'),
         }
