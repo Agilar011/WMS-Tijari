@@ -40,6 +40,11 @@
 
                 <!-- <button name="action_print_lot_number_line" string="Print Lot" type="object" class="oe_highlight" invisible="picking_type_code != 'incoming'"/> -->
             </xpath>
+            <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']"
+                position="after">
+                <field name="created_by"/>
+                <field name="approved_by"/>
+            </xpath>
 
             <xpath expr="//button[@name='do_print_picking']" position="attributes">
                 <attribute name="invisible">state != 'assigned' or picking_type_code == 'incoming'</attribute>

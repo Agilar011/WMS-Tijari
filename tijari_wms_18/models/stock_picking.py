@@ -53,6 +53,8 @@ class StockPicking(models.Model):
     sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
     adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
     destination_location = fields.Char(string='to delete field')
+    created_by = fields.Char(string='Created by')
+    approved_by = fields.Char(string='Approved by')
     all_moves_picked = fields.Boolean(
         compute='_compute_all_moves_picked',
     )

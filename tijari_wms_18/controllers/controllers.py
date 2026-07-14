@@ -406,6 +406,9 @@ class WmsApiController(http.Controller):
             'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
             'penerima': receipt.location_id.complete_name or '',
             'note': receipt.note_ba or '',
+            'user': receipt.user_id.name or '',
+            'created_by': receipt.created_by or '',
+            'approved_by': receipt.approved_by or '',
             'detail': []
         }
         for line in receipt.move_ids_without_package:
