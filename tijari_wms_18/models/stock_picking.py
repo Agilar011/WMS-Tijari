@@ -98,33 +98,14 @@ class StockPicking(models.Model):
             )
 
         # Group move line berdasarkan destination location.
-        lines_by_destination = defaultdict(
-            lambda: self.env["stock.move.line"]
-        )
-
-        for move_line in move_line_ids:
-            if not move_line.location_dest_id:
-                raise UserError(
-                    _(
-                        "Destination location is missing for product %s."
-                    ) % move_line.product_id.display_name
-                )
-
-            lines_by_destination[
-                move_line.location_dest_id.id
-            ] |= move_line
-
         packages = self.env["stock.quant.package"]
 
-        # Setiap destination diproses sebagai package terpisah.
-        for grouped_move_lines in lines_by_destination.values():
-            package = self._put_in_pack(grouped_move_lines)
+        # Satu move line diproses satu per satu.
+        for move_line in move_line_ids:
+            package = self._put_in_pack(move_line)
             packages |= package
 
-        # Mengikuti pola return dari method packing:
-        # return package terakhir yang dibuat.
         return packages[-1] if packages else False
-
     
     def _put_in_pack(self, move_line_ids):
         """
@@ -137,40 +118,27 @@ class StockPicking(models.Model):
         """
         self.ensure_one()
 
-        if not move_line_ids:
+        if not move_line_ids.location_dest_id:
             raise UserError(
-                _("No move lines were provided for packaging.")
-            )
-
-        # _put_in_pack hanya boleh menerima satu destination.
-        destination_locations = move_line_ids.mapped(
-            "location_dest_id"
-        )
-
-        if len(destination_locations) != 1:
-            raise UserError(
-                _(
-                    "Move lines with different destination locations "
-                    "cannot be inserted into the same package."
-                )
+                (
+                    "Destination location is missing for product %s."
+                ) % move_line_ids.product_id.display_name
             )
 
         package = self._get_put_in_pack_package()
 
-        # Ambil package type dari product packaging jika seluruh line
-        # menghasilkan satu package type yang sama.
-        package_types = move_line_ids.mapped(
-            "move_id.product_packaging_id.package_type_id"
+        package_type = (
+            move_line_ids.move_id
+            .product_packaging_id
+            .package_type_id
         )
 
-        if len(package_types) == 1:
-            package.package_type_id = package_types
+        if package_type:
+            package.package_type_id = package_type
 
-        # Hubungkan seluruh move line ke package hasil.
         move_line_ids.write({
             "result_package_id": package.id,
         })
-
         # Buat package level untuk package tersebut.
         self.env["stock.package_level"].with_context(
             from_put_in_pack=True
@@ -178,7 +146,7 @@ class StockPicking(models.Model):
             "package_id": package.id,
             "picking_id": self.id,
             "location_id": False,
-            "location_dest_id": destination_locations.id,
+            "location_dest_id": move_line_ids.location_dest_id.id,
             "move_line_ids": [
                 (6, 0, move_line_ids.ids)
             ],
