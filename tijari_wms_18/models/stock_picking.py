@@ -55,6 +55,8 @@ class StockPicking(models.Model):
     destination_location = fields.Char(string='to delete field')
     created_by = fields.Char(string='Created by')
     approved_by = fields.Char(string='Approved by')
+    created_by_id = fields.Many2one("res.users", string='Created by')
+    approved_by_id = fields.Many2one("res.users", string='Approved by')
     all_moves_picked = fields.Boolean(
         compute='_compute_all_moves_picked',
     )
