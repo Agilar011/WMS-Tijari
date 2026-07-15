@@ -98,7 +98,7 @@
                         class="btn-secondary"/>
 
                 <field name="id" string="Line ID" />
-                <field name="matching_html" />
+                <field name="matching_html" invisible="not confirmation_location_code and not confirmation_lot_code"/>
                 <field name="matching" column_invisible="1" force_save="1"/>
             </xpath>
 
