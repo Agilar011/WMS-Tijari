@@ -507,72 +507,94 @@ class StockMoveLine(models.Model):
         'picking_id.picking_type_id.operation_category',
     )
     def _compute_matching(self):
-        print(">>> Computing matching status...") # Cek di terminal Odoo
+        print('='*60)
+        print("Computing matching status...") # Cek di terminal Odoo
+        print('='*60)
         for line in self:
-            print(f">>> Evaluating line {line.id} - Product: {line}") # Cek di terminal Odoo
+            print(f"Evaluating line {line} - Product: {line.move_id.name} in location: {line.location_id.name}") # Cek di terminal Odoo
+            print('='*60)
+            print(f"Lot code: {line.lot_id.name}") # Cek di terminal Odoo
+            print(f"Location Code: {line.location_id.unique_code}")
             matching = ''
 
             picking_type = line.picking_id.picking_type_id
+            # print(picking_type.name)
             operation_category = picking_type.operation_category if picking_type else False
-            print(f">>> Line {line.id} - Operation Category: {operation_category}") # Cek di terminal Odoo
+            # print(f">>> Line {line.id} - Operation Category: {operation_category}") # Cek di terminal Odoo
 
             # Untuk PUT → cek unique_code lokasi (aku anggap DESTINATION location)
-            if operation_category == 'put':
-                print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
-                print(f">>> Operation Category: PUT") # Cek di terminal Odoo
-                # kalau belum ada input, keep invisible
-                print(f">>> Line Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
-                print(f">>> Line Confirmation Lot Code: {line.confirmation_lot_code}") # Cek di terminal Odoo
+            if picking_type.name in ('Pick'):
+                print(f"Running Validate for Operation Type : {picking_type.name}")
                 if line.confirmation_location_code or line.confirmation_lot_code:
-                    print(f">>> Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
-                    print(f">>> Confirmation Lot Code: {line.confirmation_lot_code}") #
-                    dest_loc = line.location_dest_id
-                    dest_code = dest_loc.unique_code if dest_loc else False
-                    print(f">>> Destination Location unique code: {dest_code}") # Cek di terminal Odoo
-                    print(f">>> Line Lot ID: {line.lot_id}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
-                    lot = line.lot_id
+                    loc_code = line.location_id.unique_code
+                    product_code = line.lot_id.name
 
-                    loc_ok = bool(dest_code and line.confirmation_location_code == dest_code)
-                    lot_ok = bool(lot and line.confirmation_lot_code and line.confirmation_lot_code == lot.name)
+                    loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
+                    lot_ok = bool(product_code and line.confirmation_lot_code == product_code)
 
                     if loc_ok and lot_ok:
-                        matching = 'match'
+                        line.matching = 'match'
                     else:
-                        matching = 'not_match'
+                        line.matching = 'not_match'
 
-                    print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
+                    print(f"Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {line.matching}") # Cek di terminal Odoo
+
+            # if operation_category == 'put':
+            #     print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
+            #     print(f">>> Operation Category: PUT") # Cek di terminal Odoo
+            #     # kalau belum ada input, keep invisible
+            #     print(f">>> Line Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
+            #     print(f">>> Line Confirmation Lot Code: {line.confirmation_lot_code}") # Cek di terminal Odoo
+            #     if line.confirmation_location_code or line.confirmation_lot_code:
+            #         print(f">>> Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
+            #         print(f">>> Confirmation Lot Code: {line.confirmation_lot_code}") #
+            #         dest_loc = line.location_dest_id
+            #         dest_code = dest_loc.unique_code if dest_loc else False
+            #         print(f">>> Destination Location unique code: {dest_code}") # Cek di terminal Odoo
+            #         print(f">>> Line Lot ID: {line.lot_id}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+            #         lot = line.lot_id
+
+            #         loc_ok = bool(dest_code and line.confirmation_location_code == dest_code)
+            #         lot_ok = bool(lot and line.confirmation_lot_code and line.confirmation_lot_code == lot.name)
+
+            #         if loc_ok and lot_ok:
+            #             matching = 'match'
+            #         else:
+            #             matching = 'not_match'
+
+            #         print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
 
             # Untuk PACK → cek lot + unique_code (aku anggap SOURCE location)
-            elif operation_category == 'delivery':
-                print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
-                print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
-                print(f">>> Evaluating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
-                # kalau belum ada input sama sekali, invisible
-                if line.confirmation_location_code or line.confirmation_lot_code:
-                    loc_code = line.location_id.unique_code if line.location_id else (line.quant_id.location_id.unique_code if line.quant_id and line.quant_id.location_id else 'N/A')
-                    lot_code = line.lot_id.name if line.lot_id else (line.quant_id.lot_id.name if line.quant_id and line.quant_id.lot_id else 'N/A')
-                    print(f">>> Information to match : Lot Code = {lot_code}, Location Code = {loc_code}") # Cek di terminal Odoo
-                    # src_loc = line.location_id
-                    # src_code = src_loc.unique_code if src_loc else False
-                    # lot = line.lot_id
-                    # src_code = line.quant_id.location_id.unique_code if line.quant_id.location_id else False
-                    # lot = line.quant_id.lot_id.name
+            # elif operation_category == 'delivery':
+            #     print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
+            #     print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
+            #     print(f">>> Evaluating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+            #     # kalau belum ada input sama sekali, invisible
+            #     if line.confirmation_location_code or line.confirmation_lot_code:
+            #         loc_code = line.location_id.unique_code if line.location_id else (line.quant_id.location_id.unique_code if line.quant_id and line.quant_id.location_id else 'N/A')
+            #         lot_code = line.lot_id.name if line.lot_id else (line.quant_id.lot_id.name if line.quant_id and line.quant_id.lot_id else 'N/A')
+            #         print(f">>> Information to match : Lot Code = {lot_code}, Location Code = {loc_code}") # Cek di terminal Odoo
+            #         # src_loc = line.location_id
+            #         # src_code = src_loc.unique_code if src_loc else False
+            #         # lot = line.lot_id
+            #         # src_code = line.quant_id.location_id.unique_code if line.quant_id.location_id else False
+            #         # lot = line.quant_id.lot_id.name
 
-                    # kondisi match
-                    loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
-                    lot_ok = bool(lot_code and line.confirmation_lot_code == lot_code)
+            #         # kondisi match
+            #         loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
+            #         lot_ok = bool(lot_code and line.confirmation_lot_code == lot_code)
 
-                    if loc_ok and lot_ok:
-                        matching = 'match'
-                    else:
-                        matching = 'not_match'
+            #         if loc_ok and lot_ok:
+            #             matching = 'match'
+            #         else:
+            #             matching = 'not_match'
 
-                    print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
+            #         print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
 
-            if line.matching_lot_id.id == line.lot_id.id and line.matching_loc_dest_id.id == line.location_dest_id.id:
-                matching = 'match'
+            # if line.matching_lot_id.id == line.lot_id.id and line.matching_loc_dest_id.id == line.location_dest_id.id:
+            #     matching = 'match'
 
-            line.matching = matching
+            # line.matching = matching
 
     @api.depends('matching')
     def _compute_matching_html(self):
