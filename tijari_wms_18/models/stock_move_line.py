@@ -121,7 +121,7 @@ class StockMoveLine(models.Model):
 
             loc_ok = False
             lot_ok = False
-
+            
             if not conf_loc or not conf_lot:
                 line.matching = 'not_match'
                 continue
