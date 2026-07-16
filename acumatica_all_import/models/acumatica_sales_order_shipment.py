@@ -198,6 +198,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'location_dest_id': picking_type.default_location_dest_id.id,
                         'origin': shipment.adt_ShipmentNbr,
                         'scheduled_date': ship_date,
+                        'adt_type' : "Sales Order Shipment"
                     }
 
                     picking = Picking.search([
@@ -325,9 +326,9 @@ class AcumaticaShipmentGIStaging(models.Model):
         Partner = self.env['res.partner']
         partner = False
         if line:
-            partner = Partner.search([('ref', '=', line)], limit=1)
+            partner = Partner.search([('company_registry', '=', line)], limit=1)
             if not partner:
-                partner = Partner.search([('name', '=', line)], limit=1)
+                partner = Partner.search([('adt_b_account_id', '=', line)], limit=1)
         return partner
 
     def _find_warehouse(self, line):

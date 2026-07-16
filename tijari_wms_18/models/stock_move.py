@@ -39,6 +39,20 @@ class StockMove(models.Model):
 
     qr_code_image = fields.Binary(string='Sign')
 
+    def _get_new_picking_values(self):
+        vals = super()._get_new_picking_values()
+
+        print("_get_new_picking_values")
+        print("move:", self)
+        print("move adt_type:", self.adt_type)
+        print("vals before:", vals)
+
+        vals['adt_type'] = self.adt_type
+
+        print("vals after:", vals)
+
+        return vals
+    
     def action_print_lot_number_line(self):
         self.ensure_one()
 
