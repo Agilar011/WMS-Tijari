@@ -176,6 +176,7 @@ class StockPicking(models.Model):
                         line.confirmation_location_code = loc_code
                         line.confirmation_lot_code = product_code
                         line.matching = 'match'
+                        
                 
             picking._check_validate_requirements()
             operation_category = picking.picking_type_id.operation_category
