@@ -573,10 +573,11 @@ class StockMoveLine(models.Model):
             raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
         return {
             'type': 'ir.actions.client',
-            'tag': 'adt_focus_move_line_field',
+            'tag': 'adt_scan_qr_to_move_line_field',
             'params': {
                 'field_name': 'confirmation_lot_code',
                 'move_line_id': self.id,
+                'title': _('Scan Lot QR Code'),
             },
         }
 
@@ -586,13 +587,13 @@ class StockMoveLine(models.Model):
             raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
         return {
             'type': 'ir.actions.client',
-            'tag': 'adt_focus_move_line_field',
+            'tag': 'adt_scan_qr_to_move_line_field',
             'params': {
                 'field_name': 'confirmation_location_code',
                 'move_line_id': self.id,
+                'title': _('Scan Location QR Code'),
             },
         }
-
     # @api.onchange('matching')
     # def _onchange_matching(self):
     #     for line in self:
