@@ -41,6 +41,8 @@
                 <field name="matching" column_invisible="1"/>
                 <!-- <field name="operation_category" column_invisible="0"/> -->
                 <field name="package_id" column_invisible="0"/>
+                <field name="confirmation_lot_code" />
+                <field name="confirmation_location_code" />
             </xpath>
 
             <!-- Lock lot fields -->
@@ -61,6 +63,40 @@
             </xpath>
 
             <!-- Custom fields -->
+            <xpath expr="//field[@name='lot_id']" position="after">
+
+                <field name="confirmation_location_code"
+                    password="1"
+                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+
+                <field name="confirmation_lot_code"
+                    password="1"
+                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+
+                <field name="matching_html"
+                    widget="html"
+                    readonly="1"
+                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+                    
+                <!-- <field name="auto_input_code" widget="auto_input_code"
+                    invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/> -->
+
+            </xpath>
+
+            <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']"
+                            position="replace">
+
+                <field name="location_dest_id"
+                    domain="[('id', 'child_of', adt_dest_location_id)]" 
+                />
+                <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
+                <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
+                <field name="matching_lot_id" column_invisible="1" force_save="1"/>
+                <field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
+
+            </xpath>
+
+            <xpath expr="//field[@name='lot_name']" position="before">
             <xpath expr="//field[@name='quant_id']" position="before">
                     
                 <field name="id" string="Line ID" />
@@ -99,6 +135,9 @@
                 <field name="matching_lot_id" column_invisible="1" force_save="1"/>
                 <field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
 
+                <field name="id" string="Line ID" />
+                <field name="matching_html" invisible="not confirmation_location_code and not confirmation_lot_code"/>
+                <field name="matching" column_invisible="1" force_save="1"/>
             </xpath>
 
         </field>

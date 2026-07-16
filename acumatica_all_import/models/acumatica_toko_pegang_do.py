@@ -19,19 +19,19 @@ class AcumaticaTokoPegangDOProductLine(models.Model):
     _name = 'acumatica.toko.pegang.do.product.line'
     _description = 'Data Product Inventory Recieve dari Acumatica'
 
-    header_external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
+    header_external_id = fields.Char(string='UUID Header Acumatica')
     inventory_line_id = fields.Many2one('acumatica.toko.pegang.do.line', string='Receipt', ondelete='cascade')
 
-    line_external_id = fields.Char(string='UUID Line', readonly=True)
-    line_note = fields.Text(string='Line Note', readonly=True)
-    branch_warehouse = fields.Char(string='Branch', readonly=True)
-    line_description = fields.Char(string='Description', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)
-    location_code = fields.Char(string='Location', readonly=True)
-    product_uom_qty = fields.Char(string='Qty', readonly=True)
-    uom_code = fields.Char(string='UOM', readonly=True)
-    warehouse_dest_code = fields.Char(string='Warehouse Dest', readonly=True)
+    line_external_id = fields.Char(string='UUID Line')
+    line_note = fields.Text(string='Line Note')
+    branch_warehouse = fields.Char(string='Branch')
+    line_description = fields.Char(string='Description')
+    inventory_id = fields.Char(string='InventoryID')
+    line_nbr = fields.Char(string='Line Nbr')
+    location_code = fields.Char(string='Location')
+    product_uom_qty = fields.Char(string='Qty')
+    uom_code = fields.Char(string='UOM')
+    warehouse_dest_code = fields.Char(string='Warehouse Dest')
 
 
 class AcumaticaTokoPegangDOLine(models.Model):
@@ -39,31 +39,31 @@ class AcumaticaTokoPegangDOLine(models.Model):
     _description = 'Data Inventory Recieved dari Acumatica'
     _order = 'reference_nbr asc, id asc'
 
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Header', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Header')
     product_line_ids = fields.One2many('acumatica.toko.pegang.do.product.line', 'inventory_line_id', string='Lines')
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
 
-    reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
-    scheduled_date = fields.Char(string='Date', readonly=True)
-    description = fields.Char(string='Description', readonly=True)
-    branch_warehouse = fields.Char(string='Branch', readonly=True)
-    actual_qty = fields.Char(string='Control Qty', readonly=True)
+    reference_nbr = fields.Char(string='Reference Number', index=True)
+    scheduled_date = fields.Char(string='Date')
+    description = fields.Char(string='Description')
+    branch_warehouse = fields.Char(string='Branch')
+    actual_qty = fields.Char(string='Control Qty')
 
-    acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
-    post_period = fields.Char(string='Post Period', readonly=True)
-    status = fields.Char(string='Status', readonly=True)
-    total_qty = fields.Char(string='Total Qty', readonly=True)
+    acumatica_write_date = fields.Char(string='Last Modified')
+    post_period = fields.Char(string='Post Period')
+    status = fields.Char(string='Status')
+    total_qty = fields.Char(string='Total Qty')
     warehouse_code = fields.Char(string='Warehouse')
-    warehouse_dest_code = fields.Char(string='Warehouse Dest', readonly=True)
-    transfer_type = fields.Char(string='Transfer Type', readonly=True)
-    note = fields.Text(string='Header Note', readonly=True)
-    external_ref = fields.Char(string='External Ref', readonly=True)
-    customer_code = fields.Char(string='Customer Code', readonly=True)
-    shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
-    transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
-    location_code = fields.Char(string='Location Code', readonly=True)
-    change_item_ref_nbr = fields.Char(string='Change Item Ref Number', readonly=True)
+    warehouse_dest_code = fields.Char(string='Warehouse Dest')
+    transfer_type = fields.Char(string='Transfer Type')
+    note = fields.Text(string='Header Note')
+    external_ref = fields.Char(string='External Ref')
+    customer_code = fields.Char(string='Customer Code')
+    shipment_nbr = fields.Char(string='Shipment Nbr')
+    transfer_nbr = fields.Char(string='Transfer Nbr')
+    location_code = fields.Char(string='Location Code')
+    change_item_ref_nbr = fields.Char(string='Change Item Ref Number')
 
 
     import_state = fields.Selection([
@@ -139,11 +139,11 @@ class AcumaticaTokoPegangDOLine(models.Model):
 
         return warehouse
 
-    def _find_location_dest(self, line):
+    def _find_location_dest(self, code):
         Location = self.env['stock.location.acumatica']
         location = False
-        if line.warehouse_code:
-            location = Location.search([('code', '=', line.warehouse_code)], limit=1)
+        if code:
+            location = Location.search([('code', '=', code)], limit=1)
             if location:
                 if not location.odoo_location_id:
                     location = False
@@ -267,7 +267,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
                 f'Warehouse with location code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
-        dest_location = receive._find_location_dest(receive)
+        dest_location = receive._find_location_dest(receive.warehouse_code)
         if not dest_location:
             error_messages.append(
                 f'Location with code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
@@ -349,6 +349,14 @@ class AcumaticaTokoPegangDOLine(models.Model):
                     })
                     continue
 
+                dest_move_location = receive._find_location_dest(receive_line.warehouse_dest_code)
+                if not dest_move_location:
+                    error_messages.append(
+                        f'Location with code {receive_line.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                    )
+
+                adt_dest_location = dest_move_location.id or picking.adt_dest_location_id.id or False
+
                 qty = receive._parse_float(receive_line.product_uom_qty)
                 existing = picking.move_ids.filtered(
                     lambda move: (
@@ -370,6 +378,7 @@ class AcumaticaTokoPegangDOLine(models.Model):
                     'location_dest_id': picking.location_dest_id.id if picking else False,
                     'warehouse_id': warehouse.id if warehouse else False,
                     'description_picking': receive_line.line_description or False,
+                    'adt_dest_location_id': adt_dest_location,
 
                     'adt_inventory_id': receive_line.line_note or False,
                     'adt_line_nbr': receive_line.line_nbr or False,

@@ -20,11 +20,11 @@
             </xpath> -->
             <xpath expr="//button[@name='button_validate']" position="after">
 
-                <!-- <button name="action_print_warehouse_receipt"
+                <button name="action_print_warehouse_receipt"
                 string="Print Receipt"
                 type="object"
                 class="btn-primary"
-                invisible="state != 'done' or picking_type_code != 'incoming'"/> -->
+                invisible="state != 'done' or picking_type_code != 'incoming'"/>
 
                 <button name="action_send_email_hasil_picking"
                     string="Send Email"
@@ -39,6 +39,13 @@
                         invisible="state != 'assigned'"/>
 
                 <!-- <button name="action_print_lot_number_line" string="Print Lot" type="object" class="oe_highlight" invisible="picking_type_code != 'incoming'"/> -->
+            </xpath>
+            <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']"
+                position="after">
+                <!-- <field name="created_by"/>
+                <field name="approved_by"/> -->
+                <field name="created_by_id"/>
+                <field name="approved_by_id"/>
             </xpath>
 
             <xpath expr="//button[@name='do_print_picking']" position="attributes">
