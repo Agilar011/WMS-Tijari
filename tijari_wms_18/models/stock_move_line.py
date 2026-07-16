@@ -74,6 +74,8 @@ class StockMoveLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        print(f"self create move: {self}")
+        print(f"val_list create move: {vals_list}")
         move_lines = super().create(vals_list)
         move_lines.mapped('picking_id')._sync_adt_quantities_from_moves()
         return move_lines
@@ -86,7 +88,7 @@ class StockMoveLine(models.Model):
         if {'quantity', 'move_id', 'picking_id'} & set(vals):
             pickings._sync_adt_quantities_from_moves()
 
-        self._update_move_picked()
+        # self._update_move_picked()
 
         return res
 
@@ -113,9 +115,6 @@ class StockMoveLine(models.Model):
         for line in self:
             picking_type = line.picking_id.picking_type_id
 
-            if not picking_type or picking_type.name not in ('Pick', 'Pack'):
-                raise ValueError('Picking type is not Pack or Pick')
-                
             # 1. Validasi awal: pastikan input user tidak kosong atau hanya berisi spasi
             conf_loc = str(line.confirmation_location_code or '').strip()
             conf_lot = str(line.confirmation_lot_code or '').strip()
@@ -123,14 +122,30 @@ class StockMoveLine(models.Model):
             if not conf_loc or not conf_lot:
                 line.matching = 'not_match'
                 continue
+            
+            if picking_type and picking_type.name in ('Pick'):
+                print('run validate code for pick')
+                loc_code = str(line.location_id.unique_code or '').strip()
+                product_code = str(line.lot_id.name or '').strip()
+
+                loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
+                lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
+
+            if picking_type and picking_type.name in ('Receipts'):
+                print('run validate code for receipt')
+                loc_code = str(line.location_dest_id.unique_code or '').strip()
+                product_code = str(line.lot_id.name or '').strip()
+
+                loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
+                lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
+
+
+            if not picking_type or picking_type.name not in ('Pick', 'Pack', 'Receipts'):
+                raise ValueError('validation is not config yet')
                 
             # 2. Ambil data pembanding dari database dan bersihkan teksnya
-            loc_code = str(line.location_id.unique_code or '').strip()
-            product_code = str(line.lot_id.name or '').strip()
 
             # 3. Lakukan perbandingan dengan mengabaikan huruf besar/kecil (.lower())
-            loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
-            lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
 
             matching = 'match' if loc_ok and lot_ok else 'not_match'
             _logger.info(f"{str(loc_ok)} - {str(lot_ok)}")
@@ -176,14 +191,40 @@ class StockMoveLine(models.Model):
                 line.lot_name = line.lot_id.name
 
             
-    # @api.onchange('auto_input_code')
-    # def _compute_auto_input_code(self):
-    #     for line in self:
-    #         if line.auto_input_code:
-    #             print(f">>> Auto input code triggered for line {line.id}") # Cek di terminal Odoo
-    #             line.matching = 'match'
-    #             sml = self.env['stock.move.line'].browse(line._origin.id)
-    #             sml.write({'matching': 'match'})
+    @api.onchange('auto_input_code')
+    def _compute_auto_input_code(self):
+        print(f"Self: {self}")
+        for line in self:
+            picking_name = line.move_id.picking_id.picking_type_id.name
+            print(f"validate stock move line with picking type name: {picking_name}")
+
+            if picking_name and picking_name == 'Pick':
+                loc_code = str(line.location_id.unique_code or '').strip()
+                product_code = str(line.lot_id.name or '').strip()
+
+                line.confirmation_location_code = loc_code
+                line.confirmation_lot_code = product_code
+                line.matching = 'match'
+
+            if picking_name and picking_name == 'Receipt':
+                loc_code = str(line.location_dest_id.unique_code or '').strip()
+                product_code = str(line.lot_id.name or '').strip()
+
+                line.confirmation_location_code = loc_code
+                line.confirmation_lot_code = product_code
+                line.matching = 'match'
+            #     # loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
+            #     # lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
+                
+                
+
+            # if line.auto_input_code:
+            #     print(f">>> Auto input code triggered for line {line.id}") # Cek di terminal Odoo
+            #     line.matching = 'match'
+            #     sml = self.env['stock.move.line'].browse(line._origin.id)
+            #     sml.write({'matching': 'match'})
+
+
 
 
     def action_generate_selected_lot(self):
@@ -549,11 +590,11 @@ class StockMoveLine(models.Model):
             },
         }
 
-    @api.onchange('matching')
-    def _onchange_matching(self):
-        for line in self:
+    # @api.onchange('matching')
+    # def _onchange_matching(self):
+    #     for line in self:
 
-            line._update_move_picked()
+    #         line._update_move_picked()
 
 
     @api.onchange('confirmation_location_code')
@@ -606,10 +647,10 @@ class StockMoveLine(models.Model):
 
     #         line.matching = 'match' if lot_match and location_match else 'not_match'
 
-    def _update_move_picked(self):
-        for move in self.mapped('move_id'):
-            move.picked = (
-                move.move_line_ids
-                and all(line.matching == 'match' for line in move.move_line_ids)
-            )
+    # def _update_move_picked(self):
+    #     for move in self.mapped('move_id'):
+    #         move.picked = (
+    #             move.move_line_ids
+    #             and all(line.matching == 'match' for line in move.move_line_ids)
+    #         )
 

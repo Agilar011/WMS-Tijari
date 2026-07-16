@@ -164,6 +164,15 @@ class StockPicking(models.Model):
                     raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
                 
         for picking in self:
+            if picking.picking_type_id.name not in ('Pick', 'Receipt'):
+                # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
+                for move in picking.move_ids:
+                    # Jika move memiliki move_line_ids, lakukan update massal di level DB
+                    if move.move_line_ids:
+                        # Menggunakan .write() langsung pada recordset untuk efisiensi database (mengurangi query UPDATE)
+                        # move.move_line_ids.write({'matching': 'match'})
+                        move.move_line_ids._compute_auto_input_code()
+                
             picking._check_validate_requirements()
             operation_category = picking.picking_type_id.operation_category
             print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo

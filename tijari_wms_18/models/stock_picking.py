@@ -339,11 +339,6 @@ class StockPicking(models.Model):
 class StockRule(models.Model):
     _inherit = "stock.rule"
 
-    # def _push_prepare_move_copy_values(self, move_to_copy, new_date):
-    #     new_move_vals = super(StockRule, self)._push_prepare_move_copy_values(move_to_copy, new_date)
-    #     new_move_vals['production_id'] = False
-    #     return new_move_vals
-
     # Override method _push_prepare_move_copy_values untuk mengubah lokasi tujuan push berdasarkan adt_dest_location_id di stock.picking jika picking type incoming dan adt_dest_location_id terisi, sehingga bisa push ke lokasi selain location_dest_id yang sudah ditentukan di stock.rule
     def _push_prepare_move_copy_values(self, move_to_copy, new_date,):
         vals = super(StockRule, self)._push_prepare_move_copy_values(move_to_copy, new_date)
