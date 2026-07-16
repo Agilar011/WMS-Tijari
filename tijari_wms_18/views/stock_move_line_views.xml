@@ -81,10 +81,10 @@
                         invisible="matching == 'match'"
                         class="btn-secondary"/>
 
-                <field name="matching" column_invisible="1" force_save="1"/>
+                <field name="matching" column_invisible="0" force_save="1"/>
                 <field name="confirmation_lot_code" />
                 <field name="confirmation_location_code" />
-                <field name="matching_html" />
+                <field name="matching_html"  force_save="1"/>
 
             </xpath>
 
