@@ -510,7 +510,7 @@ class StockMoveLine(models.Model):
         print(">>> Computing matching status...") # Cek di terminal Odoo
         for line in self:
             print(f">>> Evaluating line {line.id} - Product: {line}") # Cek di terminal Odoo
-            matching = ''
+            matching = line.matching
 
             picking_type = line.picking_id.picking_type_id
             operation_category = picking_type.operation_category if picking_type else False
@@ -995,8 +995,12 @@ class StockMoveLine(models.Model):
         for wizard in self:
 
             location = wizard._find_loc_by_scan_code(wizard.confirmation_location_code)
+            if not wizard.confirmation_location_code or not location:
+                wizard.matching_loc_dest_id = False
+                wizard.matching = 'not_match'
 
-            wizard.matching_loc_dest_id = location.id if location else False
+
+            wizard.matching_loc_dest_id = location.id
 
     def _find_lot_by_scan_code(self, lot_code):
         lot = False
@@ -1014,9 +1018,11 @@ class StockMoveLine(models.Model):
         for wizard in self:
 
             lot = wizard._find_lot_by_scan_code(wizard.confirmation_lot_code)
+            if not lot:
+                wizard.matching_lot_id = False
+                wizard.matching = 'not_match'
 
-            wizard.matching_lot_id = lot.id if lot else False
-
+            wizard.matching_lot_id = lot.id
     def _find_loc_by_scan_code(self, lot_code):
         loc = False
         Loc = self.env['stock.location']
@@ -1024,8 +1030,6 @@ class StockMoveLine(models.Model):
         loc = Loc.search([
             ('unique_code', '=', lot_code)
         ], limit=1)
-        # if not loc:
-        #     raise ValidationError("Lokasi Tidak Ditemukan")
 
         return loc
 

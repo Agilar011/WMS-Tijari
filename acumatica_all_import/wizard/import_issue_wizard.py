@@ -28,12 +28,14 @@ class ImportIssueWizard(models.TransientModel):
 
     def fetch_issue_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
         self.ensure_one()
+        staging_list = []
         session = self.config_id._do_login()
+        
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {'$top': limit, '$skip': offset}
             filters = []
-
+            
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
             if self.config_id.odata_select:
@@ -44,91 +46,141 @@ class ImportIssueWizard(models.TransientModel):
                 filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
             if odata_filter:
                 filters.append(f"({odata_filter})")
-            # elif self.odata_filter:
-            #     filters.append(f"({self.odata_filter})")
-
+                
             if filters:
                 params['$filter'] = ' and '.join(filters)
-
+                
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Issue Change Item (HTTP {response.status_code}): {response.text}')
-
+                
             raw_data = self._normalize_rows(response.json())
-            result = []
-            move_result = []
-            print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched with params: {params}")
-            for row_number, item in enumerate(raw_data, start=1):
+            print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched")
+            
+            issue_model = self.env['acumatica.issue.line']
+            product_model = self.env['acumatica.issue.line.product']
+            
+            for item in raw_data:
+                external_id = item.get('id', '') or ''
+                ref_nbr = self._val(item, 'ShipmentNbr')
+                
+                # CHECKPOINT 1: Mulai transaksi tersendiri per Header menggunakan Try-Except
+                try:
+                    # 1. Cari tipe picking
+                    picking_type = self._search_picking_type(item)
+                    picking_type_id = picking_type.id if picking_type else None
+                    
+                    # 2. Siapkan data mapped untuk Header
+                    header_vals = {
+                        'external_id': external_id,
+                        'row_number': item.get('rowNumber', '') or '',
+                        'note': item.get('note', {}).get('', '') or '',
+                        'actual_amount': self._val(item, 'ControlQty'),
+                        'actual_qty': self._val(item, 'ControlQty'),
+                        'scheduled_date': self._val(item, 'ShipmentDate'),
+                        'description': self._val(item, 'Description'),
+                        'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+                        'reference_nbr': ref_nbr,
+                        'status': self._val(item, 'Status'),
+                        'total_qty': self._val(item, 'ShippedQty'),
+                        'trans_type': self._val(item, 'Type'),
+                        'picking_type_id': picking_type_id,
+                        'warehouse_code': self._val(item, 'WarehouseID'),
+                        'branch_warehouse': self._val(item, 'WarehouseName'),
+                    }
+                    
+                    # 3. Create atau Update Header
+                    issue_record = issue_model.search([('external_id', '=', external_id)], limit=1)
+                    if issue_record:
+                        issue_record.write(header_vals)
+                    else:
+                        issue_record = issue_model.create(header_vals)
 
-                print(f"Item: {item}")
-         
-                type = self._search_picking_type(item)
-                if type:
-                    type = type.id
-                if not type:
-                    type = None
+                    record_id = issue_record.id
+                    staging_list.append(record_id)
+                    
+                    # Commit Header terlebih dahulu agar Many2one ID terbentuk secara permanen di DB
+                    self.env.cr.commit()
+                    
+                    # 4. Proses data Detail (Product Lines)
+                    details = item.get('Details') or item.get('details') or []
+                    if isinstance(details, dict):
+                        details = details.get('value', []) or []
+                    if not isinstance(details, list):
+                        details = []
+
+                    if not details:
+                        print('Header tidak memiliki detail')
+                        
+                    for detail in details:
+                        line_external_id = detail.get('id', '') or ''
+                        # print(f"DEBUG DETAILS DATA untuk {ref_nbr}: {details}")
+
+                        
+                        # CHECKPOINT 2: Sub-transaksi untuk Detail
+                        try:
+                            line_nbr = self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
+                            
+                            detail_vals = {
+                                'issue_shipment_id': issue_record.id,
+                                'external_id': external_id,
+                                'line_external_id': line_external_id,
+                                'note': detail.get('note', {}).get('value', '') or '',
+                                'branch': self._val(detail, 'Branch'),
+                                'description': self._val(detail, 'Description'),
+                                'inventory_id': self._val(detail, 'InventoryID'),
+                                'line_number': str(line_nbr),
+                                'location_code': self._val(detail, 'Location'),
+                                'product_uom_qty': self._val(detail, 'Qty'),
+                                'trans_type': self._val(detail, 'TranType'),
+                                'uom_code': self._val(detail, 'UOM'),
+                                'warehouse_code': self._val(detail, 'WarehouseID'),
+                            }
+                            
+                            product_record = product_model.search([('line_external_id', '=', line_external_id)], limit=1) if line_external_id else False
+                            if product_record:
+                                product_record.write(detail_vals)
+                            else:
+                                product_model.create(detail_vals)
+                            
+                            # Commit setiap baris detail yang sukses
+                            self.env.cr.commit()
+                            
+                        except Exception as e_detail:
+                            self.env.cr.rollback()
+                            issue_record.write({
+                                'import_state' : 'error',
+                                'import_message' : 'Proses generate product error'
+                            })
+                            # Jika detail error, rollback database khusus untuk baris detail ini saja
+                            _logger.error("Gagal memproses baris detail (ID: %s) pada dokumen %s. Error: %s", line_external_id, ref_nbr, str(e_detail))
+                            continue  # Lanjutkan ke baris detail berikutnya
+                            
+                except Exception as e_header:
+                    self.env.cr.rollback()
+
+                    if issue_record:
+                        issue_record.write({
+                            'import_state' : 'error',
+                            'import_message' : 'Proses generate header error'
+                        })
 
 
-                result.append( {
-                    'external_id': item.get('id', '') or '',
-                    'row_number': item.get('rowNumber', '') or '', 
-                    'note': item.get('note', {}).get('', '') or '',
-                    'branch_warehouse': self._val(item, 'LocationID'),
-                    'actual_amount': self._val(item, 'ControlQty'),
-                    'actual_qty': self._val(item, 'ControlQty'),
-                    'scheduled_date': self._val(item, 'ShipmentDate'),
-                    'description': self._val(item, 'Description'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'reference_nbr': self._val(item, 'ShipmentNbr'),
-                    'status': self._val(item, 'Status'),
-                    'total_qty': self._val(item, 'ShippedQty'),
-                    'trans_type': self._val(item, 'Type') or self._val(item, 'Type'),
-                    'picking_type_id': type,
-                    'warehouse_code': self._val(item, 'WarehouseID'),
-                    'branch_warehouse': self._val(item, 'WarehouseName'),
-                })
-                print(f" Get data : {item['ShipmentNbr']}, Trans Type: {item['Type']}, Status: {item['Status']}")
-
-
-                print(f"Result: {result[-1]}")
-                details = item.get('Details') or item.get('details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-
-                # if not details:
-                #     result.append(dict(item, line_nbr='0'))
-                #     continue
-
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    move_result.append({
-                        'external_id': item.get('id', '') or '',
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'branch_warehouse': self._val(detail, 'Branch'),
-                        'line_description': self._val(detail, 'Description'),
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'location_code': self._val(detail, 'Location'),
-                        'product_uom_qty': self._val(detail, 'Qty'),
-                        'line_trans_type': self._val(detail, 'TranType'),
-                        'uom_code': self._val(detail, 'UOM'),
-                        'warehouse_code': self._val(detail, 'WarehouseID'),
-                    })
-
-            _logger.info('Berhasil ambil %s rows Issue Change Item dari Acumatica', len(result))
+                    # Jika header error, rollback seluruh perubahan dokumen ini (termasuk jika ada detail yang sempat masuk)
+                    _logger.error("Gagal sinkronisasi dokumen Acumatica (RefNbr: %s, ID: %s). Error: %s", ref_nbr, external_id, str(e_header))
+                    continue  # Lanjutkan ke dokumen (item) berikutnya di raw_data
+                        
+            _logger.info('Selesai menjalankan sinkronisasi terjadwal Issue Change Item.')
             self.config_id.last_sync = fields.Datetime.now()
-            return result, move_result
+            self.env.cr.commit() # Commit final untuk waktu sync terakhir
+            return staging_list
+            
         finally:
             self.config_id._do_logout(session)
 
-
     def action_fetch_data(self):
         self.ensure_one()
-        self.env['acumatica.issue.line'].search([('config_id', '=', self.config_id.id)]).unlink()
+        # self.env['acumatica.issue.line'].search([('config_id', '=', self.config_id.id)]).unlink()
 
         import math
 
@@ -137,16 +189,13 @@ class ImportIssueWizard(models.TransientModel):
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data, batch_move_data  = self.fetch_issue_data(
+            batch_data  = self.fetch_issue_data(
                 limit=self.batch_size,
                 offset=offset,
                 reference_nbr=self.reference_nbr,
                 last_modified_from=self.last_modified_from,
                 odata_filter=self.odata_filter,
             )
-
-            print(f"Batch Data: {batch_data}")
-            print(f"Batch Move Data: {batch_move_data}")
 
             if not batch_data:
                 break
@@ -161,30 +210,30 @@ class ImportIssueWizard(models.TransientModel):
         new_keys = set()
         lines_to_create = []
 
-        for item in raw_list:
-            origin = item.get('reference_nbr')
-            exists = bool(origin and Picking.search_count([('origin', '=', origin)]))
-            if exists:
-                existing_keys.add(origin)
-                msg = 'Sudah ada → move akan ditambahkan jika belum ada'
-            else:
-                new_keys.add(origin)
-                msg = ''
+        # for item in raw_list:
+        #     origin = item.get('reference_nbr')
+        #     exists = bool(origin and Picking.search_count([('origin', '=', origin)]))
+        #     if exists:
+        #         existing_keys.add(origin)
+        #         msg = 'Sudah ada → move akan ditambahkan jika belum ada'
+        #     else:
+        #         new_keys.add(origin)
+        #         msg = ''
 
-            vals = dict(item)
-            vals.update({
-                'config_id': self.config_id.id,
-                'import_state': 'pending',
-                'import_message': msg,
-                'selected': True,
-                'sync_date': fields.Datetime.now(),
-            })
-            print(f"vals: {vals}")
-            lines_to_create.append(vals)
-            print(f"lines to create: {lines_to_create}")
-            # raise UserError(f"Debug:")
+        #     vals = dict(item)
+        #     vals.update({
+        #         'config_id': self.config_id.id,
+        #         'import_state': 'pending',
+        #         'import_message': msg,
+        #         'selected': True,
+        #         'sync_date': fields.Datetime.now(),
+        #     })
+        #     print(f"vals: {vals}")
+        #     lines_to_create.append(vals)
+        #     # print(f"lines to create: {lines_to_create}")
+        #     # raise UserError(f"Debug:")
 
-        self.env['acumatica.issue.line'].create(lines_to_create)
+        # self.env['acumatica.issue.line'].create(lines_to_create)
         self.write({
             'state': 'fetched',
             'total_fetched': len(raw_list),
@@ -254,7 +303,7 @@ class ImportIssueWizard(models.TransientModel):
         print(f"Warehouse Code: {warehouse_code}")
 
         location = Location.search([
-            ('code', '=', warehouse_code)
+            ('code', '=', location)
         ])
 
         print(f"Location: {location.id}")

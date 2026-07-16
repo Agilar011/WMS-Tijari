@@ -112,8 +112,8 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     # Cari master data gudang tujuan (ToWarehouseID)
                     warehouse_dest = self._find_warehouse_by_code(first.adt_ToWarehouseID)
                     if not warehouse_dest:
-                        warehouse_dest = picking_type.default_location_desc_id.id
-                        raise UserError(f"Gudang tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}")
+                        warehouse_dest = picking_type.default_location_dest_id.id
+                        # raise UserError(f"Gudang tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}")
 
 
                     # Definisikan dictionary payload data stock.picking Odoo
@@ -158,17 +158,17 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
                     for line in to_create_move_lines:
                         # Cari data produk Odoo berdasarkan InventoryID Acumatica
-                        product = self._find_product_by_code(line.adt_InventoryID, line.adt_Description)
+                        product = self._find_product_by_code(line.adt_InventoryID)
                         if not product:
                             raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or '-'}")
 
                         # Cari data satuan (UOM)
-                        uom = self._find_uom_by_name(line.adt_UOM, product)
+                        # uom = self._find_uom_by_name(line.adt_UOM, product)
                         qty = self._parse_float(line.adt_Quantity)
 
                         # Tentukan lokasi detail per baris barang secara spesifik (jika ada)
-                        line_loc_src = self._find_location_by_code(line.adt_FromLocationID, warehouse_src) or picking.location_id
-                        line_loc_dest = self._find_location_by_code(line.adt_ToLocationID, warehouse_dest) or picking.location_dest_id
+                        line_loc_src = picking.location_id
+                        line_loc_dest = picking.location_dest_id
 
                         # DEDUP LOGIKA: Mengunci kombinasi ID Produk + Nomor Baris asli Acumatica
                         move_domain = [('picking_id', '=', picking.id)]
@@ -190,7 +190,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             'picking_id': picking.id,
                             'product_id': product.id,
                             'product_uom_qty': qty,
-                            'product_uom': uom.id if uom else product.uom_id.id,
+                            'product_uom': product.uom_id.id,
                             'location_id': line_loc_src.id,
                             'location_dest_id': line_loc_dest.id,
                             'description_picking': line.adt_Description or False,
@@ -217,12 +217,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         'import_state': action_state,
                         'import_message': f'Sukses diproses ke Odoo ({picking.name})',
                         'odoo_picking_id': picking.id,
-                    })
-
-                    # Ubah juga status sub-tabel staging lines-nya agar sinkron di UI
-                    to_create_move_lines.write({
-                        'import_state': action_state,
-                        'import_message': 'Imported successfully via bulk upload.',
                     })
 
                     if is_new_picking:
@@ -276,6 +270,11 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
         return product
 
+    def _parse_float(self, value):
+        try:
+            return float(value or 0)
+        except Exception:
+            return 0.0
 
     @staticmethod
     def _parse_dt(dt_str):

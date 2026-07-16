@@ -393,7 +393,7 @@ class WmsApiController(http.Controller):
 
     @http.route('/print/warehouse_receipt', type='http', auth='user')
     def PrintWarehouseReceipt(self, id, **kw):
-
+        blank_image = create_blank_image()
         receipt = request.env['stock.picking'].sudo().browse(int(id))
 
         data = {
@@ -406,6 +406,12 @@ class WmsApiController(http.Controller):
             'receipt_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
             'penerima': receipt.location_id.complete_name or '',
             'note': receipt.note_ba or '',
+            'user': receipt.user_id.name or '',
+            'ttd_user':  (receipt.user_id.digital_signature.decode('utf-8') if receipt.user_id.digital_signature else blank_image),
+            'created_by': receipt.created_by_id.name or '',
+            'ttd_created_by': (receipt.created_by_id.partner_id.digital_signature.decode('utf-8') if receipt.created_by_id.partner_id.digital_signature else blank_image),
+            'approved_by': receipt.approved_by_id.name or '',
+            'ttd_approved_by': (receipt.approved_by_id.partner_id.digital_signature.decode('utf-8') if receipt.approved_by_id.partner_id.digital_signature else blank_image),
             'detail': []
         }
         for line in receipt.move_ids_without_package:
