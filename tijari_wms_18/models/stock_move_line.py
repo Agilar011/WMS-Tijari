@@ -28,11 +28,11 @@ class StockMoveLine(models.Model):
     ], string='Matching Status',
     #    compute='_compute_matching',
        store=True)
-    matching_html = fields.Html(
-        string='Matching Info',
-        compute='_compute_matching_html',
-        store=False)
-    operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
+    # matching_html = fields.Html(
+    #     string='Matching Info',
+    #     compute='_compute_matching_html',
+    #     store=False)
+    # operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
     allocation_storage = fields.Many2one(
         "stock.location",
@@ -106,7 +106,7 @@ class StockMoveLine(models.Model):
     #     'lot_id',
     #     'picking_id.picking_type_id.name',
     # )
-    @api.onchange('confirmation_lot_code', 'confirmation_location_code')
+    @api.onchange('confirmation_lot_code', 'confirmation_location_code', 'matching', 'auto_input_code')
     def _compute_matching(self):
         print('run validate code')
         import logging
@@ -118,6 +118,9 @@ class StockMoveLine(models.Model):
             # 1. Validasi awal: pastikan input user tidak kosong atau hanya berisi spasi
             conf_loc = str(line.confirmation_location_code or '').strip()
             conf_lot = str(line.confirmation_lot_code or '').strip()
+
+            loc_ok = False
+            lot_ok = False
 
             if not conf_loc or not conf_lot:
                 line.matching = 'not_match'
@@ -147,11 +150,11 @@ class StockMoveLine(models.Model):
 
             # 3. Lakukan perbandingan dengan mengabaikan huruf besar/kecil (.lower())
 
-            matching = 'match' if loc_ok and lot_ok else 'not_match'
-            _logger.info(f"{str(loc_ok)} - {str(lot_ok)}")
-            _logger.info(f"{matching}")
+            # matching = 'match' if loc_ok and lot_ok else 'not_match'
+            # _logger.info(f"{str(loc_ok)} - {str(lot_ok)}")
+            # _logger.info(f"{matching}")
             # 4. Tentukan hasil akhir
-            line.matching = matching
+            line.matching = 'match'
 
 
     @api.depends('matching')
