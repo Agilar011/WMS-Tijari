@@ -154,8 +154,6 @@ class StockPicking(models.Model):
     def button_validate(self):
         res = super().button_validate()
 
-
-
         for rec in self:
             print(rec.picking_type_id.operation_category)
             for line in rec.move_line_ids:
@@ -164,6 +162,7 @@ class StockPicking(models.Model):
                 if not line.lot_name:
                     print(f"Missing lot: {line}")
                     raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
+                
         for picking in self:
             picking._check_validate_requirements()
             operation_category = picking.picking_type_id.operation_category
@@ -524,6 +523,22 @@ class StockMoveLine(models.Model):
 
             # Untuk PUT → cek unique_code lokasi (aku anggap DESTINATION location)
             if picking_type.name in ('Pick'):
+                print(f"Running Validate for Operation Type : {picking_type.name}")
+                if line.confirmation_location_code or line.confirmation_lot_code:
+                    loc_code = line.location_id.unique_code
+                    product_code = line.lot_id.name
+
+                    loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
+                    lot_ok = bool(product_code and line.confirmation_lot_code == product_code)
+
+                    if loc_ok and lot_ok:
+                        line.matching = 'match'
+                    else:
+                        line.matching = 'not_match'
+
+                    print(f"Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {line.matching}") # Cek di terminal Odoo
+
+            if picking_type.name in ('Pack'):
                 print(f"Running Validate for Operation Type : {picking_type.name}")
                 if line.confirmation_location_code or line.confirmation_lot_code:
                     loc_code = line.location_id.unique_code

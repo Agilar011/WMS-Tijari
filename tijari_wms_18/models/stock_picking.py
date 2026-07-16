@@ -1,15 +1,16 @@
 from odoo import models, api, fields
 from odoo.exceptions import ValidationError, UserError
+
 import base64
-
-
+import traceback
 import os
 from PIL import Image
 import qrcode
 import io
+import logging 
 
 
-import logging
+
 _logger = logging.getLogger(__name__)
 
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
@@ -56,6 +57,36 @@ class StockPicking(models.Model):
     all_moves_picked = fields.Boolean(
         compute='_compute_all_moves_picked',
     )
+
+# Function to foward adt_type from parent picking
+    @api.model_create_multi
+    def create(self, vals_list):
+        # print("=" * 100)
+        # print("CREATE PICKING")
+        # traceback.print_stack(limit=15)        
+        print('=' * 100)
+        print("@api.model_create_multi")
+
+        print(f"Self: {self}")
+        print(f"Vals List: {vals_list}")
+
+        # Karena vals_list adalah sebuah LIST, kita harus melakukan looping
+        # for vals in vals_list:
+        #     # Ambil nilai 'origin' dengan aman dari dictionary
+        #     origin = vals.get('origin')
+            
+        #     if origin:
+        #         # Perbaikan pencarian: menggunakan titik 'stock.picking' dan format domain yang benar
+        #         parent_picking = self.env['stock.picking'].search([('origin', '=', origin)], limit=1)
+                
+        #         # Jika parent_picking ditemukan, salin nilai adt_type ke data baru
+        #         if parent_picking and parent_picking.adt_type:
+        #             vals['adt_type'] = parent_picking.adt_type
+
+        # # Panggil fungsi super() dengan melewatkan vals_list yang sudah diperbarui
+        pickings = super(StockPicking, self).create(vals_list)
+        return pickings
+
 
     def action_put_in_pack(self, move_lines_to_pack=False):
         self.ensure_one()
@@ -215,6 +246,7 @@ class StockPicking(models.Model):
             picking.all_moves_picked = (
                 bool(moves) and all(move.picked for move in moves)
             )
+
 # ================================================================================================
 # Temp Storage function create move line qr code        
 # ================================================================================================
@@ -307,30 +339,49 @@ class StockPicking(models.Model):
 class StockRule(models.Model):
     _inherit = "stock.rule"
 
+    # def _push_prepare_move_copy_values(self, move_to_copy, new_date):
+    #     new_move_vals = super(StockRule, self)._push_prepare_move_copy_values(move_to_copy, new_date)
+    #     new_move_vals['production_id'] = False
+    #     return new_move_vals
+
     # Override method _push_prepare_move_copy_values untuk mengubah lokasi tujuan push berdasarkan adt_dest_location_id di stock.picking jika picking type incoming dan adt_dest_location_id terisi, sehingga bisa push ke lokasi selain location_dest_id yang sudah ditentukan di stock.rule
-    def _push_prepare_move_copy_values(
-        self,
-        move_to_copy,
-        new_date,
-    ):
-        vals = super()._push_prepare_move_copy_values(
-            move_to_copy,
-            new_date,
-        )
+    def _push_prepare_move_copy_values(self, move_to_copy, new_date,):
+        vals = super(StockRule, self)._push_prepare_move_copy_values(move_to_copy, new_date)
+        print('='*300)
+        print("_push_prepare_move_copy_values")
+        print(f"Vals to create new picking: {vals}")
+        # print(f"Parent Picking: {move_to_copy}")
 
         picking = move_to_copy.picking_id
 
-        if (
-            picking
-            and picking.adt_dest_location_id
-            and picking._allow_custom_push_destination()
-        ):
+        print(picking)
+        if picking:
+            # print("=== DAFTAR FIELD DAN NILAI ===")
+            # for field_name, field_object in picking._fields.items():
+            #     # Mengambil nilai field
+            #     val = picking[field_name]
+            
+            #     if field_object.type == 'many2one' and val:
+            #         print(f"{field_name}: {val.display_name} (ID: {val.id})")
+            #     else:
+            #         print(f"{field_name}: {val}")
+
+            adt_type = picking.adt_type
+
+            if adt_type:
+                vals.update({
+                    "adt_type": picking.adt_type if picking.adt_type else picking.name,
+                })
+
+        if (picking and picking.adt_dest_location_id and picking._allow_custom_push_destination()):
             vals.update({
                 "location_dest_id": picking.adt_dest_location_id.id,
                 "adt_dest_location_id": picking.adt_dest_location_id.id,
                 "adt_dest_location_id": picking.move_ids.adt_dest_location_id.id,
-                "origin": picking.origin if picking.origin else picking.name
+                "origin": picking.origin if picking.origin else picking.name,
             })
+
+        print(f"vals to update: {vals}")
 
         return vals
 
