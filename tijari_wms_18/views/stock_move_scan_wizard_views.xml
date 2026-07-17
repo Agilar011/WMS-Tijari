@@ -103,7 +103,7 @@
                             <field name="confirmation_lot_code" optional="hide" force_save="1"/>
                             <field name="confirmation_location_code" optional="hide" force_save="1"/>
 
-                            <field name="matching_html" string="Status" readonly="1" force_save="1"/>
+                            <!-- <field name="matching_html" string="Status" readonly="1" force_save="1"/> -->
 
                             <button name="action_prepare_scan_lot"
                                     type="object"
