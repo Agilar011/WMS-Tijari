@@ -154,7 +154,7 @@ class StockPicking(models.Model):
     def button_validate(self):
         for picking in self:
             if picking.picking_type_id.name not in ('Pick', 'Receipt'):
-                _logger.info("Run validate all except pick and receipt")
+                print(f"Run validate all except pick and receipt")
                 # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
                 for move in picking.move_ids:
                     # Jika move memiliki move_line_ids, lakukan update massal di level DB
@@ -166,13 +166,13 @@ class StockPicking(models.Model):
                             'confirmation_lot_code': product_code,
                             'matching': 'match',
                         }
-                        _logger.info("Write vals = %s", vals)
+                        print(f"Write vals = {vals}")
 
                         line.write(vals)
 
-                        _logger.info("After write = %s", line.matching)
+                        print(f"After write = {line.matching}")
 
-                        _logger.info("After write line %s = %s for picking: %s", line.id, line.matching, picking.id)
+                        print(f"After write line {line.id} = {line.matching} for picking: {picking.id}")
 
         res = super().button_validate()
 

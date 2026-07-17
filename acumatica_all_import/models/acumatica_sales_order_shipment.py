@@ -223,12 +223,17 @@ class AcumaticaShipmentGIStaging(models.Model):
                         product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
                         if not product:
                             raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
+                        
+                        # Finding stock location for 
+                        product_location = self._find_warehouse_product(shipment.adt_WarehouseID)
+                        if product_location:
+                            print(f" Product: {product.product_tmpl_id.name} asignt to get from: {product_location} AKA {shipment.adt_WarehouseID}")
 
                         move_vals = {
                             'company_id': warehouse.company_id.id,
                             'product_id': product.id,
                             'product_uom': product.product_tmpl_id.uom_id.id,
-                            'location_id': picking_type.default_location_src_id.id,
+                            'location_id': product_location.id if product_location else picking_type.default_location_src_id.id,
                             'location_dest_id': picking_type.default_location_dest_id.id,
                             'partner_id': partner.id,
                             'picking_id': picking.id,
@@ -345,6 +350,19 @@ class AcumaticaShipmentGIStaging(models.Model):
 
         return warehouse
 
+    def _find_warehouse_product(self, line):
+        Warehouse = self.env['stock.location.acumatica']
+        warehouse = False
+        code = line
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+            if warehouse:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_location_id
+
+        return warehouse
         # Warehouse = self.env['stock.warehouse']
         # code = line
 
