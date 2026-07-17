@@ -75,7 +75,9 @@
             </xpath>
             <xpath expr="//group[field[@name='origin']]" position="after">
                 <group>
-                    <field name="shipment_information" invisible="adt_type not in ('Sales Order Shipment', 'Sales Order Shipment Consignment')"
+
+                    <field name="shipment_information" 
+                    invisible="adt_type not in ('Sales Order Shipment', 'Sales Order Shipment Consignment')"
                             decoration-success="shipment_information == 'full_shipment'"
                             decoration-danger="shipment_information == 'partial'"/>
                                             <!-- decoration-success="matching == 'match'" -->
