@@ -1,4 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_api_scheduler_job_user,api.scheduler.job.user,model_api_scheduler_job,base.group_user,1,1,1,1
+access_api_scheduler_log_user,api.scheduler.log.user,model_api_scheduler_log,base.group_user,1,0,0,0
+access_api_scheduler_log_detail_user,api.scheduler.log.detail.user,model_api_scheduler_log_detail,base.group_user,1,0,0,0
 access_acumatica_transfer_config_user,acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
 access_acumatica_transfer_config,access.acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
 access_acumatica_transfer_line_user,acumatica.transfer.line,model_acumatica_transfer_line,base.group_user,1,1,1,1

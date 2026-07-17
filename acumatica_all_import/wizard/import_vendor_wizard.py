@@ -43,6 +43,8 @@ class ImportVendorWizard(models.TransientModel):
 
     # Summary setelah fetch
     total_fetched = fields.Integer(string='Total Data Ditarik', readonly=True)
+    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
     # ─── Step 1: Tarik Data ──────────────────────────
     def action_fetch_data(self):
@@ -72,6 +74,91 @@ class ImportVendorWizard(models.TransientModel):
             'target':    'new',
         }
 
+    def _get_vendor_odata_filters(self):
+        self.ensure_one()
+        params = []
+        if self.start_date and self.end_date:
+            params.append(f"LastModifiedDateTime ge datetimeoffset'{self.start_date}' and LastModifiedDateTime le datetimeoffset'{self.end_date}'")
+        return params
+
+    def fetch_all_vendor_data(self, batch_size=False):
+        """
+        Ambil semua data Vendor dari Acumatica dengan paging $skip.
+
+        Dipakai untuk scheduler/server-side agar tidak dibatasi fetch_limit
+        milik wizard manual.
+        """
+        self.ensure_one()
+        if not self.config_id:
+            raise UserError('Pilih konfigurasi API terlebih dahulu.')
+
+        fetch_size = batch_size or self.batch_size or 50
+        if fetch_size <= 0:
+            raise UserError('Batch size harus lebih besar dari 0.')
+
+        raw_count = 0
+        batch_count = 0
+        params = self._get_vendor_odata_filters()
+
+        _logger.info(
+            "START FETCH ALL VENDOR; CONFIG=%s, BATCH_SIZE=%s, FETCH_SKIP=%s, FILTERS=%s",
+            self.config_id.display_name,
+            fetch_size,
+            self.fetch_skip,
+            params or '-',
+        )
+
+        while True:
+            offset = self.fetch_skip + (batch_count * fetch_size)
+            batch_data = self.fetch_vendor_data(
+                limit=fetch_size,
+                skip=offset,
+                odata_filter=params if params else False,
+            )
+            if not batch_data:
+                _logger.info(
+                    "STOP FETCH ALL VENDOR; empty batch at OFFSET=%s, TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+                    offset,
+                    raw_count,
+                    batch_count,
+                )
+                break
+
+            fetched_count = len(batch_data)
+            raw_count += fetched_count
+            batch_count += 1
+            _logger.info(
+                "FETCH ALL VENDOR BATCH DONE; BATCH=%s, OFFSET=%s, FETCHED=%s, RUNNING_TOTAL=%s",
+                batch_count,
+                offset,
+                fetched_count,
+                raw_count,
+            )
+
+        self.write({
+            'total_fetched': raw_count,
+            'state': 'fetched' if raw_count else 'draft',
+        })
+        _logger.info(
+            "FINISH FETCH ALL VENDOR; TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+            raw_count,
+            batch_count,
+        )
+        return raw_count
+
+    def action_fetch_all_data(self):
+        self.ensure_one()
+        raw_count = self.fetch_all_vendor_data()
+        if not raw_count:
+            raise UserError('Tidak ada data dari API')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'import.vendor.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
     def _check_last_modified_staging(self, item):
         Staging = self.env['acumatica.vendor.line']
         existing = Staging.search([
@@ -82,7 +169,7 @@ class ImportVendorWizard(models.TransientModel):
             item['state'] = 'pending'
             existing.write(item)
 
-    def fetch_vendor_data(self, limit=50, skip=0):
+    def fetch_vendor_data(self, limit=50, skip=0, odata_filter=False):
         """
         Ambil data Vendor dari Acumatica API.
         Endpoint: GET /Vendor?$top={limit}&$skip={skip}
@@ -111,6 +198,9 @@ class ImportVendorWizard(models.TransientModel):
                 "$top": limit,
                 "$skip": skip,
             }
+            if odata_filter:
+                params['$filter'] = ' and '.join(odata_filter)
+
             
             response = session.get(endpoint, params=params, timeout=60)
 
@@ -285,4 +375,3 @@ class ImportVendorWizard(models.TransientModel):
             'view_mode': 'list,form',
             'domain':    [('config_id', '=', self.config_id.id)],
         }
-

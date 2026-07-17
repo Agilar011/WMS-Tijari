@@ -295,7 +295,7 @@ class AcumaticaShipmentLine(models.Model):
         header_payload = shipment.read()[0] if shipment.exists() else {}
         error_messages = []
         all_line_payloads = []
-        picking = shipment.odoo_picking_id.id
+        picking = shipment.odoo_picking_id
         action_state = 'pending'
 
         for shipment_line in shipment.product_line_ids:

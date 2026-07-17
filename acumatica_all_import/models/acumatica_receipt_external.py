@@ -378,7 +378,7 @@ class AcumaticaReceiptExternalLine(models.Model):
                 qty = receive._parse_float(receive_line.product_uom_qty)
                 existing = picking.move_ids.filtered(
                     lambda move: (
-                        move.picking_id == picking.id
+                        move.picking_id == picking
                         and move.product_id.id == product.id
                         and move.product_uom_qty == qty
                     )
