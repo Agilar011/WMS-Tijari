@@ -326,3 +326,4 @@ async function scanQrToPickingProduct(env, action) {
 registry.category("actions").add("adt_focus_move_line_field", focusMoveLineField);
 registry.category("actions").add("adt_scan_qr_to_move_line_field", scanQrToMoveLineField);
 registry.category("actions").add("adt_scan_qr_to_picking_product", scanQrToPickingProduct);
+registry.category("actions").add("adt_scan_qr_to_move_line_field", focusMoveLineField);

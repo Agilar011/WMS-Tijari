@@ -52,6 +52,7 @@ class StockPicking(models.Model):
         ('ready', 'Ready'),
         ('not_ready', 'Not Ready'),
     ], string='Sync State', default='ready', readonly=True, help='Data acumatica yg tidak sesuai dengan master yg ada di wms akan masuk ke state Not Ready, dan record tidak bisa di proses sampai data master nya sudah sinkron.')
+
     sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
     adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
     destination_location = fields.Char(string='to delete field')
@@ -124,6 +125,10 @@ class StockPicking(models.Model):
                 else False
             )
 
+    shipment_information = fields.Selection([
+        ('partial', 'Partial Shipment'),
+        ('full_shipment', 'Full Shipment'),
+    ], string='Informasi TMS', readonly=True, help='Status shipment yang akan dikirimkan ke TMS.')
 
 # Function to foward adt_type from parent picking
     @api.model_create_multi
