@@ -76,53 +76,49 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
             <xpath expr="//page[@name='operations']" position="after">
-                <page string="Putaway">
-					<group>
+                <page string="Putaway" invisible="'picking_type_name', 'not in', ['Pick', 'Receipt']">
+                    <group>
                         <button name="action_prepare_scan_product"
-                                type="object"
-                                string="Scan Product"
-                                class="btn-primary"/>
+                                        type="object"
+                                        string="Scan Product"
+                                        class="btn-primary"/>
                         <field name="allowed_putaway_product_ids" invisible="1"/>
-						<field name="putaway_product_id" domain="[('id', 'in', allowed_putaway_product_ids)]"/>
+                        <field name="putaway_product_id" domain="[('id', 'in', allowed_putaway_product_ids)]"/>
                         <field name="putaway_lot_id" readonly="1"/>
-					</group>
+                    </group>
 
-					<field name="putaway_move_line_ids" options="{'no_create': True, 'no_create_edit': True, 'no_quick_create': True}">
-						<list editable="bottom" create="0" delete="0" edit="1">
+                    <field name="putaway_move_line_ids" options="{'no_create': True, 'no_create_edit': True, 'no_quick_create': True}">
+                        <list editable="bottom" create="0" delete="0" edit="1">
+                            <field name="location_id" readonly="1"/>
+                            <field name="location_dest_id" readonly="1"/>
 
+                            <field name="quantity" readonly="1"/>
+                            <field name="product_uom_id" readonly="1"/>
+                            <field name="matching" column_invisible="1" force_save="1"/>
 
+                            <field name="matching_lot_id" force_save="1"/>
+                            <field name="matching_loc_dest_id" force_save="1"/>
+                            <field name="confirmation_lot_code" optional="hide" force_save="1"/>
+                            <field name="confirmation_location_code" optional="hide" force_save="1"/>
 
-							<field name="location_id" readonly="1"/>
-							<field name="location_dest_id" readonly="1"/>
+                            <field name="matching_html" string="Status" readonly="1" force_save="1"/>
 
+                            <button name="action_prepare_scan_lot"
+                                    type="object"
+                                    icon="fa-barcode"
+                                    title="Validate Lot"
+                                    invisible="matching == 'match'"
+                                    class="btn-secondary"/>
 
-							<field name="quantity" readonly="1"/>
-							<field name="product_uom_id" readonly="1"/>
-							<field name="matching" column_invisible="1" force_save="1"/>
+                            <button name="action_prepare_scan_location"
+                                    type="object"
+                                    icon="fa-map-marker"
+                                    title="Validate Location"
+                                    invisible="matching == 'match'"
+                                    class="btn-secondary"/>
 
-							<field name="matching_lot_id" force_save="1"/>
-							<field name="matching_loc_dest_id" force_save="1"/>
-							<field name="confirmation_lot_code" optional="hide" force_save="1"/>
-							<field name="confirmation_location_code" optional="hide" force_save="1"/>
-
-							<field name="matching_html" string="Status" readonly="1" force_save="1"/>
-
-							<button name="action_prepare_scan_lot"
-									type="object"
-									icon="fa-barcode"
-									title="Validate Lot"
-									invisible="matching == 'match'"
-									class="btn-secondary"/>
-
-							<button name="action_prepare_scan_location"
-									type="object"
-									icon="fa-map-marker"
-									title="Validate Location"
-									invisible="matching == 'match'"
-									class="btn-secondary"/>
-
-						</list>
-					</field>
+                        </list>
+                    </field>
                 </page>
             </xpath>
         

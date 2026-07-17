@@ -245,6 +245,7 @@ class StockPicking(models.Model):
         string="Mapped Location",
     )
     note_ba = fields.Text(string="Notes For Official Report")
+    picking_type_name = fields.Char(string="Picking Type Name", related="picking_type_id.name", store=True)
 
     def _allow_custom_push_destination(self):
         self.ensure_one()
