@@ -372,7 +372,7 @@ class ImportReceiptWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if existing.acumatica_write_date == vals['acumatica_write_date']:
                 unchanged.append(existing)
             else:
                 to_update.append({

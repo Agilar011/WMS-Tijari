@@ -405,7 +405,7 @@ class AcumaticaReceiptLine(models.Model):
                         f'Location with code {receipt_line.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
                     )
 
-                adt_dest_location = dest_move_location.id or picking.adt_dest_location_id.id or False
+                adt_dest_location = dest_move_location.id if dest_move_location else picking.adt_dest_location_id.id or False
 
                 qty = receipt._parse_float(receipt_line.product_uom_qty)
                 existing = picking.move_ids.filtered(

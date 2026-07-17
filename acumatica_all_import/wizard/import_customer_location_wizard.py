@@ -87,6 +87,81 @@ class ImportCustomerLocationWizard(models.TransientModel):
             'target': 'new',
         }
 
+    def fetch_all_customer_location_data(self, batch_size=False):
+        """
+        Ambil semua data Customer Location dari Acumatica dengan paging $skip.
+
+        Dipakai untuk scheduler/server-side agar tidak dibatasi fetch_limit
+        milik wizard manual.
+        """
+        self.ensure_one()
+
+        if not self.config_id:
+            raise UserError('Pilih API terlebih dahulu')
+
+        fetch_size = batch_size or self.batch_size or 100
+        if fetch_size <= 0:
+            raise UserError('Batch size harus lebih besar dari 0.')
+
+        raw_count = 0
+        batch_count = 0
+
+        _logger.info(
+            "START FETCH ALL CUSTOMER LOCATION; CONFIG=%s, BATCH_SIZE=%s, FETCH_SKIP=%s",
+            self.config_id.display_name,
+            fetch_size,
+            self.fetch_skip,
+        )
+
+        while True:
+            offset = self.fetch_skip + (batch_count * fetch_size)
+            batch_data = self.fetch_customer_location_data(
+                limit=fetch_size,
+                offset=offset,
+            )
+            if not batch_data:
+                _logger.info(
+                    "STOP FETCH ALL CUSTOMER LOCATION; empty batch at OFFSET=%s, TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+                    offset,
+                    raw_count,
+                    batch_count,
+                )
+                break
+
+            raw_count += batch_data
+            batch_count += 1
+            _logger.info(
+                "FETCH ALL CUSTOMER LOCATION BATCH DONE; BATCH=%s, OFFSET=%s, FETCHED=%s, RUNNING_TOTAL=%s",
+                batch_count,
+                offset,
+                batch_data,
+                raw_count,
+            )
+
+        self.write({
+            'total_fetched': raw_count,
+            'state': 'fetched' if raw_count else 'draft',
+        })
+        _logger.info(
+            "FINISH FETCH ALL CUSTOMER LOCATION; TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+            raw_count,
+            batch_count,
+        )
+        return raw_count
+
+    def action_fetch_all_data(self):
+        self.ensure_one()
+        raw_count = self.fetch_all_customer_location_data()
+        if not raw_count:
+            raise UserError('Tidak ada data dari API')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'import.customer.location.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
     # =========================
     # IMPORT
     # =========================

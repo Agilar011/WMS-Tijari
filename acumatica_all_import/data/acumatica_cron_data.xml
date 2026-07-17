@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="api_scheduler_master_data" model="api.scheduler.job">
+            <field name="name">Acumatica: Master Data</field>
+            <field name="code">acumatica_master_data</field>
+            <field name="description">Fetch and import Acumatica master data.</field>
+            <field name="active">True</field>
+            <field name="acumatica_import">True</field>
+            <field name="acumatica_data_type">master</field>
+            <field name="execution_interval">recurring</field>
+            <field name="interval_value">1</field>
+            <field name="interval_unit">days</field>
+            <field name="timezone">Asia/Jakarta</field>
+            <field name="do_not_overlap">True</field>
+        </record>
+
+        <record id="api_scheduler_transaction_data" model="api.scheduler.job">
+            <field name="name">Acumatica: Transaction Data</field>
+            <field name="code">acumatica_transaction_data</field>
+            <field name="description">Fetch and import Acumatica transaction</field>
+            <field name="active">True</field>
+            <field name="acumatica_import">True</field>
+            <field name="acumatica_data_type">transaction</field>
+            <field name="execution_interval">recurring</field>
+            <field name="interval_value">1</field>
+            <field name="interval_unit">days</field>
+            <field name="timezone">Asia/Jakarta</field>
+            <field name="do_not_overlap">True</field>
+        </record>
+
+        <function model="ir.model.data" name="write">
+            <value model="ir.model.data" search="[('module', '=', 'acumatica_all_import'), ('name', '=', 'ir_cron_acumatica_master_data_import')]"/>
+            <value eval="{'noupdate': False}"/>
+        </function>
+
+        <record id="ir_cron_acumatica_master_data_import" model="ir.cron">
+            <field name="name">Acumatica: Fetch and Import Master Data</field>
+            <field name="model_id" ref="model_api_scheduler_job"/>
+            <field name="state">code</field>
+            <field name="code">model.browse(env.ref('acumatica_all_import.api_scheduler_master_data').id).run_from_cron()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">False</field>
+        </record>
+
+        <record id="ir_cron_acumatica_transaction_data_import" model="ir.cron">
+            <field name="name">Acumatica: Fetch and Import Transaction Data</field>
+            <field name="model_id" ref="model_api_scheduler_job"/>
+            <field name="state">code</field>
+            <field name="code">model.browse(env.ref('acumatica_all_import.api_scheduler_transaction_data').id).run_from_cron()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">False</field>
+        </record>
+
+        <record id="api_scheduler_master_data" model="api.scheduler.job">
+            <field name="ir_cron_id" ref="ir_cron_acumatica_master_data_import"/>
+        </record>
+
+        <record id="api_scheduler_transaction_data" model="api.scheduler.job">
+            <field name="ir_cron_id" ref="ir_cron_acumatica_transaction_data_import"/>
+        </record>
+    </data>
+</odoo>

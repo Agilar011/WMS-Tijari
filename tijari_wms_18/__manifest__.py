@@ -44,6 +44,8 @@
         'web.assets_frontend': [
         ],
         'web.assets_backend': [
+            'tijari_wms_18/static/src/scss/list_table_auto_layout.scss',
+            'tijari_wms_18/static/src/js/list_table_auto_layout.js',
             'tijari_wms_18/static/src/js/focus_move_line_field.js',
             'tijari_wms_18/static/src/js/generate_lot_button.js',
             'tijari_wms_18/static/src/xml/generate_lot_button.xml',

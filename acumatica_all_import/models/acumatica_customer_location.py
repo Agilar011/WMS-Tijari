@@ -365,6 +365,9 @@ class AcumaticaCustomerLocationLine(models.Model):
         imported = 0
         updated = 0
         error = 0
+        total = len(self)
+
+        _logger.info("START IMPORT CUSTOMER LOCATION; TOTAL_LINES=%s", total)
 
         STATUS_MAP = {
             'Active': 'Active',
@@ -784,6 +787,14 @@ class AcumaticaCustomerLocationLine(models.Model):
             f'{imported} dibuat, '
             f'{updated} diupdate, '
             f'{error} error.'
+        )
+
+        _logger.info(
+            "FINISH IMPORT CUSTOMER LOCATION; TOTAL_LINES=%s, CREATED=%s, UPDATED=%s, ERROR=%s",
+            total,
+            imported,
+            updated,
+            error,
         )
 
         return {

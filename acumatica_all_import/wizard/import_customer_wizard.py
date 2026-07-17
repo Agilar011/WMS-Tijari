@@ -53,6 +53,12 @@ class ImportCustomerWizard(models.TransientModel):
     start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
     end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
+    def _get_customer_odata_filters(self):
+        self.ensure_one()
+        params = []
+        if self.start_date and self.end_date:
+            params.append(f"LastModifiedDateTime ge datetimeoffset'{self.start_date}' and LastModifiedDateTime le datetimeoffset'{self.end_date}'")
+        return params
 
     # ───  Tarik Data ──────────────────────────
     def action_fetch_data(self):
@@ -64,9 +70,7 @@ class ImportCustomerWizard(models.TransientModel):
 
         raw_count = 0
         loop_count = math.ceil(self.fetch_limit / self.batch_size) if self.fetch_limit else 0
-        params = []
-        if self.start_date and self.end_date:
-            params.append(f"LastModifiedDateTime ge datetimeoffset'{self.start_date}' and LastModifiedDateTime le datetimeoffset'{self.end_date}'")
+        params = self._get_customer_odata_filters()
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
@@ -79,6 +83,83 @@ class ImportCustomerWizard(models.TransientModel):
         self.total_fetched = raw_count
         if not raw_count:
             raise UserError('Tidak ada data dari API')
+
+    def fetch_all_customer_data(self, batch_size=False):
+        """
+        Ambil semua data Customer dari Acumatica dengan paging $skip.
+
+        Dipakai untuk scheduler/server-side agar tidak dibatasi fetch_limit
+        milik wizard manual.
+        """
+        self.ensure_one()
+        if not self.config_id:
+            raise UserError('Pilih konfigurasi API terlebih dahulu.')
+
+        fetch_size = batch_size or self.batch_size or 50
+        if fetch_size <= 0:
+            raise UserError('Batch size harus lebih besar dari 0.')
+
+        raw_count = 0
+        batch_count = 0
+        params = self._get_customer_odata_filters()
+
+        _logger.info(
+            "START FETCH ALL CUSTOMER; CONFIG=%s, BATCH_SIZE=%s, FETCH_SKIP=%s, FILTERS=%s",
+            self.config_id.display_name,
+            fetch_size,
+            self.fetch_skip,
+            params or '-',
+        )
+
+        while True:
+            offset = self.fetch_skip + (batch_count * fetch_size)
+            batch_data = self.fetch_customer_data(
+                limit=fetch_size,
+                skip=offset,
+                odata_filter=params if params else False,
+            )
+            if not batch_data:
+                _logger.info(
+                    "STOP FETCH ALL CUSTOMER; empty batch at OFFSET=%s, TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+                    offset,
+                    raw_count,
+                    batch_count,
+                )
+                break
+
+            raw_count += batch_data
+            batch_count += 1
+            _logger.info(
+                "FETCH ALL CUSTOMER BATCH DONE; BATCH=%s, OFFSET=%s, FETCHED=%s, RUNNING_TOTAL=%s",
+                batch_count,
+                offset,
+                batch_data,
+                raw_count,
+            )
+
+        self.write({
+            'total_fetched': raw_count,
+            'state': 'fetched' if raw_count else 'draft',
+        })
+        _logger.info(
+            "FINISH FETCH ALL CUSTOMER; TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+            raw_count,
+            batch_count,
+        )
+        return raw_count
+
+    def action_fetch_all_data(self):
+        self.ensure_one()
+        raw_count = self.fetch_all_customer_data()
+        if not raw_count:
+            raise UserError('Tidak ada data dari API')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'import.customer.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
 
     # ────── Buka List Staging ───────────────────
     def action_view_staging(self):

@@ -1,6 +1,7 @@
 from odoo import models, api, fields
 from odoo.exceptions import ValidationError, UserError
 import base64
+import re
 
 
 import logging
@@ -50,6 +51,68 @@ class StockPicking(models.Model):
     all_moves_picked = fields.Boolean(
         compute='_compute_all_moves_picked',
     )
+    allowed_putaway_product_ids = fields.Many2many(
+        'product.product',
+        compute='_compute_allowed_putaway_product_ids',
+    )
+    putaway_product_id = fields.Many2one(
+        'product.product', string="Product Name")
+    putaway_lot_id = fields.Many2one(
+        comodel_name="stock.lot",
+        string="LOT Number",
+        compute='_compute_putaway_values',
+        readonly=True,
+    )
+    putaway_move_line_ids = fields.Many2many(
+        comodel_name="stock.move.line",
+        string="Stock Move Lines",
+        compute='_compute_putaway_values',
+        readonly=False,
+    )
+
+    def _get_putaway_move_lines(self):
+        self.ensure_one()
+
+        move_lines = self.move_line_ids
+        if self.putaway_product_id:
+            move_lines = move_lines.filtered(
+                lambda line: line.product_id == self.putaway_product_id
+            )
+
+        return move_lines
+
+    @api.depends('move_ids.product_id')
+    def _compute_allowed_putaway_product_ids(self):
+        for picking in self:
+            picking.allowed_putaway_product_ids = picking.move_ids.product_id
+
+    @api.depends(
+        'putaway_product_id',
+        'move_line_ids',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+    )
+    def _compute_putaway_values(self):
+        for picking in self:
+            move_lines = picking._get_putaway_move_lines()
+            picking.putaway_move_line_ids = move_lines
+            picking.putaway_lot_id = (
+                move_lines.mapped('lot_id')[:1]
+                if picking.putaway_product_id
+                else False
+            )
+
+    @api.onchange('putaway_product_id')
+    def _onchange_putaway_product_id(self):
+        for picking in self:
+            move_lines = picking._get_putaway_move_lines()
+            picking.putaway_move_line_ids = move_lines
+            picking.putaway_lot_id = (
+                move_lines.mapped('lot_id')[:1]
+                if picking.putaway_product_id
+                else False
+            )
+
 
     def action_put_in_pack(self, move_lines_to_pack=False):
         self.ensure_one()
@@ -259,6 +322,42 @@ class StockPicking(models.Model):
                 bool(moves) and all(move.picked for move in moves)
             )
 
+    def action_prepare_scan_product(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'adt_scan_qr_to_picking_product',
+            'params': {
+                'picking_id': self.id,
+                'title': 'Scan Product QR Code',
+            },
+        }
+
+    def _find_product_by_scan_code(self, scan_code):
+        Product = self.env['product.product']
+
+        return Product.search([
+            '|',
+            ('barcode', '=', scan_code),
+            ('default_code', '=', scan_code),
+        ], limit=1)
+
+    def action_apply_scanned_product(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        product = self._find_product_by_scan_code(scanned_code)
+
+        if not product:
+            raise ValidationError("Product tidak ditemukan untuk kode scan: %s" % scanned_code)
+
+        self.write({'putaway_product_id': product.id})
+
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+        }
+
+
 class StockRule(models.Model):
     _inherit = "stock.rule"
 
@@ -283,7 +382,7 @@ class StockRule(models.Model):
             vals.update({
                 "location_dest_id": picking.adt_dest_location_id.id,
                 "adt_dest_location_id": picking.adt_dest_location_id.id,
-                "adt_dest_location_id": picking.move_ids.adt_dest_location_id.id,
+                # "adt_dest_location_id": picking.move_ids.adt_dest_location_id.id,
                 "origin": picking.origin if picking.origin else picking.name
             })
 
