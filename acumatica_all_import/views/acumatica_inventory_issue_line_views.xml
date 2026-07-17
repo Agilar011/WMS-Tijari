@@ -18,8 +18,8 @@
         <field name="arch" type="xml">
             <search string="Cari Data Issue : Inventory Issue">
                 <field name="reference_nbr"/>
-                <field name="inventory_id"/>
-                <field name="line_description"/>
+                <field name="warehouse_code"/>
+                <field name="total_qty"/>
                 <field name="import_state"/>
                 <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
                 <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
@@ -35,16 +35,21 @@
             <list string="Data Issue : Inventory Issue" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="reference_nbr"/>
-                <field name="line_nbr"/>
-                <field name="inventory_id"/>
-                <field name="line_description"/>
-                <field name="product_uom_qty"/>
-                <field name="uom_code"/>
+                <!-- <field name="vendor_code"/> -->
                 <field name="warehouse_code"/>
-                <field name="location_code"/>
-                <field name="import_state"/>
+                <field name="total_qty"/>
+                <!-- <field name="inventory_id"/> -->
+                <!-- <field name="transaction_description"/> -->
+                <!-- <field name="product_uom_qty"/> -->
+                <!-- <field name="uom_code"/> -->
+                <!-- <field name="location_dest_code"/> -->
+                <field name="import_state" widget="badge"
+                       decoration-success="import_state in ('imported','updated')"
+                       decoration-warning="import_state == 'pending'"
+                       decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-            </list>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>            </list>
         </field>
     </record>
 
@@ -76,22 +81,22 @@
                             <field name="note" readonly="1"/>
                         </group>
                     </group>
-                    <group string="Line">
-                        <group>
-                            <field name="line_nbr" readonly="1"/>
-                            <field name="inventory_id" readonly="1"/>
-                            <field name="line_description" readonly="1"/>
-                            <field name="product_uom_qty" readonly="1"/>
-                            <field name="uom_code" readonly="1"/>
-                        </group>
-                        <group>
-                            <field name="warehouse_code" readonly="1"/>
-                            <field name="location_code" readonly="1"/>
-                            <field name="line_trans_type" readonly="1"/>
-                            <field name="branch_warehouse" readonly="1"/>
-                            <field name="import_state" readonly="1"/>
-                            <field name="import_message" readonly="1"/>
-                        </group>
+                    <notebook>
+                        <page name="Details" string="Details">
+                            <field name="product_line_ids">
+                                <list>
+                                    <field name="inventory_id"/>
+                                    <field name="line_description"/>
+                                    <field name="warehouse_code"/>
+                                    <field name="product_uom_qty"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                    <group>
+                        <field name="import_message" readonly="1" widget="text"/>
+                        <field name="odoo_picking_id" readonly="1"/>
+                        <field name="exists_in_odoo" readonly="1"/>
                     </group>
                 </sheet>
             </form>

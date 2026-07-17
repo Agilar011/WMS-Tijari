@@ -5,6 +5,7 @@ from docutils.nodes import note
 import requests
 import ast
 import json
+from collections import defaultdict
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
@@ -21,7 +22,7 @@ class ImportSOShipmentWizard(models.TransientModel):
     endpoint_name = fields.Char(required=True, default='ShipmentGI')
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
+    # config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
     batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
     receipt_nbr = fields.Char(string='Filter Shipment Number')
@@ -45,6 +46,7 @@ class ImportSOShipmentWizard(models.TransientModel):
     end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
     def action_fetch_data(self):
+        print(f"Config id: {self.config_id}")
         print(f"Self Limit: {self.fetch_limit}")
         self.ensure_one()
         # self.env['acumatica.so.shipment.line'].search([('config_id', '=', self.config_id.id)]).unlink()
@@ -56,28 +58,252 @@ class ImportSOShipmentWizard(models.TransientModel):
         if not shipment_numbers:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-
-        batch_data = self.config_id.fetch_shipment_data(
-            shipment_numbers=shipment_numbers,  # tambahan
-            odata_filter=self.odata_filter,
-        )
-
-        if not batch_data:
-            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
         
-        created_sales_order_shipment_record = self.config_id.create_staging_data(shipment_gi_data, batch_data)
+        # batch_data = self.fetch_shipment_data(
+        #     shipment_numbers=shipment_numbers,  # tambahan
+        #     odata_filter=self.odata_filter,
+        # )
+
+        # if not batch_data:
+        #     raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        total_count = 0
+        
+        created_sales_order_shipment_record = self.create_staging_data(shipment_gi_data, total_count)
 
         self.write({
             'state': 'fetched',
-            'total_fetched': len(batch_data),
+            'total_fetched': (created_sales_order_shipment_record),
         })
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'import.so.shipment.wizard',
-            'res_id': self.id,
+            'res_id': self.config_id.id,
             'view_mode': 'form',
             'target': 'new',
         }
+
+    def fetch_shipment_data(self, shipment_numbers=None, odata_filter=None):
+        print('Runnning fetch data')
+        self.ensure_one()
+        # print(f"Self config: {self.config_id}")
+
+        session = self.config_id._do_login()
+
+        try:
+            endpoint = f"{self.config_id.api_url}/Shipment"
+
+            # =====================================================
+            # 1. BERSIHKAN & PECAH DATA SHIPMENT (CHUNKING)
+            # =====================================================
+            # Hilangkan nomor duplikat dan nilai kosong/False
+            clean_shipment_numbers = list(set([nbr for nbr in shipment_numbers if nbr])) if shipment_numbers else []
+            
+            # Potong daftar menjadi per 20 nomor shipment agar URL tidak kepanjangan
+            chunk_size = 10
+            shipment_chunks = [
+                clean_shipment_numbers[i:i + chunk_size] 
+                for i in range(0, len(clean_shipment_numbers), chunk_size)
+            ]
+
+            # Jika shipment_numbers kosong sejak awal, pastikan loop tetap berjalan 1 kali tanpa filter nomor
+            if not shipment_chunks:
+                shipment_chunks = [[]]
+
+            # List untuk menampung seluruh row data mentah hasil normalisasi dari semua chunk
+            all_raw_data = []
+
+            # =====================================================
+            # 2. LOOPING API REQUEST PER CHUNK
+            # =====================================================
+            for chunk in shipment_chunks:
+                params = {}
+                filters = []
+
+                if self.config_id.odata_expand:
+                    params["$expand"] = self.config_id.odata_expand
+
+                if self.config_id.odata_select:
+                    params["$select"] = self.config_id.odata_select
+
+                # Terapkan filter nomor dokumen khusus untuk chunk ini saja
+                if chunk:
+                    shipment_filter = " or ".join([
+                        f"ShipmentNbr eq '{nbr}'"
+                        for nbr in chunk
+                    ])
+                    if shipment_filter:
+                        filters.append(f"({shipment_filter})")
+
+                if odata_filter:
+                    filters.append(f"({odata_filter})")
+                elif self.config_id.odata_filter:
+                    filters.append(f"({self.config_id.odata_filter})")
+
+                if filters:
+                    params["$filter"] = " and ".join(filters)
+
+                # print("--- Mengirim Request Chunk ---")
+                # print("Endpoint: ", endpoint)
+                # print("params: ", params)
+
+                response = session.get(
+                    endpoint,
+                    params=params,
+                    timeout=90
+                )
+
+                if response.status_code != 200:
+                    raise UserError(
+                        f"Gagal ambil Shipment "
+                        f"(HTTP {response.status_code}): "
+                        f"{response.text}"
+                    )
+
+                # Normalisasi data chunk ini dan gabungkan ke dalam penampung utama
+                chunk_raw_data = self._normalize_rows(
+                    response.json()
+                )
+                all_raw_data.extend(chunk_raw_data)
+
+            # =====================================================
+            # 3. PROSES PEMETAAN DATA (LOGIKA ASLI ANDA)
+            # =====================================================
+            result = []
+
+            # Loop sekarang membaca 'all_raw_data' yang sudah mengumpulkan hasil semua chunk
+            for item in all_raw_data:
+
+                shipment_dict = {
+
+                    "header": {
+                        "acumatica_id":item.get("id"),
+                        "rownumber":item.get("rowNumber"),
+                        "note":self._val(item, "note"),
+                        "controlqty":self._val(item, "ControlQty"),
+                        "customerid":self._val(item, "CustomerID"),
+                        "description":self._val(item, "Description"),
+                        "fobpoint":self._val(item, "FOBPoint"),
+                        "fobpointdescription":self._val(item,"FOBPointDescription"),
+                        "hold":self._val(item, "Hold"),
+                        "insurance":self._val(item, "Insurance"),
+                        "lastmodifieddatetime":self._parse_dt(self._val(item,"LastModifiedDateTime")),
+                        "locationid":self._val(item, "LocationID"),
+                        "locationname":self._val(item, "LocationName"),
+                        "operation":self._val(item, "Operation"),
+                        "packagecount":self._val(item, "PackageCount"),
+                        "packageweight":self._val(item, "PackageWeight"),
+                        "shipmentdate":self._parse_dt(self._val(item,"ShipmentDate")),
+                        "shipmentnbr":self._val(item, "ShipmentNbr"),
+                        "shippedqty":self._val(item, "ShippedQty"),
+                        "shippedvolume":self._val(item, "ShippedVolume"),
+                        "shippedweight":self._val(item, "ShippedWeight"),
+                        "shippingzoneid":self._val(item, "ShippingZoneID"),
+                        "shipvia":self._val(item, "ShipVia"),
+                        "status":self._val(item, "Status"),
+                        "towarehouseid":self._val(item, "ToWarehouseID"),
+                        "type":self._val(item, "Type"),
+                        "unlimitedpackages":self._val(item, "UnlimitedPackages"),
+                        "warehouseid":self._val(item, "WarehouseID"),
+                        "warehousename":self._val(item, "WarehouseName"),
+                    },
+
+                    "shipto_address": {},
+
+                    "details": []
+                }
+
+                # =================================================
+                # SHIP TO ADDRESS
+                # =================================================
+                shipping_settings = (
+                    item.get("ShippingSettings")
+                    or {}
+                )
+
+                shipto = (
+                    shipping_settings.get(
+                        "ShipToAddress"
+                    )
+                    or {}
+                )
+
+                if shipto:
+                    shipment_dict[
+                        "shipto_address"
+                    ] = {
+                        "addressline1":self._val(shipto,"AddressLine1"),
+                        "addressline2":self._val(shipto,"AddressLine2"),
+                        "city":self._val(shipto,"City"),
+                        "country":self._val(shipto,"Country"),
+                        "countryname":self._val(shipto,"CountryName"),
+                        "postalcode":self._val(shipto,"PostalCode"),
+                        "state":self._val(shipto,"State"),
+                    }
+
+                # =================================================
+                # DETAILS
+                # =================================================
+                details = (
+                    item.get("Details")
+                    or []
+                )
+
+                if not details:
+                    raise UserError("Detail Tidak Boleh Kosong")
+
+                for detail in details:
+
+                    detail_dict = {
+
+                        "detail": {
+                            "acumatica_id": detail.get("id"),
+                            "rownumber": detail.get("rowNumber"),
+                            "note": self._val(detail, "note"),
+                            "description": self._val(detail, "Description"),
+                            "freeitem": self._val(detail, "FreeItem"),
+                            "inventoryid": self._val(detail, "InventoryID"),
+                            "linenbr": self._val(detail, "LineNbr"),
+                            "location": self._val(detail, "Location"),
+                            "openorderqty": self._val(detail, "OpenOrderQty"),
+                            "orderedqty": self._val(detail, "OrderedQty"),
+                            "orderlinenbr": self._val(detail, "OrderLineNbr"),
+                            "ordernbr": self._val(detail, "OrderNbr"),
+                            "ordertype": self._val(detail, "OrderType"),
+                            "shippedqty": self._val(detail, "ShippedQty"),
+                            "uom": self._val(detail, "UOM"),
+                            "warehouseid": self._val(detail, "WarehouseID"),
+                        },
+
+                        "allocations": []
+                    }
+
+                    allocations = (detail.get("Allocations") or [])
+
+                    for alloc in allocations:
+
+                        detail_dict[
+                            "allocations"
+                        ].append(
+                        {
+                            "acumatica_id": alloc.get("id"),
+                            "rownumber": alloc.get("rowNumber"),
+                            "note": self._val(alloc, "note"),
+                            "description": self._val(alloc, "Description"),
+                            "inventoryid": self._val(alloc, "InventoryID"),
+                            "location": self._val(alloc, "Location"),
+                            "quantity": self._val(alloc, "Quantity"),
+                            "splitlinenbr": self._val(alloc, "SplitLineNbr"),
+                            "uom": self._val(alloc, "UOM"),
+                        })
+
+                    shipment_dict["details"].append(detail_dict)
+
+                result.append(shipment_dict)
+
+            return result
+
+        finally:
+            self.config_id._do_logout(session)
 
 
 # Function Get and create staging data
@@ -136,83 +362,70 @@ class ImportSOShipmentWizard(models.TransientModel):
             for item in details:
                 ship_date = self._val(item, "ShipDate")
                 phrase_date = dateutil_parser.parse(ship_date).replace(tzinfo=None)
+                if phrase_date:
+                    print(phrase_date)
                 warehouse_id = self._val(item, "WarehouseID")
-                picking_type = self._search_picking_type(warehouse_id)
+                OrderType = self._val(item, "OrderType")
+                # print(f"Warehouse ID : {warehouse_id}")
 
+                # if OrderType == 'CO':
+                #     code = 'incoming'
+                # else:
+                #     code = 'outgoing'
+
+                # print(f"Transaction Type: {code}")
+
+                picking_type = self._search_picking_type(warehouse_id, OrderType)
+                picking_type_id = picking_type.id if picking_type else None
+                # print(picking_type_id)
+                
 
                 vals = {
-                    "acumatica_id": item.get("id", ""),
-                    "row_number": item.get("rowNumber", ""),
+                    'acumatica_id' : item.get('id'),
+                    'adt_rowNumber' : item.get('rowNumber'),
+                    'adt_note' : item.get('note'),
+                    'adt_AddressID' : self._val(item, "AddressID"),
+                    'adt_AddressLine' : self._val(item, "AddressLine"),
+                    'adt_BuildingID' : self._val(item, "BuildingID"),
+                    'adt_City' : self._val(item, "City"),
+                    'adt_Country' : self._val(item, "Country"),
+                    'adt_CountryName' : self._val(item, "CountryName"),
+                    'adt_CustomerID' : self._val(item, "CustomerID"),
+                    'adt_CustomerName' : self._val(item, "CustomerName"),
+                    'adt_DocumentOnly' : self._val(item, "DocumentOnly"),
+                    'adt_FOBPoint' : self._val(item, "FOBPoint"),
+                    'adt_FOBPointDescription' : self._val(item, "FOBPointDescription"),
+                    'adt_LineDescription' : self._val(item, "LineDescription"),
+                    'adt_LineFreeItem' : self._val(item, "LineFreeItem"),
+                    'adt_LineInventoryID' : self._val(item, "LineInventoryID"),
+                    'adt_LineLocation' : self._val(item, "LineLocation"),
+                    'adt_LineNbr' : self._val(item, "LineNbr"),
+                    'adt_LineNote' : self._val(item, "LineNote"),
+                    'adt_LineNoteID' : self._val(item, "LineNoteID"),
+                    'adt_LineQuantity' : self._val(item, "LineQuantity"),
+                    'adt_LineUOM' : self._val(item, "LineUOM"),
+                    'adt_LocationID' : self._val(item, "LocationID"),
+                    'adt_LocationName' : self._val(item, "LocationName"),
+                    'adt_NoteHeader' : self._val(item, "NoteHeader"),
+                    'adt_NoteHeaderID' : self._val(item, "NoteHeaderID"),
+                    'adt_OrderType' : self._val(item, "OrderType"),
+                    'adt_Phone' : self._val(item, "Phone"),
+                    'adt_PostalCode' : self._val(item, "PostalCode"),
+                    'adt_ShipDate' : self._val(item, "ShipDate"),
+                    'adt_ShipmentNbr' : self._val(item, "ShipmentNbr"),
+                    'adt_ShipmentQty' : self._val(item, "ShipmentQty"),
+                    'adt_ShipmentType' : self._val(item, "ShipmentType"),
+                    'adt_ShipmentVolume' : self._val(item, "ShipmentVolume"),
+                    'adt_ShipmentWeight' : self._val(item, "ShipmentWeight"),
+                    'adt_ShipVia' : self._val(item, "ShipVia"),
+                    'adt_SiteIDDescription' : self._val(item, "SiteIDDescription"),
+                    'adt_State' : self._val(item, "State"),
+                    'adt_StateName' : self._val(item, "StateName"),
+                    'adt_Status' : self._val(item, "Status"),
+                    'adt_ToWarehouseID' : self._val(item, "ToWarehouseID"),
+                    'adt_WarehouseID' : self._val(item, "WarehouseID"),
+                    'picking_type_id' : picking_type_id,
 
-                    "address_id": self._val(item, "AddressID"),
-                    "address_line1": self._val(item, "AddressLine1"),
-                    "address_line2": self._val(item, "AddressLine2"),
-                    "address_line3": self._val(item, "AddressLine3"),
-
-                    "city": self._val(item, "City"),
-
-                    "confirmed": self._val(item, "Confirmed"),
-
-                    "country": self._val(item, "Country"),
-                    "country_name": self._val(item, "CountryName"),
-
-                    "customer": self._val(item, "Customer"),
-                    "customer_name": self._val(item, "CustomerName"),
-
-                    "document_only": self._val(item, "DocumentOnly"),
-
-                    "fob_point": self._val(item, "FOBPoint"),
-                    "fob_point_description": self._val(
-                        item,
-                        "FOBPointDescription"
-                    ),
-
-                    "hold": self._val(item, "Hold"),
-
-                    "location": self._val(item, "Location"),
-                    "location_name": self._val(item, "LocationName"),
-
-                    "note_ship_via": self._val(item, "NoteShipVia"),
-
-                    "order_type": self._val(item, "OrderType"),
-
-                    "override_address": self._val(item, "OverrideAddress"),
-
-                    "postal_code": self._val(item, "PostalCode"),
-
-                    "ship_date": phrase_date,
-
-                    "shipment_nbr": self._val(item, "ShipmentNbr"),
-
-                    "shipped_quantity": self._val(item, "ShippedQuantity"),
-                    "shipped_volume": self._val(item, "ShippedVolume"),
-                    "shipped_weight": self._val(item, "ShippedWeight"),
-
-                    "ship_via": self._val(item, "ShipVia"),
-                    "ship_via_address": self._val(item, "ShipViaAddress"),
-                    "ship_via_city": self._val(item, "ShipViaCity"),
-                    "ship_via_description": self._val(
-                        item,
-                        "ShipViaDescription"
-                    ),
-                    "ship_via_phone": self._val(item, "ShipViaPhone"),
-                    "ship_via_status": self._val(item, "ShipViaStatus"),
-
-                    "site_id_description": self._val(
-                        item,
-                        "SiteIDDescription"
-                    ),
-
-                    "state": self._val(item, "State"),
-                    "state_name": self._val(item, "StateName"),
-
-                    "status": self._val(item, "Status"),
-
-                    "to_warehouse_id": self._val(item, "ToWarehouseID"),
-
-                    "shipment_type": self._val(item, "Type"),
-
-                    "warehouse_id": warehouse_id,
                 }
 
                 shipment_numbers.append(self._val(item, "ShipmentNbr"))
@@ -229,502 +442,129 @@ class ImportSOShipmentWizard(models.TransientModel):
         finally:
             self._do_logout(session)
 
-    def fetch_shipment_data(
-        self,
-        shipment_numbers=None,
-        odata_filter=None,
-    ):
-        self.ensure_one()
+    def create_staging_data(self, shipment_gi_data, total_count):
+        if not shipment_gi_data:
+            return total_count
 
-        session = self._do_login()
+        GIStaging = self.env['acumatica.shipment.gi.staging']
+        LineStaging = self.env['acumatica.sales.order.shipment.staging.line']
 
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name}"
+        # =====================================================
+        # STEP 1: GROUPING LINE DATA BERDASARKAN SHIPMENT NUMBER
+        # =====================================================
+        grouped_shipments = defaultdict(lambda: {'header': {}, 'lines': []})
 
-            params = {}
-            filters = []
+        for row in shipment_gi_data:
+            total_count += 1
+            shipment_nbr = row.get("adt_ShipmentNbr")
+            if not shipment_nbr:
+                continue
 
-            if self.odata_expand:
-                params["$expand"] = self.odata_expand
-
-            if self.odata_select:
-                params["$select"] = self.odata_select
-
-            # =====================================================
-            # FILTER SHIPMENT NUMBER
-            # =====================================================
-
-            if shipment_numbers:
-
-                shipment_filter = " or ".join([
-                    f"ShipmentNbr eq '{nbr}'"
-                    for nbr in shipment_numbers
-                    if nbr
-                ])
-
-                if shipment_filter:
-                    filters.append(f"({shipment_filter})")
-
-            if odata_filter:
-                filters.append(f"({odata_filter})")
-
-            elif self.odata_filter:
-                filters.append(f"({self.odata_filter})")
-
-            if filters:
-                params["$filter"] = " and ".join(filters)
-
-            response = session.get(
-                endpoint,
-                params=params,
-                timeout=90
-            )
-
-            if response.status_code != 200:
-                raise UserError(
-                    f"Gagal ambil Shipment "
-                    f"(HTTP {response.status_code}): "
-                    f"{response.text}"
-                )
-
-            raw_data = self._normalize_rows(
-                response.json()
-            )
-
-            result = []
-
-            # =====================================================
-            # SHIPMENT LOOP
-            # =====================================================
-
-            for item in raw_data:
-
-                shipment_dict = {
-
-                    "header": {
-                        "acumatica_id":item.get("id"),
-                        "rownumber":item.get("rowNumber"),
-                        "note":self._val(item, "note"),
-                        "controlqty":self._val(item, "ControlQty"),
-                        "customerid":self._val(item, "CustomerID"),
-                        "description":self._val(item, "Description"),
-                        "fobpoint":self._val(item, "FOBPoint"),
-                        "fobpointdescription":self._val(item,"FOBPointDescription"),
-                        "hold":self._val(item, "Hold"),
-                        "insurance":self._val(item, "Insurance"),
-                        "lastmodifieddatetime":self._parse_dt(self._val(item,"LastModifiedDateTime")),
-                        "locationid":self._val(item, "LocationID"),
-                        "locationname":self._val(item, "LocationName"),
-                        "operation":self._val(item, "Operation"),
-                        "packagecount":self._val(item, "PackageCount"),
-                        "packageweight":self._val(item, "PackageWeight"),
-                        "shipmentdate":self._parse_dt(self._val(item,"ShipmentDate")),
-                        "shipmentnbr":self._val(item, "ShipmentNbr"),
-                        "shippedqty":self._val(item, "ShippedQty"),
-                        "shippedvolume":self._val(item, "ShippedVolume"),
-                        "shippedweight":self._val(item, "ShippedWeight"),
-                        "shippingzoneid":self._val(item, "ShippingZoneID"),
-                        "shipvia":self._val(item, "ShipVia"),
-                        "status":self._val(item, "Status"),
-                        "towarehouseid":self._val(item, "ToWarehouseID"),
-                        "type":self._val(item, "Type"),
-                        "unlimitedpackages":self._val(item, "UnlimitedPackages"),
-                        "warehouseid":self._val(item, "WarehouseID"),
-                        "warehousename":self._val(item, "WarehouseName"),
-                    },
-
-                    "shipto_address": {},
-
-                    "details": []
+            if not grouped_shipments[shipment_nbr]['header']:
+                grouped_shipments[shipment_nbr]['header'] = {
+                    'adt_ShipmentNbr': shipment_nbr,
+                    'config_id': self.config_id.id,
+                    'acumatica_id': row.get("acumatica_id"),
+                    'adt_rowNumber': row.get("adt_rowNumber"),
+                    'adt_CustomerID': row.get("adt_CustomerID"),
+                    'adt_CustomerName': row.get("adt_CustomerName"),
+                    'adt_WarehouseID': row.get("adt_WarehouseID"),
+                    'adt_LocationID': row.get("adt_LocationID"),
+                    'adt_LocationName': row.get("adt_LocationName"),
+                    'adt_AddressLine': row.get("adt_AddressLine"),
+                    'adt_Status': row.get("adt_Status"),
+                    'adt_ShipmentType': row.get("adt_ShipmentType"),
+                    'adt_City': row.get("adt_City"),
+                    'adt_State': row.get("adt_State"),
+                    'adt_StateName': row.get("adt_StateName"),
+                    'adt_Country': row.get("adt_Country"),
+                    'adt_CountryName': row.get("adt_CountryName"),
+                    'adt_ShipDate': row.get("adt_ShipDate"),
+                    'adt_PostalCode': row.get("adt_PostalCode"),
+                    'adt_ShipVia': row.get("adt_ShipVia"),
+                    'adt_FOBPoint': row.get("adt_FOBPoint"),
+                    'adt_FOBPointDescription': row.get("adt_FOBPointDescription"),
+                    'adt_OrderType': row.get("adt_OrderType"),
+                    'adt_SiteIDDescription': row.get("adt_SiteIDDescription"),
+                    'adt_ToWarehouseID': row.get("adt_ToWarehouseID"),
+                    'adt_NoteHeader': row.get("adt_NoteHeader"),
+                    'picking_type_id': row.get("picking_type_id"),
                 }
 
-                # =================================================
-                # SHIP TO ADDRESS
-                # =================================================
-
-                shipping_settings = (
-                    item.get("ShippingSettings")
-                    or {}
-                )
-
-                shipto = (
-                    shipping_settings.get(
-                        "ShipToAddress"
-                    )
-                    or {}
-                )
-
-                if shipto:
-
-                    shipment_dict[
-                        "shipto_address"
-                    ] = {
-                        "addressline1":self._val(shipto,"AddressLine1"),
-                        "addressline2":self._val(shipto,"AddressLine2"),
-                        "city":self._val(shipto,"City"),
-                        "country":self._val(shipto,"Country"),
-                        "countryname":self._val(shipto,"CountryName"),
-                        "postalcode":self._val(shipto,"PostalCode"),
-                        "state":self._val(shipto,"State"),
-                    }
-
-                # =================================================
-                # DETAILS
-                # =================================================
-
-                details = (
-                    item.get("Details")
-                    or []
-                )
-
-                for detail in details:
-
-                    detail_dict = {
-
-                        "detail": {
-                            "acumatica_id": detail.get("id"),
-                            "rownumber": detail.get("rowNumber"),
-                            "note": self._val(detail, "note"),
-                            "description": self._val(detail, "Description"),
-                            "freeitem": self._val(detail, "FreeItem"),
-                            "inventoryid": self._val(detail, "InventoryID"),
-                            "linenbr": self._val(detail, "LineNbr"),
-                            "location": self._val(detail, "Location"),
-                            "openorderqty": self._val(detail, "OpenOrderQty"),
-                            "orderedqty": self._val(detail, "OrderedQty"),
-                            "orderlinenbr": self._val(detail, "OrderLineNbr"),
-                            "ordernbr": self._val(detail, "OrderNbr"),
-                            "ordertype": self._val(detail, "OrderType"),
-                            "shippedqty": self._val(detail, "ShippedQty"),
-                            "uom": self._val(detail, "UOM"),
-                            "warehouseid": self._val(detail, "WarehouseID"),
-                        },
-
-                        "allocations": []}
-
-                    allocations = (detail.get("Allocations")or [])
-
-                    for alloc in allocations:
-
-                        detail_dict[
-                            "allocations"
-                        ].append(
-                        {
-                            "acumatica_id": alloc.get("id"),
-                            "rownumber": alloc.get("rowNumber"),
-                            "note": self._val(alloc, "note"),
-                            "description": self._val(alloc, "Description"),
-                            "inventoryid": self._val(alloc, "InventoryID"),
-                            "location": self._val(alloc, "Location"),
-                            "quantity": self._val(alloc, "Quantity"),
-                            "splitlinenbr": self._val(alloc, "SplitLineNbr"),
-                            "uom": self._val(alloc, "UOM"),
-                        })
-
-                    shipment_dict["details"].append(detail_dict)
-
-                result.append(shipment_dict)
-
-            return result
-
-        finally:
-            self._do_logout(session)
-
-    def create_staging_data(self, shipment_gi_data, batch_data):
-        staging_shipment_gi = self.env['acumatica.shipment.gi.staging']
-        staging_so_shipment= self.env['acumatica.sales.order.shipment.staging']
-        staging_so_shipment_detail= self.env['acumatica.sales.order.shipment.staging.line']
-        staging_so_shipment_allocation= self.env['acumatica.sales.order.shipment.staging.allocation']
-        staging_so_shipment_ship_to_address= self.env['acumatica.sales.order.shipment.shiptoaddress.staging']
-
-        # ==========================================================
-        # AMBIL RECORD YANG SUDAH ADA
-        # ==========================================================
-
-        acumatica_ids = [
-            vals.get('acumatica_id')
-            for vals in shipment_gi_data
-            if vals.get('acumatica_id')
-        ]
-
-        existing_records = staging_shipment_gi.search([
-            ('acumatica_id', 'in', acumatica_ids)
-        ])
-
-        existing_map = {
-            rec.acumatica_id: rec
-            for rec in existing_records
-        }
-
-        created_count = 0
-        updated_count = 0
-
-        # ==========================================================
-        # CREATE / UPDATE SHIPMENT GI
-        # ==========================================================
-
-        for item in shipment_gi_data:
-
-            acumatica_id = item.get('acumatica_id')
-
-            vals = {
-                "acumatica_id": item.get('acumatica_id'),
-                "row_number": item.get('row_number'),
-
-                "address_id": item.get('address_id'),
-                "address_line1": item.get('address_line1'),
-                "address_line2": item.get('address_line2'),
-                "address_line3": item.get('address_line3'),
-
-                "city": item.get('city'),
-                "state": item.get('state'),
-                "state_name": item.get('state_name'),
-
-                "country": item.get('country'),
-                "country_name": item.get('country_name'),
-                "postal_code": item.get('postal_code'),
-
-                "customer": item.get('customer'),
-                "customer_name": item.get('customer_name'),
-
-                "confirmed": item.get('confirmed'),
-                "hold": item.get('hold'),
-                "document_only": item.get('document_only'),
-                "override_address": item.get('override_address'),
-
-                "fob_point": item.get('fob_point'),
-                "fob_point_description": item.get('fob_point_description'),
-
-                "location": item.get('location'),
-                "location_name": item.get('location_name'),
-
-                "note_ship_via": item.get('note_ship_via'),
-
-                "order_type": item.get('order_type'),
-
-                "ship_date": item.get('ship_date'),
-                "shipment_nbr": item.get('shipment_nbr'),
-
-                "shipped_quantity": item.get('shipped_quantity'),
-                "shipped_volume": item.get('shipped_volume'),
-                "shipped_weight": item.get('shipped_weight'),
-
-                "ship_via": item.get('ship_via'),
-                "ship_via_address": item.get('ship_via_address'),
-                "ship_via_city": item.get('ship_via_city'),
-                "ship_via_description": item.get('ship_via_description'),
-                "ship_via_phone": item.get('ship_via_phone'),
-                "ship_via_status": item.get('ship_via_status'),
-
-                "site_id_description": item.get('site_id_description'),
-
-                "status": item.get('status'),
-                "shipment_type": item.get('shipment_type'),
-
-                "to_warehouse_id": item.get('to_warehouse_id'),
-                "warehouse_id": item.get('warehouse_id'),
-
-                "note": item.get('note'),
-
-                "config_id": self.id,
-                "sync_date": fields.Datetime.now(),
+            line_data = {
+                'acumatica_id': row.get("acumatica_id"),
+                'adt_rowNumber': row.get("adt_rowNumber"),
+                'adt_LineInventoryID': row.get("adt_LineInventoryID"),
+                'adt_LineDescription': row.get("adt_LineDescription"),
+                'adt_LineLocation': row.get("adt_LineLocation"),
+                'adt_LineNbr': row.get("adt_LineNbr"),
+                'adt_ShipmentQty': row.get("adt_ShipmentQty"),
+                'adt_LineUOM': row.get("adt_LineUOM"),
+                'adt_WarehouseID': row.get("adt_WarehouseID"),
             }
 
-            existing = existing_map.get(acumatica_id)
+            grouped_shipments[shipment_nbr]['lines'].append(line_data)
 
-            # ======================================================
-            # UPDATE
-            # ======================================================
-
-            if existing:
-
-                vals.update({
-                    'import_message': 'Data staging diperbarui dari Acumatica',
-                })
-
-                existing.write(vals)
-
-                updated_count += 1
-
-                print(
-                    f"UPDATED | "
-                    f"ID={existing.id} | "
-                    f"Shipment={existing.shipment_nbr} | "
-                    f"Acumatica={acumatica_id}"
-                )
-
-            # ======================================================
-            # CREATE
-            # ======================================================
-
-            else:
-
-                vals.update({
-                    'import_state': 'pending',
-                    'import_message': 'Data baru dari Acumatica',
-                })
-
-                new_rec = staging_shipment_gi.create(vals)
-
-                created_count += 1
-
-                print(
-                    f"CREATED | "
-                    f"ID={new_rec.id} | "
-                    f"Shipment={new_rec.shipment_nbr} | "
-                    f"Acumatica={acumatica_id}"
-                )
-
-        # ==========================================================
-        # SUMMARY
-        # ==========================================================
-
-        print(
-            f"Sync Shipment GI selesai | "
-            f"Created={created_count} | "
-            f"Updated={updated_count}"
-        )
-
-        # ==================================================
-        # SHIPMENT HEADER
-        # ==================================================
-
-        shipment_ids = [
-            x["header"].get("acumatica_id")
-            for x in batch_data
-            if x["header"].get("acumatica_id")
-        ]
-
-        existing_shipments = staging_so_shipment.search([
-            ("acumatica_id", "in", shipment_ids)
+        # =====================================================
+        # STEP 2: OPTIMASI SEARCH EXISTING (MASSAL)
+        # =====================================================
+        all_shipment_numbers = list(grouped_shipments.keys())
+        existing_records = GIStaging.search([
+            ('adt_ShipmentNbr', 'in', all_shipment_numbers)
         ])
+        existing_map = {rec.adt_ShipmentNbr: rec for rec in existing_records}
 
-        shipment_map = {
-            rec.acumatica_id: rec
-            for rec in existing_shipments
-        }        
+        # =====================================================
+        # STEP 3: PROSES SIMPAN / UPDATE & RECREATE LINE (DENGAN TRY-EXCEPT)
+        # =====================================================
+        for shipment_nbr, data in grouped_shipments.items():
+            gi_vals = data['header']
+            lines_vals = data['lines']
 
-        gi_map = {
-            rec.shipment_nbr: rec.id
-            for rec in staging_shipment_gi.search([])
-        }
+            # Cek memori RAM untuk data lama
+            existing_gi = existing_map.get(shipment_nbr)
 
-        for shipment in batch_data:
+            # Buka savepoint SQL baru khusus untuk record ini agar aman dari batasan database
+            # Jika baris ini error, Odoo hanya membatalkan savepoint ini, bukan seluruh fungsi
+            with self.env.cr.savepoint():
+                try:
+                    if existing_gi:
+                        # -------------------------------------------------
+                        # KONDISI A: DATA SUDAH ADA -> UPDATE & RECREATE
+                        # -------------------------------------------------
+                        existing_gi.write(gi_vals)
+                        existing_gi.all_line_ids.unlink()
 
-            shipment_vals = dict(
-                shipment["header"]
-            )
+                        for line in lines_vals:
+                            line.update({
+                                'gi_id': existing_gi.id
+                            })
+                            LineStaging.create(line)
 
-            shipment_nbr = shipment_vals.get(
-                "shipmentnbr"
-            )
+                        print(f"--> SUCCESS UPDATED SHIPMENT & RECREATED LINES: {shipment_nbr}")
 
-            shipment_vals["gi_id"] = gi_map.get(
-                shipment_nbr
-            )
+                    else:
+                        # -------------------------------------------------
+                        # KONDISI B: DATA BARU -> CREATE FRESH ALL
+                        # -------------------------------------------------
+                        line_commands = [(0, 0, line) for line in lines_vals]
+                        gi_vals.update({
+                            'all_line_ids': line_commands
+                        })
+                        GIStaging.create(gi_vals)
+                        
+                        print(f"--> SUCCESS CREATED NEW FRESH SHIPMENT: {shipment_nbr}")
 
-            shipment_vals.update({
-                "config_id": self.id,
-                "sync_date": fields.Datetime.now(),
-            })
+                except Exception as e:
+                    # Tangkap error agar tidak merusak perulangan dokumen lain
+                    error_msg = f"!!! DATABASE CRASH ON STAGING RECORD {shipment_nbr}: {str(e)}"
+                    _logger.error(error_msg)
+                    print(error_msg)
+                    
+                    # Logika Opsional: Anda bisa memasukkan pesan error ini ke model log khusus jika diperlukan
+                    continue
 
-            existing = shipment_map.get(acumatica_id)
-            for field, value in shipment_vals.items():
-                print(f"{field}: {value}")
-
-            # ======================================================
-            # UPDATE
-            # ======================================================
-
-            if existing:
-
-                shipment_vals.update({
-                    'import_state': 'updated',
-                    'import_message': 'Data diperbarui dari Acumatica',
-                })
-
-                existing.write(shipment_vals)
-                shipment_rec = existing
-                print(f"Shipment Updated: {existing.id} with row number {existing.rownumber}")
-            
-            else:
-                shipment_rec = staging_so_shipment.create(
-                    shipment_vals
-                )
-                print(
-                    f"Shipment Created: "
-                    f"{shipment_rec.id} "
-                    f"{shipment_rec.shipmentnbr}"
-                )
-
-
-
-            # ==================================================
-            # SHIP TO ADDRESS
-            # ==================================================
-
-            shipto_rec = False
-
-            if shipment.get("shipto_address"):
-                shipto_vals = dict(
-                    shipment["shipto_address"]
-                )
-
-                shipto_vals["shipment_id"] = shipment_rec.id
-
-                shipto_rec = staging_so_shipment_ship_to_address.create(
-                    shipto_vals
-                )
-
-            # ==================================================
-            # DETAILS
-            # ==================================================
-
-            for detail_data in shipment["details"]:
-
-                detail_vals = dict(
-                    detail_data["detail"]
-                )
-
-                detail_vals[
-                    "shipment_id"
-                ] = shipment_rec.id
-
-                detail_rec = staging_so_shipment_detail.create(
-                    detail_vals
-                )
-
-                print(
-                    f"  Detail Created: "
-                    f"{detail_rec.id}"
-                )
-
-                # ==============================================
-                # ALLOCATIONS
-                # ==============================================
-
-                for alloc in detail_data[
-                    "allocations"
-                ]:
-
-                    alloc_vals = dict(
-                        alloc
-                    )
-
-                    alloc_vals[
-                        "line_id"
-                    ] = detail_rec.id
-
-                    alloc_rec = staging_so_shipment_allocation.create(
-                        alloc_vals
-                    )
-
-                    print(
-                        f"    Allocation Created: "
-                        f"{alloc_rec.id}"
-                    )
-
-
+        return total_count
 
     def action_view_staging(self):
         self.ensure_one()
@@ -830,24 +670,66 @@ class ImportSOShipmentWizard(models.TransientModel):
             last_error,
         )
 
-    def _search_picking_type(self, header):
+    def _search_picking_type(self, header, code):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
 
         location = Location.search([
-            ('code', '=', header['warehouse_code'])
+            ('code', '=', header)
         ])
 
+        if code == 'CO':
+            if location:
+                # print(f"Building id: {location.odoo_building_id.id}")
+                type = PickingType.search([
+                    ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                    ('code', '=', 'internal'),
+                    ('is_default_api', '=', True)
+                ])
+                # print(f"Type: {type}")
+
+        else:
+            if location:
+                # print(f"Building id: {location.odoo_building_id.id}")
+                type = PickingType.search([
+                    ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                    ('code', '=', 'internal'),
+                    ('is_default_api', '=', True)
+                ])
+                # print(f"Type: {type}")
+
         
-        if location:
-            print(f"Building id: {location.odoo_building_id.id}")
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'outgoing'),
-                ('is_default_api', '=', True)
-            ])
 
         return type if type else None
+
+    @staticmethod
+    def _val(item, key):
+        value = item.get(key, {})
+        if isinstance(value, dict):
+            return value.get('value', '') or ''
+        return value or ''    
+
+    @staticmethod
+    def _normalize_rows(payload):
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            if isinstance(payload.get('value'), list):
+                return payload.get('value')
+            if isinstance(payload.get('rows'), list):
+                return payload.get('rows')
+        return []
+
+    @staticmethod
+    def _parse_dt(dt_str):
+        if not dt_str:
+            return False
+        try:
+            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
+        except Exception:
+            return False
+
+
 
 # Helper Atribut
     @property

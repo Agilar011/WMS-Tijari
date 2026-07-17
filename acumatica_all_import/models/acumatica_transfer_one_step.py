@@ -8,245 +8,17 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
-class AcumaticaTransferOneStepConfig(models.Model):
-    _name = 'acumatica.transfer.one.step.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Inventory Receipt Import'
-    _rec_name = 'name'
-
-    name = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
-    base_url = fields.Char(string='Base URL', required=True, default='http://staging.aditya.group/acumportal/entity')
-    api_version = fields.Char(string='API Version', required=True, default='25.200.002')
-    username = fields.Char(string='Username', required=True, default='wms')
-    password = fields.Char(string='Password', required=True)
-    company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
-    endpoint_name = fields.Char(string='Endpoint Name', required=True, default='TransferOrder')
-    active = fields.Boolean(default=True)
-    last_sync = fields.Datetime(string='Terakhir Sync', readonly=True)
-    state = fields.Selection([
-        ('draft', 'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error', 'Error'),
-    ], string='Status', default='draft', readonly=True)
-    odata_expand = fields.Char(
-        string='OData Expand',
-        default='Details',
-        help='Contoh: Details atau Details,OtherChild'
-    )
-    odata_select = fields.Char(
-        string='OData Select',
-        help='Optional: pilih field tertentu'
-    )
-    odata_filter = fields.Char(
-        string='OData Filter',
-        default="TransferType eq '1-Step' and (Status eq 'On Hold' or Status eq 'Balanced')"
-    )
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            if session:
-                self._do_logout(session)
-                self.state = 'connected'
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Koneksi Berhasil!',
-                        'message': f'Berhasil terhubung ke Acumatica ({self.base_url})',
-                        'type': 'success',
-                        'sticky': False,
-                    }
-                }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-    def _do_login(self):
-        self.ensure_one()
-
-        last_error = None
-
-        for attempt in range(1, 4):
-            try:
-                session = requests.Session()
-                response = session.post(
-                    self.login_url,
-                    json={
-                        "name": self.username,
-                        "password": self.password,
-                        "company": self.company_code
-                    },
-                    headers={"Content-Type": "application/json"},
-                    timeout=30,
-                )
-
-                if response.status_code == 204:
-                    return session
-
-                raise UserError(
-                    f'Login gagal (HTTP {response.status_code}): {response.text}'
-                )
-
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout) as e:
-                last_error = e
-
-                if attempt < 3:
-                    time.sleep(30)
-
-        if isinstance(last_error, requests.exceptions.ConnectionError):
-            raise UserError(
-                f'Tidak bisa terhubung ke server: {self.base_url} (sudah dicoba 3 kali)'
-            )
-
-        if isinstance(last_error, requests.exceptions.Timeout):
-            raise UserError(
-                'Koneksi timeout setelah 3 kali percobaan. Periksa URL server.'
-            )
-
-        raise UserError('Login gagal setelah 3 kali percobaan.')
-
-
-    def _do_logout(self, session):
-        for attempt in range(1, 4):
-            try:
-                response = session.post(
-                    self.logout_url,
-                    timeout=10
-                )
-
-                # opsional: validasi status code
-                if response.status_code in (200, 204):
-                    return
-
-                if attempt < 3:
-                    time.sleep(30)
-
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout):
-                if attempt < 3:
-                    time.sleep(30)
-
-            except Exception:
-                # tetap diam seperti kode asli
-                return
-            
-    def _val(self, item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    def _normalize_rows(self, payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
-
-    def fetch_receipt_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
-        self.ensure_one()
-        session = self._do_login()
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-            filters = []
-
-            if self.odata_expand:
-                params['$expand'] = self.odata_expand
-
-            if self.odata_select:
-                params['$select'] = self.odata_select
-            if reference_nbr:
-                filters.append(f"ReferenceNbr eq '{reference_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-            if self.odata_filter:
-                filters.append(f"({self.odata_filter})")
-            else:
-                filters.append("(TransferType eq '1-Step')")
-
-            if filters:
-                params['$filter'] = ' and '.join(filters)       
-
-            response = session.get(endpoint, params=params, timeout=90)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Transfer Order (HTTP {response.status_code}): {response.text}')
-
-            raw_data = self._normalize_rows(response.json())
-            result = []
-
-            for row_number, item in enumerate(raw_data, start=1):
-                header = {
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'scheduled_date': self._val(item, 'Date'),
-                    'description': self._val(item, 'Description'),
-                    'from_warehouse_code': self._val(item, 'FromWarehouseID'),
-                    'is_hold': self._val(item, 'Hold'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'post_period': self._val(item, 'PostPeriod'),
-                    'reference_nbr': self._val(item, 'ReferenceNbr'),
-                    'status': self._val(item, 'Status'),
-                    'total_qty': self._val(item, 'TotalQty'),
-                    'to_warehouse_code': self._val(item, 'ToWarehouseID'),
-                    'transfer_type': self._val(item, 'TransferType'),
-                    'trans_type': self._val(item, 'TransType'),
-                }
-
-                details = item.get('Details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-                if not details:
-                    result.append(dict(header, line_nbr='0'))
-                    continue
-
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    description = self._val(detail, 'Description') or self._val(detail, 'TransactionDescription')
-                    warehouse_dest_code = self._val(detail, 'Warehouse') or header.get('warehouse_code')
-
-                    result.append({
-                        **header,
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'line_description': self._val(detail, 'Description'),
-                        'from_location_code': self._val(detail, 'FromLocationID'),
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'to_location_code': self._val(detail, 'ToLocationID'),
-                        'quantity': self._val(detail, 'Quantity'),
-                        'uom_code': self._val(detail, 'UOM'),
-                    })
-
-            _logger.info("Berhasil ambil %s rows Transfer Order dari Acumatica", len(result))
-            return result
-        finally:
-            self._do_logout(session)
-            self.last_sync = fields.Datetime.now()
-
 
 class AcumaticaTransferOneStepLine(models.Model):
     _name = 'acumatica.transfer.one.step.line'
     _description = 'Data Transfer Order dari Acumatica'
     _order = 'reference_nbr asc, line_nbr asc, id asc'
+
+    line_ids = fields.One2many(
+        'acumatica.transfer.one.step.product', # Nama model child yang dituju
+        'header_id',                  # Nama field Many2one di model child
+        string='Transfer Lines'
+    )
 
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
@@ -281,6 +53,13 @@ class AcumaticaTransferOneStepLine(models.Model):
         ('updated', 'Diupdate'),
         ('error', 'Error'),
     ], string='Status', default='pending', readonly=True)
+
+    state = fields.Selection([
+        ('draft', 'Siap'),
+        ('fetched', 'Data Sudah Ditarik'),
+        ('done', 'Selesai'),
+    ], default='draft')
+
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
@@ -289,6 +68,7 @@ class AcumaticaTransferOneStepLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+    picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
 
     @api.depends('reference_nbr')
     def _compute_exists_in_odoo(self):
@@ -345,7 +125,7 @@ class AcumaticaTransferOneStepLine(models.Model):
             product = Product.search([('name', '=', line.line_description)], limit=1)
 
         if not product:
-            name = line.line_description or line.description or line.inventory_id or 'Unknown Product'
+            name = line.line_description or line.line_description or line.inventory_id or 'Unknown Product'
             existing = Product.search([('default_code', '=', line.inventory_id)], limit=1)
             if existing:
                 return existing
@@ -398,6 +178,7 @@ class AcumaticaTransferOneStepLine(models.Model):
     def action_import_this(self):
         self.ensure_one()
         return self._do_import()
+    
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
@@ -408,6 +189,9 @@ class AcumaticaTransferOneStepLine(models.Model):
         error = 0
 
         # proses per receipt number
+        # print(f"self mapped: {self.mapped('reference_nbr')}")
+
+    
         for reference_nbr in self.mapped('reference_nbr'):
             receipt_lines = self.filtered(
                 lambda l: l.reference_nbr == reference_nbr and l.import_state == 'pending'
@@ -416,6 +200,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                 continue
 
             first = receipt_lines[0]
+            print(f"first: {first}")
 
             try:
                 # vendor = self._find_vendor(first)
@@ -425,14 +210,15 @@ class AcumaticaTransferOneStepLine(models.Model):
                         f'Warehouse tidak ditemukan untuk code: {first.to_warehouse_code or first.from_warehouse_code or "-"}'
                     )
 
-                picking_type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
-                ], limit=1) or PickingType.search([
-                    ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
-                ], limit=1)
+                picking_type = first.picking_type_id.id
+                # picking_type = PickingType.search([
+                #     ('warehouse_id', '=', warehouse.id),
+                #     ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
+                # ], limit=1) or PickingType.search([
+                #     ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )
+                # ], limit=1)
 
-                print(picking_type.mapped('name'))
+                # print(picking_type.mapped('name'))
 
                 if not picking_type:
                     raise UserError('Picking type internal tidak ditemukan.')
@@ -480,20 +266,44 @@ class AcumaticaTransferOneStepLine(models.Model):
                 picking = Picking.search([('origin', '=', origin)], limit=1)
 
                 if picking:
-                    if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                    if picking.state != 'draft':
+                        action_state = 'error'
+                        error += 1
                         raise UserError(
                             f'Receipt {reference_nbr} sudah ada di Odoo dengan state '
                             f'{picking.state}, tidak bisa diupdate.'
                         )
-                    picking.write(vals)
-                    action_state = 'updated'
-                    updated += 1
+
+                    if picking.state == 'draft':
+                        action_state = 'updated'
+                        picking.write(vals)
+                        imported += 1
+
                 else:
                     picking = Picking.create(vals)
+                    # print(f"Picking : {picking} Created")
+                    # raise UserError("Checkpoint")
                     action_state = 'imported'
                     imported += 1
 
-                for line in receipt_lines:
+                if action_state == 'error':
+                    break
+
+                to_create_move = self.env['acumatica.transfer.one.step.product'].search([
+                        ('header_id', '=', first.id)
+                    ])
+
+                if action_state == 'updated' and picking:
+                    moves_to_delete = self.env['stock.move'].search([('picking_id', '=', picking.id)])
+                    if moves_to_delete:
+                        moves_to_delete.unlink()
+
+                for line in to_create_move:
+                    for field_name in line._fields:
+                        print(f"{field_name}: {line[field_name]}")
+                    print("="*50 + "\n")
+                    # raise UserError('Checkpoint')
+
                     try:
                         product = self._find_product(line)
                         if not product:
@@ -506,34 +316,37 @@ class AcumaticaTransferOneStepLine(models.Model):
                         line_dest = self._find_location_dest(line, warehouse) or dest_location
                         qty = self._parse_float(line.quantity)
 
+                        print(f"Convert : {line.quantity} to : {qty}")
+                        # raise UserError('Checkpoint')
+
                         # dedup move
                         move_domain = [('picking_id', '=', picking.id)]
-                        if 'adt_line_external_id' in Move._fields and line.line_external_id:
-                            move_domain.append(('adt_line_external_id', '=', line.line_external_id))
+                        if 'adt_line_external_id' in Move._fields and line.acumatica_header_id:
+                            move_domain.append(('adt_line_external_id', '=', line.acumatica_header_id))
                         else:
                             move_domain += [
                                 ('product_id', '=', product.id),
                                 ('product_uom_qty', '=', qty),
                             ]
 
-                        existing_move = Move.search(move_domain, limit=1)
-                        if existing_move:
-                            line.write({
-                                'import_state': action_state,
-                                'import_message': f'Skip duplicate: {picking.name}',
-                                'odoo_picking_id': picking.id,
-                            })
-                            continue
+                        # existing_move = Move.search(move_domain, limit=1)
+                        # if existing_move:
+                        #     first.write({
+                        #         'import_state': action_state,
+                        #         'import_message': f'Skip duplicate: {picking.name}',
+                        #         'odoo_picking_id': picking.id,
+                        #     })
+                        #     continue
 
                         move_vals = {
-                            'name': line.description or product.display_name,
+                            'name': line.line_description or product.display_name,
                             'picking_id': picking.id,
                             'product_id': product.id,
                             'product_uom_qty': qty,
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': picking.location_id.id,
                             'location_dest_id': line_dest.id,
-                            'description_picking': line.description or False,
+                            'description_picking': line.line_description or False,
 
                             'adt_line_nbr': line.line_nbr or False,
                             'adt_line_note': line.line_note or False,
@@ -549,9 +362,18 @@ class AcumaticaTransferOneStepLine(models.Model):
                         # filter field yang ada di stock.move
                         move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
 
-                        Move.create(move_vals)
+                        print(f"Move to create: {move_vals}")
 
-                        line.write({
+                        created_move = Move.create(move_vals)
+
+                        print("\n" + "="*50)
+                        print(f"DEBUG STOCK MOVE ID: {created_move.id}")
+                        print("="*50)
+                        for field_name in created_move._fields:
+                            print(f"{field_name}: {created_move[field_name]}")
+                        print("="*50 + "\n")
+
+                        first.write({
                             'import_state': action_state,
                             'import_message': f'{action_state.title()}: {picking.name}',
                             'odoo_picking_id': picking.id,
@@ -559,7 +381,8 @@ class AcumaticaTransferOneStepLine(models.Model):
 
                     except Exception as line_e:
                         _logger.exception("Error import line %s", line.id)
-                        line.write({
+                        raise UserError('Checkpoint')
+                        first.write({
                             'import_state': 'error',
                             'import_message': str(line_e)[:200],
                             'odoo_picking_id': picking.id if picking else False,
@@ -605,3 +428,35 @@ class AcumaticaTransferOneStepLine(models.Model):
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})
+
+
+class AcumaticaTransferOneStepProduct(models.Model):
+    _name = 'acumatica.transfer.one.step.product'
+    _description = 'Transfer One Step Product'
+
+    # Relasi ke Header / Parent
+    header_id = fields.Many2one(
+        'acumatica.transfer.one.step.line', 
+        string='Header Reference', 
+        ondelete='cascade', 
+        required=True
+    )
+    
+    # Nomor Baris & Identitas Produk
+    acumatica_header_id = fields.Char(string="Header ID")
+
+    line_nbr = fields.Integer(string='Line Number')
+    inventory_id = fields.Char(string='Product / Inventory')
+    
+    # Deskripsi & Catatan
+    line_description = fields.Char(string='Description')
+    line_note = fields.Text(string='Line Note')
+    
+    # Lokasi Asal & Tujuan
+    from_location_code = fields.Char(string='From Location')
+    to_location_code = fields.Char(string='To Location')
+    
+    # Kuantitas & Satuan
+    quantity = fields.Float(string='Quantity')
+    uom_code = fields.Char(string='Unit of Measure')
+    

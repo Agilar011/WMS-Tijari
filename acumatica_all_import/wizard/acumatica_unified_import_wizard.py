@@ -239,6 +239,40 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Inventory Issue Toko Pegang DO dari Acumatica',
             'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
         },
+        
+        'vendor_return_direct_transfer': {
+            'label': 'Vendor Return Direct Transfer',
+            'wizard_model': 'import.vendor.return.direct.transfer.wizard',
+            'line_model': 'acumatica.vendor.return.direct.transfer.staging',
+            'result_name': 'Hasil Import Direct Transfer',
+            'staging_name': 'Data Direct Transfer Acumatica',
+            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
+        },
+        'vendor_return_document_direct_transfer': {
+            'label': 'Vendor Return Document Direct Transfer',
+            'wizard_model': 'import.direct.transfer.wizard',
+            'line_model': 'acumatica.direct.transfer.staging',
+            'result_name': 'Hasil Import Direct Transfer',
+            'staging_name': 'Data Direct Transfer Acumatica',
+            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
+        },
+        'credit_memo_consignment': {
+            'label': 'Credit Memo Consignment',
+            'wizard_model': 'import.credit.memo.consignment.wizard',
+            'line_model': 'acumatica.credit.memo.consignment.staging',
+            'result_name': 'Hasil Import Credit Memo Consignment',
+            'staging_name': 'Data Credit Memo Consignment Acumatica',
+            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
+        },
+        'inventory_receipt_transfer_wh_in': {
+            'label': 'Inventory Receipt : Transfer In',
+            'wizard_model': 'import.inventory.receipt.transfer.wh.in.wizard',
+            'line_model': 'acumatica.inventory.receipt.transfer.wh.in.staging',
+            'result_name': 'Hasil Import Inventory Receipt : Transfer WH IN',
+            'staging_name': 'Data Inventory Receipt : Transfer WH IN',
+            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
+        },
+        
     }
 
     MASTER_DATA_TYPES = [
@@ -256,9 +290,9 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     TRANSACTION_TYPES = [
         'po_receipt',
         'so_transfer',
-        # 'receipt_change_item',
+        'receipt_change_item',
         'receipt_external',
-        # 'inventory_received',
+        'inventory_received',
         'toko_pegang_do',
         'shipment_so',
         'so_shipment',
@@ -271,6 +305,10 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'kit_assembly',
         'invoice_consignment',
         'inventory_issue_toko_pegang_do',
+        'vendor_return_direct_transfer',
+        'vendor_return_document_direct_transfer',
+        'credit_memo_consignment',
+        'inventory_receipt_transfer_wh_in'
     ]
 
     def _get_import_type_selection(self):
@@ -556,7 +594,9 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     def action_view_staging(self):
         self.ensure_one()
         info = self._get_import_info()
+        print(f"Info: {info}")
         config = self._get_selected_config(info)
+        print(f"Config: {config}")
         return {
             'type': 'ir.actions.act_window',
             'name': info['staging_name'],

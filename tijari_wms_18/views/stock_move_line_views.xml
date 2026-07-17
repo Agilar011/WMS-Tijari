@@ -1,30 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <record id="view_stock_move_line_inventory_tree" model="ir.ui.view">
+        <field name="name">stock.move.line.tree.view.inventory</field>
+        <field name="model">stock.move.line</field>
+        <field name="priority">1000</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="date"/>
+                <field name="product_id"/>
+                <field name="lot_id"/>
+                <field name="location_id"/>
+                <field name="location_dest_id"/>
+                <field name="quantity"/>
+                <field name="company_id" optional="hide"/>
+                <field name="reference" optional="show"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_view_stock_move_line_inventory_tree" model="ir.actions.act_window">
+        <field name="name">Stock Move Lines</field>
+        <field name="res_model">stock.move.line</field>
+        <field name="view_mode">list,form</field>
+        <field name="view_id" ref="view_stock_move_line_inventory_tree" />
+    </record>
+
     <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_standard" model="ir.ui.view">
         <field name="name">stock.move.line.list.tjr.fifo</field>
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
         <field name="arch" type="xml">
         
-
-
-
-
-
-            <!-- test locaton -->
-            <!-- <xpath expr="//field[@name='lot_name']" position="after">
-                <field name="operation_category" column_invisible="1"/>
-                <field name="lot_name" column_invisible="0"/>
-                <field name="lot_button" widget="generate_lot_button"
-                invisible="operation_category != 'receive'"/>
-            </xpath> -->
-
-
             <!-- Daftarkan field helper ke list -->
             <xpath expr="//list" position="inside">
                 <field name="picking_type_id" column_invisible="1"/>
-                <field name="matching" column_invisible="1"/>
+            <field name="matching"
+                decoration-success="matching == 'match'"
+                decoration-danger="matching == 'not_match'"/>
                 <!-- <field name="operation_category" column_invisible="0"/> -->
                 <field name="package_id" column_invisible="0"/>
                 <field name="confirmation_lot_code" />
@@ -51,19 +64,19 @@
             <!-- Custom fields -->
             <xpath expr="//field[@name='lot_id']" position="after">
 
-                <field name="confirmation_location_code"
-                    password="1"
-                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+                <!-- <field name="confirmation_location_code" -->
+                    <!-- password="1" -->
+                    <!-- column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/> -->
+<!--  -->
+                <!-- <field name="confirmation_lot_code" -->
+                    <!-- password="1" -->
+                    <!-- column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/> -->
 
-                <field name="confirmation_lot_code"
-                    password="1"
-                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
-
-                <field name="matching_html"
-                    widget="html"
-                    readonly="1"
-                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
-                    
+                <!-- <field name="matching_html" -->
+                    <!-- widget="html" -->
+                    <!-- readonly="1" -->
+                    <!-- column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/> -->
+                    <!--  -->
                 <!-- <field name="auto_input_code" widget="auto_input_code"
                     invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/> -->
 
@@ -83,6 +96,14 @@
             </xpath>
 
             <xpath expr="//field[@name='lot_name']" position="before">
+            </xpath>
+
+            <xpath expr="//field[@name='quant_id']" position="before">
+                    
+                <field name="id" string="Line ID" />
+                <field name="auto_input_code" widget="auto_input_code"
+                    invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
+
                 <button name="action_prepare_scan_lot"
                         type="object"
                         icon="fa-barcode"
@@ -97,9 +118,31 @@
                         invisible="matching == 'match'"
                         class="btn-secondary"/>
 
+                <field name="matching"
+                    decoration-success="matching == 'match'"
+                    decoration-danger="matching == 'not_match'"/>
+                <field name="confirmation_lot_code" />
+                <field name="confirmation_location_code" />
+                <!-- <field name="matching_html"  force_save="1"/> -->
+
+            </xpath>
+
+            <!-- <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']" -->
+                            <!-- position="replace"> -->
+
+            <xpath expr="//field[@name='location_dest_id']" position="replace">
+
+                <field name="location_dest_id" domain="[('id', 'child_of', adt_dest_location_id)]"/>
+                <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
+                <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
+                <field name="matching_lot_id" column_invisible="1" force_save="1"/>
+                <field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
+
                 <field name="id" string="Line ID" />
-                <field name="matching_html" invisible="not confirmation_location_code and not confirmation_lot_code"/>
-                <field name="matching" column_invisible="1" force_save="1"/>
+                <!-- <field name="matching_html" invisible="not confirmation_location_code and not confirmation_lot_code"/> -->
+                <field name="matching"
+                    decoration-success="matching == 'match'"
+                    decoration-danger="matching == 'not_match'"/>
             </xpath>
 
         </field>
@@ -152,21 +195,7 @@
         <field name="inherit_id" ref="stock.view_stock_move_line_detailed_operation_tree"/>
         <field name="arch" type="xml">
 
-            <xpath expr="//field[@name='quant_id']" position="after">
-                <field name="origin" string="Source Document"/>
-
-                <field name="confirmation_location_code"
-                    password="1"
-                    column_invisible="context.get('picking_code') == 'incoming'" readonly="state in ('done', 'cancel') and is_locked"/>
-
-                <field name="confirmation_lot_code"
-                    password="1"
-                    column_invisible="context.get('picking_code') == 'incoming'" readonly="state in ('done', 'cancel') and is_locked"/>
-
-                <field name="matching_html"
-                    widget="html"
-                    readonly="1"
-                    column_invisible="context.get('picking_code') == 'incoming'"/>
+            <xpath expr="//field[@name='quant_id']" position="before">
 
                 <field name="auto_input_code" widget="auto_input_code"
                     column_invisible="context.get('picking_code') == 'incoming'" readonly="state in ('done', 'cancel') and is_locked"/>

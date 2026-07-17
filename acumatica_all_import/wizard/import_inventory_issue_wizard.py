@@ -244,8 +244,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
         print("="*80)
         print("[DEBUG] MASUK KE FUNGSI: _create_staging_data")
         print("="*80)
-        print(f"Header List: {header_list}")
-        print(f"Line List: {line_list}")
+        # print(f"Header List: {header_list}")
+        # print(f"Line List: {line_list}")
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         lines_to_create = []
@@ -262,7 +262,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
                 'selected': True,
                 'sync_date': sync_data,
             })
-            print(f"line to create: {lines_to_create}")
+            # print(f"line to create: {lines_to_create}")
 
             created_header = self.env['acumatica.inventory.issue.line'].create(lines_to_create)
 
@@ -288,8 +288,13 @@ class ImportInventoryIssueWizard(models.TransientModel):
                     # 'post_period' : move_item.get('post_period'),
 
                 })
+                if not created_header.warehouse_code:
+                    created_header.write({'warehouse_code': created_move.warehouse_code})
 
-                print(f"Created Move: {created_move}")
+
+
+
+                # print(f"Created Move: {created_move}")
 
 
 
@@ -334,9 +339,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
     # ---------------------------------------------------------
 
     def _build_header_values(self, row_number, item):
-        print(f"Item: {item}")
-
-        type = self._search_picking_type(item)
+        type , warehouse_code = self._search_picking_type(item)
         if type:
             # print(f"Type: {type}")
             type = type.id
@@ -354,22 +357,23 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'external_id': item.get('id', '') or '',
             'row_number': row_number,
             'note': item.get('note', {}).get('value', '') or '',
-            # 'actual_amount': self._val(item, 'ControlAmount'),
-            'actual_qty': self._val(item, 'ShippedQty'),
-            'scheduled_date': self._val(item, 'ShipmentDate'),
+            'actual_qty': self._val(item, 'TotalQty'),
+            'total_qty': self._val(item, 'TotalQty'),
+            'scheduled_date': self._val(item, 'Date'),
             'description': self._val(item, 'Description'),
-            # 'external_ref': self._val(item, 'ExternalRef'),
-            # 'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
             'post_period': self._val(item, 'PostPeriod'),
-            'reference_nbr': self._val(item, 'ShipmentNbr'),
-            # 'reference_nbr': self._val(item, 'ReferenceNbr'),
+            'reference_nbr': self._val(item, 'ReferenceNbr'),
             'status': self._val(item, 'Status'),
+            'trans_type': self._val(item, 'TransType'),
+            'warehouse_code' : warehouse_code,
+            'picking_type_id': type,
+            'external_ref': self._val(item, 'ExternalRef'),
+            'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+            # 'actual_amount': self._val(item, 'ControlAmount'),
+            # 'reference_nbr': self._val(item, 'ReferenceNbr'),
             # 'total_amount': self._val(item, 'TotalAmount'),
             # 'total_qty': self._val(item, 'TotalQty'),
-            'trans_type': self._val(item, 'Type'),
-            # 'vendor_code' : self._val(item, 'CustomerID'),
-            # 'partner_ref' : self._val(item, 'CustomerID'),
-            'picking_type_id': type
+            # 'partner_ref' : self._val(item, 'CustomerID'),            
             }
 
 
@@ -470,6 +474,9 @@ class ImportInventoryIssueWizard(models.TransientModel):
     # ---------------------------------------------------------
     
     def _build_detail_values(self, header_id, detail):
+
+        print('build detail vals')
+        print(detail)
         
 
         return {
@@ -481,7 +488,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'inventory_id': self._val(detail, 'InventoryID'),
             'line_nbr': self._val(detail, 'LineNbr'),
             'location_code': self._val(detail, 'Location'),
-            'product_uom_qty': self._val(detail, 'ReceiptQty'),
+            'product_uom_qty': self._val(detail, 'Qty'),
             'uom_code': self._val(detail, 'UOM'),
             'warehouse_code': self._val(detail, 'WarehouseID'),
         }
@@ -759,4 +766,4 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
             print(f"Picking Type: {type}")
 
-        return type
+        return type, warehouse_code
