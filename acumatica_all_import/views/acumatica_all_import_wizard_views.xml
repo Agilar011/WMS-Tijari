@@ -39,7 +39,7 @@
                         <field name="inventory_stock_config_id" invisible="import_type != 'inventory_stock'" required="import_type == 'inventory_stock'"/>
                         -->
                     </group>
-                    <group string="Filter Fetch" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so']">
+                    <group string="Filter Fetch" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment']">
                         <field name="fetch_limit"/>
                         <field name="fetch_skip"/>
                         <field name="batch_size"/>
@@ -55,7 +55,7 @@
                         <field name="odata_expand"/>
                         <field name="odata_top"/>
                     </group>
-                    <group string="Date Range" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so']">
+                    <group string="Date Range" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment']">
                         <field name="date_period"/>
                         <field name="start_date" invisible="date_period != True"/>
                         <field name="end_date" invisible="date_period != True"/>
