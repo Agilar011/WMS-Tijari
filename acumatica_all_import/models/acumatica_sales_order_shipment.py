@@ -156,7 +156,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         for staging_rec in not_pending_shipment:
             staging_rec.write({
                 'import_state': 'error',
-                'import_message': f'Receipt {staging_rec.shipment_nbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
+                'import_message': f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
             })
 
         # =====================================================
