@@ -352,10 +352,6 @@ class StockPicking(models.Model):
         self._adt_apply_dest_location_to_move_lines()
         return res
 
-    def action_assign(self):
-        res = super().action_assign()
-        self._adt_apply_dest_location_to_move_lines()
-        return res
 
     def _adt_apply_dest_location_to_move_lines(self):
         for picking in self:
