@@ -131,6 +131,9 @@ class AcumaticaCustomerLine(models.Model):
         - Field "to be": diisi ke field custom di res.partner
         """
         imported = updated = skipped = error = 0
+        total = len(self)
+
+        _logger.info("START IMPORT CUSTOMER; TOTAL_LINES=%s", total)
 
         for line in self:
             try:
@@ -208,6 +211,14 @@ class AcumaticaCustomerLine(models.Model):
                 error += 1
 
         msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {skipped} dilewati, {error} error.'
+        _logger.info(
+            "FINISH IMPORT CUSTOMER; TOTAL_LINES=%s, CREATED=%s, UPDATED=%s, SKIPPED=%s, ERROR=%s",
+            total,
+            imported,
+            updated,
+            skipped,
+            error,
+        )
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',

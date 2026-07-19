@@ -152,9 +152,29 @@ class StockPicking(models.Model):
             })
 
     def button_validate(self):
+        for picking in self:
+            if picking.picking_type_id.name not in ('Pick', 'Receipt'):
+                print(f"Run validate all except pick and receipt")
+                # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
+                for move in picking.move_ids:
+                    # Jika move memiliki move_line_ids, lakukan update massal di level DB
+                    for line in move.move_line_ids:
+                        loc_code = str(line.location_id.unique_code or '').strip()
+                        product_code = str(line.lot_id.name or '').strip()
+                        vals = {
+                            'confirmation_location_code': loc_code,
+                            'confirmation_lot_code': product_code,
+                            'matching': 'match',
+                        }
+                        print(f"Write vals = {vals}")
+
+                        line.write(vals)
+
+                        print(f"After write = {line.matching}")
+
+                        print(f"After write line {line.id} = {line.matching} for picking: {picking.id}")
+
         res = super().button_validate()
-
-
 
         for rec in self:
             print(rec.picking_type_id.operation_category)
@@ -164,7 +184,8 @@ class StockPicking(models.Model):
                 if not line.lot_name:
                     print(f"Missing lot: {line}")
                     raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
-        for picking in self:
+                
+
             picking._check_validate_requirements()
             operation_category = picking.picking_type_id.operation_category
             print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
@@ -256,6 +277,7 @@ class StockPicking(models.Model):
 
     def _check_validate_requirements(self):
         self.ensure_one()
+        _logger.info("Check Validate on = %s", self.id)
 
         active_moves = self.move_ids.filtered(
             lambda move: move.state != "cancel"
@@ -413,7 +435,7 @@ class StockMoveLine(models.Model):
     )
 
     lot_button = fields.Char(string="Lot Button", compute="_compute_lot_button")
-    auto_input_code = fields.Boolean(string="Auto Input Code", compute="_compute_auto_input_code")
+    auto_input_code = fields.Boolean(string="Auto Input Code")
 
     confirmation_location_code = fields.Char(
         string='Confirmation Location Code',
@@ -429,12 +451,12 @@ class StockMoveLine(models.Model):
         ('match', 'Match'),
         ('not_match', 'Not Match')
     ], string='Matching Status',
-       compute='_compute_matching',
+    #    compute='_compute_matching',
        store=True)
-    matching_html = fields.Html(
-        string='Matching Info',
-        compute='_compute_matching_html',
-        store=False)
+    # matching_html = fields.Html(
+    #     string='Matching Info',
+    #     compute='_compute_matching_html',
+    #     store=False)
     operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
     allocation_storage = fields.Many2one(
@@ -574,15 +596,15 @@ class StockMoveLine(models.Model):
 
             line.matching = matching
 
-    @api.depends('matching')
-    def _compute_matching_html(self):
-        for line in self:
-            if line.matching == 'match':
-                line.matching_html = "<span style='color: green; font-weight: bold;'>MATCH</span>"
-            elif line.matching == 'not_match':
-                line.matching_html = "<span style='color: red; font-weight: bold;'>NOT MATCH</span>"
-            else:
-                line.matching_html = False
+    # @api.depends('matching')
+    # def _compute_matching_html(self):
+    #     for line in self:
+    #         if line.matching == 'match':
+    #             line.matching_html = "<span style='color: green; font-weight: bold;'>MATCH</span>"
+    #         elif line.matching == 'not_match':
+    #             line.matching_html = "<span style='color: red; font-weight: bold;'>NOT MATCH</span>"
+    #         else:
+    #             line.matching_html = False
 
     @api.onchange('product_id')
     def _onchange_product_copy_previous_lot(self):
@@ -963,10 +985,11 @@ class StockMoveLine(models.Model):
             raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
         return {
             'type': 'ir.actions.client',
-            'tag': 'adt_focus_move_line_field',
+            'tag': 'adt_scan_qr_to_move_line_field',
             'params': {
                 'field_name': 'confirmation_lot_code',
                 'move_line_id': self.id,
+                'title': _('Scan Lot QR Code'),
             },
         }
 
@@ -976,10 +999,11 @@ class StockMoveLine(models.Model):
             raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
         return {
             'type': 'ir.actions.client',
-            'tag': 'adt_focus_move_line_field',
+            'tag': 'adt_scan_qr_to_move_line_field',
             'params': {
                 'field_name': 'confirmation_location_code',
                 'move_line_id': self.id,
+                'title': _('Scan Location QR Code'),
             },
         }
 
@@ -1124,17 +1148,6 @@ class StockMove(models.Model):
 
     # lot_button = fields.Char(string="Lot Button")
 
-    def action_validate_lot(self):
-        for move in self:
-            for line in move.move_line_ids:
-                if not line.lot_id:
-                    raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
-                if not line.location_dest_id.unique_code:
-                    raise ValidationError(f"Unique Code untuk location {line.location_dest_id.name} kosong, Silahkan generate location terlebih dahulu")
-                line.matching_lot_id = line.lot_id.id or False
-                line.matching_loc_dest_id = line.location_dest_id.id or False
-                line.confirmation_lot_code = line.lot_id.name or False
-                line.confirmation_location_code = line.location_dest_id.unique_code or False
 
     def action_generate_lot(self):
         for move in self:

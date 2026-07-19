@@ -180,6 +180,91 @@ class ImportWarehouseWizard(models.TransientModel):
             self.config_id._do_logout(session)
             self.config_id.last_sync = fields.Datetime.now()
 
+    def _get_warehouse_odata_filters(self):
+        self.ensure_one()
+        params = []
+        start_date = getattr(self, 'start_date', False)
+        end_date = getattr(self, 'end_date', False)
+        if start_date and end_date:
+            params.append(f"LastModifiedDateTime ge datetimeoffset'{start_date}' and LastModifiedDateTime le datetimeoffset'{end_date}'")
+        return params
+
+    def fetch_all_warehouse_data(self, batch_size=False):
+        """
+        Ambil semua data Warehouse dari Acumatica dengan paging $skip.
+
+        Dipakai untuk scheduler/server-side agar tidak dibatasi fetch_limit
+        milik wizard manual.
+        """
+        self.ensure_one()
+        if not self.config_id:
+            raise UserError('Pilih konfigurasi API terlebih dahulu.')
+
+        fetch_size = batch_size or self.batch_size or 50
+        if fetch_size <= 0:
+            raise UserError('Batch size harus lebih besar dari 0.')
+
+        raw_count = 0
+        batch_count = 0
+        params = self._get_warehouse_odata_filters()
+
+        _logger.info(
+            "START FETCH ALL WAREHOUSE; CONFIG=%s, BATCH_SIZE=%s, FETCH_SKIP=%s, FILTERS=%s",
+            self.config_id.display_name,
+            fetch_size,
+            self.fetch_skip,
+            params or '-',
+        )
+
+        while True:
+            offset = self.fetch_skip + (batch_count * fetch_size)
+            batch_data = self.fetch_warehouse_data(limit=fetch_size, offset=offset)
+            if not batch_data:
+                _logger.info(
+                    "STOP FETCH ALL WAREHOUSE; empty batch at OFFSET=%s, TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+                    offset,
+                    raw_count,
+                    batch_count,
+                )
+                break
+
+            raw_count += batch_data
+            batch_count += 1
+            _logger.info(
+                "FETCH ALL WAREHOUSE BATCH DONE; BATCH=%s, OFFSET=%s, FETCHED=%s, RUNNING_TOTAL=%s",
+                batch_count,
+                offset,
+                batch_data,
+                raw_count,
+            )
+
+            if batch_data < fetch_size:
+                break
+
+        self.write({
+            'total_fetched': raw_count,
+            'state': 'fetched' if raw_count else 'draft',
+        })
+        _logger.info(
+            "FINISH FETCH ALL WAREHOUSE; TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+            raw_count,
+            batch_count,
+        )
+        return raw_count
+
+    def action_fetch_all_data(self):
+        self.ensure_one()
+        raw_count = self.fetch_all_warehouse_data()
+        if not raw_count:
+            raise UserError('Tidak ada data dari API')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'import.warehouse.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
     def action_view_staging(self):
         self.ensure_one()
         return {

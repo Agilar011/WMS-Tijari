@@ -11,11 +11,14 @@
             </xpath>
 
             <xpath expr="//label[@for='product_uom_qty']" position="replace"/>
+            <!-- </xpath> -->
 
             <xpath expr="//div[@class='o_row']//field[@name='product_uom_qty']" position="replace"/>
+            <!-- </xpath> -->
 
 
             <xpath expr="//div[@class='o_row']//field[@name='product_uom']" position="replace"/>
+            <!-- </xpath> -->
 
             
             <xpath expr="//field[@name='product_uom']" position="after">
@@ -42,9 +45,32 @@
 
             </xpath> 
            
+            <xpath expr="//widget[@name='import_lots']" position="before">
+                <button name="action_toggle_unfiltered_dest"
+                        type="object"
+                        class="btn-secondary"
+                        icon="fa-filter"
+                        string="Unfiltered"
+                        invisible="unfiltered_dest"/>
+
+                <button name="action_toggle_unfiltered_dest"
+                        type="object"
+                        class="btn-success"
+                        icon="fa-check"
+                        string="Filtered"
+                        invisible="not unfiltered_dest"/>
+
+                <button name="action_validate_lot_pick"
+                    type="object"
+                    string="Validate Lot"
+                    class="btn-warning"
+                    invisible="picking_type_name != 'Pick'"/>
+
+            </xpath> 
 
             <xpath expr="//widget[@name='import_lots']" position="after">
                 <span class="d-inline-flex gap-1">
+
                     <button name="action_generate_lot"
                         type="object"
                         string="Generate Lot"

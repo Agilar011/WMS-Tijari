@@ -1,0 +1,214 @@
+{
+  "info": {
+    "_postman_id": "b6f0d7f1-65b8-4e95-a2ef-acumatica-master-transaction-webhooks",
+    "name": "Acumatica Master and Transaction Webhooks",
+    "description": "Template Postman untuk webhook Acumatica vendor, UoM, warehouse, stock item, non-stock item, dan PO receipt.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8069",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "CHANGE_ME",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Master - Vendor",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"vendor-postman-001\",\n  \"rowNumber\": 1,\n  \"note\": {\n    \"value\": \"Vendor test from Postman\"\n  },\n  \"AccountRef\": {\n    \"value\": \"VREF-001\"\n  },\n  \"BAccountID\": {\n    \"value\": \"200001\"\n  },\n  \"FOBPoint\": {\n    \"value\": \"DEST\"\n  },\n  \"LastModifiedDateTime\": {\n    \"value\": \"2026-07-16T00:10:00+07:00\"\n  },\n  \"LeadTimedays\": {\n    \"value\": 7\n  },\n  \"LocationName\": {\n    \"value\": \"MAIN\"\n  },\n  \"Status\": {\n    \"value\": \"Active\"\n  },\n  \"VendorID\": {\n    \"value\": \"VEND-POSTMAN-001\"\n  },\n  \"VendorName\": {\n    \"value\": \"Postman Test Vendor 001\"\n  },\n  \"VendorClass\": {\n    \"value\": \"LOCAL\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/acumatica/webhook/vendor",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "acumatica",
+            "webhook",
+            "vendor"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Master - UoM",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"uom-postman-001\",\n  \"rowNumber\": 1,\n  \"UnitID\": {\n    \"value\": \"PCS\"\n  },\n  \"Description\": {\n    \"value\": \"Piece\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/acumatica/webhook/uom",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "acumatica",
+            "webhook",
+            "uom"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Master - Warehouse",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"warehouse-postman-001\",\n  \"rowNumber\": 1,\n  \"note\": {\n    \"value\": \"Warehouse test from Postman\"\n  },\n  \"Active\": {\n    \"value\": true\n  },\n  \"BuildingID\": {\n    \"value\": \"WH33\"\n  },\n  \"Description\": {\n    \"value\": \"WH33 Finished Goods\"\n  },\n  \"DropShipLocationID\": {\n    \"value\": \"WH33-DS\"\n  },\n  \"LastModifiedDateTime\": {\n    \"value\": \"2026-07-16T00:20:00+07:00\"\n  },\n  \"ReceivingLocationID\": {\n    \"value\": \"WH33-RC\"\n  },\n  \"RMALocationID\": {\n    \"value\": \"WH33-RMA\"\n  },\n  \"ShippingLocationID\": {\n    \"value\": \"WH33-SH\"\n  },\n  \"WarehouseID\": {\n    \"value\": \"WH33-FG\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/acumatica/webhook/warehouse",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "acumatica",
+            "webhook",
+            "warehouse"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Master - Stock Item",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"stock-item-postman-001\",\n  \"rowNumber\": 1,\n  \"InventoryID\": {\n    \"value\": \"SKU-POSTMAN-001\"\n  },\n  \"Description\": {\n    \"value\": \"Postman Stock Item 001\"\n  },\n  \"ItemType\": {\n    \"value\": \"Finished Good\"\n  },\n  \"ItemClass\": {\n    \"value\": \"FINISH\"\n  },\n  \"ItemStatus\": {\n    \"value\": \"Active\"\n  },\n  \"BaseUOM\": {\n    \"value\": \"Piece\"\n  },\n  \"ValuationMethod\": {\n    \"value\": \"FIFO\"\n  },\n  \"LastModifiedDateTime\": {\n    \"value\": \"2026-07-16T00:30:00+07:00\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/acumatica/webhook/stock-item",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "acumatica",
+            "webhook",
+            "stock-item"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Master - Non-Stock Item",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": \"non-stock-item-postman-001\",\n  \"rowNumber\": 1,\n  \"note\": {\n    \"value\": \"Non-stock item test\"\n  },\n  \"InventoryID\": {\n    \"value\": \"NS-POSTMAN-001\"\n  },\n  \"Description\": {\n    \"value\": \"Postman Non-Stock Item 001\"\n  },\n  \"ItemType\": {\n    \"value\": \"Non-Stock\"\n  },\n  \"ItemClass\": {\n    \"value\": \"SERVICE\"\n  },\n  \"ItemStatus\": {\n    \"value\": \"Active\"\n  },\n  \"BaseUnit\": {\n    \"value\": \"Piece\"\n  },\n  \"PurchaseUnit\": {\n    \"value\": \"Piece\"\n  },\n  \"SalesUnit\": {\n    \"value\": \"Piece\"\n  },\n  \"IsAKit\": {\n    \"value\": false\n  },\n  \"IsKit\": {\n    \"value\": false\n  },\n  \"NoteID\": {\n    \"value\": \"NOTE-NS-001\"\n  },\n  \"PostingClass\": {\n    \"value\": \"DEFAULT\"\n  },\n  \"LastModifiedDateTime\": {\n    \"value\": \"2026-07-16T00:35:00+07:00\"\n  },\n  \"PriceClass\": {\n    \"value\": \"STD\"\n  },\n  \"Volume\": {\n    \"value\": 0\n  },\n  \"VolumeUOM\": {\n    \"value\": \"CM3\"\n  },\n  \"Weight\": {\n    \"value\": 0\n  },\n  \"WeightUOM\": {\n    \"value\": \"KG\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/acumatica/webhook/non-stock-item",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "acumatica",
+            "webhook",
+            "non-stock-item"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Transaction - PO Receipt",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-API-Key",
+            "value": "{{api_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"PurchaseReceiptGIDetails\": [\n    {\n      \"id\": \"po-receipt-postman-001\",\n      \"rowNumber\": 1,\n      \"NoteHeader\": {\n        \"value\": \"PO receipt test from Postman\"\n      },\n      \"Branch\": {\n        \"value\": \"MAIN\"\n      },\n      \"BuildingID\": {\n        \"value\": \"WH33\"\n      },\n      \"ControlQty\": {\n        \"value\": \"10\"\n      },\n      \"Date\": {\n        \"value\": \"2026-07-16T00:45:00+07:00\"\n      },\n      \"Hold\": {\n        \"value\": false\n      },\n      \"InventoryRefNbr\": {\n        \"value\": \"INVREF-001\"\n      },\n      \"LastModifiedDateTime\": {\n        \"value\": \"2026-07-16T00:50:00+07:00\"\n      },\n      \"Location\": {\n        \"value\": \"WH33-FG\"\n      },\n      \"PostPeriod\": {\n        \"value\": \"202607\"\n      },\n      \"ReceiptNbr\": {\n        \"value\": \"RCPT-POSTMAN-001\"\n      },\n      \"Status\": {\n        \"value\": \"Released\"\n      },\n      \"TotalQty\": {\n        \"value\": \"10\"\n      },\n      \"Type\": {\n        \"value\": \"Receipt\"\n      },\n      \"VendorID\": {\n        \"value\": \"VEND-POSTMAN-001\"\n      },\n      \"VendorName\": {\n        \"value\": \"Postman Test Vendor 001\"\n      },\n      \"VendorRef\": {\n        \"value\": \"VREF-001\"\n      },\n      \"LineNote\": {\n        \"value\": \"Line 1\"\n      },\n      \"LineDescription\": {\n        \"value\": \"Postman Stock Item 001\"\n      },\n      \"LineInventoryID\": {\n        \"value\": \"SKU-POSTMAN-001\"\n      },\n      \"LineNbr\": {\n        \"value\": \"1\"\n      },\n      \"LineType\": {\n        \"value\": \"Goods\"\n      },\n      \"LineLocation\": {\n        \"value\": \"WH33-FG\"\n      },\n      \"LineOpenQty\": {\n        \"value\": \"10\"\n      },\n      \"LineOrderedQty\": {\n        \"value\": \"10\"\n      },\n      \"LineReceiptQty\": {\n        \"value\": \"10\"\n      },\n      \"LineUOM\": {\n        \"value\": \"Piece\"\n      },\n      \"LineWarehouseID\": {\n        \"value\": \"WH33-FG\"\n      }\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/acumatica/webhook/po-receipt",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "acumatica",
+            "webhook",
+            "po-receipt"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

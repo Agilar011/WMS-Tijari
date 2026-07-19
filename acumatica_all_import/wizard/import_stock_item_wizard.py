@@ -59,6 +59,81 @@ class ImportStockItemWizard(models.TransientModel):
             'target':    'new',
         }
     
+    def fetch_all_stock_item_data(self, batch_size=False):
+        """
+        Ambil semua data Stock Item dari Acumatica dengan paging $skip.
+
+        Dipakai untuk scheduler/server-side agar tidak dibatasi fetch_limit
+        milik wizard manual.
+        """
+        self.ensure_one()
+        if not self.config_id:
+            raise UserError('Pilih konfigurasi API terlebih dahulu.')
+
+        fetch_size = batch_size or self.batch_size or 50
+        if fetch_size <= 0:
+            raise UserError('Batch size harus lebih besar dari 0.')
+
+        raw_count = 0
+        batch_count = 0
+
+        _logger.info(
+            "START FETCH ALL STOCK ITEM; CONFIG=%s, BATCH_SIZE=%s, FETCH_SKIP=%s",
+            self.config_id.display_name,
+            fetch_size,
+            self.fetch_skip,
+        )
+
+        while True:
+            offset = batch_count * fetch_size
+            batch_data = self.fetch_stock_item_data(
+                limit=fetch_size,
+                offset=offset,
+                skip=self.fetch_skip,
+            )
+            if not batch_data:
+                _logger.info(
+                    "STOP FETCH ALL STOCK ITEM; empty batch at OFFSET=%s, TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+                    self.fetch_skip + offset,
+                    raw_count,
+                    batch_count,
+                )
+                break
+
+            raw_count += batch_data
+            batch_count += 1
+            _logger.info(
+                "FETCH ALL STOCK ITEM BATCH DONE; BATCH=%s, OFFSET=%s, FETCHED=%s, RUNNING_TOTAL=%s",
+                batch_count,
+                self.fetch_skip + offset,
+                batch_data,
+                raw_count,
+            )
+
+        self.write({
+            'total_fetched': raw_count,
+            'state': 'fetched' if raw_count else 'draft',
+        })
+        _logger.info(
+            "FINISH FETCH ALL STOCK ITEM; TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+            raw_count,
+            batch_count,
+        )
+        return raw_count
+
+    def action_fetch_all_data(self):
+        self.ensure_one()
+        raw_count = self.fetch_all_stock_item_data()
+        if not raw_count:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        return {
+            'type':      'ir.actions.act_window',
+            'res_model': 'import.stock.item.wizard',
+            'res_id':    self.id,
+            'view_mode': 'form',
+            'target':    'new',
+        }
+
     def _check_last_modified_staging(self, item):
         Staging = self.env['acumatica.stock.item.line']
         existing = Staging.search([
@@ -66,7 +141,7 @@ class ImportStockItemWizard(models.TransientModel):
             ('last_modified_datetime', '!=', item['last_modified_datetime']),
         ])
         if existing:
-            item['state'] = 'pending'
+            item['import_state'] = 'pending'
             existing.write(item)
 
     def fetch_stock_item_data(self, limit=50, offset=0, skip=0):
@@ -107,7 +182,7 @@ class ImportStockItemWizard(models.TransientModel):
 
             _logger.info(
                 'REQUEST INFO | '
-                'ENDPOINT=%d | PARAMS=%d',
+                'ENDPOINT=%s | PARAMS=%s',
                 self.config_id.api_url,
                 params,
             )
@@ -454,4 +529,3 @@ class ImportStockItemWizard(models.TransientModel):
                 'sticky': False,
             },
         }
-

@@ -63,6 +63,41 @@ class ImportTokoPegangDOWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
+    def fetch_all_toko_pegang_do_data(self, batch_size=False):
+        self.ensure_one()
+
+        fetch_size = batch_size or self.batch_size or 1000
+        offset = self.fetch_skip or 0
+        raw_count = 0
+        params = []
+        if self.start_date and self.end_date:
+            params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+        if self.odata_filter:
+            params.append(self.odata_filter)
+
+        while True:
+            batch_count = self.fetch_toko_pegang_do_data(
+                limit=fetch_size,
+                offset=offset,
+                reference_nbr=self.reference_nbr,
+                odata_filter=params if params else None,
+            )
+            if not batch_count:
+                break
+
+            raw_count += batch_count
+            if batch_count < fetch_size:
+                break
+            offset += fetch_size
+
+        self.write({
+            'state': 'fetched',
+            'total_fetched': raw_count,
+        })
+        if not raw_count:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        return raw_count
+
     @staticmethod
     def _val(item, key):
         value = item.get(key, {})
@@ -303,7 +338,7 @@ class ImportTokoPegangDOWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if existing.acumatica_write_date == vals['acumatica_write_date']:
                 unchanged.append(existing)
             else:
                 to_update.append({

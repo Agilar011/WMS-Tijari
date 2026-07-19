@@ -1,15 +1,17 @@
 from odoo import models, api, fields
 from odoo.exceptions import ValidationError, UserError
+
 import base64
-
-
+import re
+import traceback
 import os
 from PIL import Image
 import qrcode
 import io
+import logging 
 
 
-import logging
+
 _logger = logging.getLogger(__name__)
 
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
@@ -50,6 +52,7 @@ class StockPicking(models.Model):
         ('ready', 'Ready'),
         ('not_ready', 'Not Ready'),
     ], string='Sync State', default='ready', readonly=True, help='Data acumatica yg tidak sesuai dengan master yg ada di wms akan masuk ke state Not Ready, dan record tidak bisa di proses sampai data master nya sudah sinkron.')
+
     sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
     adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
     destination_location = fields.Char(string='to delete field')
@@ -60,6 +63,102 @@ class StockPicking(models.Model):
     all_moves_picked = fields.Boolean(
         compute='_compute_all_moves_picked',
     )
+    allowed_putaway_product_ids = fields.Many2many(
+        'product.product',
+        compute='_compute_allowed_putaway_product_ids',
+    )
+    putaway_product_id = fields.Many2one(
+        'product.product', string="Product Name")
+    putaway_lot_id = fields.Many2one(
+        comodel_name="stock.lot",
+        string="LOT Number",
+        compute='_compute_putaway_values',
+        readonly=True,
+    )
+    putaway_move_line_ids = fields.Many2many(
+        comodel_name="stock.move.line",
+        string="Stock Move Lines",
+        compute='_compute_putaway_values',
+        readonly=False,
+    )
+
+    def _get_putaway_move_lines(self):
+        self.ensure_one()
+
+        move_lines = self.move_line_ids
+        if self.putaway_product_id:
+            move_lines = move_lines.filtered(
+                lambda line: line.product_id == self.putaway_product_id
+            )
+
+        return move_lines
+
+    @api.depends('move_ids.product_id')
+    def _compute_allowed_putaway_product_ids(self):
+        for picking in self:
+            picking.allowed_putaway_product_ids = picking.move_ids.product_id
+
+    @api.depends(
+        'putaway_product_id',
+        'move_line_ids',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+    )
+    def _compute_putaway_values(self):
+        for picking in self:
+            move_lines = picking._get_putaway_move_lines()
+            picking.putaway_move_line_ids = move_lines
+            picking.putaway_lot_id = (
+                move_lines.mapped('lot_id')[:1]
+                if picking.putaway_product_id
+                else False
+            )
+
+    @api.onchange('putaway_product_id')
+    def _onchange_putaway_product_id(self):
+        for picking in self:
+            move_lines = picking._get_putaway_move_lines()
+            picking.putaway_move_line_ids = move_lines
+            picking.putaway_lot_id = (
+                move_lines.mapped('lot_id')[:1]
+                if picking.putaway_product_id
+                else False
+            )
+
+    shipment_information = fields.Selection([
+        ('partial', 'Partial Shipment'),
+        ('full_shipment', 'Full Shipment'),
+    ], string='Informasi TMS', readonly=True, help='Status shipment yang akan dikirimkan ke TMS.')
+
+# Function to foward adt_type from parent picking
+    @api.model_create_multi
+    def create(self, vals_list):
+        # print("=" * 100)
+        # print("CREATE PICKING")
+        # traceback.print_stack(limit=15)        
+        print('=' * 100)
+        print("@api.model_create_multi")
+
+        print(f"Self: {self}")
+        print(f"Vals List: {vals_list}")
+
+        # Karena vals_list adalah sebuah LIST, kita harus melakukan looping
+        # for vals in vals_list:
+        #     # Ambil nilai 'origin' dengan aman dari dictionary
+        #     origin = vals.get('origin')
+            
+        #     if origin:
+        #         # Perbaikan pencarian: menggunakan titik 'stock.picking' dan format domain yang benar
+        #         parent_picking = self.env['stock.picking'].search([('origin', '=', origin)], limit=1)
+                
+        #         # Jika parent_picking ditemukan, salin nilai adt_type ke data baru
+        #         if parent_picking and parent_picking.adt_type:
+        #             vals['adt_type'] = parent_picking.adt_type
+
+        # # Panggil fungsi super() dengan melewatkan vals_list yang sudah diperbarui
+        pickings = super(StockPicking, self).create(vals_list)
+        return pickings
+
 
     def action_put_in_pack(self, move_lines_to_pack=False):
         self.ensure_one()
@@ -192,6 +291,7 @@ class StockPicking(models.Model):
         string="Mapped Location",
     )
     note_ba = fields.Text(string="Notes For Official Report")
+    picking_type_name = fields.Char(string="Picking Type Name", related="picking_type_id.name", store=True)
 
     def _allow_custom_push_destination(self):
         self.ensure_one()
@@ -268,6 +368,42 @@ class StockPicking(models.Model):
             picking.all_moves_picked = (
                 bool(moves) and all(move.picked for move in moves)
             )
+
+    def action_prepare_scan_product(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'adt_scan_qr_to_picking_product',
+            'params': {
+                'picking_id': self.id,
+                'title': 'Scan Product QR Code',
+            },
+        }
+
+    def _find_product_by_scan_code(self, scan_code):
+        Product = self.env['product.product']
+
+        return Product.search([
+            '|',
+            ('barcode', '=', scan_code),
+            ('default_code', '=', scan_code),
+        ], limit=1)
+
+    def action_apply_scanned_product(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        product = self._find_product_by_scan_code(scanned_code)
+
+        if not product:
+            raise ValidationError("Product tidak ditemukan untuk kode scan: %s" % scanned_code)
+
+        self.write({'putaway_product_id': product.id})
+
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+        }
+
 # ================================================================================================
 # Temp Storage function create move line qr code        
 # ================================================================================================
@@ -361,29 +497,43 @@ class StockRule(models.Model):
     _inherit = "stock.rule"
 
     # Override method _push_prepare_move_copy_values untuk mengubah lokasi tujuan push berdasarkan adt_dest_location_id di stock.picking jika picking type incoming dan adt_dest_location_id terisi, sehingga bisa push ke lokasi selain location_dest_id yang sudah ditentukan di stock.rule
-    def _push_prepare_move_copy_values(
-        self,
-        move_to_copy,
-        new_date,
-    ):
-        vals = super()._push_prepare_move_copy_values(
-            move_to_copy,
-            new_date,
-        )
+    def _push_prepare_move_copy_values(self, move_to_copy, new_date,):
+        vals = super(StockRule, self)._push_prepare_move_copy_values(move_to_copy, new_date)
+        print('='*300)
+        print("_push_prepare_move_copy_values")
+        print(f"Vals to create new picking: {vals}")
+        # print(f"Parent Picking: {move_to_copy}")
 
         picking = move_to_copy.picking_id
 
-        if (
-            picking
-            and picking.adt_dest_location_id
-            and picking._allow_custom_push_destination()
-        ):
+        print(picking)
+        if picking:
+            # print("=== DAFTAR FIELD DAN NILAI ===")
+            # for field_name, field_object in picking._fields.items():
+            #     # Mengambil nilai field
+            #     val = picking[field_name]
+            
+            #     if field_object.type == 'many2one' and val:
+            #         print(f"{field_name}: {val.display_name} (ID: {val.id})")
+            #     else:
+            #         print(f"{field_name}: {val}")
+
+            adt_type = picking.adt_type
+
+            if adt_type:
+                vals.update({
+                    "adt_type": picking.adt_type if picking.adt_type else picking.name,
+                })
+
+        if (picking and picking.adt_dest_location_id and picking._allow_custom_push_destination()):
             vals.update({
                 "location_dest_id": picking.adt_dest_location_id.id,
                 "adt_dest_location_id": picking.adt_dest_location_id.id,
-                "adt_dest_location_id": picking.move_ids.adt_dest_location_id.id,
+                # "adt_dest_location_id": picking.move_ids.adt_dest_location_id.id,
                 "origin": picking.origin if picking.origin else picking.name
             })
+
+        print(f"vals to update: {vals}")
 
         return vals
 
