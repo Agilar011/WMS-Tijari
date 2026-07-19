@@ -1,0 +1,9 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_approval_type,approval.type,model_approval_type,,1,1,1,1
+access_approval_type_line,approval.type.line,model_approval_type_line,,1,1,1,1
+access_approval_type_range,approval.range,model_approval_type_range,,1,1,1,1
+access_approval_type_range_line,approval.range.line,model_approval_type_range_line,,1,1,1,1
+access_approval_request,approval.request.,model_approval_request,,1,1,1,1
+access_approval_request_line,approval.request.line,model_approval_request_line,,1,1,1,1
+access_approval_mixin,approval.mixin,model_approval_mixin,,1,1,1,1
+access_approval_model,approval.model,model_approval_model,,1,1,1,1

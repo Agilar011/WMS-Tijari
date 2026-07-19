@@ -1,4 +1,5 @@
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError, ValidationError
 
 
 class StockQuant(models.Model):
@@ -62,6 +63,19 @@ class StockQuant(models.Model):
             for inventory in adjustments_to_process:
                 inventory.action_auto_state_to_done()
         return res
+
+    def action_apply_all(self):
+        ctx = self.env.context
+        inventory = self.env["stock.inventory"].browse(
+            ctx.get("inventory_id")
+        )
+
+        if inventory.approval_state != "approved":
+            raise UserError(_(
+                "Inventory Adjustment must be approved before applying inventory."
+            ))
+
+        return super().action_apply_all()
 
     def _get_inventory_fields_write(self):
         return super()._get_inventory_fields_write() + ["to_do"]
