@@ -156,7 +156,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         for staging_rec in not_pending_shipment:
             staging_rec.write({
                 'import_state': 'error',
-                'import_message': f'Receipt {staging_rec.shipment_nbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
+                'import_message': f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
             })
 
         # =====================================================
@@ -253,8 +253,10 @@ class AcumaticaShipmentGIStaging(models.Model):
                             'adt_open_qty': float(item.adt_ShipmentQty or 0.0),
                             'adt_type': 'Sales Order Shipment',
                             'adt_line_description': item.adt_LineDescription or item.description,
+                            'adt_dest_location_id' : product_location.id if product_location else picking_type.default_location_src_id.id,
                         }
-                        Move.create(move_vals)
+                        adt_dest_location_id =  Move.create(move_vals)
+                        print(f"mapped location: {adt_dest_location_id.id}")
 
                     # Tandai sukses jika semua proses di atas berhasil tanpa memicu exception
                     shipment.write({
