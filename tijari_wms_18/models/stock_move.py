@@ -4,7 +4,7 @@ import os
 from PIL import Image
 import qrcode
 import io
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 
 class StockMove(models.Model):
@@ -38,6 +38,63 @@ class StockMove(models.Model):
     product_note = fields.Text(string='Product Note')
 
     qr_code_image = fields.Binary(string='Sign')
+
+    unfiltered_dest = fields.Boolean(
+        string="Unfiltered Destination",
+        default=False,
+    )
+
+    picking_type_code = fields.Selection(
+        related="picking_id.picking_type_id.code",
+        store=False,
+    )
+
+    picking_type_name = fields.Char(
+        related="picking_id.picking_type_id.name",
+        store=False,
+    )
+
+    def action_validate_lot_pick(self):
+        for move in self:
+            picking_type = move.picking_id.picking_type_id
+            for line in move.move_line_ids:
+                line._compute_auto_input_code()
+                
+    def action_validate_lot(self):
+        for move in self:
+            picking_type = move.picking_id.picking_type_id
+            for line in move.move_line_ids:
+                if not line.lot_id:
+                    raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
+
+                if not line.location_dest_id.unique_code:
+                    raise ValidationError(f"Unique Code untuk location {line.location_dest_id.name} kosong, Silahkan generate unique code terlebih dahulu")
+
+                location = line.location_dest_id
+                if picking_type.name == "Pick":
+                    location = line.location_id
+
+                line.matching_lot_id = line.lot_id.id or False
+                line.matching_loc_dest_id = location.id or False
+                line.confirmation_lot_code = line.lot_id.name or False
+                line.confirmation_location_code = location.unique_code or False
+
+    def action_toggle_unfiltered_dest(self):
+        for move in self:
+            value = not move.unfiltered_dest
+
+            move.write({
+                'unfiltered_dest': value,
+            })
+
+            move.move_line_ids.write({
+                'unfiltered_dest': value,
+            })
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "reload",
+        }
 
     def _get_new_picking_values(self):
         vals = super()._get_new_picking_values()

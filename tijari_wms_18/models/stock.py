@@ -1148,24 +1148,6 @@ class StockMove(models.Model):
 
     # lot_button = fields.Char(string="Lot Button")
 
-    def action_validate_lot(self):
-        for move in self:
-            picking_type = move.picking_id.picking_type_id
-            for line in move.move_line_ids:
-                if not line.lot_id:
-                    raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
-
-                if not line.location_dest_id.unique_code:
-                    raise ValidationError(f"Unique Code untuk location {line.location_dest_id.name} kosong, Silahkan generate unique code terlebih dahulu")
-
-                location = line.location_dest_id
-                if picking_type.name == "Pick":
-                    location = line.location_id
-
-                line.matching_lot_id = line.lot_id.id or False
-                line.matching_loc_dest_id = location.id or False
-                line.confirmation_lot_code = line.lot_id.name or False
-                line.confirmation_location_code = location.unique_code or False
 
     def action_generate_lot(self):
         for move in self:

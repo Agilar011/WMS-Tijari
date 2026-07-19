@@ -75,6 +75,17 @@ class StockMoveLine(models.Model):
         store=True
     )
 
+    unfiltered_dest = fields.Boolean(
+        string="Unfiltered Destination",
+        default=False,
+    )
+
+    quant_unfiltered_id = fields.Many2one(
+        'stock.quant',
+        string="Pick From (All)"
+    )        
+
+
     @api.model_create_multi
     def create(self, vals_list):
         move_lines = super().create(vals_list)
@@ -179,6 +190,10 @@ class StockMoveLine(models.Model):
     #             line.matching_html = "<span style='color: red; font-weight: bold;'>NOT MATCH</span>"
     #         else:
     #             line.matching_html = False
+
+    @api.onchange('quant_unfiltered_id')
+    def _onchange_quant_unfiltered(self):
+        self.quant_id = self.quant_unfiltered_id
 
     @api.onchange('product_id')
     def _onchange_product_copy_previous_lot(self):
