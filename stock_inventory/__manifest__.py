@@ -8,7 +8,7 @@
     "summary": "Allows to do an easier follow up of the Inventory Adjustments",
     "author": "ForgeFlow, Odoo Community Association (OCA)",
     "website": "https://github.com/OCA/stock-logistics-warehouse",
-    "depends": ["stock"],
+    "depends": ["stock", "approval_base"],
     "data": [
         "security/ir.model.access.csv",
         "security/security.xml",

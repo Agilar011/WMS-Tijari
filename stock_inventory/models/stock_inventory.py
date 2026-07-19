@@ -7,9 +7,7 @@ class InventoryAdjustmentsGroup(models.Model):
     _name = "stock.inventory"
     _description = "Inventory Adjustment Group"
     _order = "date desc, id desc"
-    _inherit = [
-        "mail.thread",
-    ]
+    _inherit = [ "mail.thread", "approval.mixin"]
 
     name = fields.Char(
         required=True,
@@ -35,6 +33,8 @@ class InventoryAdjustmentsGroup(models.Model):
         [
             ("draft", "Draft"),
             ("in_progress", "In Progress"),
+            ("wait_approval", "Waiting for Approval"),
+            ("approved", "Approved"),
             ("done", "Done"),
             ("cancel", "Cancelled"),
         ],
@@ -138,6 +138,24 @@ class InventoryAdjustmentsGroup(models.Model):
         string="Products Under Review",
         relation="stock_inventory_product_review_rel",
     )
+
+    acumatica_ref_doc = fields.Char('Acumatica Ref Document')
+    
+    approval_type_id = fields.Many2one(
+        "approval.type",
+        string="Approval Type",
+        domain=lambda self: self._get_approval_domain(),
+    )
+
+    @api.model
+    def _get_approval_domain(self):
+        return [
+            (
+                "approval_model_id.model",
+                "=",
+                self._name,
+            )
+        ]
 
     def _search_products_under_review_ids(self, operator, value):
         quants = self.env["stock.quant"].search(
@@ -331,6 +349,11 @@ class InventoryAdjustmentsGroup(models.Model):
         )
         return
 
+    def action_state_to_wait_approval(self):
+        self.ensure_one()
+        self.state = "wait_approval"
+        self.action_submit_approval()
+
     def action_state_to_done(self):
         self.ensure_one()
         self.state = "done"
@@ -471,6 +494,14 @@ class InventoryAdjustmentsGroup(models.Model):
                             " you are only able to add one product."
                         )
                     )
+
+    def _approval_approved(self):
+        self.ensure_one()
+        self.state = "approved"
+
+    def _approval_rejected(self):
+        self.ensure_one()
+        self.state = "cancel"
 
     def unlink(self):
         for adjustment in self:
