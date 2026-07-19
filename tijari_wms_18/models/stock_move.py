@@ -41,7 +41,7 @@ class StockMove(models.Model):
 
     unfiltered_dest = fields.Boolean(
         string="Unfiltered Destination",
-        default=False,
+        default=True,
     )
 
     picking_type_code = fields.Selection(
