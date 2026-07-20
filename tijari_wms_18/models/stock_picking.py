@@ -81,7 +81,11 @@ class StockPicking(models.Model):
         compute='_compute_putaway_values',
         readonly=False,
     )
-
+    status_ba = fields.Selection([
+        ('conform', 'Conform'),
+        ('discrepancy', 'Discrepancy'),],
+    string='Status BA',
+    )
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
