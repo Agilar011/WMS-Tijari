@@ -11,7 +11,7 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
 
-            <xpath expr="//field[@name='state'][1]" position="replace">
+            <!-- <xpath expr="//field[@name='state'][1]" position="replace">
                 <field name="wms_state"
                     widget="statusbar"
                     invisible="picking_type_code != 'outgoing'"/>
@@ -25,9 +25,9 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="picking_type_code == 'outgoing'"/>
+                    invisible="1"/>
 
-            </xpath>            
+            </xpath>             -->
             <xpath expr="(//button[@name='button_validate'])[1]" position="replace">
                 <button name="button_validate"
                         string="Validate"

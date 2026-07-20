@@ -431,13 +431,13 @@ class StockPicking(models.Model):
 
 
     def _format_datetime(self, dt):
-        """Convert Odoo datetime ke ISO8601 UTC."""
-
         if not dt:
             return None
 
-        return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        if isinstance(dt, str):
+            dt = Datetime.from_string(dt)
 
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
     # ==========================================================
     # Prepare Payload
     # ==========================================================
@@ -454,37 +454,39 @@ class StockPicking(models.Model):
             raise UserError("Data staging TMS tidak dapat ditemukan")
         
         return {
-            "orderNo": header_to_send.next_order_no,
-            "shipmentOrderDt": header_to_send.mat_datetime(header_to_send.next_shipment_order_dt),
-            "shipmentOrderTypeCd": header_to_send.next_shipment_order_type_cd,
-            "orderState": header_to_send.next_order_state,
-            "distributionCenter": header_to_send.next_distribution_center,
-            "returnBranch": header_to_send.next_return_branch,
-            "packageWeight": str(header_to_send.next_package_weight or 0),
-            "packageVolume": str(header_to_send.next_package_volume or 0),
-            "preparationTime": int(header_to_send.next_preparation_time or 0),
-            "paymentType": header_to_send.next_payment_type,
-            "packageValue": str(header_to_send.next_package_value or 0),
-            "numberOfItems": header_to_send.next_number_of_items or 0,
-            "partialDeliveryAllowedFl": "Y" if header_to_send.next_partial_delivery_allowed_fl else "N",
-            "returnAllowedFl": "Y" if header_to_send.next_return_allowed_fl else "N",
-            "cancellationAllowedFl": "Y" if header_to_send.next_cancellation_allowed_fl else "N",
-            "deliverServiceTime": str(header_to_send.next_deliver_service_time or 0),
-            "deliverStartTimeWindow": header_to_send.mat_datetime(header_to_send.next_deliver_start_time_window),
-            "deliverEndTimeWindow": header_to_send.mat_datetime(header_to_send.next_deliver_end_time_window),
-            "deliveryType": header_to_send.next_delivery_type,
-            "deliverBranch": header_to_send.next_deliver_branch,
-            "deliverAccountCode": header_to_send.next_deliver_account_code,
-            "deliverAccountName": header_to_send.next_deliver_account_name,
-            "deliverApartment": header_to_send.next_deliver_apartment,
-            "deliverStreetName": header_to_send.next_deliver_street_name,
-            "deliverLocality": header_to_send.next_deliver_locality,
-            "deliverCity": header_to_send.next_deliver_city,
-            "deliverState": header_to_send.next_deliver_state,
-            "deliverCountry": header_to_send.next_deliver_country,
-            "deliverPinCode": header_to_send.next_deliver_pin_code,
-            "deliverAddressTimezone": header_to_send.next_deliver_address_timezone,
-            "deliverNotes": header_to_send.next_deliver_notes,
+            "orderNo": header_to_send.loginext_order_no,
+            "shipmentOrderDt": self._format_datetime(
+                header_to_send.loginext_shipment_order_dt
+            ),
+            "shipmentOrderTypeCd": header_to_send.loginext_shipment_order_type_cd,
+            "orderState": header_to_send.loginext_order_state,
+            "distributionCenter": header_to_send.loginext_distribution_center,
+            "returnBranch": header_to_send.loginext_return_branch,
+            "packageWeight": str(header_to_send.loginext_package_weight or 0),
+            "packageVolume": str(header_to_send.loginext_package_volume or 0),
+            "preparationTime": int(header_to_send.loginext_preparation_time or 0),
+            "paymentType": header_to_send.loginext_payment_type,
+            "packageValue": str(header_to_send.loginext_package_value or 0),
+            "numberOfItems": header_to_send.loginext_number_of_items or 0,
+            "partialDeliveryAllowedFl": "Y" if header_to_send.loginext_partial_delivery_allowed_fl else "N",
+            "returnAllowedFl": "Y" if header_to_send.loginext_return_allowed_fl else "N",
+            "cancellationAllowedFl": "Y" if header_to_send.loginext_cancellation_allowed_fl else "N",
+            "deliverServiceTime": str(header_to_send.loginext_deliver_service_time or 0),
+            "deliverStartTimeWindow": self._format_datetime(header_to_send.loginext_deliver_start_time_window),
+            "deliverEndTimeWindow": self._format_datetime(header_to_send.loginext_deliver_end_time_window),
+            "deliveryType": header_to_send.loginext_delivery_type,
+            "deliverBranch": header_to_send.loginext_deliver_branch,
+            "deliverAccountCode": header_to_send.loginext_deliver_account_code,
+            "deliverAccountName": header_to_send.loginext_deliver_account_name,
+            "deliverApartment": header_to_send.loginext_deliver_apartment,
+            "deliverStreetName": header_to_send.loginext_deliver_street_name,
+            "deliverLocality": header_to_send.loginext_deliver_locality,
+            "deliverCity": header_to_send.loginext_deliver_city,
+            "deliverState": header_to_send.loginext_deliver_state,
+            "deliverCountry": header_to_send.loginext_deliver_country,
+            "deliverPinCode": header_to_send.loginext_deliver_pin_code,
+            "deliverAddressTimezone": header_to_send.loginext_deliver_address_timezone,
+            "deliverNotes": header_to_send.loginext_deliver_notes,
             "shipmentCrateMappings": [
                 {
                     "crateCd": crate.loginext_crate_cd,
@@ -503,7 +505,7 @@ class StockPicking(models.Model):
                         for item in crate.item_ids
                     ],
                 }
-                for crate in self.crate_ids
+                for crate in header_to_send.crate_ids
             ],
         }
 
@@ -512,29 +514,15 @@ class StockPicking(models.Model):
     # ==========================================================
 
     def action_post_loginext(self):
-        """
-        POST seluruh record pada self ke Loginext.
-        """
+        import json
+        import requests
+        from odoo.exceptions import UserError
 
-        # ------------------------------------------------------------------
-        # Hardcode sementara
-        # ------------------------------------------------------------------
-
-        LOGINEXT_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v2/create"
+        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
+        CREATE_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v2/create"
 
         USERNAME = "api.tms@aditya.co.id"
         PASSWORD = "9CE5Q8Jz_#xXR"
-
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-
-        # Jika Loginext menggunakan Basic Auth
-        auth = (USERNAME, PASSWORD)
-
-        # Jika menggunakan Bearer Token, gunakan ini dan hapus auth
-        # headers["Authorization"] = "Bearer xxxxxxxxxxxxxxxxx"
 
         body = [
             rec._prepare_loginext_payload()
@@ -546,18 +534,52 @@ class StockPicking(models.Model):
         _logger.info(json.dumps(body, indent=4))
         _logger.info("=" * 80)
 
+        session = requests.Session()
+
         try:
-            response = requests.post(
-                LOGINEXT_URL,
+            # ======================================================
+            # LOGIN
+            # ======================================================
+
+            login_payload = {
+                "userName": USERNAME,
+                "password": PASSWORD,
+                "sessionExpiryTimeout": "60",
+            }
+
+            login_response = session.post(
+                LOGIN_URL,
+                json=login_payload,
+                timeout=60,
+            )
+
+            _logger.info("=" * 80)
+            _logger.info("LOGINEXT LOGIN RESPONSE")
+            _logger.info("Status : %s", login_response.status_code)
+            _logger.info(login_response.text)
+            _logger.info("=" * 80)
+
+            login_response.raise_for_status()
+
+            # ======================================================
+            # CREATE SHIPMENT
+            # ======================================================
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+
+            response = session.post(
+                CREATE_URL,
                 headers=headers,
-                auth=auth,
                 json=body,
                 timeout=120,
             )
 
             _logger.info("=" * 80)
-            _logger.info("LOGINEXT RESPONSE")
-            _logger.info("Status Code : %s", response.status_code)
+            _logger.info("LOGINEXT CREATE RESPONSE")
+            _logger.info("Status : %s", response.status_code)
             _logger.info(response.text)
             _logger.info("=" * 80)
 
@@ -568,7 +590,6 @@ class StockPicking(models.Model):
         except requests.exceptions.RequestException as e:
             _logger.exception(e)
             raise UserError(f"Loginext API Error\n\n{e}")
-
 
 
 # ================================================================================================
