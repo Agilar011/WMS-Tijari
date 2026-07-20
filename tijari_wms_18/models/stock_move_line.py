@@ -49,6 +49,7 @@ class StockMoveLine(models.Model):
     allocation_Quantity = fields.Float(string='Allocation Quantity')
     allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
     allocation_UOM = fields.Char(string='Allocation UOM')
+    confirmation_quantity = fields.Char(string='confirmation_quantity')
 
     picking_code = fields.Selection(
         related='picking_id.picking_type_code',
@@ -76,11 +77,14 @@ class StockMoveLine(models.Model):
         default=False,
     )
 
+<<<<<<< Updated upstream
     # unfiltered_dest_quant = fields.Many2one(
     #     'stock.quant',
     #     string="Pick From (All)"
     # )
 
+=======
+>>>>>>> Stashed changes
     parent_location_id = fields.Many2one(
         "stock.location",
         string="Parent Location",
@@ -111,9 +115,14 @@ class StockMoveLine(models.Model):
         store=False,
     )
 
+    picking_type_name = fields.Char(
+        related="move_id.picking_type_name",
+        store=False,
+    )
+
     @api.depends("product_id", "source_location_id")
     def _compute_temp_quant_ids(self):
-        print("check quant domain")
+        _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
         Quant = self.env["stock.quant"]
 
         for line in self:
@@ -190,6 +199,7 @@ class StockMoveLine(models.Model):
 
         self.selected_quant_id = quant
         self.quant_id = quant
+<<<<<<< Updated upstream
 
     # @api.depends("product_id", "product_lot_id", "source_location_id")
     # def _compute_selected_quant(self):
@@ -256,6 +266,8 @@ class StockMoveLine(models.Model):
     #             "product_lot_id": domain
     #         }
     #     }
+=======
+>>>>>>> Stashed changes
 
     @api.model_create_multi
     def create(self, vals_list):

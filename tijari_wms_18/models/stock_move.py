@@ -5,7 +5,9 @@ from PIL import Image
 import qrcode
 import io
 from odoo.exceptions import UserError, ValidationError
+import logging
 
+_logger = logging.getLogger(__name__)
 
 class StockMove(models.Model):
     _inherit = 'stock.move'
@@ -81,45 +83,36 @@ class StockMove(models.Model):
 
     @api.onchange('unfiltered_dest')
     def action_toggle_unfiltered_dest(self):
-        print('Runnning Onchange 1')
+        _logger.info("Running Onchange 1")
+        _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
+
         for move in self:
-            print(f"Before onchange: {move.unfiltered_dest}")
+            _logger.info("Before onchange: %s", move.unfiltered_dest)
+
             value = move.unfiltered_dest
-            print(f"After onchange: {value}")
+
+            _logger.info("After onchange: %s", value)
 
             move.unfiltered_dest = value
 
             for item in move.move_line_ids:
-                if move.unfiltered_dest == True:
-                    item.parent_location_id = item.adt_dest_location_id.id                    
+                if move.unfiltered_dest:
+                    item.parent_location_id = item.adt_dest_location_id.id
                     item.source_location_id = False
                     item.unfiltered_dest = value
-                    print(f"parent_location_id: {item.parent_location_id.name}")
-                    print(f"source_location_id: {item.source_location_id.name}")
-                    print(f"unfiltered_dest: {item.unfiltered_dest}")
 
-                else :
-                    item.parent_location_id = move.picking_id.picking_type_id.default_location_src_id.id         
+                    _logger.info("parent_location_id: %s", item.parent_location_id.name)
+                    _logger.info("source_location_id: %s", item.source_location_id.name if item.source_location_id else False)
+                    _logger.info("unfiltered_dest: %s", item.unfiltered_dest)
+
+                else:
+                    item.parent_location_id = move.picking_id.picking_type_id.default_location_src_id.id
                     item.source_location_id = False
                     item.unfiltered_dest = value
-                    print(f"parent_location_id: {item.parent_location_id.name}")
-                    print(f"source_location_id: {item.source_location_id.name}")
-                    print(f"unfiltered_dest: {item.unfiltered_dest}")
 
-
-
-        #     move.write({
-        #         'unfiltered_dest': value,
-        #     })
-
-        #     move.move_line_ids.write({
-        #         'unfiltered_dest': value,
-        #     })
-
-        # return {
-        #     "type": "ir.actions.client",
-        #     "tag": "reload",
-        # }
+                    _logger.info("parent_location_id: %s", item.parent_location_id.name)
+                    _logger.info("source_location_id: %s", item.source_location_id.name if item.source_location_id else False)
+                    _logger.info("unfiltered_dest: %s", item.unfiltered_dest)
 
     def _get_new_picking_values(self):
         vals = super()._get_new_picking_values()

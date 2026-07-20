@@ -47,9 +47,9 @@
 
             <xpath expr="//widget[@name='import_lots']" position="before">
                 <div>
-                    <div>
-                        <field name="unfiltered_dest"/>
-                        <span style="margin-right: 4px;">Pengambilan Item Berdasarkan mapping lokasi</span>
+                    <div invisible="picking_type_name != 'Pick'">
+                        <field name="unfiltered_dest" invisible="picking_type_name != 'Pick'"/>
+                        <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick'">Pengambilan Item Berdasarkan mapping lokasi</span>
                     </div>
                     
                     <button name="action_validate_lot_pick"
@@ -58,9 +58,8 @@
                         class="btn-warning"
                         invisible="picking_type_name != 'Pick'"/>
                 </div>
-
-
-            </xpath> 
+                <field name="picking_type_name"/>
+            </xpath>
 
             <xpath expr="//widget[@name='import_lots']" position="after">
                 <span class="d-inline-flex gap-1">
