@@ -10,8 +10,34 @@
         <field name="model">stock.picking</field>
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
+
+            <!-- <xpath expr="//field[@name='state']" position="attributes"> -->
+                <!-- <attribute name="invisible">picking_type_code == 'outgoing'</attribute> -->
+            <!-- </xpath> -->
+<!--  -->
+            <!-- Tampilkan wms_state jika Deliveryc -->
+            <!-- <xpath expr="//field[@name='state']" position="after"> -->
+                <!-- <field name="wms_state" -->
+                    <!-- widget="statusbar" -->
+                    <!-- invisible="picking_type_code != 'outgoing'"/> -->
+            <!-- </xpath> -->
+
+            <xpath expr="(//button[@name='button_validate'])[1]" position="replace">
+                <button name="button_validate"
+                        string="Validate"
+                        type="object"
+                        class="oe_highlight"
+                        groups="stock.group_stock_user"
+                        invisible="picking_type_code == 'outgoing' or state in ('draft','confirmed','done','cancel')"
+                        data-hotkey="v"/>
+            </xpath>
+
+            <xpath expr="(//button[@name='button_validate'])[2]" position="attributes">
+                <attribute name="string">Test Validate</attribute>
+            </xpath>
             
             <xpath expr="//button[@name='button_validate']" position="after">
+
 
                 <button name="action_print_warehouse_receipt"
                 string="Print Receipt"
@@ -35,8 +61,7 @@
             </xpath>
             <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']"
                 position="after">
-                <!-- <field name="created_by"/>
-                <field name="approved_by"/> -->
+                <!-- <field name="created_by"/> -->
                 <field name="created_by_id"/>
                 <field name="approved_by_id"/>
             </xpath>

@@ -82,6 +82,22 @@ class StockPicking(models.Model):
         readonly=False,
     )
 
+    wms_state = fields.Selection(
+        selection=[
+            ('draft', 'Draft'),
+            ('waiting', 'Waiting Another Operation'),
+            ('confirmed', 'Waiting'),
+            ('assigned', 'Ready'),
+            ('waiting_response', 'Waiting_response'),
+            ('done', 'Done'),
+            ('cancel', 'Cancelled'),
+        ],
+        string="WMS State",
+        copy=False,
+        tracking=True,
+    )
+
+
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
@@ -403,6 +419,13 @@ class StockPicking(models.Model):
             'product_id': product.id,
             'display_name': product.display_name,
         }
+    
+    @api.onchange("state")
+    def _onchange_state_update_wms_state(self):
+        for picking in self:
+            picking.wms_state = picking.state        
+
+
 
 # ================================================================================================
 # Temp Storage function create move line qr code        

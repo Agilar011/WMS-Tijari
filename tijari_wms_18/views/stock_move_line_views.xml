@@ -36,8 +36,14 @@
             <xpath expr="//field[@name='quant_id']" position="before">
                 <field name="id" string="Line ID" />
                 <field name="adt_dest_location_id" optional="show"/>
+
                 <!-- <field name="unfiltered_dest"/> -->
-                <field string="Unfiltered To" name="quant_unfiltered_id" domain="[('product_id', '=', product_id)]" column_invisible="parent.unfiltered_dest"/>
+                <!-- <field string="Unfiltered To" name="quant_unfiltered_id" domain="[('product_id', '=', product_id)]" column_invisible="parent.unfiltered_dest"/> -->
+                <field name="parent_location_id" readonly="1" optional="hide"/>
+                <field name="source_location_id"/>
+                <field name="temp_quant_ids" optional="hide"/>
+                <field name="product_lot_id"/>
+                <field name="selected_quant_id" optional="hide"/>
             </xpath>
 
            <xpath expr="//field[last()]" position="after">

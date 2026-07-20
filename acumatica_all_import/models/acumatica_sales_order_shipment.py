@@ -201,10 +201,21 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'adt_type' : "Sales Order Shipment"
                     }
 
+                    shipment_location_id = shipment.adt_WarehouseID
+                    shipment_weight = shipment.adt_ShipmentWeight
+                    shipment_volume = shipment.adt_ShipmentVolume
+                    shipment_city = shipment.adt_City
+                    shipment_country = shipment.adt_CountryName
+                    shipment_postal_code = shipment.adt_PostalCode
+                    shipment_street = shipment.adt_AddressLine
+
+
                     picking = Picking.search([
                         ('origin', '=', shipment.adt_ShipmentNbr),
                         ('state', '=', 'draft')
                     ], limit=1)
+
+                    create_tms_state = False
 
                     if picking:
                         picking.write(updated_vals)
@@ -212,14 +223,20 @@ class AcumaticaShipmentGIStaging(models.Model):
                         picking.move_ids.unlink()
                         print(f"--> SUCCESS UNLINK OLD LINES FOR PICKING ID: {picking.id}")
                     else:
+                        create_tms_state = True
                         picking = Picking.create(updated_vals)
+                        created_loginext_header = self._build_loginext_header(shipment.adt_ShipmentNbr, ship_date, shipment_location_id,shipment_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking.origin)
+
                         print(f"SUCCESS CREATING NEW PICKING ID: {picking.id}")
 
                     move_items = shipment_line.search([
                         ('gi_id', '=', shipment.id)
                     ])
 
+                    move_count = 0
+
                     for item in move_items:
+                        move_count += 1
                         product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
                         if not product:
                             raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
@@ -257,6 +274,14 @@ class AcumaticaShipmentGIStaging(models.Model):
                         }
                         adt_dest_location_id =  Move.create(move_vals)
                         print(f"mapped location: {adt_dest_location_id.id}")
+
+                        item_qty = float(item.adt_ShipmentQty or 0.0)
+
+                        if create_tms_state == True:
+                            self._build_loginext_item(product, shipment.adt_OrderType, created_loginext_header.id, move_count, shipment.adt_ShipmentWeight, item_qty)
+
+
+                    created_loginext_header.loginext_number_of_items = move_count
 
                     # Tandai sukses jika semua proses di atas berhasil tanpa memicu exception
                     shipment.write({
@@ -476,6 +501,98 @@ class AcumaticaShipmentGIStaging(models.Model):
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+
+    def _find_loginext_wh(self, shipment_location_id):
+        Warehouse = self.env['stock.location.acumatica']
+        warehouse = False
+        code = shipment_location_id
+        print(code)
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+            # if warehouse:
+            #     if not warehouse.loginext_branch:
+            #         warehouse = False
+            #     else:
+            #         warehouse = warehouse.loginext_branch
+
+        return warehouse
+
+
+    def _build_loginext_header(self, adt_ShipmentNbr, ship_date, shipment_location_id, ship_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking):
+        print(adt_ShipmentNbr)
+        print(ship_date)
+        print(ship_weight)
+        print(shipment_volume)
+        print(partner)
+        print(shipment_city)
+        print(shipment_country)
+        print(shipment_postal_code)
+        loginext_wh = self._find_loginext_wh(shipment_location_id)
+
+        loginext_order_no = f"testing-dev-{adt_ShipmentNbr}"
+        updated_vals = {
+            'loginext_order_no' : loginext_order_no if loginext_order_no else '',
+            'loginext_shipment_order_dt' : ship_date if ship_date else '',
+            'loginext_shipment_order_type_cd' : "DELIVER",
+            'loginext_order_state' : "FORWARD"  if "FORWARD"  else '',
+            'loginext_distribution_center' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
+            'loginext_return_branch' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
+            'loginext_package_weight' : ship_weight if ship_weight else '',
+            'loginext_package_volume' : shipment_volume if shipment_volume else '',
+            'loginext_preparation_time' : '30',
+            'loginext_payment_type' : "Prepaid",
+            'loginext_package_value' : ship_weight if ship_weight else '',
+            # 'loginext_number_of_items' : using compute_metho if using compute_metho else ''d
+            'loginext_partial_delivery_allowed_fl' : "Y",
+            'loginext_return_allowed_fl' : "Y",
+            'loginext_cancellation_allowed_fl' : "Y",
+            'loginext_deliver_service_time' : '30',
+            'loginext_deliver_start_time_window' : ship_date if ship_date else '',
+            'loginext_deliver_end_time_window' : ship_date if ship_date else '',
+            'loginext_delivery_type' : "DRIVER",
+            'loginext_deliver_branch' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
+            'loginext_deliver_account_code' : partner.name if partner.name else '',
+            'loginext_deliver_account_name' : partner.id if partner.id else '',
+            'loginext_deliver_apartment' : shipment_street if shipment_street else '',
+            'loginext_deliver_street_name' : shipment_street if shipment_street else '',
+            'loginext_deliver_locality' : shipment_city if shipment_city else '',
+            'loginext_deliver_city' : shipment_city if shipment_city else '',
+            'loginext_deliver_state' : loginext_wh.loginext_state.code if loginext_wh.loginext_state.code else '',
+            'loginext_deliver_country' : shipment_country if shipment_country else '',
+            'loginext_deliver_pin_code' : shipment_postal_code if shipment_postal_code else '',
+            'loginext_deliver_address_timezone' : "Asia/Jakarta",
+            'loginext_deliver_notes' : f'"Delivered" atau "ShipVia"',
+            'odoo_shipment_number' : picking if picking else '',
+
+        }
+
+        created_loginext_header = self.env['loginext.staging.data'].create(updated_vals)
+        return created_loginext_header
+
+    def _build_loginext_item(self, product, shipment_type, header, move_count, shipment_weight, item_qty):
+
+        crate_vals = {
+            'loginext_crate_cd' : f"{product.default_code}|{move_count}",
+            'loginext_crate_name' : product.name,
+            'loginext_crate_type' : shipment_type,
+            'loginext_crate_weight' : shipment_weight,
+            'staging_id' : header
+        }
+
+        crate = self.env['loginext.staging.crate'].create(crate_vals)
+
+        item_vals = {
+            'loginext_item_cd' : f"{product.default_code}",
+            'loginext_item_name' : product.name,
+            'loginext_item_type' : shipment_type,
+            'loginext_item_weight' : shipment_weight,
+            'loginext_item_quantity' : item_qty,
+            'staging_id' : header,
+            'crate_id' : crate.id
+        }
+        self.env['loginext.staging.item'].create(item_vals)
+
+
 
 
 class AcumaticaSalesOrderShipmentStaging(models.Model):

@@ -46,25 +46,19 @@
             </xpath> 
 
             <xpath expr="//widget[@name='import_lots']" position="before">
-                <button name="action_toggle_unfiltered_dest"
+                <div>
+                    <div>
+                        <field name="unfiltered_dest"/>
+                        <span style="margin-right: 4px;">Pengambilan Item Berdasarkan mapping lokasi</span>
+                    </div>
+                    
+                    <button name="action_validate_lot_pick"
                         type="object"
-                        class="btn-secondary"
-                        icon="fa-filter"
-                        string="Unfiltered"
-                        invisible="unfiltered_dest or picking_type_name != 'Pick'"/>
+                        string="Validate Lot"
+                        class="btn-warning"
+                        invisible="picking_type_name != 'Pick'"/>
+                </div>
 
-                <button name="action_toggle_unfiltered_dest"
-                        type="object"
-                        class="btn-success"
-                        icon="fa-check"
-                        string="Filtered"
-                        invisible="not unfiltered_dest or picking_type_name != 'Pick'"/>
-
-                <button name="action_validate_lot_pick"
-                    type="object"
-                    string="Validate Lot"
-                    class="btn-warning"
-                    invisible="picking_type_name != 'Pick'"/>
 
             </xpath> 
 

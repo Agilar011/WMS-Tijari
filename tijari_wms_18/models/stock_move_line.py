@@ -32,12 +32,8 @@ class StockMoveLine(models.Model):
         ('match', 'Match'),
         ('not_match', 'Not Match')
     ], string='Matching Status',
-    #    compute='_compute_matching',
        store=True)
-    # matching_html = fields.Html(
-    #     string='Matching Info',
-    #     compute='_compute_matching_html',
-    #     store=False)
+
     operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
     allocation_storage = fields.Many2one(
@@ -80,11 +76,186 @@ class StockMoveLine(models.Model):
         default=False,
     )
 
-    quant_unfiltered_id = fields.Many2one(
-        'stock.quant',
-        string="Pick From (All)"
-    )        
+    # unfiltered_dest_quant = fields.Many2one(
+    #     'stock.quant',
+    #     string="Pick From (All)"
+    # )
 
+    parent_location_id = fields.Many2one(
+        "stock.location",
+        string="Parent Location",
+    )
+
+    source_location_id = fields.Many2one(
+        "stock.location",
+        string="Source Location",
+        domain="[('id', 'child_of', parent_location_id)]",
+    )
+
+    product_lot_id = fields.Many2one(
+        "stock.lot",
+        string="Lot",
+        domain="[('id', 'in', temp_quant_ids)]",
+    )
+
+    selected_quant_id = fields.Many2one(
+        "stock.quant",
+        string="Selected Quant",
+        readonly=True,
+    )
+
+    temp_quant_ids = fields.Many2many(
+        "stock.quant",
+        string="Temporary Quants",
+        compute="_compute_temp_quant_ids",
+        store=False,
+    )
+
+    @api.depends("product_id", "source_location_id")
+    def _compute_temp_quant_ids(self):
+        print("check quant domain")
+        Quant = self.env["stock.quant"]
+
+        for line in self:
+
+            line.temp_quant_ids = False
+
+            if not line.product_id or not line.source_location_id:
+                continue
+
+            quants = Quant.search([
+                ("product_id", "=", line.product_id.id),
+                ("location_id", "child_of", line.source_location_id.id),
+                ("quantity", ">", 0),
+                ("lot_id", "!=", False),
+            ])
+
+            line.temp_quant_ids = [(6, 0, quants.mapped("lot_id").ids)]
+
+            print(f"Quant domain: {line.temp_quant_ids}")
+
+    @api.onchange("product_id", "source_location_id")
+    def _onchange_source_location(self):
+        print(f"Search product: {self.product_id.name} in loc: {self.source_location_id.name}")
+        self.product_lot_id = False
+        self.selected_quant_id = False
+        self.quant_id = False
+
+        if not self.product_id or not self.source_location_id:
+            return {
+                "domain": {
+                    "product_lot_id": [("id", "=", False)]
+                }
+            }
+
+        quants = self.env["stock.quant"].search([
+            ("product_id", "=", self.product_id.id),
+            ("location_id", "child_of", self.source_location_id.id),
+            ("quantity", ">", 0),
+            ("lot_id", "!=", False),
+        ])
+
+        lot_ids = quants.mapped("lot_id").ids
+        print(f"Lot found: {lot_ids}")
+
+        return {
+            "domain": {
+                "product_lot_id": [("id", "in", lot_ids)]
+            }
+        }
+    
+    @api.onchange("product_lot_id")
+    def _onchange_product_lot(self):
+        self.selected_quant_id = False
+        self.quant_id = False
+
+        if not (
+            self.product_id
+            and self.source_location_id
+            and self.product_lot_id
+        ):
+            return
+
+        quant = self.env["stock.quant"].search(
+            [
+                ("product_id", "=", self.product_id.id),
+                ("location_id", "child_of", self.source_location_id.id),
+                ("lot_id", "=", self.product_lot_id.id),
+                ("quantity", ">", 0),
+            ],
+            order="quantity desc",
+            limit=1,
+        )
+        print(f"Quant found: {quant}")
+
+        self.selected_quant_id = quant
+        self.quant_id = quant
+
+    # @api.depends("product_id", "product_lot_id", "source_location_id")
+    # def _compute_selected_quant(self):
+    #     print('Run compute_selected_quant')
+    #     Quant = self.env["stock.quant"]
+
+    #     for line in self:
+    #         line.selected_quant_id = False
+
+    #         if not (
+    #             line.product_id
+    #             and line.source_location_id
+    #             and line.product_lot_id
+    #         ):
+    #             line.quant_id = False
+    #             continue
+
+    #         quant = Quant.search(
+    #             [
+    #                 ("product_id", "=", line.product_id.id),
+    #                 ("location_id", "=", line.source_location_id.id),
+    #                 ("lot_id", "=", line.product_lot_id.id),
+    #             ],
+    #             limit=1,
+    #         )
+
+    #         print(f"quant found: {quant}")
+
+    #         line.selected_quant_id = quant.id
+
+    #         # print(line.)
+
+
+    #         line.quant_id = quant
+    #         print(f"Quant value: {line.selected_quant_id}")
+
+    # @api.onchange("selected_quant_id")
+    # def _onchange_change_quant_id(self):
+    #     print(f"change quant id to: {self.selected_quant_id}")
+    #     self.quant_id = self.selected_quant_id
+
+
+    # @api.onchange("product_id", "source_location_id")
+    # def _onchange_product_lot(self):
+
+    #     self.product_lot_id = False
+
+    #     domain = []
+
+    #     if self.product_id and self.source_location_id:
+
+    #         quants = self.env["stock.quant"].search([
+    #             ("product_id", "=", self.product_id.id),
+    #             ("location_id", "child_of", self.source_location_id.id),
+    #             ("quantity", ">", 0),
+    #         ])
+
+    #         domain = [
+    #             ("id", "in", quants.mapped("lot_id").ids)
+    #         ]
+
+    #     return {
+    #         "domain": {
+    #             "product_lot_id": domain
+    #         }
+    #     }
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -181,19 +352,6 @@ class StockMoveLine(models.Model):
 
             # line.matching = matching
 
-    # @api.depends('matching')
-    # def _compute_matching_html(self):
-    #     for line in self:
-    #         if line.matching == 'match':
-    #             line.matching_html = "<span style='color: green; font-weight: bold;'>MATCH</span>"
-    #         elif line.matching == 'not_match':
-    #             line.matching_html = "<span style='color: red; font-weight: bold;'>NOT MATCH</span>"
-    #         else:
-    #             line.matching_html = False
-
-    @api.onchange('quant_unfiltered_id')
-    def _onchange_quant_unfiltered(self):
-        self.quant_id = self.quant_unfiltered_id
 
     @api.onchange('product_id')
     def _onchange_product_copy_previous_lot(self):

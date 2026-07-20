@@ -79,22 +79,47 @@ class StockMove(models.Model):
                 line.confirmation_lot_code = line.lot_id.name or False
                 line.confirmation_location_code = location.unique_code or False
 
+    @api.onchange('unfiltered_dest')
     def action_toggle_unfiltered_dest(self):
+        print('Runnning Onchange 1')
         for move in self:
-            value = not move.unfiltered_dest
+            print(f"Before onchange: {move.unfiltered_dest}")
+            value = move.unfiltered_dest
+            print(f"After onchange: {value}")
 
-            move.write({
-                'unfiltered_dest': value,
-            })
+            move.unfiltered_dest = value
 
-            move.move_line_ids.write({
-                'unfiltered_dest': value,
-            })
+            for item in move.move_line_ids:
+                if move.unfiltered_dest == True:
+                    item.parent_location_id = item.adt_dest_location_id.id                    
+                    item.source_location_id = False
+                    item.unfiltered_dest = value
+                    print(f"parent_location_id: {item.parent_location_id.name}")
+                    print(f"source_location_id: {item.source_location_id.name}")
+                    print(f"unfiltered_dest: {item.unfiltered_dest}")
 
-        return {
-            "type": "ir.actions.client",
-            "tag": "reload",
-        }
+                else :
+                    item.parent_location_id = move.picking_id.picking_type_id.default_location_src_id.id         
+                    item.source_location_id = False
+                    item.unfiltered_dest = value
+                    print(f"parent_location_id: {item.parent_location_id.name}")
+                    print(f"source_location_id: {item.source_location_id.name}")
+                    print(f"unfiltered_dest: {item.unfiltered_dest}")
+
+
+
+        #     move.write({
+        #         'unfiltered_dest': value,
+        #     })
+
+        #     move.move_line_ids.write({
+        #         'unfiltered_dest': value,
+        #     })
+
+        # return {
+        #     "type": "ir.actions.client",
+        #     "tag": "reload",
+        # }
 
     def _get_new_picking_values(self):
         vals = super()._get_new_picking_values()
