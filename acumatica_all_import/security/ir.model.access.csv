@@ -111,6 +111,8 @@ access_acumatica_inventory_issue_toko_pegang_do_config,access.acumatica.inventor
 access_acumatica_inventory_issue_toko_pegang_do_staging,access.acumatica.inventory.issue.toko.pegang.do.staging,model_acumatica_inventory_issue_toko_pegang_do_staging,base.group_user,1,1,1,1
 access_acumatica_inventory_issue_toko_pegang_do_staging_line,access.acumatica.inventory.issue.toko.pegang.do.staging.line,model_acumatica_inventory_issue_toko_pegang_do_staging_line,base.group_user,1,1,1,1
 access_import_inventory_issue_toko_pegang_do_wizard,access.import.inventory.issue.toko.pegang.do.wizard,model_import_inventory_issue_toko_pegang_do_wizard,base.group_user,1,1,1,1
+access_acumatica_webhook_key_config_system,access.acumatica.webhook.key.config.system,model_acumatica_webhook_key_config,base.group_system,1,1,1,1
+access_acumatica_webhook_api_key_system,access.acumatica.webhook.api.key.system,model_acumatica_webhook_api_key,base.group_system,1,1,1,1
 
 access_import_direct_transfer_wizard,access.import.direct.transfer.wizard,model_import_direct_transfer_wizard,base.group_user,1,1,1,1
 access_acumatica_vendor_return_direct_transfer_staging_user,acumatica.vendor.return.direct.transfer.staging.user,model_acumatica_vendor_return_direct_transfer_staging,base.group_user,1,1,1,1

@@ -155,7 +155,7 @@
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">issue_change_item</field>
-            <field name="endpoint_name">Shipment</field>
+            <field name="endpoint_name">InventoryIssue</field>
             <field name="odata_filter">Status eq 'On Hold' or Status eq 'Balanced'</field>
             <field name="is_default">True</field>
             <field name="active">True</field>
@@ -229,6 +229,82 @@
             <field name="company_code">asgjkt</field>
             <field name="config_type">kit_assembly</field>
             <field name="endpoint_name">KitAssembly</field>
+            <field name="odata_expand">StockComponents</field>
+            <field name="is_default">True</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
+        <record id="acumatica_config_invoice_consignment_default" model="acumatica.config">
+            <field name="name">Acumatica Invoice Consignment - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="config_type">invoice_consignment</field>
+            <field name="endpoint_name">Invoice</field>
+            <field name="odata_expand">Details</field>
+            <field name="odata_filter">Type eq 'Invoice' and Status eq 'Open' and ConsignmentType eq 'Billing Notation'</field>
+            <field name="is_default">True</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
+        <record id="acumatica_config_inventory_issue_toko_pegang_do_default" model="acumatica.config">
+            <field name="name">Acumatica Inventory Issue Toko Pegang DO - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="config_type">inventory_issue_toko_pegang_do</field>
+            <field name="endpoint_name">InventoryIssue</field>
+            <field name="odata_expand">Details</field>
+            <field name="odata_filter">TransType eq 'Toko Pegang DO' and (Status eq 'On Hold' or Status eq 'Balanced')</field>
+            <field name="is_default">True</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
+        <record id="acumatica_config_vendor_return_direct_transfer_default" model="acumatica.config">
+            <field name="name">Acumatica Vendor Return Direct Transfer - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="config_type">vendor_return_direct_transfer</field>
+            <field name="endpoint_name">TransferOrder</field>
+            <field name="odata_expand">Details</field>
+            <field name="odata_filter">ReturnType eq 'Return Transfer' and (Status eq 'On Hold' or Status eq 'Balance')</field>
+            <field name="is_default">True</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
+        <record id="acumatica_config_vendor_return_document_direct_transfer_default" model="acumatica.config">
+            <field name="name">Acumatica Vendor Return Document Direct Transfer - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="config_type">vendor_return_document_direct_transfer</field>
+            <field name="endpoint_name">TransferOrder</field>
+            <field name="odata_expand">Details</field>
+            <field name="odata_filter">ReturnType eq 'Return Transfer Document' and Status eq 'Released'</field>
+            <field name="is_default">True</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
+        <record id="acumatica_config_credit_memo_consignment_default" model="acumatica.config">
+            <field name="name">Acumatica Credit Memo Consignment - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="config_type">credit_memo_consignment</field>
+            <field name="endpoint_name">Invoice</field>
+            <field name="odata_expand">Details</field>
+            <field name="odata_filter">Type eq 'Credit Memo' and Status eq 'Open' and ConsignmentType eq 'Billing Notation'</field>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>

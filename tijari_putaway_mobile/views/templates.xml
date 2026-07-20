@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="putaway_layout" name="Putaway Mobile Layout">
+        <html>
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <title>Putaway Mobile</title>
+                <t t-call-assets="web.assets_frontend"/>
+            </head>
+            <body class="o_putaway_mobile">
+                <main class="putaway-shell">
+                    <t t-out="0"/>
+                </main>
+            </body>
+        </html>
+    </template>
+
+    <template id="putaway_today" name="Putaway Today">
+        <t t-call="tijari_putaway_mobile.putaway_layout">
+            <header class="putaway-header">
+                <div>
+                    <p class="putaway-kicker">Putaway hari ini</p>
+                    <h1 t-esc="operation_label"/>
+                </div>
+                <a class="putaway-refresh" t-att-href="'/putaway/mobile?operation=%s' % operation">Refresh</a>
+            </header>
+
+            <nav class="putaway-tabs">
+                <t t-foreach="operation_tabs" t-as="tab">
+                    <a t-attf-class="putaway-tab #{'is-active' if tab['active'] else ''}"
+                       t-att-href="tab['url']"
+                       t-esc="tab['label']"/>
+                </t>
+            </nav>
+
+            <section class="putaway-controls">
+                <form class="putaway-search" method="get" action="/putaway/mobile">
+                    <input type="hidden" name="operation" t-att-value="operation"/>
+                    <input type="hidden" name="status" t-att-value="status"/>
+                    <input name="q"
+                           type="search"
+                           inputmode="search"
+                           placeholder="Cari origin, picking, partner, produk, lot"
+                           t-att-value="query"/>
+                    <button type="submit">Cari</button>
+                </form>
+                <div class="putaway-status-tabs">
+                    <t t-foreach="status_filters" t-as="status_filter">
+                        <a t-attf-class="putaway-status-tab #{'is-active' if status_filter['active'] else ''}"
+                           t-att-href="status_filter['url']"
+                           t-esc="status_filter['label']"/>
+                    </t>
+                </div>
+            </section>
+
+            <section class="putaway-list">
+                <t t-if="not pickings">
+                    <div class="putaway-empty">Tidak ada dokumen yang cocok.</div>
+                </t>
+                <t t-foreach="pickings" t-as="picking">
+                    <a class="putaway-picking-card" t-att-href="'/putaway/mobile/picking/%s' % picking['id']">
+                        <div class="putaway-picking-main">
+                            <strong t-esc="picking['display_name']"/>
+                            <span t-if="picking['partner']" t-esc="picking['partner']"/>
+                        </div>
+                        <div class="putaway-progress">
+                            <span t-attf-class="putaway-badge #{'is-ok' if picking['is_putaway_valid'] else 'is-waiting'}"
+                                  t-esc="picking['status_label']"/>
+                            <small class="putaway-count">
+                                <t t-esc="picking['matched_lines']"/>/<t t-esc="picking['total_lines']"/> valid
+                            </small>
+                        </div>
+                        <div class="putaway-card-meta">
+                            <span t-esc="picking['operation']"/>
+                        </div>
+                    </a>
+                </t>
+            </section>
+        </t>
+    </template>
+
+    <template id="putaway_detail" name="Putaway Detail">
+        <t t-call="tijari_putaway_mobile.putaway_layout">
+            <header class="putaway-header">
+                <div>
+                    <a class="putaway-back" t-att-href="'/putaway/mobile?operation=%s' % picking['operation_key']">Back</a>
+                    <h1 t-esc="picking['display_name']"/>
+                    <p class="putaway-subtitle">
+                        <t t-esc="picking['matched_lines']"/>/<t t-esc="picking['total_lines']"/> move line valid
+                    </p>
+                </div>
+                <a t-if="next_picking"
+                   class="putaway-next"
+                   t-att-href="'/putaway/mobile/picking/%s' % next_picking['id']">
+                    Next
+                </a>
+            </header>
+
+            <section class="putaway-controls putaway-line-controls">
+                <form class="putaway-search" method="get" t-att-action="'/putaway/mobile/picking/%s' % picking['id']">
+                    <input type="hidden" name="line_status" t-att-value="line_status"/>
+                    <input name="q"
+                           type="search"
+                           inputmode="search"
+                           placeholder="Cari produk, lot, lokasi"
+                           t-att-value="line_query"/>
+                    <button type="submit">Cari</button>
+                </form>
+                <div class="putaway-status-tabs">
+                    <t t-foreach="line_status_filters" t-as="status_filter">
+                        <a t-attf-class="putaway-status-tab #{'is-active' if status_filter['active'] else ''}"
+                           t-att-href="status_filter['url']"
+                           t-esc="status_filter['label']"/>
+                    </t>
+                </div>
+            </section>
+
+            <section class="putaway-lines">
+                <t t-if="not move_lines">
+                    <div class="putaway-empty">Tidak ada lot yang cocok.</div>
+                </t>
+                <t t-foreach="move_lines" t-as="line">
+                    <article class="putaway-line" t-att-data-line-id="line['id']">
+                        <div class="putaway-line-head">
+                            <div>
+                                <strong t-esc="line['product_label']"/>
+                            </div>
+                            <span t-attf-class="putaway-badge #{'is-ok' if line['status_key'] == 'valid' else 'is-waiting'}">
+                                <t t-esc="line['status_label']"/>
+                            </span>
+                        </div>
+
+                        <dl class="putaway-meta">
+                            <div>
+                                <dt>Qty</dt>
+                                <dd><t t-esc="line['quantity']"/> <t t-esc="line['uom']"/></dd>
+                            </div>
+                            <div>
+                                <dt>Lot</dt>
+                                <dd t-esc="line['lot'] or '-'"/>
+                            </div>
+                            <div>
+                                <dt t-esc="line['location_label']"/>
+                                <dd>
+                                    <t t-esc="line['location'] or '-'"/>
+                                    <small t-if="line['location_code']" t-esc="line['location_code']"/>
+                                </dd>
+                            </div>
+                        </dl>
+
+                        <div class="putaway-scan-state putaway-line-state">
+                            <span t-attf-class="#{'is-ok' if line['location_ok'] else ''}">
+                                Loc: <t t-esc="line['confirmation_location_code'] or '-'"/>
+                            </span>
+                            <span t-attf-class="#{'is-ok' if line['lot_ok'] else ''}">
+                                Lot: <t t-esc="line['confirmation_lot_code'] or '-'"/>
+                            </span>
+                            <span t-attf-class="#{'is-ok' if line['quantity_ok'] else ''}">
+                                Qty: <t t-esc="line['confirmation_quantity']"/>
+                            </span>
+                        </div>
+
+                        <div class="putaway-actions">
+                            <button class="putaway-scan-button"
+                                    type="button"
+                                    data-scan-target="location"
+                                    t-att-data-line-id="line['id']">
+                                Scan Location
+                            </button>
+                            <button class="putaway-scan-button"
+                                    type="button"
+                                    data-scan-target="lot"
+                                    t-att-data-line-id="line['id']">
+                                Scan Lot
+                            </button>
+                        </div>
+                        <div class="putaway-quantity-check">
+                            <input class="putaway-quantity-input"
+                                   inputmode="decimal"
+                                   type="number"
+                                   step="any"
+                                   t-att-data-line-id="line['id']"
+                                   t-att-value="line['confirmation_quantity']"
+                                   placeholder="Input quantity"/>
+                            <button class="putaway-quantity-button"
+                                    type="button"
+                                    t-att-data-line-id="line['id']">
+                                Validasi Qty
+                            </button>
+                        </div>
+                    </article>
+                </t>
+            </section>
+
+            <div class="putaway-scanner" hidden="hidden">
+                <div class="putaway-scanner-panel">
+                    <video class="putaway-video" playsinline="playsinline"></video>
+                    <div class="putaway-manual">
+                        <input class="putaway-manual-input" placeholder="Input kode manual"/>
+                        <button class="putaway-submit-scan" type="button">Validasi</button>
+                    </div>
+                    <p class="putaway-scanner-message"></p>
+                    <button class="putaway-close-scanner" type="button">Tutup</button>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

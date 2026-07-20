@@ -98,6 +98,11 @@ class StockPicking(models.Model):
     )
 
 
+    status_ba = fields.Selection([
+        ('conform', 'Conform'),
+        ('discrepancy', 'Discrepancy'),],
+    string='Status BA',
+    )
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
