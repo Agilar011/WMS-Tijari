@@ -24,14 +24,16 @@ class AcumaticaWebhookController(http.Controller):
             return False, _("Missing X-API-Key header")
 
         ICP = request.env["ir.config_parameter"].sudo()
-        expected = (
-            ICP.get_param("acumatica.webhook_api_key")
+        has_key = (
+            request.env["acumatica.webhook.api.key"].sudo()._latest_key()
+            or ICP.get_param("acumatica.webhook_api_key")
             or ICP.get_param("wms.api_key")
         )
-        if not expected:
+        if not has_key:
             return False, _("Webhook API Key is not configured")
 
-        if api_key != expected:
+        KeyHistory = request.env["acumatica.webhook.api.key"].sudo()
+        if not KeyHistory._matches_latest_key(api_key):
             return False, _("Invalid API Key")
 
         return True, None

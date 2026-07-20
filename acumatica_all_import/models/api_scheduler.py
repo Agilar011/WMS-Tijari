@@ -114,9 +114,9 @@ class ApiSchedulerJob(models.Model):
         try:
             self.write({'is_running': True})
             process_result = self._run_configured_process() or {}
+            message = self._build_process_message(process_result)
             if not self._is_process_result_success(process_result):
                 status = 'failed'
-                message = self._build_process_message(process_result)
         except Exception as exc:
             status = 'failed'
             message = str(exc)
@@ -161,8 +161,11 @@ class ApiSchedulerJob(models.Model):
             return False
         messages = []
         for acumatica_data, result in process_result.items():
-            if isinstance(result, dict) and not result.get('success', True):
-                messages.append('%s: %s' % (acumatica_data, result.get('message') or 'Failed'))
+            if isinstance(result, dict) and result.get('message') and (
+                result.get('records_errors') or not result.get('success', True)
+            ):
+                prefix = 'Skipped with error' if result.get('success', True) else 'Failed'
+                messages.append('%s: %s - %s' % (acumatica_data, prefix, result.get('message')))
             elif result is False:
                 messages.append('%s: Failed' % acumatica_data)
         return '\n'.join(messages) if messages else False
@@ -181,9 +184,26 @@ class ApiSchedulerJob(models.Model):
         if self.acumatica_data_type == 'transaction':
             return [
                 ('po_receipt', 'PO Receipt', 'acumatica.receipt.line'),
-                ('shipment_so', 'SO Return', 'acumatica.shipment.line'),
+                ('so_transfer', 'Transfer - Inter Warehouse : IN', 'acumatica.transfer.line'),
+                ('receipt_change_item', 'Receipt : Change Item', 'acumatica.receipt.change.item.line'),
                 ('receipt_external', 'Receipt External', 'acumatica.receipt.external.line'),
-                ('toko_pegang_do', 'Toko Pegang DO', 'acumatica.toko.pegang.do.line'),
+                ('inventory_received', 'Receipt : Inventory Receipt', 'acumatica.inventory.recieved.line'),
+                ('toko_pegang_do', 'Receipt : Toko Pegang DO', 'acumatica.toko.pegang.do.line'),
+                ('shipment_so', 'SO Return', 'acumatica.shipment.line'),
+                ('so_shipment', 'SO Shipment', 'acumatica.so.shipment.line'),
+                ('transfer_shipment', 'Transfer - Inter Warehouse : OUT', 'acumatica.transfer.shipment.line'),
+                ('issue_change_item', 'Issue : Change Item', 'acumatica.issue.line'),
+                ('inventory_issue', 'Issue : Inventory Issue', 'acumatica.inventory.issue.line'),
+                ('issue_po_return', 'PO Return', 'acumatica.issue.po.return.line'),
+                ('transfer_one_step', 'Transfer - Intra Warehouse : OUT', 'acumatica.transfer.one.step.line'),
+                ('transfer_two_step', 'Transfer - 2 Step : OUT', 'acumatica.transfer.two.step.line'),
+                ('kit_assembly', 'Manufacturing Order', 'acumatica.kit.assembly.line'),
+                ('invoice_consignment', 'Invoice Consignment', 'acumatica.invoice.consignment.staging'),
+                ('inventory_issue_toko_pegang_do', 'Inventory Issue Toko Pegang DO', 'acumatica.inventory.issue.toko.pegang.do.staging'),
+                ('vendor_return_direct_transfer', 'Vendor Return Direct Transfer', 'acumatica.vendor.return.direct.transfer.staging'),
+                ('vendor_return_document_direct_transfer', 'Vendor Return Document Direct Transfer', 'acumatica.direct.transfer.staging'),
+                ('credit_memo_consignment', 'Credit Memo Consignment', 'acumatica.credit.memo.consignment.staging'),
+                ('inventory_receipt_transfer_wh_in', 'Inventory Receipt : Transfer In', 'acumatica.inventory.receipt.transfer.wh.in.staging'),
             ]
         return []
 
@@ -319,9 +339,26 @@ class ApiSchedulerLogDetail(models.Model):
             ('stock_item', 'Stock Item'),
             ('non_stock_item', 'Non Stock Item'),
             ('po_receipt', 'PO Receipt'),
-            ('shipment_so', 'SO Return'),
+            ('so_transfer', 'Transfer - Inter Warehouse : IN'),
+            ('receipt_change_item', 'Receipt : Change Item'),
             ('receipt_external', 'Receipt External'),
-            ('toko_pegang_do', 'Toko Pegang DO'),
+            ('inventory_received', 'Receipt : Inventory Receipt'),
+            ('toko_pegang_do', 'Receipt : Toko Pegang DO'),
+            ('shipment_so', 'SO Return'),
+            ('so_shipment', 'SO Shipment'),
+            ('transfer_shipment', 'Transfer - Inter Warehouse : OUT'),
+            ('issue_change_item', 'Issue : Change Item'),
+            ('inventory_issue', 'Issue : Inventory Issue'),
+            ('issue_po_return', 'PO Return'),
+            ('transfer_one_step', 'Transfer - Intra Warehouse : OUT'),
+            ('transfer_two_step', 'Transfer - 2 Step : OUT'),
+            ('kit_assembly', 'Manufacturing Order'),
+            ('invoice_consignment', 'Invoice Consignment'),
+            ('inventory_issue_toko_pegang_do', 'Inventory Issue Toko Pegang DO'),
+            ('vendor_return_direct_transfer', 'Vendor Return Direct Transfer'),
+            ('vendor_return_document_direct_transfer', 'Vendor Return Document Direct Transfer'),
+            ('credit_memo_consignment', 'Credit Memo Consignment'),
+            ('inventory_receipt_transfer_wh_in', 'Inventory Receipt : Transfer In'),
         ],
         string='Acumatica Data',
         readonly=True,
