@@ -104,14 +104,18 @@ class AcumaticaTransferShipmentLine(models.Model):
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_row_number = fields.Char(string='Row Number Detail', readonly=True)
 
+    building_code = fields.Char(string='BuildingID', readonly=True)
     shipment_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
     partner_code = fields.Char(string='CustomerID', readonly=True)
+    customer_name = fields.Char(string='Customer Name', readonly=True)
     description = fields.Char(string='Description Header', readonly=True)
+    document_only = fields.Char(string='Document Only', readonly=True)
     fob_point = fields.Char(string='FOB Point', readonly=True)
     is_hold = fields.Char(string='Hold', readonly=True)
     is_insurance = fields.Char(string='Insurance', readonly=True)
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
     header_location_code = fields.Char(string='Location Header', readonly=True)
+    location_name = fields.Char(string='Location Name', readonly=True)
     operation = fields.Char(string='Operation', readonly=True)
     package_count = fields.Char(string='Package Count', readonly=True)
     package_weight = fields.Char(string='Package Weight', readonly=True)
@@ -123,6 +127,7 @@ class AcumaticaTransferShipmentLine(models.Model):
     shipping_terms = fields.Char(string='Shipping Terms', readonly=True)
     shipping_zone = fields.Char(string='Shipping Zone', readonly=True)
     ship_via = fields.Char(string='Ship Via', readonly=True)
+    site_id_description = fields.Char(string='Site ID Description', readonly=True)
     status = fields.Char(string='Status', readonly=True)
     warehouse_dest_code = fields.Char(string='To Warehouse', readonly=True)
     shipment_type = fields.Char(string='Type', readonly=True)
@@ -130,6 +135,7 @@ class AcumaticaTransferShipmentLine(models.Model):
     is_unlimited_packages = fields.Char(string='Unlimited Packages', readonly=True)
     actual_qty = fields.Char(string='Control Qty', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
+    note_header_id = fields.Char(string='Note Header ID', readonly=True)
 
 
     import_state = fields.Selection([
@@ -314,14 +320,11 @@ class AcumaticaTransferShipmentLine(models.Model):
                 print(f"debug : [Shipment {shipment_key}] Source WH: {source_wh.code} | Dest WH: {dest_wh.code if dest_wh else 'None'}")
 
                 print(f"debug : [Shipment {shipment_key}] Langkah 2: Mencari stock.picking.type (Outgoing)")
-                # picking_type = PickingType.search([
-                #     ('warehouse_id', '=', source_wh.id),
-                #     ('code', '=', 'outgoing'),
-                # ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
-                # if not picking_type:
-                #     print(f"debug : [Shipment {shipment_key}] ERROR: Picking type outgoing tidak ditemukan")
-                #     raise UserError('Picking type outgoing tidak ditemukan.')
-                # print(f"debug : [Shipment {shipment_key}] Picking Type ID: {picking_type.id} ({picking_type.display_name})")
+                picking_type = first.picking_type_id
+                if not picking_type:
+                    print(f"debug : [Shipment {shipment_key}] ERROR: Picking type internal tidak ditemukan")
+                    raise UserError('Picking type internal tidak ditemukan.')
+                print(f"debug : [Shipment {shipment_key}] Picking Type ID: {picking_type.id} ({picking_type.display_name})")
 
                 print(f"debug : [Shipment {shipment_key}] Langkah 3: Menentukan Source & Destination Location")
                 src_location = self._find_location(first.header_location_code, source_wh, 'lot_stock_id') or (picking_type.default_location_src_id or source_wh.lot_stock_id)
@@ -337,7 +340,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                 vals = {
                     'origin': first.shipment_nbr,
                     'partner_id': self._find_partner(first).id if self._find_partner(first) else False,
-                    'picking_type_id': self.picking_type_id.id,
+                    'picking_type_id': picking_type.id,
                     'location_id': src_location.id,
                     'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
@@ -492,4 +495,5 @@ class AcumaticaTransferShipmentLineProduct(models.Model):
     uom_code = fields.Char(string='UOM', readonly=True)
     line_warehouse_code = fields.Char(string='Warehouse Detail', readonly=True)
     line_note = fields.Text(string='Line Note', readonly=True)
-
+    line_note_id = fields.Char(string='Line Note ID', readonly=True)
+    custom_json = fields.Text(string='Custom Payload', readonly=True)

@@ -363,7 +363,7 @@ class AcumaticaInventoryReceiptTransferWhInStaging(models.Model):
                         f'Warehouse tidak ditemukan untuk code: {first.to_warehouse_code or warehouse_code or "-"}'
                     )
                 print(f"Warehouse : {warehouse}")
-                
+                picking_type = self.picking_type_id
                 if not first.picking_type_id:
                     acumatica_mapped_location = self.env['stock.location.acumatica'].search(
                         [('code', '=', warehouse_code)], # <-- Ubah Null menjadi None
@@ -595,7 +595,7 @@ class AcumaticaInventoryReceiptTransferWhInStagingLine(models.Model):
     _order = 'header_id asc, id asc'
 
     header_id = fields.Many2one(
-        'acumatica.inventory.receipt.transfer.wh.in.staging.line', 
+        'acumatica.inventory.receipt.transfer.wh.in.staging',
         string="Header Reference", 
         ondelete='cascade', 
         index=True
