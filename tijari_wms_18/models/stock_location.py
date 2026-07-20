@@ -15,6 +15,9 @@ class StockLocationAcumatica(models.Model):
     is_error = fields.Boolean(string='Is Error')
     error_message = fields.Char(string='Error Message', readonly=True)
 
+    loginext_branch = fields.Char(string='Branch Name (Loginext)', required=True)
+    loginext_state = fields.Many2one('loginext.master.state', string='State Name (loginext)')
+
     @api.onchange('odoo_location_id')
     def _onchange_odoo_location_id(self):
         if self.is_error:

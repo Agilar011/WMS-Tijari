@@ -489,6 +489,8 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_ToWarehouseID': row.get("adt_ToWarehouseID"),
                     'adt_NoteHeader': row.get("adt_NoteHeader"),
                     'picking_type_id': row.get("picking_type_id"),
+                    'adt_ShipmentVolume': row.get("adt_ShipmentVolume"),
+                    'adt_ShipmentWeight': row.get("adt_ShipmentWeight"),
                 }
 
             line_data = {
@@ -551,6 +553,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                         gi_vals.update({
                             'all_line_ids': line_commands
                         })
+                        print(f"GI Vals: {gi_vals}")
                         GIStaging.create(gi_vals)
                         
                         print(f"--> SUCCESS CREATED NEW FRESH SHIPMENT: {shipment_nbr}")
