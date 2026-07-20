@@ -77,14 +77,6 @@ class StockMoveLine(models.Model):
         default=False,
     )
 
-<<<<<<< Updated upstream
-    # unfiltered_dest_quant = fields.Many2one(
-    #     'stock.quant',
-    #     string="Pick From (All)"
-    # )
-
-=======
->>>>>>> Stashed changes
     parent_location_id = fields.Many2one(
         "stock.location",
         string="Parent Location",
@@ -199,75 +191,6 @@ class StockMoveLine(models.Model):
 
         self.selected_quant_id = quant
         self.quant_id = quant
-<<<<<<< Updated upstream
-
-    # @api.depends("product_id", "product_lot_id", "source_location_id")
-    # def _compute_selected_quant(self):
-    #     print('Run compute_selected_quant')
-    #     Quant = self.env["stock.quant"]
-
-    #     for line in self:
-    #         line.selected_quant_id = False
-
-    #         if not (
-    #             line.product_id
-    #             and line.source_location_id
-    #             and line.product_lot_id
-    #         ):
-    #             line.quant_id = False
-    #             continue
-
-    #         quant = Quant.search(
-    #             [
-    #                 ("product_id", "=", line.product_id.id),
-    #                 ("location_id", "=", line.source_location_id.id),
-    #                 ("lot_id", "=", line.product_lot_id.id),
-    #             ],
-    #             limit=1,
-    #         )
-
-    #         print(f"quant found: {quant}")
-
-    #         line.selected_quant_id = quant.id
-
-    #         # print(line.)
-
-
-    #         line.quant_id = quant
-    #         print(f"Quant value: {line.selected_quant_id}")
-
-    # @api.onchange("selected_quant_id")
-    # def _onchange_change_quant_id(self):
-    #     print(f"change quant id to: {self.selected_quant_id}")
-    #     self.quant_id = self.selected_quant_id
-
-
-    # @api.onchange("product_id", "source_location_id")
-    # def _onchange_product_lot(self):
-
-    #     self.product_lot_id = False
-
-    #     domain = []
-
-    #     if self.product_id and self.source_location_id:
-
-    #         quants = self.env["stock.quant"].search([
-    #             ("product_id", "=", self.product_id.id),
-    #             ("location_id", "child_of", self.source_location_id.id),
-    #             ("quantity", ">", 0),
-    #         ])
-
-    #         domain = [
-    #             ("id", "in", quants.mapped("lot_id").ids)
-    #         ]
-
-    #     return {
-    #         "domain": {
-    #             "product_lot_id": domain
-    #         }
-    #     }
-=======
->>>>>>> Stashed changes
 
     @api.model_create_multi
     def create(self, vals_list):

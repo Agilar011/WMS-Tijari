@@ -46,14 +46,6 @@
                 <field name="selected_quant_id" optional="hide"/>
             </xpath>
 
-                <!-- <field name="unfiltered_dest"/> -->
-                <!-- <field string="Unfiltered To" name="quant_unfiltered_id" domain="[('product_id', '=', product_id)]" column_invisible="parent.unfiltered_dest"/> -->
-                <field name="parent_location_id" readonly="1" optional="hide"/>
-                <field name="source_location_id"/>
-                <field name="temp_quant_ids" optional="hide"/>
-                <field name="product_lot_id"/>
-                <field name="selected_quant_id" optional="hide"/>
-            </xpath>
             <!-- Hide From To defaul_odoo -->
             <xpath expr="//field[@name='quant_id']" position="replace">
                 <field name="quant_id" column_invisible="parent.picking_type_name == 'Pick'"/>
