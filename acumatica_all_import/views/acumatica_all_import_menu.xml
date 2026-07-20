@@ -61,6 +61,15 @@
 
     <menuitem id="menu_acumatica_all_import_config_root" name="Konfigurasi API" parent="menu_acumatica_all_import_root" action="action_acumatica_config" sequence="5"/>
     <menuitem id="menu_acumatica_all_import_config" name="All Config" parent="menu_acumatica_all_import_config_root" action="action_acumatica_config" sequence="0"/>
+    <menuitem id="menu_acumatica_webhook_key_config" name="Webhook API Key" parent="menu_acumatica_all_import_config_root" action="action_acumatica_webhook_api_key_history" sequence="1" groups="base.group_system"/>
+    <record id="menu_acumatica_webhook_api_key_history" model="ir.ui.menu">
+        <field name="name">Webhook API Key History</field>
+        <field name="parent_id" ref="menu_acumatica_all_import_config_root"/>
+        <field name="action" eval="'ir.actions.act_window,%d' % ref('action_acumatica_webhook_api_key_history')"/>
+        <field name="sequence">2</field>
+        <field name="groups_id" eval="[(6, 0, [ref('base.group_system')])]"/>
+        <field name="active" eval="False"/>
+    </record>
     <menuitem id="menu_acumatica_all_import_config_inbound"
         name="Inbound"
         parent="menu_acumatica_all_import_config_root"

@@ -30,11 +30,11 @@
           sequence="4" 
           action="uom.product_uom_form_action"/>
   
-  <menuitem
+  <!-- <menuitem
     id="menu_master_approval_type"
     name="Approval Types"
     parent="custom_master_menu"
     action="approval_base.action_approval_type"
-    sequence="30"/>
+    sequence="30"/> -->
 
 </odoo>

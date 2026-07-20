@@ -1,6 +1,7 @@
 import logging
+from datetime import datetime, time, timedelta, timezone
 
-from odoo import models, api
+from odoo import fields, models, api
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -22,16 +23,17 @@ class AcumaticaCronJob(models.Model):
 
     def _run_import_step(self, key, runner, batch_size=1000, fetch_skip=0):
         try:
-            with self.env.cr.savepoint():
-                result = runner(batch_size=batch_size, fetch_skip=fetch_skip)
+            result = runner(batch_size=batch_size, fetch_skip=fetch_skip)
             if isinstance(result, dict):
                 return result
             return self._cron_result(success=bool(result))
         except Exception as exc:
-            _logger.exception("Cron import %s failed.", key)
+            self.env.cr.rollback()
+            _logger.exception("Cron import %s skipped because of an error.", key)
             return self._cron_result(
-                success=False,
+                success=True,
                 records_errors=1,
+                records_skipped=1,
                 message=str(exc),
             )
 
@@ -45,6 +47,134 @@ class AcumaticaCronJob(models.Model):
         if skipped_states:
             skipped_count = Line.search_count(domain + [('import_state', 'in', skipped_states)])
         return imported_count, updated_count, error_count, skipped_count
+
+    def _get_transaction_import_definitions(self):
+        return [
+            ('po_receipt', 'PO Receipt', 'import.receipt.wizard', 'acumatica.receipt.line', 'put'),
+            ('so_transfer', 'Transfer - Inter Warehouse : IN', 'import.transfer.wizard', 'acumatica.transfer.line', 'get'),
+            ('receipt_change_item', 'Receipt : Change Item', 'import.receipt.change.item.wizard', 'acumatica.receipt.change.item.line', 'get'),
+            ('receipt_external', 'Receipt External', 'import.receipt.external.wizard', 'acumatica.receipt.external.line', 'put'),
+            ('inventory_received', 'Receipt : Inventory Receipt', 'import.inventory.recieved.wizard', 'acumatica.inventory.recieved.line', 'get'),
+            ('toko_pegang_do', 'Receipt : Toko Pegang DO', 'import.toko.pegang.do.wizard', 'acumatica.toko.pegang.do.line', 'get'),
+            ('shipment_so', 'SO Return', 'import.shipment.wizard', 'acumatica.shipment.line', 'put'),
+            ('so_shipment', 'SO Shipment', 'import.so.shipment.wizard', 'acumatica.so.shipment.line', 'put'),
+            ('transfer_shipment', 'Transfer - Inter Warehouse : OUT', 'import.transfer.shipment.wizard', 'acumatica.transfer.shipment.line', 'get'),
+            ('issue_change_item', 'Issue : Change Item', 'import.issue.wizard', 'acumatica.issue.line', 'get'),
+            ('inventory_issue', 'Issue : Inventory Issue', 'import.inventory.issue.wizard', 'acumatica.inventory.issue.line', 'get'),
+            ('issue_po_return', 'PO Return', 'import.issue.po.return.wizard', 'acumatica.issue.po.return.line', 'get'),
+            ('transfer_one_step', 'Transfer - Intra Warehouse : OUT', 'import.transfer.one.step.wizard', 'acumatica.transfer.one.step.line', 'get'),
+            ('transfer_two_step', 'Transfer - 2 Step : OUT', 'import.transfer.two.step.wizard', 'acumatica.transfer.two.step.line', 'get'),
+            ('kit_assembly', 'Manufacturing Order', 'import.kit.assembly.wizard', 'acumatica.kit.assembly.line', 'get'),
+            ('invoice_consignment', 'Invoice Consignment', 'import.invoice.consignment.wizard', 'acumatica.invoice.consignment.staging', 'get'),
+            ('inventory_issue_toko_pegang_do', 'Inventory Issue Toko Pegang DO', 'import.inventory.issue.toko.pegang.do.wizard', 'acumatica.inventory.issue.toko.pegang.do.staging', 'get'),
+            ('vendor_return_direct_transfer', 'Vendor Return Direct Transfer', 'import.vendor.return.direct.transfer.wizard', 'acumatica.vendor.return.direct.transfer.staging', 'get'),
+            ('vendor_return_document_direct_transfer', 'Vendor Return Document Direct Transfer', 'import.direct.transfer.wizard', 'acumatica.direct.transfer.staging', 'get'),
+            ('credit_memo_consignment', 'Credit Memo Consignment', 'import.credit.memo.consignment.wizard', 'acumatica.credit.memo.consignment.staging', 'get'),
+            ('inventory_receipt_transfer_wh_in', 'Inventory Receipt : Transfer In', 'import.inventory.receipt.transfer.wh.in.wizard', 'acumatica.inventory.receipt.transfer.wh.in.staging', 'get'),
+        ]
+
+    def _get_transaction_date_filter_values(self, days=30):
+        today = fields.Date.context_today(self)
+        start_date = today - timedelta(days=days)
+        start_dt = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+        return start_date, today, start_dt.isoformat().replace('+00:00', 'Z')
+
+    def _prepare_transaction_wizard_values(self, wizard_model, config, method, batch_size, fetch_skip):
+        Wizard = self.env[wizard_model]
+        values = {'config_id': config.id}
+        if 'batch_size' in Wizard._fields:
+            values['batch_size'] = batch_size
+        if 'fetch_limit' in Wizard._fields:
+            values['fetch_limit'] = batch_size
+        if 'fetch_skip' in Wizard._fields:
+            values['fetch_skip'] = fetch_skip
+        if method == 'get':
+            start_date, end_date, last_modified_from = self._get_transaction_date_filter_values()
+            if 'odata_filter' in Wizard._fields:
+                end_dt = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
+                end_dt_str = end_dt.isoformat().replace('+00:00', 'Z')
+                odata_filters = []
+                if config.odata_filter:
+                    odata_filters.append("(%s)" % config.odata_filter)
+                if config.endpoint_name != 'Shipment':
+                    odata_filters.append(
+                        "Date ge datetimeoffset'%s' and Date le datetimeoffset'%s'"
+                        % (last_modified_from, end_dt_str)
+                    )
+                odata_filters.append("LastModifiedDateTime ge datetimeoffset'%s'" % last_modified_from)
+                values['odata_filter'] = ' and '.join(odata_filters)
+        return values
+
+    def _get_importable_lines(self, model_name, config):
+        Line = self.env[model_name]
+        domain = [('import_state', '=', 'pending')]
+        config_field = Line._fields.get('config_id')
+        if config_field and getattr(config_field, 'comodel_name', False) == 'acumatica.config':
+            domain.append(('config_id', '=', config.id))
+        if 'selected' in Line._fields:
+            domain.append(('selected', '=', True))
+        return Line.search(domain)
+
+    def _run_generic_transaction_import_job(self, key, batch_size=1000, fetch_skip=0):
+        definition = False
+        for item in self._get_transaction_import_definitions():
+            if item[0] == key:
+                definition = item
+                break
+        if not definition:
+            return self._cron_result(success=False, records_errors=1, message='Unsupported transaction import: %s' % key)
+
+        key, label, wizard_model, line_model, method = definition
+        config = self._get_default_config_for_type(key)
+        if not config:
+            _logger.warning("Cron import %s skipped: no active %s config found.", label, key)
+            return self._cron_result(message='No active %s config found; skipped.' % key)
+
+        wizard = self.env[wizard_model].create(
+            self._prepare_transaction_wizard_values(wizard_model, config, method, batch_size, fetch_skip)
+        )
+
+        try:
+            wizard.action_fetch_data()
+        except UserError as exc:
+            if 'Tidak ada data' in str(exc):
+                _logger.info("Cron import %s finished: no data returned from Acumatica.", label)
+                return self._cron_result()
+            raise
+
+        data_retrieved = wizard.total_fetched or 0
+        lines = self._get_importable_lines(line_model, config)
+        pending_count = len(lines)
+        if not lines:
+            _logger.info("Cron import %s finished: no pending staging lines.", label)
+            return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
+
+        _logger.info("Cron import %s starting _do_import; PENDING_LINES=%s", label, pending_count)
+        lines._do_import()
+
+        imported_count, updated_count, error_count, skipped_count = self._get_import_counts(
+            line_model,
+            lines.ids,
+            skipped_states=['skipped'],
+        )
+        records_created = imported_count + updated_count
+        records_skipped = skipped_count + max(data_retrieved - records_created - error_count - skipped_count, 0)
+        _logger.info(
+            "Cron import %s finished _do_import; RETRIEVED=%s, PENDING_BEFORE=%s, IMPORTED=%s, UPDATED=%s, SKIPPED=%s, ERROR=%s",
+            label,
+            data_retrieved,
+            pending_count,
+            imported_count,
+            updated_count,
+            skipped_count,
+            error_count,
+        )
+        return self._cron_result(
+            data_retrieved=data_retrieved,
+            records_created=records_created,
+            records_errors=error_count,
+            records_skipped=records_skipped,
+        )
 
     def _run_customer_import_job(self, batch_size=1000, fetch_skip=0):
         """Fetch Customer data from Acumatica and import pending staging lines."""
@@ -724,17 +854,23 @@ class AcumaticaCronJob(models.Model):
 
     @api.model
     def _cron_import_transaction_data(self, batch_size=1000, fetch_skip=0):
-        """Run transaction imports. PO Receipt is the first supported transaction API."""
+        """Run transaction imports with method-specific fetch rules."""
         _logger.info(
             "START CRON IMPORT TRANSACTION DATA; BATCH_SIZE=%s, FETCH_SKIP=%s",
             batch_size,
             fetch_skip,
         )
-        results = {
-            'po_receipt': self._run_import_step('po_receipt', self._run_po_receipt_import_job, batch_size, fetch_skip),
-            'shipment_so': self._run_import_step('shipment_so', self._run_shipment_so_import_job, batch_size, fetch_skip),
-            'receipt_external': self._run_import_step('receipt_external', self._run_receipt_external_import_job, batch_size, fetch_skip),
-            'toko_pegang_do': self._run_import_step('toko_pegang_do', self._run_toko_pegang_do_import_job, batch_size, fetch_skip),
-        }
+        results = {}
+        for key, label, wizard_model, line_model, method in self._get_transaction_import_definitions():
+            results[key] = self._run_import_step(
+                key,
+                lambda batch_size, fetch_skip, import_key=key: self._run_generic_transaction_import_job(
+                    import_key,
+                    batch_size=batch_size,
+                    fetch_skip=fetch_skip,
+                ),
+                batch_size,
+                fetch_skip,
+            )
         _logger.info("FINISH CRON IMPORT TRANSACTION DATA; RESULTS=%s", results)
         return results

@@ -83,7 +83,18 @@ class StockMoveLine(models.Model):
     quant_unfiltered_id = fields.Many2one(
         'stock.quant',
         string="Pick From (All)"
-    )        
+    )
+    location_dest_name = fields.Char(
+        related='location_dest_id.name',
+        string='Destination Location Name',
+        readonly=True,
+        store=False,
+    )
+    confirmation_quantity = fields.Float(
+        string="Confirmation Quantity",
+        default=0.0,
+        copy=False,
+    )
 
 
     @api.model_create_multi
@@ -110,76 +121,76 @@ class StockMoveLine(models.Model):
         pickings._sync_adt_quantities_from_moves()
         return res
 
-    @api.onchange('confirmation_lot_code', 'confirmation_location_code', 'matching', 'auto_input_code')
-    def _compute_matching(self):
-        print(">>> Computing matching status...") # Cek di terminal Odoo
-        for line in self:
-            picking_type = line.picking_id.picking_type_id
+    # @api.onchange('confirmation_lot_code', 'confirmation_location_code', 'matching', 'auto_input_code')
+    # def _compute_matching(self):
+    #     print(">>> Computing matching status...") # Cek di terminal Odoo
+    #     for line in self:
+    #         picking_type = line.picking_id.picking_type_id
 
-            # 1. Validasi awal: pastikan input user tidak kosong atau hanya berisi spasi
-            conf_loc = str(line.confirmation_location_code or '').strip()
-            conf_lot = str(line.confirmation_lot_code or '').strip()
+    #         # 1. Validasi awal: pastikan input user tidak kosong atau hanya berisi spasi
+    #         conf_loc = str(line.confirmation_location_code or '').strip()
+    #         conf_lot = str(line.confirmation_lot_code or '').strip()
 
-            loc_ok = False
-            lot_ok = False
+    #         loc_ok = False
+    #         lot_ok = False
             
-            if not conf_loc or not conf_lot:
-                line.matching = 'not_match'
-                continue
+    #         if not conf_loc or not conf_lot:
+    #             line.matching = 'not_match'
+    #             continue
             
-            if picking_type and picking_type.name in ('Pick'):
-                print('run validate code for pick')
-                loc_code = str(line.location_id.unique_code or '').strip()
-                product_code = str(line.lot_id.name or '').strip()
+    #         if picking_type and picking_type.name in ('Pick'):
+    #             print('run validate code for pick')
+    #             loc_code = str(line.location_id.unique_code or '').strip()
+    #             product_code = str(line.lot_id.name or '').strip()
 
-                loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
-                lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
+    #             loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
+    #             lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
 
-            if picking_type and picking_type.name in ('Receipts'):
-                print('run validate code for receipt')
-                loc_code = str(line.location_dest_id.unique_code or '').strip()
-                product_code = str(line.lot_id.name or '').strip()
+    #         if picking_type and picking_type.name in ('Receipts'):
+    #             print('run validate code for receipt')
+    #             loc_code = str(line.location_dest_id.unique_code or '').strip()
+    #             product_code = str(line.lot_id.name or '').strip()
 
-                loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
-                lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
+    #             loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
+    #             lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
 
 
-            if not picking_type or picking_type.name not in ('Pick', 'Pack', 'Receipts'):
-                raise ValueError('validation is not config yet')
+    #         if not picking_type or picking_type.name not in ('Pick', 'Pack', 'Receipts'):
+    #             raise ValueError('validation is not config yet')
 
-            line.matching = 'match'
+    #         line.matching = 'match'
 
-            # # Untuk PACK → cek lot + unique_code (aku anggap SOURCE location)
-            # elif operation_category == 'delivery':
-            #     print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
-            #     print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
-            #     print(f">>> Evaluating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
-            #     # kalau belum ada input sama sekali, invisible
-            #     if line.confirmation_location_code or line.confirmation_lot_code:
-            #         loc_code = line.location_id.unique_code if line.location_id else (line.quant_id.location_id.unique_code if line.quant_id and line.quant_id.location_id else 'N/A')
-            #         lot_code = line.lot_id.name if line.lot_id else (line.quant_id.lot_id.name if line.quant_id and line.quant_id.lot_id else 'N/A')
-            #         print(f">>> Information to match : Lot Code = {lot_code}, Location Code = {loc_code}") # Cek di terminal Odoo
-            #         # src_loc = line.location_id
-            #         # src_code = src_loc.unique_code if src_loc else False
-            #         # lot = line.lot_id
-            #         # src_code = line.quant_id.location_id.unique_code if line.quant_id.location_id else False
-            #         # lot = line.quant_id.lot_id.name
+    #         # # Untuk PACK → cek lot + unique_code (aku anggap SOURCE location)
+    #         # elif operation_category == 'delivery':
+    #         #     print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
+    #         #     print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
+    #         #     print(f">>> Evaluating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+    #         #     # kalau belum ada input sama sekali, invisible
+    #         #     if line.confirmation_location_code or line.confirmation_lot_code:
+    #         #         loc_code = line.location_id.unique_code if line.location_id else (line.quant_id.location_id.unique_code if line.quant_id and line.quant_id.location_id else 'N/A')
+    #         #         lot_code = line.lot_id.name if line.lot_id else (line.quant_id.lot_id.name if line.quant_id and line.quant_id.lot_id else 'N/A')
+    #         #         print(f">>> Information to match : Lot Code = {lot_code}, Location Code = {loc_code}") # Cek di terminal Odoo
+    #         #         # src_loc = line.location_id
+    #         #         # src_code = src_loc.unique_code if src_loc else False
+    #         #         # lot = line.lot_id
+    #         #         # src_code = line.quant_id.location_id.unique_code if line.quant_id.location_id else False
+    #         #         # lot = line.quant_id.lot_id.name
 
-            #         # kondisi match
-            #         loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
-            #         lot_ok = bool(lot_code and line.confirmation_lot_code == lot_code)
+    #         #         # kondisi match
+    #         #         loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
+    #         #         lot_ok = bool(lot_code and line.confirmation_lot_code == lot_code)
 
-            #         if loc_ok and lot_ok:
-            #             matching = 'match'
-            #         else:
-            #             matching = 'not_match'
+    #         #         if loc_ok and lot_ok:
+    #         #             matching = 'match'
+    #         #         else:
+    #         #             matching = 'not_match'
 
-            #         print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
+    #         #         print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
 
-            # if line.matching_lot_id.id == line.lot_id.id and line.matching_loc_dest_id.id == line.location_dest_id.id:
-            #     matching = 'match'
+    #         # if line.matching_lot_id.id == line.lot_id.id and line.matching_loc_dest_id.id == line.location_dest_id.id:
+    #         #     matching = 'match'
 
-            # line.matching = matching
+    #         # line.matching = matching
 
     # @api.depends('matching')
     # def _compute_matching_html(self):
@@ -687,7 +698,7 @@ class StockMoveLine(models.Model):
     #     'lot_id',
     #     'picking_id.picking_type_id.name',
     # )
-    @api.onchange('confirmation_lot_code', 'confirmation_location_code', 'matching', 'auto_input_code')
+    @api.onchange('confirmation_lot_code', 'confirmation_location_code', 'confirmation_quantity', 'matching', 'auto_input_code')
     def _compute_matching(self):
         print('run validate code')
         import logging
@@ -720,8 +731,15 @@ class StockMoveLine(models.Model):
                 loc_code = str(line.location_dest_id.unique_code or '').strip()
                 product_code = str(line.lot_id.name or '').strip()
 
-                loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
-                lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
+                loc_ok = bool(line.location_dest_id.id == line.matching_loc_dest_id.id)
+                lot_ok = bool(line.lot_id.id == line.matching_lot_id.id)
+                qty_ok = bool(line.quantity == line.confirmation_quantity)
+                if loc_ok and lot_ok and qty_ok:
+                    line.matching = 'match'
+                    continue
+                else:
+                    line.matching = 'not_match'
+                    continue
 
 
             if not picking_type or picking_type.name not in ('Pick', 'Pack', 'Receipts'):

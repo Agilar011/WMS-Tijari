@@ -229,11 +229,17 @@
     </record>
 
     <menuitem
+        id="custom_logs_menu"
+        name="Logs"
+        parent="stock.menu_stock_root"
+        sequence="101"/>
+
+    <menuitem
         id="menu_stock_picking_acumatica_error"
         name="Picking Import Errors"
-        parent="stock.menu_stock_root"
+        parent="custom_logs_menu"
         action="action_stock_picking_acumatica_error"
-        sequence="100"/>
+        sequence="10"/>
 
     <record id="view_picking_form_inherit_acumatica_receipt" model="ir.ui.view">
         <field name="name">stock.picking.form.acumatica.receipt</field>
