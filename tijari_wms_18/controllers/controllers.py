@@ -399,7 +399,7 @@ class WmsApiController(http.Controller):
         data = {
             'type': receipt.adt_type or '',
             'date': format_tanggal_indo(receipt.scheduled_date),
-            'no': receipt.name or '',
+            'no': receipt.origin or '',
             'vendor': receipt.partner_id.name or '',
             'warehouse': receipt.picking_type_id.name or '',
             'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
@@ -412,16 +412,25 @@ class WmsApiController(http.Controller):
             'ttd_created_by': (receipt.created_by_id.partner_id.digital_signature.decode('utf-8') if receipt.created_by_id.partner_id.digital_signature else blank_image),
             'approved_by': receipt.approved_by_id.name or '',
             'ttd_approved_by': (receipt.approved_by_id.partner_id.digital_signature.decode('utf-8') if receipt.approved_by_id.partner_id.digital_signature else blank_image),
+            'status_ba': dict(receipt._fields['status_ba'].selection).get(receipt.status_ba, ''),
+            'status_ba_color': 'green' if receipt.status_ba == 'conform' else 'red',
             'detail': []
         }
         for line in receipt.move_ids_without_package:
             difference_qty = float(line.difference_quantity or 0)
+            if difference_qty.is_integer():
+                difference_text = str(int(difference_qty))
+            else:
+                difference_text = str(difference_qty)
 
             obj = {
                 'name': line.product_id.display_name or '',
                 'uom': line.product_uom.name or '',
-                'difference_quantity': difference_qty if difference_qty == 0 else 0,
-                'difference_quantity_red': difference_qty if difference_qty > 0 else "",
+                'difference_quantity': (
+                    "<style forecolor='red'>%s</style>" % difference_text
+                    if difference_qty > 0
+                    else difference_text
+                ),
                 'demand': float(line.product_uom_qty or 0),
                 'demand1': float(line.quantity or 0),
                 'qty': float(line.quantity or 0),

@@ -458,7 +458,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             if picking_type.default_location_src_id
                             else self.env.ref('stock.stock_location_suppliers').id
                         ),
-                        'location_dest_id': dest_location.id,
+                        'location_dest_id': picking_type.default_location_dest_id.id,
                         'scheduled_date': self._parse_dt(first.scheduled_date) if hasattr(first, 'scheduled_date') and first.scheduled_date else fields.Datetime.now(),
                         'origin': origin,
                         'note': first.note or False,

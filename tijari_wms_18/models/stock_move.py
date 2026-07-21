@@ -5,7 +5,9 @@ from PIL import Image
 import qrcode
 import io
 from odoo.exceptions import UserError, ValidationError
+import logging
 
+_logger = logging.getLogger(__name__)
 
 class StockMove(models.Model):
     _inherit = 'stock.move'
@@ -41,7 +43,7 @@ class StockMove(models.Model):
 
     unfiltered_dest = fields.Boolean(
         string="Unfiltered Destination",
-        default=False,
+        default=True,
     )
 
     picking_type_code = fields.Selection(
@@ -54,10 +56,15 @@ class StockMove(models.Model):
         store=False,
     )
 
+    
+    adt_dest_location = fields.Char(string="Mappped Location",
+        readonly=True
+    ) 
+    
     @api.depends('move_line_ids.lot_id', 'move_line_ids.quantity')
     def _compute_lot_ids(self):
         for move in self:
-            move.lot_ids = move.move_line_ids.mapped('lot_id')
+            move.lot_ids = move.move_line_ids.mapped('lot_id')   
 
     def action_validate_lot_pick(self):
         for move in self:
@@ -84,36 +91,54 @@ class StockMove(models.Model):
                 line.confirmation_lot_code = line.lot_id.name or False
                 line.confirmation_location_code = location.unique_code or False
 
+    @api.onchange('unfiltered_dest')
     def action_toggle_unfiltered_dest(self):
+        _logger.info("Running Onchange 1")
+        _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
+
         for move in self:
-            value = not move.unfiltered_dest
+            _logger.info("Before onchange: %s", move.unfiltered_dest)
 
-            move.write({
-                'unfiltered_dest': value,
-            })
+            value = move.unfiltered_dest
 
-            move.move_line_ids.write({
-                'unfiltered_dest': value,
-            })
+            _logger.info("After onchange: %s", value)
 
-        return {
-            "type": "ir.actions.client",
-            "tag": "reload",
-        }
+            move.unfiltered_dest = value
+
+            for item in move.move_line_ids:
+                if move.unfiltered_dest:
+                    item.parent_location_id = item.adt_dest_location_id.id
+                    item.source_location_id = False
+                    item.unfiltered_dest = value
+
+                    _logger.info("parent_location_id: %s", item.parent_location_id.name)
+                    _logger.info("source_location_id: %s", item.source_location_id.name if item.source_location_id else False)
+                    _logger.info("unfiltered_dest: %s", item.unfiltered_dest)
+
+                else:
+                    item.parent_location_id = move.picking_id.picking_type_id.default_location_src_id.id
+                    item.source_location_id = False
+                    item.unfiltered_dest = value
+
+                    _logger.info("parent_location_id: %s", item.parent_location_id.name)
+                    _logger.info("source_location_id: %s", item.source_location_id.name if item.source_location_id else False)
+                    _logger.info("unfiltered_dest: %s", item.unfiltered_dest)
 
     def _get_new_picking_values(self):
         vals = super()._get_new_picking_values()
 
         print("_get_new_picking_values")
-        print("move:", self)
-        print("move adt_type:", self.adt_type)
-        print("vals before:", vals)
+        for item in self:
+            print("move:", self)
+            print("move adt_type:", self.adt_type)
+            print("vals before:", vals)
 
-        vals['adt_type'] = self.adt_type
+            vals['adt_type'] = self.adt_type
 
-        print("vals after:", vals)
+            print("vals after:", vals)
 
         return vals
+
     
     def action_print_lot_number_line(self):
         self.ensure_one()
@@ -243,7 +268,7 @@ class StockMove(models.Model):
         res = super().create(vals)
         for line in res:
             if not line.adt_dest_location_id:
-                line.adt_dest_location_id = line.picking_id.adt_dest_location_id
+                line.adt_dest_location_id = line.location_id
 
         return res
 

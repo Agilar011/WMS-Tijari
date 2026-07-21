@@ -1,6 +1,3 @@
-from odoo import models, api, fields
-from odoo.exceptions import ValidationError, UserError
-
 import base64
 import re
 import traceback
@@ -9,13 +6,14 @@ from PIL import Image
 import qrcode
 import io
 import logging 
-
-
+import json
+import requests
+from collections import defaultdict
+from odoo import models, api, fields
+from odoo.exceptions import ValidationError, UserError
+from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 
 _logger = logging.getLogger(__name__)
-
-from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
-from collections import defaultdict
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -82,6 +80,27 @@ class StockPicking(models.Model):
         readonly=False,
     )
 
+    wms_state = fields.Selection(
+        selection=[
+            ('draft', 'Draft'),
+            ('waiting', 'Waiting Another Operation'),
+            ('confirmed', 'Waiting'),
+            ('assigned', 'Ready'),
+            ('waiting_response', 'Waiting_response'),
+            ('done', 'Done'),
+            ('cancel', 'Cancelled'),
+        ],
+        string="WMS State",
+        copy=False,
+        tracking=True,
+    )
+
+
+    status_ba = fields.Selection([
+        ('conform', 'Conform'),
+        ('discrepancy', 'Discrepancy'),],
+    string='Status BA',
+    )
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
@@ -282,6 +301,23 @@ class StockPicking(models.Model):
         _logger.info(">>> action_confirm CALLED %s", self.ids)
 
         res = super().action_confirm()
+        
+        for picking in self:
+                    for move in picking.move_ids:
+                        for line in move.move_line_ids:
+                            print(line)
+                            if line.lot_id:
+                                print(line.lot_id)
+                                # vals = {
+                                #     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                                # }
+                                # vals['product_lot_id'] = line.lot_id.id
+                                # line.write(vals)
+                                print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
+                                line.write({
+                                    'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                                    'product_lot_id': line.lot_id.id,
+                                })        
 
         return res
 
@@ -403,6 +439,265 @@ class StockPicking(models.Model):
             'product_id': product.id,
             'display_name': product.display_name,
         }
+    
+    @api.onchange("state")
+    def _onchange_state_update_wms_state(self):
+        for picking in self:
+            picking.wms_state = picking.state        
+
+
+    def _format_datetime(self, dt):
+        if not dt:
+            return None
+
+        if isinstance(dt, str):
+            dt = Datetime.from_string(dt)
+
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    # ==========================================================
+    # Prepare Payload
+    # ==========================================================
+
+    def _prepare_loginext_payload(self):
+        self.ensure_one()
+
+        header_to_send = self.env["loginext.staging.data"].search(
+            [("odoo_shipment_number", "=", self.origin)],
+            limit=1,
+        )
+
+        if not header_to_send:
+            raise UserError("Data staging TMS tidak dapat ditemukan")
+        
+        return {
+            "orderNo": header_to_send.loginext_order_no,
+            "shipmentOrderDt": self._format_datetime(
+                header_to_send.loginext_shipment_order_dt
+            ),
+            "shipmentOrderTypeCd": header_to_send.loginext_shipment_order_type_cd,
+            "orderState": header_to_send.loginext_order_state,
+            "distributionCenter": header_to_send.loginext_distribution_center,
+            "returnBranch": header_to_send.loginext_return_branch,
+            "packageWeight": str(header_to_send.loginext_package_weight or 0),
+            "packageVolume": str(header_to_send.loginext_package_volume or 0),
+            "preparationTime": int(header_to_send.loginext_preparation_time or 0),
+            "paymentType": header_to_send.loginext_payment_type,
+            "packageValue": str(header_to_send.loginext_package_value or 0),
+            "numberOfItems": header_to_send.loginext_number_of_items or 0,
+            "partialDeliveryAllowedFl": "Y" if header_to_send.loginext_partial_delivery_allowed_fl else "N",
+            "returnAllowedFl": "Y" if header_to_send.loginext_return_allowed_fl else "N",
+            "cancellationAllowedFl": "Y" if header_to_send.loginext_cancellation_allowed_fl else "N",
+            "deliverServiceTime": str(header_to_send.loginext_deliver_service_time or 0),
+            "deliverStartTimeWindow": self._format_datetime(header_to_send.loginext_deliver_start_time_window),
+            "deliverEndTimeWindow": self._format_datetime(header_to_send.loginext_deliver_end_time_window),
+            "deliveryType": header_to_send.loginext_delivery_type,
+            "deliverBranch": header_to_send.loginext_deliver_branch,
+            "deliverAccountCode": header_to_send.loginext_deliver_account_code,
+            "deliverAccountName": header_to_send.loginext_deliver_account_name,
+            "deliverApartment": header_to_send.loginext_deliver_apartment,
+            "deliverStreetName": header_to_send.loginext_deliver_street_name,
+            "deliverLocality": header_to_send.loginext_deliver_locality,
+            "deliverCity": header_to_send.loginext_deliver_city,
+            "deliverState": header_to_send.loginext_deliver_state,
+            "deliverCountry": header_to_send.loginext_deliver_country,
+            "deliverPinCode": header_to_send.loginext_deliver_pin_code,
+            "deliverAddressTimezone": header_to_send.loginext_deliver_address_timezone,
+            "deliverNotes": header_to_send.loginext_deliver_notes,
+            "shipmentCrateMappings": [
+                {
+                    "crateCd": crate.loginext_crate_cd,
+                    "crateName": crate.loginext_crate_name,
+                    "crateType": crate.loginext_crate_type,
+                    "crateWeight": crate.loginext_crate_weight,
+                    "shipmentlineitems": [
+                        {
+                            "itemCd": item.loginext_item_cd,
+                            "itemName": item.loginext_item_name,
+                            "itemPrice": item.loginext_item_price,
+                            "itemQuantity": item.loginext_item_quantity,
+                            "itemType": item.loginext_item_type,
+                            "itemWeight": item.loginext_item_weight,
+                        }
+                        for item in crate.item_ids
+                    ],
+                }
+                for crate in header_to_send.crate_ids
+            ],
+        }
+
+    # ==========================================================
+    # POST API
+    # ==========================================================
+
+    def action_post_loginext(self):
+        self.wms_state = 'waiting_response'
+
+        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
+        CREATE_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v2/create"
+
+        USERNAME = "api.tms@aditya.co.id"
+        PASSWORD = "9CE5Q8Jz_#xXR"
+
+        body = [
+            rec._prepare_loginext_payload()
+            for rec in self
+        ]
+
+        _logger.info("=" * 80)
+        _logger.info("LOGINEXT REQUEST")
+        _logger.info(json.dumps(body, indent=4))
+        _logger.info("=" * 80)
+
+        session = requests.Session()
+
+        try:
+            # ======================================================
+            # LOGIN
+            # ======================================================
+
+            login_payload = {
+                "userName": USERNAME,
+                "password": PASSWORD,
+                "sessionExpiryTimeout": "60",
+            }
+
+            login_response = session.post(
+                LOGIN_URL,
+                json=login_payload,
+                timeout=60,
+            )
+
+            _logger.info("=" * 80)
+            _logger.info("LOGINEXT LOGIN RESPONSE")
+            _logger.info("Status : %s", login_response.status_code)
+            _logger.info(login_response.text)
+            _logger.info("=" * 80)
+
+            login_response.raise_for_status()
+
+            # ======================================================
+            # CREATE SHIPMENT
+            # ======================================================
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+
+            response = session.post(
+                CREATE_URL,
+                headers=headers,
+                json=body,
+                timeout=120,
+            )
+
+            _logger.info("=" * 80)
+            _logger.info("LOGINEXT CREATE RESPONSE")
+            _logger.info("Status : %s", response.status_code)
+            _logger.info(response.text)
+            _logger.info("=" * 80)
+
+            response.raise_for_status()
+
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            _logger.exception(e)
+            raise UserError(f"Loginext API Error\n\n{e}")
+
+    def action_get_loginext(self):
+        """
+        Get Shipment dari Loginext berdasarkan tanggal dan Order No.
+        """
+
+        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
+        SHIPMENT_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v1/shipment"
+
+        USERNAME = "api.tms@aditya.co.id"
+        PASSWORD = "9CE5Q8Jz_#xXR"
+
+        session = requests.Session()
+
+        try:
+            # ==========================================================
+            # LOGIN
+            # ==========================================================
+            login_payload = {
+                "userName": USERNAME,
+                "password": PASSWORD,
+                "sessionExpiryTimeout": "60",
+            }
+
+            login_response = session.post(
+                LOGIN_URL,
+                json=login_payload,
+                timeout=60,
+            )
+
+            _logger.info("=" * 80)
+            _logger.info("LOGINEXT LOGIN")
+            _logger.info(login_response.text)
+            _logger.info("=" * 80)
+
+            login_response.raise_for_status()
+
+            # ==========================================================
+            # GET SHIPMENT
+            # ==========================================================
+            params = {
+                "start_date": "2026-04-20 00:00:00",
+                "end_date": "2026-04-23 00:00:00",
+                "order_no": self.origin,
+            }
+
+            response = session.get(
+                SHIPMENT_URL,
+                params=params,
+                headers={
+                    "Accept": "application/json",
+                },
+                timeout=120,
+            )
+
+            _logger.info("=" * 80)
+            _logger.info("LOGINEXT GET SHIPMENT")
+            _logger.info("Request URL : %s", response.request.url)
+            _logger.info("Status Code : %s", response.status_code)
+            _logger.info(response.text)
+            _logger.info("=" * 80)
+
+            response.raise_for_status()
+
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            _logger.exception(e)
+            raise UserError(f"Loginext API Error\n\n{e}")
+
+    def action_assign(self):
+        _logger.info(">>> action_assign CALLED %s", self.ids)
+
+        res = super().action_assign()
+
+        for picking in self:
+            for move in picking.move_ids:
+                for line in move.move_line_ids:
+                    print(line)
+                    if line.lot_id:
+                        print(line.lot_id)
+                        # vals = {
+                        #     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                        # }
+                        # vals['product_lot_id'] = line.lot_id.id
+                        # line.write(vals)
+                        print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
+                        line.write({
+                            'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                            'product_lot_id': line.lot_id.id,
+                        })
+
+        return res  
+
 
 # ================================================================================================
 # Temp Storage function create move line qr code        
