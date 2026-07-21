@@ -7,10 +7,17 @@ _logger = logging.getLogger(__name__)
 class StockMoveLine(models.Model):
     _inherit  = 'stock.move.line'
     _description = "Stock Move Line"
-
+    # Bisa dihapus sebelum golive
     adt_dest_location_id = fields.Many2one(
         "stock.location",
         related="move_id.adt_dest_location_id",
+        store=True,
+        readonly=True,
+    )
+
+    adt_dest_location = fields.Char(
+        string="Mapped Location",
+        related="move_id.adt_dest_location",
         store=True,
         readonly=True,
     )
@@ -140,7 +147,7 @@ class StockMoveLine(models.Model):
         print(f"Search product: {self.product_id.name} in loc: {self.source_location_id.name}")
         self.product_lot_id = False
         self.selected_quant_id = False
-        self.quant_id = False
+        # self.quant_id = False
 
         if not self.product_id or not self.source_location_id:
             return {
@@ -168,7 +175,7 @@ class StockMoveLine(models.Model):
     @api.onchange("product_lot_id")
     def _onchange_product_lot(self):
         self.selected_quant_id = False
-        self.quant_id = False
+        # self.quant_id = False
 
         if not (
             self.product_id
@@ -190,7 +197,7 @@ class StockMoveLine(models.Model):
         print(f"Quant found: {quant}")
 
         self.selected_quant_id = quant
-        self.quant_id = quant
+        # self.quant_id = quant
 
     @api.model_create_multi
     def create(self, vals_list):

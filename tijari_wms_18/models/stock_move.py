@@ -56,6 +56,10 @@ class StockMove(models.Model):
         store=False,
     )
 
+    adt_dest_location = fields.Char(string="Mappped Location",
+        readonly=True
+    )    
+
     def action_validate_lot_pick(self):
         for move in self:
             picking_type = move.picking_id.picking_type_id
