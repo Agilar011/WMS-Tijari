@@ -56,9 +56,15 @@ class StockMove(models.Model):
         store=False,
     )
 
+    
     adt_dest_location = fields.Char(string="Mappped Location",
         readonly=True
-    )    
+    ) 
+    
+    @api.depends('move_line_ids.lot_id', 'move_line_ids.quantity')
+    def _compute_lot_ids(self):
+        for move in self:
+            move.lot_ids = move.move_line_ids.mapped('lot_id')   
 
     def action_validate_lot_pick(self):
         for move in self:

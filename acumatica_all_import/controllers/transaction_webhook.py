@@ -25,28 +25,28 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _search_warehouse(self, warehouse_code):
         if not warehouse_code:
-            return request.env["stock.warehouse"].sudo().browse()
+            return self._env()["stock.warehouse"].sudo().browse()
 
-        mapping = request.env["stock.location.acumatica"].sudo().search([
+        mapping = self._env()["stock.location.acumatica"].sudo().search([
             ("code", "=", warehouse_code)
         ], limit=1)
         warehouse = mapping.odoo_building_id if mapping else False
         if warehouse:
             return warehouse
 
-        return request.env["stock.warehouse"].sudo().search([
+        return self._env()["stock.warehouse"].sudo().search([
             ("code", "=", warehouse_code)
         ], limit=1)
 
     def _search_picking_type(self, warehouse_code, picking_code="incoming"):
         if not warehouse_code:
-            return request.env["stock.picking.type"].sudo().browse()
+            return self._env()["stock.picking.type"].sudo().browse()
 
         warehouse = self._search_warehouse(warehouse_code)
         if not warehouse:
-            return request.env["stock.picking.type"].sudo().browse()
+            return self._env()["stock.picking.type"].sudo().browse()
 
-        return request.env["stock.picking.type"].sudo().search([
+        return self._env()["stock.picking.type"].sudo().search([
             ("warehouse_id", "=", warehouse.id),
             ("code", "=", picking_code),
             ("is_default_api", "=", True),
@@ -254,9 +254,9 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         if not grouped:
             raise UserError(_("No valid ReferenceNbr found in payload."))
 
-        Header = request.env["acumatica.kit.assembly"].sudo()
-        Component = request.env["acumatica.kit.assembly.component"].sudo()
-        Staging = request.env["acumatica.kit.assembly.line"].sudo()
+        Header = self._env()["acumatica.kit.assembly"].sudo()
+        Component = self._env()["acumatica.kit.assembly.component"].sudo()
+        Staging = self._env()["acumatica.kit.assembly.line"].sudo()
         created = updated = component_lines = staging_lines = imported = errors = 0
         staging_ids = []
 
@@ -309,19 +309,17 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             imported = len(staging_records.filtered(lambda line: line.import_state in ("imported", "updated")))
             errors = len(staging_records.filtered(lambda line: line.import_state == "error"))
 
-        return self._json_response(
-            "success",
-            _("Kit Assembly webhook processed."),
-            transaction_type="kit_assembly",
-            model="acumatica.kit.assembly.line",
-            created=created,
-            updated=updated,
-            imported=imported,
-            errors=errors,
-            header_ids=staging_ids,
-            component_lines=component_lines,
-            product_lines=staging_lines,
-        )
+        return {
+            "transaction_type": "kit_assembly",
+            "model": "acumatica.kit.assembly.line",
+            "created": created,
+            "updated": updated,
+            "imported": imported,
+            "errors": errors,
+            "header_ids": staging_ids,
+            "component_lines": component_lines,
+            "product_lines": staging_lines,
+        }
 
     def _so_transfer_header_vals(self, item, row_number):
         vals = self._receipt_header_vals(item, row_number)
@@ -628,6 +626,56 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "custom_json": json.dumps(custom_payload) if custom_payload is not None else "",
         }
 
+    def _inventory_issue_header_vals(self, item, row_number):
+        warehouse_code = self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_code")
+        picking_type = self._search_outgoing_picking_type(warehouse_code)
+        return {
+            "external_id": item.get("id") or item.get("external_id") or "",
+            "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
+            "line_external_id": item.get("line_id") or item.get("line_external_id") or item.get("id") or "",
+            "reference_nbr": self._first_value(item, "ReferenceNbr", "reference_nbr"),
+            "scheduled_date": self._first_value(item, "Date", "scheduled_date"),
+            "description": self._first_value(item, "Description", "description"),
+            "external_ref": self._first_value(item, "ExternalRef", "external_ref"),
+            "status": self._first_value(item, "Status", "status"),
+            "actual_qty": self._first_value(item, "ControlQty", "actual_qty"),
+            "total_qty": self._first_value(item, "TotalQty", "total_qty"),
+            "post_period": self._first_value(item, "PostPeriod", "post_period"),
+            "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
+            "trans_type": self._first_value(item, "TransType", "trans_type"),
+            "note": self._first_value(item, "NoteHeader", "note") or self._note_value(item),
+            "line_nbr": self._first_value(item, "LineNumber", "LineNbr", "line_nbr"),
+            "line_description": self._first_value(item, "LineInventoryName", "LineDescription", "line_description"),
+            "inventory_id": self._first_value(item, "LineInventoryID", "InventoryID", "inventory_id"),
+            "location_code": self._first_value(item, "LineLocation", "Location", "location_code"),
+            "product_uom_qty": self._first_value(item, "LineQuantity", "Quantity", "product_uom_qty"),
+            "uom_code": self._first_value(item, "LineUOM", "UOM", "uom_code"),
+            "warehouse_code": warehouse_code,
+            "branch_warehouse": self._first_value(item, "Branch", "branch_warehouse"),
+            "line_note": self._first_value(item, "LineNote", "line_note"),
+            "picking_type_id": picking_type.id if picking_type else False,
+            "import_state": "pending",
+            "import_message": False,
+            "selected": True,
+            "sync_date": fields.Datetime.now(),
+        }
+
+    def _inventory_issue_product_vals(self, item, header):
+        return {
+            "receipt_line_id": header.id,
+            "header_external_id": header.external_id or False,
+            "line_external_id": item.get("line_id") or item.get("line_external_id") or item.get("id") or "",
+            "line_note": self._first_value(item, "LineNote", "line_note"),
+            "branch_warehouse": self._first_value(item, "Branch", "branch_warehouse"),
+            "line_description": self._first_value(item, "LineInventoryName", "LineDescription", "line_description"),
+            "inventory_id": self._first_value(item, "LineInventoryID", "InventoryID", "inventory_id"),
+            "line_nbr": self._first_value(item, "LineNumber", "LineNbr", "line_nbr"),
+            "location_code": self._first_value(item, "LineLocation", "Location", "location_code"),
+            "product_uom_qty": self._first_value(item, "LineQuantity", "Quantity", "product_uom_qty"),
+            "uom_code": self._first_value(item, "LineUOM", "UOM", "uom_code"),
+            "warehouse_code": self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_code"),
+        }
+
     def _transfer_one_step_header_vals(self, item, row_number):
         from_warehouse = self._first_value(item, "FromWarehouseID", "from_warehouse_code")
         picking_type = self._search_internal_picking_type(from_warehouse)
@@ -918,6 +966,16 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "header_vals": self._transfer_shipment_header_vals,
                 "product_vals": self._transfer_shipment_product_vals,
             },
+            "inventory_issue": {
+                "label": "Inventory Issue",
+                "records_keys": ("Inserted", "records", "data", "value"),
+                "document_keys": ("ReferenceNbr", "reference_nbr"),
+                "document_field": "reference_nbr",
+                "header_model": "acumatica.inventory.issue.line",
+                "product_model": "acumatica.inventory.issue.product",
+                "header_vals": self._inventory_issue_header_vals,
+                "product_vals": self._inventory_issue_product_vals,
+            },
             "so_shipment": {
                 "label": "SO Shipment",
                 "records_keys": ("ShipmentGIDetails", "records", "data", "value"),
@@ -1056,11 +1114,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "receipt_transfer_in": "inventory_receipt_transfer_wh_in",
             "inventory_receipt_transfer_in": "inventory_receipt_transfer_wh_in",
             "sotr": "so_transfer",
+            "inventory_issue_change_item": "inventory_issue",
         }
         return aliases.get(key, key)
 
     def _upsert_header(self, model_name, document_field, vals):
-        Header = request.env[model_name].sudo()
+        Header = self._env()[model_name].sudo()
         vals = {
             field_name: value
             for field_name, value in vals.items()
@@ -1073,7 +1132,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         return Header.create(vals), "created"
 
     def _replace_product_lines(self, header, product_model, product_vals_getter, records, line_relation="product_line_ids"):
-        ProductLine = request.env[product_model].sudo()
+        ProductLine = self._env()[product_model].sudo()
         if line_relation in header._fields:
             header[line_relation].unlink()
         product_vals = [
@@ -1137,6 +1196,76 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 normalized.append(item)
         return normalized
 
+    def _process_transaction_payload(self, transaction_type, payload):
+        config_key = self._normalize_transaction_type(transaction_type)
+        config = self._transaction_configs().get(config_key)
+        if not config:
+            raise UserError(_("Unknown transaction type: %s") % transaction_type)
+
+        if config.get("processor"):
+            return config["processor"](payload, config)
+
+        records = self._records_from_transaction_payload(payload, config)
+        if not records:
+            raise UserError(_("No transaction records found in payload."))
+
+        grouped = {}
+        for index, item in enumerate(records, start=1):
+            if not isinstance(item, dict):
+                continue
+            document_nbr = self._first_value(item, *config["document_keys"])
+            if not document_nbr:
+                continue
+            grouped.setdefault(document_nbr, []).append((index, item))
+
+        if not grouped:
+            raise UserError(_("No valid document number found in payload."))
+
+        created = updated = product_lines = imported = errors = 0
+        header_ids = []
+
+        for document_records in grouped.values():
+            first_index, first_item = document_records[0]
+            header_vals = config["header_vals"](first_item, first_index)
+            if not header_vals.get(config["document_field"]):
+                continue
+
+            header, state = self._upsert_header(
+                config["header_model"],
+                config["document_field"],
+                header_vals,
+            )
+            if state == "created":
+                created += 1
+            else:
+                updated += 1
+
+            product_lines += self._replace_product_lines(
+                header,
+                config["product_model"],
+                config["product_vals"],
+                [item for _, item in document_records],
+                config.get("line_relation", "product_line_ids"),
+            )
+            header_ids.append(header.id)
+
+        headers = self._env()[config["header_model"]].sudo().browse(header_ids)
+        if headers:
+            headers._do_import()
+            imported = len(headers.filtered(lambda header: header.import_state in ("imported", "updated")))
+            errors = len(headers.filtered(lambda header: header.import_state == "error"))
+
+        return {
+            "transaction_type": config_key,
+            "model": config["header_model"],
+            "created": created,
+            "updated": updated,
+            "imported": imported,
+            "errors": errors,
+            "header_ids": header_ids,
+            "product_lines": product_lines,
+        }
+
     def _transaction_webhook(self, transaction_type, **kwargs):
         ok, err = self._check_api_key()
         if not ok:
@@ -1144,75 +1273,16 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
         try:
             config_key = self._normalize_transaction_type(transaction_type)
-            config = self._transaction_configs().get(config_key)
-            if not config:
+            if config_key not in self._transaction_configs():
                 raise UserError(_("Unknown transaction type: %s") % transaction_type)
-
             payload = self._raw_payload(kwargs)
-            if config.get("processor"):
-                return config["processor"](payload, config)
-
-            records = self._records_from_transaction_payload(payload, config)
-            if not records:
-                raise UserError(_("No transaction records found in payload."))
-
-            grouped = {}
-            for index, item in enumerate(records, start=1):
-                if not isinstance(item, dict):
-                    continue
-                document_nbr = self._first_value(item, *config["document_keys"])
-                if not document_nbr:
-                    continue
-                grouped.setdefault(document_nbr, []).append((index, item))
-
-            if not grouped:
-                raise UserError(_("No valid document number found in payload."))
-
-            created = updated = product_lines = imported = errors = 0
-            header_ids = []
-
-            for document_records in grouped.values():
-                first_index, first_item = document_records[0]
-                header_vals = config["header_vals"](first_item, first_index)
-                if not header_vals.get(config["document_field"]):
-                    continue
-
-                header, state = self._upsert_header(
-                    config["header_model"],
-                    config["document_field"],
-                    header_vals,
-                )
-                if state == "created":
-                    created += 1
-                else:
-                    updated += 1
-
-                product_lines += self._replace_product_lines(
-                    header,
-                    config["product_model"],
-                    config["product_vals"],
-                    [item for _, item in document_records],
-                    config.get("line_relation", "product_line_ids"),
-                )
-                header_ids.append(header.id)
-
-            headers = request.env[config["header_model"]].sudo().browse(header_ids)
-            if headers:
-                headers._do_import()
-                imported = len(headers.filtered(lambda header: header.import_state in ("imported", "updated")))
-                errors = len(headers.filtered(lambda header: header.import_state == "error"))
-
+            log = self._create_webhook_log("transaction", config_key, payload)
             return self._json_response(
                 "success",
-                _("%s webhook processed.") % config["label"],
-                transaction_type=config_key,
-                model=config["header_model"],
-                created=created,
-                updated=updated,
-                imported=imported,
-                errors=errors,
-                header_ids=header_ids,
-                product_lines=product_lines,
+                _("Webhook logged. Process it from Webhook Logs."),
+                log_id=log.id,
+                webhook_type="transaction",
+                webhook_name=config_key,
             )
         except UserError as exc:
             return self._json_response("error", str(exc), http_status=400)

@@ -66,6 +66,7 @@ access_acumatica_kit_assembly_user,acumatica.kit.assembly,model_acumatica_kit_as
 access_acumatica_kit_assembly_component_user,acumatica.kit.assembly.component,model_acumatica_kit_assembly_component,base.group_user,1,1,1,1
 access_acumatica_kit_assembly_line_user,acumatica.kit.assembly.line,model_acumatica_kit_assembly_line,base.group_user,1,1,1,1
 access_import_kit_assembly_wizard_user,import.kit.assembly.wizard,model_import_kit_assembly_wizard,base.group_user,1,1,1,1
+access_acumatica_webhook_log_user,acumatica.webhook.log,model_acumatica_webhook_log,base.group_user,1,1,1,1
 access_acumatica_config_user,acumatica.config,model_acumatica_config,base.group_user,1,1,1,1
 access_acumatica_customer_line_user,acumatica.customer.line,model_acumatica_customer_line,base.group_user,1,1,1,1
 access_import_customer_wizard_user,import.customer.wizard,model_import_customer_wizard,base.group_user,1,1,1,1
