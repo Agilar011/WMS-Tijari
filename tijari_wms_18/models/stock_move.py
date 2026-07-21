@@ -122,13 +122,14 @@ class StockMove(models.Model):
         vals = super()._get_new_picking_values()
 
         print("_get_new_picking_values")
-        print("move:", self)
-        print("move adt_type:", self.adt_type)
-        print("vals before:", vals)
+        for item in self:
+            print("move:", item)
+            print("move adt_type:", item.adt_type)
+            print("vals before:", vals)
 
-        vals['adt_type'] = self.adt_type
+            vals['adt_type'] = item.adt_type
 
-        print("vals after:", vals)
+            print("vals after:", vals)
 
         return vals
     
