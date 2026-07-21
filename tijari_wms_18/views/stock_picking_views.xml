@@ -46,6 +46,12 @@
                 class="btn-primary"
                 invisible="state != 'assigned' or picking_type_code != 'outgoing'"/>
 
+                <button name="action_get_loginext"
+                string="Get Response"
+                type="object"
+                class="btn-primary"
+                invisible="state != 'assigned' or picking_type_code != 'outgoing'"/>
+
                 <button name="action_print_warehouse_receipt"
                 string="Print Receipt"
                 type="object"

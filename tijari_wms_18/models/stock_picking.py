@@ -9,7 +9,6 @@ import logging
 import json
 import requests
 from collections import defaultdict
-
 from odoo import models, api, fields
 from odoo.exceptions import ValidationError, UserError
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
@@ -514,9 +513,7 @@ class StockPicking(models.Model):
     # ==========================================================
 
     def action_post_loginext(self):
-        import json
-        import requests
-        from odoo.exceptions import UserError
+        self.wms_state = 'waiting_response'
 
         LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
         CREATE_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v2/create"
@@ -591,6 +588,74 @@ class StockPicking(models.Model):
             _logger.exception(e)
             raise UserError(f"Loginext API Error\n\n{e}")
 
+    def action_get_loginext(self):
+        """
+        Get Shipment dari Loginext berdasarkan tanggal dan Order No.
+        """
+
+        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
+        SHIPMENT_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v1/shipment"
+
+        USERNAME = "api.tms@aditya.co.id"
+        PASSWORD = "9CE5Q8Jz_#xXR"
+
+        session = requests.Session()
+
+        try:
+            # ==========================================================
+            # LOGIN
+            # ==========================================================
+            login_payload = {
+                "userName": USERNAME,
+                "password": PASSWORD,
+                "sessionExpiryTimeout": "60",
+            }
+
+            login_response = session.post(
+                LOGIN_URL,
+                json=login_payload,
+                timeout=60,
+            )
+
+            _logger.info("=" * 80)
+            _logger.info("LOGINEXT LOGIN")
+            _logger.info(login_response.text)
+            _logger.info("=" * 80)
+
+            login_response.raise_for_status()
+
+            # ==========================================================
+            # GET SHIPMENT
+            # ==========================================================
+            params = {
+                "start_date": "2026-04-20 00:00:00",
+                "end_date": "2026-04-23 00:00:00",
+                "order_no": self.origin,
+            }
+
+            response = session.get(
+                SHIPMENT_URL,
+                params=params,
+                headers={
+                    "Accept": "application/json",
+                },
+                timeout=120,
+            )
+
+            _logger.info("=" * 80)
+            _logger.info("LOGINEXT GET SHIPMENT")
+            _logger.info("Request URL : %s", response.request.url)
+            _logger.info("Status Code : %s", response.status_code)
+            _logger.info(response.text)
+            _logger.info("=" * 80)
+
+            response.raise_for_status()
+
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            _logger.exception(e)
+            raise UserError(f"Loginext API Error\n\n{e}")
 
 # ================================================================================================
 # Temp Storage function create move line qr code        

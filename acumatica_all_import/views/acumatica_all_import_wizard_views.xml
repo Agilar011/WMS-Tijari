@@ -46,7 +46,7 @@
                         <field name="reference_nbr" invisible="import_type not in ['issue_po_return','transfer_one_step','transfer_two_step','inventory_received','inventory_issue','receipt_change_item','issue_change_item','so_transfer']"/>
                         <field name="receipt_nbr" invisible="import_type != 'po_receipt'"/>
                         <field name="shipment_nbr" invisible="import_type not in ['shipment_so','so_shipment','transfer_shipment']"/>
-                        <field name='wh33_filter' invisible="import_category != 'transaction'"/>
+                        <field name='wh33_filter' invisible="import_category != 'transaction' or import_type not in ['issue_po_return]"/>
                         <field name="odata_filter"/>
                     </group>
                     <group invisible="import_type != 'inventory_stock'" string="Inventory Stock Params">
