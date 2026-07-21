@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 import logging
 
 from odoo import _, http
@@ -10,6 +11,9 @@ _logger = logging.getLogger(__name__)
 
 
 class AcumaticaWebhookController(http.Controller):
+    def _env(self):
+        return getattr(self, "env", None) or request.env
+
     def _json_response(self, status, message, http_status=200, **extra):
         body = {
             "status": status,
@@ -23,16 +27,17 @@ class AcumaticaWebhookController(http.Controller):
         if not api_key:
             return False, _("Missing X-API-Key header")
 
-        ICP = request.env["ir.config_parameter"].sudo()
+        env = self._env()
+        ICP = env["ir.config_parameter"].sudo()
         has_key = (
-            request.env["acumatica.webhook.api.key"].sudo()._latest_key()
+            env["acumatica.webhook.api.key"].sudo()._latest_key()
             or ICP.get_param("acumatica.webhook_api_key")
             or ICP.get_param("wms.api_key")
         )
         if not has_key:
             return False, _("Webhook API Key is not configured")
 
-        KeyHistory = request.env["acumatica.webhook.api.key"].sudo()
+        KeyHistory = env["acumatica.webhook.api.key"].sudo()
         if not KeyHistory._matches_latest_key(api_key):
             return False, _("Invalid API Key")
 
@@ -43,6 +48,18 @@ class AcumaticaWebhookController(http.Controller):
         if isinstance(payload, dict) and isinstance(payload.get("params"), (dict, list)):
             payload = payload["params"]
         return payload
+
+    def _create_webhook_log(self, webhook_type, webhook_name, payload):
+        log = self._env()["acumatica.webhook.log"].sudo().create({
+            "webhook_type": webhook_type,
+            "webhook_name": webhook_name,
+            "company_id_text": payload.get("CompanyId") if isinstance(payload, dict) else "",
+            "acumatica_event_id": payload.get("Id") if isinstance(payload, dict) else "",
+            "acumatica_timestamp": str(payload.get("TimeStamp") or "") if isinstance(payload, dict) else "",
+            "payload": json.dumps(payload, indent=2, default=str),
+            "state": "pending",
+        })
+        return log
 
     def _records_from_payload(self, payload):
         if isinstance(payload, list):
@@ -112,7 +129,7 @@ class AcumaticaWebhookController(http.Controller):
         return note or ""
 
     def _upsert_line(self, model_name, vals, lookup_fields):
-        Line = request.env[model_name].sudo()
+        Line = self._env()[model_name].sudo()
         for fields_group in lookup_fields:
             domain = []
             for field_name in fields_group:
@@ -145,7 +162,7 @@ class AcumaticaWebhookController(http.Controller):
                 updated += 1
             line_ids.append(line.id)
 
-        lines = request.env[model_name].sudo().browse(line_ids)
+        lines = self._env()[model_name].sudo().browse(line_ids)
         if lines:
             lines._do_import()
             imported = len(lines.filtered(lambda line: line.import_state in ("imported", "updated", "skipped")))

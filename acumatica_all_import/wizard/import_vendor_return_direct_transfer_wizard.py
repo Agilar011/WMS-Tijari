@@ -184,8 +184,8 @@ class ImportDirectTransferWizard(models.TransientModel):
                             type_record = self._search_picking_type(header)
                             header['picking_type_id'] = type_record.id if type_record else False
 
-                        if not header['picking_type_id']:
-                            raise UserError("Picking type untuk warehouse tersebut tidak ditemukan")
+                        # if not header['picking_type_id']:
+                        #     raise UserError("Picking type untuk warehouse tersebut tidak ditemukan")
                         
                         print(f"header : {header}")
                         created_header = self.env['acumatica.vendor.return.direct.transfer.staging'].create(header)

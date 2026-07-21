@@ -51,6 +51,7 @@
           'views/acumatica_credit_memo_consignment_staging_views.xml',
           'views/acumatica_inventory_receipt_transfer_wh_in_staging_views.xml',
           'views/acumatica_webhook_key_config_views.xml',
+          'views/acumatica_webhook_log_views.xml',
           'views/acumatica_all_import_wizard_views.xml',
           'views/acumatica_all_import_menu.xml',
           ],

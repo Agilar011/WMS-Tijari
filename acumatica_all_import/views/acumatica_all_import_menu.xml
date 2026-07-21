@@ -3,6 +3,7 @@
     <menuitem id="menu_acumatica_all_import_root" web_icon="acumatica_all_import,static/description/icon.png" name="API Data Hub" action="action_acumatica_config" sequence="83"/>
     <menuitem id="menu_acumatica_all_import_unified" name="Import Data" parent="menu_acumatica_all_import_root" action="action_acumatica_unified_import_wizard" sequence="10"/>
     <menuitem id="menu_acumatica_api_scheduler" name="API Scheduler" parent="menu_acumatica_all_import_root" action="action_api_scheduler_job" sequence="15"/>
+    <menuitem id="menu_acumatica_webhook_log" name="Webhook Logs" parent="menu_acumatica_all_import_root" action="action_acumatica_webhook_log" sequence="20"/>
 
     <menuitem id="menu_acumatica_all_import_staging_root" name="Data Staging" parent="menu_acumatica_all_import_root" sequence="30"/>
     <menuitem id="menu_acumatica_all_import_staging_inbound"

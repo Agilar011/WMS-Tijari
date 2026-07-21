@@ -22,11 +22,11 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "customer_id": self._first_value(item, "CustomerID", "customer_id"),
             "customer_name": self._first_value(item, "CustomerName", "customer_name"),
             "fob_point": self._first_value(item, "FOBPoint", "fob_point"),
-            "last_modified_datetime": self._first_value(item, "LastModifiedDateTime", "last_modified_datetime"),
+            "last_modified_datetime": self._first_value(item, "LastModifiedDateTime", "LastModifiedOn", "last_modified_datetime"),
             "location_name": self._first_value(item, "LocationName", "location_name"),
             "note_id": self._first_value(item, "NoteID", "note_id"),
             "shipping_zone_id": self._first_value(item, "ShippingZoneID", "shipping_zone_id"),
-            "status": self._first_value(item, "Status", "status"),
+            "status": self._first_value(item, "Status", "CustomerStatus", "status"),
             "warehouse_id": self._first_value(item, "WarehouseID", "warehouse_id"),
             "tax_registration_id": self._first_value(item, "TaxRegistrationID", "tax_registration_id"),
             "import_state": "pending",
@@ -133,92 +133,121 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "sync_date": fields.Datetime.now(),
         }
 
-    def _master_webhook(self, model_name, vals_getter, lookup_fields, payload_keys, label, **kwargs):
+    def _master_configs(self):
+        return {
+            "customer": {
+                "model_name": "acumatica.customer.line",
+                "vals_getter": self._customer_vals,
+                "lookup_fields": [("b_account_id", "customer_id"), ("external_id",), ("customer_id",)],
+                "payload_keys": ("Inserted", "records", "data", "value"),
+                "label": "Customer",
+            },
+            "vendor": {
+                "model_name": "acumatica.vendor.line",
+                "vals_getter": self._vendor_vals,
+                "lookup_fields": [("vendor_id",), ("external_id",)],
+                "payload_keys": ("Inserted", "records", "data", "value"),
+                "label": "Vendor",
+            },
+            "uom": {
+                "model_name": "acumatica.uom.line",
+                "vals_getter": self._uom_vals,
+                "lookup_fields": [("unit_id",), ("external_id",)],
+                "payload_keys": ("Inserted", "records", "data", "value"),
+                "label": "UoM",
+            },
+            "warehouse": {
+                "model_name": "acumatica.warehouse.line",
+                "vals_getter": self._warehouse_vals,
+                "lookup_fields": [("warehouse_id",), ("external_id",)],
+                "payload_keys": ("Inserted", "records", "data", "value"),
+                "label": "Warehouse",
+            },
+            "stock_item": {
+                "model_name": "acumatica.stock.item.line",
+                "vals_getter": self._stock_item_vals,
+                "lookup_fields": [("external_id",), ("inventory_id",)],
+                "payload_keys": ("Inserted", "records", "data", "value"),
+                "label": "Stock Item",
+            },
+            "non_stock_item": {
+                "model_name": "acumatica.non.stock.item.line",
+                "vals_getter": self._non_stock_item_vals,
+                "lookup_fields": [("external_id",), ("inventory_id",)],
+                "payload_keys": ("Inserted", "records", "data", "value"),
+                "label": "Non-Stock Item",
+            },
+        }
+
+    def _normalize_master_key(self, key):
+        return (key or "").strip().lower().replace("-", "_")
+
+    def _process_master_payload(self, master_key, payload):
+        config_key = self._normalize_master_key(master_key)
+        config = self._master_configs().get(config_key)
+        if not config:
+            raise UserError(_("Unknown master webhook: %s") % master_key)
+
+        records = self._records_from_payload_keys(payload, config["payload_keys"])
+        if not records:
+            raise UserError(_("No records found in payload."))
+
+        result = self._process_lines(
+            config["model_name"],
+            records,
+            config["vals_getter"],
+            config["lookup_fields"],
+        )
+        result.update({
+            "model": config["model_name"],
+            "label": config["label"],
+        })
+        return result
+
+    def _master_webhook(self, master_key, **kwargs):
         ok, err = self._check_api_key()
         if not ok:
             return self._json_response("error", err, http_status=401)
 
         try:
             payload = self._raw_payload(kwargs)
-            records = self._records_from_payload_keys(payload, payload_keys)
-            if not records:
-                raise UserError(_("No records found in payload."))
-
-            result = self._process_lines(model_name, records, vals_getter, lookup_fields)
+            config_key = self._normalize_master_key(master_key)
+            if config_key not in self._master_configs():
+                raise UserError(_("Unknown master webhook: %s") % master_key)
+            log = self._create_webhook_log("master", config_key, payload)
             return self._json_response(
                 "success",
-                _("%s webhook processed.") % label,
-                model=model_name,
-                **result
+                _("Webhook logged. Process it from Webhook Logs."),
+                log_id=log.id,
+                webhook_type="master",
+                webhook_name=config_key,
             )
         except UserError as exc:
             return self._json_response("error", str(exc), http_status=400)
         except Exception as exc:
-            _logger.exception("Unexpected error in %s webhook", label)
+            _logger.exception("Unexpected error in master webhook")
             return self._json_response("error", _("Unexpected server error: %s") % str(exc), http_status=500)
 
     @http.route(["/acumatica/webhook/customer", "/acumatica/customer/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_customer_webhook(self, **kwargs):
-        return self._master_webhook(
-            "acumatica.customer.line",
-            self._customer_vals,
-            [("b_account_id", "customer_id"), ("external_id",), ("customer_id",)],
-            ("records", "data", "value"),
-            "Customer",
-            **kwargs
-        )
+        return self._master_webhook("customer", **kwargs)
 
     @http.route(["/acumatica/webhook/vendor", "/acumatica/vendor/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_vendor_webhook(self, **kwargs):
-        return self._master_webhook(
-            "acumatica.vendor.line",
-            self._vendor_vals,
-            [("vendor_id",), ("external_id",)],
-            ("records", "data", "value"),
-            "Vendor",
-            **kwargs
-        )
+        return self._master_webhook("vendor", **kwargs)
 
     @http.route(["/acumatica/webhook/uom", "/acumatica/uom/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_uom_webhook(self, **kwargs):
-        return self._master_webhook(
-            "acumatica.uom.line",
-            self._uom_vals,
-            [("unit_id",), ("external_id",)],
-            ("records", "data", "value"),
-            "UoM",
-            **kwargs
-        )
+        return self._master_webhook("uom", **kwargs)
 
     @http.route(["/acumatica/webhook/warehouse", "/acumatica/warehouse/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_warehouse_webhook(self, **kwargs):
-        return self._master_webhook(
-            "acumatica.warehouse.line",
-            self._warehouse_vals,
-            [("warehouse_id",), ("external_id",)],
-            ("records", "data", "value"),
-            "Warehouse",
-            **kwargs
-        )
+        return self._master_webhook("warehouse", **kwargs)
 
     @http.route(["/acumatica/webhook/stock-item", "/acumatica/stock-item/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_stock_item_webhook(self, **kwargs):
-        return self._master_webhook(
-            "acumatica.stock.item.line",
-            self._stock_item_vals,
-            [("external_id",), ("inventory_id",)],
-            ("records", "data", "value"),
-            "Stock Item",
-            **kwargs
-        )
+        return self._master_webhook("stock_item", **kwargs)
 
     @http.route(["/acumatica/webhook/non-stock-item", "/acumatica/non-stock-item/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_non_stock_item_webhook(self, **kwargs):
-        return self._master_webhook(
-            "acumatica.non.stock.item.line",
-            self._non_stock_item_vals,
-            [("external_id",), ("inventory_id",)],
-            ("records", "data", "value"),
-            "Non-Stock Item",
-            **kwargs
-        )
+        return self._master_webhook("non_stock_item", **kwargs)

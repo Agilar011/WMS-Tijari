@@ -350,6 +350,7 @@ class StockPicking(models.Model):
     def action_confirm(self):
         res = super().action_confirm()
         self._adt_apply_dest_location_to_move_lines()
+        self._remove_qty_move_line()
         return res
 
     def action_assign(self):
@@ -373,6 +374,14 @@ class StockPicking(models.Model):
                     move.move_line_ids.write({
                         'location_dest_id': final_dest_location.id,
                     })
+
+    def _remove_qty_move_line(self):
+        # for move in self.move_ids:
+        #     move.action_generate_lot()
+        #     for line in move.move_line_ids:
+        #         line.quantity = 0
+        for move in self.move_line_ids:
+            move.quantity = 0
 
 
 class StockPickingType(models.Model):

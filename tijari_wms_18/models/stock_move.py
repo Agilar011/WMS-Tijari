@@ -54,6 +54,11 @@ class StockMove(models.Model):
         store=False,
     )
 
+    @api.depends('move_line_ids.lot_id', 'move_line_ids.quantity')
+    def _compute_lot_ids(self):
+        for move in self:
+            move.lot_ids = move.move_line_ids.mapped('lot_id')
+
     def action_validate_lot_pick(self):
         for move in self:
             picking_type = move.picking_id.picking_type_id
