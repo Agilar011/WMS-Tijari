@@ -246,6 +246,21 @@ class AcumaticaShipmentGIStaging(models.Model):
                         if product_location:
                             print(f" Product: {product.product_tmpl_id.name} asignt to get from: {product_location} AKA {shipment.adt_WarehouseID}")
 
+                        _logger.info("============================================================")
+                        _logger.info("Warehouse ID           : %s", shipment.adt_WarehouseID)
+                        _logger.info("Product                : %s (%s)", product.display_name, product.id)
+                        _logger.info("Product Location       : %s", product_location)
+                        _logger.info(
+                            "Product Location ID    : %s",
+                            product_location.id if product_location else False,
+                        )
+                        _logger.info(
+                            "Picking Type Src Loc   : %s (%s)",
+                            picking_type.default_location_src_id.display_name if picking_type.default_location_src_id else False,
+                            picking_type.default_location_src_id.id if picking_type.default_location_src_id else False,
+                        )
+
+
                         move_vals = {
                             'company_id': warehouse.company_id.id,
                             'product_id': product.id,

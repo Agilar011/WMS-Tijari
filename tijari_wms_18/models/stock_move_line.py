@@ -114,7 +114,7 @@ class StockMoveLine(models.Model):
 
     @api.depends("product_id", "source_location_id")
     def _compute_temp_quant_ids(self):
-        _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
+        # _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
         Quant = self.env["stock.quant"]
 
         for line in self:

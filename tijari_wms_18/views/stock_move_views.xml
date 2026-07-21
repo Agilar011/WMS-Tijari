@@ -49,7 +49,7 @@
                 <div>
                     <div invisible="picking_type_name != 'Pick'">
                         <field name="unfiltered_dest" invisible="picking_type_name != 'Pick'"/>
-                        <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick'">Pengambilan Item Berdasarkan mapping lokasi</span>
+                        <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick'">Pengambilan Item berdasarkan lokasi mapping</span>
                     </div>
                     
                     <button name="action_validate_lot_pick"
