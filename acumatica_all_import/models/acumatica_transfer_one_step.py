@@ -210,7 +210,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                         f'Warehouse tidak ditemukan untuk code: {first.to_warehouse_code or first.from_warehouse_code or "-"}'
                     )
 
-                picking_type = first.picking_type_id.id
+                picking_type = first.picking_type_id
                 # picking_type = PickingType.search([
                 #     ('warehouse_id', '=', warehouse.id),
                 #     ('code', '=', 'internal'), ('name', '=', 'Internal Transfers' )

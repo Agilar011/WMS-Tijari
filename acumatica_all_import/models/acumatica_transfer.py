@@ -604,11 +604,15 @@ class AcumaticaTransferLine(models.Model):
                     continue
 
                 qty = receipt._parse_float(receipt_line.product_uom_qty)
+                location_id = picking.location_id.id if picking else False
+                location_dest_id = picking.location_dest_id.id if picking else False
                 existing = picking.move_ids.filtered(
                     lambda move: (
-                        move.picking_id == picking.id
+                        move.picking_id.id == picking.id
                         and move.product_id.id == product.id
                         and move.product_uom_qty == qty
+                        and move.location_id.id == location_id
+                        and move.location_dest_id.id == location_dest_id
                     )
                 )
                 if existing:
@@ -620,8 +624,8 @@ class AcumaticaTransferLine(models.Model):
                     'product_id': product.id,
                     'product_uom_qty': qty,
                     'product_uom': uom.id if uom else product.uom_id.id,
-                    'location_id': picking.location_id.id if picking else False,
-                    'location_dest_id': picking.location_dest_id.id if picking else False,
+                    'location_id': location_id,
+                    'location_dest_id': location_dest_id,
                     'warehouse_id': warehouse.id if warehouse else False,
                     'description_picking': receipt_line.description or False,
                     'adt_line_external_id': receipt_line.line_external_id or False,
@@ -761,4 +765,3 @@ class AcumaticaTransferLine(models.Model):
             'res_id': self.odoo_picking_id.id,
             'view_mode': 'form',
         }
-
