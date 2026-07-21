@@ -286,6 +286,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                             'adt_type': 'Sales Order Shipment',
                             'adt_line_description': item.adt_LineDescription or item.description,
                             'adt_dest_location_id' : product_location.id if product_location else picking_type.default_location_src_id.id,
+                            'adt_dest_location' : shipment.adt_WarehouseID
                         }
                         adt_dest_location_id =  Move.create(move_vals)
                         print(f"mapped location: {adt_dest_location_id.id}")
@@ -296,7 +297,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                             self._build_loginext_item(product, shipment.adt_OrderType, created_loginext_header.id, move_count, shipment.adt_ShipmentWeight, item_qty)
 
 
-                    created_loginext_header.loginext_number_of_items = move_count
+                    if create_tms_state == True:
+                        created_loginext_header.loginext_number_of_items = move_count
 
                     # Tandai sukses jika semua proses di atas berhasil tanpa memicu exception
                     shipment.write({
@@ -545,6 +547,21 @@ class AcumaticaShipmentGIStaging(models.Model):
         loginext_wh = self._find_loginext_wh(shipment_location_id)
 
         loginext_order_no = f"testing-dev-{adt_ShipmentNbr}"
+        _logger.info("loginext_order_no         : %s", loginext_order_no)
+        _logger.info("ship_date                 : %s", ship_date)
+        _logger.info("loginext_wh               : %s", loginext_wh)
+        _logger.info("loginext_wh.loginext_branch : %s", loginext_wh.loginext_branch if loginext_wh else False)
+        _logger.info("ship_weight              : %s", ship_weight)
+        _logger.info("shipment_volume          : %s", shipment_volume)
+        _logger.info("partner                  : %s", partner)
+        _logger.info("partner.name             : %s", partner.name if partner else False)
+        _logger.info("partner.id               : %s", partner.id if partner else False)
+        _logger.info("shipment_street          : %s", shipment_street)
+        _logger.info("shipment_city            : %s", shipment_city)
+        _logger.info("shipment_country         : %s", shipment_country)
+        _logger.info("shipment_postal_code     : %s", shipment_postal_code)
+        _logger.info("loginext_state.code      : %s", loginext_wh.loginext_state.code if loginext_wh and loginext_wh.loginext_state else False)
+        _logger.info("picking                  : %s", picking)        
         updated_vals = {
             'loginext_order_no' : loginext_order_no if loginext_order_no else '',
             'loginext_shipment_order_dt' : ship_date if ship_date else '',

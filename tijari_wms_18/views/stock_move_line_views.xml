@@ -35,7 +35,7 @@
             <!-- First row of detailed stock_move_line -->
             <xpath expr="//field[@name='quant_id']" position="before">
                 <field name="id" string="Line ID" />
-                <field name="adt_dest_location_id" optional="show"/>
+                <field name="adt_dest_location" readonly="1" optional="show"/>
 
                 <!-- <field name="unfiltered_dest"/> -->
                 <!-- <field string="Unfiltered To" name="quant_unfiltered_id" domain="[('product_id', '=', product_id)]" column_invisible="parent.unfiltered_dest"/> -->
@@ -49,6 +49,7 @@
             <!-- Hide From To defaul_odoo -->
             <xpath expr="//field[@name='quant_id']" position="replace">
                 <field name="quant_id" column_invisible="parent.picking_type_name == 'Pick'"/>
+                <!-- <field name="quant_id"/> -->
             </xpath>
             
            <xpath expr="//field[last()]" position="after">

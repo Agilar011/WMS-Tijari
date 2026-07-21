@@ -301,6 +301,23 @@ class StockPicking(models.Model):
         _logger.info(">>> action_confirm CALLED %s", self.ids)
 
         res = super().action_confirm()
+        
+        for picking in self:
+                    for move in picking.move_ids:
+                        for line in move.move_line_ids:
+                            print(line)
+                            if line.lot_id:
+                                print(line.lot_id)
+                                # vals = {
+                                #     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                                # }
+                                # vals['product_lot_id'] = line.lot_id.id
+                                # line.write(vals)
+                                print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
+                                line.write({
+                                    'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                                    'product_lot_id': line.lot_id.id,
+                                })        
 
         return res
 
@@ -656,6 +673,31 @@ class StockPicking(models.Model):
         except requests.exceptions.RequestException as e:
             _logger.exception(e)
             raise UserError(f"Loginext API Error\n\n{e}")
+
+    def action_assign(self):
+        _logger.info(">>> action_assign CALLED %s", self.ids)
+
+        res = super().action_assign()
+
+        for picking in self:
+            for move in picking.move_ids:
+                for line in move.move_line_ids:
+                    print(line)
+                    if line.lot_id:
+                        print(line.lot_id)
+                        # vals = {
+                        #     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                        # }
+                        # vals['product_lot_id'] = line.lot_id.id
+                        # line.write(vals)
+                        print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
+                        line.write({
+                            'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                            'product_lot_id': line.lot_id.id,
+                        })
+
+        return res  
+
 
 # ================================================================================================
 # Temp Storage function create move line qr code        
