@@ -135,3 +135,9 @@ access_acumatica_transfer_one_step_line_user,acumatica.transfer.one.step.line.us
 access_import_inventory_receipt_transfer_wh_in_wizard_user,import.inventory.receipt.transfer.wh.in.wizard.user,model_import_inventory_receipt_transfer_wh_in_wizard,base.group_user,1,1,1,1
 access_acumatica_inventory_receipt_transfer_wh_in_staging_user,acumatica.inventory.receipt.transfer.wh.in.staging.user,model_acumatica_inventory_receipt_transfer_wh_in_staging,base.group_user,1,1,1,1
 access_acumatica_inventory_receipt_transfer_wh_in_staging_line_user,acumatica.inventory.receipt.transfer.wh.in.staging.line.user,model_acumatica_inventory_receipt_transfer_wh_in_staging_line,base.group_user,1,1,1,1
+
+access_loginext_staging_data_user,loginext.staging.data,model_loginext_staging_data,base.group_user,1,1,1,1
+access_loginext_staging_crate_user,loginext.staging.crate,model_loginext_staging_crate,base.group_user,1,1,1,1
+access_loginext_staging_item_user,loginext.staging.item,model_loginext_staging_item,base.group_user,1,1,1,1
+access_loginext_master_country_user,loginext.master.country,model_loginext_master_country,base.group_user,1,1,1,1
+access_loginext_master_state_user,loginext.master.state,model_loginext_master_state,base.group_user,1,1,1,1

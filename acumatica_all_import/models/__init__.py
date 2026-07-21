@@ -36,5 +36,6 @@ from . import acumatica_direct_transfer
 from . import acumatica_vendor_return_direct_transfer
 from . import acumatica_credit_memo_consignment
 from . import acumatica_inventory_receipt_transfer_wh_in
+from . import loginext_model
 from . import acumatica_webhook_key_config
 from . import acumatica_webhook_log
