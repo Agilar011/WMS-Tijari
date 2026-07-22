@@ -56,10 +56,11 @@ class StockMove(models.Model):
         store=False,
     )
 
-    transaction_type = fields.Selection(
-        related="picking_id.transaction_type",
-        store=False,
-    )
+    transaction_type = fields.Selection([
+        ('inbound', 'Inbound'),
+        ('outbound', 'Outbound'),
+        ('internal', 'Internal'),
+    ], string='Type transaksi', readonly=True)
 
     
     adt_dest_location = fields.Char(string="Mappped Location",
@@ -136,11 +137,12 @@ class StockMove(models.Model):
         for item in self:
             print("move:", item)
             print("move adt_type:", item.adt_type)
+            print("move transaction_type:", item.transaction_type)
             print("vals before:", vals)
 
             vals['adt_type'] = item.adt_type
+            vals['transaction_type'] = item.transaction_type
 
-            print("vals after:", vals)
             print("vals after:", vals)
 
         return vals
