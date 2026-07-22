@@ -182,6 +182,7 @@ class StockPicking(models.Model):
 
         # # Panggil fungsi super() dengan melewatkan vals_list yang sudah diperbarui
         pickings = super(StockPicking, self).create(vals_list)
+        print(pickings)
         return pickings
 
 
@@ -820,6 +821,7 @@ class StockRule(models.Model):
             #         print(f"{field_name}: {val}")
 
             adt_type = picking.adt_type
+
 
             if adt_type:
                 vals.update({

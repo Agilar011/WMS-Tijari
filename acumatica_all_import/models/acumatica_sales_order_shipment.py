@@ -287,7 +287,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                             'adt_type': 'Sales Order Shipment',
                             'adt_line_description': item.adt_LineDescription or item.description,
                             'adt_dest_location_id' : product_location.id if product_location else picking_type.default_location_src_id.id,
-                            'adt_dest_location' : shipment.adt_WarehouseID
+                            'adt_dest_location' : shipment.adt_WarehouseID,
+                            'transaction_type' : 'outbound'
                         }
                         adt_dest_location_id =  Move.create(move_vals)
                         print(f"mapped location: {adt_dest_location_id.id}")
@@ -537,14 +538,14 @@ class AcumaticaShipmentGIStaging(models.Model):
 
 
     def _build_loginext_header(self, adt_ShipmentNbr, ship_date, shipment_location_id, ship_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking):
-        print(adt_ShipmentNbr)
-        print(ship_date)
-        print(ship_weight)
-        print(shipment_volume)
-        print(partner)
-        print(shipment_city)
-        print(shipment_country)
-        print(shipment_postal_code)
+        # print(adt_ShipmentNbr)
+        # print(ship_date)
+        # print(ship_weight)
+        # print(shipment_volume)
+        # print(partner)
+        # print(shipment_city)
+        # print(shipment_country)
+        # print(shipment_postal_code)
         loginext_wh = self._find_loginext_wh(shipment_location_id)
 
         loginext_order_no = f"testing-dev-{adt_ShipmentNbr}"
@@ -575,7 +576,6 @@ class AcumaticaShipmentGIStaging(models.Model):
             'loginext_preparation_time' : '30',
             'loginext_payment_type' : "Prepaid",
             'loginext_package_value' : ship_weight if ship_weight else '',
-            # 'loginext_number_of_items' : using compute_metho if using compute_metho else ''d
             'loginext_partial_delivery_allowed_fl' : "Y",
             'loginext_return_allowed_fl' : "Y",
             'loginext_cancellation_allowed_fl' : "Y",
@@ -600,6 +600,8 @@ class AcumaticaShipmentGIStaging(models.Model):
         }
 
         created_loginext_header = self.env['loginext.staging.data'].create(updated_vals)
+        _logger.info("TMS Header Created: %s", created_loginext_header)        
+
         return created_loginext_header
 
     def _build_loginext_item(self, product, shipment_type, header, move_count, shipment_weight, item_qty):
@@ -613,6 +615,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         }
 
         crate = self.env['loginext.staging.crate'].create(crate_vals)
+        _logger.info("TMS Crate Created: %s", crate)        
 
         item_vals = {
             'loginext_item_cd' : f"{product.default_code}",
@@ -623,7 +626,8 @@ class AcumaticaShipmentGIStaging(models.Model):
             'staging_id' : header,
             'crate_id' : crate.id
         }
-        self.env['loginext.staging.item'].create(item_vals)
+        items = self.env['loginext.staging.item'].create(item_vals)
+        _logger.info("TMS Item Created: %s", items)        
 
 
 

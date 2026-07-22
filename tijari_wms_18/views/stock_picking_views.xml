@@ -1,3 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+
+     <record id="view_picking_form_inherit_acumatica_header" model="ir.ui.view">
+        <field name="name">stock.picking.form.acumatica.header</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='state']" position="replace">
+                <field name="wms_state"
+                    widget="statusbar"
+                    invisible="picking_type_name != 'outgoing' or transaction_type !='outbound'"/>
+
+                <field name="state"
+                    widget="statusbar"
+                    invisible="picking_type_name == 'outgoing' or transaction_type =='outbound'"/>
+            </xpath>
+         
+        </field>
+    </record>
+
 </odoo>

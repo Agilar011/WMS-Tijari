@@ -10,6 +10,7 @@
             <xpath expr="//field[@name='quant_id']" position="before">
                 <field name="id" string="Line ID"  column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
                 <field name="adt_dest_location" readonly="1" optional="show" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
+                <field name="adt_dest_location_id" readonly="1" optional="show" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
                 <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
                 <field name="source_location_id" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
                 <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
@@ -23,7 +24,7 @@
             </xpath>
             
            <xpath expr="//field[last()]" position="after">
-<!--  -->
+
                 <button name="action_prepare_scan_lot"
                         type="object"
                         icon="fa-barcode"
