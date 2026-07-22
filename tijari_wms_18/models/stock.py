@@ -1144,10 +1144,14 @@ class StockMove(models.Model):
         pickings._sync_adt_quantities_from_moves()
         return res
 
-    @api.depends('product_uom_qty', 'quantity')
+    @api.depends('product_uom_qty', 'quantity', 'picking_type_name', 'move_line_ids.confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
-            difference = move.product_uom_qty - move.quantity
+            if move.picking_type_name == 'Receipt':
+                total_confirmation_quantity = sum(move.move_line_ids.mapped('confirmation_quantity'))
+                difference = move.product_uom_qty - total_confirmation_quantity
+            else:
+                difference = move.product_uom_qty - move.quantity
             move.difference_quantity = difference if difference > 0 else 0.0
 
 

@@ -113,4 +113,19 @@
             sequence="8" 
             action="action_wms_kit_assembly"/>
 
+
+  <!-- INTERNAL HEADERS -->
+  <menuitem id="wms_operations_menu_internal"
+            name="Internal"
+            parent="wms_operations_menu"
+            sequence="30"/>
+
+
+  <!-- INTERNAL SUB MENUS -->
+  <menuitem id="wms_operations_internal_transfer_order"
+            name="Internal Transfer Orders"
+            parent="wms_operations_menu_internal"
+            sequence="1"
+            action="action_internal_transfer_order"/>
+
 </odoo>

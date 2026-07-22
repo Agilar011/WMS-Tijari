@@ -56,7 +56,7 @@ class StockMoveLine(models.Model):
     allocation_Quantity = fields.Float(string='Allocation Quantity')
     allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
     allocation_UOM = fields.Char(string='Allocation UOM')
-    confirmation_quantity = fields.Char(string='confirmation_quantity')
+    confirmation_quantity = fields.Float(string='Confirmation Qty')
 
     picking_code = fields.Selection(
         related='picking_id.picking_type_code',
@@ -696,6 +696,56 @@ class StockMoveLine(models.Model):
             },
         }
 
+    def action_apply_scanned_field(self, field_name, scanned_code):
+        allowed_fields = {
+            'confirmation_lot_code',
+            'confirmation_location_code',
+        }
+        if field_name not in allowed_fields:
+            raise ValidationError(_("Field scan tidak valid."))
+
+        result = {}
+        for line in self:
+            line.write({field_name: scanned_code})
+            if field_name == 'confirmation_lot_code':
+                lot = line._find_lot_by_scan_code(scanned_code)
+                line.write({
+                    'matching_lot_id': lot.id if lot else False,
+                })
+            elif field_name == 'confirmation_location_code':
+                location = line._find_loc_by_scan_code(scanned_code)
+                line.write({
+                    'matching_loc_dest_id': location.id if location else False,
+                })
+
+            if line.matching_lot_id and line.matching_loc_dest_id:
+                line.matching = (
+                    'match'
+                    if line.matching_lot_id == line.lot_id
+                    and line.matching_loc_dest_id == line.location_dest_id
+                    else 'not_match'
+                )
+            else:
+                line.matching = 'not_match'
+
+            matching_labels = dict(line._fields['matching'].selection)
+            result = {
+                'id': line.id,
+                field_name: scanned_code,
+                'matching': line.matching,
+                'matching_label': matching_labels.get(line.matching, line.matching or ''),
+                'matching_lot_id': [
+                    line.matching_lot_id.id,
+                    line.matching_lot_id.display_name,
+                ] if line.matching_lot_id else False,
+                'matching_loc_dest_id': [
+                    line.matching_loc_dest_id.id,
+                    line.matching_loc_dest_id.display_name,
+                ] if line.matching_loc_dest_id else False,
+            }
+
+        return result
+
 
     @api.onchange('confirmation_location_code')
     def _onchange_confirmation_location_code(self):
@@ -822,8 +872,7 @@ class StockMoveLine(models.Model):
 
                 loc_ok = bool(line.location_dest_id.id == line.matching_loc_dest_id.id)
                 lot_ok = bool(line.lot_id.id == line.matching_lot_id.id)
-                qty_ok = bool(line.quantity == line.confirmation_quantity)
-                if loc_ok and lot_ok and qty_ok:
+                if loc_ok and lot_ok:
                     line.matching = 'match'
                     continue
                 else:
@@ -879,11 +928,6 @@ class StockMoveLine(models.Model):
             #     line.matching = 'match'
             #     sml = self.env['stock.move.line'].browse(line._origin.id)
             #     sml.write({'matching': 'match'})
-
-
-
-
-
 
 
 

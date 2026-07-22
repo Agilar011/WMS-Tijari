@@ -67,7 +67,7 @@ class ImportTransferOneStepWizard(models.TransientModel):
             print(f"- OData Filter      : {self.odata_filter}")
             print("==================================================================")
 
-        Picking = self.env['stock.picking']
+        InternalTransferOrder = self.env['internal.transfer.order']
         existing_receipts = set()
         new_receipts = set()
         lines_to_create = []
@@ -76,7 +76,10 @@ class ImportTransferOneStepWizard(models.TransientModel):
         for item in raw_list:
             reference_nbr = item.get('reference_nbr')
             header_id = item.get('external_id')
-            exists = bool(reference_nbr and Picking.search_count([('origin', '=', reference_nbr)]))
+            exists = bool(
+                reference_nbr
+                and InternalTransferOrder.search_count([('external_ref', '=', reference_nbr)])
+            )
             if exists:
                 existing_receipts.add(reference_nbr)
                 msg = 'Sudah ada → akan diupdate'
