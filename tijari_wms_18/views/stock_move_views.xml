@@ -21,6 +21,31 @@
                             invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'"/>
                 </div>
             </xpath>
+            
+            <xpath expr="//widget[@name='import_lots']" position="after">
+                <span class="d-inline-flex gap-1">
+
+                    <button name="action_generate_lot"
+                        type="object"
+                        string="Generate Lot"
+                        class="btn-warning"
+                        invisible="not display_assign_serial"/>
+
+                    <button name="action_validate_lot"
+                        type="object"
+                        string="Validate Lot"
+                        class="btn-warning"
+                        invisible="not display_assign_serial"/>
+                </span>
+            </xpath>
+
+            <xpath expr="//widget[@name='generate_serials']" position="replace">
+                <widget class="btn btn-link btn-group" name="generate_serials" invisible="1"/>
+            </xpath>                        
+            
+            <xpath expr="//widget[@name='import_lots']" position="replace">
+                <widget class="btn btn-link btn-group" name="import_lots" invisible="1"/>
+            </xpath>
 
         </field>
     </record>
