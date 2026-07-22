@@ -502,14 +502,14 @@ class StockPicking(models.Model):
             "returnBranch": header_to_send.loginext_return_branch,
             "packageWeight": str(header_to_send.loginext_package_weight or 0),
             "packageVolume": str(header_to_send.loginext_package_volume or 0),
-            "preparationTime": int(header_to_send.loginext_preparation_time or 0),
+            "preparationTime": 30,
             "paymentType": header_to_send.loginext_payment_type,
             "packageValue": str(header_to_send.loginext_package_value or 0),
             "numberOfItems": header_to_send.loginext_number_of_items or 0,
             "partialDeliveryAllowedFl": "Y" if header_to_send.loginext_partial_delivery_allowed_fl else "N",
             "returnAllowedFl": "Y" if header_to_send.loginext_return_allowed_fl else "N",
             "cancellationAllowedFl": "Y" if header_to_send.loginext_cancellation_allowed_fl else "N",
-            "deliverServiceTime": str(header_to_send.loginext_deliver_service_time or 0),
+            "deliverServiceTime": '30',
             "deliverStartTimeWindow": self._format_datetime(header_to_send.loginext_deliver_start_time_window),
             "deliverEndTimeWindow": self._format_datetime(header_to_send.loginext_deliver_end_time_window),
             "deliveryType": header_to_send.loginext_delivery_type,
@@ -552,9 +552,8 @@ class StockPicking(models.Model):
     # ==========================================================
 
     def action_post_loginext(self):
-        _logger.info("=" * 80)
-        _logger.info("Sent LOGINEXT REQUEST")
-        # print(self)
+        print("=" * 80)
+        print("Sent LOGINEXT REQUEST")
         self.wms_state = 'waiting_response'
 
         LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
@@ -568,9 +567,10 @@ class StockPicking(models.Model):
             for rec in self
         ]
 
-        _logger.info("LOGINEXT REQUEST")
-        _logger.info(json.dumps(body, indent=4))
-        _logger.info("=" * 80)
+        print("=" * 80)
+        print("LOGINEXT REQUEST")
+        print("=" * 80)
+        print(json.dumps(body, indent=4))
 
         session = requests.Session()
 
@@ -591,11 +591,12 @@ class StockPicking(models.Model):
                 timeout=30,
             )
 
-            _logger.info("=" * 80)
-            _logger.info("LOGINEXT LOGIN RESPONSE")
-            _logger.info("Status : %s", login_response.status_code)
-            _logger.info(login_response.text)
-            _logger.info("=" * 80)
+            print("=" * 80)
+            print("LOGINEXT LOGIN RESPONSE")
+            print("=" * 80)
+            print(f"Status : {login_response.status_code}")
+            print(login_response.text)
+
 
             login_response.raise_for_status()
             www_authenticate = login_response.headers.get("WWW-Authenticate")
@@ -611,8 +612,7 @@ class StockPicking(models.Model):
             if www_authenticate:
                 headers["WWW-Authenticate"] = www_authenticate
 
-            _logger.info("Sent Response to Loginext")
-            print('Sent Response to Loginext')
+            print("Sent Response to Loginext")
             response = session.post(
                 CREATE_URL,
                 headers=headers,
@@ -620,13 +620,17 @@ class StockPicking(models.Model):
                 timeout=1,
             )
 
-            _logger.info("=" * 80)
-            _logger.info("LOGINEXT CREATE RESPONSE")
-            _logger.info("Status : %s", response.status_code)
-            _logger.info(response.text)
-            _logger.info("=" * 80)
+            print("=" * 80)
+            print("LOGINEXT CREATE RESPONSE")
+            print("=" * 80)
+            print(f"Status : {response.status_code}")
+            print(response.text)
 
             response.raise_for_status()
+
+            print("=" * 80)
+            print("END LOGINEXT REQUEST")
+            print("=" * 80)
 
             return response.json()
 
