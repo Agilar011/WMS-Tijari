@@ -95,12 +95,18 @@ class StockPicking(models.Model):
         tracking=True,
     )
 
-
     status_ba = fields.Selection([
         ('conform', 'Conform'),
         ('discrepancy', 'Discrepancy'),],
     string='Status BA',
     )
+
+    transaction_type = fields.Selection([
+        ('inbound', 'Inbound'),
+        ('outbound', 'Outbound'),
+        ('internal', 'Internal'),
+    ], string='Type transaksi', readonly=True)
+
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
@@ -818,6 +824,8 @@ class StockRule(models.Model):
             if adt_type:
                 vals.update({
                     "adt_type": picking.adt_type if picking.adt_type else picking.name,
+                    "transaction_type": picking.transaction_type,
+                    # "adt_type": picking.adt_type
                 })
 
         if (picking and picking.adt_dest_location_id and picking._allow_custom_push_destination()):

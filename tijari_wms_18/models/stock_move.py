@@ -56,6 +56,11 @@ class StockMove(models.Model):
         store=False,
     )
 
+    transaction_type = fields.Selection(
+        related="picking_id.transaction_type",
+        store=False,
+    )
+
     
     adt_dest_location = fields.Char(string="Mappped Location",
         readonly=True
@@ -129,12 +134,13 @@ class StockMove(models.Model):
 
         print("_get_new_picking_values")
         for item in self:
-            print("move:", self)
-            print("move adt_type:", self.adt_type)
+            print("move:", item)
+            print("move adt_type:", item.adt_type)
             print("vals before:", vals)
 
-            vals['adt_type'] = self.adt_type
+            vals['adt_type'] = item.adt_type
 
+            print("vals after:", vals)
             print("vals after:", vals)
 
         return vals

@@ -198,7 +198,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'location_dest_id': picking_type.default_location_dest_id.id,
                         'origin': shipment.adt_ShipmentNbr,
                         'scheduled_date': ship_date,
-                        'adt_type' : "Sales Order Shipment"
+                        'adt_type' : "Sales Order Shipment",
+                        'transaction_type' : 'outbound'
                     }
 
                     shipment_location_id = shipment.adt_WarehouseID
