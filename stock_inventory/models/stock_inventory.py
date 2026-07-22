@@ -2,6 +2,9 @@ from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 from odoo.osv import expression
 
+import logging
+_logger = logging.getLogger(__name__)
+
 
 class InventoryAdjustmentsGroup(models.Model):
     _name = "stock.inventory"
@@ -359,8 +362,9 @@ class InventoryAdjustmentsGroup(models.Model):
     def action_state_to_done(self):
         self.ensure_one()
         self._check_inventory_adjustments_is_set()
-        stock_quant_ids = self.stock_quant_ids.filtered(lambda q: q.inventory_diff_quantity != 0)
-        stock_quant_ids.action_apply_inventory()
+        stock_quant_ids = self.stock_quant_ids.filtered(lambda q: q.inventory_quantity and q.inventory_diff_quantity != 0)
+        for quant in stock_quant_ids:
+            quant.action_apply_inventory()
         self.state = "done"
         self.stock_quant_ids.filtered(
             lambda q: q.current_inventory_id.id == self.id
@@ -451,7 +455,7 @@ class InventoryAdjustmentsGroup(models.Model):
     def action_view_stock_moves(self):
         self.ensure_one()
         result = self.env["ir.actions.act_window"]._for_xml_id(
-            "tijari_wms_18.action_view_stock_move_line_inventory_tree"
+            "stock_inventory.action_view_stock_move_line_inventory_tree"
         )
         result["domain"] = [("inventory_adjustment_id", "=", self.id)]
         result["context"] = {}
