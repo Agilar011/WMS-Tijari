@@ -17,6 +17,7 @@
         'stock_picking_batch',
         'stock_sms',
         'product',
+        'stock_inventory'
     ],
     'data': [
         'security/ir.model.access.csv',

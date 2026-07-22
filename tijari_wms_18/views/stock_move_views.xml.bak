@@ -44,22 +44,22 @@
                 </div>
 
             </xpath> 
-
-            <xpath expr="//widget[@name='import_lots']" position="before">
-                <div>
-                    <div invisible="picking_type_name != 'Pick'">
-                        <field name="unfiltered_dest" invisible="picking_type_name != 'Pick'"/>
-                        <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick'">Pengambilan Item berdasarkan lokasi mapping</span>
-                    </div>
-                    
-                    <button name="action_validate_lot_pick"
-                        type="object"
-                        string="Validate Lot"
-                        class="btn-warning"
-                        invisible="picking_type_name != 'Pick'"/>
-                </div>
-                <field name="picking_type_name"/>
-            </xpath>
+            <!-- view button filter and generate lot -->
+            <!-- <xpath expr="//widget[@name='import_lots']" position="before"> -->
+                <!-- <div> -->
+                    <!-- <field name="picking_type_name"/> -->
+                    <!-- <div invisible="picking_type_name != 'Pick'"> -->
+                        <!-- <field name="unfiltered_dest" invisible="picking_type_name != 'Pick'"/> -->
+                        <!-- <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick'">Pengambilan Item berdasarkan lokasi mapping</span> -->
+                    <!-- </div> -->
+                    <!--  -->
+                    <!-- <button name="action_validate_lot_pick" -->
+                        <!-- type="object" -->
+                        <!-- string="Validate Lot" -->
+                        <!-- class="btn-warning" -->
+                        <!-- invisible="picking_type_name != 'Pick'"/> -->
+                <!-- </div> -->
+            <!-- </xpath> -->
 
             <xpath expr="//widget[@name='import_lots']" position="after">
                 <span class="d-inline-flex gap-1">

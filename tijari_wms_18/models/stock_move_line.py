@@ -87,6 +87,7 @@ class StockMoveLine(models.Model):
     parent_location_id = fields.Many2one(
         "stock.location",
         string="Parent Location",
+        default="adt_dest_location_id"
     )
 
     source_location_id = fields.Many2one(
@@ -197,12 +198,15 @@ class StockMoveLine(models.Model):
         print(f"Quant found: {quant}")
 
         self.selected_quant_id = quant
-        # self.quant_id = quant
+        self.quant_id = quant
 
     @api.model_create_multi
     def create(self, vals_list):
         move_lines = super().create(vals_list)
         move_lines.mapped('picking_id')._sync_adt_quantities_from_moves()
+        if not move_lines.parent_location_id:
+            move_lines.parent_location_id = move_lines.adt_dest_location_id
+
         return move_lines
 
     def write(self, vals):

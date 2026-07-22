@@ -99,20 +99,3 @@ class LoginextStagingItem(models.Model):
     loginext_item_quantity = fields.Float(string="Item Quantity")
     loginext_item_type = fields.Char(string="Item Type")
     loginext_item_weight = fields.Float(string="Item Weight")
-
-
-
-class LoginextMasterCountry(models.Model):
-    _name = "loginext.master.country"
-    _description = "Loginext Master Country"
-
-    country = fields.Char(string="Country")
-    code = fields.Char(string="Code")
-
-
-class LoginextMasterState(models.Model):
-    _name = "loginext.master.state"
-    _description = "Loginext Master State"
-
-    state = fields.Char(string="State")
-    code = fields.Char(string="Code")

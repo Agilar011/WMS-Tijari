@@ -10,3 +10,5 @@ access_stock_move_scan_wizard_user,access.stock.move.scan.wizard.user,model_stoc
 
 access_stock_location_acumatica_user,access.stock.location.acumatica.user,model_stock_location_acumatica,base.group_user,1,1,1,1
 access_internal_transfer_order_user,access.internal.transfer.order.user,model_internal_transfer_order,base.group_user,1,1,1,1
+access_loginext_master_country_user,loginext.master.country,model_loginext_master_country,base.group_user,1,1,1,1
+access_loginext_master_state_user,loginext.master.state,model_loginext_master_state,base.group_user,1,1,1,1

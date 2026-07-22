@@ -1,18 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <record id="view_move_dest_domain" model="ir.ui.view">
-        <field name="name">stock.move.generate.lot</field>
+    <record id="view_stock_move_operations_inherit" model="ir.ui.view">
+        <field name="name">stock.move.operations.inherit</field>
         <field name="model">stock.move</field>
         <field name="inherit_id" ref="stock.view_stock_move_operations"/>
         <field name="arch" type="xml">
 
-            <xpath expr="//field[@name='picking_type_id']" position="after">
-                <field name="picking_type_name" invisible="1"/>
-            </xpath>
 
+            <xpath expr="//widget[@name='import_lots']" position="before">
+                <div>
+                    <field name="picking_type_name" invisible="1"/>
+                    <div invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">
+                        <field name="unfiltered_dest" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'"/>
+                        <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">Pengambilan Item berdasarkan lokasi mapping</span>
+                    </div>
+                        <button name="action_validate_lot_pick"
+                            type="object"
+                            string="Validate Lot"
+                            class="btn-warning"
+                            invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'"/>
+                </div>
+            </xpath>
+            
             <xpath expr="//widget[@name='import_lots']" position="after">
-                <span class="d-inline-flex gap-1" invisible="picking_type_name != 'Receipts'">
+                <span class="d-inline-flex gap-1">
 
                     <button name="action_generate_lot"
                         type="object"
@@ -25,7 +37,6 @@
                         string="Validate Lot"
                         class="btn-warning"
                         invisible="not display_assign_serial"/>
-
                 </span>
             </xpath>
 
