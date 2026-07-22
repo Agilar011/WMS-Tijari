@@ -11,6 +11,7 @@ class LoginextMasterCountry(models.Model):
 class LoginextMasterState(models.Model):
     _name = "loginext.master.state"
     _description = "Loginext Master State"
+    _rec_name = "state"
 
     state = fields.Char(string="State")
     code = fields.Char(string="Code")

@@ -86,14 +86,17 @@ class StockPicking(models.Model):
             ('waiting', 'Waiting Another Operation'),
             ('confirmed', 'Waiting'),
             ('assigned', 'Ready'),
-            ('waiting_response', 'Waiting_response'),
+            ('waiting_response', 'Waiting Response'),
             ('done', 'Done'),
             ('cancel', 'Cancelled'),
         ],
         string="WMS State",
+        compute="_compute_wms_state",
+        store=True,
         copy=False,
         tracking=True,
     )
+
 
     status_ba = fields.Selection([
         ('conform', 'Conform'),
@@ -117,6 +120,14 @@ class StockPicking(models.Model):
             )
 
         return move_lines
+
+    @api.depends("state")
+    def _compute_wms_state(self):
+        for picking in self:
+            if picking.sync_state == "waiting_response":
+                continue
+            
+            picking.wms_state = picking.state
 
     @api.depends('move_ids.product_id')
     def _compute_allowed_putaway_product_ids(self):
@@ -467,11 +478,15 @@ class StockPicking(models.Model):
 
     def _prepare_loginext_payload(self):
         self.ensure_one()
+        print(self)
+
+        print(self.origin)
 
         header_to_send = self.env["loginext.staging.data"].search(
             [("odoo_shipment_number", "=", self.origin)],
             limit=1,
         )
+        print(header_to_send)
 
         if not header_to_send:
             raise UserError("Data staging TMS tidak dapat ditemukan")
@@ -537,6 +552,9 @@ class StockPicking(models.Model):
     # ==========================================================
 
     def action_post_loginext(self):
+        _logger.info("=" * 80)
+        _logger.info("Sent LOGINEXT REQUEST")
+        # print(self)
         self.wms_state = 'waiting_response'
 
         LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
@@ -550,7 +568,6 @@ class StockPicking(models.Model):
             for rec in self
         ]
 
-        _logger.info("=" * 80)
         _logger.info("LOGINEXT REQUEST")
         _logger.info(json.dumps(body, indent=4))
         _logger.info("=" * 80)
@@ -565,13 +582,13 @@ class StockPicking(models.Model):
             login_payload = {
                 "userName": USERNAME,
                 "password": PASSWORD,
-                "sessionExpiryTimeout": "60",
+                "sessionExpiryTimeout": "1",
             }
 
             login_response = session.post(
                 LOGIN_URL,
                 json=login_payload,
-                timeout=60,
+                timeout=30,
             )
 
             _logger.info("=" * 80)
@@ -581,7 +598,7 @@ class StockPicking(models.Model):
             _logger.info("=" * 80)
 
             login_response.raise_for_status()
-
+            www_authenticate = login_response.headers.get("WWW-Authenticate")
             # ======================================================
             # CREATE SHIPMENT
             # ======================================================
@@ -591,11 +608,16 @@ class StockPicking(models.Model):
                 "Accept": "application/json",
             }
 
+            if www_authenticate:
+                headers["WWW-Authenticate"] = www_authenticate
+
+            _logger.info("Sent Response to Loginext")
+            print('Sent Response to Loginext')
             response = session.post(
                 CREATE_URL,
                 headers=headers,
                 json=body,
-                timeout=120,
+                timeout=1,
             )
 
             _logger.info("=" * 80)
@@ -613,6 +635,9 @@ class StockPicking(models.Model):
             raise UserError(f"Loginext API Error\n\n{e}")
 
     def action_get_loginext(self):
+        _logger.info("=" * 80)
+        _logger.info("Get LOGINEXT REQUEST")
+        # print(self)
         """
         Get Shipment dari Loginext berdasarkan tanggal dan Order No.
         """
@@ -632,13 +657,13 @@ class StockPicking(models.Model):
             login_payload = {
                 "userName": USERNAME,
                 "password": PASSWORD,
-                "sessionExpiryTimeout": "60",
+                "sessionExpiryTimeout": "1",
             }
 
             login_response = session.post(
                 LOGIN_URL,
                 json=login_payload,
-                timeout=60,
+                timeout=30,
             )
 
             _logger.info("=" * 80)
@@ -647,22 +672,29 @@ class StockPicking(models.Model):
             _logger.info("=" * 80)
 
             login_response.raise_for_status()
-
+            www_authenticate = login_response.headers.get("WWW-Authenticate")
             # ==========================================================
             # GET SHIPMENT
             # ==========================================================
             params = {
                 "start_date": "2026-04-20 00:00:00",
-                "end_date": "2026-04-23 00:00:00",
-                "order_no": self.origin,
+                "end_date": "2026-07-23 00:00:00",
+                "order_no": f"testing-dev-{self.origin}",
             }
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+
+
+            if www_authenticate:
+                headers["WWW-Authenticate"] = www_authenticate
 
             response = session.get(
                 SHIPMENT_URL,
                 params=params,
-                headers={
-                    "Accept": "application/json",
-                },
+                headers=headers,
                 timeout=120,
             )
 
