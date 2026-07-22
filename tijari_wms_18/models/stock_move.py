@@ -56,6 +56,11 @@ class StockMove(models.Model):
         store=False,
     )
 
+    transaction_type = fields.Selection(
+        related="picking_id.transaction_type",
+        store=False,
+    )
+
     
     adt_dest_location = fields.Char(string="Mappped Location",
         readonly=True
