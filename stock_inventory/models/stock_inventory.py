@@ -335,7 +335,7 @@ class InventoryAdjustmentsGroup(models.Model):
         quants = self._get_quants(self.location_ids)
         self.write(
             {
-                "state": "in_progress",
+                # "state": "in_progress",
                 "stock_quant_ids": [(6, 0, quants.ids)],
             }
         )
@@ -347,15 +347,20 @@ class InventoryAdjustmentsGroup(models.Model):
                 "current_inventory_id": self.id,
             }
         )
+        self.action_submit_approval()
+        self.state = "in_progress"
         return
 
     def action_state_to_wait_approval(self):
         self.ensure_one()
+        self._check_inventory_adjustments_is_set()
         self.state = "wait_approval"
-        self.action_submit_approval()
 
     def action_state_to_done(self):
         self.ensure_one()
+        self._check_inventory_adjustments_is_set()
+        stock_quant_ids = self.stock_quant_ids.filtered(lambda q: q.inventory_diff_quantity != 0)
+        stock_quant_ids.action_apply_inventory()
         self.state = "done"
         self.stock_quant_ids.filtered(
             lambda q: q.current_inventory_id.id == self.id
@@ -400,6 +405,16 @@ class InventoryAdjustmentsGroup(models.Model):
             }
         )
 
+    def _check_inventory_adjustments_is_set(self):
+        for rec in self:
+            adjusted_stock_quant_ids = rec.stock_quant_ids.filtered(lambda q: q.inventory_diff_quantity != 0)
+            if not adjusted_stock_quant_ids:
+                raise UserError(
+                    self.env._(
+                        "You cannot do this action because there are no adjustments made."
+                    )
+                )
+
     def _check_action_state_to_cancel(self):
         for rec in self:
             if not rec.action_state_to_cancel_allowed:
@@ -436,7 +451,7 @@ class InventoryAdjustmentsGroup(models.Model):
     def action_view_stock_moves(self):
         self.ensure_one()
         result = self.env["ir.actions.act_window"]._for_xml_id(
-            "stock_inventory.action_view_stock_move_line_inventory_tree"
+            "tijari_wms_18.action_view_stock_move_line_inventory_tree"
         )
         result["domain"] = [("inventory_adjustment_id", "=", self.id)]
         result["context"] = {}
