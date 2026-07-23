@@ -41,11 +41,12 @@
             </xpath>
 
             <xpath expr="//page[@name='page_operations']" position="after">
-                <page string="Putaway" name="page_putaway" invisible="picking_type_name not in ['Pick', 'Receipts']">
+                <page string="Putaway" name="page_putaway" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
                     <group>
                         <field name="scan_product_button"
                             widget="adt_scan_product_button"
                             nolabel="1"/>
+                        <field name="picking_type_name" invisible="1"/>
                         <field name="allowed_putaway_product_ids" invisible="1"/>
                         <field name="allowed_putaway_move_line_ids" invisible="1"/>
                         <field name="putaway_product_id" domain="[('id', 'in', allowed_putaway_product_ids)]"/>
@@ -57,11 +58,13 @@
                             <field name="id" column_invisible="1"/>
                             <field name="product_id" readonly="1"/>
                             <field name="product_uom_id" readonly="1" string="UoM"/>
+                            <field name="adt_dest_location_id" column_invisible="1"/>
+                            <field name="allowed_matching_lot_ids" column_invisible="1"/>
                             <field name="location_dest_id" readonly="1"/>
                             <field name="quantity" readonly="1"/>
                             <field name="matching" column_invisible="1" force_save="1"/>
-                            <field name="matching_lot_id" force_save="1"/>
-                            <field name="matching_loc_dest_id" force_save="1"/>
+                            <field name="matching_lot_id" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
+                            <field name="matching_loc_dest_id" force_save="1" domain="[('id', 'child_of', adt_dest_location_id)]"/>
                             <field name="confirmation_quantity" force_save="1"/>
                             <field name="matching" string="Status"
                                 decoration-success="matching == 'match'"
@@ -123,12 +126,13 @@
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"
                         title="Print Lot"/>
                     <button name="action_open_move_pick"
                         type="object"
                         icon="fa-hand-lizard-o"
                         title="Open Picker"
-                        invisible="state == 'draft'"/>
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal'] or state == 'draft'"/>
                     <button name="action_open_move_lines"
                         type="object"
                         icon="fa-list"

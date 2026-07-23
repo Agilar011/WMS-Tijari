@@ -11,15 +11,15 @@
             <xpath expr="//widget[@name='import_lots']" position="before">
                 <div>
                     <field name="picking_type_name" invisible="1"/>
-                    <div invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">
-                        <field name="unfiltered_dest" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'"/>
-                        <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">Pengambilan Item berdasarkan lokasi mapping</span>
+                    <div invisible="picking_type_name not in ['Pick', 'Pick Internal']">
+                        <field name="unfiltered_dest" invisible="picking_type_name not in ['Pick', 'Pick Internal']"/>
+                        <span style="margin-right: 4px;" invisible="picking_type_name not in ['Pick', 'Pick Internal']">Pengambilan Item berdasarkan lokasi mapping</span>
                     </div>
                         <button name="action_validate_lot_pick"
                             type="object"
                             string="Validate Lot"
                             class="btn-warning"
-                            invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'"/>
+                            invisible="picking_type_name not in ['Pick', 'Pick Internal']"/>
                 </div>
             </xpath>
             
@@ -69,14 +69,17 @@
 
             </xpath>
 
-            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name != 'Receipts'">
-                <button name="action_print_lot_number_line" type="object" title="Print" icon="fa-print" column_invisible="parent.picking_type_code == 'outgoing'"/>
-                <button name="action_open_move_pick"
-                    type="object"
-                    icon="fa-hand-lizard-o"
-                    title="Open Picker"
-                    invisible="state == 'draft'"
-                    />
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
+                    <button name="action_print_lot_number_line"
+                        type="object"
+                        icon="fa-print"
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"
+                        title="Print Lot"/>
+                    <button name="action_open_move_pick"
+                        type="object"
+                        icon="fa-hand-lizard-o"
+                        title="Open Picker"
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal'] or state == 'draft'"/>
             </xpath>
 
             <xpath expr="//field[@name='quantity']" position="after">

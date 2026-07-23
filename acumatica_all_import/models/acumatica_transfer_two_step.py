@@ -207,6 +207,11 @@ class AcumaticaTransferTwoStepLine(models.Model):
     ], string='Status', default='pending', readonly=True)
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    odoo_internal_transfer_order_id = fields.Many2one(
+        'internal.transfer.order',
+        string='Internal Transfer Order',
+        readonly=True,
+    )
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -217,9 +222,12 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
     @api.depends('reference_nbr')
     def _compute_exists_in_odoo(self):
-        Picking = self.env['stock.picking']
+        InternalTransferOrder = self.env['internal.transfer.order']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.reference_nbr and Picking.search_count([('origin', '=', rec.reference_nbr)]))
+            rec.exists_in_odoo = bool(
+                rec.reference_nbr
+                and InternalTransferOrder.search_count([('external_ref', '=', rec.reference_nbr)])
+            )
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -348,6 +356,66 @@ class AcumaticaTransferTwoStepLine(models.Model):
             print(f"first: {first}")
 
             try:
+                transfer_service = self.env['acumatica.internal.transfer.service']
+                transfer_info = transfer_service.classify(
+                    first.from_warehouse_code,
+                    first.to_warehouse_code,
+                    'FromWarehouseID',
+                    'ToWarehouseID',
+                )
+                if transfer_info['status'] == 'skip':
+                    receipt_lines.write({
+                        'import_state': 'updated',
+                        'import_message': transfer_info['message'],
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': False,
+                    })
+                    updated += len(receipt_lines)
+                    continue
+
+                order, action_state = transfer_service.prepare_order(
+                    first.reference_nbr,
+                    transfer_info['source_location'],
+                    transfer_info['destination_location'],
+                    transfer_info['transaction_type'],
+                    self._parse_dt(first.scheduled_date),
+                    first.note or False,
+                )
+
+                to_create_move = self.env['acumatica.transfer.two.step.line.product'].search([('header_id', '=', first.id)])
+                for line in to_create_move:
+                    product = self._find_product(line)
+                    if not product:
+                        raise UserError(f'Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or "-"}')
+                    uom = self._find_uom(line, product)
+                    qty = self._parse_float(line.adt_Quantity)
+                    transfer_service.create_order_move(order, product, qty, uom, line.adt_Description or product.display_name, line.adt_Description or False, {
+                        'adt_line_nbr': line.adt_LineNumber or False,
+                        'adt_line_note': line.adt_note or False,
+                        'adt_inventory_id': line.adt_InventoryID or False,
+                        'adt_uom_code': line.adt_UOM or False,
+                        'adt_line_description': line.adt_Description or False,
+                        'adt_to_location_code': line.adt_ToLocationID or False,
+                        'adt_from_location_code': line.adt_FromLocationID or False,
+                        'adt_transfer_order_number': first.reference_nbr,
+                        'adt_transfer_order_line_number': line.adt_LineNumber or False,
+                        'adt_transfer_order_type': first.transfer_type or False,
+                        'adt_quantity': qty,
+                        'adt_type': first.transfer_type or 'Transfer Two Step',
+                    })
+
+                receipt_lines.write({
+                    'import_state': action_state,
+                    'import_message': f'{action_state.title()}: {order.name}',
+                    'odoo_picking_id': False,
+                    'odoo_internal_transfer_order_id': order.id,
+                })
+                if action_state == 'imported':
+                    imported += 1
+                else:
+                    updated += 1
+                continue
+
                 # vendor = self._find_vendor(first)
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
@@ -567,6 +635,13 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
     def action_open_picking(self):
         self.ensure_one()
+        if self.odoo_internal_transfer_order_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'internal.transfer.order',
+                'res_id': self.odoo_internal_transfer_order_id.id,
+                'view_mode': 'form',
+            }
         if not self.odoo_picking_id:
             raise UserError('Belum diimport, belum ada receipt di Odoo.')
         return {
