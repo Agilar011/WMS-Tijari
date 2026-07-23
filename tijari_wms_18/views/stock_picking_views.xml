@@ -64,7 +64,7 @@
                 <group>
 
                     <field name="shipment_information" 
-                    invisible="transaction_type not in ('outbound')"
+                    invisible="transaction_type not in ('outbound') and "
                             decoration-success="shipment_information == 'full_shipment'"
                             decoration-warning="shipment_information == 'partial'"
                             decoration-danger="shipment_information == 'canceled'"/>

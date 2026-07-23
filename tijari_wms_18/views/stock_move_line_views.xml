@@ -9,20 +9,38 @@
             <!-- First row of detailed stock_move_line outbound - pick -->
             <xpath expr="//field[@name='quant_id']" position="before">
                 <field name="id" string="Line ID"  column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
-                <field name="adt_dest_location" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <!-- <field name="adt_dest_location" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/> -->
                 <field name="adt_dest_location_id" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
-                <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
-                <field name="source_location_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <!-- <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/> -->
+                <field name="source_location_id" string="Pick From" column_invisible="parent.picking_type_name not in ['Pack','Pick', 'Pick Internal']"/>
                 <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
-                <field name="product_lot_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="product_lot_id" string="Lot" column_invisible="parent.picking_type_name not in ['Pack', 'Pick', 'Pick Internal']"/>
                 <field name="selected_quant_id" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
             </xpath>
 
             <!-- Hide From To defaul_odoo for outbound- pick -->
             <xpath expr="//field[@name='quant_id']" position="replace">
-                <field name="quant_id" column_invisible="parent.picking_type_name in ['Pick', 'Receipts', 'Receipt Internal']"/>
+                <field name="quant_id" column_invisible="parent.picking_type_name in ['Pack', 'Pick', 'Receipts', 'Receipt Internal']"/>
             </xpath>
+
+            <!-- <xpath expr="//field[@name='result_package_id']" position="attributes"> -->
+                <!-- <attribute name="column_invisible"> -->
+                    <!-- parent.picking_type_name in ['Pick', 'Receipts', 'Receipt Internal'] -->
+                <!-- </attribute> -->
+            <!-- </xpath> -->
             
+           <xpath expr="//field[last()]" position="after">
+
+
+                <field name="matching_lot_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
+                <field name="matching_loc_dest_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
+
+                <field name="second_matching" string="Matching Status"
+                    decoration-success="second_matching == 'Match'"
+                    decoration-danger="second_matching == 'Not Match'" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" readonly="1"/>
+
+            </xpath>
+
            <xpath expr="//field[last()]" position="after">
 
                 <button name="action_prepare_scan_lot"
@@ -40,14 +58,8 @@
                         invisible="matching == 'match'"
                         column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"
                         class="btn-secondary"/>
-
-                <field name="confirmation_lot_code" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
-                <field name="confirmation_location_code" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
-
-                <field name="matching"
-                    decoration-success="matching == 'match'"
-                    decoration-danger="matching == 'not_match'" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
-
+                <!-- <field name="second_matching" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" /> -->
+                <!-- <field name="third_matching" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" /> -->
             </xpath>
 
 <!-- ============================================================================================================ -->
