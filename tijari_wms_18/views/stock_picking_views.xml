@@ -355,14 +355,53 @@
             <xpath expr="//button[@name='unpack']" position="after">
                 <button name="action_print_packing_list" string="Print" type="object" class="btn-primary"/>
             </xpath>
-            <xpath expr="//field[@name='pack_date']" position="after">
-                <!-- <field name="scheduled_date"/>
-                <field name="origin"/> -->
-                <field name="note"/>
-            </xpath>
+            <!-- <xpath expr="//field[@name='pack_date']" position="after">
+                <field name="scheduled_date"/>
+                <field name="origin"/>
+                <field name="note" widget="html"/>
+            </xpath> -->
+            <xpath expr="//field[@name='quant_ids']" position="replace">
+            <notebook>
+
+                <page string="Content">
+                    <field name="quant_ids">
+                        <list>
+                            <field name="product_id"/>
+                            <field name="lot_id" groups="stock.group_production_lot"/>
+                            <field name="quantity"/>
+                            <field name="product_uom_id" groups="uom.group_uom"/>
+                        </list>
+                        <kanban class="o_kanban_mobile">
+                            <templates>
+                                <t t-name="card">
+                                    <field name="product_id" class="fw-bold"/>
+                                    <field name="lot_id"/>
+                                    <div class="d-flex">
+                                        <field name="quantity"/>
+                                        <field class="mx-2"
+                                               name="product_uom_id"
+                                               groups="uom.group_uom"/>
+                                    </div>
+                                </t>
+                            </templates>
+                        </kanban>
+                    </field>
+                </page>
+
+                <page string="Notes">
+                    <field name="warehouse_note" widget="html"/>
+                </page>
+
+            </notebook>
+
+        </xpath>
+        <xpath expr="//sheet/separator" position="attributes">
+            <attribute name="invisible">1</attribute>
+        </xpath>
 
         </field>
     </record>
+
     
     <record id="view_quant_package_tree_inherit" model="ir.ui.view">
         <field name="name">stock.quant.package.tree.inherit</field>
