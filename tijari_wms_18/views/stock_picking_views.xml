@@ -23,7 +23,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="1"/>
+                    invisible="picking_type_name == 'Delivery Orders' and transaction_type =='outbound'"/>
 
             </xpath>            
 
@@ -33,7 +33,7 @@
                         type="object"
                         class="oe_highlight"
                         groups="stock.group_stock_user"
-                        invisible="picking_type_name == 'Delivery Orders' and transaction_type =='outbound'"
+                        invisible="picking_type_name == 'Delivery Orders' and transaction_type =='outbound' or state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel')"
                         data-hotkey="v"/>
             </xpath>
 
@@ -64,7 +64,7 @@
                 <group>
 
                     <field name="shipment_information" 
-                    invisible="transaction_type not in ('outbound') and picking_type_name != 'Delivery Orders'"
+                    invisible="transaction_type not in ('outbound') or picking_type_name != 'Delivery Orders'"
                             decoration-success="shipment_information == 'full_shipment'"
                             decoration-warning="shipment_information == 'partial'"
                             decoration-danger="shipment_information == 'canceled'"/>
@@ -74,7 +74,7 @@
 
         <xpath expr="//notebook" position="inside">
 
-            <page string="Package Details" invisible="transaction_type not in ('outbound') and picking_type_name != 'Delivery Orders'">
+            <page string="Package Details" invisible="transaction_type not in ('outbound') or picking_type_name != 'Delivery Orders'">
 
                 <field name="package_level_ids"
                        context="{
@@ -97,7 +97,7 @@
 
             </page>
 
-            <page string="Detail Product" name="operations" invisible="transaction_type not in ('outbound') and picking_type_name != 'Delivery Orders'">
+            <page string="Detail Product" name="operations" invisible="transaction_type not in ('outbound') or picking_type_name != 'Delivery Orders'">
                 <field name="move_ids_without_package" mode="list,kanban"
                     widget="stock_move_one2many"
                     readonly="state == 'done' and is_locked"
