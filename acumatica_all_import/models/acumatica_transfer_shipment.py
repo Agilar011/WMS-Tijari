@@ -146,6 +146,11 @@ class AcumaticaTransferShipmentLine(models.Model):
     ], default='pending', readonly=True)
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Picking di Odoo', readonly=True)
+    odoo_internal_transfer_order_id = fields.Many2one(
+        'internal.transfer.order',
+        string='Internal Transfer Order',
+        readonly=True,
+    )
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -157,9 +162,12 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     @api.depends('shipment_nbr')
     def _compute_exists_in_odoo(self):
-        Picking = self.env['stock.picking']
+        InternalTransferOrder = self.env['internal.transfer.order']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.shipment_nbr and Picking.search_count([('origin', '=', rec.shipment_nbr)]))
+            rec.exists_in_odoo = bool(
+                rec.shipment_nbr
+                and InternalTransferOrder.search_count([('external_ref', '=', rec.shipment_nbr)])
+            )
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -271,6 +279,13 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     def action_open_picking(self):
         self.ensure_one()
+        if self.odoo_internal_transfer_order_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'internal.transfer.order',
+                'res_id': self.odoo_internal_transfer_order_id.id,
+                'view_mode': 'form',
+            }
         if not self.odoo_picking_id:
             raise UserError('Belum diimport, belum ada receipt di Odoo.')
         return {
@@ -305,6 +320,63 @@ class AcumaticaTransferShipmentLine(models.Model):
             print(f"debug : [Shipment {shipment_key}] Mengambil record pertama (ID Odoo: {first.id})")
             
             try:
+                transfer_service = self.env['acumatica.internal.transfer.service']
+                transfer_info = transfer_service.classify(
+                    first.warehouse_code or first.line_warehouse_code,
+                    first.warehouse_dest_code,
+                    'WarehouseID',
+                    'ToWarehouseID',
+                )
+                if transfer_info['status'] == 'skip':
+                    shipment_lines.write({
+                        'import_state': 'updated',
+                        'import_message': transfer_info['message'],
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': False,
+                    })
+                    updated += len(shipment_lines)
+                    continue
+
+                order, action_state = transfer_service.prepare_order(
+                    first.shipment_nbr,
+                    transfer_info['source_location'],
+                    transfer_info['destination_location'],
+                    transfer_info['transaction_type'],
+                    self._parse_dt(first.scheduled_date),
+                    first.note or first.description or False,
+                )
+
+                for line in shipment_lines:
+                    for item in self.env['acumatica.transfer.shipment.line.product'].search([('shipment_id', '=', line.id)]):
+                        product = self._find_product(item)
+                        uom = self._find_uom(item, product)
+                        qty = self._parse_float(item.product_uom_qty)
+                        transfer_service.create_order_move(order, product, qty, uom, item.line_description or product.display_name, item.line_description or False, {
+                            'adt_line_nbr': item.line_nbr or False,
+                            'adt_inventory_id': item.inventory_id or False,
+                            'adt_uom_code': item.uom_code or False,
+                            'adt_line_description': item.line_description or False,
+                            'adt_to_location_code': item.location_dest_code or False,
+                            'adt_from_location_code': item.line_warehouse_code or first.warehouse_code or False,
+                            'adt_transfer_order_number': first.shipment_nbr,
+                            'adt_transfer_order_line_number': item.line_nbr or False,
+                            'adt_transfer_order_type': first.shipment_type or False,
+                            'adt_quantity': qty,
+                            'adt_type': first.shipment_type or 'Transfer Shipment',
+                        })
+
+                shipment_lines.write({
+                    'import_state': action_state,
+                    'import_message': f'{action_state.title()}: {order.name}',
+                    'odoo_picking_id': False,
+                    'odoo_internal_transfer_order_id': order.id,
+                })
+                if action_state == 'imported':
+                    imported += 1
+                else:
+                    updated += 1
+                continue
+
                 first_data = first.read()[0]
                 print("--- SEMUA FIELD DAN NILAI DARI FIRST ---")
                 import pprint

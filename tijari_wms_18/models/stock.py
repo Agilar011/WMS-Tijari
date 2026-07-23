@@ -365,6 +365,7 @@ class StockPicking(models.Model):
                     continue
 
                 move.location_dest_id = picking.adt_dest_location_id
+                move.adt_dest_location_id = picking.adt_dest_location_id
 
                 if move.move_line_ids:
                     move.move_line_ids.write({
@@ -384,6 +385,7 @@ class StockPickingType(models.Model):
     _inherit = 'stock.picking.type'
 
     operation_category = fields.Selection([
+        ('pick', 'Pick'), 
         ('put', 'Put'), 
         ('pack', 'Pack'), 
         ('internal', 'Internal Transfer'), 
@@ -419,6 +421,7 @@ class StockLocation(models.Model):
     sequence = fields.Boolean(string='Sequence', default=False, help='Indicates if the location uses sequence for operations')
     unique_code = fields.Char(string='Unique Code', help='A unique code for the location')
     is_location_mapping = fields.Boolean(string="Parent Mapping Location")
+    is_consignment = fields.Boolean(string="Consignment Location")
 
     def generate_unique_code(self):
         for location in self:

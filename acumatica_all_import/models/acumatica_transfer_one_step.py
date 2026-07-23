@@ -189,8 +189,12 @@ class AcumaticaTransferOneStepLine(models.Model):
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: (
-                l.import_state in ['pending', 'error'] 
-                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+                l.import_state in ['pending', 'error']
+                or (
+                    l.import_state in ['imported', 'updated']
+                    and not l.odoo_picking_id
+                    and not l.odoo_internal_transfer_order_id
+                )
             )
         )
         if not lines:
@@ -243,61 +247,45 @@ class AcumaticaTransferOneStepLine(models.Model):
                     action_state = 'imported'
                     imported += 1
 
-                from_mapping = self._find_acumatica_location_mapping(
+                transfer_service = self.env['acumatica.internal.transfer.service']
+                transfer_info = transfer_service.classify(
                     first.from_warehouse_code,
-                    'FromWarehouseID',
-                )
-                to_mapping = self._find_acumatica_location_mapping(
                     first.to_warehouse_code,
+                    'FromWarehouseID',
                     'ToWarehouseID',
                 )
-                source_location = from_mapping.odoo_location_id
-                destination_location = to_mapping.odoo_location_id
+                source_location = transfer_info['source_location']
+                destination_location = transfer_info['destination_location']
 
-                if source_location == destination_location:
+                if transfer_info['status'] == 'skip':
                     receipt_lines.write({
                         'import_state': 'updated',
-                        'import_message': 'Skipped: FromWarehouseID dan ToWarehouseID map ke Odoo location yang sama.',
+                        'import_message': transfer_info['message'],
                     })
                     skipped += len(receipt_lines)
                     continue
 
-                if (
-                    from_mapping.odoo_building_id
-                    and to_mapping.odoo_building_id
-                    and from_mapping.odoo_building_id != to_mapping.odoo_building_id
-                ):
-                    receipt_lines.write({
-                        'import_state': 'error',
-                        'import_message': 'Skipped: transfer one step hanya untuk intra warehouse.',
-                    })
-                    skipped += len(receipt_lines)
-                    continue
-
-                if not order:
-                    order = InternalTransferOrder.create({
-                        'external_ref': origin,
-                        'transaction_type': 'intra_warehouse',
-                        'transfer_type': 'transfer_out',
-                        'location_id': source_location.id,
-                        'location_dest_id': destination_location.id,
-                        'transit_location_id': self._find_transit_location().id,
-                        'schedule_date': self._parse_dt(first.scheduled_date),
-                        'validation_policy': 'validate_all',
-                        'note': first.note or False,
-                    })
-                else:
+                if order:
                     order.write({
-                        'transaction_type': 'intra_warehouse',
+                        'transaction_type': transfer_info['transaction_type'],
                         'transfer_type': 'transfer_out',
                         'location_id': source_location.id,
                         'location_dest_id': destination_location.id,
-                        'transit_location_id': self._find_transit_location().id,
+                        'transit_location_id': transfer_service.get_or_create_transit_location().id,
                         'schedule_date': self._parse_dt(first.scheduled_date),
                         'validation_policy': 'validate_all',
                         'note': first.note or False,
                         'state': 'draft',
                     })
+                else:
+                    order, action_state = transfer_service.prepare_order(
+                        origin,
+                        source_location,
+                        destination_location,
+                        transfer_info['transaction_type'],
+                        self._parse_dt(first.scheduled_date),
+                        first.note or False,
+                    )
 
                 transfer_lines = self.env['acumatica.transfer.one.step.product'].search([
                     ('header_id', '=', first.id),
