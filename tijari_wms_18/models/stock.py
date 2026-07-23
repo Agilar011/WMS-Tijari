@@ -1246,3 +1246,18 @@ class StockLot(models.Model):
         img.save(buffer, format="PNG")
 
         return base64.b64encode(buffer.getvalue()).decode()
+
+class StockQuantPackage(models.Model):
+    _inherit = "stock.quant.package"
+
+    note = fields.Text(string="Notes")
+    warehouse_note = fields.Text(string="Warehouse Note")
+    origin = fields.Char(string="Source Document")
+    scheduled_date = fields.Date(string='scheduled_date')
+
+    def action_print_packing_list(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/packing_list?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
