@@ -794,16 +794,16 @@ class StockMoveLine(models.Model):
 
         return loc
 
-    @api.onchange('matching_lot_id', 'matching_loc_dest_id')
-    def _onchange_update_matching_status(self):
-        for line in self:
-            if not line.matching_lot_id or not line.matching_loc_dest_id:
-                continue
+    # @api.onchange('matching_lot_id', 'matching_loc_dest_id')
+    # def _onchange_update_matching_status(self):
+    #     for line in self:
+    #         if not line.matching_lot_id or not line.matching_loc_dest_id:
+    #             continue
 
-            lot_match = line.matching_lot_id.id == line.lot_id.id
-            location_match = line.matching_loc_dest_id.id == line.location_dest_id.id
+    #         lot_match = line.matching_lot_id.id == line.lot_id.id
+    #         location_match = line.matching_loc_dest_id.id == line.location_dest_id.id
 
-            line.matching = 'match' if lot_match and location_match else 'not_match'
+    #         line.matching = 'match' if lot_match and location_match else 'not_match'
 
     def _update_move_picked(self):
         for move in self.mapped('move_id'):
@@ -841,7 +841,7 @@ class StockMoveLine(models.Model):
     #     'lot_id',
     #     'picking_id.picking_type_id.name',
     # )
-    @api.onchange('confirmation_lot_code', 'confirmation_location_code', 'confirmation_quantity', 'matching', 'auto_input_code')
+    @api.onchange('confirmation_lot_code', 'confirmation_location_code', 'confirmation_quantity', 'matching', 'auto_input_code', 'matching_lot_id', 'matching_loc_dest_id')
     def _compute_matching(self):
         print('run validate code')
         import logging
@@ -851,8 +851,8 @@ class StockMoveLine(models.Model):
             picking_type = line.picking_id.picking_type_id
 
             # 1. Validasi awal: pastikan input user tidak kosong atau hanya berisi spasi
-            conf_loc = str(line.confirmation_location_code or '').strip()
-            conf_lot = str(line.confirmation_lot_code or '').strip()
+            conf_loc = str(line.confirmation_location_code or line.matching_loc_dest_id or '').strip()
+            conf_lot = str(line.confirmation_lot_code or line.matching_lot_id or '').strip()
 
             loc_ok = False
             lot_ok = False
