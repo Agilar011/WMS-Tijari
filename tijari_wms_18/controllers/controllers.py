@@ -596,7 +596,6 @@ class WmsApiController(http.Controller):
 
     @http.route('/print/packing_list', type='http', auth='user')
     def PrintPackingList(self, id=None, **kw):
-
         if not id:
             return request.make_response(
                 json.dumps({'error': 'id tidak ditemukan'}),
@@ -604,15 +603,23 @@ class WmsApiController(http.Controller):
             )
 
         stok = request.env['stock.quant.package'].sudo().browse(int(id))
+        package_level = request.env['stock.package_level'].sudo().search([
+            ('package_id', '=', stok.id)
+        ], limit=1)
+        picking = package_level.picking_id
+
+        origin = ""
+        if picking and picking.origin:
+            origin = picking.origin.split(",")[0].strip()
 
         data = {
-            'partner_id': stok.owner_id.name or "",
+            'partner_id': picking.partner_id.name if picking else "",
             'warehouse': stok.location_id.name or "",
             'name': stok.name or "",
             'date': format_tanggal_indo(stok.pack_date),
-            'origin': stok.origin or "",
-            'note': stok.note or "",
-            'scheduled_date': format_tanggal_indo(stok.scheduled_date),
+            'origin': origin,
+            'note': stok.warehouse_note or "",
+            'scheduled_date': format_tanggal_indo(picking.scheduled_date) if picking else "",
             'detail': [],
         }
 
