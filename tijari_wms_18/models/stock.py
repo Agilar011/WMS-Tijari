@@ -1120,8 +1120,13 @@ class StockMove(models.Model):
         string="Mapped Location",
     )
     difference_quantity = fields.Float(
-        string='Difference Quantity',
+        string='Difference Qty',
         compute='_compute_difference_quantity',
+        store=True,
+    )
+    confirmation_quantity = fields.Float(
+        string='Confirmation Qty',
+        compute='_compute_confirmation_quantity',
         store=True,
     )
 
@@ -1147,16 +1152,21 @@ class StockMove(models.Model):
         pickings._sync_adt_quantities_from_moves()
         return res
 
-    @api.depends('product_uom_qty', 'quantity', 'picking_type_name', 'move_line_ids.confirmation_quantity')
+    @api.depends('product_uom_qty', 'quantity', 'picking_type_name', 'confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
-            if move.picking_type_name == 'Receipt':
-                total_confirmation_quantity = sum(move.move_line_ids.mapped('confirmation_quantity'))
+            if move.picking_type_name in ['Receipts', 'Receipt Internal']:
+                total_confirmation_quantity = move.confirmation_quantity
                 difference = move.product_uom_qty - total_confirmation_quantity
             else:
                 difference = move.product_uom_qty - move.quantity
             move.difference_quantity = difference if difference > 0 else 0.0
 
+    @api.depends('move_line_ids.confirmation_quantity')
+    def _compute_confirmation_quantity(self):
+        for move in self:
+            total_confirmation_quantity = sum(move.move_line_ids.mapped('confirmation_quantity'))
+            move.confirmation_quantity = total_confirmation_quantity if total_confirmation_quantity > 0 else 0.0
 
     # lot_button = fields.Char(string="Lot Button")
 
