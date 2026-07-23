@@ -43,16 +43,34 @@
                 string="Sent Response"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' and state != 'assigned'"/>
+                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' or wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel')"/>
 
                 <button name="action_get_loginext"
                 string="Get Response"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' and state != 'assigned'"/>
+                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel')"/>
+
+                <button
+                    name="action_validate_full_shipment"
+                    type="object"
+                    string="Validate Full Shipment"
+                    class="btn-primary"
+                    invisible="picking_type_name != 'Delivery Orders' or wms_state != 'waiting_response' or transaction_type !='outbound'"/>
 
             </xpath>
 
+            <xpath expr="//group[field[@name='origin']]" position="after">
+                <group>
+
+                    <field name="shipment_information" 
+                    invisible="transaction_type not in ('outbound')"
+                            decoration-success="shipment_information == 'full_shipment'"
+                            decoration-warning="shipment_information == 'partial'"
+                            decoration-danger="shipment_information == 'canceled'"/>
+
+                </group>
+            </xpath>
 
         </field>
     </record>

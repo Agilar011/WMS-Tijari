@@ -127,10 +127,9 @@ class StockPicking(models.Model):
     @api.depends("state")
     def _compute_wms_state(self):
         for picking in self:
-            if picking.sync_state == "waiting_response":
-                continue
+            if picking.state != "done":
+                picking.wms_state = picking.state
             
-            picking.wms_state = picking.state
 
     @api.depends('move_ids.product_id')
     def _compute_allowed_putaway_product_ids(self):
@@ -167,6 +166,7 @@ class StockPicking(models.Model):
     shipment_information = fields.Selection([
         ('partial', 'Partial Shipment'),
         ('full_shipment', 'Full Shipment'),
+        ('full_return', 'Canceled'),
     ], string='Informasi TMS', readonly=True, help='Status shipment yang akan dikirimkan ke TMS.')
 
 # Function to foward adt_type from parent picking
@@ -464,6 +464,8 @@ class StockPicking(models.Model):
     @api.onchange("state")
     def _onchange_state_update_wms_state(self):
         for picking in self:
+            if picking.state == 'done':
+                continue
             picking.wms_state = picking.state        
 
 
@@ -635,7 +637,10 @@ class StockPicking(models.Model):
             print("END LOGINEXT REQUEST")
             print("=" * 80)
 
-            return response.json()
+            res = self.button_validate()
+
+            return res
+
 
         except requests.exceptions.RequestException as e:
             _logger.exception(e)
@@ -744,6 +749,11 @@ class StockPicking(models.Model):
 
         return res  
 
+    def action_validate_full_shipment(self):
+        self.ensure_one()
+
+        self.shipment_information = 'full_shipment'
+        self.wms_state = 'done' 
 
 # ================================================================================================
 # Temp Storage function create move line qr code        
@@ -834,6 +844,7 @@ class StockPicking(models.Model):
 
         return base64.b64encode(buffer.getvalue()).decode()
 
+    
 class StockRule(models.Model):
     _inherit = "stock.rule"
 
