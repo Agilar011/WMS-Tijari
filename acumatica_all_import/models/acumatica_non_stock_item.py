@@ -76,6 +76,7 @@ class AcumaticaNonStockItemLine(models.Model):
 
     import_message  = fields.Char(string='Keterangan',          readonly=True)
     odoo_product_id = fields.Many2one('product.template', string='Product di Odoo', readonly=True)
+    selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one(
         'acumatica.config',

@@ -20,6 +20,11 @@ class AcumaticaShipmentGIStaging(models.Model):
     all_line_ids = fields.One2many('acumatica.sales.order.shipment.staging.line', 'gi_id',string='All Shipment Details')
     active = fields.Boolean(default=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    odoo_internal_transfer_order_id = fields.Many2one(
+        'internal.transfer.order',
+        string='Internal Transfer Order',
+        readonly=True,
+    )
     import_state = fields.Selection([
         ('pending', 'Belum Diimport'),
         ('imported', 'Sudah Diimport'),
@@ -156,7 +161,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         for staging_rec in not_pending_shipment:
             staging_rec.write({
                 'import_state': 'error',
-                'import_message': f'Receipt {staging_rec.shipment_nbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
+                'import_message': f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
             })
 
         # =====================================================
@@ -172,6 +177,10 @@ class AcumaticaShipmentGIStaging(models.Model):
             # Ambil sub-transaksi database tingkat dokumen
             with self.env.cr.savepoint():
                 try:
+                    if (shipment.adt_OrderType or '').strip().upper() == 'CO':
+                        self._import_consignment_internal_transfer(shipment, shipment_line)
+                        continue
+
                     warehouse = self._find_warehouse(shipment.adt_WarehouseID)
                     if not warehouse:
                         raise UserError(f"Warehouse {shipment.adt_WarehouseID} tidak ditemukan di Odoo.")
@@ -198,12 +207,26 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'location_dest_id': picking_type.default_location_dest_id.id,
                         'origin': shipment.adt_ShipmentNbr,
                         'scheduled_date': ship_date,
+                        'adt_type' : "Sales Order Shipment",
+                        'transaction_type' : 'outbound'
                     }
+
+                    shipment_location_id = shipment.adt_WarehouseID
+                    shipment_weight = shipment.adt_ShipmentWeight
+                    shipment_volume = shipment.adt_ShipmentVolume
+                    shipment_city = shipment.adt_City
+
+                    shipment_country = self._find_loginext_country(shipment.adt_CountryName)
+                    shipment_postal_code = shipment.adt_PostalCode
+                    shipment_street = shipment.adt_AddressLine
+
 
                     picking = Picking.search([
                         ('origin', '=', shipment.adt_ShipmentNbr),
                         ('state', '=', 'draft')
                     ], limit=1)
+
+                    create_tms_state = False
 
                     if picking:
                         picking.write(updated_vals)
@@ -212,22 +235,50 @@ class AcumaticaShipmentGIStaging(models.Model):
                         print(f"--> SUCCESS UNLINK OLD LINES FOR PICKING ID: {picking.id}")
                     else:
                         picking = Picking.create(updated_vals)
+                        exist_post_data = self.env['loginext.staging.data'].search([('odoo_shipment_number', '=', picking.origin)], limit=1)
+                        if not exist_post_data:
+                            create_tms_state = True
+                            created_loginext_header = self._build_loginext_header(shipment.adt_ShipmentNbr, ship_date, shipment_location_id,shipment_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking.origin)
+
                         print(f"SUCCESS CREATING NEW PICKING ID: {picking.id}")
 
                     move_items = shipment_line.search([
                         ('gi_id', '=', shipment.id)
                     ])
 
+                    move_count = 0
+
                     for item in move_items:
+                        move_count += 1
                         product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
                         if not product:
                             raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
+                        
+                        # Finding stock location for 
+                        product_location = self._find_warehouse_product(shipment.adt_WarehouseID)
+                        if product_location:
+                            print(f" Product: {product.product_tmpl_id.name} asignt to get from: {product_location} AKA {shipment.adt_WarehouseID}")
+
+                        _logger.info("============================================================")
+                        _logger.info("Warehouse ID           : %s", shipment.adt_WarehouseID)
+                        _logger.info("Product                : %s (%s)", product.display_name, product.id)
+                        _logger.info("Product Location       : %s", product_location)
+                        _logger.info(
+                            "Product Location ID    : %s",
+                            product_location.id if product_location else False,
+                        )
+                        _logger.info(
+                            "Picking Type Src Loc   : %s (%s)",
+                            picking_type.default_location_src_id.display_name if picking_type.default_location_src_id else False,
+                            picking_type.default_location_src_id.id if picking_type.default_location_src_id else False,
+                        )
+
 
                         move_vals = {
                             'company_id': warehouse.company_id.id,
                             'product_id': product.id,
                             'product_uom': product.product_tmpl_id.uom_id.id,
-                            'location_id': picking_type.default_location_src_id.id,
+                            'location_id': product_location.id if product_location else picking_type.default_location_src_id.id,
                             'location_dest_id': picking_type.default_location_dest_id.id,
                             'partner_id': partner.id,
                             'picking_id': picking.id,
@@ -247,8 +298,21 @@ class AcumaticaShipmentGIStaging(models.Model):
                             'adt_open_qty': float(item.adt_ShipmentQty or 0.0),
                             'adt_type': 'Sales Order Shipment',
                             'adt_line_description': item.adt_LineDescription or item.description,
+                            'adt_dest_location_id' : product_location.id if product_location else picking_type.default_location_src_id.id,
+                            'adt_dest_location' : shipment.adt_WarehouseID,
+                            'transaction_type' : 'outbound'
                         }
-                        Move.create(move_vals)
+                        adt_dest_location_id =  Move.create(move_vals)
+                        print(f"mapped location: {adt_dest_location_id.id}")
+
+                        item_qty = float(item.adt_ShipmentQty or 0.0)
+
+                        if create_tms_state == True:
+                            self._build_loginext_item(product, shipment.adt_OrderType, created_loginext_header.id, move_count, shipment.adt_ShipmentWeight, item_qty)
+
+
+                    if create_tms_state == True:
+                        created_loginext_header.loginext_number_of_items = move_count
 
                     # Tandai sukses jika semua proses di atas berhasil tanpa memicu exception
                     shipment.write({
@@ -274,6 +338,173 @@ class AcumaticaShipmentGIStaging(models.Model):
 
         print("\n" + "=" * 120 + "\nEND OF IMPORT PROCESS\n" + "=" * 120)
         return True
+
+
+    def _get_or_create_consignment_location(
+        self, source_location=False, customer_code=False, cons_location_code=False
+    ):
+        Location = self.env['stock.location']
+        if not source_location:
+            raise UserError('Source location wajib diisi untuk membuat lokasi consignment.')
+
+        customer_code = (customer_code or '').strip() or 'Unknown Customer'
+        cons_location_code = (cons_location_code or '').strip() or 'Consignment'
+
+        def get_or_create_child(parent, name, is_consignment=False):
+            location = Location.search([
+                ('location_id', '=', parent.id),
+                ('name', '=', name),
+            ], limit=1)
+            vals = {
+                'name': name,
+                'usage': 'internal',
+                'location_id': parent.id,
+            }
+            if source_location.company_id:
+                vals['company_id'] = source_location.company_id.id
+            if 'is_consignment' in Location._fields:
+                vals['is_consignment'] = is_consignment
+            if location:
+                write_vals = {}
+                if is_consignment and not location.is_consignment:
+                    write_vals['is_consignment'] = True
+                if write_vals:
+                    location.write(write_vals)
+                return location
+            return Location.create(vals)
+
+        warehouse_root = source_location
+        warehouse = self.env['stock.warehouse'].search([]).filtered(
+            lambda wh: source_location.parent_path.startswith(wh.view_location_id.parent_path)
+        )[:1]
+        if warehouse:
+            warehouse_root = warehouse.view_location_id
+
+        cons_root = get_or_create_child(warehouse_root, 'CONS')
+        customer_location = get_or_create_child(cons_root, customer_code)
+        return get_or_create_child(
+            customer_location,
+            cons_location_code,
+            is_consignment=True,
+        )
+
+    def _get_or_create_transit_location(self):
+        Location = self.env['stock.location']
+        transit_location = Location.search([('usage', '=', 'transit')], limit=1)
+        if not transit_location:
+            transit_location = Location.create({
+                'name': 'Transit',
+                'usage': 'transit',
+            })
+        return transit_location
+
+    def _import_consignment_internal_transfer(self, shipment, shipment_line):
+        InternalTransferOrder = self.env['internal.transfer.order']
+        Move = self.env['stock.move']
+        Product = self.env['product.product']
+
+        source_location = self._find_warehouse_product(shipment.adt_WarehouseID)
+        if not source_location:
+            raise UserError(
+                f"Source location mapping WarehouseID {shipment.adt_WarehouseID or '-'} tidak ditemukan."
+            )
+
+        destination_location = self._get_or_create_consignment_location(
+            source_location,
+            shipment.adt_CustomerID,
+            shipment.adt_ToWarehouseID or shipment.adt_LocationID or shipment.adt_LocationName,
+        )
+        transit_location = self._get_or_create_transit_location()
+
+        if shipment.adt_ShipDate and 'T' in str(shipment.adt_ShipDate):
+            clean_date_str = str(shipment.adt_ShipDate).split('+')[0].replace('T', ' ')
+            ship_date = fields.Datetime.to_datetime(clean_date_str)
+        else:
+            ship_date = shipment.adt_ShipDate if shipment.adt_ShipDate else fields.Datetime.now()
+
+        order = InternalTransferOrder.search([
+            ('external_ref', '=', shipment.adt_ShipmentNbr),
+        ], limit=1)
+        if order:
+            if order.picking_ids:
+                raise UserError(
+                    f"Shipment {shipment.adt_ShipmentNbr} sudah memiliki transfer, tidak bisa diupdate."
+                )
+            if order.state not in ('draft', 'cancel'):
+                raise UserError(
+                    f"Shipment {shipment.adt_ShipmentNbr} sudah ada di state {order.state}, tidak bisa diupdate."
+                )
+            order.move_ids.unlink()
+            order.write({
+                'transaction_type': 'consignment',
+                'transfer_type': 'transfer_out',
+                'location_id': source_location.id,
+                'location_dest_id': destination_location.id,
+                'transit_location_id': transit_location.id,
+                'schedule_date': ship_date,
+                'validation_policy': 'validate_all',
+                'note': shipment.adt_note or shipment.adt_NoteHeader or False,
+                'state': 'draft',
+            })
+            action_state = 'updated'
+        else:
+            order = InternalTransferOrder.create({
+                'external_ref': shipment.adt_ShipmentNbr,
+                'transaction_type': 'consignment',
+                'transfer_type': 'transfer_out',
+                'location_id': source_location.id,
+                'location_dest_id': destination_location.id,
+                'transit_location_id': transit_location.id,
+                'schedule_date': ship_date,
+                'validation_policy': 'validate_all',
+                'note': shipment.adt_note or shipment.adt_NoteHeader or False,
+            })
+            action_state = 'imported'
+
+        move_items = shipment_line.search([('gi_id', '=', shipment.id)])
+        if not move_items:
+            raise UserError(f"Shipment {shipment.adt_ShipmentNbr} tidak punya detail line.")
+
+        for item in move_items:
+            product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
+            if not product:
+                raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
+
+            uom = self._find_uom(item, product)
+            qty = float(item.adt_ShipmentQty or 0.0)
+            move_vals = {
+                'name': item.adt_LineDescription or product.display_name,
+                'product_id': product.id,
+                'product_uom_qty': qty,
+                'product_uom': uom.id if uom else product.uom_id.id,
+                'location_id': source_location.id,
+                'location_dest_id': destination_location.id,
+                'internal_transfer_order_id': order.id,
+                'description_picking': item.adt_LineDescription or False,
+                'adt_line_external_id': item.acumatica_id,
+                'adt_inventory_id': item.adt_LineInventoryID,
+                'adt_uom_code': item.adt_LineUOM,
+                'adt_open_qty': qty,
+                'adt_quantity': qty,
+                'adt_type': 'SO Shipment Consignment',
+                'adt_line_description': item.adt_LineDescription or False,
+                'adt_line_nbr': item.adt_LineNbr or False,
+                'adt_transfer_order_number': shipment.adt_ShipmentNbr,
+                'adt_transfer_order_line_number': item.adt_LineNbr or False,
+                'adt_transfer_order_type': shipment.adt_OrderType or False,
+                'adt_from_location_code': shipment.adt_WarehouseID or False,
+                'adt_to_location_code': destination_location.complete_name,
+            }
+            move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
+            Move.create(move_vals)
+
+        shipment.write({
+            'import_state': action_state,
+            'import_message': f"{action_state.title()}: {order.name}",
+            'odoo_picking_id': False,
+            'odoo_internal_transfer_order_id': order.id,
+        })
+        return order
 
 # =====================================================================================================================================================================
     # Service Function
@@ -325,9 +556,9 @@ class AcumaticaShipmentGIStaging(models.Model):
         Partner = self.env['res.partner']
         partner = False
         if line:
-            partner = Partner.search([('ref', '=', line)], limit=1)
+            partner = Partner.search([('company_registry', '=', line)], limit=1)
             if not partner:
-                partner = Partner.search([('name', '=', line)], limit=1)
+                partner = Partner.search([('adt_b_account_id', '=', line)], limit=1)
         return partner
 
     def _find_warehouse(self, line):
@@ -344,6 +575,19 @@ class AcumaticaShipmentGIStaging(models.Model):
 
         return warehouse
 
+    def _find_warehouse_product(self, line):
+        Warehouse = self.env['stock.location.acumatica']
+        warehouse = False
+        code = line
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+            if warehouse:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_location_id
+
+        return warehouse
         # Warehouse = self.env['stock.warehouse']
         # code = line
 
@@ -402,13 +646,35 @@ class AcumaticaShipmentGIStaging(models.Model):
             uom = product.uom_id
         return uom
 
+    def _find_loginext_country(self, code):
+        Country = self.env['loginext.master.country']
+
+        country_code = Country.search([('country', '=', code)], limit=1)
+        if country_code:
+            final_code = country_code.code
+
+        else:
+            final_code = "IDN"
+            
+        return final_code
+
 # Helper Function
 
-    @api.depends('adt_ShipmentNbr')
+    @api.depends('adt_ShipmentNbr', 'adt_OrderType')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
+        InternalTransferOrder = self.env['internal.transfer.order']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.adt_ShipmentNbr and Picking.search_count([('origin', '=', rec.adt_ShipmentNbr)]))
+            if not rec.adt_ShipmentNbr:
+                rec.exists_in_odoo = False
+            elif (rec.adt_OrderType or '').strip().upper() == 'CO':
+                rec.exists_in_odoo = bool(
+                    InternalTransferOrder.search_count([('external_ref', '=', rec.adt_ShipmentNbr)])
+                )
+            else:
+                rec.exists_in_odoo = bool(
+                    Picking.search_count([('origin', '=', rec.adt_ShipmentNbr)])
+                )
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -429,8 +695,12 @@ class AcumaticaShipmentGIStaging(models.Model):
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: (
-                l.import_state in ['pending', 'error'] 
-                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+                l.import_state in ['pending', 'error']
+                or (
+                    l.import_state in ['imported', 'updated']
+                    and not l.odoo_picking_id
+                    and not l.odoo_internal_transfer_order_id
+                )
             )
         )
         if not lines:
@@ -444,6 +714,13 @@ class AcumaticaShipmentGIStaging(models.Model):
 
     def action_open_picking(self):
         self.ensure_one()
+        if self.odoo_internal_transfer_order_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'internal.transfer.order',
+                'res_id': self.odoo_internal_transfer_order_id.id,
+                'view_mode': 'form',
+            }
         if not self.odoo_picking_id:
             raise UserError('Belum diimport, belum ada receipt di Odoo.')
         return {
@@ -455,6 +732,108 @@ class AcumaticaShipmentGIStaging(models.Model):
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+
+    def _find_loginext_wh(self, shipment_location_id):
+        Warehouse = self.env['stock.location.acumatica']
+        warehouse = False
+        code = shipment_location_id
+        print(code)
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+            # if warehouse:
+            #     if not warehouse.loginext_branch:
+            #         warehouse = False
+            #     else:
+            #         warehouse = warehouse.loginext_branch
+
+        return warehouse
+
+
+    def _build_loginext_header(self, adt_ShipmentNbr, ship_date, shipment_location_id, ship_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking):
+        loginext_wh = self._find_loginext_wh(shipment_location_id)
+
+        loginext_order_no = f"testing-dev-{adt_ShipmentNbr}"
+        _logger.info("loginext_order_no         : %s", loginext_order_no)
+        _logger.info("ship_date                 : %s", ship_date)
+        _logger.info("loginext_wh               : %s", loginext_wh)
+        _logger.info("loginext_wh.loginext_branch : %s", loginext_wh.loginext_branch if loginext_wh else False)
+        _logger.info("ship_weight              : %s", ship_weight)
+        _logger.info("shipment_volume          : %s", shipment_volume)
+        _logger.info("partner                  : %s", partner)
+        _logger.info("partner.name             : %s", partner.name if partner else False)
+        _logger.info("partner.id               : %s", partner.id if partner else False)
+        _logger.info("shipment_street          : %s", shipment_street)
+        _logger.info("shipment_city            : %s", shipment_city)
+        _logger.info("shipment_country         : %s", shipment_country)
+        _logger.info("shipment_postal_code     : %s", shipment_postal_code)
+        _logger.info("loginext_state.code      : %s", loginext_wh.loginext_state.code if loginext_wh and loginext_wh.loginext_state else False)
+        _logger.info("picking                  : %s", picking)        
+        updated_vals = {
+            'loginext_order_no' : loginext_order_no if loginext_order_no else '',
+            'loginext_shipment_order_dt' : ship_date if ship_date else '',
+            'loginext_shipment_order_type_cd' : "DELIVER",
+            'loginext_order_state' : "FORWARD"  if "FORWARD"  else '',
+            'loginext_distribution_center' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
+            'loginext_return_branch' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
+            'loginext_package_weight' : ship_weight if ship_weight else '',
+            'loginext_package_volume' : shipment_volume if shipment_volume else '',
+            'loginext_preparation_time' : '30',
+            'loginext_payment_type' : "Prepaid",
+            'loginext_package_value' : ship_weight if ship_weight else '',
+            'loginext_partial_delivery_allowed_fl' : "Y",
+            'loginext_return_allowed_fl' : "Y",
+            'loginext_cancellation_allowed_fl' : "Y",
+            'loginext_deliver_service_time' : '30',
+            'loginext_deliver_start_time_window' : ship_date if ship_date else '',
+            'loginext_deliver_end_time_window' : ship_date if ship_date else '',
+            'loginext_delivery_type' : "DRIVER",
+            'loginext_deliver_branch' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
+            'loginext_deliver_account_code' : partner.name if partner.name else '',
+            'loginext_deliver_account_name' : partner.id if partner.id else '',
+            'loginext_deliver_apartment' : shipment_street if shipment_street else '',
+            'loginext_deliver_street_name' : shipment_street if shipment_street else '',
+            'loginext_deliver_locality' : shipment_city if shipment_city else '',
+            'loginext_deliver_city' : shipment_city if shipment_city else '',
+            'loginext_deliver_state' : loginext_wh.loginext_state.code if loginext_wh.loginext_state.code else '',
+            'loginext_deliver_country' : shipment_country if shipment_country else '',
+            'loginext_deliver_pin_code' : shipment_postal_code if shipment_postal_code else '',
+            'loginext_deliver_address_timezone' : "Asia/Jakarta",
+            'loginext_deliver_notes' : f'"Delivered" atau "ShipVia"',
+            'odoo_shipment_number' : picking if picking else '',
+
+        }
+
+        created_loginext_header = self.env['loginext.staging.data'].create(updated_vals)
+        _logger.info("TMS Header Created: %s", created_loginext_header)        
+
+        return created_loginext_header
+
+    def _build_loginext_item(self, product, shipment_type, header, move_count, shipment_weight, item_qty):
+
+        crate_vals = {
+            'loginext_crate_cd' : f"{product.default_code}|{move_count}",
+            'loginext_crate_name' : product.name,
+            'loginext_crate_type' : shipment_type,
+            'loginext_crate_weight' : shipment_weight,
+            'staging_id' : header
+        }
+
+        crate = self.env['loginext.staging.crate'].create(crate_vals)
+        _logger.info("TMS Crate Created: %s", crate)        
+
+        item_vals = {
+            'loginext_item_cd' : f"{product.default_code}",
+            'loginext_item_name' : product.name,
+            'loginext_item_type' : shipment_type,
+            'loginext_item_weight' : shipment_weight,
+            'loginext_item_quantity' : item_qty,
+            'staging_id' : header,
+            'crate_id' : crate.id
+        }
+        items = self.env['loginext.staging.item'].create(item_vals)
+        _logger.info("TMS Item Created: %s", items)        
+
+
 
 
 class AcumaticaSalesOrderShipmentStaging(models.Model):

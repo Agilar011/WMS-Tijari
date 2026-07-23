@@ -39,14 +39,14 @@
                         <field name="inventory_stock_config_id" invisible="import_type != 'inventory_stock'" required="import_type == 'inventory_stock'"/>
                         -->
                     </group>
-                    <group string="Filter Fetch" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so']">
+                    <group string="Filter Fetch" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment']">
                         <field name="fetch_limit"/>
                         <field name="fetch_skip"/>
                         <field name="batch_size"/>
                         <field name="reference_nbr" invisible="import_type not in ['issue_po_return','transfer_one_step','transfer_two_step','inventory_received','inventory_issue','receipt_change_item','issue_change_item','so_transfer']"/>
                         <field name="receipt_nbr" invisible="import_type != 'po_receipt'"/>
                         <field name="shipment_nbr" invisible="import_type not in ['shipment_so','so_shipment','transfer_shipment']"/>
-                        <field name='wh33_filter' invisible="import_category != 'transaction'"/>
+                        <field name='wh33_filter' invisible="import_category != 'transaction' or import_type not in ['issue_po_return']"/>
                         <field name="odata_filter"/>
                     </group>
                     <group invisible="import_type != 'inventory_stock'" string="Inventory Stock Params">
@@ -55,7 +55,7 @@
                         <field name="odata_expand"/>
                         <field name="odata_top"/>
                     </group>
-                    <group string="Date Range" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so']">
+                    <group string="Date Range" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment']">
                         <field name="date_period"/>
                         <field name="start_date" invisible="date_period != True"/>
                         <field name="end_date" invisible="date_period != True"/>

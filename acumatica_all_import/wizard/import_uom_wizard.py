@@ -71,6 +71,75 @@ class ImportUomWizard(models.TransientModel):
             'target': 'new',
         }
 
+    def fetch_all_uom_data(self, batch_size=False):
+        """
+        Ambil semua data UoM dari Acumatica dengan paging $skip.
+
+        Dipakai scheduler agar tidak dibatasi fetch_limit wizard manual.
+        """
+        self.ensure_one()
+        if not self.config_id:
+            raise UserError('Pilih konfigurasi API terlebih dahulu.')
+
+        fetch_size = batch_size or self.batch_size or 500
+        if fetch_size <= 0:
+            raise UserError('Batch size harus lebih besar dari 0.')
+
+        raw_count = 0
+        batch_count = 0
+
+        _logger.info(
+            "START FETCH ALL UOM; CONFIG=%s, BATCH_SIZE=%s, FETCH_SKIP=%s",
+            self.config_id.display_name,
+            fetch_size,
+            self.fetch_skip,
+        )
+
+        while True:
+            offset = self.fetch_skip + (batch_count * fetch_size)
+            batch_count_result = self.fetch_uom_data(limit=fetch_size, offset=offset)
+            if not batch_count_result:
+                _logger.info(
+                    "STOP FETCH ALL UOM; empty batch at OFFSET=%s, TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+                    offset,
+                    raw_count,
+                    batch_count,
+                )
+                break
+
+            raw_count += batch_count_result
+            batch_count += 1
+            _logger.info(
+                "FETCH ALL UOM BATCH DONE; BATCH=%s, OFFSET=%s, FETCHED=%s, RUNNING_TOTAL=%s",
+                batch_count,
+                offset,
+                batch_count_result,
+                raw_count,
+            )
+
+            if batch_count_result < fetch_size:
+                break
+
+        self.write({
+            'total_fetched': raw_count,
+            'state': 'fetched' if raw_count else 'draft',
+        })
+        _logger.info("FINISH FETCH ALL UOM; TOTAL_FETCHED=%s, TOTAL_BATCHES=%s", raw_count, batch_count)
+        return raw_count
+
+    def action_fetch_all_data(self):
+        self.ensure_one()
+        raw_count = self.fetch_all_uom_data()
+        if not raw_count:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'import.uom.wizard',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
     def fetch_uom_data(self, limit=500, offset=0):
         """
         Ambil data Units of Measure dari Acumatica API.
@@ -80,7 +149,8 @@ class ImportUomWizard(models.TransientModel):
         session = self.config_id._do_login()
 
         try:
-            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
+            endpoint_name = self.config_id.endpoint_name or 'UnitsOfMeasure'
+            endpoint = f"{self.config_id.api_url}/{endpoint_name}"
             params = {"$top": limit, "$skip": offset}
 
             response = session.get(endpoint, params=params, timeout=60)
@@ -118,7 +188,7 @@ class ImportUomWizard(models.TransientModel):
                     'unit_id': item['unit_id'],
                     'description': item['description'],
                     'import_state': 'pending',
-                    'import_message': f'Sudah ada → akan diupdate: {existing.name}' if existing else '',
+                    'import_message': f'Sudah ada → akan diupdate: {existing.unit_id}' if existing else '',
                     'selected': True,
                     'sync_date': fields.Datetime.now(),
                 })

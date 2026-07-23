@@ -10,13 +10,13 @@
                         type="object"
                         name="action_state_to_in_progress"
                         class="oe_highlight"
-                        invisible="state in ('in_progress', 'done')"
+                        invisible="state != 'draft'"
                         string="Begin Adjustments"
                     />
                     <button
                         type="object"
                         name="action_state_to_draft"
-                        invisible="state in ('draft', 'done') or count_stock_moves != 0"
+                        invisible="state in ('draft', 'approved', 'done') or count_stock_moves != 0"
                         string="Back to Draft"
                     />
                     <button
@@ -27,10 +27,30 @@
                     />
                     <button
                         type="object"
+                        name="action_state_to_wait_approval"
+                        class="oe_highlight"
+                        invisible="state != 'in_progress'"
+                        string="Validate"
+                    />
+                    <button
+                        name="action_approve"
+                        type="object"
+                        string="Approve"
+                        class="btn-primary"
+                        invisible="state != 'wait_approval' or current_approver_id != uid"/>
+
+                    <button
+                        name="action_reject"
+                        type="object"
+                        string="Reject"
+                        class="btn-danger"
+                        invisible="state != 'wait_approval' or current_approver_id != uid"/>
+                    <button
+                        type="object"
                         name="action_state_to_done"
                         class="oe_highlight"
-                        invisible="state in ('draft', 'done')"
-                        string="Set to Done"
+                        invisible="approval_state != 'approved' or state != 'approved'"
+                        string="Update Stock"
                     />
                     <field
                         name="state"
@@ -46,7 +66,7 @@
                             name="action_view_inventory_adjustment"
                             class="oe_stat_button"
                             icon="fa-pencil-square-o"
-                            invisible="state in ('draft', 'done')"
+                            invisible="state in ('draft', 'done', 'cancel')"
                         >
                             <field
                                 name="count_stock_quants_string"
@@ -79,7 +99,7 @@
                         </h1>
                     </div>
                     <group>
-                        <group>
+                        <group name='count_method' string='Count Method'>
                             <field
                                 name="product_selection"
                                 widget="radio"
@@ -97,8 +117,6 @@
                                 readonly="state in ['in_progress', 'done']"
                                 required="1"
                             />
-                        </group>
-                        <group>
                             <field name="date" readonly="state != 'draft'" />
                             <field name="company_id" readonly="state != 'draft'" />
                             <field name="responsible_id" readonly="state != 'draft'" />
@@ -133,7 +151,43 @@
                                 invisible="product_selection != 'lot'"
                             />
                         </group>
+                        <group name='approval_info' string='Approval Info'>
+                            <field 
+                                name="acumatica_ref_doc" 
+                                required="state == 'wait_approval'" 
+                                invisible="state in ('draft', 'in_progress')"
+                            />
+                            <field 
+                                name="approval_type_id" 
+                                required="state == 'draft'"
+                                readonly="state != 'draft'" 
+                            />
+                            <field name="approval_request_id" invisible='1' readonly='1' force_save='1' />
+                            <field 
+                                name="current_approver_id" 
+                                string='Current Approver' 
+                                invisible="current_approver_id == False"
+                            />
+                            <field name="approval_state" invisible='1' />
+                        </group>
                     </group>
+                    <notebook>
+                        <page name="approval_info" string="Approval Info">
+                            <field name="approval_line_ids">
+                                <list>
+                                    <field name="sequence" />            
+                                    <field name="role" />            
+                                    <field name="user_id" />            
+                                    <field name="state" widget="badge"
+                                        decoration-success="state == 'approved'"
+                                        decoration-danger="state == 'rejected'"
+                                        decoration-muted="state == 'waiting'" 
+                                    />            
+                                    <field name="action_date" />            
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                 </sheet>
                 <chatter />
             </form>

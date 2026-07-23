@@ -12,6 +12,11 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     config_id = fields.Many2one('acumatica.direct.transfer.config', string="Konfigurasi API")
     picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
     odoo_picking_id = fields.Many2one('stock.picking', string="Odoo Stock Picking")
+    odoo_internal_transfer_order_id = fields.Many2one(
+        'internal.transfer.order',
+        string='Internal Transfer Order',
+        readonly=True,
+    )
     line_ids = fields.One2many(
         'acumatica.vendor.return.direct.transfer.staging.line', 
         'receipt_line_id', 
@@ -97,6 +102,65 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # Jika lines bermasalah, pembuatan picking otomatis dibatalkan bersih (Rollback)
                 with self.env.cr.savepoint():
                     print(f"[DIRECT TRANSFER] Processing Document: {origin}")
+
+                    transfer_service = self.env['acumatica.internal.transfer.service']
+                    transfer_info = transfer_service.classify(
+                        first.adt_FromWarehouseID,
+                        first.adt_ToWarehouseID,
+                        'FromWarehouseID',
+                        'ToWarehouseID',
+                    )
+                    if transfer_info['status'] == 'skip':
+                        receipt_lines.write({
+                            'import_state': 'updated',
+                            'import_message': transfer_info['message'],
+                            'odoo_picking_id': False,
+                            'odoo_internal_transfer_order_id': False,
+                        })
+                        updated += 1
+                        continue
+
+                    order, action_state = transfer_service.prepare_order(
+                        origin,
+                        transfer_info['source_location'],
+                        transfer_info['destination_location'],
+                        transfer_info['transaction_type'],
+                        self._parse_dt(first.adt_Date),
+                        first.adt_note or False,
+                    )
+
+                    for line in to_create_move_lines:
+                        product = self._find_product_by_code(line.adt_InventoryID)
+                        if not product:
+                            raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or '-'}")
+                        qty = self._parse_float(line.adt_Quantity)
+                        transfer_service.create_order_move(order, product, qty, product.uom_id, line.adt_Description or product.display_name, line.adt_Description or False, {
+                            'adt_line_external_id': line.adt_id or False,
+                            'adt_inventory_id': line.adt_InventoryID or False,
+                            'adt_line_nbr': line.adt_rowNumber or False,
+                            'adt_open_qty': qty,
+                            'adt_order_qty': qty,
+                            'adt_uom_code': line.adt_UOM or False,
+                            'adt_from_location_code': line.adt_FromLocationID or False,
+                            'adt_to_location_code': line.adt_ToLocationID or False,
+                            'adt_transfer_order_number': origin,
+                            'adt_transfer_order_line_number': line.adt_LineNumber or line.adt_rowNumber or False,
+                            'adt_transfer_order_type': first.adt_TransferType or first.adt_ReturnType or False,
+                            'adt_quantity': qty,
+                            'adt_type': first.adt_TransferType or 'Vendor Return CO',
+                        })
+
+                    receipt_lines.write({
+                        'import_state': action_state,
+                        'import_message': f'Sukses diproses ke Internal Transfer ({order.name})',
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': order.id,
+                    })
+                    if action_state == 'imported':
+                        imported += 1
+                    else:
+                        updated += 1
+                    continue
 
                     # Tentukan jenis operasi picking (Operation Type)
                     picking_type = first.picking_type_id
@@ -287,6 +351,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
     def action_open_picking(self):
         self.ensure_one()
+        if self.odoo_internal_transfer_order_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'internal.transfer.order',
+                'res_id': self.odoo_internal_transfer_order_id.id,
+                'view_mode': 'form',
+            }
         if not self.odoo_picking_id:
             raise UserError('Belum diimport, belum ada receipt di Odoo.')
         return {

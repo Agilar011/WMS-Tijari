@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<templates>
+    <t t-name="tijari.MoveLineScanButton" owl="1">
+        <button t-on-click="onClick"
+                type="button"
+                class="btn btn-secondary btn-sm oe_inline"
+                t-att-title="title">
+            <i t-att-class="iconClass"/>
+        </button>
+    </t>
+
+    <t t-name="tijari.ProductScanButton" owl="1">
+        <button t-on-click="onClick"
+                type="button"
+                class="btn btn-primary oe_inline"
+                title="Scan Product">
+            <i class="fa fa-barcode me-1"/>
+            Scan Product
+        </button>
+    </t>
+</templates>

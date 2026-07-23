@@ -1,19 +1,19 @@
-from odoo import models, api, fields
-from odoo.exceptions import ValidationError, UserError
 import base64
-
-
+import re
+import traceback
 import os
 from PIL import Image
 import qrcode
 import io
-
-
-import logging
-_logger = logging.getLogger(__name__)
-
-from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
+import logging 
+import json
+import requests
 from collections import defaultdict
+from odoo import models, api, fields
+from odoo.exceptions import ValidationError, UserError
+from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
+
+_logger = logging.getLogger(__name__)
 
 class StockPicking(models.Model):
     _inherit = 'stock.picking'
@@ -50,6 +50,7 @@ class StockPicking(models.Model):
         ('ready', 'Ready'),
         ('not_ready', 'Not Ready'),
     ], string='Sync State', default='ready', readonly=True, help='Data acumatica yg tidak sesuai dengan master yg ada di wms akan masuk ke state Not Ready, dan record tidak bisa di proses sampai data master nya sudah sinkron.')
+
     sync_message = fields.Char(string='Sync Message', readonly=True, help='Keterangan jika ada data acumatica yang tidak sesuai dengan master yang ada di wms.')
     adt_shipment_status = fields.Char(string='Shipment Status (Acumatica)')
     destination_location = fields.Char(string='to delete field')
@@ -60,6 +61,145 @@ class StockPicking(models.Model):
     all_moves_picked = fields.Boolean(
         compute='_compute_all_moves_picked',
     )
+    allowed_putaway_product_ids = fields.Many2many(
+        'product.product',
+        compute='_compute_allowed_putaway_product_ids',
+    )
+    scan_product_button = fields.Boolean(string='Scan Product')
+    putaway_product_id = fields.Many2one(
+        'product.product', string="Product Name")
+    putaway_lot_id = fields.Many2one(
+        comodel_name="stock.lot",
+        string="LOT Number",
+        compute='_compute_putaway_values',
+        readonly=True,
+    )
+    putaway_move_line_ids = fields.Many2many(
+        comodel_name="stock.move.line",
+        string="Stock Move Lines",
+        compute='_compute_putaway_values',
+        readonly=False,
+    )
+
+    wms_state = fields.Selection(
+        selection=[
+            ('draft', 'Draft'),
+            ('waiting', 'Waiting Another Operation'),
+            ('confirmed', 'Waiting'),
+            ('assigned', 'Ready'),
+            ('waiting_response', 'Waiting For Shipment'),
+            ('return_shipment', 'Returned Shipment'),
+            ('done', 'Done'),
+            ('cancel', 'Cancelled'),
+        ],
+        string="WMS State",
+        compute="_compute_wms_state",
+        store=True,
+        copy=False,
+        tracking=True,
+    )
+
+    shipment_information = fields.Selection([
+        ('partial', 'Partial Shipment'),
+        ('full_shipment', 'Full Shipment'),
+        ('full_return', 'Canceled'),
+    ], string='Informasi TMS', help='Status shipment yang akan dikirimkan dari TMS.')
+
+    status_ba = fields.Selection([
+        ('conform', 'Conform'),
+        ('discrepancy', 'Discrepancy'),],
+    string='Status BA',
+    )
+
+    transaction_type = fields.Selection([
+        ('inbound', 'Inbound'),
+        ('outbound', 'Outbound'),
+        ('internal', 'Internal'),
+    ], string='Type transaksi', readonly=True)
+
+    def _get_putaway_move_lines(self):
+        self.ensure_one()
+
+        move_lines = self.move_line_ids.filtered(
+                lambda line: line.quantity > 0 and (line.lot_id or line.lot_name)
+            )
+        if self.putaway_product_id:
+            move_lines = move_lines.filtered(
+                lambda line: line.product_id == self.putaway_product_id and line.quantity > 0
+            )
+
+        return move_lines
+
+    @api.depends("state")
+    def _compute_wms_state(self):
+        for picking in self:
+            if picking.state != "done":
+                picking.wms_state = picking.state
+            
+
+    @api.depends('move_ids.product_id')
+    def _compute_allowed_putaway_product_ids(self):
+        for picking in self:
+            picking.allowed_putaway_product_ids = picking.move_ids.product_id
+
+    @api.depends(
+        'putaway_product_id',
+        'move_line_ids',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+    )
+    def _compute_putaway_values(self):
+        for picking in self:
+            move_lines = picking._get_putaway_move_lines()
+            picking.putaway_move_line_ids = move_lines
+            picking.putaway_lot_id = (
+                move_lines.mapped('lot_id')[:1]
+                if picking.putaway_product_id
+                else False
+            )
+
+    @api.onchange('putaway_product_id')
+    def _onchange_putaway_product_id(self):
+        for picking in self:
+            move_lines = picking._get_putaway_move_lines()
+            picking.putaway_move_line_ids = move_lines
+            picking.putaway_lot_id = (
+                move_lines.mapped('lot_id')[:1]
+                if picking.putaway_product_id
+                else False
+            )
+
+
+# Function to foward adt_type from parent picking
+    @api.model_create_multi
+    def create(self, vals_list):
+        # print("=" * 100)
+        # print("CREATE PICKING")
+        # traceback.print_stack(limit=15)        
+        print('=' * 100)
+        print("@api.model_create_multi")
+
+        print(f"Self: {self}")
+        print(f"Vals List: {vals_list}")
+
+        # Karena vals_list adalah sebuah LIST, kita harus melakukan looping
+        # for vals in vals_list:
+        #     # Ambil nilai 'origin' dengan aman dari dictionary
+        #     origin = vals.get('origin')
+            
+        #     if origin:
+        #         # Perbaikan pencarian: menggunakan titik 'stock.picking' dan format domain yang benar
+        #         parent_picking = self.env['stock.picking'].search([('origin', '=', origin)], limit=1)
+                
+        #         # Jika parent_picking ditemukan, salin nilai adt_type ke data baru
+        #         if parent_picking and parent_picking.adt_type:
+        #             vals['adt_type'] = parent_picking.adt_type
+
+        # # Panggil fungsi super() dengan melewatkan vals_list yang sudah diperbarui
+        pickings = super(StockPicking, self).create(vals_list)
+        print(pickings)
+        return pickings
+
 
     def action_put_in_pack(self, move_lines_to_pack=False):
         self.ensure_one()
@@ -183,6 +323,23 @@ class StockPicking(models.Model):
         _logger.info(">>> action_confirm CALLED %s", self.ids)
 
         res = super().action_confirm()
+        
+        for picking in self:
+                    for move in picking.move_ids:
+                        for line in move.move_line_ids:
+                            print(line)
+                            if line.lot_id:
+                                print(line.lot_id)
+                                # vals = {
+                                #     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                                # }
+                                # vals['product_lot_id'] = line.lot_id.id
+                                # line.write(vals)
+                                print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
+                                line.write({
+                                    'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                                    'product_lot_id': line.lot_id.id,
+                                })        
 
         return res
 
@@ -192,6 +349,7 @@ class StockPicking(models.Model):
         string="Mapped Location",
     )
     note_ba = fields.Text(string="Notes For Official Report")
+    picking_type_name = fields.Char(string="Picking Type Name", related="picking_type_id.name", store=True)
 
     def _allow_custom_push_destination(self):
         self.ensure_one()
@@ -268,6 +426,343 @@ class StockPicking(models.Model):
             picking.all_moves_picked = (
                 bool(moves) and all(move.picked for move in moves)
             )
+
+    def action_prepare_scan_product(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'adt_scan_qr_to_picking_product',
+            'params': {
+                'picking_id': self.id,
+                'title': 'Scan Product QR Code',
+            },
+        }
+
+    def _find_product_by_scan_code(self, scan_code):
+        Product = self.env['product.product']
+
+        return Product.search([
+            '|',
+            ('barcode', '=', scan_code),
+            ('default_code', '=', scan_code),
+        ], limit=1)
+
+    def action_apply_scanned_product(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        product = self._find_product_by_scan_code(scanned_code)
+
+        if not product:
+            raise ValidationError("Product tidak ditemukan untuk kode scan: %s" % scanned_code)
+
+        self.write({'putaway_product_id': product.id})
+
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+        }
+    
+    @api.onchange("state")
+    def _onchange_state_update_wms_state(self):
+        for picking in self:
+            if picking.state == 'done':
+                continue
+            picking.wms_state = picking.state        
+
+
+    def _format_datetime(self, dt):
+        if not dt:
+            return None
+
+        if isinstance(dt, str):
+            dt = Datetime.from_string(dt)
+
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    # ==========================================================
+    # Prepare Payload
+    # ==========================================================
+
+    def _prepare_loginext_payload(self):
+        self.ensure_one()
+        print(self)
+
+        print(self.origin)
+
+        header_to_send = self.env["loginext.staging.data"].search(
+            [("odoo_shipment_number", "=", self.origin)],
+            limit=1,
+        )
+        print(header_to_send)
+
+        if not header_to_send:
+            raise UserError("Data staging TMS tidak dapat ditemukan")
+        
+        return {
+            "orderNo": header_to_send.loginext_order_no,
+            "shipmentOrderDt": self._format_datetime(
+                header_to_send.loginext_shipment_order_dt
+            ),
+            "shipmentOrderTypeCd": header_to_send.loginext_shipment_order_type_cd,
+            "orderState": header_to_send.loginext_order_state,
+            "distributionCenter": header_to_send.loginext_distribution_center,
+            "returnBranch": header_to_send.loginext_return_branch,
+            "packageWeight": str(header_to_send.loginext_package_weight or 0),
+            "packageVolume": str(header_to_send.loginext_package_volume or 0),
+            "preparationTime": 30,
+            "paymentType": header_to_send.loginext_payment_type,
+            "packageValue": str(header_to_send.loginext_package_value or 0),
+            "numberOfItems": header_to_send.loginext_number_of_items or 0,
+            "partialDeliveryAllowedFl": "Y" if header_to_send.loginext_partial_delivery_allowed_fl else "N",
+            "returnAllowedFl": "Y" if header_to_send.loginext_return_allowed_fl else "N",
+            "cancellationAllowedFl": "Y" if header_to_send.loginext_cancellation_allowed_fl else "N",
+            "deliverServiceTime": '30',
+            "deliverStartTimeWindow": self._format_datetime(header_to_send.loginext_deliver_start_time_window),
+            "deliverEndTimeWindow": self._format_datetime(header_to_send.loginext_deliver_end_time_window),
+            "deliveryType": header_to_send.loginext_delivery_type,
+            "deliverBranch": header_to_send.loginext_deliver_branch,
+            "deliverAccountCode": header_to_send.loginext_deliver_account_code,
+            "deliverAccountName": header_to_send.loginext_deliver_account_name,
+            "deliverApartment": header_to_send.loginext_deliver_apartment,
+            "deliverStreetName": header_to_send.loginext_deliver_street_name,
+            "deliverLocality": header_to_send.loginext_deliver_locality,
+            "deliverCity": header_to_send.loginext_deliver_city,
+            "deliverState": header_to_send.loginext_deliver_state,
+            "deliverCountry": header_to_send.loginext_deliver_country,
+            "deliverPinCode": header_to_send.loginext_deliver_pin_code,
+            "deliverAddressTimezone": header_to_send.loginext_deliver_address_timezone,
+            "deliverNotes": header_to_send.loginext_deliver_notes,
+            "shipmentCrateMappings": [
+                {
+                    "crateCd": crate.loginext_crate_cd,
+                    "crateName": crate.loginext_crate_name,
+                    "crateType": crate.loginext_crate_type,
+                    "crateWeight": crate.loginext_crate_weight,
+                    "shipmentlineitems": [
+                        {
+                            "itemCd": item.loginext_item_cd,
+                            "itemName": item.loginext_item_name,
+                            "itemPrice": item.loginext_item_price,
+                            "itemQuantity": item.loginext_item_quantity,
+                            "itemType": item.loginext_item_type,
+                            "itemWeight": item.loginext_item_weight,
+                        }
+                        for item in crate.item_ids
+                    ],
+                }
+                for crate in header_to_send.crate_ids
+            ],
+        }
+
+    # ==========================================================
+    # POST API
+    # ==========================================================
+
+    def action_post_loginext(self):
+        print("=" * 80)
+        print("Sent LOGINEXT REQUEST")
+        self.wms_state = 'waiting_response'
+
+        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
+        CREATE_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v2/create"
+
+        USERNAME = "api.tms@aditya.co.id"
+        PASSWORD = "9CE5Q8Jz_#xXR"
+
+        body = [
+            rec._prepare_loginext_payload()
+            for rec in self
+        ]
+
+        print("=" * 80)
+        print("LOGINEXT REQUEST")
+        print("=" * 80)
+        print(json.dumps(body, indent=4))
+
+        session = requests.Session()
+
+        try:
+            # ======================================================
+            # LOGIN
+            # ======================================================
+
+            login_payload = {
+                "userName": USERNAME,
+                "password": PASSWORD,
+                "sessionExpiryTimeout": "1",
+            }
+
+            login_response = session.post(
+                LOGIN_URL,
+                json=login_payload,
+                timeout=30,
+            )
+
+            print("=" * 80)
+            print("LOGINEXT LOGIN RESPONSE")
+            print("=" * 80)
+            print(f"Status : {login_response.status_code}")
+            print(login_response.text)
+
+
+            login_response.raise_for_status()
+            www_authenticate = login_response.headers.get("WWW-Authenticate")
+            # ======================================================
+            # CREATE SHIPMENT
+            # ======================================================
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+
+            if www_authenticate:
+                headers["WWW-Authenticate"] = www_authenticate
+
+            print("Sent Response to Loginext")
+            response = session.post(
+                CREATE_URL,
+                headers=headers,
+                json=body,
+                timeout=1,
+            )
+
+            print("=" * 80)
+            print("LOGINEXT CREATE RESPONSE")
+            print("=" * 80)
+            print(f"Status : {response.status_code}")
+            print(response.text)
+
+            response.raise_for_status()
+
+            print("=" * 80)
+            print("END LOGINEXT REQUEST")
+            print("=" * 80)
+
+            res = self.button_validate()
+
+            return res
+
+
+        except requests.exceptions.RequestException as e:
+            _logger.exception(e)
+            raise UserError(f"Loginext API Error\n\n{e}")
+
+    def action_get_loginext(self):
+        _logger.info("=" * 80)
+        _logger.info("Get LOGINEXT REQUEST")
+        # print(self)
+        """
+        Get Shipment dari Loginext berdasarkan tanggal dan Order No.
+        """
+
+        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
+        SHIPMENT_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v1/shipment"
+
+        USERNAME = "api.tms@aditya.co.id"
+        PASSWORD = "9CE5Q8Jz_#xXR"
+
+        session = requests.Session()
+
+        try:
+            # ==========================================================
+            # LOGIN
+            # ==========================================================
+            login_payload = {
+                "userName": USERNAME,
+                "password": PASSWORD,
+                "sessionExpiryTimeout": "1",
+            }
+
+            login_response = session.post(
+                LOGIN_URL,
+                json=login_payload,
+                timeout=30,
+            )
+
+            _logger.info("=" * 80)
+            _logger.info("LOGINEXT LOGIN")
+            _logger.info(login_response.text)
+            _logger.info("=" * 80)
+
+            login_response.raise_for_status()
+            www_authenticate = login_response.headers.get("WWW-Authenticate")
+            # ==========================================================
+            # GET SHIPMENT
+            # ==========================================================
+            params = {
+                "start_date": "2026-04-20 00:00:00",
+                "end_date": "2026-07-23 00:00:00",
+                "order_no": f"testing-dev-{self.origin}",
+            }
+
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+
+
+            if www_authenticate:
+                headers["WWW-Authenticate"] = www_authenticate
+
+            response = session.get(
+                SHIPMENT_URL,
+                params=params,
+                headers=headers,
+                timeout=120,
+            )
+
+            _logger.info("=" * 80)
+            _logger.info("LOGINEXT GET SHIPMENT")
+            _logger.info("Request URL : %s", response.request.url)
+            _logger.info("Status Code : %s", response.status_code)
+            _logger.info(response.text)
+            _logger.info("=" * 80)
+
+            response.raise_for_status()
+
+            return response.json()
+
+        except requests.exceptions.RequestException as e:
+            _logger.exception(e)
+            raise UserError(f"Loginext API Error\n\n{e}")
+
+    def action_assign(self):
+        _logger.info(">>> action_assign CALLED %s", self.ids)
+
+        res = super().action_assign()
+
+        for picking in self:
+            for move in picking.move_ids:
+                for line in move.move_line_ids:
+                    print(line)
+                    if line.lot_id:
+                        print(line.lot_id)
+                        # vals = {
+                        #     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                        # }
+                        # vals['product_lot_id'] = line.lot_id.id
+                        # line.write(vals)
+                        print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
+                        line.write({
+                            'source_location_id': line.lot_id.location_id.id or line.location_id.id,
+                            'product_lot_id': line.lot_id.id,
+                        })
+
+        return res  
+
+    def action_confirm_shipment(self):
+        self.ensure_one()
+        if not self.shipment_information:
+            raise UserError('Informasi TMS tidak boleh kosong')
+
+        if self.shipment_information == 'full_shipment':
+            self.wms_state = 'done'
+
+        if self.shipment_information != 'full_shipment':
+            self.wms_state = 'return_shipment'     
+        # self.shipment_information = 'full_shipment'
+        # self.wms_state = 'done' 
+
 # ================================================================================================
 # Temp Storage function create move line qr code        
 # ================================================================================================
@@ -357,33 +852,51 @@ class StockPicking(models.Model):
 
         return base64.b64encode(buffer.getvalue()).decode()
 
+    
 class StockRule(models.Model):
     _inherit = "stock.rule"
 
     # Override method _push_prepare_move_copy_values untuk mengubah lokasi tujuan push berdasarkan adt_dest_location_id di stock.picking jika picking type incoming dan adt_dest_location_id terisi, sehingga bisa push ke lokasi selain location_dest_id yang sudah ditentukan di stock.rule
-    def _push_prepare_move_copy_values(
-        self,
-        move_to_copy,
-        new_date,
-    ):
-        vals = super()._push_prepare_move_copy_values(
-            move_to_copy,
-            new_date,
-        )
+    def _push_prepare_move_copy_values(self, move_to_copy, new_date,):
+        vals = super(StockRule, self)._push_prepare_move_copy_values(move_to_copy, new_date)
+        print('='*300)
+        print("_push_prepare_move_copy_values")
+        print(f"Vals to create new picking: {vals}")
+        # print(f"Parent Picking: {move_to_copy}")
 
         picking = move_to_copy.picking_id
 
-        if (
-            picking
-            and picking.adt_dest_location_id
-            and picking._allow_custom_push_destination()
-        ):
+        print(picking)
+        if picking:
+            # print("=== DAFTAR FIELD DAN NILAI ===")
+            # for field_name, field_object in picking._fields.items():
+            #     # Mengambil nilai field
+            #     val = picking[field_name]
+            
+            #     if field_object.type == 'many2one' and val:
+            #         print(f"{field_name}: {val.display_name} (ID: {val.id})")
+            #     else:
+            #         print(f"{field_name}: {val}")
+
+            adt_type = picking.adt_type
+
+
+            if adt_type:
+                vals.update({
+                    "adt_type": picking.adt_type if picking.adt_type else picking.name,
+                    "transaction_type": picking.transaction_type,
+                    # "adt_type": picking.adt_type
+                })
+
+        if (picking and picking.adt_dest_location_id and picking._allow_custom_push_destination()):
             vals.update({
                 "location_dest_id": picking.adt_dest_location_id.id,
                 "adt_dest_location_id": picking.adt_dest_location_id.id,
-                "adt_dest_location_id": picking.move_ids.adt_dest_location_id.id,
+                # "adt_dest_location_id": picking.move_ids.adt_dest_location_id.id,
                 "origin": picking.origin if picking.origin else picking.name
             })
+
+        print(f"vals to update: {vals}")
 
         return vals
 

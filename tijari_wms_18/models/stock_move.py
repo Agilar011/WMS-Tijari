@@ -4,8 +4,10 @@ import os
 from PIL import Image
 import qrcode
 import io
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
+import logging
 
+_logger = logging.getLogger(__name__)
 
 class StockMove(models.Model):
     _inherit = 'stock.move'
@@ -36,9 +38,158 @@ class StockMove(models.Model):
     adt_type = fields.Char(string='Type (Acumatica)')
     adt_acumatica_write_date = fields.Datetime(string='Last Modified (Acumatica)')
     product_note = fields.Text(string='Product Note')
+    batch_adt_type = fields.Char(
+        related='picking_id.adt_type',
+        string='Tipe Transaksi',
+        readonly=True,
+    )
+    batch_origin = fields.Char(
+        related='picking_id.origin',
+        string='No. Transaksi',
+        readonly=True,
+    )
 
     qr_code_image = fields.Binary(string='Sign')
 
+    unfiltered_dest = fields.Boolean(
+        string="Unfiltered Destination",
+        default=True,
+    )
+
+    picking_type_code = fields.Selection(
+        related="picking_id.picking_type_id.code",
+        store=False,
+    )
+
+    picking_type_name = fields.Char(
+        related="picking_id.picking_type_id.name",
+        store=False,
+    )
+
+    transaction_type = fields.Selection([
+        ('inbound', 'Inbound'),
+        ('outbound', 'Outbound'),
+        ('internal', 'Internal'),
+    ], string='Type transaksi', readonly=True)
+
+    
+    adt_dest_location = fields.Char(string="Mappped Location",
+        readonly=True
+    ) 
+
+    remaining_package_qty = fields.Float(
+        compute="_compute_remaining_package_qty",
+        string="Remaining Package Qty",
+    )
+
+    @api.depends(
+        "quantity",
+        "move_line_ids.quantity",
+        "move_line_ids.package_id",
+    )
+    def _compute_remaining_package_qty(self):
+        for move in self:
+            packaged_qty = sum(
+                ml.quantity
+                for ml in move.move_line_ids
+                if ml.package_id
+            )
+
+            move.remaining_package_qty = move.quantity - packaged_qty
+            
+    @api.depends('move_line_ids.lot_id', 'move_line_ids.quantity')
+    def _compute_lot_ids(self):
+        for move in self:
+            move.lot_ids = move.move_line_ids.mapped('lot_id')   
+
+    def action_validate_lot_pick(self):
+        for move in self:
+            picking_type = move.picking_id.picking_type_id
+            for line in move.move_line_ids:
+                line._compute_auto_input_code()
+                
+    def action_validate_lot(self):
+        for move in self:
+            picking_type = move.picking_id.picking_type_id
+            for line in move.move_line_ids:
+                if not line.lot_id:
+                    raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
+
+                if not line.location_dest_id.unique_code:
+                    raise ValidationError(f"Unique Code untuk location {line.location_dest_id.name} kosong, Silahkan generate unique code terlebih dahulu")
+
+                location = line.location_dest_id
+                if picking_type.name == "Pick":
+                    location = line.location_id
+
+                line.matching_lot_id = line.lot_id.id or False
+                line.matching_loc_dest_id = location.id or False
+                line.confirmation_lot_code = line.lot_id.name or False
+                line.confirmation_location_code = location.unique_code or False
+                self._check_match_status()
+
+    def _check_match_status(self):
+        for move in self.move_line_ids:
+            loc_ok = bool(move.location_dest_id.id == move.matching_loc_dest_id.id)
+            lot_ok = bool(move.lot_id.id == move.matching_lot_id.id)
+            if loc_ok and lot_ok:
+                move.matching = 'match'
+                continue
+            else:
+                move.matching = 'not_match'
+                continue 
+
+    @api.onchange('unfiltered_dest')
+    def action_toggle_unfiltered_dest(self):
+        _logger.info("Running Onchange 1")
+        _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
+
+        for move in self:
+            _logger.info("Before onchange: %s", move.unfiltered_dest)
+
+            value = move.unfiltered_dest
+
+            _logger.info("After onchange: %s", value)
+
+            move.unfiltered_dest = value
+
+            for item in move.move_line_ids:
+                if move.unfiltered_dest:
+                    item.parent_location_id = item.adt_dest_location_id.id
+                    item.source_location_id = False
+                    item.unfiltered_dest = value
+
+                    _logger.info("parent_location_id: %s", item.parent_location_id.name)
+                    _logger.info("source_location_id: %s", item.source_location_id.name if item.source_location_id else False)
+                    _logger.info("unfiltered_dest: %s", item.unfiltered_dest)
+
+                else:
+                    item.parent_location_id = move.picking_id.picking_type_id.default_location_src_id.id
+                    item.source_location_id = False
+                    item.unfiltered_dest = value
+
+                    _logger.info("parent_location_id: %s", item.parent_location_id.name)
+                    _logger.info("source_location_id: %s", item.source_location_id.name if item.source_location_id else False)
+                    _logger.info("unfiltered_dest: %s", item.unfiltered_dest)
+
+    def _get_new_picking_values(self):
+        vals = super()._get_new_picking_values()
+
+        print("_get_new_picking_values")
+        for item in self:
+            print("move:", item)
+            print("move adt_type:", item.adt_type)
+            print("move transaction_type:", item.transaction_type)
+            print("vals before:", vals)
+
+            vals['adt_type'] = item.adt_type
+            vals['transaction_type'] = item.transaction_type
+
+            print("vals after:", vals)
+
+        return vals
+
+    
     def action_print_lot_number_line(self):
         self.ensure_one()
 
@@ -124,6 +275,25 @@ class StockMove(models.Model):
 
         return base64.b64encode(buffer.getvalue()).decode()
 
+    def action_open_move_pick(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_open_move_lines(self):
+        self.ensure_one()
+        return self.action_show_details()
+
     def action_open_note_wizard(self):
         self.ensure_one()
 
@@ -167,7 +337,7 @@ class StockMove(models.Model):
         res = super().create(vals)
         for line in res:
             if not line.adt_dest_location_id:
-                line.adt_dest_location_id = line.picking_id.adt_dest_location_id
+                line.adt_dest_location_id = line.location_id
 
         return res
 
@@ -272,4 +442,3 @@ class StockMoveScanWizard(models.TransientModel):
             ('barcode', '=', scan_code),
             ('default_code', '=', scan_code),
         ], limit=1)
-

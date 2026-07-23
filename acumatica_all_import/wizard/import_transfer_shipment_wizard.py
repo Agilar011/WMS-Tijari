@@ -1,3 +1,4 @@
+from datetime import datetime, time, timezone
 from odoo import fields, models
 from odoo.exceptions import UserError
 
@@ -53,6 +54,25 @@ class ImportTransferShipmentWizard(models.TransientModel):
 
     def fetch_transfer_shipment_data(self, limit=50, offset=0, shipment_nbr=False, last_modified_from=False, odata_filter=False):
         self.ensure_one()
+
+        # print("\n" + "="*60)
+        # print(f">>> DATA DARI OBJECT SELF ({self._name} - ID: {self.id}) <<<")
+        # print("="*60)
+        # for field_name in self._fields:
+        #     try:
+        #         value = self[field_name]
+        #         # Jika field adalah relasi Odoo (Many2one/One2many/Many2many), ambil ID atau representasinya
+        #         if hasattr(value, 'ids'):
+        #             value_str = f"Recordset {value._name}({value.ids})"
+        #         else:
+        #             value_str = str(value)
+                
+        #         print(f"{field_name:<30} : {value_str}")
+        #     except Exception as e:
+        #         print(f"{field_name:<30} : [Gagal membaca nilai: {str(e)}]")
+        # print("="*60 + "\n")
+        # -----------------------------------------------
+
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
@@ -61,8 +81,8 @@ class ImportTransferShipmentWizard(models.TransientModel):
 
             if self.wh33_filter:
                 filters.append("startswith(WarehouseID,'WH33')")
-            if self.start_date and self.end_date:
-                filters.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+            # if self.start_date and self.end_date:
+            #     filters.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
@@ -70,8 +90,20 @@ class ImportTransferShipmentWizard(models.TransientModel):
                 params['$select'] = self.config_id.odata_select
             if shipment_nbr:
                 filters.append(f"ShipmentNbr eq '{shipment_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
+
+            if self.start_date and self.end_date:
+                start_date_datetime_str = datetime.combine(
+                    fields.Date.to_date(self.start_date),
+                    time.min,
+                    tzinfo=timezone.utc,
+                ).isoformat().replace("+00:00", "Z")
+                end_date_datetime_str = datetime.combine(
+                    fields.Date.to_date(self.end_date),
+                    time.min,
+                    tzinfo=timezone.utc,
+                ).isoformat().replace("+00:00", "Z")
+                filters.append(f"LastModifiedDateTime ge datetimeoffset'{start_date_datetime_str}' and LastModifiedDateTime le datetimeoffset'{end_date_datetime_str}'")
+
             if odata_filter:
                 filters.append(f"({odata_filter})")
             elif self.config_id.odata_filter:

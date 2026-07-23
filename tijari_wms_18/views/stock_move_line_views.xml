@@ -1,35 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-
     <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_standard" model="ir.ui.view">
         <field name="name">stock.move.line.list.tjr.fifo</field>
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock.view_stock_move_line_operation_tree"/>
         <field name="arch" type="xml">
-        
 
-
-
-
-
-            <!-- test locaton -->
-            <!-- <xpath expr="//field[@name='lot_name']" position="after">
-                <field name="operation_category" column_invisible="1"/>
-                <field name="lot_name" column_invisible="0"/>
-                <field name="lot_button" widget="generate_lot_button"
-                invisible="operation_category != 'receive'"/>
-            </xpath> -->
-
-
-            <!-- Daftarkan field helper ke list -->
-            <xpath expr="//list" position="inside">
-                <field name="picking_type_id" column_invisible="1"/>
-                <field name="matching" column_invisible="1"/>
-                <!-- <field name="operation_category" column_invisible="0"/> -->
-                <field name="package_id" column_invisible="0"/>
-                <field name="confirmation_lot_code" />
-                <field name="confirmation_location_code" />
+            <!-- First row of detailed stock_move_line outbound - pick -->
+            <xpath expr="//field[@name='quant_id']" position="before">
+                <field name="id" string="Line ID"  column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="adt_dest_location" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="adt_dest_location_id" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="source_location_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="product_lot_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="selected_quant_id" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
             </xpath>
+
+            <!-- Hide From To defaul_odoo for outbound- pick -->
+            <xpath expr="//field[@name='quant_id']" position="replace">
+                <field name="quant_id" column_invisible="parent.picking_type_name in ['Pick', 'Receipts', 'Receipt Internal']"/>
+            </xpath>
+            
+           <xpath expr="//field[last()]" position="after">
+
+                <button name="action_prepare_scan_lot"
+                        type="object"
+                        icon="fa-barcode"
+                        title="Validate Lot"
+                        invisible="matching == 'match'"
+                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"
+                        class="btn-secondary"/>
+
+                <button name="action_prepare_scan_location"
+                        type="object"
+                        icon="fa-map-marker"
+                        title="Validate Location"
+                        invisible="matching == 'match'"
+                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"
+                        class="btn-secondary"/>
+
+                <field name="confirmation_lot_code" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
+                <field name="confirmation_location_code" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
+
+                <field name="matching"
+                    decoration-success="matching == 'match'"
+                    decoration-danger="matching == 'not_match'" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
+
+            </xpath>
+
+<!-- ============================================================================================================ -->
+<!-- please dont use view below, its better to adjust view above -->
 
             <!-- Lock lot fields -->
             <xpath expr="//field[@name='lot_id']" position="attributes">
@@ -48,27 +70,6 @@
                 <field name="lot_name" column_invisible="1"/>
             </xpath>
 
-            <!-- Custom fields -->
-            <xpath expr="//field[@name='lot_id']" position="after">
-
-                <field name="confirmation_location_code"
-                    password="1"
-                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
-
-                <field name="confirmation_lot_code"
-                    password="1"
-                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
-
-                <field name="matching_html"
-                    widget="html"
-                    readonly="1"
-                    column_invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/>
-                    
-                <!-- <field name="auto_input_code" widget="auto_input_code"
-                    invisible="context.get('picking_type_code') not in ['outgoing', 'internal']"/> -->
-
-            </xpath>
-
             <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']"
                             position="replace">
 
@@ -76,72 +77,33 @@
                     domain="[('id', 'child_of', adt_dest_location_id)]" 
                 />
                 <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
+                <!-- <field name="adt_location_id" optional="show" column_invisible="parent.name != 'Pick'" /> -->
+                <field name="allowed_matching_lot_ids" column_invisible="1"/>
+                <field name="matching_lot_id" column_invisible="1" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
+                <field name="matching_loc_dest_id" column_invisible="1" force_save="1" domain="[('id', 'child_of', adt_dest_location_id)]"/>
+
+            </xpath>
+
+
+
+            <!-- <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']" -->
+                            <!-- position="replace"> -->
+
+            <xpath expr="//field[@name='location_dest_id']" position="replace">
+
+                <!-- <field name="location_dest_id" domain="[('id', 'child_of', adt_dest_location_id)]"/> -->
+                <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
                 <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
-                <field name="matching_lot_id" column_invisible="1" force_save="1"/>
-                <field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
+                <field name="allowed_matching_lot_ids" column_invisible="1"/>
+                <field name="matching_lot_id" column_invisible="1" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
+                <field name="matching_loc_dest_id" column_invisible="1" force_save="1" domain="[('id', 'child_of', adt_dest_location_id)]"/>
 
+                <!-- <field name="id" string="Line ID" /> -->
+                <!-- <field name="matching_html" invisible="not confirmation_location_code and not confirmation_lot_code"/> -->
+                <!-- <field name="matching" -->
+                    <!-- decoration-success="matching == 'match'" -->
+                    <!-- decoration-danger="matching == 'not_match'"/> -->
             </xpath>
-
-            <xpath expr="//field[@name='lot_name']" position="before">
-                <button name="action_prepare_scan_lot"
-                        type="object"
-                        icon="fa-barcode"
-                        title="Validate Lot"
-                        invisible="matching == 'match'"
-                        class="btn-secondary"/>
-
-                <button name="action_prepare_scan_location"
-                        type="object"
-                        icon="fa-map-marker"
-                        title="Validate Location"
-                        invisible="matching == 'match'"
-                        class="btn-secondary"/>
-
-                <field name="id" string="Line ID" />
-                <field name="matching_html" invisible="not confirmation_location_code and not confirmation_lot_code"/>
-                <field name="matching" column_invisible="1" force_save="1"/>
-            </xpath>
-
-        </field>
-    </record>
-
-    <record id="view_move_line_dest_domain" model="ir.ui.view">
-        <field name="name">stock.move.line.dest.domain</field>
-        <field name="model">stock.move.line</field>
-        <field name="inherit_id"
-            ref="stock.view_stock_move_line_detailed_operation_tree"/>
-
-        <field name="arch" type="xml">
-
-            <xpath expr="//button[@name='action_put_in_pack']"
-                   position="after">
-
-                <button
-                    name="action_generate_selected_lot"
-                    type="object"
-                    string="Generate Lot"
-                    class="btn-warning" invisible="picking_code != 'incoming'"/>
-
-            </xpath>        
-
-            <xpath expr="//field[@name='location_dest_id']"
-                position="attributes">
-
-                <attribute name="domain">
-                    [
-                        ('id', 'child_of', adt_dest_location_id),
-                        ('usage', '=', 'internal')
-                    ]
-                </attribute>
-
-            </xpath>
-
-            <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']" position="replace">
-                <field name="location_dest_id" optional="hide" />
-                <!-- <field name="allocation_storage" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
-                <field name="adt_dest_location_id" optional="hide" />
-            </xpath>
-
 
         </field>
     </record>
@@ -152,25 +114,13 @@
         <field name="inherit_id" ref="stock.view_stock_move_line_detailed_operation_tree"/>
         <field name="arch" type="xml">
 
-            <xpath expr="//field[@name='quant_id']" position="after">
-                <field name="origin" string="Source Document"/>
-
-                <field name="confirmation_location_code"
-                    password="1"
-                    column_invisible="context.get('picking_code') == 'incoming'" readonly="state in ('done', 'cancel') and is_locked"/>
-
-                <field name="confirmation_lot_code"
-                    password="1"
-                    column_invisible="context.get('picking_code') == 'incoming'" readonly="state in ('done', 'cancel') and is_locked"/>
-
-                <field name="matching_html"
-                    widget="html"
-                    readonly="1"
-                    column_invisible="context.get('picking_code') == 'incoming'"/>
-
-                <field name="auto_input_code" widget="auto_input_code"
-                    column_invisible="context.get('picking_code') == 'incoming'" readonly="state in ('done', 'cancel') and is_locked"/>
-
+            <xpath expr="//list/field[1]" position="before">
+                <header>
+                    <button name="action_generate_selected_lot"
+                        type="object"
+                        string="Generate Lot"
+                        class="btn-warning"/>
+                </header>
             </xpath>
 
             <xpath expr="//field[@name='location_dest_id']" position="after">
@@ -180,16 +130,14 @@
         </field>
     </record>
 
-    <!-- <record id="view_stock_move_line_allocation_inherit" model="ir.ui.view">
-        <field name="name">stock.move.line.allocation.inherit</field>
-        <field name="model">stock.move.line</field>
-        <field name="inherit_id" ref="stock.view_move_line_tree"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='location_dest_id']" position="after">
-                <field name="allocation_storage" optional="hide" domain="[('id', 'child_of', adt_dest_location_id)]" />
-            </xpath>
-        
-        </field>
-    </record> -->
+    <record id="action_generate_selected_lot_server" model="ir.actions.server">
+        <field name="name">Generate Lot</field>
+        <field name="model_id" ref="stock.model_stock_move_line"/>
+        <field name="binding_model_id" ref="stock.model_stock_move_line"/>
+        <field name="binding_type">action</field>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_generate_selected_lot()</field>
+    </record>
 
 </odoo>

@@ -399,19 +399,21 @@ class AcumaticaReceiptLine(models.Model):
                     # })
                     continue
 
-                dest_move_location = receipt._find_location_dest(receipt_line.warehouse_dest_code)
+                dest_code = receipt_line.warehouse_dest_code
+                dest_move_location = receipt._find_location_dest(dest_code)
                 if not dest_move_location:
                     error_messages.append(
                         f'Location with code {receipt_line.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
-                    )
+                     )
 
-                adt_dest_location = dest_move_location.id or picking.adt_dest_location_id.id or False
+                adt_dest_location = dest_move_location.id if dest_move_location else picking.adt_dest_location_id.id or False
 
                 qty = receipt._parse_float(receipt_line.product_uom_qty)
                 existing = picking.move_ids.filtered(
                     lambda move: (
                         move.picking_id.id == picking.id
                         and move.adt_dest_location_id.id == adt_dest_location
+                        and move.adt_warehouse_dest_code == dest_code
                         and move.product_id.id == product.id
                         and move.product_uom_qty == qty
                     )
@@ -566,4 +568,3 @@ class AcumaticaReceiptLine(models.Model):
             'res_id': self.odoo_picking_id.id,
             'view_mode': 'form',
         }
-

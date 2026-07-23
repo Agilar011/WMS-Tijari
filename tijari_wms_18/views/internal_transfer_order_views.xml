@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="internal_transfer_order_view_list" model="ir.ui.view">
+        <field name="name">internal.transfer.order.list</field>
+        <field name="model">internal.transfer.order</field>
+        <field name="arch" type="xml">
+            <list string="Internal Transfer Orders">
+                <field name="name"/>
+                <field name="external_ref" optional="hide"/>
+                <field name="transaction_type"/>
+                <field name="transfer_type"/>
+                <field name="location_id"/>
+                <field name="location_dest_id"/>
+                <field name="schedule_date"/>
+                <field name="validation_policy"/>
+                <field name="state" widget="badge"
+                    decoration-info="state == 'draft'"
+                    decoration-warning="state == 'ready'"
+                    decoration-success="state == 'done'"
+                    decoration-danger="state == 'cancel'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="internal_transfer_order_view_form" model="ir.ui.view">
+        <field name="name">internal.transfer.order.form</field>
+        <field name="model">internal.transfer.order</field>
+        <field name="arch" type="xml">
+            <form string="Internal Transfer Order">
+                <header>
+                    <button name="action_ready" string="Set Ready" type="object"
+                        class="btn-primary" invisible="state != 'draft'"/>
+                    <button name="action_done" string="Set Done" type="object"
+                        class="btn-primary" invisible="state != 'ready'"/>
+                    <button name="action_cancel" string="Cancel" type="object"
+                        invisible="state in ('done', 'cancel')"/>
+                    <button name="action_draft" string="Reset to Draft" type="object"
+                        invisible="state != 'cancel'"/>
+                    <field name="state" widget="statusbar"
+                        statusbar_visible="draft,ready,done,cancel"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_pickings" type="object"
+                            class="oe_stat_button" icon="fa-truck"
+                            invisible="picking_count == 0">
+                            <field name="picking_count" widget="statinfo" string="Transfers"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="transaction_type"/>
+                            <field name="transfer_type"/>
+                            <field name="validation_policy"/>
+                            <field name="external_ref"/>
+                        </group>
+                        <group>
+                            <field name="location_id"/>
+                            <field name="location_dest_id"/>
+                            <field name="transit_location_id"/>
+                            <field name="schedule_date"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Operation" name="page_operations">
+                            <field name="move_ids"
+                                invisible="picking_count != 0"
+                                context="{
+                                    'default_internal_transfer_order_id': id,
+                                    'default_location_id': location_id,
+                                    'default_location_dest_id': location_dest_id,
+                                    'default_date': schedule_date
+                                }">
+                                <list editable="bottom">
+                                    <field name="company_id" column_invisible="1"/>
+                                    <field name="name" column_invisible="1"/>
+                                    <field name="state" column_invisible="1"/>
+                                    <field name="location_id" column_invisible="1"/>
+                                    <field name="location_dest_id" column_invisible="1"/>
+                                    <field name="product_uom_category_id" column_invisible="1"/>
+                                    <field name="product_id" required="1"/>
+                                    <field name="product_uom_qty" string="Demand"/>
+                                    <field name="quantity" string="Qty"/>
+                                    <field name="product_uom" string="UoM"
+                                        groups="uom.group_uom"
+                                        options="{'no_open': True, 'no_create': True}"/>
+                                    <field name="lot_ids" widget="many2many_tags"
+                                        string="Lot/Serial Number"
+                                        groups="stock.group_production_lot"/>
+                                    <field name="product_note" optional="hide"/>
+                                    <field name="adt_type" string="Tipe Transaksi" optional="hide"/>
+                                    <field name="adt_transfer_order_number" optional="hide"/>
+                                    <field name="adt_transfer_order_line_number" optional="hide"/>
+                                </list>
+                            </field>
+                            <field name="generated_move_ids"
+                                invisible="picking_count == 0"
+                                context="{'list_view_ref': 'stock_picking_batch.view_picking_move_tree_inherited'}"
+                                readonly="1"/>
+                        </page>
+                        <page string="Transfer" name="page_transfers">
+                            <field name="picking_ids" widget="many2many" mode="list,kanban"
+                                context="{
+                                    'form_view_ref': 'stock_picking_batch.view_picking_form_inherited',
+                                    'list_view_ref': 'tijari_wms_18.stock_picking_batch_transaction_tree_columns'
+                                }"
+                                readonly="1"/>
+                        </page>
+                        <page string="Notes" name="page_notes">
+                            <field name="note" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="internal_transfer_order_view_search" model="ir.ui.view">
+        <field name="name">internal.transfer.order.search</field>
+        <field name="model">internal.transfer.order</field>
+        <field name="arch" type="xml">
+            <search string="Internal Transfer Orders">
+                <field name="name"/>
+                <field name="external_ref"/>
+                <field name="transaction_type"/>
+                <field name="transfer_type"/>
+                <field name="location_id"/>
+                <field name="location_dest_id"/>
+                <filter string="Draft" name="draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Ready" name="ready" domain="[('state', '=', 'ready')]"/>
+                <filter string="Done" name="done" domain="[('state', '=', 'done')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Transaction Type" name="group_transaction_type" context="{'group_by': 'transaction_type'}"/>
+                    <filter string="Transfer Type" name="group_transfer_type" context="{'group_by': 'transfer_type'}"/>
+                    <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_internal_transfer_order" model="ir.actions.act_window">
+        <field name="name">Internal Transfer Orders</field>
+        <field name="res_model">internal.transfer.order</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_draft': 1}</field>
+    </record>
+
+</odoo>

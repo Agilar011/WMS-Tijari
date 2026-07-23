@@ -118,6 +118,66 @@ class ImportShipmentWizard(models.TransientModel):
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
         }
+
+    def fetch_all_shipment_data(self, batch_size=False):
+        """
+        Ambil semua data SO Return Shipment dari Acumatica dengan paging $skip.
+
+        Dipakai scheduler agar tidak dibatasi fetch_limit wizard manual.
+        """
+        self.ensure_one()
+        if not self.config_id:
+            raise UserError('Pilih konfigurasi API terlebih dahulu.')
+
+        fetch_size = batch_size or self.batch_size or 50
+        if fetch_size <= 0:
+            raise UserError('Batch size harus lebih besar dari 0.')
+
+        raw_count = 0
+        batch_count = 0
+
+        _logger.info(
+            "START FETCH ALL SO RETURN; CONFIG=%s, BATCH_SIZE=%s, FETCH_SKIP=%s",
+            self.config_id.display_name,
+            fetch_size,
+            self.fetch_skip,
+        )
+
+        while True:
+            offset = self.fetch_skip + (batch_count * fetch_size)
+            batch_count_result = self.fetch_shipment_data(
+                limit=fetch_size,
+                offset=offset,
+                shipment_nbr=self.shipment_nbr,
+            )
+            if not batch_count_result:
+                _logger.info(
+                    "STOP FETCH ALL SO RETURN; empty batch at OFFSET=%s, TOTAL_FETCHED=%s, TOTAL_BATCHES=%s",
+                    offset,
+                    raw_count,
+                    batch_count,
+                )
+                break
+
+            raw_count += batch_count_result
+            batch_count += 1
+            _logger.info(
+                "FETCH ALL SO RETURN BATCH DONE; BATCH=%s, OFFSET=%s, FETCHED=%s, RUNNING_TOTAL=%s",
+                batch_count,
+                offset,
+                batch_count_result,
+                raw_count,
+            )
+
+            if batch_count_result < fetch_size:
+                break
+
+        self.write({
+            'total_fetched': raw_count,
+            'state': 'fetched' if raw_count else 'draft',
+        })
+        _logger.info("FINISH FETCH ALL SO RETURN; TOTAL_FETCHED=%s, TOTAL_BATCHES=%s", raw_count, batch_count)
+        return raw_count
     
     @staticmethod
     def _val(item, key):
@@ -408,7 +468,7 @@ class ImportShipmentWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if existing.acumatica_write_date == vals['acumatica_write_date']:
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -506,4 +566,3 @@ class ImportShipmentWizard(models.TransientModel):
             vals['shipment_line_id'] = shipment_map.get(ext_id)
             if vals['shipment_line_id']:
                 product_line.browse(vals['shipment_line_id']).write(vals)
-

@@ -11,6 +11,8 @@
                 <field name="building"/>
                 <field name="odoo_location_id" domain="[('is_location_mapping', '=', True)]"/>
                 <field name="odoo_building_id" domain="[('lot_stock_id', 'parent_of', odoo_location_id)]"/>
+                <field name="loginext_branch"/>
+                <field name="loginext_state"/>
                 <field name="is_active"/>
             </list>
         </field>
@@ -26,6 +28,7 @@
                 <field name="building"/>
                 <field name="odoo_location_id"/>
                 <field name="odoo_building_id"/>
+                <field name="loginext_branch"/>
                 <field name="is_active"/>
                 <field name="error_message"/>
                 <field name="is_error" invisible="1"></field>
@@ -46,6 +49,7 @@
                             class="btn-link" icon="fa-barcode" invisible="unique_code"/>
                 </div>
                 <field name="is_location_mapping" />
+                <field name="is_consignment" />
                 <field name="sequence" />
             </xpath>
         </field>

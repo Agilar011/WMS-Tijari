@@ -153,9 +153,12 @@ class AcumaticaShipmentLine(models.Model):
         Partner = self.env['res.partner']
         partner = False
         if line.partner_code:
-            partner = Partner.search([('company_registry', '=', line.partner_code)], limit=1)
+            partner = Partner.search([('adt_b_account_id', '=', line.partner_code)], limit=1)
             if not partner:
                 partner = Partner.search([('name', '=', line.partner_code)], limit=1)
+
+            if partner:
+                print(f"Partner found: {partner}")
         return partner
 
     def _find_warehouse(self, line):
@@ -295,7 +298,7 @@ class AcumaticaShipmentLine(models.Model):
         header_payload = shipment.read()[0] if shipment.exists() else {}
         error_messages = []
         all_line_payloads = []
-        picking = shipment.odoo_picking_id.id
+        picking = shipment.odoo_picking_id
         action_state = 'pending'
 
         for shipment_line in shipment.product_line_ids:

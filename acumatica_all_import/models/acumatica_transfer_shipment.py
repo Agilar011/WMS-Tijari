@@ -104,14 +104,18 @@ class AcumaticaTransferShipmentLine(models.Model):
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_row_number = fields.Char(string='Row Number Detail', readonly=True)
 
+    building_code = fields.Char(string='BuildingID', readonly=True)
     shipment_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
     partner_code = fields.Char(string='CustomerID', readonly=True)
+    customer_name = fields.Char(string='Customer Name', readonly=True)
     description = fields.Char(string='Description Header', readonly=True)
+    document_only = fields.Char(string='Document Only', readonly=True)
     fob_point = fields.Char(string='FOB Point', readonly=True)
     is_hold = fields.Char(string='Hold', readonly=True)
     is_insurance = fields.Char(string='Insurance', readonly=True)
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
     header_location_code = fields.Char(string='Location Header', readonly=True)
+    location_name = fields.Char(string='Location Name', readonly=True)
     operation = fields.Char(string='Operation', readonly=True)
     package_count = fields.Char(string='Package Count', readonly=True)
     package_weight = fields.Char(string='Package Weight', readonly=True)
@@ -123,6 +127,7 @@ class AcumaticaTransferShipmentLine(models.Model):
     shipping_terms = fields.Char(string='Shipping Terms', readonly=True)
     shipping_zone = fields.Char(string='Shipping Zone', readonly=True)
     ship_via = fields.Char(string='Ship Via', readonly=True)
+    site_id_description = fields.Char(string='Site ID Description', readonly=True)
     status = fields.Char(string='Status', readonly=True)
     warehouse_dest_code = fields.Char(string='To Warehouse', readonly=True)
     shipment_type = fields.Char(string='Type', readonly=True)
@@ -130,6 +135,7 @@ class AcumaticaTransferShipmentLine(models.Model):
     is_unlimited_packages = fields.Char(string='Unlimited Packages', readonly=True)
     actual_qty = fields.Char(string='Control Qty', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
+    note_header_id = fields.Char(string='Note Header ID', readonly=True)
 
 
     import_state = fields.Selection([
@@ -140,6 +146,11 @@ class AcumaticaTransferShipmentLine(models.Model):
     ], default='pending', readonly=True)
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Picking di Odoo', readonly=True)
+    odoo_internal_transfer_order_id = fields.Many2one(
+        'internal.transfer.order',
+        string='Internal Transfer Order',
+        readonly=True,
+    )
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -151,9 +162,12 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     @api.depends('shipment_nbr')
     def _compute_exists_in_odoo(self):
-        Picking = self.env['stock.picking']
+        InternalTransferOrder = self.env['internal.transfer.order']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.shipment_nbr and Picking.search_count([('origin', '=', rec.shipment_nbr)]))
+            rec.exists_in_odoo = bool(
+                rec.shipment_nbr
+                and InternalTransferOrder.search_count([('external_ref', '=', rec.shipment_nbr)])
+            )
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -265,6 +279,13 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     def action_open_picking(self):
         self.ensure_one()
+        if self.odoo_internal_transfer_order_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'internal.transfer.order',
+                'res_id': self.odoo_internal_transfer_order_id.id,
+                'view_mode': 'form',
+            }
         if not self.odoo_picking_id:
             raise UserError('Belum diimport, belum ada receipt di Odoo.')
         return {
@@ -299,6 +320,63 @@ class AcumaticaTransferShipmentLine(models.Model):
             print(f"debug : [Shipment {shipment_key}] Mengambil record pertama (ID Odoo: {first.id})")
             
             try:
+                transfer_service = self.env['acumatica.internal.transfer.service']
+                transfer_info = transfer_service.classify(
+                    first.warehouse_code or first.line_warehouse_code,
+                    first.warehouse_dest_code,
+                    'WarehouseID',
+                    'ToWarehouseID',
+                )
+                if transfer_info['status'] == 'skip':
+                    shipment_lines.write({
+                        'import_state': 'updated',
+                        'import_message': transfer_info['message'],
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': False,
+                    })
+                    updated += len(shipment_lines)
+                    continue
+
+                order, action_state = transfer_service.prepare_order(
+                    first.shipment_nbr,
+                    transfer_info['source_location'],
+                    transfer_info['destination_location'],
+                    transfer_info['transaction_type'],
+                    self._parse_dt(first.scheduled_date),
+                    first.note or first.description or False,
+                )
+
+                for line in shipment_lines:
+                    for item in self.env['acumatica.transfer.shipment.line.product'].search([('shipment_id', '=', line.id)]):
+                        product = self._find_product(item)
+                        uom = self._find_uom(item, product)
+                        qty = self._parse_float(item.product_uom_qty)
+                        transfer_service.create_order_move(order, product, qty, uom, item.line_description or product.display_name, item.line_description or False, {
+                            'adt_line_nbr': item.line_nbr or False,
+                            'adt_inventory_id': item.inventory_id or False,
+                            'adt_uom_code': item.uom_code or False,
+                            'adt_line_description': item.line_description or False,
+                            'adt_to_location_code': item.location_dest_code or False,
+                            'adt_from_location_code': item.line_warehouse_code or first.warehouse_code or False,
+                            'adt_transfer_order_number': first.shipment_nbr,
+                            'adt_transfer_order_line_number': item.line_nbr or False,
+                            'adt_transfer_order_type': first.shipment_type or False,
+                            'adt_quantity': qty,
+                            'adt_type': first.shipment_type or 'Transfer Shipment',
+                        })
+
+                shipment_lines.write({
+                    'import_state': action_state,
+                    'import_message': f'{action_state.title()}: {order.name}',
+                    'odoo_picking_id': False,
+                    'odoo_internal_transfer_order_id': order.id,
+                })
+                if action_state == 'imported':
+                    imported += 1
+                else:
+                    updated += 1
+                continue
+
                 first_data = first.read()[0]
                 print("--- SEMUA FIELD DAN NILAI DARI FIRST ---")
                 import pprint
@@ -314,14 +392,11 @@ class AcumaticaTransferShipmentLine(models.Model):
                 print(f"debug : [Shipment {shipment_key}] Source WH: {source_wh.code} | Dest WH: {dest_wh.code if dest_wh else 'None'}")
 
                 print(f"debug : [Shipment {shipment_key}] Langkah 2: Mencari stock.picking.type (Outgoing)")
-                # picking_type = PickingType.search([
-                #     ('warehouse_id', '=', source_wh.id),
-                #     ('code', '=', 'outgoing'),
-                # ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
-                # if not picking_type:
-                #     print(f"debug : [Shipment {shipment_key}] ERROR: Picking type outgoing tidak ditemukan")
-                #     raise UserError('Picking type outgoing tidak ditemukan.')
-                # print(f"debug : [Shipment {shipment_key}] Picking Type ID: {picking_type.id} ({picking_type.display_name})")
+                picking_type = first.picking_type_id
+                if not picking_type:
+                    print(f"debug : [Shipment {shipment_key}] ERROR: Picking type internal tidak ditemukan")
+                    raise UserError('Picking type internal tidak ditemukan.')
+                print(f"debug : [Shipment {shipment_key}] Picking Type ID: {picking_type.id} ({picking_type.display_name})")
 
                 print(f"debug : [Shipment {shipment_key}] Langkah 3: Menentukan Source & Destination Location")
                 src_location = self._find_location(first.header_location_code, source_wh, 'lot_stock_id') or (picking_type.default_location_src_id or source_wh.lot_stock_id)
@@ -337,7 +412,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                 vals = {
                     'origin': first.shipment_nbr,
                     'partner_id': self._find_partner(first).id if self._find_partner(first) else False,
-                    'picking_type_id': self.picking_type_id.id,
+                    'picking_type_id': picking_type.id,
                     'location_id': src_location.id,
                     'location_dest_id': dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
@@ -492,4 +567,5 @@ class AcumaticaTransferShipmentLineProduct(models.Model):
     uom_code = fields.Char(string='UOM', readonly=True)
     line_warehouse_code = fields.Char(string='Warehouse Detail', readonly=True)
     line_note = fields.Text(string='Line Note', readonly=True)
-
+    line_note_id = fields.Char(string='Line Note ID', readonly=True)
+    custom_json = fields.Text(string='Custom Payload', readonly=True)

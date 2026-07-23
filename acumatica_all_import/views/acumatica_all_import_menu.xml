@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <menuitem id="menu_acumatica_all_import_root" web_icon="acumatica_all_import,static/description/icon.png" name="API Data Hub" sequence="83"/>
+    <menuitem id="menu_acumatica_all_import_root" web_icon="acumatica_all_import,static/description/icon.png" name="API Data Hub" action="action_acumatica_config" sequence="83"/>
     <menuitem id="menu_acumatica_all_import_unified" name="Import Data" parent="menu_acumatica_all_import_root" action="action_acumatica_unified_import_wizard" sequence="10"/>
+    <menuitem id="menu_acumatica_api_scheduler" name="API Scheduler" parent="menu_acumatica_all_import_root" action="action_api_scheduler_job" sequence="15"/>
+    <menuitem id="menu_acumatica_webhook_log" name="Webhook Logs" parent="menu_acumatica_all_import_root" action="action_acumatica_webhook_log" sequence="20"/>
 
     <menuitem id="menu_acumatica_all_import_staging_root" name="Data Staging" parent="menu_acumatica_all_import_root" sequence="30"/>
     <menuitem id="menu_acumatica_all_import_staging_inbound"
@@ -41,6 +43,7 @@
     <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer - Intra Warehouse : OUT" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_one_step_line" sequence="50"/>
     <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer - 2 Step : OUT" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_two_step_line" sequence="60"/>
     <menuitem id="menu_acumatica_all_inventory_receipt_transfer_wh_in" name="Inventory Receipt Transfer Wh In" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_inventory_receipt_transfer_wh_in_staging" sequence="70"/>
+    <menuitem id="menu_acumatica_all_import_staging_kit_assembly" name="Kit Assembly" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_kit_assembly_line" sequence="80"/>
 
 
 
@@ -58,7 +61,17 @@
     <menuitem id="menu_acumatica_all_import_staging_shipvia" name="ShipVia" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_shipvia_line" sequence="8"/>
     <menuitem id="menu_acumatica_all_import_staging_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_inventory_stock_line" sequence="9"/>
 
-    <menuitem id="menu_acumatica_all_import_config_root" name="Konfigurasi API" parent="menu_acumatica_all_import_root" sequence="20"/>
+    <menuitem id="menu_acumatica_all_import_config_root" name="Konfigurasi API" parent="menu_acumatica_all_import_root" action="action_acumatica_config" sequence="5"/>
+    <menuitem id="menu_acumatica_all_import_config" name="All Config" parent="menu_acumatica_all_import_config_root" action="action_acumatica_config" sequence="0"/>
+    <menuitem id="menu_acumatica_webhook_key_config" name="Webhook API Key" parent="menu_acumatica_all_import_config_root" action="action_acumatica_webhook_api_key_history" sequence="1" groups="base.group_system"/>
+    <record id="menu_acumatica_webhook_api_key_history" model="ir.ui.menu">
+        <field name="name">Webhook API Key History</field>
+        <field name="parent_id" ref="menu_acumatica_all_import_config_root"/>
+        <field name="action" eval="'ir.actions.act_window,%d' % ref('action_acumatica_webhook_api_key_history')"/>
+        <field name="sequence">2</field>
+        <field name="groups_id" eval="[(6, 0, [ref('base.group_system')])]"/>
+        <field name="active" eval="False"/>
+    </record>
     <menuitem id="menu_acumatica_all_import_config_inbound"
         name="Inbound"
         parent="menu_acumatica_all_import_config_root"
@@ -88,7 +101,6 @@
         name="Master Data"
         parent="menu_acumatica_all_import_config_root"
         sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_config" name="All Config" parent="menu_acumatica_all_import_config_master" action="action_acumatica_config" sequence="0"/>
     <menuitem id="menu_acumatica_all_import_config_uom" name="UoM" parent="menu_acumatica_all_import_config_master" action="action_acumatica_uom_config" sequence="1"/>
     <menuitem id="menu_acumatica_all_import_config_customer" name="Customer" parent="menu_acumatica_all_import_config_master" action="action_acumatica_customer_config" sequence="2"/>
     <menuitem id="menu_acumatica_all_import_config_vendor" name="Vendor" parent="menu_acumatica_all_import_config_master" action="action_acumatica_vendor_config" sequence="3"/>

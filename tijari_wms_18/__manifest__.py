@@ -12,14 +12,18 @@
     'license': 'LGPL-3',
     'depends': [
         'base', 
-        'stock', 
+        'mail',
+        'stock',
+        'stock_picking_batch',
         'stock_sms',
         'product',
+        'stock_inventory'
     ],
     'data': [
         'security/ir.model.access.csv',
         'views/assets.xml',
         'views/hide_menu.xml',
+        'views/internal_transfer_order_views.xml',
         'views/master_menu_view.xml',
         'views/product_template.xml',
         'views/res_partner.xml',
@@ -33,6 +37,7 @@
         'views/stock_picking_action.xml',
         'views/stock_picking_type_views.xml',
         'views/stock_picking_views.xml',
+        'views/stock_picking_batch_views.xml',
         'views/stock_report_aging_views.xml',
         'views/stock_report_inherit_inventory.xml',
         'views/stock_report_velocity_views.xml',
@@ -44,11 +49,14 @@
         'web.assets_frontend': [
         ],
         'web.assets_backend': [
+            'tijari_wms_18/static/src/scss/list_table_auto_layout.scss',
+            'tijari_wms_18/static/src/js/list_table_auto_layout.js',
             'tijari_wms_18/static/src/js/focus_move_line_field.js',
             'tijari_wms_18/static/src/js/generate_lot_button.js',
             'tijari_wms_18/static/src/xml/generate_lot_button.xml',
             'tijari_wms_18/static/src/xml/auto_input_code.xml',
             'tijari_wms_18/static/src/xml/action_generate_selected_lot.xml',
+            'tijari_wms_18/static/src/xml/move_line_scan_button.xml',
         ]
     },
     'installable': True,

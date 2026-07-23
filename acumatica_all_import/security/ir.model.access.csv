@@ -1,4 +1,7 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_api_scheduler_job_user,api.scheduler.job.user,model_api_scheduler_job,base.group_user,1,1,1,1
+access_api_scheduler_log_user,api.scheduler.log.user,model_api_scheduler_log,base.group_user,1,0,0,0
+access_api_scheduler_log_detail_user,api.scheduler.log.detail.user,model_api_scheduler_log_detail,base.group_user,1,0,0,0
 access_acumatica_transfer_config_user,acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
 access_acumatica_transfer_config,access.acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
 access_acumatica_transfer_line_user,acumatica.transfer.line,model_acumatica_transfer_line,base.group_user,1,1,1,1
@@ -59,8 +62,11 @@ access_acumatica_warehouse_line_manager,acumatica.warehouse.line manager,model_a
 access_acumatica_warehouse_line_user,acumatica.warehouse.line user,model_acumatica_warehouse_line,base.group_user,1,1,1,1
 access_import_warehouse_wizard_user,import.warehouse.wizard user,model_import_warehouse_wizard,base.group_user,1,1,1,1
 access_acumatica_kit_assembly_config_user,acumatica.kit.assembly.config,model_acumatica_kit_assembly_config,base.group_user,1,1,1,1
+access_acumatica_kit_assembly_user,acumatica.kit.assembly,model_acumatica_kit_assembly,base.group_user,1,1,1,1
+access_acumatica_kit_assembly_component_user,acumatica.kit.assembly.component,model_acumatica_kit_assembly_component,base.group_user,1,1,1,1
 access_acumatica_kit_assembly_line_user,acumatica.kit.assembly.line,model_acumatica_kit_assembly_line,base.group_user,1,1,1,1
 access_import_kit_assembly_wizard_user,import.kit.assembly.wizard,model_import_kit_assembly_wizard,base.group_user,1,1,1,1
+access_acumatica_webhook_log_user,acumatica.webhook.log,model_acumatica_webhook_log,base.group_user,1,1,1,1
 access_acumatica_config_user,acumatica.config,model_acumatica_config,base.group_user,1,1,1,1
 access_acumatica_customer_line_user,acumatica.customer.line,model_acumatica_customer_line,base.group_user,1,1,1,1
 access_import_customer_wizard_user,import.customer.wizard,model_import_customer_wizard,base.group_user,1,1,1,1
@@ -108,6 +114,8 @@ access_acumatica_inventory_issue_toko_pegang_do_config,access.acumatica.inventor
 access_acumatica_inventory_issue_toko_pegang_do_staging,access.acumatica.inventory.issue.toko.pegang.do.staging,model_acumatica_inventory_issue_toko_pegang_do_staging,base.group_user,1,1,1,1
 access_acumatica_inventory_issue_toko_pegang_do_staging_line,access.acumatica.inventory.issue.toko.pegang.do.staging.line,model_acumatica_inventory_issue_toko_pegang_do_staging_line,base.group_user,1,1,1,1
 access_import_inventory_issue_toko_pegang_do_wizard,access.import.inventory.issue.toko.pegang.do.wizard,model_import_inventory_issue_toko_pegang_do_wizard,base.group_user,1,1,1,1
+access_acumatica_webhook_key_config_system,access.acumatica.webhook.key.config.system,model_acumatica_webhook_key_config,base.group_system,1,1,1,1
+access_acumatica_webhook_api_key_system,access.acumatica.webhook.api.key.system,model_acumatica_webhook_api_key,base.group_system,1,1,1,1
 
 access_import_direct_transfer_wizard,access.import.direct.transfer.wizard,model_import_direct_transfer_wizard,base.group_user,1,1,1,1
 access_acumatica_vendor_return_direct_transfer_staging_user,acumatica.vendor.return.direct.transfer.staging.user,model_acumatica_vendor_return_direct_transfer_staging,base.group_user,1,1,1,1
@@ -127,3 +135,7 @@ access_acumatica_transfer_one_step_line_user,acumatica.transfer.one.step.line.us
 access_import_inventory_receipt_transfer_wh_in_wizard_user,import.inventory.receipt.transfer.wh.in.wizard.user,model_import_inventory_receipt_transfer_wh_in_wizard,base.group_user,1,1,1,1
 access_acumatica_inventory_receipt_transfer_wh_in_staging_user,acumatica.inventory.receipt.transfer.wh.in.staging.user,model_acumatica_inventory_receipt_transfer_wh_in_staging,base.group_user,1,1,1,1
 access_acumatica_inventory_receipt_transfer_wh_in_staging_line_user,acumatica.inventory.receipt.transfer.wh.in.staging.line.user,model_acumatica_inventory_receipt_transfer_wh_in_staging_line,base.group_user,1,1,1,1
+
+access_loginext_staging_data_user,loginext.staging.data,model_loginext_staging_data,base.group_user,1,1,1,1
+access_loginext_staging_crate_user,loginext.staging.crate,model_loginext_staging_crate,base.group_user,1,1,1,1
+access_loginext_staging_item_user,loginext.staging.item,model_loginext_staging_item,base.group_user,1,1,1,1
