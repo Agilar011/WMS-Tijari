@@ -389,7 +389,7 @@
                 </page>
 
                 <page string="Notes">
-                    <field name="warehouse_note" widget="html"/>
+                    <field name="note" widget="html"/>
                 </page>
 
             </notebook>
