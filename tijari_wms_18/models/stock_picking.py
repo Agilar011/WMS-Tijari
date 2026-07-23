@@ -87,7 +87,8 @@ class StockPicking(models.Model):
             ('waiting', 'Waiting Another Operation'),
             ('confirmed', 'Waiting'),
             ('assigned', 'Ready'),
-            ('waiting_response', 'Waiting Response'),
+            ('waiting_response', 'Waiting For Shipment'),
+            ('return_shipment', 'Returned Shipment'),
             ('done', 'Done'),
             ('cancel', 'Cancelled'),
         ],
@@ -98,6 +99,11 @@ class StockPicking(models.Model):
         tracking=True,
     )
 
+    shipment_information = fields.Selection([
+        ('partial', 'Partial Shipment'),
+        ('full_shipment', 'Full Shipment'),
+        ('full_return', 'Canceled'),
+    ], string='Informasi TMS', help='Status shipment yang akan dikirimkan dari TMS.')
 
     status_ba = fields.Selection([
         ('conform', 'Conform'),
@@ -163,11 +169,6 @@ class StockPicking(models.Model):
                 else False
             )
 
-    shipment_information = fields.Selection([
-        ('partial', 'Partial Shipment'),
-        ('full_shipment', 'Full Shipment'),
-        ('full_return', 'Canceled'),
-    ], string='Informasi TMS', readonly=True, help='Status shipment yang akan dikirimkan ke TMS.')
 
 # Function to foward adt_type from parent picking
     @api.model_create_multi
@@ -749,11 +750,18 @@ class StockPicking(models.Model):
 
         return res  
 
-    def action_validate_full_shipment(self):
+    def action_confirm_shipment(self):
         self.ensure_one()
+        if not self.shipment_information:
+            raise UserError('Informasi TMS tidak boleh kosong')
 
-        self.shipment_information = 'full_shipment'
-        self.wms_state = 'done' 
+        if self.shipment_information == 'full_shipment':
+            self.wms_state = 'done'
+
+        if self.shipment_information != 'full_shipment':
+            self.wms_state = 'return_shipment'     
+        # self.shipment_information = 'full_shipment'
+        # self.wms_state = 'done' 
 
 # ================================================================================================
 # Temp Storage function create move line qr code        

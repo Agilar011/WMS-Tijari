@@ -52,9 +52,9 @@
                 invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel')"/>
 
                 <button
-                    name="action_validate_full_shipment"
+                    name="action_confirm_shipment"
                     type="object"
-                    string="Validate Full Shipment"
+                    string="Confirm Shipment"
                     class="btn-primary"
                     invisible="picking_type_name != 'Delivery Orders' or wms_state != 'waiting_response' or transaction_type !='outbound'"/>
 
