@@ -224,9 +224,11 @@ class AcumaticaShipmentGIStaging(models.Model):
                         picking.move_ids.unlink()
                         print(f"--> SUCCESS UNLINK OLD LINES FOR PICKING ID: {picking.id}")
                     else:
-                        create_tms_state = True
                         picking = Picking.create(updated_vals)
-                        created_loginext_header = self._build_loginext_header(shipment.adt_ShipmentNbr, ship_date, shipment_location_id,shipment_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking.origin)
+                        exist_post_data = self.env['loginext.staging.data'].search([('odoo_shipment_number', '=', picking.origin)], limit=1)
+                        if not exist_post_data:
+                            create_tms_state = True
+                            created_loginext_header = self._build_loginext_header(shipment.adt_ShipmentNbr, ship_date, shipment_location_id,shipment_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking.origin)
 
                         print(f"SUCCESS CREATING NEW PICKING ID: {picking.id}")
 
@@ -538,14 +540,6 @@ class AcumaticaShipmentGIStaging(models.Model):
 
 
     def _build_loginext_header(self, adt_ShipmentNbr, ship_date, shipment_location_id, ship_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking):
-        # print(adt_ShipmentNbr)
-        # print(ship_date)
-        # print(ship_weight)
-        # print(shipment_volume)
-        # print(partner)
-        # print(shipment_city)
-        # print(shipment_country)
-        # print(shipment_postal_code)
         loginext_wh = self._find_loginext_wh(shipment_location_id)
 
         loginext_order_no = f"testing-dev-{adt_ShipmentNbr}"
