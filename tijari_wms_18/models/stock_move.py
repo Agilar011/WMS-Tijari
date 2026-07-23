@@ -38,6 +38,16 @@ class StockMove(models.Model):
     adt_type = fields.Char(string='Type (Acumatica)')
     adt_acumatica_write_date = fields.Datetime(string='Last Modified (Acumatica)')
     product_note = fields.Text(string='Product Note')
+    batch_adt_type = fields.Char(
+        related='picking_id.adt_type',
+        string='Tipe Transaksi',
+        readonly=True,
+    )
+    batch_origin = fields.Char(
+        related='picking_id.origin',
+        string='No. Transaksi',
+        readonly=True,
+    )
 
     qr_code_image = fields.Binary(string='Sign')
 
@@ -233,6 +243,25 @@ class StockMove(models.Model):
 
         return base64.b64encode(buffer.getvalue()).decode()
 
+    def action_open_move_pick(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_open_move_lines(self):
+        self.ensure_one()
+        return self.action_show_details()
+
     def action_open_note_wizard(self):
         self.ensure_one()
 
@@ -381,4 +410,3 @@ class StockMoveScanWizard(models.TransientModel):
             ('barcode', '=', scan_code),
             ('default_code', '=', scan_code),
         ], limit=1)
-

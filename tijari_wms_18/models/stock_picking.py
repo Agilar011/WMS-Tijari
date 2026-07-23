@@ -65,6 +65,7 @@ class StockPicking(models.Model):
         'product.product',
         compute='_compute_allowed_putaway_product_ids',
     )
+    scan_product_button = fields.Boolean(string='Scan Product')
     putaway_product_id = fields.Many2one(
         'product.product', string="Product Name")
     putaway_lot_id = fields.Many2one(
@@ -113,10 +114,12 @@ class StockPicking(models.Model):
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
-        move_lines = self.move_line_ids
+        move_lines = self.move_line_ids.filtered(
+                lambda line: line.quantity > 0 and (line.lot_id or line.lot_name)
+            )
         if self.putaway_product_id:
             move_lines = move_lines.filtered(
-                lambda line: line.product_id == self.putaway_product_id
+                lambda line: line.product_id == self.putaway_product_id and line.quantity > 0
             )
 
         return move_lines
