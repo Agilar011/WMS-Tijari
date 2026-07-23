@@ -20,6 +20,11 @@ class AcumaticaShipmentGIStaging(models.Model):
     all_line_ids = fields.One2many('acumatica.sales.order.shipment.staging.line', 'gi_id',string='All Shipment Details')
     active = fields.Boolean(default=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    odoo_internal_transfer_order_id = fields.Many2one(
+        'internal.transfer.order',
+        string='Internal Transfer Order',
+        readonly=True,
+    )
     import_state = fields.Selection([
         ('pending', 'Belum Diimport'),
         ('imported', 'Sudah Diimport'),
@@ -172,6 +177,10 @@ class AcumaticaShipmentGIStaging(models.Model):
             # Ambil sub-transaksi database tingkat dokumen
             with self.env.cr.savepoint():
                 try:
+                    if (shipment.adt_OrderType or '').strip().upper() == 'CO':
+                        self._import_consignment_internal_transfer(shipment, shipment_line)
+                        continue
+
                     warehouse = self._find_warehouse(shipment.adt_WarehouseID)
                     if not warehouse:
                         raise UserError(f"Warehouse {shipment.adt_WarehouseID} tidak ditemukan di Odoo.")
@@ -327,6 +336,173 @@ class AcumaticaShipmentGIStaging(models.Model):
         print("\n" + "=" * 120 + "\nEND OF IMPORT PROCESS\n" + "=" * 120)
         return True
 
+
+    def _get_or_create_consignment_location(
+        self, source_location=False, customer_code=False, cons_location_code=False
+    ):
+        Location = self.env['stock.location']
+        if not source_location:
+            raise UserError('Source location wajib diisi untuk membuat lokasi consignment.')
+
+        customer_code = (customer_code or '').strip() or 'Unknown Customer'
+        cons_location_code = (cons_location_code or '').strip() or 'Consignment'
+
+        def get_or_create_child(parent, name, is_consignment=False):
+            location = Location.search([
+                ('location_id', '=', parent.id),
+                ('name', '=', name),
+            ], limit=1)
+            vals = {
+                'name': name,
+                'usage': 'internal',
+                'location_id': parent.id,
+            }
+            if source_location.company_id:
+                vals['company_id'] = source_location.company_id.id
+            if 'is_consignment' in Location._fields:
+                vals['is_consignment'] = is_consignment
+            if location:
+                write_vals = {}
+                if is_consignment and not location.is_consignment:
+                    write_vals['is_consignment'] = True
+                if write_vals:
+                    location.write(write_vals)
+                return location
+            return Location.create(vals)
+
+        warehouse_root = source_location
+        warehouse = self.env['stock.warehouse'].search([]).filtered(
+            lambda wh: source_location.parent_path.startswith(wh.view_location_id.parent_path)
+        )[:1]
+        if warehouse:
+            warehouse_root = warehouse.view_location_id
+
+        cons_root = get_or_create_child(warehouse_root, 'CONS')
+        customer_location = get_or_create_child(cons_root, customer_code)
+        return get_or_create_child(
+            customer_location,
+            cons_location_code,
+            is_consignment=True,
+        )
+
+    def _get_or_create_transit_location(self):
+        Location = self.env['stock.location']
+        transit_location = Location.search([('usage', '=', 'transit')], limit=1)
+        if not transit_location:
+            transit_location = Location.create({
+                'name': 'Transit',
+                'usage': 'transit',
+            })
+        return transit_location
+
+    def _import_consignment_internal_transfer(self, shipment, shipment_line):
+        InternalTransferOrder = self.env['internal.transfer.order']
+        Move = self.env['stock.move']
+        Product = self.env['product.product']
+
+        source_location = self._find_warehouse_product(shipment.adt_WarehouseID)
+        if not source_location:
+            raise UserError(
+                f"Source location mapping WarehouseID {shipment.adt_WarehouseID or '-'} tidak ditemukan."
+            )
+
+        destination_location = self._get_or_create_consignment_location(
+            source_location,
+            shipment.adt_CustomerID,
+            shipment.adt_ToWarehouseID or shipment.adt_LocationID or shipment.adt_LocationName,
+        )
+        transit_location = self._get_or_create_transit_location()
+
+        if shipment.adt_ShipDate and 'T' in str(shipment.adt_ShipDate):
+            clean_date_str = str(shipment.adt_ShipDate).split('+')[0].replace('T', ' ')
+            ship_date = fields.Datetime.to_datetime(clean_date_str)
+        else:
+            ship_date = shipment.adt_ShipDate if shipment.adt_ShipDate else fields.Datetime.now()
+
+        order = InternalTransferOrder.search([
+            ('external_ref', '=', shipment.adt_ShipmentNbr),
+        ], limit=1)
+        if order:
+            if order.picking_ids:
+                raise UserError(
+                    f"Shipment {shipment.adt_ShipmentNbr} sudah memiliki transfer, tidak bisa diupdate."
+                )
+            if order.state not in ('draft', 'cancel'):
+                raise UserError(
+                    f"Shipment {shipment.adt_ShipmentNbr} sudah ada di state {order.state}, tidak bisa diupdate."
+                )
+            order.move_ids.unlink()
+            order.write({
+                'transaction_type': 'consignment',
+                'transfer_type': 'transfer_out',
+                'location_id': source_location.id,
+                'location_dest_id': destination_location.id,
+                'transit_location_id': transit_location.id,
+                'schedule_date': ship_date,
+                'validation_policy': 'validate_all',
+                'note': shipment.adt_note or shipment.adt_NoteHeader or False,
+                'state': 'draft',
+            })
+            action_state = 'updated'
+        else:
+            order = InternalTransferOrder.create({
+                'external_ref': shipment.adt_ShipmentNbr,
+                'transaction_type': 'consignment',
+                'transfer_type': 'transfer_out',
+                'location_id': source_location.id,
+                'location_dest_id': destination_location.id,
+                'transit_location_id': transit_location.id,
+                'schedule_date': ship_date,
+                'validation_policy': 'validate_all',
+                'note': shipment.adt_note or shipment.adt_NoteHeader or False,
+            })
+            action_state = 'imported'
+
+        move_items = shipment_line.search([('gi_id', '=', shipment.id)])
+        if not move_items:
+            raise UserError(f"Shipment {shipment.adt_ShipmentNbr} tidak punya detail line.")
+
+        for item in move_items:
+            product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
+            if not product:
+                raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
+
+            uom = self._find_uom(item, product)
+            qty = float(item.adt_ShipmentQty or 0.0)
+            move_vals = {
+                'name': item.adt_LineDescription or product.display_name,
+                'product_id': product.id,
+                'product_uom_qty': qty,
+                'product_uom': uom.id if uom else product.uom_id.id,
+                'location_id': source_location.id,
+                'location_dest_id': destination_location.id,
+                'internal_transfer_order_id': order.id,
+                'description_picking': item.adt_LineDescription or False,
+                'adt_line_external_id': item.acumatica_id,
+                'adt_inventory_id': item.adt_LineInventoryID,
+                'adt_uom_code': item.adt_LineUOM,
+                'adt_open_qty': qty,
+                'adt_quantity': qty,
+                'adt_type': 'SO Shipment Consignment',
+                'adt_line_description': item.adt_LineDescription or False,
+                'adt_line_nbr': item.adt_LineNbr or False,
+                'adt_transfer_order_number': shipment.adt_ShipmentNbr,
+                'adt_transfer_order_line_number': item.adt_LineNbr or False,
+                'adt_transfer_order_type': shipment.adt_OrderType or False,
+                'adt_from_location_code': shipment.adt_WarehouseID or False,
+                'adt_to_location_code': destination_location.complete_name,
+            }
+            move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
+            Move.create(move_vals)
+
+        shipment.write({
+            'import_state': action_state,
+            'import_message': f"{action_state.title()}: {order.name}",
+            'odoo_picking_id': False,
+            'odoo_internal_transfer_order_id': order.id,
+        })
+        return order
+
 # =====================================================================================================================================================================
     # Service Function
 # =====================================================================================================================================================================
@@ -469,11 +645,21 @@ class AcumaticaShipmentGIStaging(models.Model):
 
 # Helper Function
 
-    @api.depends('adt_ShipmentNbr')
+    @api.depends('adt_ShipmentNbr', 'adt_OrderType')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
+        InternalTransferOrder = self.env['internal.transfer.order']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.adt_ShipmentNbr and Picking.search_count([('origin', '=', rec.adt_ShipmentNbr)]))
+            if not rec.adt_ShipmentNbr:
+                rec.exists_in_odoo = False
+            elif (rec.adt_OrderType or '').strip().upper() == 'CO':
+                rec.exists_in_odoo = bool(
+                    InternalTransferOrder.search_count([('external_ref', '=', rec.adt_ShipmentNbr)])
+                )
+            else:
+                rec.exists_in_odoo = bool(
+                    Picking.search_count([('origin', '=', rec.adt_ShipmentNbr)])
+                )
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -494,8 +680,12 @@ class AcumaticaShipmentGIStaging(models.Model):
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: (
-                l.import_state in ['pending', 'error'] 
-                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+                l.import_state in ['pending', 'error']
+                or (
+                    l.import_state in ['imported', 'updated']
+                    and not l.odoo_picking_id
+                    and not l.odoo_internal_transfer_order_id
+                )
             )
         )
         if not lines:
@@ -509,6 +699,13 @@ class AcumaticaShipmentGIStaging(models.Model):
 
     def action_open_picking(self):
         self.ensure_one()
+        if self.odoo_internal_transfer_order_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'internal.transfer.order',
+                'res_id': self.odoo_internal_transfer_order_id.id,
+                'view_mode': 'form',
+            }
         if not self.odoo_picking_id:
             raise UserError('Belum diimport, belum ada receipt di Odoo.')
         return {

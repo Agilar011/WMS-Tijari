@@ -106,6 +106,18 @@ class StockMove(models.Model):
                 line.matching_loc_dest_id = location.id or False
                 line.confirmation_lot_code = line.lot_id.name or False
                 line.confirmation_location_code = location.unique_code or False
+                self._check_match_status()
+
+    def _check_match_status(self):
+        for move in self.move_line_ids:
+            loc_ok = bool(move.location_dest_id.id == move.matching_loc_dest_id.id)
+            lot_ok = bool(move.lot_id.id == move.matching_lot_id.id)
+            if loc_ok and lot_ok:
+                move.matching = 'match'
+                continue
+            else:
+                move.matching = 'not_match'
+                continue 
 
     @api.onchange('unfiltered_dest')
     def action_toggle_unfiltered_dest(self):

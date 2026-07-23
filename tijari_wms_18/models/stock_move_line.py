@@ -71,12 +71,19 @@ class StockMoveLine(models.Model):
     matching_lot_id = fields.Many2one(
         comodel_name="stock.lot",
         string="Matching Lot",
+        domain="[('id', 'in', allowed_matching_lot_ids)]",
         store=True
     )
     matching_loc_dest_id = fields.Many2one(
         comodel_name="stock.location",
         string="Matching Location Dest",
+        domain="[('id', 'child_of', adt_dest_location_id)]",
         store=True
+    )
+    allowed_matching_lot_ids = fields.Many2many(
+        comodel_name="stock.lot",
+        string="Allowed Matching Lots",
+        compute="_compute_allowed_matching_lot_ids",
     )
 
     unfiltered_dest = fields.Boolean(
@@ -119,6 +126,14 @@ class StockMoveLine(models.Model):
         related="move_id.picking_type_name",
         store=False,
     )
+
+    @api.depends(
+        "picking_id.move_line_ids.lot_id",
+        "picking_id.move_ids.move_line_ids.lot_id",
+    )
+    def _compute_allowed_matching_lot_ids(self):
+        for line in self:
+            line.allowed_matching_lot_ids = line.picking_id.move_line_ids.mapped("lot_id")
 
     @api.depends("product_id", "source_location_id")
     def _compute_temp_quant_ids(self):
@@ -205,7 +220,8 @@ class StockMoveLine(models.Model):
         move_lines = super().create(vals_list)
         move_lines.mapped('picking_id')._sync_adt_quantities_from_moves()
         if not move_lines.parent_location_id:
-            move_lines.parent_location_id = move_lines.adt_dest_location_id
+            for line in move_lines:
+                line.parent_location_id = line.adt_dest_location_id
 
         return move_lines
 
@@ -851,17 +867,17 @@ class StockMoveLine(models.Model):
             picking_type = line.picking_id.picking_type_id
 
             # 1. Validasi awal: pastikan input user tidak kosong atau hanya berisi spasi
-            conf_loc = str(line.confirmation_location_code or line.matching_loc_dest_id or '').strip()
-            conf_lot = str(line.confirmation_lot_code or line.matching_lot_id or '').strip()
+            conf_loc = str(line.matching_loc_dest_id or '').strip()
+            conf_lot = str(line.matching_lot_id or '').strip()
 
             loc_ok = False
             lot_ok = False
             
-            if not conf_loc or not conf_lot:
+            if not conf_loc and not conf_lot:
                 line.matching = 'not_match'
                 continue
             
-            if picking_type and picking_type.name in ('Pick'):
+            if picking_type and picking_type.name in ('Pick', 'Pick Internal'):
                 print('run validate code for pick')
                 loc_code = str(line.location_id.unique_code or '').strip()
                 product_code = str(line.lot_id.name or '').strip()
@@ -869,7 +885,7 @@ class StockMoveLine(models.Model):
                 loc_ok = bool(loc_code and conf_loc.lower() == loc_code.lower())
                 lot_ok = bool(product_code and conf_lot.lower() == product_code.lower())
 
-            if picking_type and picking_type.name in ('Receipts'):
+            if picking_type and picking_type.name in ('Receipts', 'Receipt Internal'):
                 print('run validate code for receipt')
                 loc_code = str(line.location_dest_id.unique_code or '').strip()
                 product_code = str(line.lot_id.name or '').strip()
@@ -884,7 +900,7 @@ class StockMoveLine(models.Model):
                     continue
 
 
-            if not picking_type or picking_type.name not in ('Pick', 'Pack', 'Receipts'):
+            if not picking_type or picking_type.name not in ('Pick', 'Pack', 'Receipts', 'Pick Internal', 'Receipt Internal'):
                 raise ValueError('validation is not config yet')
                 
             # 2. Ambil data pembanding dari database dan bersihkan teksnya
@@ -932,6 +948,4 @@ class StockMoveLine(models.Model):
             #     line.matching = 'match'
             #     sml = self.env['stock.move.line'].browse(line._origin.id)
             #     sml.write({'matching': 'match'})
-
-
 

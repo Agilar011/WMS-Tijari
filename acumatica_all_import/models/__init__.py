@@ -16,6 +16,7 @@ from . import acumatica_uom
 from . import acumatica_shipvia
 from . import acumatica_inventory_stock
 
+from . import acumatica_internal_transfer_service
 # Merged models
 from . import acumatica_sales_order_shipment
 from . import acumatica_inventory_issue

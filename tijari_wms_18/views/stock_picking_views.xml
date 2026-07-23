@@ -115,6 +115,74 @@
         </field>
     </record>
 
+    <record id="stock_picking_tree_transaction_columns" model="ir.ui.view">
+        <field name="name">stock.picking.list.transaction.columns</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.vpicktree"/>
+        <field name="priority" eval="1200"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="replace">
+                <list string="Transfers" multi_edit="1" sample="1" js_class="stock_list_view">
+                    <header>
+                        <button name="do_unreserve" type="object" string="Unreserve"/>
+                        <button name="action_assign" type="object" string="Check Availability"/>
+                    </header>
+                    <field name="name" decoration-bf="1"/>
+                    <field name="location_id" optional="hide"
+                        options="{'no_create': True}"
+                        groups="stock.group_stock_multi_locations"
+                        readonly="state == 'done'"/>
+                    <field name="company_id" optional="hide" groups="base.group_multi_company"/>
+                    <field name="adt_type" string="Transaction Type"/>
+                    <field name="origin" readonly="state in ['cancel', 'done']"/>
+                    <field name="partner_id" readonly="state in ['cancel', 'done']"/>
+                    <field name="scheduled_date" widget="remaining_days"
+                        readonly="state in ['cancel', 'done']"/>
+                    <field name="state" widget="badge"
+                        decoration-danger="state == 'cancel'"
+                        decoration-info="state == 'assigned'"
+                        decoration-muted="state == 'draft'"
+                        decoration-success="state == 'done'"
+                        decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"/>
+                    <field name="batch_id" string="Batch"/>
+                </list>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_batch_transaction_tree_columns" model="ir.ui.view">
+        <field name="name">stock.picking.batch.transaction.list.columns</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock_picking_batch.stock_picking_view_batch_tree_ref"/>
+        <field name="mode">primary</field>
+        <field name="priority" eval="1200"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="replace">
+                <list string="Transactions" default_order="batch_sequence">
+                    <field name="batch_sequence" widget="handle"/>
+                    <field name="name" decoration-bf="1"/>
+                    <field name="location_id" optional="hide"
+                        options="{'no_create': True}"
+                        groups="stock.group_stock_multi_locations"
+                        readonly="state == 'done'"/>
+                    <field name="company_id" optional="hide" groups="base.group_multi_company"/>
+                    <field name="adt_type" string="Transaction Type"/>
+                    <field name="origin" readonly="state in ['cancel', 'done']"/>
+                    <field name="partner_id" readonly="state in ['cancel', 'done']"/>
+                    <field name="scheduled_date" widget="remaining_days"
+                        readonly="state in ['cancel', 'done']"/>
+                    <field name="state" widget="badge"
+                        decoration-danger="state == 'cancel'"
+                        decoration-info="state == 'assigned'"
+                        decoration-muted="state == 'draft'"
+                        decoration-success="state == 'done'"
+                        decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"/>
+                    <field name="batch_id" string="Batch"/>
+                </list>
+            </xpath>
+        </field>
+    </record>
+
     <menuitem
         id="custom_logs_menu"
         name="Logs"

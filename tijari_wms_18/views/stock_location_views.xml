@@ -49,6 +49,7 @@
                             class="btn-link" icon="fa-barcode" invisible="unique_code"/>
                 </div>
                 <field name="is_location_mapping" />
+                <field name="is_consignment" />
                 <field name="sequence" />
             </xpath>
         </field>

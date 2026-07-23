@@ -8,19 +8,19 @@
 
             <!-- First row of detailed stock_move_line outbound - pick -->
             <xpath expr="//field[@name='quant_id']" position="before">
-                <field name="id" string="Line ID"  column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
-                <field name="adt_dest_location" readonly="1" optional="show" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
-                <field name="adt_dest_location_id" readonly="1" optional="show" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
-                <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
-                <field name="source_location_id" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
-                <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
-                <field name="product_lot_id" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
-                <field name="selected_quant_id" optional="hide" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"/>
+                <field name="id" string="Line ID"  column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="adt_dest_location" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="adt_dest_location_id" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="source_location_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="product_lot_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="selected_quant_id" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
             </xpath>
 
             <!-- Hide From To defaul_odoo for outbound- pick -->
             <xpath expr="//field[@name='quant_id']" position="replace">
-                <field name="quant_id" column_invisible="parent.picking_type_name == 'Pick' and parent.transaction_type == 'outbound'"/>
+                <field name="quant_id" column_invisible="parent.picking_type_name in ['Pick', 'Receipts', 'Receipt Internal']"/>
             </xpath>
             
            <xpath expr="//field[last()]" position="after">
@@ -30,7 +30,7 @@
                         icon="fa-barcode"
                         title="Validate Lot"
                         invisible="matching == 'match'"
-                        column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"
+                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"
                         class="btn-secondary"/>
 
                 <button name="action_prepare_scan_location"
@@ -38,15 +38,15 @@
                         icon="fa-map-marker"
                         title="Validate Location"
                         invisible="matching == 'match'"
-                        column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'"
+                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"
                         class="btn-secondary"/>
 
-                <field name="confirmation_lot_code" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'" />
-                <field name="confirmation_location_code" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'" />
+                <field name="confirmation_lot_code" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
+                <field name="confirmation_location_code" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
 
                 <field name="matching"
                     decoration-success="matching == 'match'"
-                    decoration-danger="matching == 'not_match'" column_invisible="parent.picking_type_name != 'Pick' and parent.transaction_type != 'outbound'" />
+                    decoration-danger="matching == 'not_match'" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
 
             </xpath>
 
@@ -77,10 +77,10 @@
                     domain="[('id', 'child_of', adt_dest_location_id)]" 
                 />
                 <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
-                <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
                 <!-- <field name="adt_location_id" optional="show" column_invisible="parent.name != 'Pick'" /> -->
-                <field name="matching_lot_id" column_invisible="1" force_save="1"/>
-                <field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
+                <field name="allowed_matching_lot_ids" column_invisible="1"/>
+                <field name="matching_lot_id" column_invisible="1" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
+                <field name="matching_loc_dest_id" column_invisible="1" force_save="1" domain="[('id', 'child_of', adt_dest_location_id)]"/>
 
             </xpath>
 
@@ -92,10 +92,11 @@
             <xpath expr="//field[@name='location_dest_id']" position="replace">
 
                 <!-- <field name="location_dest_id" domain="[('id', 'child_of', adt_dest_location_id)]"/> -->
-                <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" />
+                <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
                 <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
-                <field name="matching_lot_id" column_invisible="1" force_save="1"/>
-                <field name="matching_loc_dest_id" column_invisible="1" force_save="1"/>
+                <field name="allowed_matching_lot_ids" column_invisible="1"/>
+                <field name="matching_lot_id" column_invisible="1" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
+                <field name="matching_loc_dest_id" column_invisible="1" force_save="1" domain="[('id', 'child_of', adt_dest_location_id)]"/>
 
                 <!-- <field name="id" string="Line ID" /> -->
                 <!-- <field name="matching_html" invisible="not confirmation_location_code and not confirmation_lot_code"/> -->
