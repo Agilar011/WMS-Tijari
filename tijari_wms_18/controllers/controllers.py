@@ -620,6 +620,8 @@ class WmsApiController(http.Controller):
             'origin': origin,
             'note': stok.note or "",
             'ket': stok.warehouse_note or "",
+            'warehouse_name': picking.picking_type_id.name or '',
+            'warehouse_id': picking.picking_type_id.warehouse_id.name or '',
             'scheduled_date': format_tanggal_indo(picking.scheduled_date) if picking else "",
             'detail': [],
         }

@@ -1250,7 +1250,7 @@ class StockLot(models.Model):
 class StockQuantPackage(models.Model):
     _inherit = "stock.quant.package"
 
-    note = fields.Text(string="Notes")
+    note = fields.Html(string="Notes")
     warehouse_note = fields.Text(string="Warehouse Note")
     origin = fields.Char(string="Source Document")
     scheduled_date = fields.Date(string='scheduled_date')
