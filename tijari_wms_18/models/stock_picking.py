@@ -87,7 +87,8 @@ class StockPicking(models.Model):
             ('waiting', 'Waiting Another Operation'),
             ('confirmed', 'Waiting'),
             ('assigned', 'Ready'),
-            ('waiting_response', 'Waiting Response'),
+            ('waiting_response', 'Waiting For Shipment'),
+            ('return_shipment', 'Returned Shipment'),
             ('done', 'Done'),
             ('cancel', 'Cancelled'),
         ],
@@ -98,6 +99,11 @@ class StockPicking(models.Model):
         tracking=True,
     )
 
+    shipment_information = fields.Selection([
+        ('partial', 'Partial Shipment'),
+        ('full_shipment', 'Full Shipment'),
+        ('full_return', 'Canceled'),
+    ], string='Informasi TMS', help='Status shipment yang akan dikirimkan dari TMS.')
 
     status_ba = fields.Selection([
         ('conform', 'Conform'),
@@ -127,10 +133,9 @@ class StockPicking(models.Model):
     @api.depends("state")
     def _compute_wms_state(self):
         for picking in self:
-            if picking.sync_state == "waiting_response":
-                continue
+            if picking.state != "done":
+                picking.wms_state = picking.state
             
-            picking.wms_state = picking.state
 
     @api.depends('move_ids.product_id')
     def _compute_allowed_putaway_product_ids(self):
@@ -164,10 +169,6 @@ class StockPicking(models.Model):
                 else False
             )
 
-    shipment_information = fields.Selection([
-        ('partial', 'Partial Shipment'),
-        ('full_shipment', 'Full Shipment'),
-    ], string='Informasi TMS', readonly=True, help='Status shipment yang akan dikirimkan ke TMS.')
 
 # Function to foward adt_type from parent picking
     @api.model_create_multi
@@ -464,6 +465,8 @@ class StockPicking(models.Model):
     @api.onchange("state")
     def _onchange_state_update_wms_state(self):
         for picking in self:
+            if picking.state == 'done':
+                continue
             picking.wms_state = picking.state        
 
 
@@ -505,14 +508,14 @@ class StockPicking(models.Model):
             "returnBranch": header_to_send.loginext_return_branch,
             "packageWeight": str(header_to_send.loginext_package_weight or 0),
             "packageVolume": str(header_to_send.loginext_package_volume or 0),
-            "preparationTime": int(header_to_send.loginext_preparation_time or 0),
+            "preparationTime": 30,
             "paymentType": header_to_send.loginext_payment_type,
             "packageValue": str(header_to_send.loginext_package_value or 0),
             "numberOfItems": header_to_send.loginext_number_of_items or 0,
             "partialDeliveryAllowedFl": "Y" if header_to_send.loginext_partial_delivery_allowed_fl else "N",
             "returnAllowedFl": "Y" if header_to_send.loginext_return_allowed_fl else "N",
             "cancellationAllowedFl": "Y" if header_to_send.loginext_cancellation_allowed_fl else "N",
-            "deliverServiceTime": str(header_to_send.loginext_deliver_service_time or 0),
+            "deliverServiceTime": '30',
             "deliverStartTimeWindow": self._format_datetime(header_to_send.loginext_deliver_start_time_window),
             "deliverEndTimeWindow": self._format_datetime(header_to_send.loginext_deliver_end_time_window),
             "deliveryType": header_to_send.loginext_delivery_type,
@@ -555,9 +558,8 @@ class StockPicking(models.Model):
     # ==========================================================
 
     def action_post_loginext(self):
-        _logger.info("=" * 80)
-        _logger.info("Sent LOGINEXT REQUEST")
-        # print(self)
+        print("=" * 80)
+        print("Sent LOGINEXT REQUEST")
         self.wms_state = 'waiting_response'
 
         LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
@@ -571,9 +573,10 @@ class StockPicking(models.Model):
             for rec in self
         ]
 
-        _logger.info("LOGINEXT REQUEST")
-        _logger.info(json.dumps(body, indent=4))
-        _logger.info("=" * 80)
+        print("=" * 80)
+        print("LOGINEXT REQUEST")
+        print("=" * 80)
+        print(json.dumps(body, indent=4))
 
         session = requests.Session()
 
@@ -594,11 +597,12 @@ class StockPicking(models.Model):
                 timeout=30,
             )
 
-            _logger.info("=" * 80)
-            _logger.info("LOGINEXT LOGIN RESPONSE")
-            _logger.info("Status : %s", login_response.status_code)
-            _logger.info(login_response.text)
-            _logger.info("=" * 80)
+            print("=" * 80)
+            print("LOGINEXT LOGIN RESPONSE")
+            print("=" * 80)
+            print(f"Status : {login_response.status_code}")
+            print(login_response.text)
+
 
             login_response.raise_for_status()
             www_authenticate = login_response.headers.get("WWW-Authenticate")
@@ -614,8 +618,7 @@ class StockPicking(models.Model):
             if www_authenticate:
                 headers["WWW-Authenticate"] = www_authenticate
 
-            _logger.info("Sent Response to Loginext")
-            print('Sent Response to Loginext')
+            print("Sent Response to Loginext")
             response = session.post(
                 CREATE_URL,
                 headers=headers,
@@ -623,15 +626,22 @@ class StockPicking(models.Model):
                 timeout=1,
             )
 
-            _logger.info("=" * 80)
-            _logger.info("LOGINEXT CREATE RESPONSE")
-            _logger.info("Status : %s", response.status_code)
-            _logger.info(response.text)
-            _logger.info("=" * 80)
+            print("=" * 80)
+            print("LOGINEXT CREATE RESPONSE")
+            print("=" * 80)
+            print(f"Status : {response.status_code}")
+            print(response.text)
 
             response.raise_for_status()
 
-            return response.json()
+            print("=" * 80)
+            print("END LOGINEXT REQUEST")
+            print("=" * 80)
+
+            res = self.button_validate()
+
+            return res
+
 
         except requests.exceptions.RequestException as e:
             _logger.exception(e)
@@ -740,6 +750,18 @@ class StockPicking(models.Model):
 
         return res  
 
+    def action_confirm_shipment(self):
+        self.ensure_one()
+        if not self.shipment_information:
+            raise UserError('Informasi TMS tidak boleh kosong')
+
+        if self.shipment_information == 'full_shipment':
+            self.wms_state = 'done'
+
+        if self.shipment_information != 'full_shipment':
+            self.wms_state = 'return_shipment'     
+        # self.shipment_information = 'full_shipment'
+        # self.wms_state = 'done' 
 
 # ================================================================================================
 # Temp Storage function create move line qr code        
@@ -830,6 +852,7 @@ class StockPicking(models.Model):
 
         return base64.b64encode(buffer.getvalue()).decode()
 
+    
 class StockRule(models.Model):
     _inherit = "stock.rule"
 

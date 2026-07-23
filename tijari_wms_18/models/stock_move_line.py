@@ -93,8 +93,6 @@ class StockMoveLine(models.Model):
 
     parent_location_id = fields.Many2one(
         "stock.location",
-        string="Parent Location",
-        default="adt_dest_location_id"
     )
 
     source_location_id = fields.Many2one(
@@ -224,6 +222,7 @@ class StockMoveLine(models.Model):
                 line.parent_location_id = line.adt_dest_location_id
 
         return move_lines
+        
 
     def write(self, vals):
         pickings = self.mapped('picking_id')

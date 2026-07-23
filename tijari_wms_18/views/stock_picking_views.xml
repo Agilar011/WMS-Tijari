@@ -43,16 +43,131 @@
                 string="Sent Response"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' and state != 'assigned'"/>
-
+                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' or wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel')"/>
+                
                 <button name="action_get_loginext"
                 string="Get Response"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' and state != 'assigned'"/>
+                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel')"/>
+
+                <button
+                    name="action_confirm_shipment"
+                    type="object"
+                    string="Confirm Shipment"
+                    class="btn-primary"
+                    invisible="picking_type_name != 'Delivery Orders' or wms_state != 'waiting_response' or transaction_type !='outbound'"/>
 
             </xpath>
 
+            <xpath expr="//group[field[@name='origin']]" position="after">
+                <group>
+
+                    <field name="shipment_information" 
+                    invisible="transaction_type not in ('outbound')"
+                            decoration-success="shipment_information == 'full_shipment'"
+                            decoration-warning="shipment_information == 'partial'"
+                            decoration-danger="shipment_information == 'canceled'"/>
+
+                </group>
+            </xpath>
+
+        <xpath expr="//notebook" position="inside">
+
+            <page string="Package Details">
+
+                <field name="package_level_ids"
+                       context="{
+                           'default_location_id': location_id,
+                           'default_location_dest_id': location_dest_id,
+                           'default_company_id': company_id
+                       }"
+                       readonly="state == 'done'"
+                       invisible="not picking_type_entire_packs"/>
+
+                <div class="mt16"/>
+
+                <button name="action_put_in_pack"
+                        type="object"
+                        string="Put in Pack"
+                        class="btn-secondary"
+                        groups="stock.group_tracking_lot"
+                        invisible="state in ('draft','done','cancel')"
+                        data-hotkey="shift+g"/>
+
+            </page>
+
+            <page string="Detail Product" name="operations">
+                <field name="move_ids_without_package" mode="list,kanban"
+                    widget="stock_move_one2many"
+                    readonly="state == 'done' and is_locked"
+                    context="{'default_company_id': company_id, 'default_date': scheduled_date, 'default_date_deadline': date_deadline, 'picking_type_code': picking_type_code, 'default_picking_id': id, 'form_view_ref': 'stock.view_stock_move_operations', 'address_in_id': partner_id, 'default_picking_type_id': picking_type_id, 'default_location_id': location_id, 'default_location_dest_id': location_dest_id, 'default_partner_id': partner_id}"
+                    add-label="Add a Product">
+                    <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" editable="bottom">
+                        <field name="company_id" column_invisible="True"/>
+                        <field name="picking_id" column_invisible="True"/>
+                        <field name="name" column_invisible="True"/>
+                        <field name="state" readonly="0" column_invisible="True"/>
+                        <field name="picking_type_id" column_invisible="True"/>
+                        <field name="move_line_ids" column_invisible="True"/>
+                        <field name="location_id" column_invisible="True"/>
+                        <field name="location_dest_id" column_invisible="True"/>
+                        <field name="partner_id" column_invisible="True" readonly="state == 'done'"/>
+                        <field name="scrapped" column_invisible="True"/>
+                        <field name="picking_code" column_invisible="True"/>
+                        <field name="show_details_visible" column_invisible="True"/>
+                        <field name="additional" column_invisible="True"/>
+                        <field name="move_lines_count" column_invisible="True"/>
+                        <field name="is_locked" column_invisible="True"/>
+                        <field name="product_uom_category_id" column_invisible="True"/>
+                        <field name="is_storable" column_invisible="True"/>
+                        <field name="has_tracking" column_invisible="True"/>
+                        <field name="product_id" context="{'default_is_storable': True}" required="1" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0" force_save="1"/>
+                        <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
+                        <field name="description_picking" string="Description" optional="hide"/>
+                        <field name="date" optional="hide"/>
+                        <field name="date_deadline" optional="hide"/>
+                        <field name="is_quantity_done_editable" column_invisible="True"/>
+                        <field name="show_quant" column_invisible="True"/>
+                        <field name="show_lots_text" column_invisible="True"/>
+                        <field name="show_lots_m2o" column_invisible="True"/>
+                        <field name="is_initial_demand_editable" column_invisible="True"/>
+                        <field name="display_import_lot" column_invisible="True"/>
+                        <field name="picking_type_entire_packs" column_invisible="True"/>
+                        <field name="product_packaging_id" groups="product.group_stock_packaging"
+                            context="{'default_product_id': product_id}"
+                            readonly="not product_id"/>
+                        <field name="product_uom_qty" string="Demand" readonly="not is_initial_demand_editable"/>
+                        <field name="remaining_package_qty" string="Remaining Product" readonly="1"/>
+                        <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
+                            invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                        <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
+                            invisible="not product_id or product_uom_qty == 0 or quantity &gt; 0 or forecast_availability &gt; 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                        <field name="forecast_expected_date" column_invisible="True"/>
+                        <field name="forecast_availability" string="Forecast" optional="hide"
+                            column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
+                        <field name="product_qty" readonly="1" column_invisible="True"/>
+                        <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                        <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
+                        <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
+                        <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
+                        <field name="lot_ids" widget="many2many_tags"
+                            readonly="has_tracking != 'serial'"
+                            column_invisible="parent.state == 'draft'"
+                            groups="stock.group_production_lot"
+                            invisible="not show_details_visible or has_tracking == 'none'"
+                            optional="hide"
+                            options="{'create': [('parent.use_create_lots', '=', True)]}"
+                            context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
+                            domain="[('product_id','=',product_id)]"
+                        />
+                    </list>
+                </field>
+                <field name="id" invisible="1"/>
+                <!-- <field name="package_level_ids" context="{'default_location_id': location_id, 'default_location_dest_id': location_dest_id, 'default_company_id': company_id}" invisible="not picking_type_entire_packs" readonly="state == 'done'" /> -->
+                <button class="btn-secondary float-end" name="action_put_in_pack" type="object" string="Put in Pack" invisible="state in ('draft', 'done', 'cancel')" groups="stock.group_tracking_lot" data-hotkey="shift+g"/>
+            </page>
+        </xpath>
 
         </field>
     </record>
@@ -296,6 +411,80 @@
                     </group>
                 </page>
             </xpath>
+        </field>
+    </record>
+
+    <record id="view_quant_package_form_inherit" model="ir.ui.view">
+        <field name="name">stock.quant.package.form.inherit</field>
+        <field name="model">stock.quant.package</field>
+        <field name="inherit_id" ref="stock.view_quant_package_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//button[@name='unpack']" position="after">
+                <button name="action_print_packing_list" string="Print" type="object" class="btn-primary"/>
+            </xpath>
+            <!-- <xpath expr="//field[@name='pack_date']" position="after">
+                <field name="scheduled_date"/>
+                <field name="origin"/>
+                <field name="note" widget="html"/>
+            </xpath> -->
+            <xpath expr="//field[@name='quant_ids']" position="replace">
+            <notebook>
+
+                <page string="Content">
+                    <field name="quant_ids">
+                        <list>
+                            <field name="product_id"/>
+                            <field name="lot_id" groups="stock.group_production_lot"/>
+                            <field name="quantity"/>
+                            <field name="product_uom_id" groups="uom.group_uom"/>
+                        </list>
+                        <kanban class="o_kanban_mobile">
+                            <templates>
+                                <t t-name="card">
+                                    <field name="product_id" class="fw-bold"/>
+                                    <field name="lot_id"/>
+                                    <div class="d-flex">
+                                        <field name="quantity"/>
+                                        <field class="mx-2"
+                                               name="product_uom_id"
+                                               groups="uom.group_uom"/>
+                                    </div>
+                                </t>
+                            </templates>
+                        </kanban>
+                    </field>
+                </page>
+
+                <page string="Notes">
+                    <field name="warehouse_note" widget="html"/>
+                </page>
+
+            </notebook>
+
+        </xpath>
+        <xpath expr="//sheet/separator" position="attributes">
+            <attribute name="invisible">1</attribute>
+        </xpath>
+
+        </field>
+    </record>
+
+    
+    <record id="view_quant_package_tree_inherit" model="ir.ui.view">
+        <field name="name">stock.quant.package.tree.inherit</field>
+        <field name="model">stock.quant.package</field>
+        <field name="inherit_id" ref="stock.view_quant_package_tree"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='company_id']" position="after">
+                <button
+                    name="action_print_packing_list"
+                    type="object"
+                    icon="fa-print"
+                    string="Print"/>
+            </xpath>
+
         </field>
     </record>
 

@@ -76,7 +76,27 @@ class StockMove(models.Model):
     adt_dest_location = fields.Char(string="Mappped Location",
         readonly=True
     ) 
-    
+
+    remaining_package_qty = fields.Float(
+        compute="_compute_remaining_package_qty",
+        string="Remaining Package Qty",
+    )
+
+    @api.depends(
+        "quantity",
+        "move_line_ids.quantity",
+        "move_line_ids.package_id",
+    )
+    def _compute_remaining_package_qty(self):
+        for move in self:
+            packaged_qty = sum(
+                ml.quantity
+                for ml in move.move_line_ids
+                if ml.package_id
+            )
+
+            move.remaining_package_qty = move.quantity - packaged_qty
+            
     @api.depends('move_line_ids.lot_id', 'move_line_ids.quantity')
     def _compute_lot_ids(self):
         for move in self:

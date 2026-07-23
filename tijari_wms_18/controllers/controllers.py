@@ -593,3 +593,76 @@ class WmsApiController(http.Controller):
             resp = {'msg': msg, 'request_content': str(request_content)}
             resp = json.dumps(resp)
             return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/packing_list', type='http', auth='user')
+    def PrintPackingList(self, id=None, **kw):
+        if not id:
+            return request.make_response(
+                json.dumps({'error': 'id tidak ditemukan'}),
+                [('Content-Type', 'application/json')]
+            )
+
+        stok = request.env['stock.quant.package'].sudo().browse(int(id))
+        package_level = request.env['stock.package_level'].sudo().search([
+            ('package_id', '=', stok.id)
+        ], limit=1)
+        picking = package_level.picking_id
+
+        origin = ""
+        if picking and picking.origin:
+            origin = picking.origin.split(",")[0].strip()
+
+        data = {
+            'partner_id': picking.partner_id.name if picking else "",
+            'warehouse': stok.location_id.name or "",
+            'name': stok.name or "",
+            'date': format_tanggal_indo(stok.pack_date),
+            'origin': origin,
+            'note': stok.note or "",
+            'ket': stok.warehouse_note or "",
+            'warehouse_name': picking.picking_type_id.name or '',
+            'warehouse_id': picking.picking_type_id.warehouse_id.name or '',
+            'scheduled_date': format_tanggal_indo(picking.scheduled_date) if picking else "",
+            'detail': [],
+        }
+
+        for quant in stok.quant_ids:
+            data['detail'].append({
+                'product': quant.product_id.name or "",
+                'product_code': quant.product_id.default_code or "",
+                'qty': quant.quantity,
+                'uom': quant.product_id.uom_id.name or "",
+            })
+
+        data = json.dumps(data)
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/PACKING_LIST',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "PACKING_LIST.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
