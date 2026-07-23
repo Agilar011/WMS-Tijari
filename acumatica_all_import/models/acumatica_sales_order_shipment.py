@@ -206,7 +206,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                     shipment_weight = shipment.adt_ShipmentWeight
                     shipment_volume = shipment.adt_ShipmentVolume
                     shipment_city = shipment.adt_City
-                    shipment_country = shipment.adt_CountryName
+
+                    shipment_country = self._find_loginext_country(shipment.adt_CountryName)
                     shipment_postal_code = shipment.adt_PostalCode
                     shipment_street = shipment.adt_AddressLine
 
@@ -468,6 +469,18 @@ class AcumaticaShipmentGIStaging(models.Model):
         if not uom and product:
             uom = product.uom_id
         return uom
+
+    def _find_loginext_country(self, code):
+        Country = self.env['loginext.master.country']
+
+        country_code = Country.search([('country', '=', code)], limit=1)
+        if country_code:
+            final_code = country_code.code
+
+        else:
+            final_code = "IDN"
+            
+        return final_code
 
 # Helper Function
 
