@@ -17,7 +17,8 @@
         'stock_picking_batch',
         'stock_sms',
         'product',
-        'stock_inventory'
+        'stock_inventory',
+        'tijari_auth_oauth',
     ],
     'data': [
         'security/ir.model.access.csv',
