@@ -58,6 +58,18 @@
                     class="btn-primary"
                     invisible="picking_type_name != 'Delivery Orders' or wms_state != 'waiting_response' or transaction_type !='outbound'"/>
 
+                <button name="action_print_warehouse_receipt"
+                    string="Print Receipt"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_name not in ['Receipts', 'Receipt Internal']"/>
+
+                <button name="action_send_email_hasil_picking"
+                    string="Send Email"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_name not in ['Receipts', 'Receipt Internal']"/>
+
             </xpath>
 
             <xpath expr="//group[field[@name='origin']]" position="after">
