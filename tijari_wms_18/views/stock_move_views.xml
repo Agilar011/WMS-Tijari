@@ -11,10 +11,10 @@
             <xpath expr="//widget[@name='import_lots']" position="before">
                 <div>
                     <field name="picking_type_name" invisible="1"/>
-                    <div invisible="picking_type_name not in ['Pick', 'Pick Internal']">
-                        <field name="unfiltered_dest" invisible="picking_type_name not in ['Pick', 'Pick Internal']"/>
-                        <span style="margin-right: 4px;" invisible="picking_type_name not in ['Pick', 'Pick Internal']">Pengambilan Item berdasarkan lokasi mapping</span>
-                    </div>
+                    <!-- <div invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">
+                        <field name="unfiltered_dest" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'"/>
+                        <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">Pengambilan Item berdasarkan lokasi mapping</span>
+                    </div> -->
                         <button name="action_validate_lot_pick"
                             type="object"
                             string="Validate Lot"
@@ -84,6 +84,7 @@
 
             <xpath expr="//field[@name='quantity']" position="after">
                 <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
+                <field name="confirmation_quantity" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
             </xpath>
 
         </field>

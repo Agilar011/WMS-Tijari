@@ -462,6 +462,14 @@ class StockPicking(models.Model):
             'display_name': product.display_name,
         }
     
+    def action_mark_as_done(self):
+        self.ensure_one()
+        if self.wms_state == 'return_shipment':
+            self.wms_state = 'done'
+
+        else: 
+            raise UserError('Shipment return tidak bisa diselesaikan tanpa membuat dokumen return')
+
     @api.onchange("state")
     def _onchange_state_update_wms_state(self):
         for picking in self:

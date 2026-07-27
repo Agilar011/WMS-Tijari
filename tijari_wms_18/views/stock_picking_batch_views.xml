@@ -60,7 +60,7 @@
                             <field name="product_uom_id" readonly="1" string="UoM"/>
                             <field name="adt_dest_location_id" column_invisible="1"/>
                             <field name="allowed_matching_lot_ids" column_invisible="1"/>
-                            <field name="location_dest_id" readonly="1"/>
+                            <field name="location_dest_id" domain="[('id', 'child_of', adt_dest_location_id)]"/>
                             <field name="quantity" readonly="1"/>
                             <field name="matching" column_invisible="1" force_save="1"/>
                             <field name="matching_lot_id" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
