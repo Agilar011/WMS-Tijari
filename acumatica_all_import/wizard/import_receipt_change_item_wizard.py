@@ -108,6 +108,14 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
 
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='receipt_change_item',
+            document_only=header.get('document_only'),
+            warehouse_code=header.get('warehouse_code'),
+        )
+        if document_only_type:
+            return document_only_type
+
         location = Location.search([
             ('code', '=', header['warehouse_code'])
         ])
@@ -245,6 +253,7 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
 
         return {
             'external_id': item.get('id', '') or '',
+            'document_only': self._bool_val(item, 'DocumentOnly'),
             'row_number': row_number,
             'note': item.get('note', {}).get('value', '') or '',
             'branch_warehouse': self._val(item, 'Branch'),
@@ -459,6 +468,14 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
         warehouse_code = header.get('warehouse_code')
         type = False
 
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='receipt_change_item',
+            document_only=header.get('document_only'),
+            warehouse_code=warehouse_code,
+        )
+        if document_only_type:
+            return document_only_type
+
         print(f"Warehouse Code: {warehouse_code}")
 
         location = Location.search([
@@ -500,6 +517,19 @@ class ImportReceiptChangeItemWizard(models.TransientModel):
             return value.get('value', '') or ''
         # print(value)
         return value or ''
+
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
     
     @staticmethod
     def _parse_dt(dt_str):

@@ -370,6 +370,8 @@ class AcumaticaKitAssembly(models.Model):
 
     status = fields.Char()
 
+    document_only = fields.Boolean(string='Document Only', readonly=True)
+
     type = fields.Char()
 
     uom = fields.Char()
@@ -831,6 +833,8 @@ class AcumaticaKitAssemblyLine(models.Model):
             'adt_type' : "1-Step",
             'adt_total_qty' : total_moving_qty,
         }
+        if operation_type.default_location_dest_id.usage == 'customer':
+            raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
 
         if manufacturing_check:
             print("Create MO Skipped")

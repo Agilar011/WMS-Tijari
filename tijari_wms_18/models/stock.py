@@ -152,7 +152,21 @@ class StockPicking(models.Model):
             })
 
     def button_validate(self):
+        document_only_pickings = self.filtered(
+            lambda picking: picking.adt_is_document_only or picking.picking_type_id.is_document_only_api
+        )
+        for picking in document_only_pickings.filtered(lambda item: item.state not in ('done', 'cancel')):
+            picking._adt_preserve_document_only_destination()
+            if picking.state == 'draft':
+                picking.action_confirm()
+            if picking.state in ('confirmed', 'waiting', 'assigned'):
+                picking.action_assign()
+            picking._adt_preserve_document_only_destination()
+            picking._set_document_only_done_quantities()
+
         for picking in self:
+            if picking.adt_is_document_only or picking.picking_type_id.is_document_only_api:
+                continue
             if picking.picking_type_id.name not in ('Pick', 'Receipt'):
                 print(f"Run validate all except pick and receipt")
                 # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
@@ -174,55 +188,60 @@ class StockPicking(models.Model):
 
                         print(f"After write line {line.id} = {line.matching} for picking: {picking.id}")
 
-        res = super().button_validate()
+        if document_only_pickings:
+            res = super(StockPicking, self.with_context(skip_sanity_check=True)).button_validate()
+        else:
+            res = super().button_validate()
+        document_only_pickings._adt_preserve_document_only_destination()
 
         for rec in self:
+            is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
             print(rec.picking_type_id.operation_category)
-            for line in rec.move_line_ids:
-                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
-                line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
-                if not line.lot_name:
-                    print(f"Missing lot: {line}")
-                    raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
-                
+            if not is_document_only:
+                for line in rec.move_line_ids:
+                    print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
+                    line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
+                    if not line.lot_name:
+                        print(f"Missing lot: {line}")
+                        raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
 
-            picking._check_validate_requirements()
-            operation_category = picking.picking_type_id.operation_category
-            print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
+                rec._check_validate_requirements()
+                operation_category = rec.picking_type_id.operation_category
+                print(f">>> Validating picking {rec.id} - Picking Type: {rec.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
 
-            # Hanya enforce untuk PUT dan DELIVERY
-            if operation_category in ['put', 'delivery']:
-                for line in picking.move_line_ids:
-                    # Jika belum dicek (invisible), tidak dianggap ok
-                    print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
-                    # line.matching = 'match'
-                    print(f">>> Matching status for line {line.id}: {line.matching}") # Cek di terminal Odoo
-                    if line.matching != 'match':
-                        raise UserError(_(
-                            "Validation blocked.\n\n"
-                            "Line:\n"
-                            f"- Product: {line.product_id.display_name}\n"
-                            f"- Qty: {line.quantity or line.product_uom_qty}\n\n"
-                            "Status: ❌ NOT MATCH\n\n"
-                            "Silakan pastikan scan location dan/atau lot sudah benar."
-                        ))
+                # Hanya enforce untuk PUT dan DELIVERY
+                if operation_category in ['put', 'delivery']:
+                    for line in rec.move_line_ids:
+                        # Jika belum dicek (invisible), tidak dianggap ok
+                        print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+                        # line.matching = 'match'
+                        print(f">>> Matching status for line {line.id}: {line.matching}") # Cek di terminal Odoo
+                        if line.matching != 'match':
+                            raise UserError(_(
+                                "Validation blocked.\n\n"
+                                "Line:\n"
+                                f"- Product: {line.product_id.display_name}\n"
+                                f"- Qty: {line.quantity or line.product_uom_qty}\n\n"
+                                "Status: ❌ NOT MATCH\n\n"
+                                "Silakan pastikan scan location dan/atau lot sudah benar."
+                            ))
             pickings = self.env["stock.picking"].search([])
-            if picking.picking_type_id.code != "incoming":
+            if rec.picking_type_id.code != "incoming":
                 continue
 
             storage_pickings = self.env["stock.picking"].search([
-                ("origin", "ilike", picking.origin or picking.name),
+                ("origin", "ilike", rec.origin or rec.name),
                 ("picking_type_id.code", "=", "internal"),
             ], limit=1)
-            total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
-            picking.write({
+            total_qty = sum(rec.move_ids.move_line_ids.mapped("quantity"))
+            rec.write({
                 'adt_total_qty': total_qty
             })
 
             storage_pickings.write({
-                "adt_dest_location_id": picking.adt_dest_location_id,
-                "adt_type": picking.adt_type,
-                "note" : picking.note,
+                "adt_dest_location_id": rec.adt_dest_location_id,
+                "adt_type": rec.adt_type,
+                "note" : rec.note,
             })
             # for ml in picking.move_line_ids:
                 # if not ml.allocation_storage:
@@ -246,7 +265,7 @@ class StockPicking(models.Model):
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
-                    receipt_move = picking.move_ids.filtered(
+                    receipt_move = rec.move_ids.filtered(
                         lambda m: m.product_id == storage_move.product_id
                     )[:1]
 
@@ -255,7 +274,7 @@ class StockPicking(models.Model):
                             "product_note": receipt_move.product_note,
                         })
 
-            for move in picking.move_ids:
+            for move in rec.move_ids:
                 if move.quantity > move.product_uom_qty:
                     total_qty = sum(line.mapped("quantity"))
                     raise UserError(
@@ -395,6 +414,123 @@ class StockPickingType(models.Model):
     ], string='Operation Category', required=False, default='others') 
 
     is_default_api = fields.Boolean(string="Default Picking Type For API")
+    is_document_only_api = fields.Boolean(string="Document Only API")
+
+    @api.model
+    def _normalize_document_only_operation(self, value):
+        if not value:
+            return False
+        normalized = str(value).strip().lower().replace('-', '_').replace(' ', '_')
+        aliases = {
+            'direct_receipt': 'direct_receipt',
+            'receipt': 'direct_receipt',
+            'receive': 'direct_receipt',
+            'incoming': 'direct_receipt',
+            'direct_delivery_order': 'direct_delivery_order',
+            'delivery': 'direct_delivery_order',
+            'delivery_order': 'direct_delivery_order',
+            'outgoing': 'direct_delivery_order',
+        }
+        return aliases.get(normalized)
+
+    @api.model
+    def _normalize_api_acumatica(self, value):
+        if not value:
+            return False
+        return str(value).strip().lower().replace('-', '_').replace(' ', '_')
+
+    @api.model
+    def _get_document_only_operation_by_api(self):
+        return {
+            'po_receipt': 'direct_receipt',
+            'receipt_change_item': 'direct_receipt',
+            'inventory_received': 'direct_receipt',
+            'inventory_receive': 'direct_receipt',
+            'receipt_toko_pegang_do': 'direct_receipt',
+            'transfer_in': 'direct_receipt',
+            'so_transfer': 'direct_receipt',
+            'sotr': 'direct_receipt',
+            'vendor_return': 'direct_receipt',
+            'so_shipment': 'direct_delivery_order',
+            'so_shipment_toko_pegang_do': 'direct_delivery_order',
+            'so_shipment_co': 'direct_delivery_order',
+            'transfer_shipment': 'direct_delivery_order',
+            'issue_change_item': 'direct_delivery_order',
+            'inventory_issue': 'direct_delivery_order',
+            'issue_change_item_discontinue': 'direct_delivery_order',
+            'issue_po_return': 'direct_delivery_order',
+            'po_return': 'direct_delivery_order',
+            'transfer_one_step': 'direct_delivery_order',
+            'transfer_two_step': 'direct_delivery_order',
+        }
+
+    @api.model
+    def _get_document_only_picking_type(self, operation, warehouse_code=False, required=True):
+        operation = self._normalize_document_only_operation(operation)
+        operation_vals = {
+            'direct_receipt': ('Direct Receipt', 'DRC'),
+            'direct_delivery_order': ('Direct Delivery Order', 'DDO'),
+        }
+        if operation not in operation_vals:
+            if required:
+                raise UserError(_("Unsupported document only operation: %s") % operation)
+            return self.browse()
+
+        name, sequence_code = operation_vals[operation]
+        domain = [
+            ('is_document_only_api', '=', True),
+            ('sequence_code', '=', sequence_code),
+        ]
+        if warehouse_code:
+            warehouse = self.env['stock.warehouse'].sudo().search([
+                '|',
+                ('code', '=', warehouse_code),
+                ('name', '=', warehouse_code),
+            ], limit=1)
+            if warehouse:
+                domain.append(('warehouse_id', '=', warehouse.id))
+
+        picking_type = self.sudo().search(domain, limit=1)
+        if not picking_type:
+            picking_type = self.sudo().search([
+                ('is_document_only_api', '=', True),
+                ('name', '=', name),
+            ], limit=1)
+        if not picking_type and required:
+            raise UserError(_("No document only picking type configured for %s") % name)
+        return picking_type
+
+    @api.model
+    def resolve_document_only_picking_type(
+        self,
+        target_picking_type_id=False,
+        target_operation_type=False,
+        api_acumatica=False,
+        document_only=False,
+        warehouse_code=False,
+        required=False,
+    ):
+        if target_picking_type_id:
+            picking_type = self.sudo().browse(int(target_picking_type_id)).exists()
+            if picking_type:
+                return picking_type
+            if required:
+                raise UserError(_("Target picking type not found: %s") % target_picking_type_id)
+
+        operation = self._normalize_document_only_operation(target_operation_type)
+        if not operation and document_only:
+            operation = self._get_document_only_operation_by_api().get(
+                self._normalize_api_acumatica(api_acumatica)
+            )
+        if operation:
+            return self._get_document_only_picking_type(
+                operation,
+                warehouse_code=warehouse_code,
+                required=required,
+            )
+        if required:
+            raise UserError(_("Document only operation type is not provided"))
+        return self.browse()
 
     # def get_action_picking_tree_draft(self):
     #     self.ensure_one()

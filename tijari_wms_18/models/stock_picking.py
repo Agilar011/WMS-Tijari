@@ -9,7 +9,7 @@ import logging
 import json
 import requests
 from collections import defaultdict
-from odoo import models, api, fields
+from odoo import models, api, fields, _
 from odoo.exceptions import ValidationError, UserError
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 
@@ -40,6 +40,7 @@ class StockPicking(models.Model):
     adt_to_warehouse_code = fields.Char(string='To Warehouse (Acumatica)')
     adt_from_warehouse_code = fields.Char(string='From Warehouse (Acumatica)')
     adt_description = fields.Char(string='Description (Acumatica)')
+    adt_is_document_only = fields.Boolean(string='Is Document Only', index=True, copy=False)
 
     adt_actual_amount = fields.Float(string='Control Amount (Acumatica)')
     adt_total_amount = fields.Float(string='Total Amount (Acumatica)')
@@ -80,6 +81,116 @@ class StockPicking(models.Model):
         compute='_compute_putaway_values',
         readonly=False,
     )
+
+    def write(self, vals):
+        result = super().write(vals)
+        if 'adt_is_document_only' not in vals and ({'origin', 'adt_type'} & set(vals)):
+            self._set_acumatica_document_only_flag()
+        if not self.env.context.get('skip_document_only_picking_type_sync') and (
+            {'adt_is_document_only', 'picking_type_id', 'origin', 'adt_type'} & set(vals)
+        ):
+            self._set_document_only_picking_type()
+        return result
+
+    @staticmethod
+    def _document_only_value(value):
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _set_acumatica_document_only_flag(self):
+        staging_specs = [
+            ('acumatica.receipt.line', 'receipt_nbr', 'document_only'),
+            ('acumatica.transfer.line', 'reference_nbr', 'document_only'),
+            ('acumatica.receipt.change.item.line', 'reference_nbr', 'document_only'),
+            ('acumatica.inventory.recieved.line', 'reference_nbr', 'document_only'),
+            ('acumatica.shipment.line', 'shipment_nbr', 'document_only'),
+            ('acumatica.shipment.gi.staging', 'adt_ShipmentNbr', 'adt_DocumentOnly'),
+            ('acumatica.issue.line', 'reference_nbr', 'document_only'),
+            ('acumatica.inventory.issue.line', 'reference_nbr', 'document_only'),
+            ('acumatica.issue.po.return.line', 'reference_nbr', 'document_only'),
+            ('acumatica.transfer.shipment.line', 'shipment_nbr', 'document_only'),
+            ('acumatica.transfer.one.step.line', 'reference_nbr', 'document_only'),
+            ('acumatica.transfer.two.step.line', 'reference_nbr', 'document_only'),
+            ('acumatica.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
+            ('acumatica.vendor.return.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
+            ('acumatica.receipt.external.line', 'reference_nbr', 'document_only'),
+            ('acumatica.toko.pegang.do.line', 'reference_nbr', 'document_only'),
+        ]
+        for picking in self:
+            if picking.adt_is_document_only or not picking.origin:
+                continue
+            is_document_only = False
+            for model_name, reference_field, document_field in staging_specs:
+                if model_name not in self.env.registry.models:
+                    continue
+                Model = self.env[model_name].sudo()
+                if reference_field not in Model._fields or document_field not in Model._fields:
+                    continue
+                staging = Model.search([(reference_field, '=', picking.origin)], limit=1)
+                if staging and self._document_only_value(staging[document_field]):
+                    is_document_only = True
+                    break
+            if is_document_only:
+                picking.sudo().with_context(skip_document_only_sync=True).write({'adt_is_document_only': True})
+        self._set_document_only_picking_type()
+
+    def _get_document_only_operation(self):
+        self.ensure_one()
+        picking_type_code = self.picking_type_id.code
+        if picking_type_code == 'incoming':
+            return 'direct_receipt'
+        if picking_type_code == 'outgoing':
+            return 'direct_delivery_order'
+
+        adt_type = (self.adt_type or '').strip().lower()
+        if any(token in adt_type for token in ('receipt', 'transfer in', 'return')):
+            return 'direct_receipt'
+        if any(token in adt_type for token in ('issue', 'shipment', 'delivery', 'transfer out')):
+            return 'direct_delivery_order'
+        return False
+
+    def _set_document_only_picking_type(self):
+        PickingType = self.env['stock.picking.type'].sudo()
+        for picking in self:
+            if not picking.adt_is_document_only:
+                continue
+            if picking.picking_type_id.is_document_only_api:
+                continue
+
+            operation = picking._get_document_only_operation()
+            if not operation:
+                continue
+
+            warehouse = picking.picking_type_id.warehouse_id or picking.location_dest_id.warehouse_id or picking.location_id.warehouse_id
+            document_only_type = PickingType.resolve_document_only_picking_type(
+                target_operation_type=operation,
+                document_only=True,
+                warehouse_code=warehouse.code if warehouse else False,
+            )
+            if document_only_type and document_only_type != picking.picking_type_id:
+                picking.with_context(skip_document_only_picking_type_sync=True).sudo().write({
+                    'picking_type_id': document_only_type.id,
+                })
+
+    def _adt_preserve_document_only_destination(self):
+        for picking in self:
+            if not picking.adt_dest_location_id:
+                continue
+            if picking.location_dest_id != picking.adt_dest_location_id:
+                picking.with_context(skip_document_only_sync=True).sudo().write({
+                    'location_dest_id': picking.adt_dest_location_id.id,
+                })
+            picking.move_ids.sudo().write({
+                'location_dest_id': picking.adt_dest_location_id.id,
+                'adt_dest_location_id': picking.adt_dest_location_id.id,
+            })
+            picking.move_line_ids.sudo().write({
+                'location_dest_id': picking.adt_dest_location_id.id,
+            })
+
 
     wms_state = fields.Selection(
         selection=[
@@ -169,6 +280,96 @@ class StockPicking(models.Model):
                 else False
             )
 
+    def _set_document_only_done_quantities(self):
+        MoveLine = self.env['stock.move.line'].sudo()
+        for picking in self:
+            for move in picking.move_ids.filtered(lambda line: line.state not in ('done', 'cancel')):
+                quantity = move.product_uom_qty
+                if not quantity:
+                    continue
+
+                move_lines = move.move_line_ids
+                quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
+                move.write({
+                    'quantity': quantity,
+                })
+                if move_lines:
+                    if len(move_lines) > 1:
+                        move_lines[:-1].write({
+                            quantity_field: 0.0,
+                            'picked': False,
+                        })
+                    line_vals = {
+                        quantity_field: quantity,
+                        'picked': True,
+                    }
+                    if (
+                        move.product_id.tracking != 'none'
+                        and not move_lines[-1].lot_id
+                        and not move_lines[-1].lot_name
+                    ):
+                        line_vals['lot_name'] = picking.origin or picking.name or 'DOCUMENT ONLY'
+                    move_lines[-1].write(line_vals)
+                else:
+                    move_line_vals = {
+                        'picking_id': picking.id,
+                        'move_id': move.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                        quantity_field: quantity,
+                        'picked': True,
+                    }
+                    if move.product_id.tracking != 'none':
+                        move_line_vals['lot_name'] = picking.origin or picking.name or 'DOCUMENT ONLY'
+                    MoveLine.create(move_line_vals)
+
+                move.move_line_ids.flush_recordset([quantity_field, 'picked'])
+                move.flush_recordset(['quantity', 'picked'])
+                self.env.cr.execute(
+                    "UPDATE stock_move_line SET picked = TRUE WHERE move_id = %s",
+                    [move.id],
+                )
+                self.env.cr.execute(
+                    "UPDATE stock_move SET picked = TRUE WHERE id = %s",
+                    [move.id],
+                )
+                move.move_line_ids.invalidate_recordset(['picked'])
+                move.invalidate_recordset(['picked'])
+
+    def _process_document_only_validation_action(self, action):
+        if not isinstance(action, dict):
+            return
+
+        model_name = action.get('res_model')
+        context = action.get('context') or {}
+        if model_name == 'stock.immediate.transfer':
+            wizard = self.env[model_name].with_context(context).create({})
+            wizard.process()
+        elif model_name == 'stock.backorder.confirmation':
+            wizard = self.env[model_name].with_context(context).create({})
+            wizard.process_cancel_backorder()
+
+    def action_validate_document_only_import(self, force=False):
+        for picking in self:
+            if force and not picking.adt_is_document_only:
+                picking.sudo().write({'adt_is_document_only': True})
+            if not picking.adt_is_document_only or picking.state in ('done', 'cancel'):
+                continue
+            if not picking.move_ids:
+                raise UserError(_("Document only picking %s has no lines to validate.") % picking.display_name)
+
+            picking._adt_preserve_document_only_destination()
+            picking.action_confirm()
+            picking.action_assign()
+            picking.button_validate()
+            picking._adt_preserve_document_only_destination()
+            # picking._set_document_only_done_quantities()
+            # action = picking.with_context().button_validate()
+            # picking._process_document_only_validation_action(action)
+        return True
+
 
 # Function to foward adt_type from parent picking
     @api.model_create_multi
@@ -197,6 +398,8 @@ class StockPicking(models.Model):
 
         # # Panggil fungsi super() dengan melewatkan vals_list yang sudah diperbarui
         pickings = super(StockPicking, self).create(vals_list)
+        pickings._set_acumatica_document_only_flag()
+        pickings._set_document_only_picking_type()
         print(pickings)
         return pickings
 

@@ -103,6 +103,14 @@ class ImportDirectTransferWizard(models.TransientModel):
         Location = self.env['stock.location.acumatica']
         type = False
 
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='vendor_return',
+            document_only=header.get('adt_DocumentOnly'),
+            warehouse_code=header.get('adt_FromWarehouseID'),
+        )
+        if document_only_type:
+            return document_only_type
+
         print(f"Warehouse: {header['adt_FromWarehouseID']}")
 
         location = Location.search([

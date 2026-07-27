@@ -54,7 +54,7 @@
             name="Shipment SO Return"
             parent="wms_operations_menu_inbound" 
             sequence="5" 
-            action="stock.method_action_picking_tree_incoming"/>
+            action="action_wms_operations_shipment_so_return"/>
 
 
   <!-- OUTBOUND HEADERS -->
@@ -69,13 +69,13 @@
             name="Sale Orders Shipment"
             parent="wms_operations_menu_outbound" 
             sequence="1" 
-            action="stock.method_action_picking_tree_outgoing"/>
+            action="action_wms_operations_sale_orders_shipment"/>
 
   <menuitem id="wms_operations_outbound_transfer_shipment"
             name="Transfer Shipment"
             parent="wms_operations_menu_outbound" 
             sequence="2" 
-            action="stock.method_action_picking_tree_outgoing"/>
+            action="action_wms_operations_transfer_shipment"/>
 
   <menuitem id="wms_operations_outbound_issue_type_change_items"
             name="Issue Type Change Items"
@@ -93,7 +93,7 @@
             name="Issue Type PO Return"
             parent="wms_operations_menu_outbound" 
             sequence="4" 
-            action="stock.method_action_picking_tree_outgoing"/>
+            action="action_wms_operations_po_return"/>
 
   <menuitem id="wms_operations_outbound_transfer_pinjaman_1_step"
             name="Transfer Pinjaman (1 Step)"
@@ -112,6 +112,13 @@
             parent="wms_operations_menu_outbound" 
             sequence="8" 
             action="action_wms_kit_assembly"/>
+
+
+  <menuitem id="wms_operations_document_only"
+            name="Document Only"
+            parent="wms_operations_menu"
+            sequence="25"
+            action="action_wms_operations_document_only"/>
 
 
   <!-- INTERNAL HEADERS -->

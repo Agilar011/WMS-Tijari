@@ -181,7 +181,7 @@ class AcumaticaInventoryReceiptTransferWhInStaging(models.Model):
     adt_Customer = fields.Char(string="Acumatica Customer")
     adt_Date = fields.Char(string="Acumatica Date")
     adt_Description = fields.Char(string="Acumatica Description")
-    adt_DocumentOnly = fields.Char(string="Acumatica DocumentOnly")
+    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly")
     adt_ExternalRef = fields.Char(string="Acumatica ExternalRef")
     adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime")
     adt_Location = fields.Char(string="Acumatica Location")
@@ -546,6 +546,9 @@ class AcumaticaInventoryReceiptTransferWhInStaging(models.Model):
                             'odoo_picking_id': picking.id if picking else False,
                         })
                         error += 1
+
+                if first.adt_DocumentOnly:
+                    picking.action_validate_document_only_import(force=True)
 
             except Exception as e:
                 _logger.exception("Error import receipt %s", reference_nbr)

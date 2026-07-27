@@ -76,6 +76,20 @@ class ImportInventoryReceiptWizard(models.TransientModel):
         return value or ''
 
     @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    @classmethod
+    def _bool_val(cls, item, key):
+        return cls._bool_value(item.get(key, {}))
+
+    @staticmethod
     def _normalize_rows(payload):
         if isinstance(payload, list):
             return payload
@@ -140,7 +154,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
                     "value": "WH33"
                 }
             }
-            response = session.put(endpoint, json=body, params=params, timeout=60)
+            response = session.put(endpoint, json=body, params=params, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal fetch data (HTTP {response.status_code}): {response.text}')
 
@@ -171,7 +185,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
                         'scheduled_date': self._val(item, 'Date'),
                         'description': self._val(item, 'Description'),
                         # DocType
-                        # DocumentOnly
+                        'document_only': self._bool_val(item, 'DocumentOnly'),
                         'external_ref': self._val(item, 'ExternalRef'),
                         'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
                         
@@ -251,7 +265,7 @@ class ImportInventoryReceiptWizard(models.TransientModel):
     #             '$filter': f"ReferenceNbr eq '{transfer_nbr}'"
     #         }
 
-    #         response = session.get(endpoint, params=params, timeout=90)
+    #         response = session.get(endpoint, params=params, timeout=300)
     #         if response.status_code != 200:
     #             raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
 

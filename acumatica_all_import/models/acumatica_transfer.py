@@ -291,6 +291,7 @@ class AcumaticaTransferLine(models.Model):
     actual_qty = fields.Char(string='Control Qty', readonly=True)
     total_qty = fields.Char(string='Total Qty', readonly=True)
     is_hold = fields.Char(string='Hold', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     inventory_ref = fields.Char(string='Inventory Ref Nbr', readonly=True)
     post_period = fields.Char(string='Post Period', readonly=True)
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
@@ -677,6 +678,9 @@ class AcumaticaTransferLine(models.Model):
                 },
                 line_payloads=error_line_payloads,
             )
+
+        if receipt.document_only:
+            picking.action_validate_document_only_import(force=True)
 
         receipt.write({
             'import_state': action_state,

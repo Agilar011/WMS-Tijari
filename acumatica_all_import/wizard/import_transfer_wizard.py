@@ -68,6 +68,14 @@ class ImportTransferWizard(models.TransientModel):
         # warehouse = 
         type = False
 
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='so_transfer',
+            document_only=header.get('document_only'),
+            warehouse_code=warehouse_code,
+        )
+        if document_only_type:
+            return document_only_type
+
         location = Location.search([
             ('code', '=', warehouse_code)
         ])
@@ -91,6 +99,19 @@ class ImportTransferWizard(models.TransientModel):
         if isinstance(value, dict):
             return value.get('value', '') or ''
         return value or ''
+
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
 
     @staticmethod
     def _normalize_rows(payload):
@@ -119,45 +140,36 @@ class ImportTransferWizard(models.TransientModel):
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {'$top': limit, '$skip': offset}
-            filters = []
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-            if self.config_id.odata_select:
-                params['$select'] = self.config_id.odata_select
-            if receipt_nbr:
-                filters.append(f"ReceiptNbr eq '{receipt_nbr}'")
-            if odata_filter:
-                filters.append(self.config_id.odata_filter)
-                filters.extend(odata_filter)
-            else:
-                filters.append(f"({self.config_id.odata_filter})")
 
-            if filters:
-                params['$filter'] = ' and '.join(filters)
+            body = {
+                "BuildingID": {
+                    "value": "WH33"
+                }
+            }
 
-            from requests import Request
-            req = Request('GET', endpoint, params=params)
-            prepared_url = req.prepare().url
+            print("Filter API:")
+            print(endpoint)
+            print(params)
 
-            print("="*80)
-            print(f"[DEBUG URL API ACUMATICA]:\n{prepared_url}")
-            print("="*80)
-
-
-            response = session.get(endpoint, params=params, timeout=90)
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             print(f"Response: {response}")
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Transfer Receipt (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+            raw_payload = response.json()
+            flat_data = raw_payload.get('PurchaseReceiptGIDetails') if isinstance(raw_payload, dict) else None
+            raw_data = flat_data or self._normalize_rows(raw_payload)
             print(f"raw data: {raw_data}")
             result = []
             detail_result = []
+            seen_receipts = set()
 
             for row_number, item in enumerate(raw_data, start=1):
                 print(f"item to create: {item}")
-                warehouse_code = self._val(item, 'Warehouse')
+                warehouse_code = self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID')
                 print(f"Processing row {row_number}: Warehouse Code = {warehouse_code}")
                 picking_type = self._search_picking_type(item, warehouse_code)
 
@@ -181,12 +193,13 @@ class ImportTransferWizard(models.TransientModel):
                     'header_location_code': self._val(item, 'Location'),
                     'post_period': self._val(item, 'PostPeriod'),
                     'receipt_nbr': self._val(item, 'ReceiptNbr'),
+                    'document_only': self._bool_val(item, 'DocumentOnly'),
                     'status': self._val(item, 'Status'),
                     'total_qty': self._val(item, 'TotalQty'),
                     'receipt_type': self._val(item, 'Type'),
                     'vendor_code': self._val(item, 'VendorID'),
-                    'partner_ref': self._val(item, 'VendorRef'),
-                    'warehouse_dest_code': self._val(item, 'Warehouse'),
+                    'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
+                    'warehouse_dest_code': self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
                     'picking_type_id': picking_type_id,
 
                     }
@@ -196,6 +209,44 @@ class ImportTransferWizard(models.TransientModel):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
+
+                if flat_data is not None:
+                    receipt_nbr = header.get('receipt_nbr')
+                    header['external_id'] = receipt_nbr or header['external_id']
+                    header['warehouse_dest_code'] = self._val(item, 'LineWarehouseID') or header.get('warehouse_dest_code')
+                    transfer_shipment_nbr = self._val(item, 'TransferShipmentNbr') or self._val(item, 'LineTransferShipmentNbr')
+                    if transfer_shipment_nbr:
+                        dest_warehouse_data = self.search_dest_warehouse(transfer_shipment_nbr, session)
+                        if dest_warehouse_data:
+                            header["warehouse_code"] = dest_warehouse_data.get('source_warehouse')
+                    if receipt_nbr not in seen_receipts:
+                        seen_receipts.add(receipt_nbr)
+                        result.append(dict(header, line_nbr='0'))
+                    detail_result.append({
+                        'header_external_id': header['external_id'],
+                        'line_external_id': item.get('id', '') or '',
+                        'line_note': self._val(item, 'LineNote'),
+                        'description': self._val(item, 'LineDescription'),
+                        'inventory_id': self._val(item, 'LineInventoryID'),
+                        'line_nbr': str(self._val(item, 'LineNbr') or item.get('rowNumber') or 0),
+                        'line_type': self._val(item, 'LineType'),
+                        'location_dest_code': self._val(item, 'LineLocation'),
+                        'open_qty': self._val(item, 'LineOpenQty'),
+                        'order_qty': self._val(item, 'LineOrderedQty'),
+                        'po_line_number': self._val(item, 'LinePOLineNbr'),
+                        'po_number': self._val(item, 'LinePOOrderNbr'),
+                        'po_type': self._val(item, 'LinePOOrderType'),
+                        'po_receipt_line_number': self._val(item, 'LinePOReceiptLineNbr'),
+                        'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
+                        'product_uom_qty': self._val(item, 'LineReceiptQty'),
+                        'transaction_description': self._val(item, 'LineTransactionDescription') or self._val(item, 'LineDescription'),
+                        'transfer_order_line_number': self._val(item, 'LineTransferOrderLineNbr'),
+                        'transfer_order_number': self._val(item, 'LineTransferOrderNbr'),
+                        'transfer_order_type': self._val(item, 'LineTransferOrderType'),
+                        'transfer_shipment_number': transfer_shipment_nbr,
+                        'uom_code': self._val(item, 'LineUOM'),
+                    })
+                    continue
 
                 # if not details:
                 #     result.append(dict(header, line_nbr='0'))
@@ -259,7 +310,7 @@ class ImportTransferWizard(models.TransientModel):
                 '$filter': f"ShipmentNbr eq '{transfer_nbr}'"
             }
 
-            response = session.get(endpoint, params=params, timeout=90)
+            response = session.get(endpoint, params=params, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
 

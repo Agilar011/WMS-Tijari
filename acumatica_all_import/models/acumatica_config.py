@@ -78,7 +78,7 @@ class AcumaticaConfig(models.Model):
             ('so_transfer', 'SO Transfer'),
             ('receipt_external', 'Receipt External'),
             ('receipt_change_item', 'Receipt Change Item'),
-            ('inventory_received', 'Inventory Received'),
+            ('inventory_received', 'Inventory Receipt'),
             ('toko_pegang_do', 'Toko Pegang DO'),
             ('shipment_so', 'Shipment SO Return'),
             ('so_shipment', 'SO Shipment'),

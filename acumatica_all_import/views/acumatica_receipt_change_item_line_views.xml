@@ -18,6 +18,7 @@
         <field name="arch" type="xml">
             <list string="Data Receipt : Change Item">
                 <field name="origin"/>
+                <field name="document_only"/>
                 <field name="customer_code"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>

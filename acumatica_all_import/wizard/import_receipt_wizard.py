@@ -100,6 +100,19 @@ class ImportReceiptWizard(models.TransientModel):
             return value.get('value', '') or ''
         return value or ''
 
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
+
     def _normalize_rows(self, payload):
         if isinstance(payload, list):
             return payload
@@ -119,10 +132,19 @@ class ImportReceiptWizard(models.TransientModel):
         except Exception:
             return False
 
-    def _search_picking_type(self, building_code):
+    def _search_picking_type(self, building_code, document_only=False):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         Warehouse = self.env['stock.warehouse']
+        type = False
+
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='po_receipt',
+            document_only=document_only,
+            warehouse_code=building_code,
+        )
+        if document_only_type:
+            return document_only_type
 
         warehouse = Warehouse.search([
             ('code', '=', building_code)
@@ -165,7 +187,7 @@ class ImportReceiptWizard(models.TransientModel):
                     "value": "WH33"
                 }
             }
-            response = session.put(endpoint, params=params, json=body, timeout=90)
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
 
@@ -182,7 +204,8 @@ class ImportReceiptWizard(models.TransientModel):
                 if receipt_nbr not in seen_receipts:
                     seen_receipts.add(receipt_nbr)
                     building_code = self._val(item, "BuildingID")
-                    type = self._search_picking_type(building_code)
+                    document_only = self._bool_val(item, 'DocumentOnly')
+                    type = self._search_picking_type(building_code, document_only=document_only)
                     result.append({
                         'external_id': item.get('id', '') or '',
                         'row_number': row_number,
@@ -197,6 +220,7 @@ class ImportReceiptWizard(models.TransientModel):
                         'header_location_code': self._val(item, 'Location'),
                         'post_period': self._val(item, 'PostPeriod'),
                         'receipt_nbr': self._val(item, 'ReceiptNbr'),
+                        'document_only': document_only,
                         'status': self._val(item, 'Status'),
                         'total_qty': self._val(item, 'TotalQty'),
                         'receipt_type': self._val(item, 'Type'),
@@ -500,4 +524,3 @@ class ImportReceiptWizard(models.TransientModel):
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
         }
-

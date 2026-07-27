@@ -103,36 +103,21 @@ class ImportReceiptWizard(models.TransientModel):
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {'$top': limit, '$skip': offset}
-            filters = []
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
 
-            if self.config_id.odata_select:
-                params['$select'] = self.config_id.odata_select
-            if reference_nbr:
-                # print(f"receipt Number: {reference_nbr}")
-                filters.append(f"ReceiptNbr eq '{reference_nbr}'")
-            if self.config_id.odata_filter:
-                print(f"Odata Filter: {self.config_id.odata_filter}")
-                filters.append(self.config_id.odata_filter)
-                # filters.extend(odata_filter)
-                print(f"Filter: {filters}")
-            # else:
-            #     filters.append("(Status eq 'On Hold' or Status eq 'Balanced')")
-            if filters:
-                params['$filter'] = ' and '.join(filters)       
+            body = {
+                "BuildingID": {
+                    "value": "WH33"
+                }
+            }
 
-            # --- TAMBAHKAN KODE INI UNTUK PRINT URL UTUH ---
-            from requests import Request
-            req = Request('GET', endpoint, params=params)
-            prepared_url = req.prepare().url
-            
-            print("="*80)
-            print(f"[DEBUG URL API ACUMATICA]:\n{prepared_url}")
-            print("="*80)
+            print("Filter API:")
+            print(endpoint)
+            print(params)
 
-            response = session.get(endpoint, params=params, timeout=90)
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 print("="*80)
                 print("[DEBUG] MASUK Ke proses get data api")
@@ -140,15 +125,53 @@ class ImportReceiptWizard(models.TransientModel):
 
                 raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+            raw_payload = response.json()
+            flat_data = raw_payload.get('PurchaseReceiptGIDetails') if isinstance(raw_payload, dict) else None
+            raw_data = flat_data or self._normalize_rows(raw_payload)
             result = []
             detail_result = []
+            seen_receipts = set()
 
             for row_number, item in enumerate(raw_data, start=1):
 
                 print("="*80)
                 print("[DEBUG] MASUK Ke proses deklarasi header")
                 print("="*80)
+
+                if flat_data is not None:
+                    receipt_nbr = self._val(item, 'ReceiptNbr')
+                    header_id = receipt_nbr or item.get('id', '')
+                    if receipt_nbr not in seen_receipts:
+                        seen_receipts.add(receipt_nbr)
+                        header_item = dict(item)
+                        header_item['warehouse_code'] = self._val(item, 'LineWarehouseID') or self._val(item, 'Warehouse')
+                        header = self._build_header_values(row_number, header_item)
+                        header.update({
+                            'external_id': header_id,
+                            'warehouse_code': header_item['warehouse_code'],
+                            'note': self._val(item, 'NoteHeader'),
+                            'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
+                            'po_line_number': self._val(item, 'LinePOLineNbr'),
+                            'po_number': self._val(item, 'LinePOOrderNbr'),
+                            'po_type': self._val(item, 'LinePOOrderType') or self._val(item, 'Type'),
+                            'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
+                        })
+                        result.append(dict(header))
+
+                    detail_result.append({
+                        'header_external_id': header_id,
+                        'line_external_id': item.get('id', '') or '',
+                        'line_note': self._val(item, 'LineNote'),
+                        'branch_warehouse': self._val(item, 'Branch'),
+                        'line_description': self._val(item, 'LineDescription'),
+                        'inventory_id': self._val(item, 'LineInventoryID'),
+                        'line_nbr': self._val(item, 'LineNbr'),
+                        'location_code': self._val(item, 'LineLocation'),
+                        'product_uom_qty': self._val(item, 'LineReceiptQty'),
+                        'uom_code': self._val(item, 'LineUOM'),
+                        'warehouse_code': self._val(item, 'LineWarehouseID'),
+                    })
+                    continue
 
                 header_id = item.get('id', '')
 
@@ -283,6 +306,7 @@ class ImportReceiptWizard(models.TransientModel):
             'scheduled_date': self._val(item, 'Date'),
             # 'warehouse_code': self._val(item, 'Description'),
             # 'external_ref': self._val(item, 'ExternalRef'),
+            'document_only': self._bool_val(item, 'DocumentOnly'),
             # 'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
             'post_period': self._val(item, 'PostPeriod'),
             'receipt_nbr': self._val(item, 'ReceiptNbr'),
@@ -494,6 +518,17 @@ class ImportReceiptWizard(models.TransientModel):
         warehouse_code = header.get('warehouse_code')
         # details = header.get('Details') or []
         type = False
+        document_only = header.get('document_only')
+        if document_only is None:
+            document_only = self._bool_val(header, 'DocumentOnly')
+
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='issue_po_return',
+            document_only=document_only,
+            warehouse_code=warehouse_code or self._val(header, 'Warehouse'),
+        )
+        if document_only_type:
+            return document_only_type
 
         if not warehouse_code:
             # Normalkan struktur jika details berupa bungkus dictionary OData (mengandung key 'value')
@@ -540,6 +575,19 @@ class ImportReceiptWizard(models.TransientModel):
             return value.get('value', '') or ''
         # print(value)
         return value or ''
+
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
     
     @staticmethod
     def _parse_dt(dt_str):

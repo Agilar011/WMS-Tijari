@@ -174,6 +174,7 @@ class ImportTransferOneStepWizard(models.TransientModel):
                     'note': item.get('note', {}).get('value', '') or '',
                     'scheduled_date': self._val(item, 'Date'),
                     'description': self._val(item, 'Description'),
+                    'document_only': self._bool_val(item, 'DocumentOnly'),
                     'from_warehouse_code': self._val(item, 'FromWarehouseID'),
                     'is_hold': self._val(item, 'Hold'),
                     'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
@@ -339,6 +340,19 @@ class ImportTransferOneStepWizard(models.TransientModel):
             return value.get('value', '') or ''
         return value or ''
 
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
+
     def _normalize_rows(self, payload):
         if isinstance(payload, list):
             return payload
@@ -354,6 +368,14 @@ class ImportTransferOneStepWizard(models.TransientModel):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         type = False
+
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='transfer_one_step',
+            document_only=header.get('document_only'),
+            warehouse_code=header.get('from_warehouse_code'),
+        )
+        if document_only_type:
+            return document_only_type
 
         print(f"Warehouse: {header['from_warehouse_code']}")
 
@@ -639,4 +661,3 @@ class AcumaticaTransferOneStepConfig(models.Model):
         finally:
             self._do_logout(session)
             self.last_sync = fields.Datetime.now()
-

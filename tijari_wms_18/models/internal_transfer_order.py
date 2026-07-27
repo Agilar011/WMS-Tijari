@@ -51,6 +51,11 @@ class InternalTransferOrder(models.Model):
         default='transfer_out',
         tracking=True,
     )
+    partner_id = fields.Many2one(
+        comodel_name='res.partner',
+        string='Contact',
+        tracking=True,
+    )
     location_id = fields.Many2one(
         comodel_name='stock.location',
         string='Source Location',
@@ -257,20 +262,71 @@ class InternalTransferOrder(models.Model):
 
     def _prepare_picking_vals(self, picking_type, location, location_dest, suffix, leg):
         self.ensure_one()
-        return {
+        vals = {
             'picking_type_id': picking_type.id,
             'scheduled_date': self.schedule_date,
             'origin': '%s - %s' % (self.name, suffix),
             'location_id': location.id,
             'location_dest_id': location_dest.id,
-            'adt_type': 'Internal Transfer',
+            'adt_type': self._get_picking_adt_type(),
             'adt_external_ref': self.name,
             'internal_transfer_order_id': self.id,
             'internal_transfer_leg': leg,
         }
+        partner = self._get_picking_partner(leg)
+        if partner:
+            vals['partner_id'] = partner.id
+        dest_location = self._get_picking_mapped_dest_location(leg)
+        if dest_location:
+            vals['adt_dest_location_id'] = dest_location.id
+        return vals
+
+    def _get_picking_adt_type(self):
+        self.ensure_one()
+        if self.transaction_type == 'consignment':
+            return 'Shipment Consignment'
+        return 'Internal Transfer'
+
+    def _get_picking_mapped_dest_location(self, leg):
+        self.ensure_one()
+        if leg == 'receipt':
+            return self.location_dest_id
+        return self.env['stock.location']
+
+    def _get_warehouse_partner(self):
+        self.ensure_one()
+        warehouse = self._get_source_warehouse()
+        if not warehouse:
+            return self.env.company.partner_id
+
+        company_partner = warehouse.company_id.partner_id or self.env.company.partner_id
+        if warehouse.partner_id and warehouse.partner_id != company_partner:
+            return warehouse.partner_id
+
+        partner_name = '%s (%s)' % (warehouse.name, warehouse.code)
+        partner = self.env['res.partner'].search([
+            ('name', '=', partner_name),
+            ('parent_id', '=', False),
+        ], limit=1)
+        if not partner:
+            partner = self.env['res.partner'].create({
+                'name': partner_name,
+                'type': 'delivery',
+                'company_id': warehouse.company_id.id,
+            })
+        warehouse.partner_id = partner.id
+        return partner
+
+    def _get_picking_partner(self, leg):
+        self.ensure_one()
+        if self.transaction_type != 'consignment':
+            return self.env['res.partner']
+        if leg == 'receipt':
+            return self._get_warehouse_partner()
+        return self.partner_id
 
     def _copy_move_to_picking(self, source_move, picking, location, location_dest):
-        return self.env['stock.move'].create({
+        vals = {
             'name': source_move.name or source_move.product_id.display_name,
             'product_id': source_move.product_id.id,
             'product_uom_qty': source_move.product_uom_qty,
@@ -289,7 +345,10 @@ class InternalTransferOrder(models.Model):
             'adt_quantity': source_move.adt_quantity,
             'adt_type': source_move.adt_type,
             'product_note': source_move.product_note,
-        })
+        }
+        if picking.internal_transfer_leg == 'receipt' and picking.adt_dest_location_id:
+            vals['adt_dest_location_id'] = picking.adt_dest_location_id.id
+        return self.env['stock.move'].create(vals)
 
     def _get_move_match_key(self, move):
         return (
@@ -363,13 +422,22 @@ class InternalTransferOrder(models.Model):
         if not next_picking:
             return False
 
-        next_picking.write({
+        vals = {
             'origin': '%s - %s' % (self.name, suffix),
-            'adt_type': 'Internal Transfer',
+            'adt_type': self._get_picking_adt_type(),
             'adt_external_ref': self.name,
             'internal_transfer_order_id': self.id,
             'internal_transfer_leg': leg,
-        })
+        }
+        partner = self._get_picking_partner(leg)
+        vals['partner_id'] = partner.id if partner else False
+        dest_location = self._get_picking_mapped_dest_location(leg)
+        vals['adt_dest_location_id'] = dest_location.id if dest_location else False
+        next_picking.write(vals)
+        if leg == 'receipt' and next_picking.adt_dest_location_id:
+            next_picking.move_ids.write({
+                'adt_dest_location_id': next_picking.adt_dest_location_id.id,
+            })
         self.picking_ids = [(4, next_picking.id)]
         return next_picking
 

@@ -156,7 +156,7 @@ class ImportInventoryReceiptTransferWhInWizard(models.TransientModel):
                     'adt_Customer': self._val(item, 'Customer'),
                     'adt_Date': self._val(item, 'Date'),
                     'adt_Description': self._val(item, 'Description'),
-                    'adt_DocumentOnly': self._val(item, 'DocumentOnly'),
+                    'adt_DocumentOnly': self._bool_val(item, 'DocumentOnly'),
                     'adt_ExternalRef': self._val(item, 'ExternalRef'),
                     'adt_LastModifiedDateTime': self._val(item, 'LastModifiedDateTime'),
                     'adt_Location': self._val(item, 'Location'),
@@ -227,6 +227,19 @@ class ImportInventoryReceiptTransferWhInWizard(models.TransientModel):
             return value.get('value', '') or ''
         return value or ''
 
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
+
     def _normalize_rows(self, payload):
         if isinstance(payload, list):
             return payload
@@ -241,6 +254,14 @@ class ImportInventoryReceiptTransferWhInWizard(models.TransientModel):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         type = False
+
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='transfer_in',
+            document_only=header.get('adt_DocumentOnly'),
+            warehouse_code=header.get('adt_Warehouse'),
+        )
+        if document_only_type:
+            return document_only_type
 
         print(f"Warehouse: {header['adt_Warehouse']}")
 

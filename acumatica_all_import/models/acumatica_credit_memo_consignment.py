@@ -43,6 +43,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_CustomerOrder = fields.Char(string="Acumatica CustomerOrder")
     adt_Date = fields.Char(string="Acumatica Date")
     adt_Description = fields.Char(string="Acumatica Description")
+    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly", readonly=True)
     adt_DueDate = fields.Char(string="Acumatica DueDate")
     adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime")
     adt_LocationID = fields.Char(string="Acumatica LocationID")
@@ -135,23 +136,23 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     # Cari master data gudang asal (FromWarehouseID)
                     warehouse_src = self._find_warehouse_by_code(staging_line.adt_Warehouse)
                     if not warehouse_src:
-                        warehouse_src = picking_type.default_location_src_id.id
-                        # raise UserError(f"Gudang asal tidak ditemukan untuk code: {staging_line.adt_Warehouse or '-'}")
+                        raise UserError(f"Gudang tidak ditemukan untuk code: {staging_line.adt_Warehouse or '-'}")
 
-                    # Cari master data gudang tujuan (ToWarehouseID)
-                    # warehouse_dest = self._find_warehouse_by_code(first.adt_ToWarehouseID)
-                    warehouse_dest = False
-                    if not warehouse_dest:
-                        warehouse_dest = picking_type.default_location_dest_id.id
-                        print(picking_type.default_location_dest_id.id)
-                        # raise UserError(f"Gudang tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}")
+                    source_location = picking_type.default_location_src_id or warehouse_src.lot_stock_id
+                    dest_location = warehouse_src.lot_stock_id
+                    if not source_location:
+                        raise UserError(f"Lokasi asal tidak ditemukan untuk code: {staging_line.adt_Warehouse or '-'}")
+                    if not dest_location:
+                        raise UserError(f"Lokasi tujuan tidak ditemukan untuk code: {staging_line.adt_Warehouse or '-'}")
+                    if dest_location.usage == 'customer':
+                        raise UserError("Lokasi tujuan customer hanya boleh dipakai oleh SO Shipment.")
 
 
                     # Definisikan dictionary payload data stock.picking Odoo
                     vals = {
                         'picking_type_id': picking_type.id,
-                        'location_id': picking_type.default_location_src_id.id or warehouse_src.lot_stock_id.id,
-                        'location_dest_id': picking_type.default_location_dest_id.id or warehouse_dest.lot_stock_id.id,
+                        'location_id': source_location.id,
+                        'location_dest_id': dest_location.id,
                         'scheduled_date': self._parse_dt(first.adt_Date),
                         'origin': origin,
                         'note': first.adt_note or False,

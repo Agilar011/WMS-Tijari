@@ -61,6 +61,7 @@ class AcumaticaReceiptExternalLine(models.Model):
     transfer_type = fields.Char(string='Transfer Type')
     note = fields.Text(string='Header Note')
     external_ref = fields.Char(string='External Ref')
+    document_only = fields.Boolean(string='Document Only')
     customer_code = fields.Char(string='Customer Code')
     shipment_nbr = fields.Char(string='Shipment Nbr')
     transfer_nbr = fields.Char(string='Transfer Nbr')
@@ -432,6 +433,9 @@ class AcumaticaReceiptExternalLine(models.Model):
                 },
                 line_payloads=all_line_payloads,
             )
+
+        if receive.document_only:
+            picking.action_validate_document_only_import(force=True)
 
         receive.write({
             'import_state': action_state,

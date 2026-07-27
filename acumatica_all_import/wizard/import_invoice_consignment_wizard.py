@@ -100,40 +100,39 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {'$top': limit, '$skip': offset}
-            filters = []
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-            if self.config_id.odata_select:
-                params['$select'] = self.config_id.odata_select
-            if reference_nbr:
-                filters.append(f"ReceiptNbr eq '{reference_nbr}'")
-            if self.config_id.odata_filter:
-                filters.append(self.config_id.odata_filter)
-            if filters:
-                params['$filter'] = ' and '.join(filters)       
 
-            from requests import Request
-            req = Request('GET', endpoint, params=params)
-            prepared_url = req.prepare().url
-            
-            print("="*80)
-            print(f"[DEBUG URL API ACUMATICA]:\n{prepared_url}")
-            print("="*80)
+            body = {
+                "BuildingID": {
+                    "value": "WH33"
+                }
+            }
 
-            response = session.get(endpoint, params=params, timeout=90)
+            print("Filter API:")
+            print(endpoint)
+            print(params)
+
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+            raw_payload = response.json()
+            flat_data = (raw_payload.get('InvoiceConsignmentGIDetails') or raw_payload.get('InvoiceGIDetails')) if isinstance(raw_payload, dict) else None
+            raw_data = flat_data or self._normalize_rows(raw_payload)
             
             # PINDAHKAN KE LUAR PERULANGAN: Agar total record terhitung dengan benar
             total_imported_headers = 0 
             sync_data = fields.Datetime.now() # Pastikan variabel sync_data terdefinisi
 
+            seen_headers = {}
+
             for row_number, item in enumerate(raw_data, start=1):
-                header_id = item.get('id', '')
+                header_id = (self._val(item, 'ReferenceNbr') or item.get('id', '')) if flat_data is not None else item.get('id', '')
                 header = self._build_header_values(row_number, item)
+                if flat_data is not None:
+                    header['adt_id'] = header_id
 
                 lines_to_create = {
                     **header,
@@ -145,8 +144,12 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 }
                 
                 # 1. Buat Header Staging Terlebih Dahulu
-                created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
-                total_imported_headers += 1
+                if flat_data is not None and header_id in seen_headers:
+                    created_header = seen_headers[header_id]
+                else:
+                    created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
+                    seen_headers[header_id] = created_header
+                    total_imported_headers += 1
 
                 # 2. Normalisasi Data Detail/Lines
                 details = item.get('Details') or []
@@ -154,6 +157,8 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
                     details = []
+                if flat_data is not None:
+                    details = [item]
 
                 # PINDAHKAN KE DALAM: Kosongkan list detail khusus untuk header/invoice aktif saat ini
                 detail_to_create = [] 
@@ -440,15 +445,15 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         
 
         return {
-            'adt_id': self._val(detail, 'id'),
-            'adt_rowNumber': self._val(detail, 'rowNumber'),
-            'adt_note': self._val(detail, 'Note'),
-            'adt_Branch': self._val(detail, 'Branch'),
-            'adt_InventoryID': self._val(detail, 'InventoryID'),
-            'adt_Qty': self._val(detail, 'Qty'),
-            'adt_TransactionDescription': self._val(detail, 'TransactionDescription'),
-            'adt_UOM': self._val(detail, 'UOM'),
-            'adt_Warehouse': self._val(detail, 'Warehouse'),
+            'adt_id': detail.get('id') or self._val(detail, 'id'),
+            'adt_rowNumber': detail.get('rowNumber') or self._val(detail, 'rowNumber'),
+            'adt_note': self._val(detail, 'LineNote') or self._val(detail, 'Note'),
+            'adt_Branch': self._val(detail, 'LineBranchID') or self._val(detail, 'Branch'),
+            'adt_InventoryID': self._val(detail, 'LineInventoryID') or self._val(detail, 'InventoryID'),
+            'adt_Qty': self._val(detail, 'LineQty') or self._val(detail, 'Qty'),
+            'adt_TransactionDescription': self._val(detail, 'LineTransactionDescription') or self._val(detail, 'TransactionDescription'),
+            'adt_UOM': self._val(detail, 'LineUOM') or self._val(detail, 'UOM'),
+            'adt_Warehouse': self._val(detail, 'LineWarehouseID') or self._val(detail, 'Warehouse'),
             'adt_external_id': header_id_id,
             # 'line_external_id': detail.get('id', '') or '',
             # 'line_note': detail.get('note', {}).get('value', '') or '',

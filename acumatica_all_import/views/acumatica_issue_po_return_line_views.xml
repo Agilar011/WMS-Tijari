@@ -18,6 +18,7 @@
             <list string="Data PO Return" create="0" delete="0">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="receipt_nbr"/>
+                <field name="document_only"/>
                 <field name="vendor_code"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>

@@ -17,6 +17,7 @@
         <field name="arch" type="xml">
             <search string="Cari Data Issue : Change Item">
                 <field name="reference_nbr"/>
+                <field name="document_only"/>
                 <field name="inventory_id"/>
                 <field name="line_description"/>
                 <field name="import_state"/>

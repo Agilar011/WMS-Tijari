@@ -18,6 +18,7 @@
         <field name="arch" type="xml">
             <search string="Cari Data Transfer - Inter Warehouse : IN">
                 <field name="receipt_nbr"/>
+                <field name="document_only"/>
                 <!-- <field name="transfer_order_nbr"/> -->
                 <field name="inventory_id"/>
                 <field name="description"/>

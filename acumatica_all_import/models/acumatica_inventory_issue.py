@@ -160,6 +160,7 @@ class AcumaticaInventoryIssueLine(models.Model):
     scheduled_date = fields.Char(string='Date', readonly=True)
     description = fields.Char(string='Header Description', readonly=True)
     external_ref = fields.Char(string='External Ref', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     status = fields.Char(string='Status', readonly=True)
     actual_qty = fields.Char(string='Control Qty', readonly=True)
     total_qty = fields.Char(string='Total Qty', readonly=True)
@@ -246,8 +247,6 @@ class AcumaticaInventoryIssueLine(models.Model):
                 location = Location.search([('name', '=', code)], limit=1)
         # if not location and warehouse:
         #     location = warehouse.lot_stock_id
-        if not location and fallback == 'customer':
-            location = self.env.ref('stock.stock_location_customers', raise_if_not_found=False)
         return location
 
     def _find_uom(self, line, product=False):
@@ -301,12 +300,14 @@ class AcumaticaInventoryIssueLine(models.Model):
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
                     
                 source_location = picking_type.default_location_src_id
-                dest_location = picking_type.default_location_dest_id or self.env.ref('stock.stock_location_customers', raise_if_not_found=False)
+                dest_location = picking_type.default_location_dest_id
                 
                 if not source_location:
                     raise UserError('Source location warehouse tidak ditemukan.')
                 if not dest_location:
-                    raise UserError('Destination location customer tidak ditemukan.')
+                    raise UserError('Destination location tidak ditemukan.')
+                if dest_location.usage == 'customer':
+                    raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
                     
                 vals = {
                     'origin': first.reference_nbr,
@@ -379,6 +380,9 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'import_message': f'{action_state.title()}: {picking.name}',
                             'odoo_picking_id': picking.id,
                         })
+
+                if first.document_only:
+                    picking.action_validate_document_only_import(force=True)
 
                 # === PENTING: Release Savepoint & Commit Data Sukses ===
                 self.env.cr.execute('RELEASE SAVEPOINT import_issue_line')
