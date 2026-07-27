@@ -34,10 +34,11 @@
 
                 <field name="matching_lot_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
                 <field name="matching_loc_dest_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" />
+                <field name="matching" column_invisible="1" force_save="1" />
 
                 <field name="second_matching" string="Matching Status"
                     decoration-success="second_matching == 'Match'"
-                    decoration-danger="second_matching == 'Not Match'" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" readonly="1"/>
+                    decoration-danger="second_matching == 'Not Match'" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" readonly="1" force_save="1"/>
 
             </xpath>
 
