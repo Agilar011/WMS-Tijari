@@ -266,6 +266,22 @@ class StockMoveLine(models.Model):
         if {'quantity', 'move_id', 'picking_id'} & set(vals):
             pickings._sync_adt_quantities_from_moves()
 
+        matching_inputs = {
+            'matching_lot_id', 'matching_loc_dest_id',
+            'source_location_id', 'product_lot_id',
+            'location_id', 'location_dest_id', 'lot_id',
+        }
+        if not self.env.context.get('skip_matching_sync') and matching_inputs & set(vals):
+            for line in self:
+                matching = line._get_matching_status()
+                status_vals = {'matching': matching}
+                if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal'):
+                    status_vals['second_matching'] = (
+                        'Match' if matching == 'match' else 'Not Match'
+                    )
+                if any(line[field] != value for field, value in status_vals.items()):
+                    line.with_context(skip_matching_sync=True).write(status_vals)
+
         self._update_move_picked()
 
         return res
@@ -763,27 +779,15 @@ class StockMoveLine(models.Model):
 
         result = {}
         for line in self:
-            line.write({field_name: scanned_code})
+            vals = {field_name: scanned_code}
             if field_name == 'confirmation_lot_code':
                 lot = line._find_lot_by_scan_code(scanned_code)
-                line.write({
-                    'matching_lot_id': lot.id if lot else False,
-                })
+                vals['matching_lot_id'] = lot.id if lot else False
             elif field_name == 'confirmation_location_code':
                 location = line._find_loc_by_scan_code(scanned_code)
-                line.write({
-                    'matching_loc_dest_id': location.id if location else False,
-                })
+                vals['matching_loc_dest_id'] = location.id if location else False
 
-            if line.matching_lot_id and line.matching_loc_dest_id:
-                line.matching = (
-                    'match'
-                    if line.matching_lot_id == line.lot_id
-                    and line.matching_loc_dest_id == line.location_dest_id
-                    else 'not_match'
-                )
-            else:
-                line.matching = 'not_match'
+            line.write(vals)
 
             matching_labels = dict(line._fields['matching'].selection)
             result = {
@@ -861,98 +865,43 @@ class StockMoveLine(models.Model):
     #         line.matching = 'match' if lot_match and location_match else 'not_match'
 
     def _update_move_picked(self):
-        for item in self:
-            print(item.matching)
         for move in self.mapped('move_id'):
             move.picked = (
                 move.move_line_ids
                 and all(line.matching == 'match' for line in move.move_line_ids)
             )
 
+    def _get_matching_status(self):
+        """Return the matching result using the reference fields for each operation."""
+        self.ensure_one()
+        if not self.matching_lot_id or not self.matching_loc_dest_id:
+            return 'not_match'
+
+        picking_name = self.picking_id.picking_type_id.name
+        if picking_name in ('Pick', 'Pick Internal'):
+            expected_location = self.source_location_id or self.location_id
+            expected_lot = self.product_lot_id or self.lot_id
+        elif picking_name in ('Receipts', 'Receipt Internal'):
+            expected_location = self.location_dest_id
+            expected_lot = self.lot_id
+        else:
+            return 'not_match'
+
+        return (
+            'match'
+            if expected_location == self.matching_loc_dest_id
+            and expected_lot == self.matching_lot_id
+            else 'not_match'
+        )
 
     @api.onchange('confirmation_quantity', 'auto_input_code', 'matching_lot_id', 'matching_loc_dest_id')
     def _compute_matching(self):
-        print('def _compute_matching(self)')
-        print('run validate code')
-        import logging
-        _logger = logging.getLogger(__name__)
-
         for line in self:
-            picking_type = line.picking_id.picking_type_id
-
-            # 1. Validasi awal: pastikan input user tidak kosong atau hanya berisi spasi
-            conf_loc = str(line.matching_loc_dest_id or '').strip()
-            conf_lot = str(line.matching_lot_id or '').strip()
-
-            loc_ok = False
-            lot_ok = False
-            
-            if not conf_loc and not conf_lot:
-                line.matching = 'not_match'
-                line.second_matching = 'not_match'
-                continue
-            
-            if picking_type and picking_type.name in ('Pick', 'Pick Internal'):
-                print('='*100)
-                print(f'run validate code for pick: {self}')
-                # loc_code = str(line.location_id.unique_code or '').strip()
-                # product_code = str(line.lot_id.name or '').strip()
-                loc_ok = bool(line.source_location_id.id == line.matching_loc_dest_id.id)
-                lot_ok = bool(line.product_lot_id.id == line.matching_lot_id.id)
-                print(f"Source Location: {line.source_location_id}")
-                print(f"Location to match: {line.matching_loc_dest_id}")
-                print(f"Product ID: {line.product_lot_id}")
-                print(f"Product to match: {line.matching_lot_id}")
-                print(f"Matching Location STatus: {loc_ok}")
-                print(f"Matching LOT Status: {lot_ok}")
-
-
-                if loc_ok and lot_ok:
-                    line.matching = 'match'
-                    line.second_matching = 'Match'
-
-                    line.write({'second_matching': 'Match'})
-                    print('finish validating match status')
-                    print(line._cache)
-                    print("CACHE MATCH =", line._cache.get(self._fields['matching']))                    
-                    continue
-                else:
-                    line.matching = 'not_match'
-                    line.second_matching = 'Not Match'
-                    line.write({'second_matching': 'Not Match'})
-
-                    
-                    continue
-
-            if picking_type and picking_type.name in ('Receipts', 'Receipt Internal'):
-                print('run validate code for receipt')
-                loc_code = str(line.location_dest_id.unique_code or '').strip()
-                product_code = str(line.lot_id.name or '').strip()
-
-                loc_ok = bool(line.location_dest_id.id == line.matching_loc_dest_id.id)
-                lot_ok = bool(line.lot_id.id == line.matching_lot_id.id)
-                if loc_ok and lot_ok:
-                    line.matching = 'match'
-                    continue
-                else:
-                    line.matching = 'not_match'
-
-                    
-                    continue
-
-
-            if not picking_type or picking_type.name not in ('Pick', 'Pack', 'Receipts', 'Pick Internal', 'Receipt Internal'):
-                raise ValueError('validation is not config yet')
-                
-            # 2. Ambil data pembanding dari database dan bersihkan teksnya
-
-            # 3. Lakukan perbandingan dengan mengabaikan huruf besar/kecil (.lower())
-
-            # matching = 'match' if loc_ok and lot_ok else 'not_match'
-            # _logger.info(f"{str(loc_ok)} - {str(lot_ok)}")
-            # _logger.info(f"{matching}")
-            # 4. Tentukan hasil akhir
-            # line.matching = 'match'
+            line.matching = line._get_matching_status()
+            if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal'):
+                line.second_matching = (
+                    'Match' if line.matching == 'match' else 'Not Match'
+                )
 
 
             

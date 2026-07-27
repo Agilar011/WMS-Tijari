@@ -77,8 +77,9 @@ class StockMove(models.Model):
         readonly=True
     ) 
 
-    temp_float = fields.Float(string="Confirmation Quantity",
-    ) 
+    # temp_float = fields.Float(string="Confirmation Quantity")
+    so_confirmation_quantity = fields.Float(string="Confirmation Quantity")
+    
     remaining_package_qty = fields.Float(
         compute="_compute_remaining_package_qty",
         string="Remaining Package Qty",
@@ -140,6 +141,8 @@ class StockMove(models.Model):
                 line._compute_auto_input_code()
                 
     def action_validate_lot(self):
+        print('action_validate_lot')
+
         for move in self:
             picking_type = move.picking_id.picking_type_id
             for line in move.move_line_ids:
@@ -160,15 +163,9 @@ class StockMove(models.Model):
                 self._check_match_status()
 
     def _check_match_status(self):
+        print('_check_match_status')
         for move in self.move_line_ids:
-            loc_ok = bool(move.location_dest_id.id == move.matching_loc_dest_id.id)
-            lot_ok = bool(move.lot_id.id == move.matching_lot_id.id)
-            if loc_ok and lot_ok:
-                move.matching = 'match'
-                continue
-            else:
-                move.matching = 'not_match'
-                continue 
+            move.matching = move._get_matching_status()
 
     @api.onchange('unfiltered_dest')
     def action_toggle_unfiltered_dest(self):

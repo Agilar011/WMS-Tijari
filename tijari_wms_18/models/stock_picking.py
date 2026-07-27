@@ -330,11 +330,6 @@ class StockPicking(models.Model):
                             print(line)
                             if line.lot_id:
                                 print(line.lot_id)
-                                # vals = {
-                                #     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
-                                # }
-                                # vals['product_lot_id'] = line.lot_id.id
-                                # line.write(vals)
                                 print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
                                 line.write({
                                     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
@@ -768,8 +763,176 @@ class StockPicking(models.Model):
 
         if self.shipment_information != 'full_shipment':
             self.wms_state = 'return_shipment'     
-        # self.shipment_information = 'full_shipment'
-        # self.wms_state = 'done' 
+
+    def button_validate(self):
+        for picking in self:
+            # Pick harus diblokir sebelum validasi standar Odoo memproses
+            # perpindahan stok apabila masih ada line yang belum Match.
+            if picking.picking_type_id.name in ('Pick', 'Pick Internal'):
+                picking._check_validate_requirements()
+
+            if picking.picking_type_id.name not in ('Pick', 'Receipt'):
+                print(f"Run validate all except pick and receipt")
+                # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
+                for move in picking.move_ids:
+                    # Jika move memiliki move_line_ids, lakukan update massal di level DB
+                    for line in move.move_line_ids:
+                        loc_code = str(line.location_id.unique_code or '').strip()
+                        product_code = str(line.lot_id.name or '').strip()
+                        vals = {
+                            'confirmation_location_code': loc_code,
+                            'confirmation_lot_code': product_code,
+                            'matching': 'match',
+                        }
+                        print(f"Write vals = {vals}")
+
+                        line.write(vals)
+
+                        print(f"After write = {line.matching}")
+
+                        print(f"After write line {line.id} = {line.matching} for picking: {picking.id}")
+
+        res = super().button_validate()
+
+        for rec in self:
+            print(rec.picking_type_id.name)
+            for line in rec.move_line_ids:
+                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
+                line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
+                if not line.lot_name:
+                    print(f"Missing lot: {line}")
+                    raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
+                
+
+            picking._check_validate_requirements()
+            operation_category = picking.picking_type_id.operation_category
+            print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
+
+            # Hanya enforce untuk PUT dan DELIVERY
+            if operation_category in ['put', 'delivery']:
+                for line in picking.move_line_ids:
+                    # Jika belum dicek (invisible), tidak dianggap ok
+                    print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+                    # line.matching = 'match'
+                    print(f">>> Matching status for line {line.id}: {line.matching}") # Cek di terminal Odoo
+                    if line.matching != 'match':
+                        raise UserError(_(
+                            "Validation blocked.\n\n"
+                            "Line:\n"
+                            f"- Product: {line.product_id.display_name}\n"
+                            f"- Qty: {line.quantity or line.product_uom_qty}\n\n"
+                            "Status: ❌ NOT MATCH\n\n"
+                            "Silakan pastikan scan location dan/atau lot sudah benar."
+                        ))
+                                        
+            pickings = self.env["stock.picking"].search([])
+            if picking.picking_type_id.code != "incoming":
+                continue
+
+            storage_pickings = self.env["stock.picking"].search([
+                ("origin", "ilike", picking.origin or picking.name),
+                ("picking_type_id.code", "=", "internal"),
+            ], limit=1)
+            total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
+            picking.write({
+                'adt_total_qty': total_qty
+            })
+
+            storage_pickings.write({
+                "adt_dest_location_id": picking.adt_dest_location_id,
+                "adt_type": picking.adt_type,
+                "note" : picking.note,
+            })
+
+            for storage in storage_pickings:
+                for storage_move in storage.move_ids:
+                    receipt_move = picking.move_ids.filtered(
+                        lambda m: m.product_id == storage_move.product_id
+                    )[:1]
+
+                    if receipt_move:
+                        storage_move.write({
+                            "product_note": receipt_move.product_note,
+                        })
+
+            for move in picking.move_ids:
+                if move.quantity > move.product_uom_qty:
+                    total_qty = sum(line.mapped("quantity"))
+                    raise UserError(
+                        _(
+                            "Product: %s\n"
+                            "Lot: %s\n"
+                            "Total QTY: %s\n"
+                            "Demand: %s\n\n"
+                            "Quantity exceeds demand."
+                        ) % (
+                            move.product_id.display_name,
+                            line.lot_id.name or "-",
+                            move.quantity,
+                            move.product_uom_qty,
+                        )
+                    )
+
+        return res
+
+    def _check_validate_requirements(self):
+        self.ensure_one()
+        _logger.info("Check Validate on = %s", self.id)
+
+        active_moves = self.move_ids.filtered(
+            lambda move: move.state != "cancel"
+        )
+
+        unpicked_moves = active_moves.filtered(
+            lambda move: not move.picked
+        )
+
+        unmatched_move_lines = active_moves.move_line_ids.filtered(
+            lambda line: line.matching != "match"
+        )
+
+        error_messages = []
+
+        if unpicked_moves:
+            products = "\n".join(
+                f"- {move.product_id.display_name}"
+                for move in unpicked_moves
+            )
+
+            error_messages.append(
+                (
+                    "Semua product harus dalam kondisi picked.\n"
+                    "Move yang belum picked:\n%s"
+                )
+                % products
+            )
+
+        if unmatched_move_lines:
+            lines = "\n".join(
+                "- %s | Lot/Serial: %s | Matching: %s"
+                % (
+                    line.product_id.display_name,
+                    line.lot_id.name or line.lot_name or "-",
+                    dict(line._fields["matching"].selection).get(
+                        line.matching,
+                        line.matching or "-"
+                    ),
+                )
+                for line in unmatched_move_lines
+            )
+
+            error_messages.append(
+                (
+                    "Semua product harus memiliki status matching "
+                    "'Match'.\n"
+                    "Move line yang belum match:\n%s"
+                )
+                % lines
+            )
+
+        if error_messages:
+            raise UserError("\n\n".join(error_messages))
+
 
 # ================================================================================================
 # Temp Storage function create move line qr code        
