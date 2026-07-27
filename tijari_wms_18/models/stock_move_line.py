@@ -920,7 +920,7 @@ class StockMoveLine(models.Model):
                 line.confirmation_location_code = loc_code
                 line.confirmation_lot_code = product_code
                 line.matching_lot_id = line.product_lot_id.id
-                line.source_location_id = line.matching_loc_dest_id.id
+                line.matching_loc_dest_id = line.source_location_id.id
                 line.matching = 'match'
                 line.second_matching = 'Match'
 
