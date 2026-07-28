@@ -163,6 +163,16 @@ class StockMoveLine(models.Model):
     @api.depends("product_id", "source_location_id")
     def _compute_temp_quant_ids(self):
         print('def _compute_temp_quant_ids(self):')
+        for line in self:
+            if line.move_id.transaction_type == 'outbound' and line.move_id.picking_type_name == 'Pack':
+                print('Auto matching source_location_id and product_lot_id in Pack transaction')
+                print(line.location_id.id)
+                print(line.lot_id.id)
+                line.source_location_id = line.location_id
+                line.product_lot_id = line.lot_id.id
+                line.lot_name = line.lot_id.name
+
+        
         # _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
         Quant = self.env["stock.quant"]
 

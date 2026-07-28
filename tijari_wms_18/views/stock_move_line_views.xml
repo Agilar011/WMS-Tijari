@@ -12,6 +12,7 @@
                 <!-- <field name="adt_dest_location" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/> -->
                 <field name="adt_dest_location_id" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
                 <!-- <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/> -->
+                <!-- <field name="quant_id" optional="hide"/> -->
                 <field name="source_location_id" string="Pick From" column_invisible="parent.picking_type_name not in ['Pack','Pick', 'Pick Internal']"/>
                 <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
                 <field name="product_lot_id" string="Lot" column_invisible="parent.picking_type_name not in ['Pack', 'Pick', 'Pick Internal']"/>
