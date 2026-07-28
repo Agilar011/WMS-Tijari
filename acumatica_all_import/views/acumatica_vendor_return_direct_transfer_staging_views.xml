@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <search string="Cari Data Direct Transfer Staging">
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="adt_DocumentOnly" string="Document Only"/>
                 <field name="import_state"/>
                 <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
                 <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
@@ -24,6 +25,7 @@
             <list string="Data Direct Transfer Staging">
                 <!-- <field name="id" string="ID"/> -->
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="adt_DocumentOnly" string="Document Only"/>
                 <field name="adt_ToWarehouseID" string="Warehouse"/>
                 <field name="adt_TotalQty" string="Total Quantity"/>
                 <field name="import_state" widget="badge"

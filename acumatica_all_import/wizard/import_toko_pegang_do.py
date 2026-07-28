@@ -106,6 +106,19 @@ class ImportTokoPegangDOWizard(models.TransientModel):
         return value or ''
 
     @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
+
+    @staticmethod
     def _normalize_rows(payload):
         if isinstance(payload, list):
             return payload
@@ -129,6 +142,14 @@ class ImportTokoPegangDOWizard(models.TransientModel):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         type = False
+
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='receipt_toko_pegang_do',
+            document_only=header.get('document_only'),
+            warehouse_code=header.get('warehouse_code'),
+        )
+        if document_only_type:
+            return document_only_type
 
         location = Location.search([
             ('code', '=', header['warehouse_code'])
@@ -183,7 +204,7 @@ class ImportTokoPegangDOWizard(models.TransientModel):
                     'customer_code': self._val(item, 'Customer'),
                     'scheduled_date': self._val(item, 'Date'),
                     'description': self._val(item, 'Description'),
-                    # DocumentOnly
+                    'document_only': self._bool_val(item, 'DocumentOnly'),
                     'external_ref': self._val(item, 'ExternalRef'),
                     'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
                     'location_code': str(self._val(item, 'Location')),

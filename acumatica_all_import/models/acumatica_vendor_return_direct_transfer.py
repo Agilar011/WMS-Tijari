@@ -40,7 +40,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_note = fields.Char(string="Note Header")
     adt_Date = fields.Char(string="Transfer Date")
     adt_Description = fields.Char(string="Description Header")
-    adt_DocumentOnly = fields.Char(string="Document Only")
+    adt_DocumentOnly = fields.Boolean(string="Document Only")
     adt_ExternalRef = fields.Char(string="External Ref")
     adt_FromWarehouseID = fields.Char(string="From Warehouse ID")
     adt_Hold = fields.Boolean(string="Hold Status")
@@ -275,6 +275,9 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     # Eksekusi pembuatan seluruh Stock Moves secara massal di luar perulangan
                     if moves_to_create:
                         Move.create(moves_to_create)
+
+                    if first.adt_DocumentOnly:
+                        picking.action_validate_document_only_import(force=True)
 
                     # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
                     first.write({

@@ -66,6 +66,7 @@ class AcumaticaShipmentLine(models.Model):
     header_location_code = fields.Char(string='Location Header')
     header_location_name = fields.Char(string='Location Header Name')
     status = fields.Char(string='Status')
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     shipment_type = fields.Char(string='Type')
     operation = fields.Char(string='Operation')
 

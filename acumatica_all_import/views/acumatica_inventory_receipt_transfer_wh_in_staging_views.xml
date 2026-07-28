@@ -39,6 +39,7 @@
 
                 <!-- Field Header dari Acumatica (Ganti adt_ReferenceNbr jika ada nama field lain) -->
                 <field name="adt_ReferenceNbr"/>
+                <field name="adt_DocumentOnly"/>
                 <!-- <field name="adt_Customer"/> -->
                 <field name="adt_Branch"/> 
                 <field name="adt_TotalQty"/> 

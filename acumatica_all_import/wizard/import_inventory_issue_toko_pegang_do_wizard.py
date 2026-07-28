@@ -309,7 +309,7 @@ class ImportInventoryIssueTokoPegangDOWizard(models.TransientModel):
             'adt_Date' : self._val(item, 'Date'),
             'adt_Description' : self._val(item, 'Description'),
             'adt_LastModifiedDateTime' : self._val(item, 'LastModifiedDateTime'),
-            'adt_document_only' : self._val(item, 'DocumentOnly'),
+            'adt_document_only' : self._bool_val(item, 'DocumentOnly'),
             'adt_LocationID' : self._val(item, 'Location'),
             'adt_ReferenceNbr' : self._val(item, 'ReferenceNbr'),
             'adt_Status' : self._val(item, 'Status'),
@@ -599,6 +599,19 @@ class ImportInventoryIssueTokoPegangDOWizard(models.TransientModel):
             return value.get('value', '') or ''
         # print(value)
         return value or ''
+
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
     
     @staticmethod
     def _parse_dt(dt_str):

@@ -35,7 +35,7 @@ class AcumaticaDirectTransferStaging(models.Model):
     adt_note = fields.Char(string="Note Header")
     adt_Date = fields.Char(string="Transfer Date")
     adt_Description = fields.Char(string="Description Header")
-    adt_DocumentOnly = fields.Char(string="Document Only")
+    adt_DocumentOnly = fields.Boolean(string="Document Only")
     adt_ExternalRef = fields.Char(string="External Ref")
     adt_FromWarehouseID = fields.Char(string="From Warehouse ID")
     adt_Hold = fields.Boolean(string="Hold Status")
@@ -106,21 +106,27 @@ class AcumaticaDirectTransferStaging(models.Model):
                     # Cari master data gudang asal (FromWarehouseID)
                     warehouse_src = self._find_warehouse_by_code(first.adt_FromWarehouseID)
                     if not warehouse_src:
-                        warehouse_src = picking_type.default_location_src_id.id
-                        # raise UserError(f"Gudang asal tidak ditemukan untuk code: {first.adt_FromWarehouseID or '-'}")
+                        raise UserError(f"Gudang asal tidak ditemukan untuk code: {first.adt_FromWarehouseID or '-'}")
 
                     # Cari master data gudang tujuan (ToWarehouseID)
                     warehouse_dest = self._find_warehouse_by_code(first.adt_ToWarehouseID)
                     if not warehouse_dest:
-                        warehouse_dest = picking_type.default_location_dest_id.id
-                        # raise UserError(f"Gudang tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}")
+                        raise UserError(f"Gudang tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}")
 
+                    source_location = warehouse_src.lot_stock_id or picking_type.default_location_src_id
+                    dest_location = warehouse_dest.lot_stock_id
+                    if not source_location:
+                        raise UserError(f"Lokasi asal tidak ditemukan untuk code: {first.adt_FromWarehouseID or '-'}")
+                    if not dest_location:
+                        raise UserError(f"Lokasi tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}")
+                    if dest_location.usage == 'customer':
+                        raise UserError("Lokasi tujuan customer hanya boleh dipakai oleh SO Shipment.")
 
                     # Definisikan dictionary payload data stock.picking Odoo
                     vals = {
                         'picking_type_id': picking_type.id,
-                        'location_id': picking_type.default_location_src_id.id or warehouse_src.lot_stock_id.id,
-                        'location_dest_id': picking_type.default_location_dest_id.id or warehouse_dest.lot_stock_id.id,
+                        'location_id': source_location.id,
+                        'location_dest_id': dest_location.id,
                         'scheduled_date': self._parse_dt(first.adt_Date),
                         'origin': origin,
                         'note': first.adt_note or False,
@@ -211,6 +217,9 @@ class AcumaticaDirectTransferStaging(models.Model):
                     # Eksekusi pembuatan seluruh Stock Moves secara massal di luar perulangan
                     if moves_to_create:
                         Move.create(moves_to_create)
+
+                    if first.adt_DocumentOnly:
+                        picking.action_validate_document_only_import(force=True)
 
                     # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
                     first.write({

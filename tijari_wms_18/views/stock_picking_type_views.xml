@@ -9,6 +9,7 @@
             <xpath expr="//field[@name='code']" position="after">
                 <field name="operation_category" required="1"/>
                 <field name="is_default_api" />
+                <field name="is_document_only_api" />
             </xpath>
         </field>
     </record>

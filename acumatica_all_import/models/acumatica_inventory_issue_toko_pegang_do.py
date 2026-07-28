@@ -237,7 +237,7 @@ class AcumaticaInventoryIssueTokoPegangDO(models.Model):
     adt_Status = fields.Char(string="Acumatica Status", readonly=True)
     adt_Type = fields.Char(string="Acumatica Type", readonly=True)
     adt_post_period = fields.Char(string="Acumatica PostPeriod", readonly=True)
-    adt_document_only = fields.Char(string="Acumatica DocumentOnly", readonly=True)
+    adt_document_only = fields.Boolean(string="Acumatica DocumentOnly", readonly=True)
 
     adt_ControlQty = fields.Float(string="Acumatica ControlQty", readonly=True)
     adt_ExternalRef = fields.Char(string="Acumatica ExternalRef", readonly=True)
@@ -657,6 +657,14 @@ class AcumaticaInventoryIssueTokoPegangDO(models.Model):
                     if not picking_type:
                         raise UserError('Picking type outgoing tidak ditemukan.')
 
+                    dest_location = self._find_location_dest(first, warehouse)
+                    if not dest_location:
+                        raise UserError(
+                            f'Location tujuan tidak ditemukan untuk code: {warehouse_code or "-"}'
+                        )
+                    if dest_location.usage == 'customer':
+                        raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
+
                     origin = first.adt_ReferenceNbr or False
 
                     vals = {
@@ -667,7 +675,7 @@ class AcumaticaInventoryIssueTokoPegangDO(models.Model):
                             if picking_type.default_location_src_id
                             else self.env.ref('stock.stock_location_suppliers').id
                         ),
-                        'location_dest_id': picking_type.default_location_dest_id.id if picking_type.default_location_dest_id else None,
+                        'location_dest_id': dest_location.id,
                         'scheduled_date': self._parse_dt(first.adt_Date),
                         'origin': origin,
                         'note': first.adt_note or False,
@@ -708,6 +716,8 @@ class AcumaticaInventoryIssueTokoPegangDO(models.Model):
 
                         uom = self._find_uom(line, product)
                         line_dest = self._find_location_dest(line, warehouse) or picking.location_dest_id
+                        if line_dest.usage == 'customer':
+                            raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
                         qty = self._parse_int(line.adt_Qty)
                         print(f"Quantity: {qty} for actual value: {line.adt_Qty}")
 
@@ -752,6 +762,8 @@ class AcumaticaInventoryIssueTokoPegangDO(models.Model):
                     if moves_to_create:
                         Move.create(moves_to_create)
 
+                    if first.adt_document_only:
+                        picking.action_validate_document_only_import(force=True)
 
                     # Tulis status sukses ke tabel staging kustom
                     first.write({

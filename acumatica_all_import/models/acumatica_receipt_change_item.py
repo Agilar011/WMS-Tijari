@@ -41,6 +41,7 @@ class AcumaticaReceiptChangeItemLine(models.Model):
     transfer_type = fields.Char(string='Transfer Type', readonly=True)
     branch_warehouse = fields.Char(string='Branch', readonly=True)
     external_ref = fields.Char(string='External Ref', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
 
     receipt_type = fields.Char(string='Type', readonly=True)
     vendor_code = fields.Char(string='VendorID', readonly=True)
@@ -364,6 +365,9 @@ class AcumaticaReceiptChangeItemLine(models.Model):
                 },
                 line_payloads=all_line_payloads,
             )
+
+        if receipt.document_only:
+            picking.action_validate_document_only_import(force=True)
 
         receipt.write({
             'import_state': action_state,

@@ -37,6 +37,7 @@ class AcumaticaTransferOneStepLine(models.Model):
     post_period = fields.Char(string='Post Period', readonly=True)
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
 
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
     line_note = fields.Text(string='Line Note', readonly=True)

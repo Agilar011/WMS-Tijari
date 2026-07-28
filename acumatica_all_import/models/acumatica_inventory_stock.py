@@ -140,7 +140,7 @@ class AcumaticaInventoryStockConfig(models.Model):
                 inventory_id=inventory_id or '',
             )
 
-            response = session.put(endpoint, params=params, json=payload)
+            response = session.put(endpoint, params=params, json=payload, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Inventory Stock (HTTP {response.status_code}): {response.text}')
 

@@ -341,7 +341,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                 endpoint,
                 params=params,
                 json={},
-                timeout=90
+                timeout=300
             )
 
 
@@ -375,7 +375,12 @@ class ImportSOShipmentWizard(models.TransientModel):
 
                 # print(f"Transaction Type: {code}")
 
-                picking_type = self._search_picking_type(warehouse_id, OrderType)
+                document_only = self._bool_val(item, 'DocumentOnly')
+                picking_type = self._search_picking_type(
+                    warehouse_id,
+                    OrderType,
+                    document_only=document_only,
+                )
                 picking_type_id = picking_type.id if picking_type else None
                 # print(picking_type_id)
                 
@@ -392,7 +397,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_CountryName' : self._val(item, "CountryName"),
                     'adt_CustomerID' : self._val(item, "CustomerID"),
                     'adt_CustomerName' : self._val(item, "CustomerName"),
-                    'adt_DocumentOnly' : self._val(item, "DocumentOnly"),
+                    'adt_DocumentOnly' : self._bool_val(item, "DocumentOnly"),
                     'adt_FOBPoint' : self._val(item, "FOBPoint"),
                     'adt_FOBPointDescription' : self._val(item, "FOBPointDescription"),
                     'adt_LineDescription' : self._val(item, "LineDescription"),
@@ -673,9 +678,17 @@ class ImportSOShipmentWizard(models.TransientModel):
             last_error,
         )
 
-    def _search_picking_type(self, header, code):
+    def _search_picking_type(self, header, code, document_only=False):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
+
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='so_shipment',
+            document_only=document_only,
+            warehouse_code=header,
+        )
+        if document_only_type:
+            return document_only_type
 
         location = Location.search([
             ('code', '=', header)
@@ -711,6 +724,20 @@ class ImportSOShipmentWizard(models.TransientModel):
         if isinstance(value, dict):
             return value.get('value', '') or ''
         return value or ''    
+
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    @classmethod
+    def _bool_val(cls, item, key):
+        return cls._bool_value(item.get(key, {}))
 
     @staticmethod
     def _normalize_rows(payload):

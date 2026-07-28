@@ -20,6 +20,7 @@
                 <field name="selected" widget="boolean_toggle"/>
 
                 <field name="reference_nbr"/>
+                <field name="document_only"/>
                 <field name="from_warehouse_code"/>
                 <field name="total_qty"/>
 

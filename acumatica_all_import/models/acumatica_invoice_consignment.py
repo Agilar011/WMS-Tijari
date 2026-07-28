@@ -125,30 +125,23 @@ class AcumaticaInvoiceConsignmentConfig(models.Model):
         try:
             endpoint = f"{self.api_url}/{self.endpoint_name}"
             params = {'$top': limit, '$skip': offset}
-            filters = []
 
             if self.odata_expand:
                 params['$expand'] = self.odata_expand
 
-            if self.odata_select:
-                params['$select'] = self.odata_select
-            if receipt_nbr:
-                filters.append(f"ReceiptNbr eq '{receipt_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-            if self.odata_filter:
-                filters.append(f"({self.odata_filter})")
-            else:
-                filters.append("(Type eq 'Receipt')")
+            body = {
+                "BuildingID": {
+                    "value": "WH33"
+                }
+            }
 
-            if filters:
-                params['$filter'] = ' and '.join(filters)       
-
-            response = session.get(endpoint, params=params, timeout=90)
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Inventory Receipt (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+            raw_payload = response.json()
+            raw_data = (raw_payload.get('InvoiceConsignmentGIDetails') or raw_payload.get('InvoiceGIDetails')) if isinstance(raw_payload, dict) else None
+            raw_data = raw_data or self._normalize_rows(raw_payload)
             result = []
 
             for row_number, item in enumerate(raw_data, start=1):
@@ -170,7 +163,7 @@ class AcumaticaInvoiceConsignmentConfig(models.Model):
                     'receipt_type': self._val(item, 'Type'),
                     'vendor_code': self._val(item, 'VendorID'),
                     'partner_ref': self._val(item, 'VendorRef'),
-                    'warehouse_code': self._val(item, 'Warehouse'),
+                    'warehouse_code': self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
                 }
                 print(f" Get data : {header['receipt_nbr']}, Type: {header['receipt_type']}, Status: {header['status']}")           
 
@@ -187,14 +180,14 @@ class AcumaticaInvoiceConsignmentConfig(models.Model):
                 for detail in details:
                     line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
                     description = self._val(detail, 'Description') or self._val(detail, 'TransactionDescription')
-                    warehouse_dest_code = self._val(detail, 'Warehouse') or header.get('warehouse_code')
+                    warehouse_dest_code = self._val(detail, 'Warehouse') or self._val(detail, 'LineWarehouseID') or header.get('warehouse_code')
 
                     result.append({
                         **header,
                         'line_external_id': detail.get('id', '') or '',
                         'line_note': detail.get('note', {}).get('value', '') or '',
                         'description': description,
-                        'adt_InventoryID': self._val(detail, 'InventoryID'),
+                        'adt_InventoryID': self._val(detail, 'InventoryID') or self._val(detail, 'LineInventoryID'),
                         'line_nbr': str(line_nbr),
                         'line_type': self._val(detail, 'LineType'),
                         'location_dest_code': self._val(detail, 'Location'),
@@ -204,6 +197,7 @@ class AcumaticaInvoiceConsignmentConfig(models.Model):
                         'transaction_description': self._val(detail, 'TransactionDescription'),
                         'uom_code': self._val(detail, 'UOM'),
                         'warehouse_dest_code': warehouse_dest_code,
+                        'warehouse_code': warehouse_dest_code,
                     })
 
             _logger.info("Berhasil ambil %s rows Inventory Receipt dari Acumatica", len(result))
@@ -228,6 +222,7 @@ class AcumaticaInvoiceConsignment(models.Model):
     adt_CustomerOrder = fields.Char(string="Acumatica CustomerOrder", readonly=True)
     adt_Date = fields.Char(string="Acumatica Date", readonly=True)
     adt_Description = fields.Char(string="Acumatica Description", readonly=True)
+    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly", readonly=True)
     adt_DueDate = fields.Char(string="Acumatica DueDate", readonly=True)
     adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime", readonly=True)
     adt_LocationID = fields.Char(string="Acumatica LocationID", readonly=True)
@@ -434,6 +429,14 @@ class AcumaticaInvoiceConsignment(models.Model):
                     if not picking_type:
                         raise UserError('Picking type outgoing tidak ditemukan.')
 
+                    dest_location = self._find_location_dest(first, warehouse)
+                    if not dest_location:
+                        raise UserError(
+                            f'Location tujuan tidak ditemukan untuk code: {warehouse_code or "-"}'
+                        )
+                    if dest_location.usage == 'customer':
+                        raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
+
                     origin = first.adt_ReferenceNbr or False
 
                     vals = {
@@ -444,7 +447,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                             if picking_type.default_location_src_id
                             else self.env.ref('stock.stock_location_suppliers').id
                         ),
-                        'location_dest_id': picking_type.default_location_dest_id.id if picking_type.default_location_dest_id else None,
+                        'location_dest_id': dest_location.id,
                         'scheduled_date': self._parse_dt(first.adt_Date),
                         'origin': origin,
                         'note': first.adt_note or False,
@@ -485,6 +488,8 @@ class AcumaticaInvoiceConsignment(models.Model):
 
                         uom = self._find_uom(line, product)
                         line_dest = self._find_location_dest(line, warehouse) or picking.location_dest_id
+                        if line_dest.usage == 'customer':
+                            raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
                         qty = self._parse_int(line.adt_Qty)
                         print(f"Quantity: {qty} for actual value: {line.adt_Qty}")
 

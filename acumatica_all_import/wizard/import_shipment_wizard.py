@@ -242,7 +242,7 @@ class ImportShipmentWizard(models.TransientModel):
                     "value": ""
                 }
             }
-            response = session.put(endpoint, params=params, json=body, timeout=90)
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Shipment Receipt (HTTP {response.status_code}): {response.text}')
 

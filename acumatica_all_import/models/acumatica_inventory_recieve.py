@@ -102,6 +102,19 @@ class AcumaticaInventoryRecievedConfig(models.Model):
         return value or ''
 
     @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
+
+    @staticmethod
     def _normalize_rows(payload):
         if isinstance(payload, list):
             return payload
@@ -153,7 +166,7 @@ class AcumaticaInventoryRecievedConfig(models.Model):
                     # Customer
                     'scheduled_date': self._val(item, 'Date'),
                     'header_description': self._val(header, 'Description'),
-                    # DocumentOnly
+                    'document_only': self._bool_val(item, 'DocumentOnly'),
                     # ExternalRef
                     'acumatica_write_date': self._val(header, 'LastModifiedDateTime'),
                     # Location
@@ -234,6 +247,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     transfer_type = fields.Char(string='Transfer Type', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
     external_ref = fields.Char(string='External Ref', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     customer_code = fields.Char(string='Customer Code', readonly=True)
     shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
     transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
@@ -562,6 +576,9 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 },
                 line_payloads=error_line_payloads,
             )
+
+        if receive.document_only:
+            picking.action_validate_document_only_import(force=True)
 
         receive.write({
             'import_state': action_state,
