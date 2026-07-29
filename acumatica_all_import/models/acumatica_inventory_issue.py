@@ -300,14 +300,16 @@ class AcumaticaInventoryIssueLine(models.Model):
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
                     
                 source_location = picking_type.default_location_src_id
-                dest_location = picking_type.default_location_dest_id
+                if first.trans_type == 'Disposal':
+                    dest_location = picking_type.default_location_dest_id
+                    
                 
                 if not source_location:
                     raise UserError('Source location warehouse tidak ditemukan.')
                 if not dest_location:
                     raise UserError('Destination location tidak ditemukan.')
-                if dest_location.usage == 'customer':
-                    raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
+                # if dest_location.usage == 'customer':
+                    # raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
                     
                 vals = {
                     'origin': first.reference_nbr,
@@ -325,6 +327,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     'adt_warehouse_code': first.warehouse_code or False,
                     'adt_external_id': first.external_id or False,
                     'adt_type': first.trans_type or False,
+                    'transaction_type' : 'outbound'
                 }
                 
                 picking = Picking.search([('origin', '=', first.reference_nbr)], limit=1)
@@ -374,6 +377,8 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'location_id': source_location.id,
                             'location_dest_id': dest_location.id,
                             'description_picking': line.line_description or False,
+                            'transaction_type' : 'outbound',
+                            'adt_type': first.trans_type or False,
                         })
                         first.write({
                             'import_state': action_state,
