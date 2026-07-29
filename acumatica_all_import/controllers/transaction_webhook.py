@@ -1217,12 +1217,20 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
     def _normalize_transaction_type(self, transaction_type):
         key = (transaction_type or "").strip().lower().replace("-", "_")
         aliases = {
+            "inventory_receipt": "inventory_receipt_external",
+            "inventory_received": "inventory_receipt_external",
             "inventory_receipt_toko_pegang_do": "toko_pegang_do",
             "receipt_toko_pegang_do": "toko_pegang_do",
             "receipt_transfer_in": "inventory_receipt_transfer_wh_in",
             "inventory_receipt_transfer_in": "inventory_receipt_transfer_wh_in",
+            "shipment_so_return": "shipment_return",
+            "so_shipment_return": "shipment_return",
             "sotr": "so_transfer",
             "inventory_issue_change_item": "inventory_issue",
+            "issue_change_item": "inventory_issue",
+            "vendor_return": "vendor_return_direct_transfer",
+            "vendor_return_direct": "vendor_return_direct_transfer",
+            "shipment_so": "so_shipment",
         }
         return aliases.get(key, key)
 
@@ -1398,6 +1406,9 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             _logger.exception("Unexpected error in transaction webhook")
             return self._json_response("error", _("Unexpected server error: %s") % str(exc), http_status=500)
 
-    @http.route("/acumatica/webhook/transaction/<string:transaction_type>", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route([
+        "/acumatica/webhook/<string:transaction_type>",
+        "/acumatica/webhook/transaction/<string:transaction_type>",
+    ], type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_flat_transaction_webhook(self, transaction_type, **kwargs):
         return self._transaction_webhook(transaction_type, **kwargs)

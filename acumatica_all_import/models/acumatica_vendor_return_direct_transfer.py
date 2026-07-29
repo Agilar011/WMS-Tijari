@@ -104,7 +104,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     print(f"[DIRECT TRANSFER] Processing Document: {origin}")
 
                     transfer_service = self.env['acumatica.internal.transfer.service']
-                    transfer_info = transfer_service.classify(
+                    transfer_info = transfer_service.classify_transfer_out_to_virtual(
                         first.adt_FromWarehouseID,
                         first.adt_ToWarehouseID,
                         'FromWarehouseID',

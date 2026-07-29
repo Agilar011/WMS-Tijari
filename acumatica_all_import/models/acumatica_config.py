@@ -139,6 +139,52 @@ class AcumaticaConfig(models.Model):
         return self.browse()
 
     @api.model
+    def _normalize_inventory_receive_type(self, value):
+        if not value:
+            return 'inventory_receive'
+        return str(value).strip().lower().replace('-', '_').replace(' ', '_')
+
+    def _resolve_inventory_receive_picking_type(self, transfer_type=False, warehouse_code=False, document_only=False):
+        self.ensure_one()
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+        type_key = self._normalize_inventory_receive_type(transfer_type)
+        domain_by_type = {
+            'toko_pegang_do': [('code', '=', 'incoming')],
+            'transfer_in': [('code', '=', 'internal')],
+            'change_item': [('code', '=', 'incoming')],
+            'inventory_receive': [('code', '=', 'incoming')],
+            'inventory_received': [('code', '=', 'incoming')],
+            'inventory_receipt': [('code', '=', 'incoming')],
+        }
+
+        picking_type_domain = domain_by_type.get(type_key)
+        if picking_type_domain:
+            domain = list(picking_type_domain) + [('is_default_api', '=', True)]
+            if warehouse_code:
+                location = Location.search([('code', '=', warehouse_code)], limit=1)
+                if location and location.odoo_building_id:
+                    domain.append(('warehouse_id', '=', location.odoo_building_id.id))
+            picking_type = PickingType.search(domain, limit=1)
+            if picking_type:
+                return picking_type
+
+            picking_type = PickingType.search(
+                list(picking_type_domain) + [('is_default_api', '=', True)],
+                limit=1,
+            )
+            if picking_type:
+                return picking_type
+
+        if document_only and type_key != 'transfer_in':
+            return PickingType.resolve_document_only_picking_type(
+                api_acumatica='inventory_received',
+                document_only=document_only,
+                warehouse_code=warehouse_code,
+            )
+        return PickingType.browse()
+
+    @api.model
     def _create_default_kit_assembly_config(self):
         source = self.search([('active', '=', True)], limit=1)
         vals = {

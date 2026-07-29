@@ -416,14 +416,16 @@ class AcumaticaTransferShipmentLine(models.Model):
         )
         source_wh = shipment._find_warehouse_by_code(source_warehouse_code)
         dest_wh = shipment._find_warehouse_by_code(shipment.warehouse_dest_code)
-        picking_type = shipment.picking_type_id
-        document_only_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
-            api_acumatica='transfer_shipment',
-            document_only=shipment.document_only,
-            warehouse_code=source_warehouse_code,
-        )
-        if document_only_type:
-            picking_type = document_only_type
+        picking_type = False
+        if shipment.document_only:
+            picking_type = shipment.picking_type_id
+            document_only_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
+                api_acumatica='transfer_shipment',
+                document_only=shipment.document_only,
+                warehouse_code=source_warehouse_code,
+            )
+            if document_only_type:
+                picking_type = document_only_type
 
         if not source_wh:
             error_messages.append(
@@ -433,7 +435,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             error_messages.append(
                 f'Destination warehouse with location code {shipment.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
-        if not picking_type:
+        if shipment.document_only and not picking_type:
             error_messages.append(
                 f'Operation Type for Transfer Shipment with warehouse code {source_warehouse_code or "-"} was not found in the WMS | WMS Dependency : MASTER OPERATION TYPE.'
             )
@@ -457,7 +459,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             error_messages.append(
                 f'Destination location for code {shipment.warehouse_dest_code or "-"} was not found in the WMS | WMS Dependency : MAPPING LOCATION.'
             )
-        if dest_location and dest_location.usage == 'customer':
+        if shipment.document_only and dest_location and dest_location.usage == 'customer':
             error_messages.append(
                 'Destination location customer hanya boleh dipakai oleh SO Shipment.'
             )
@@ -468,6 +470,110 @@ class AcumaticaTransferShipmentLine(models.Model):
                 payload={'header': header_payload},
                 line_payloads=all_line_payloads,
             )
+
+        if not shipment.document_only:
+            transfer_service = self.env['acumatica.internal.transfer.service']
+            transfer_info = transfer_service.classify_transfer_out_to_virtual(
+                source_warehouse_code,
+                shipment.warehouse_dest_code,
+                'WarehouseID',
+                'ToWarehouseID',
+            )
+            if transfer_info['status'] == 'skip':
+                shipment.write({
+                    'import_state': 'updated',
+                    'import_message': transfer_info['message'],
+                    'odoo_picking_id': False,
+                    'odoo_internal_transfer_order_id': False,
+                })
+                return 'updated'
+            src_location = transfer_info['source_location']
+            dest_location = transfer_info['destination_location']
+            order, action_state = transfer_service.prepare_order(
+                origin,
+                src_location,
+                dest_location,
+                'inter_warehouse',
+                shipment._parse_dt(shipment.scheduled_date),
+                shipment.note or shipment.description or False,
+                transfer_type='transfer_out',
+            )
+
+            for shipment_line in shipment.shipment_line_ids:
+                move_vals = {}
+                try:
+                    product = shipment._find_product(shipment_line)
+                    if not product:
+                        error_messages.append(
+                            f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
+                        )
+                        continue
+
+                    uom = shipment._find_uom(shipment_line, product)
+                    if not uom:
+                        error_messages.append(
+                            f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
+                        )
+                        continue
+
+                    qty = shipment._parse_float(shipment_line.product_uom_qty)
+                    move_vals = {
+                        'adt_dest_location_id': dest_location.id,
+                        'adt_line_external_id': shipment_line.line_external_id or False,
+                        'adt_inventory_id': shipment_line.inventory_id or False,
+                        'adt_line_nbr': shipment_line.line_nbr or False,
+                        'adt_order_qty': shipment._parse_float(shipment_line.order_qty),
+                        'adt_open_qty': shipment._parse_float(shipment_line.open_qty),
+                        'adt_transfer_order_line_number': shipment_line.order_line_number or False,
+                        'adt_transfer_order_number': shipment_line.order_number or False,
+                        'adt_transfer_order_type': shipment_line.order_type or False,
+                        'adt_transfer_shipment_number': origin,
+                        'adt_uom_code': shipment_line.uom_code or False,
+                        'adt_warehouse_dest_code': shipment.warehouse_dest_code or False,
+                        'adt_location_dest_code': shipment_line.location_dest_code or False,
+                        'adt_type': 'Transfer Shipment',
+                        'product_note': shipment_line.line_note or False,
+                    }
+                    transfer_service.create_order_move(
+                        order,
+                        product,
+                        qty,
+                        uom,
+                        shipment_line.line_description or product.display_name,
+                        shipment_line.line_description or False,
+                        move_vals,
+                    )
+                except TransferShipmentImportError:
+                    raise
+                except Exception as line_error:
+                    _logger.exception("Error import transfer shipment line %s", shipment_line.id)
+                    error_messages.append(str(line_error))
+                    all_line_payloads.append({
+                        'inventory_id': shipment_line.inventory_id or False,
+                        'product_name': shipment_line.line_description or False,
+                        'qty': shipment._parse_float(shipment_line.product_uom_qty),
+                        'uom': shipment_line.uom_code or False,
+                        'payload': move_vals if move_vals else (shipment_line.read()[0] if shipment_line.exists() else {}),
+                    })
+
+            if error_messages:
+                raise TransferShipmentImportError(
+                    '\n'.join(error_messages),
+                    payload={
+                        'header': header_payload,
+                        'order_id': order.id if order else False,
+                    },
+                    line_payloads=all_line_payloads,
+                )
+
+            shipment.write({
+                'import_state': action_state,
+                'import_message': f'{action_state.title()}: {order.name if order else False}',
+                'odoo_picking_id': False,
+                'odoo_internal_transfer_order_id': order.id if order else False,
+            })
+            self._resolve_error_tracking(shipment)
+            return action_state
 
         picking_vals = {
             'origin': origin,
@@ -662,19 +768,6 @@ class AcumaticaTransferShipmentLine(models.Model):
                     'import_message': error_message[:1000],
                 })
                 error += 1
-
-        msg = f'Import selesai: {imported} transfer dibuat, {updated} transfer diupdate, {error} line error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Transfer Shipment',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
-
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})

@@ -57,34 +57,16 @@ class ImportReceiptWizard(models.TransientModel):
             params.append(self.odata_filter)
 
 
-        # for i in range(loop_count):
-        #     offset = self.fetch_skip + (i * self.batch_size)
-        #     batch_data = self.fetch_receipt_data(
-        #         limit=self.batch_size,
-        #         offset=offset,
-        #         receipt_nbr=self.receipt_nbr,
-        #         odata_filter=params if params else None,
-        #     )
-
-        #     if not batch_data:
-        #         break
-
-        #     count += batch_data
 
         batch_data = self.fetch_receipt_data(
             limit=self.batch_size,
             receipt_nbr=self.receipt_nbr,
             odata_filter=params if params else None,
         )
-
-        if not batch_data:
-            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
-
         count += batch_data
-
         self.total_fetched = count
-        # if not count:
-        #     raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        if not count:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
         return {
             'type': 'ir.actions.act_window',
