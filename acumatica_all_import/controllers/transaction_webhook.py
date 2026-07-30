@@ -430,11 +430,40 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         }
 
     def _vendor_return_direct_transfer_header_vals(self, item, row_number):
-        return self._direct_transfer_header_vals(
+        vals = self._direct_transfer_header_vals(
             item,
             row_number,
             api_acumatica="vendor_return",
         )
+        from_warehouse = vals.get("adt_FromWarehouseID")
+        document_only = vals.get("adt_DocumentOnly")
+        picking_type = self._search_picking_type(
+            from_warehouse,
+            "outgoing",
+            document_only=document_only,
+            api_acumatica="vendor_return",
+            target_operation_type="direct_delivery_order",
+        )
+        vals["picking_type_id"] = picking_type.id if picking_type else False
+        return vals
+
+    def _vendor_return_document_direct_transfer_header_vals(self, item, row_number):
+        vals = self._direct_transfer_header_vals(
+            item,
+            row_number,
+            api_acumatica="vendor_return",
+        )
+        from_warehouse = vals.get("adt_FromWarehouseID")
+        document_only = vals.get("adt_DocumentOnly")
+        picking_type = self._env()["stock.picking.type"].sudo().resolve_document_only_picking_type(
+            target_operation_type="direct_delivery_order",
+            api_acumatica="vendor_return",
+            document_only=document_only,
+            warehouse_code=from_warehouse,
+            required=True,
+        )
+        vals["picking_type_id"] = picking_type.id if picking_type else False
+        return vals
 
     def _direct_transfer_product_vals(self, item, header):
         return {
@@ -1128,7 +1157,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "header_model": "acumatica.direct.transfer.staging",
                 "product_model": "acumatica.direct.transfer.staging.line",
                 "line_relation": "line_ids",
-                "header_vals": self._vendor_return_direct_transfer_header_vals,
+                "header_vals": self._vendor_return_document_direct_transfer_header_vals,
                 "product_vals": self._direct_transfer_product_vals,
             },
             "transfer_one_step": {
@@ -1218,12 +1247,20 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
     def _normalize_transaction_type(self, transaction_type):
         key = (transaction_type or "").strip().lower().replace("-", "_")
         aliases = {
+            "inventory_receipt": "inventory_receipt_external",
+            "inventory_received": "inventory_receipt_external",
             "inventory_receipt_toko_pegang_do": "toko_pegang_do",
             "receipt_toko_pegang_do": "toko_pegang_do",
             "receipt_transfer_in": "inventory_receipt_transfer_wh_in",
             "inventory_receipt_transfer_in": "inventory_receipt_transfer_wh_in",
+            "shipment_so_return": "shipment_return",
+            "so_shipment_return": "shipment_return",
             "sotr": "so_transfer",
             "inventory_issue_change_item": "inventory_issue",
+            "issue_change_item": "inventory_issue",
+            "vendor_return": "vendor_return_direct_transfer",
+            "vendor_return_direct": "vendor_return_direct_transfer",
+            "shipment_so": "so_shipment",
         }
         return aliases.get(key, key)
 
@@ -1399,6 +1436,6 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             _logger.exception("Unexpected error in transaction webhook")
             return self._json_response("error", _("Unexpected server error: %s") % str(exc), http_status=500)
 
-    @http.route("/acumatica/webhook/transaction/<string:transaction_type>", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/acumatica/webhook/<string:transaction_type>", type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_flat_transaction_webhook(self, transaction_type, **kwargs):
         return self._transaction_webhook(transaction_type, **kwargs)

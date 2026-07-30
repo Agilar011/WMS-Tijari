@@ -108,42 +108,42 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
 
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Header', readonly=True)
-    line_row_number = fields.Char(string='Row Number Detail', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Header')
+    line_row_number = fields.Char(string='Row Number Detail')
 
-    building_code = fields.Char(string='BuildingID', readonly=True)
+    building_code = fields.Char(string='BuildingID')
     shipment_nbr = fields.Char(string='Shipment Number', index=True)
-    partner_code = fields.Char(string='CustomerID', readonly=True)
-    customer_name = fields.Char(string='Customer Name', readonly=True)
-    description = fields.Char(string='Description Header', readonly=True)
+    partner_code = fields.Char(string='CustomerID')
+    customer_name = fields.Char(string='Customer Name')
+    description = fields.Char(string='Description Header')
     document_only = fields.Boolean(string='Document Only')
-    fob_point = fields.Char(string='FOB Point', readonly=True)
-    is_hold = fields.Char(string='Hold', readonly=True)
-    is_insurance = fields.Char(string='Insurance', readonly=True)
-    acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
-    header_location_code = fields.Char(string='Location Header', readonly=True)
-    location_name = fields.Char(string='Location Name', readonly=True)
-    operation = fields.Char(string='Operation', readonly=True)
-    package_count = fields.Char(string='Package Count', readonly=True)
-    package_weight = fields.Char(string='Package Weight', readonly=True)
-    is_picked = fields.Char(string='Picked', readonly=True)
-    scheduled_date = fields.Char(string='Shipment Date', readonly=True)
-    shipped_qty = fields.Char(string='Shipped Qty Header', readonly=True)
-    shipped_volume = fields.Char(string='Shipped Volume', readonly=True)
-    shipped_weight = fields.Char(string='Shipped Weight', readonly=True)
-    shipping_terms = fields.Char(string='Shipping Terms', readonly=True)
-    shipping_zone = fields.Char(string='Shipping Zone', readonly=True)
-    ship_via = fields.Char(string='Ship Via', readonly=True)
-    site_id_description = fields.Char(string='Site ID Description', readonly=True)
-    status = fields.Char(string='Status', readonly=True)
+    fob_point = fields.Char(string='FOB Point')
+    is_hold = fields.Char(string='Hold')
+    is_insurance = fields.Char(string='Insurance')
+    acumatica_write_date = fields.Char(string='Last Modified')
+    header_location_code = fields.Char(string='Location Header')
+    location_name = fields.Char(string='Location Name')
+    operation = fields.Char(string='Operation')
+    package_count = fields.Char(string='Package Count')
+    package_weight = fields.Char(string='Package Weight')
+    is_picked = fields.Char(string='Picked')
+    scheduled_date = fields.Char(string='Shipment Date')
+    shipped_qty = fields.Char(string='Shipped Qty Header')
+    shipped_volume = fields.Char(string='Shipped Volume')
+    shipped_weight = fields.Char(string='Shipped Weight')
+    shipping_terms = fields.Char(string='Shipping Terms')
+    shipping_zone = fields.Char(string='Shipping Zone')
+    ship_via = fields.Char(string='Ship Via')
+    site_id_description = fields.Char(string='Site ID Description')
+    status = fields.Char(string='Status')
     warehouse_dest_code = fields.Char(string='To Warehouse')
-    shipment_type = fields.Char(string='Type', readonly=True)
-    warehouse_code = fields.Char(string='Warehouse', readonly=True)
-    is_unlimited_packages = fields.Char(string='Unlimited Packages', readonly=True)
-    actual_qty = fields.Char(string='Control Qty', readonly=True)
-    note = fields.Text(string='Header Note', readonly=True)
-    note_header_id = fields.Char(string='Note Header ID', readonly=True)
+    shipment_type = fields.Char(string='Type')
+    warehouse_code = fields.Char(string='Warehouse')
+    is_unlimited_packages = fields.Char(string='Unlimited Packages')
+    actual_qty = fields.Char(string='Control Qty')
+    note = fields.Text(string='Header Note')
+    note_header_id = fields.Char(string='Note Header ID')
 
 
     import_state = fields.Selection([
@@ -416,14 +416,16 @@ class AcumaticaTransferShipmentLine(models.Model):
         )
         source_wh = shipment._find_warehouse_by_code(source_warehouse_code)
         dest_wh = shipment._find_warehouse_by_code(shipment.warehouse_dest_code)
-        picking_type = shipment.picking_type_id
-        document_only_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
-            api_acumatica='transfer_shipment',
-            document_only=shipment.document_only,
-            warehouse_code=source_warehouse_code,
-        )
-        if document_only_type:
-            picking_type = document_only_type
+        picking_type = False
+        if shipment.document_only:
+            picking_type = shipment.picking_type_id
+            document_only_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
+                api_acumatica='transfer_shipment',
+                document_only=shipment.document_only,
+                warehouse_code=source_warehouse_code,
+            )
+            if document_only_type:
+                picking_type = document_only_type
 
         if not source_wh:
             error_messages.append(
@@ -433,7 +435,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             error_messages.append(
                 f'Destination warehouse with location code {shipment.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
-        if not picking_type:
+        if shipment.document_only and not picking_type:
             error_messages.append(
                 f'Operation Type for Transfer Shipment with warehouse code {source_warehouse_code or "-"} was not found in the WMS | WMS Dependency : MASTER OPERATION TYPE.'
             )
@@ -457,7 +459,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             error_messages.append(
                 f'Destination location for code {shipment.warehouse_dest_code or "-"} was not found in the WMS | WMS Dependency : MAPPING LOCATION.'
             )
-        if dest_location and dest_location.usage == 'customer':
+        if shipment.document_only and dest_location and dest_location.usage == 'customer':
             error_messages.append(
                 'Destination location customer hanya boleh dipakai oleh SO Shipment.'
             )
@@ -468,6 +470,110 @@ class AcumaticaTransferShipmentLine(models.Model):
                 payload={'header': header_payload},
                 line_payloads=all_line_payloads,
             )
+
+        if not shipment.document_only:
+            transfer_service = self.env['acumatica.internal.transfer.service']
+            transfer_info = transfer_service.classify_transfer_out_to_virtual(
+                source_warehouse_code,
+                shipment.warehouse_dest_code,
+                'WarehouseID',
+                'ToWarehouseID',
+            )
+            if transfer_info['status'] == 'skip':
+                shipment.write({
+                    'import_state': 'updated',
+                    'import_message': transfer_info['message'],
+                    'odoo_picking_id': False,
+                    'odoo_internal_transfer_order_id': False,
+                })
+                return 'updated'
+            src_location = transfer_info['source_location']
+            dest_location = transfer_info['destination_location']
+            order, action_state = transfer_service.prepare_order(
+                origin,
+                src_location,
+                dest_location,
+                'inter_warehouse',
+                shipment._parse_dt(shipment.scheduled_date),
+                shipment.note or shipment.description or False,
+                transfer_type='transfer_out',
+            )
+
+            for shipment_line in shipment.shipment_line_ids:
+                move_vals = {}
+                try:
+                    product = shipment._find_product(shipment_line)
+                    if not product:
+                        error_messages.append(
+                            f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
+                        )
+                        continue
+
+                    uom = shipment._find_uom(shipment_line, product)
+                    if not uom:
+                        error_messages.append(
+                            f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
+                        )
+                        continue
+
+                    qty = shipment._parse_float(shipment_line.product_uom_qty)
+                    move_vals = {
+                        'adt_dest_location_id': dest_location.id,
+                        'adt_line_external_id': shipment_line.line_external_id or False,
+                        'adt_inventory_id': shipment_line.inventory_id or False,
+                        'adt_line_nbr': shipment_line.line_nbr or False,
+                        'adt_order_qty': shipment._parse_float(shipment_line.order_qty),
+                        'adt_open_qty': shipment._parse_float(shipment_line.open_qty),
+                        'adt_transfer_order_line_number': shipment_line.order_line_number or False,
+                        'adt_transfer_order_number': shipment_line.order_number or False,
+                        'adt_transfer_order_type': shipment_line.order_type or False,
+                        'adt_transfer_shipment_number': origin,
+                        'adt_uom_code': shipment_line.uom_code or False,
+                        'adt_warehouse_dest_code': shipment.warehouse_dest_code or False,
+                        'adt_location_dest_code': shipment_line.location_dest_code or False,
+                        'adt_type': 'Transfer Shipment',
+                        'product_note': shipment_line.line_note or False,
+                    }
+                    transfer_service.create_order_move(
+                        order,
+                        product,
+                        qty,
+                        uom,
+                        shipment_line.line_description or product.display_name,
+                        shipment_line.line_description or False,
+                        move_vals,
+                    )
+                except TransferShipmentImportError:
+                    raise
+                except Exception as line_error:
+                    _logger.exception("Error import transfer shipment line %s", shipment_line.id)
+                    error_messages.append(str(line_error))
+                    all_line_payloads.append({
+                        'inventory_id': shipment_line.inventory_id or False,
+                        'product_name': shipment_line.line_description or False,
+                        'qty': shipment._parse_float(shipment_line.product_uom_qty),
+                        'uom': shipment_line.uom_code or False,
+                        'payload': move_vals if move_vals else (shipment_line.read()[0] if shipment_line.exists() else {}),
+                    })
+
+            if error_messages:
+                raise TransferShipmentImportError(
+                    '\n'.join(error_messages),
+                    payload={
+                        'header': header_payload,
+                        'order_id': order.id if order else False,
+                    },
+                    line_payloads=all_line_payloads,
+                )
+
+            shipment.write({
+                'import_state': action_state,
+                'import_message': f'{action_state.title()}: {order.name if order else False}',
+                'odoo_picking_id': False,
+                'odoo_internal_transfer_order_id': order.id if order else False,
+            })
+            self._resolve_error_tracking(shipment)
+            return action_state
 
         picking_vals = {
             'origin': origin,
@@ -663,19 +769,6 @@ class AcumaticaTransferShipmentLine(models.Model):
                 })
                 error += 1
 
-        msg = f'Import selesai: {imported} transfer dibuat, {updated} transfer diupdate, {error} line error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Transfer Shipment',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
-
-
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
 
@@ -691,23 +784,23 @@ class AcumaticaTransferShipmentLineProduct(models.Model):
     ondelete='cascade', 
     required=True)
 
-    shipment_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
-    line_external_id = fields.Char(string='UUID Line', readonly=True)
-    line_row_number = fields.Char(string='Line Nbr', readonly=True)
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)    
-    line_description = fields.Char(string='Description Detail', readonly=True)
-    is_free_item = fields.Char(string='Free Item', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    location_dest_code = fields.Char(string='LocationID', readonly=True)
-    open_qty = fields.Char(string='Open Qty', readonly=True)
-    order_qty = fields.Char(string='Ordered Qty', readonly=True)
-    order_line_number = fields.Char(string='Order Line Nbr', readonly=True)
-    order_number = fields.Char(string='Order Number', readonly=True, index=True)
-    order_type = fields.Char(string='Order Type', readonly=True)
-    original_qty = fields.Char(string='Original Qty', readonly=True)
-    product_uom_qty = fields.Char(string='Shipped Qty Detail', readonly=True)
-    uom_code = fields.Char(string='UOM', readonly=True)
-    line_warehouse_code = fields.Char(string='Warehouse Detail', readonly=True)
-    line_note = fields.Text(string='Line Note', readonly=True)
-    line_note_id = fields.Char(string='Line Note ID', readonly=True)
-    custom_json = fields.Text(string='Custom Payload', readonly=True)
+    shipment_nbr = fields.Char(string='Shipment Number', index=True)
+    line_external_id = fields.Char(string='UUID Line')
+    line_row_number = fields.Char(string='Line Nbr')
+    line_nbr = fields.Char(string='Line Nbr')    
+    line_description = fields.Char(string='Description Detail')
+    is_free_item = fields.Char(string='Free Item')
+    inventory_id = fields.Char(string='InventoryID')
+    location_dest_code = fields.Char(string='LocationID')
+    open_qty = fields.Char(string='Open Qty')
+    order_qty = fields.Char(string='Ordered Qty')
+    order_line_number = fields.Char(string='Order Line Nbr')
+    order_number = fields.Char(string='Order Number', index=True)
+    order_type = fields.Char(string='Order Type')
+    original_qty = fields.Char(string='Original Qty')
+    product_uom_qty = fields.Char(string='Shipped Qty Detail')
+    uom_code = fields.Char(string='UOM')
+    line_warehouse_code = fields.Char(string='Warehouse Detail')
+    line_note = fields.Text(string='Line Note')
+    line_note_id = fields.Char(string='Line Note ID')
+    custom_json = fields.Text(string='Custom Payload')

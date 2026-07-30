@@ -358,7 +358,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
             try:
                 transfer_service = self.env['acumatica.internal.transfer.service']
-                transfer_info = transfer_service.classify(
+                transfer_info = transfer_service.classify_transfer_out_to_virtual(
                     first.from_warehouse_code,
                     first.to_warehouse_code,
                     'FromWarehouseID',

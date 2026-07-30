@@ -450,7 +450,7 @@ class StockPickingType(models.Model):
             'transfer_in': 'direct_receipt',
             'so_transfer': 'direct_receipt',
             'sotr': 'direct_receipt',
-            'vendor_return': 'direct_receipt',
+            'vendor_return': 'direct_delivery_order',
             'so_shipment': 'direct_delivery_order',
             'so_shipment_toko_pegang_do': 'direct_delivery_order',
             'so_shipment_co': 'direct_delivery_order',

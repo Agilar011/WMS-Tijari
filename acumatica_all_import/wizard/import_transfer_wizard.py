@@ -36,62 +36,39 @@ class ImportTransferWizard(models.TransientModel):
 
         import math
 
-        raw_list = 0
-        loop_count = math.ceil(self.fetch_limit / self.batch_size)
-        params = []
-        if self.wh33_filter:
-            params.append("startswith(Warehouse,'WH33')")
-        if self.start_date and self.end_date:
-            params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
-        if self.odata_filter:
-            params.append(self.odata_filter)
+        count = 0
+        batch_data = self.fetch_transfer_data()
+        count += batch_data
+        self.total_fetched = count
 
-        for i in range(loop_count):
-            offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.fetch_transfer_data(
-                limit=self.batch_size,
-                offset=offset,
-                receipt_nbr=self.receipt_nbr,
-                odata_filter=params if params else None,
-            )
+        if not count:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-            if not batch_data:
-                break
-
-            raw_list += batch_data
-
-        self.total_fetched = raw_list
-
-    def _search_picking_type(self, header, warehouse_code):
+    def _search_picking_type(self, building_code, document_only=False):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        # warehouse = 
+        Warehouse = self.env['stock.warehouse']
         type = False
 
         document_only_type = PickingType.resolve_document_only_picking_type(
             api_acumatica='so_transfer',
-            document_only=header.get('document_only'),
-            warehouse_code=warehouse_code,
+            document_only=document_only,
+            warehouse_code=building_code,
         )
         if document_only_type:
             return document_only_type
 
-        location = Location.search([
-            ('code', '=', warehouse_code)
+        warehouse = Warehouse.search([
+            ('code', '=', building_code)
         ])
-
-        
-        if location:
-            print(f"Building id: {location.odoo_building_id.id}")
+        if warehouse:
             type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'incoming'),
                 ('is_default_api', '=', True)
             ])
 
-        print(f"Type: {type}")
-
-        return type
+        return type if type else None
 
     @staticmethod
     def _val(item, key):
@@ -134,12 +111,12 @@ class ImportTransferWizard(models.TransientModel):
             return False
 
 
-    def fetch_transfer_data(self, limit=50, offset=0, receipt_nbr=False, odata_filter=False):
+    def fetch_transfer_data(self):
         self.ensure_one()
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
+            params = {}
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
@@ -166,131 +143,65 @@ class ImportTransferWizard(models.TransientModel):
             result = []
             detail_result = []
             seen_receipts = set()
+            shipment_warehouse_cache = {}
 
             for row_number, item in enumerate(raw_data, start=1):
-                print(f"item to create: {item}")
-                warehouse_code = self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID')
-                print(f"Processing row {row_number}: Warehouse Code = {warehouse_code}")
-                picking_type = self._search_picking_type(item, warehouse_code)
+                receipt_nbr = self._val(item, "ReceiptNbr")
+                transfer_shipment_nbr = self._val(item, 'LineTransferShipmentNbr')
+                shipment_warehouse = {}
+                if transfer_shipment_nbr:
+                    shipment_warehouse = shipment_warehouse_cache.get(transfer_shipment_nbr)
+                    if shipment_warehouse is None:
+                        shipment_warehouse = self.search_dest_warehouse(transfer_shipment_nbr, session) or {}
+                        shipment_warehouse_cache[transfer_shipment_nbr] = shipment_warehouse
 
-                if picking_type:
-                    picking_type_id = picking_type.id
+                if receipt_nbr not in seen_receipts:
+                    seen_receipts.add(receipt_nbr)
+                    building_code = self._val(item, "BuildingID")
+                    document_only = self._bool_val(item, 'DocumentOnly')
+                    type = self._search_picking_type(building_code, document_only=document_only)
 
-                if not picking_type:
-                    picking_type_id = False
+                    header = {
+                        'external_id': item.get('id', '') or '',
+                        'row_number': row_number,
+                        'note': item.get('HeaderNote', {}).get('value', '') or '',
+                        'branch_warehouse': self._val(item, 'Branch'),
+                        'actual_qty': self._val(item, 'ControlQty'),
+                        'scheduled_date': self._val(item, 'Date'),
+                        'is_hold': self._val(item, 'Hold'),
+                        'inventory_ref': self._val(item, 'InventoryRefNbr'),
+                        'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+                        'header_location_code': self._val(item, 'Location'),
+                        'post_period': self._val(item, 'PostPeriod'),
+                        'receipt_nbr': self._val(item, 'ReceiptNbr'),
+                        'document_only': self._bool_val(item, 'DocumentOnly'),
+                        'status': self._val(item, 'Status'),
+                        'total_qty': self._val(item, 'TotalQty'),
+                        'receipt_type': self._val(item, 'Type'),
+                        'vendor_code': self._val(item, 'VendorID'),
+                        'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
+                        'warehouse_code': shipment_warehouse.get('source_warehouse') or self._val(item, 'WarehouseID'),
+                        'warehouse_dest_code': shipment_warehouse.get('dest_warehouse') or self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
+                        'picking_type_id': type.id if type else None,
 
+                        }
 
-                header = {
-                    'external_id': item.get('id', '') or '',
-                    'row_number': row_number,
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'branch_warehouse': self._val(item, 'Branch'),
-                    'actual_qty': self._val(item, 'ControlQty'),
-                    'scheduled_date': self._val(item, 'Date'),
-                    'is_hold': self._val(item, 'Hold'),
-                    'inventory_ref': self._val(item, 'InventoryRefNbr'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'header_location_code': self._val(item, 'Location'),
-                    'post_period': self._val(item, 'PostPeriod'),
+                detail_result.append({
+                    # 'header_external_id': item.get('id', '') or '',
+                    'line_external_id': item.get('id', '') or '',
                     'receipt_nbr': self._val(item, 'ReceiptNbr'),
-                    'document_only': self._bool_val(item, 'DocumentOnly'),
-                    'status': self._val(item, 'Status'),
-                    'total_qty': self._val(item, 'TotalQty'),
-                    'receipt_type': self._val(item, 'Type'),
-                    'vendor_code': self._val(item, 'VendorID'),
-                    'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
-                    'warehouse_dest_code': self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
-                    'picking_type_id': picking_type_id,
-
-                    }
-
-                details = item.get('Details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-                if flat_data is not None:
-                    receipt_nbr = header.get('receipt_nbr')
-                    header['external_id'] = receipt_nbr or header['external_id']
-                    header['warehouse_dest_code'] = self._val(item, 'LineWarehouseID') or header.get('warehouse_dest_code')
-                    transfer_shipment_nbr = self._val(item, 'TransferShipmentNbr') or self._val(item, 'LineTransferShipmentNbr')
-                    if transfer_shipment_nbr:
-                        dest_warehouse_data = self.search_dest_warehouse(transfer_shipment_nbr, session)
-                        if dest_warehouse_data:
-                            header["warehouse_code"] = dest_warehouse_data.get('source_warehouse')
-                    if receipt_nbr not in seen_receipts:
-                        seen_receipts.add(receipt_nbr)
-                        result.append(dict(header, line_nbr='0'))
-                    detail_result.append({
-                        'header_external_id': header['external_id'],
-                        'line_external_id': item.get('id', '') or '',
-                        'line_note': self._val(item, 'LineNote'),
-                        'description': self._val(item, 'LineDescription'),
-                        'inventory_id': self._val(item, 'LineInventoryID'),
-                        'line_nbr': str(self._val(item, 'LineNbr') or item.get('rowNumber') or 0),
-                        'line_type': self._val(item, 'LineType'),
-                        'location_dest_code': self._val(item, 'LineLocation'),
-                        'open_qty': self._val(item, 'LineOpenQty'),
-                        'order_qty': self._val(item, 'LineOrderedQty'),
-                        'po_line_number': self._val(item, 'LinePOLineNbr'),
-                        'po_number': self._val(item, 'LinePOOrderNbr'),
-                        'po_type': self._val(item, 'LinePOOrderType'),
-                        'po_receipt_line_number': self._val(item, 'LinePOReceiptLineNbr'),
-                        'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
-                        'product_uom_qty': self._val(item, 'LineReceiptQty'),
-                        'transaction_description': self._val(item, 'LineTransactionDescription') or self._val(item, 'LineDescription'),
-                        'transfer_order_line_number': self._val(item, 'LineTransferOrderLineNbr'),
-                        'transfer_order_number': self._val(item, 'LineTransferOrderNbr'),
-                        'transfer_order_type': self._val(item, 'LineTransferOrderType'),
-                        'transfer_shipment_number': transfer_shipment_nbr,
-                        'uom_code': self._val(item, 'LineUOM'),
-                    })
-                    continue
-
-                # if not details:
-                #     result.append(dict(header, line_nbr='0'))
-                #     continue
-                if details:
-                    transfer_shipment_nbr = self._val(details[0], 'TransferShipmentNbr')
-                    dest_warehouse_data = self.search_dest_warehouse(transfer_shipment_nbr, session)
-                    if dest_warehouse_data:
-                        header["warehouse_code"] = dest_warehouse_data.get('source_warehouse')
-
-                result.append(dict(header, line_nbr='0'))
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    description = self._val(detail, 'Description') or self._val(detail, 'TransactionDescription')
-                    # transfer_shipment_nbr = self._val(detail, 'TransferShipmentNbr')
-                    # if transfer_shipment_nbr and not is_found_dest_warehouse:
-                    #     dest_warehouse_data = self.search_dest_warehouse(transfer_shipment_nbr, session)
-                    #     is_found_dest_warehouse = True
-
-                    detail_result.append({
-                        'header_external_id': header['external_id'],
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'description': description,
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'line_type': self._val(detail, 'LineType'),
-                        'location_dest_code': self._val(detail, 'Location'),
-                        'open_qty': self._val(detail, 'OpenQty'),
-                        'order_qty': self._val(detail, 'OrderedQty'),
-                        'po_line_number': self._val(detail, 'POLineNbr'),
-                        'po_number': self._val(detail, 'POOrderNbr'),
-                        'po_type': self._val(detail, 'POOrderType'),
-                        'po_receipt_line_number': self._val(detail, 'POReceiptLineNbr'),
-                        'po_receipt_number': self._val(detail, 'POReceiptNbr'),
-                        'product_uom_qty': self._val(detail, 'ReceiptQty'),
-                        'transaction_description': self._val(detail, 'TransactionDescription'),
-                        'transfer_order_line_number': self._val(detail, 'TransferOrderLineNbr'),
-                        'transfer_order_number': self._val(detail, 'TransferOrderNbr'),
-                        'transfer_order_type': self._val(detail, 'TransferOrderType'),
-                        'transfer_shipment_number': transfer_shipment_nbr,
-                        'uom_code': self._val(detail, 'UOM'),
-                        # 'warehouse_code': dest_warehouse_data.get('source_warehouse') if dest_warehouse_data else None,
-                    })
+                    'line_note': item.get('LineNote', {}).get('value', '') or '',
+                    'description': self._val(item, 'LineDescription'),
+                    'inventory_id': self._val(item, 'LineInventoryID'),
+                    'line_nbr': self._val(item, 'LineNbr'),
+                    'line_type': self._val(item, 'LineType'),
+                    'location_dest_code': self._val(item, 'LineLocation'),
+                    'open_qty': self._val(item, 'LineOpenQty'),
+                    'order_qty': self._val(item, 'LineOrderedQty'),
+                    'product_uom_qty': self._val(item, 'LineReceiptQty'),
+                    'uom_code': self._val(item, 'LineUOM'),
+                    'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+                })
 
             _logger.info('Berhasil ambil %s rows Transfer Receipt dari Acumatica', len(result))
             self.config_id.last_sync = fields.Datetime.now()

@@ -35,6 +35,7 @@
             <list string="Data Issue : Change Item" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="reference_nbr"/>
+                <field name="trans_type"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
                 <!-- <field name="line_description"/> -->

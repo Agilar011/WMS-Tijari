@@ -249,11 +249,12 @@ class AcumaticaTransferOneStepLine(models.Model):
                     imported += 1
 
                 transfer_service = self.env['acumatica.internal.transfer.service']
-                transfer_info = transfer_service.classify(
+                transfer_info = transfer_service.classify_transfer_out_to_virtual(
                     first.from_warehouse_code,
                     first.to_warehouse_code,
                     'FromWarehouseID',
                     'ToWarehouseID',
+                    check_same_location_mapping=True,
                 )
                 source_location = transfer_info['source_location']
                 destination_location = transfer_info['destination_location']

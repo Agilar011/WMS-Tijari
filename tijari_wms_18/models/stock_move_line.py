@@ -753,7 +753,7 @@ class StockMoveLine(models.Model):
                       
             if not chosen:
                 print(f">>> chosen {chosen}") # Cek di terminal Odoo
-                print(f">>> chosen lot {q.lot_id.name} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
+                # print(f">>> chosen lot {q.lot_id.name} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
                 # Tidak ada lot yg cukup → pilih lot tertua yang punya sedikit stok (sebagai hint)
                 partial = next((q for q in quants if Quant._get_available_quantity(
                     line.product_id, q.location_id, lot_id=q.lot_id,

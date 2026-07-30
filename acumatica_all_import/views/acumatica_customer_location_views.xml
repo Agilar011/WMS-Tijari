@@ -178,6 +178,7 @@
                 <field name="customer" string="Customer"/>
                 <field name="location_id_acumatica" string="LocationID"/>
                 <field name="location_name" string="Location Name"/>
+                <field name="usage_type" string="EntityUsageType"/>
                 <field name="warehouse" string="Warehouse" optional="show"/>
                 <field name="status" string="Status"
                        decoration-success="status == 'Active'"

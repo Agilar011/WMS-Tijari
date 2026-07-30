@@ -20,6 +20,8 @@
                 <field name="selected" widget="boolean_toggle"/>
 
                 <field name="reference_nbr"/>
+                <field name="transfer_type"/>
+                <field name="trans_type"/>
                 <field name="document_only"/>
                 <!-- <field name="scheduled_date"/> -->
                 <field name="from_warehouse_code"/>
@@ -42,6 +44,12 @@
                         type="object"
                         icon="fa-upload"
                         invisible="import_state != 'pending'"/>
+
+                <button name="action_reset_pending"
+                        string="Reset Error"
+                        type="object"
+                        icon="fa-refresh"
+                        invisible="import_state != 'error'"/>
 
                 <button name="action_open_picking"
                         string="Open Transfer"
@@ -68,6 +76,12 @@
                             string="Buka Transfer"
                             type="object"
                             invisible="not odoo_picking_id"/>
+
+                    <button name="action_reset_pending"
+                            string="Reset Error"
+                            type="object"
+                            class="btn-secondary"
+                            invisible="import_state != 'error'"/>
 
                     <field name="import_state"
                         widget="statusbar"

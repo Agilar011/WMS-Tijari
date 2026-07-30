@@ -115,13 +115,13 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         Location = self.env['stock.location.acumatica']
         type = False
 
-        document_only_type = PickingType.resolve_document_only_picking_type(
-            api_acumatica='inventory_received',
+        mapped_type = self.config_id._resolve_inventory_receive_picking_type(
+            transfer_type=header.get('transfer_type'),
             document_only=header.get('document_only'),
             warehouse_code=header.get('warehouse_code'),
         )
-        if document_only_type:
-            return document_only_type
+        if mapped_type:
+            return mapped_type
 
         location = Location.search([
             ('code', '=', header['warehouse_code'])
@@ -148,7 +148,14 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             details = details.get('value', []) or []
         return details if isinstance(details, list) else []
 
-    def _build_inventory_receipt_header(self, row_number, item, header_id, warehouse_code):
+    def _is_transfer_in_type(self, value):
+        return str(value or '').strip().lower().replace('-', '_').replace(' ', '_') in (
+            'transfer_in',
+            'transfer_receipt',
+        )
+
+    def _build_inventory_receipt_header(self, row_number, item, header_id, warehouse_code, warehouse_dest_code=False):
+        transfer_type = self._val(item, 'TransType')
         header = {
             'external_id': header_id,
             'row_number': item.get('rowNumber') or row_number,
@@ -169,8 +176,9 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             'status': self._val(item, 'Status'),
             'total_qty': str(self._val(item, 'TotalQty')),
             'transfer_nbr': self._val(item, 'TransferNbr'),
-            'transfer_type': self._val(item, 'TransType'),
+            'transfer_type': transfer_type,
             'warehouse_code': warehouse_code,
+            'warehouse_dest_code': warehouse_dest_code or warehouse_code,
         }
         picking_type = self._search_picking_type(header)
         header['picking_type_id'] = picking_type.id if picking_type else None
@@ -183,12 +191,12 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             'line_nbr': str(self._val(detail, 'LineNbr')),
             'line_note': self._val(detail, 'LineNote'),
             'branch_warehouse': self._val(detail, 'LineBranch'),
-            'line_description': self._val(detail, 'LineDescription'),
+            'line_description': self._val(detail, 'LineInventoryName'),
             'inventory_id': self._val(detail, 'LineInventoryID'),
             'location_code': self._val(detail, 'LineLocation'),
             'product_uom_qty': str(self._val(detail, 'LineQuantity')),
             'uom_code': self._val(detail, 'LineUOM'),
-            'warehouse_dest_code': self._val(detail, 'LineWarehouseID') or warehouse_code,
+            'warehouse_dest_code': warehouse_code,
         }
 
     def fetch_inventory_recieved_data(self):
@@ -216,15 +224,31 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                 if not details:
                     details = [item]
 
-                warehouse_code = self._coalesce_val(item, 'Warehouse', 'LineWarehouseID')
+                transfer_type = self._val(item, 'TransType')
+                line_warehouse = self._val(item, 'LineWarehouse') or self._val(item, 'LineWarehouseID')
+                if self._is_transfer_in_type(transfer_type):
+                    warehouse_code = (
+                        self._val(item, 'FromWarehouseID')
+                        or self._val(item, 'WarehouseID')
+                        or line_warehouse
+                    )
+                    warehouse_dest_code = (
+                        self._val(item, 'ToWarehouseID')
+                        or self._val(item, 'Warehouse')
+                        or self._val(item, 'LineWarehouseID')
+                        or line_warehouse
+                    )
+                else:
+                    warehouse_code = line_warehouse
+                    warehouse_dest_code = warehouse_code
                 header_id = ref or item.get('id', '')
 
                 if header_id not in headers_seen:
-                    result.append(self._build_inventory_receipt_header(row_number, item, header_id, warehouse_code))
+                    result.append(self._build_inventory_receipt_header(row_number, item, header_id, warehouse_code, warehouse_dest_code))
                     headers_seen.add(header_id)
 
                 for detail in details:
-                    detail_result.append(self._build_inventory_receipt_detail(header_id, detail, warehouse_code))
+                    detail_result.append(self._build_inventory_receipt_detail(header_id, detail, warehouse_dest_code))
 
             self.config_id.last_sync = fields.Datetime.now()
             _logger.info("Berhasil ambil %s rows Inventory Receipt dari Acumatica", len(result))
@@ -233,37 +257,6 @@ class ImportInventoryRecievedWizard(models.TransientModel):
 
         finally:
             self.config_id._do_logout(session)
-
-    # def search_dest_warehouse(self, transfer_nbr, session):
-    #     self.ensure_one()
-    #     if not transfer_nbr:
-    #         return None
-    #     try:
-    #         endpoint = f"{self.config_id.api_url}/TransferOrder"
-    #         params = {
-    #             '$select': 'ToWarehouseID, FromWarehouseID, ReferenceNbr', 
-    #             '$filter': f"ReferenceNbr eq '{transfer_nbr}'"
-    #         }
-
-    #         response = session.get(endpoint, params=params, timeout=300)
-    #         if response.status_code != 200:
-    #             raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
-
-    #         raw_data = self._normalize_rows(response.json())
-
-    #         item = raw_data[0]  # misal ambil data pertama
-
-    #         result = {
-    #             'shipment_number': self._val(item, 'ShipmentNbr'),
-    #             'dest_warehouse': self._val(item, 'ToWarehouseID'),
-    #             'source_warehouse': self._val(item, 'FromWarehouseID'),
-    #         }
-
-    #         _logger.info('Berhasil ambil data Warehouse dari Transfer', len(result))
-    #         return result
-    #     except Exception as e:
-    #         _logger.error('Gagal ambil data Warehouse dari Transfer: %s', str(e))
-    #         return None
 
     def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']

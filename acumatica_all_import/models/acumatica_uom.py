@@ -44,6 +44,19 @@ class AcumaticaUomLine(models.Model):
     )
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
+    def _clean_uom_value(self, value):
+        return (value or '').strip()
+
+    def _find_uom_by_name(self, name, category=False):
+        name = self._clean_uom_value(name)
+        if not name:
+            return self.env['uom.uom'].browse()
+
+        domain = [('name', '=ilike', name)]
+        if category:
+            domain.append(('category_id', '=', category.id))
+        return self.env['uom.uom'].search(domain, limit=1)
+
     # ─── Computed: sudah ada di Odoo? ────────────────
     exists_in_odoo = fields.Boolean(
         string='Sudah Ada di Odoo',
@@ -54,17 +67,11 @@ class AcumaticaUomLine(models.Model):
     @api.depends('description')
     def _compute_exists_in_odoo(self):
         for rec in self:
-            if rec.description:
-                existing = self.env['uom.uom'].search([
-                    ('name', '=ilike', rec.description)
-                ], limit=1)
-                rec.exists_in_odoo = bool(existing)
-            else:
-                rec.exists_in_odoo = False
+            rec.exists_in_odoo = bool(rec._find_uom_by_name(rec.description))
 
     # ─── Action: Import baris yang dipilih ───────────
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
@@ -84,7 +91,8 @@ class AcumaticaUomLine(models.Model):
 
         for line in self:
             try:
-                if not line.description:
+                uom_name = line._clean_uom_value(line.description or line.unit_id)
+                if not uom_name:
                     line.write({
                         'import_state':   'error',
                         'import_message': 'Description kosong, tidak bisa jadi nama UoM',
@@ -101,18 +109,14 @@ class AcumaticaUomLine(models.Model):
                     _logger.info("Kategori UoM baru dibuat: %s", 'Unit')
 
                 # ── 2. Cek apakah uom.uom (Description) sudah ada ──
-                existing = self.env['uom.uom'].search([
-                    ('name', '=ilike', line.description),
-                    ('category_id', '=', uom_categ.id),
-                ], limit=1)
+                existing = line._find_uom_by_name(uom_name)
 
                 if existing:
-                    existing.category_id = uom_categ.id  # Pastikan kategorinya sesuai
                     line.write({
                         'import_state':   'skipped',
-                        'import_message': f'Sudah ada: {existing.name} (kategori: {uom_categ.name})',
+                        'import_message': f'Sudah ada: {existing.name} (kategori: {existing.category_id.name})',
                         'odoo_uom_id':    existing.id,
-                        'odoo_categ_id':  uom_categ.id,
+                        'odoo_categ_id':  existing.category_id.id,
                     })
                     skipped += 1
                 else:
@@ -124,7 +128,7 @@ class AcumaticaUomLine(models.Model):
 
                     # ── 3. Buat uom.uom baru ──
                     new_uom = self.env['uom.uom'].create({
-                        'name':        line.description,
+                        'name':        uom_name,
                         'category_id': uom_categ.id,
                         'uom_type':    'smaller' if has_reference else 'reference',
                         'factor':      1.0,
