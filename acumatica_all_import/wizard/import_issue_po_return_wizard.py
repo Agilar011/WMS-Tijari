@@ -1,5 +1,6 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
+from dateutil import parser as dateutil_parser
 
 
 class ImportReceiptWizard(models.TransientModel):
@@ -61,25 +62,20 @@ class ImportReceiptWizard(models.TransientModel):
             print("[DEBUG] MASUK proses set filter")
             print("="*80)
 
-        for i in range(loop_count):
-            offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.fetch_receipt_data(
-                limit=self.batch_size,
-                reference_nbr=self.receipt_nbr,
-                offset=offset,
-                odata_filter=params if params else None,
-            )
+        batch_data = self.fetch_receipt_data()
 
-            if not batch_data:
-                break
 
-            raw_list += batch_data
+        raw_list += batch_data
+
 
         self.total_fetched = raw_list
 
+        if not raw_list:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+
         return {
             'type': 'ir.actions.act_window',
-            'res_model': 'import.receipt.change.item.wizard',
+            'res_model': 'import.issue.po.return.wizard',
             'res_id': self.id,
             'view_mode': 'form',
             'target': 'new',
@@ -90,7 +86,7 @@ class ImportReceiptWizard(models.TransientModel):
     # MAIN PROCESS
     # ---------------------------------------------------------
 
-    def fetch_receipt_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
+    def fetch_receipt_data(self):
         print("="*80)
         print("[DEBUG] MASUK KE FUNGSI: fetch_receipt_data")
         print("="*80)
@@ -102,7 +98,7 @@ class ImportReceiptWizard(models.TransientModel):
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
+            params = {}
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
@@ -126,8 +122,11 @@ class ImportReceiptWizard(models.TransientModel):
                 raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
 
             raw_payload = response.json()
-            flat_data = raw_payload.get('PurchaseReceiptGIDetails') if isinstance(raw_payload, dict) else None
-            raw_data = flat_data or self._normalize_rows(raw_payload)
+            raw_data = (
+                raw_payload.get('PurchaseReceiptGIDetails')
+                if isinstance(raw_payload, dict)
+                else None
+            ) or self._normalize_rows(raw_payload)
             result = []
             detail_result = []
             seen_receipts = set()
@@ -138,64 +137,24 @@ class ImportReceiptWizard(models.TransientModel):
                 print("[DEBUG] MASUK Ke proses deklarasi header")
                 print("="*80)
 
-                if flat_data is not None:
-                    receipt_nbr = self._val(item, 'ReceiptNbr')
-                    header_id = receipt_nbr or item.get('id', '')
-                    if receipt_nbr not in seen_receipts:
-                        seen_receipts.add(receipt_nbr)
-                        header_item = dict(item)
-                        header_item['warehouse_code'] = self._val(item, 'LineWarehouseID') or self._val(item, 'Warehouse')
-                        header = self._build_header_values(row_number, header_item)
-                        header.update({
-                            'external_id': header_id,
-                            'warehouse_code': header_item['warehouse_code'],
-                            'note': self._val(item, 'NoteHeader'),
-                            'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
-                            'po_line_number': self._val(item, 'LinePOLineNbr'),
-                            'po_number': self._val(item, 'LinePOOrderNbr'),
-                            'po_type': self._val(item, 'LinePOOrderType') or self._val(item, 'Type'),
-                            'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
-                        })
-                        result.append(dict(header))
-
-                    detail_result.append({
-                        'header_external_id': header_id,
-                        'line_external_id': item.get('id', '') or '',
-                        'line_note': self._val(item, 'LineNote'),
-                        'branch_warehouse': self._val(item, 'Branch'),
-                        'line_description': self._val(item, 'LineDescription'),
-                        'inventory_id': self._val(item, 'LineInventoryID'),
-                        'line_nbr': self._val(item, 'LineNbr'),
-                        'location_code': self._val(item, 'LineLocation'),
-                        'product_uom_qty': self._val(item, 'LineReceiptQty'),
-                        'uom_code': self._val(item, 'LineUOM'),
-                        'warehouse_code': self._val(item, 'LineWarehouseID'),
-                    })
-                    continue
-
-                header_id = item.get('id', '')
-
                 header = self._build_header_values(row_number, item)
+                header_id = header.get('receipt_nbr') or header.get('external_id')
+                header['external_id'] = header_id
 
                 print(f"header : {header}")
 
-
-                # Cek apakah Detail ada dan berbentuk list / dict / array
                 details = item.get('Details') or []
-                # print(details)
                 if isinstance(details, dict):
                     details = details.get('value', []) or []
                 if not isinstance(details, list):
-                    details = []                    
+                    details = []
+                if not details:
+                    details = [item]
 
-                result.append(dict(header))
-                # print(f"Result: {result}")
+                if header_id not in seen_receipts:
+                    seen_receipts.add(header_id)
+                    result.append(dict(header))
 
-
-                print("="*80)
-                print("[DEBUG] MASUK Ke proses deklarasi detail")
-                print("="*80)
-                
                 for detail in details:
                     detail_result.append(
                         self._build_detail_values(header_id, detail)
@@ -300,23 +259,46 @@ class ImportReceiptWizard(models.TransientModel):
         return {
             'external_id': item.get('id', '') or '',
             'row_number': row_number,
-            'note': item.get('note', {}).get('value', '') or '',
+            'note': self._val(item, 'NoteHeader')  or '',
+            'branch_warehouse': self._val(item, 'Branch'),
             'actual_qty': self._val(item, 'ControlQty'),
             'total_qty': self._val(item, 'TotalQty'),
             'scheduled_date': self._val(item, 'Date'),
-            # 'warehouse_code': self._val(item, 'Description'),
+            'warehouse_code': self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
+            'header_location_code': self._val(item, 'Location'),
             # 'external_ref': self._val(item, 'ExternalRef'),
             'document_only': self._bool_val(item, 'DocumentOnly'),
-            # 'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+            'is_hold': self._val(item, 'Hold'),
+            'inventory_ref': self._val(item, 'InventoryRefNbr'),
+            'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
             'post_period': self._val(item, 'PostPeriod'),
             'receipt_nbr': self._val(item, 'ReceiptNbr'),
             'status': self._val(item, 'Status'),
             # 'total_amount': self._val(item, 'TotalAmount'),
             # 'total_qty': self._val(item, 'TotalQty'),
-            'po_type': self._val(item, 'Type'),
+            'receipt_type': self._val(item, 'Type'),
             'vendor_code' : self._val(item, 'VendorID'),
-            'partner_ref' : self._val(item, 'VendorName'),
-            'partner_ref' : self._val(item, 'VendorName'),
+            'partner_ref' : self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
+            'line_nbr': self._val(item, 'LineNbr'),
+            'description': self._val(item, 'LineDescription'),
+            'transaction_description': self._val(item, 'LineDescription'),
+            'inventory_id': self._val(item, 'LineInventoryID'),
+            'line_type': self._val(item, 'LineType'),
+            'location_dest_code': self._val(item, 'LineLocation'),
+            'open_qty': self._val(item, 'LineOpenQty'),
+            'order_qty': self._val(item, 'LineOrderedQty'),
+            'po_line_number': self._val(item, 'LinePOLineNbr'),
+            'po_number': self._val(item, 'LinePOOrderNbr'),
+            'po_type': self._val(item, 'LinePOOrderType') or self._val(item, 'Type'),
+            'po_receipt_line_number': self._val(item, 'LinePOReceiptLineNbr'),
+            'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
+            'product_uom_qty': self._val(item, 'LineReceiptQty'),
+            'transfer_order_line_number': self._val(item, 'LineTransferOrderLineNbr'),
+            'transfer_order_number': self._val(item, 'LineTransferOrderNbr'),
+            'transfer_order_type': self._val(item, 'LineTransferOrderType'),
+            'transfer_shipment_number': self._val(item, 'LineTransferShipmentNbr'),
+            'uom_code': self._val(item, 'LineUOM'),
+            'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
             'picking_type_id': type
 
             }
@@ -425,15 +407,15 @@ class ImportReceiptWizard(models.TransientModel):
         return {
             'header_external_id': header_id,
             'line_external_id': detail.get('id', '') or '',
-            'line_note': detail.get('note', {}).get('value', '') or '',
-            'branch_warehouse': self._val(detail, 'Branch'),
-            'line_description': self._val(detail, 'Description'),
-            'inventory_id': self._val(detail, 'InventoryID'),
+            'line_note': self._val(detail, 'LineNote') or '',
+            'branch_warehouse': self._val(detail, 'LineBranch') or '',
+            'line_description': self._val(detail, 'LineDescription') or '',
+            'inventory_id': self._val(detail, 'LineInventoryID') or '',
             'line_nbr': self._val(detail, 'LineNbr'),
-            'location_code': self._val(detail, 'Location'),
-            'product_uom_qty': self._val(detail, 'ReceiptQty'),
-            'uom_code': self._val(detail, 'UOM'),
-            'warehouse_code': self._val(detail, 'WarehouseID'),
+            'location_code': self._val(detail, 'LineLocation') or '',
+            'product_uom_qty': self._val(detail, 'LineReceiptQty') or '',
+            'uom_code': self._val(detail, 'LineUOM') or '',
+            'warehouse_code': self._val(detail, 'LineWarehouseID') or '',
         }
 
         
@@ -515,7 +497,11 @@ class ImportReceiptWizard(models.TransientModel):
     def _search_picking_type(self, header):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        warehouse_code = header.get('warehouse_code')
+        warehouse_code = (
+            header.get('warehouse_code')
+            or self._val(header, 'Warehouse')
+            or self._val(header, 'LineWarehouseID')
+        )
         # details = header.get('Details') or []
         type = False
         document_only = header.get('document_only')
@@ -606,8 +592,8 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Data Receipt Type Change Item dari Acumatica',
-            'res_model': 'acumatica.receipt.change.item.line',
+            'name': 'Data PO Return dari Acumatica',
+            'res_model': 'acumatica.issue.po.return.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
             'context': {'default_config_id': self.config_id.id},
@@ -615,7 +601,7 @@ class ImportReceiptWizard(models.TransientModel):
 
     def action_import_all_pending(self):
         self.ensure_one()
-        lines = self.env['acumatica.receipt.change.item.line'].search([
+        lines = self.env['acumatica.issue.po.return.line'].search([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
             ('selected', '=', True),
@@ -626,8 +612,8 @@ class ImportReceiptWizard(models.TransientModel):
         self.state = 'done'
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Hasil Import Receipt Type Change Item',
-            'res_model': 'acumatica.receipt.change.item.line',
+            'name': 'Hasil Import PO Return',
+            'res_model': 'acumatica.issue.po.return.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
         }
@@ -637,8 +623,8 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Data Inventory Inventory Issue dari Acumatica',
-            'res_model': 'acumatica.inventory.issue.line',
+            'name': 'Data PO Return dari Acumatica',
+            'res_model': 'acumatica.issue.po.return.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
             'context': {'default_config_id': self.config_id.id},
@@ -646,7 +632,7 @@ class ImportReceiptWizard(models.TransientModel):
 
     def action_import_all_pending(self):
         self.ensure_one()
-        lines = self.env['acumatica.inventory.issue.line'].search([
+        lines = self.env['acumatica.issue.po.return.line'].search([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'pending'),
             ('selected', '=', True),
@@ -657,8 +643,8 @@ class ImportReceiptWizard(models.TransientModel):
         self.state = 'done'
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Hasil Import Delivery Order',
-            'res_model': 'acumatica.inventory.issue.line',
+            'name': 'Hasil Import PO Return',
+            'res_model': 'acumatica.issue.po.return.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
         }

@@ -21,6 +21,8 @@
         <field name="arch" type="xml">
             <list string="Data Invoice Consignment">
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="adt_Type" string="Type"/>
+                <field name="adt_ConsignmentType" string="Consignment Type"/>
                 <!-- <field name="id" string="ID"/> -->
                 <field name="adt_CustomerID" string="Customer Code"/>
                 <!-- <field name="odoo_picking_id" string="Delivery Order"/> -->

@@ -40,6 +40,7 @@
             <list string="Data Transfer - Inter Warehouse : OUT" multi_edit="1">
                 <field name="selected"/>
                 <field name="shipment_nbr"/>
+                <field name="shipment_type"/>
                 <field name="document_only"/>
                 <!-- <field name="partner_code"/> -->
                 <field name="warehouse_code"/>

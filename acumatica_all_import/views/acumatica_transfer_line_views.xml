@@ -46,6 +46,7 @@
             <list string="Data Transfer - Inter Warehouse : IN" multi_edit="1">
                 <!-- <field name="transfer_order_number"/> -->
                 <field name="receipt_nbr"/>
+                <field name="receipt_type"/>
                 <!-- <field name="line_nbr"/> -->
                 <!-- <field name="inventory_id"/> -->
                 <!-- <field name="transaction_description"/> -->

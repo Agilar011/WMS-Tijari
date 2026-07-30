@@ -25,6 +25,8 @@
             <list string="Data Direct Transfer Staging">
                 <!-- <field name="id" string="ID"/> -->
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="adt_TransType" string="Trans Type"/>
+                <field name="adt_TransferType" string="Transfer Type"/>
                 <field name="adt_DocumentOnly" string="Document Only"/>
                 <field name="adt_FromWarehouseID" string="Warehouse"/>
                 <field name="adt_TotalQty" string="Total Quantity"/>

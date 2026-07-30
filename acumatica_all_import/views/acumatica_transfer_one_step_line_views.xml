@@ -16,10 +16,12 @@
         <field name="name">acumatica.transfer.one.step.line.list</field>
         <field name="model">acumatica.transfer.one.step.line</field>
         <field name="arch" type="xml">
-            <list string="Data Transfer - Intra Warehouse : OUT" create="0" delete="0">
+            <list string="Data Transfer - Intra Warehouse : OUT">
                 <field name="selected" widget="boolean_toggle"/>
 
                 <field name="reference_nbr"/>
+                <field name="transfer_type"/>
+                <field name="trans_type"/>
                 <field name="document_only"/>
                 <field name="from_warehouse_code"/>
                 <field name="total_qty"/>
