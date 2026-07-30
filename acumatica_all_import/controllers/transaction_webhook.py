@@ -1406,9 +1406,6 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             _logger.exception("Unexpected error in transaction webhook")
             return self._json_response("error", _("Unexpected server error: %s") % str(exc), http_status=500)
 
-    @http.route([
-        "/acumatica/webhook/<string:transaction_type>",
-        "/acumatica/webhook/transaction/<string:transaction_type>",
-    ], type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/acumatica/webhook/<string:transaction_type>", type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_flat_transaction_webhook(self, transaction_type, **kwargs):
         return self._transaction_webhook(transaction_type, **kwargs)
