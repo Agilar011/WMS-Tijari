@@ -27,16 +27,16 @@ class AcumaticaStockItemLine(models.Model):
     _order       = 'row_number asc'
 
     # ─── Data mentah dari Acumatica ──────────────────
-    row_number             = fields.Integer(string='No',                    readonly=True)
-    external_id            = fields.Char(string='UUID Acumatica',           readonly=True)
-    inventory_id           = fields.Char(string='InventoryID',              readonly=True)
-    description            = fields.Char(string='Description',              readonly=True)
-    item_type              = fields.Char(string='ItemType',                 readonly=True)
-    item_class             = fields.Char(string='ItemClass',                readonly=True)
-    item_status            = fields.Char(string='ItemStatus',               readonly=True)
-    base_uom               = fields.Char(string='BaseUOM',                  readonly=True)
-    valuation_method       = fields.Char(string='ValuationMethod',          readonly=True)
-    last_modified_datetime = fields.Char(string='LastModifiedDateTime',     readonly=True)
+    row_number             = fields.Integer(string='No')
+    external_id            = fields.Char(string='UUID Acumatica')
+    inventory_id           = fields.Char(string='InventoryID')
+    description            = fields.Char(string='Description')
+    item_type              = fields.Char(string='ItemType')
+    item_class             = fields.Char(string='ItemClass')
+    item_status            = fields.Char(string='ItemStatus')
+    base_uom               = fields.Char(string='BaseUOM')
+    valuation_method       = fields.Char(string='ValuationMethod')
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime')
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
@@ -44,7 +44,7 @@ class AcumaticaStockItemLine(models.Model):
         ('imported', 'Sudah Diimport'),
         ('updated',  'Diupdate'),
         ('error',    'Error'),
-    ], string='Status', default='pending', readonly=True)
+    ], string='Status', default='pending')
 
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_product_id  = fields.Many2one('product.template', string='Product di Odoo', readonly=True)
