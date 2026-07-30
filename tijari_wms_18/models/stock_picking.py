@@ -971,7 +971,7 @@ class StockPicking(models.Model):
         for picking in self:
             # Pick harus diblokir sebelum validasi standar Odoo memproses
             # perpindahan stok apabila masih ada line yang belum Match.
-            if picking.picking_type_id.name in ('Pick', 'Pick Internal'):
+            if picking.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
                 picking._check_validate_requirements()
 
             if picking.picking_type_id.name not in ('Pick', 'Receipt'):

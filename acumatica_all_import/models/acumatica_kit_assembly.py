@@ -153,14 +153,21 @@ class AcumaticaKitAssemblyConfig(models.Model):
         return []
 
 
+
     def _parse_datetime(self, value):
         if not value:
             return False
 
+        if isinstance(value, datetime):
+            return value
+
         try:
-            return datetime.fromisoformat(value)
+            # Support:
+            # 2011-12-09T22:18:00+07:00
+            # 2011-12-09T22:18:00Z
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
         except Exception:
-            return False
+            return False        
         
     def fetch_kit_assembly_data(self, limit=100, offset=0):
         """Fetch 1 page Kit Assembly dari Acumatica (paging via $top/$skip)."""
@@ -188,15 +195,16 @@ class AcumaticaKitAssemblyConfig(models.Model):
             result = []
 
             for item in raw_data:
+
+                last_modified_datetime = self._parse_datetime(item.get('LastModifiedDateTime'))
+                print(f"Last Modified Date Time: :{last_modified_datetime}")
                 header = {
                     'name': self._val(item, 'ReferenceNbr'),
                     'external_id': item.get('id', '') or '',
                     'row_number': item.get('rowNumber', 0) or 0,
                     'description': self._val(item, 'Description'),
                     'inventory_id': self._val(item, 'InventoryID'),
-                    'last_modified_datetime': self._parse_datetime(
-                        item.get('LastModifiedDateTime')
-                    ),
+                    'last_modified_datetime': last_modified_datetime,
                     'location': self._val(item, 'Location'),
                     'post_period': self._val(item, 'PostPeriod'),
                     'quantity': self._val(item, 'Qty'),
@@ -816,7 +824,7 @@ class AcumaticaKitAssemblyLine(models.Model):
 
 
 # Block Kode Generate 1-Step Transfer Pemindahan barang dari penyimpanan ke Assembly Line
-        operation_type = self.env['stock.picking.type'].search([('code', '=', 'internal'), ('operation_category', '=', 'internal')], limit=1)
+        operation_type = self.env['stock.picking.type'].search([('code', '=', 'internal'), ('name', '=', 'Pick Components')], limit=1)
 
         total_moving_qty = 0 
 
