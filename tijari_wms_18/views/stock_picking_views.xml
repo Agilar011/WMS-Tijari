@@ -10,7 +10,7 @@
             <xpath expr="//field[@name='state']" position="after">
                 <field name="wms_state"
                     widget="statusbar"
-                    invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound'"/>
+                    invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']"/>
             </xpath>
 
             <xpath expr="//field[@name='state'][1]" position="replace">
@@ -23,7 +23,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="picking_type_name == 'Delivery Orders' and transaction_type =='outbound'"/>
+                    invisible="picking_type_name in ['Delivery Orders', 'Transfer Internal']"/>
 
             </xpath>            
 
@@ -33,7 +33,7 @@
                         type="object"
                         class="oe_highlight"
                         groups="stock.group_stock_user"
-                        invisible="picking_type_name == 'Delivery Orders' and transaction_type =='outbound' or state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel')"
+                        invisible="picking_type_name in ['Delivery Orders', 'Transfer Internal'] or state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel')"
                         data-hotkey="v"/>
             </xpath>
 
@@ -43,27 +43,27 @@
                 string="Validate"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' or wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel', 'return_shipment')"/>
+                invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel', 'return_shipment')"/>
                 
                 <button name="action_get_loginext"
                 string="Get Response"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name != 'Delivery Orders' or transaction_type !='outbound' or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+                invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
 
                 <button
                     name="action_confirm_shipment"
                     type="object"
                     string="Confirm Shipment"
                     class="btn-primary"
-                    invisible="picking_type_name != 'Delivery Orders' or wms_state != 'waiting_response' or transaction_type !='outbound'"/>
+                    invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state != 'waiting_response'"/>
 
                 <button
                     name="action_mark_as_done"
                     type="object"
                     string="Confirm Shipment"
                     class="btn-primary"
-                    invisible="picking_type_name != 'Delivery Orders' or wms_state != 'return_shipment' or transaction_type !='outbound'"/>
+                    invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state != 'return_shipment'"/>
 
                 <button name="action_print_warehouse_receipt"
                     string="Print Receipt"
@@ -83,7 +83,7 @@
                 <group>
 
                     <field name="shipment_information" 
-                    invisible="transaction_type not in ('outbound') or picking_type_name != 'Delivery Orders'"
+                    invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']"
                             decoration-success="shipment_information == 'full_shipment'"
                             decoration-warning="shipment_information == 'partial'"
                             decoration-danger="shipment_information == 'canceled'"/>
@@ -166,7 +166,7 @@
                             column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
                         <field name="product_qty" readonly="1" column_invisible="True"/>
                         <!-- <field name="temp_float" string="Confirmed Quantity"/> -->
-                        <field name="so_confirmation_quantity" string="Confirmed Quantity" column_invisible="parent.transaction_type not in ('outbound') or parent.picking_type_name != 'Delivery Orders'"/>
+                        <field name="so_confirmation_quantity" string="Confirmed Quantity" column_invisible="parent.picking_type_name not in ['Delivery Orders', 'Transfer Internal']"/>
                         <field name="quantity" string="Quantity" optional="hide" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                         <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
                         <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
@@ -302,7 +302,8 @@
         <field name="priority" eval="1200"/>
         <field name="arch" type="xml">
             <xpath expr="//list" position="replace">
-                <list string="Transactions" default_order="batch_sequence">
+                <list string="Transactions" default_order="internal_transfer_sequence, batch_sequence">
+                    <field name="internal_transfer_sequence" column_invisible="1"/>
                     <field name="batch_sequence" widget="handle"/>
                     <field name="name" decoration-bf="1"/>
                     <field name="location_id" optional="hide"

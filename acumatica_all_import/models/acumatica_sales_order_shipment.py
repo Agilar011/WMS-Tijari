@@ -431,6 +431,14 @@ class AcumaticaShipmentGIStaging(models.Model):
         else:
             ship_date = shipment.adt_ShipDate if shipment.adt_ShipDate else fields.Datetime.now()
 
+        shipment_location_id = shipment.adt_WarehouseID
+        shipment_weight = shipment.adt_ShipmentWeight
+        shipment_volume = shipment.adt_ShipmentVolume
+        shipment_city = shipment.adt_City
+        shipment_country = self._find_loginext_country(shipment.adt_CountryName)
+        shipment_postal_code = shipment.adt_PostalCode
+        shipment_street = shipment.adt_AddressLine
+
         order = InternalTransferOrder.search([
             ('external_ref', '=', shipment.adt_ShipmentNbr),
         ], limit=1)
@@ -476,7 +484,30 @@ class AcumaticaShipmentGIStaging(models.Model):
         if not move_items:
             raise UserError(f"Shipment {shipment.adt_ShipmentNbr} tidak punya detail line.")
 
+        created_loginext_header = False
+        create_tms_state = False
+        exist_post_data = self.env['loginext.staging.data'].search([
+            ('odoo_shipment_number', '=', shipment.adt_ShipmentNbr),
+        ], limit=1)
+        if not exist_post_data:
+            create_tms_state = True
+            created_loginext_header = self._build_loginext_header(
+                shipment.adt_ShipmentNbr,
+                ship_date,
+                shipment_location_id,
+                shipment_weight,
+                shipment_volume,
+                partner,
+                shipment_city,
+                shipment_country,
+                shipment_postal_code,
+                shipment_street,
+                shipment.adt_ShipmentNbr,
+            )
+
+        move_count = 0
         for item in move_items:
+            move_count += 1
             product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
             if not product:
                 raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
@@ -508,6 +539,19 @@ class AcumaticaShipmentGIStaging(models.Model):
             }
             move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
             Move.create(move_vals)
+
+            if create_tms_state:
+                self._build_loginext_item(
+                    product,
+                    shipment.adt_OrderType,
+                    created_loginext_header.id,
+                    move_count,
+                    shipment.adt_ShipmentWeight,
+                    qty,
+                )
+
+        if create_tms_state:
+            created_loginext_header.loginext_number_of_items = move_count
 
         shipment.write({
             'import_state': action_state,

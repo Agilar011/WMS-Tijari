@@ -60,6 +60,87 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             'transaction_type': transaction_type,
         }
 
+    def _get_virtual_locations_parent(self):
+        parent = self.env.ref('stock.stock_location_locations_virtual', raise_if_not_found=False)
+        if parent:
+            return parent
+        return self.env['stock.location'].search([
+            ('name', '=', 'Virtual Locations'),
+            ('usage', '=', 'view'),
+        ], limit=1)
+
+    def get_or_create_virtual_building_location(self, building_code):
+        code = (building_code or '').strip().upper()
+        if not code or code == 'WH33':
+            return self.env['stock.location'].browse()
+
+        parent = self._get_virtual_locations_parent()
+        if not parent:
+            raise UserError('Parent location "Virtual Locations" tidak ditemukan.')
+
+        Location = self.env['stock.location'].sudo()
+        virtual_location = Location.search([
+            ('name', '=', code),
+            ('location_id', '=', parent.id),
+        ], limit=1)
+        if virtual_location:
+            return virtual_location
+
+        return Location.create({
+            'name': code,
+            'location_id': parent.id,
+            'usage': 'transit',
+            'company_id': False,
+        })
+
+    def get_virtual_destination_location_from_mapping(self, mapping):
+        building_code = (
+            (mapping.odoo_building_id.code if mapping.odoo_building_id else False)
+            or mapping.building
+            or (mapping.code.split('-')[0] if mapping.code else False)
+        )
+        virtual_location = self.get_or_create_virtual_building_location(building_code)
+        return virtual_location or mapping.odoo_location_id
+
+    def classify_transfer_out_to_virtual(self, from_code, to_code, from_label='FromWarehouseID', to_label='ToWarehouseID'):
+        transfer_info = self.classify(from_code, to_code, from_label, to_label)
+        if transfer_info['status'] == 'skip':
+            return transfer_info
+
+        if transfer_info['transaction_type'] == 'inter_warehouse':
+            transfer_info['destination_location'] = self.get_virtual_destination_location_from_mapping(
+                transfer_info['to_mapping']
+            )
+        return transfer_info
+
+    def classify_transfer_in_from_virtual(self, from_code, to_code, from_label='FromWarehouseID', to_label='ToWarehouseID'):
+        from_mapping = self._find_location_mapping(from_code, from_label)
+        to_mapping = self._find_location_mapping(to_code, to_label)
+        source_location = from_mapping.odoo_location_id
+        destination_location = to_mapping.odoo_location_id
+
+        if source_location == destination_location:
+            return {
+                'status': 'skip',
+                'message': f'Skipped: {from_label} dan {to_label} map ke Odoo location yang sama.',
+                'from_mapping': from_mapping,
+                'to_mapping': to_mapping,
+                'source_location': source_location,
+                'destination_location': destination_location,
+                'transaction_type': False,
+            }
+
+        virtual_source_location = self.get_virtual_destination_location_from_mapping(from_mapping)
+        return {
+            'status': 'import',
+            'message': False,
+            'from_mapping': from_mapping,
+            'to_mapping': to_mapping,
+            'source_location': virtual_source_location or source_location,
+            'destination_location': destination_location,
+            'transaction_type': 'inter_warehouse',
+        }
+
     def get_or_create_transit_location(self):
         Location = self.env['stock.location']
         transit_location = Location.search([('usage', '=', 'transit')], limit=1)

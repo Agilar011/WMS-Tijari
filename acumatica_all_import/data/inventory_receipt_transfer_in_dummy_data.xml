@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="inventory_receipt_transfer_in_dummy_1" model="acumatica.inventory.recieved.line">
+            <field name="row_number">1</field>
+            <field name="external_id">a84b0f7d-37b6-4751-9a48-5be6e2fd3001</field>
+            <field name="reference_nbr">IRTI-20260730-0001</field>
+            <field name="scheduled_date">2026-07-30T09:30:00+07:00</field>
+            <field name="description">Inventory Receipt - Transfer In WH31-FG to WH33-FG</field>
+            <field name="branch_warehouse">WH33</field>
+            <field name="actual_qty">6.00</field>
+            <field name="acumatica_write_date">2026-07-30T09:35:18+07:00</field>
+            <field name="post_period">072026</field>
+            <field name="status">Balanced</field>
+            <field name="total_qty">6.00</field>
+            <field name="warehouse_code">WH31-FG</field>
+            <field name="warehouse_dest_code">WH33-FG</field>
+            <field name="transfer_type">Transfer In</field>
+            <field name="note">Dummy Inventory Receipt dengan transfer type Transfer In dari virtual WH31 ke WH33 Finish Goods.</field>
+            <field name="external_ref">EXT-IRTI-20260730-0001</field>
+            <field name="document_only">False</field>
+            <field name="shipment_nbr">TS-20260730-0001</field>
+            <field name="transfer_nbr">TO-20260730-0001</field>
+            <field name="location_code">WH33-FG</field>
+            <field name="picking_type_id" ref="stock.picking_type_internal"/>
+            <field name="config_id" ref="acumatica_config_inventory_received_default"/>
+            <field name="import_state">pending</field>
+            <field name="import_message">Dummy Inventory Receipt Transfer In realistic data</field>
+            <field name="selected">True</field>
+            <field name="sync_date">2026-07-30 02:35:18</field>
+        </record>
+
+        <record id="inventory_receipt_transfer_in_dummy_1_line_1" model="acumatica.inventory.recieved.product.line">
+            <field name="inventory_line_id" ref="inventory_receipt_transfer_in_dummy_1"/>
+            <field name="header_external_id">a84b0f7d-37b6-4751-9a48-5be6e2fd3001</field>
+            <field name="line_external_id">a84b0f7d-37b6-4751-9a48-5be6e2fd3101</field>
+            <field name="line_note">Transfer In line WH33-FG.</field>
+            <field name="branch_warehouse">WH33</field>
+            <field name="line_description">Roca Ona WC WH Vortex 550 RL-SC UR</field>
+            <field name="inventory_id">KRCCT00WH ONA VORTEX 550-SC UR</field>
+            <field name="line_nbr">1</field>
+            <field name="location_code">WH33-FG</field>
+            <field name="product_uom_qty">2.00</field>
+            <field name="uom_code">Units</field>
+            <field name="warehouse_dest_code">WH33-FG</field>
+        </record>
+
+        <record id="inventory_receipt_transfer_in_dummy_1_line_2" model="acumatica.inventory.recieved.product.line">
+            <field name="inventory_line_id" ref="inventory_receipt_transfer_in_dummy_1"/>
+            <field name="header_external_id">a84b0f7d-37b6-4751-9a48-5be6e2fd3001</field>
+            <field name="line_external_id">a84b0f7d-37b6-4751-9a48-5be6e2fd3102</field>
+            <field name="line_note">Transfer In line WH33-FG.</field>
+            <field name="branch_warehouse">WH33</field>
+            <field name="line_description">ROCA VICTORIA EL SC S-TRAP 500 |A3423D1000|A3413D0000|A80D032001</field>
+            <field name="inventory_id">KRCCT00VICTORIA-EL-SC</field>
+            <field name="line_nbr">2</field>
+            <field name="location_code">WH33-FG</field>
+            <field name="product_uom_qty">4.00</field>
+            <field name="uom_code">Units</field>
+            <field name="warehouse_dest_code">WH33-FG</field>
+        </record>
+
+        <record id="inventory_receipt_transfer_in_dummy_2" model="acumatica.inventory.recieved.line">
+            <field name="row_number">2</field>
+            <field name="external_id">0c9f188c-b575-4b69-bde2-690408af3002</field>
+            <field name="reference_nbr">IRTI-20260730-0002</field>
+            <field name="scheduled_date">2026-07-30T10:10:00+07:00</field>
+            <field name="description">Inventory Receipt - Transfer In WH33-FG to WH31-FG</field>
+            <field name="branch_warehouse">WH31</field>
+            <field name="actual_qty">3.00</field>
+            <field name="acumatica_write_date">2026-07-30T10:16:44+07:00</field>
+            <field name="post_period">072026</field>
+            <field name="status">Balanced</field>
+            <field name="total_qty">3.00</field>
+            <field name="warehouse_code">WH33-FG</field>
+            <field name="warehouse_dest_code">WH31-FG</field>
+            <field name="transfer_type">Transfer In</field>
+            <field name="note">Dummy Inventory Receipt dengan transfer type Transfer In dari virtual WH33 ke WH31 Finish Goods.</field>
+            <field name="external_ref">EXT-IRTI-20260730-0002</field>
+            <field name="document_only">False</field>
+            <field name="shipment_nbr">TS-20260730-0002</field>
+            <field name="transfer_nbr">TO-20260730-0002</field>
+            <field name="location_code">WH31-FG</field>
+            <field name="picking_type_id" ref="stock.picking_type_internal"/>
+            <field name="config_id" ref="acumatica_config_inventory_received_default"/>
+            <field name="import_state">pending</field>
+            <field name="import_message">Dummy Inventory Receipt Transfer In realistic data</field>
+            <field name="selected">True</field>
+            <field name="sync_date">2026-07-30 03:16:44</field>
+        </record>
+
+        <record id="inventory_receipt_transfer_in_dummy_2_line_1" model="acumatica.inventory.recieved.product.line">
+            <field name="inventory_line_id" ref="inventory_receipt_transfer_in_dummy_2"/>
+            <field name="header_external_id">0c9f188c-b575-4b69-bde2-690408af3002</field>
+            <field name="line_external_id">0c9f188c-b575-4b69-bde2-690408af3101</field>
+            <field name="line_note">Transfer In line WH31-FG.</field>
+            <field name="branch_warehouse">WH31</field>
+            <field name="line_description">ROCA VICTORIA EL WC CC S-TRAP 500 SET B</field>
+            <field name="inventory_id">KRCCT00VICTORIA-EL500-SETB</field>
+            <field name="line_nbr">1</field>
+            <field name="location_code">WH31-FG</field>
+            <field name="product_uom_qty">3.00</field>
+            <field name="uom_code">Units</field>
+            <field name="warehouse_dest_code">WH31-FG</field>
+        </record>
+    </data>
+</odoo>

@@ -86,6 +86,60 @@ class AcumaticaWarehouseLine(models.Model):
             if found:
                 return found
         return Warehouse.browse()
+
+    def _get_virtual_locations_parent(self):
+        parent = self.env.ref('stock.stock_location_locations_virtual', raise_if_not_found=False)
+        if parent:
+            return parent
+        return self.env['stock.location'].search([
+            ('name', '=', 'Virtual Locations'),
+            ('usage', '=', 'view'),
+        ], limit=1)
+
+    def _create_virtual_location_for_building(self, building_id):
+        building_code = (building_id or '').strip().upper()
+        if not building_code or building_code == 'WH33':
+            return self.env['stock.location'].browse()
+
+        parent = self._get_virtual_locations_parent()
+        if not parent:
+            raise UserError('Parent location "Virtual Locations" tidak ditemukan.')
+
+        Location = self.env['stock.location'].sudo()
+        virtual_location = Location.search([
+            ('name', '=', building_code),
+            ('location_id', '=', parent.id),
+        ], limit=1)
+        if virtual_location:
+            return virtual_location
+
+        return Location.create({
+            'name': building_code,
+            'location_id': parent.id,
+            'usage': 'transit',
+            'company_id': False,
+        })
+
+    def _generate_virtual_locations_for_existing_buildings(self):
+        buildings = set(
+            building.strip().upper()
+            for building in self.search([('building_id', '!=', False)]).mapped('building_id')
+            if building and building.strip()
+        )
+        buildings.update(
+            building.strip().upper()
+            for building in self.env['stock.location.acumatica'].sudo().search([
+                ('building', '!=', False),
+            ]).mapped('building')
+            if building and building.strip()
+        )
+
+        locations = self.env['stock.location'].browse()
+        for building in sorted(buildings):
+            location = self._create_virtual_location_for_building(building)
+            if location:
+                locations |= location
+        return locations
     
     # ─── Actions ─────────────────────────────────────
     def action_import_this(self):
@@ -178,6 +232,7 @@ class AcumaticaWarehouseLine(models.Model):
                 else:
                     location_code = (line.warehouse_id or '').strip()
                     error_list = []
+                    wh_builidng = self.env['stock.warehouse'].browse()
                     warehouse_odoo = self._search_warehouse(line.building_id)
                     if not location_code:
                         line.write({
@@ -188,7 +243,7 @@ class AcumaticaWarehouseLine(models.Model):
                         vals['is_error'] = True
                         error_list.append('WarehouseID kosong')
                     if not line.building_id:
-                        building_code = line.building_id.strip()
+                        building_code = ''
                         if not building_code:
                             line.write({
                                 'import_state': 'error',
