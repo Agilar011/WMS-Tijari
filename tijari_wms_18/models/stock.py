@@ -644,17 +644,17 @@ class StockMoveLine(models.Model):
         move_lines.mapped('picking_id')._sync_adt_quantities_from_moves()
         return move_lines
 
-    def write(self, vals):
-        pickings = self.mapped('picking_id')
-        res = super().write(vals)
-        pickings |= self.mapped('picking_id')
+    # def write(self, vals):
+    #     pickings = self.mapped('picking_id')
+    #     res = super().write(vals)
+    #     pickings |= self.mapped('picking_id')
 
-        if {'quantity', 'move_id', 'picking_id'} & set(vals):
-            pickings._sync_adt_quantities_from_moves()
+    #     if {'quantity', 'move_id', 'picking_id'} & set(vals):
+    #         pickings._sync_adt_quantities_from_moves()
 
-        self._update_move_picked()
+    #     self._update_move_picked()
 
-        return res
+    #     return res
 
     def unlink(self):
         pickings = self.mapped('picking_id')

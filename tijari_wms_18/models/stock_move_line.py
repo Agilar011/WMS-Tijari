@@ -887,11 +887,16 @@ class StockMoveLine(models.Model):
     #         line.matching = 'match' if lot_match and location_match else 'not_match'
 
     def _update_move_picked(self):
+        print(f"_update_move_picked: {self}")
         for move in self.mapped('move_id'):
+            if move.raw_material_production_id != False:
+                continue
             move.picked = (
                 move.move_line_ids
                 and all(line.matching == 'match' for line in move.move_line_ids)
             )
+            print(move.picked)
+
 
     def _get_matching_status(self):
         """Return the matching result using the reference fields for each operation."""
@@ -900,7 +905,7 @@ class StockMoveLine(models.Model):
             return 'not_match'
 
         picking_name = self.picking_id.picking_type_id.name
-        if picking_name in ('Pick', 'Pick Internal'):
+        if picking_name in ('Pick', 'Pick Internal', 'Pick Components'):
             expected_location = self.source_location_id or self.location_id
             expected_lot = self.product_lot_id or self.lot_id
         elif picking_name in ('Receipts', 'Receipt Internal'):
@@ -920,7 +925,7 @@ class StockMoveLine(models.Model):
     def _compute_matching(self):
         for line in self:
             line.matching = line._get_matching_status()
-            if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal'):
+            if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
                 line.second_matching = (
                     'Match' if line.matching == 'match' else 'Not Match'
                 )
@@ -935,7 +940,7 @@ class StockMoveLine(models.Model):
             picking_name = line.move_id.picking_id.picking_type_id.name
             print(f"validate stock move line with picking type name: {picking_name}")
 
-            if picking_name and picking_name == 'Pick':
+            if picking_name and picking_name in ( 'Pick', 'Pick Components'):
                 loc_code = str(line.location_id.unique_code or '').strip()
                 product_code = str(line.lot_id.name or '').strip()
 
