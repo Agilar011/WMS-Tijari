@@ -1,6 +1,7 @@
 import requests
 import json
 import logging
+from datetime import datetime
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
@@ -317,6 +318,22 @@ class AcumaticaConfig(models.Model):
                 return payload.get('rows')
         return []
 
+    def _parse_datetime(self, value):
+        if not value:
+            return False
+
+        if isinstance(value, datetime):
+            return value
+
+        try:
+            # Support:
+            # 2011-12-09T22:18:00+07:00
+            # 2011-12-09T22:18:00Z
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception:
+            return False        
+        
+
     def fetch_kit_assembly_data(self, limit=100, offset=0):
         self.ensure_one()
         endpoint_name = self.endpoint_name or 'KitAssembly'
@@ -351,7 +368,7 @@ class AcumaticaConfig(models.Model):
                     'row_number': item.get('rowNumber', 0) or 0,
                     'description': self._val(item, 'Description'),
                     'inventory_id': self._val(item, 'InventoryID'),
-                    'last_modified_datetime': self._val(item, 'LastModifiedDateTime'),
+                    'last_modified_datetime': self._parse_datetime(item.get('LastModifiedDateTime')),
                     'location': self._val(item, 'Location'),
                     'post_period': self._val(item, 'PostPeriod'),
                     'quantity': self._val(item, 'Qty'),
