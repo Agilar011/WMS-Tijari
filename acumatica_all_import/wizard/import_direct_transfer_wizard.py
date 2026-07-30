@@ -72,6 +72,17 @@ class ImportDirectTransferWizard(models.TransientModel):
         return value or ''
 
     @staticmethod
+    def _bool_val(item, key):
+        value = item.get(key, {})
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.strip().lower() in ('1', 'true', 'yes', 'y')
+        return bool(value)
+
+    @staticmethod
     def _normalize_rows(payload):
         if isinstance(payload, list):
             return payload
@@ -102,6 +113,17 @@ class ImportDirectTransferWizard(models.TransientModel):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         type = False
+
+        if self.config_id.config_type == 'vendor_return_document_direct_transfer':
+            document_only_type = PickingType.resolve_document_only_picking_type(
+                target_operation_type='direct_delivery_order',
+                api_acumatica='vendor_return',
+                document_only=header.get('adt_DocumentOnly'),
+                warehouse_code=header.get('adt_FromWarehouseID'),
+                required=True,
+            )
+            if document_only_type:
+                return document_only_type
 
         print(f"Warehouse: {header['adt_FromWarehouseID']}")
 
@@ -170,6 +192,7 @@ class ImportDirectTransferWizard(models.TransientModel):
                             # 'customer_code': self._val(item, 'CustomerID'), # JSON Anda menggunakan CustomerID
                             'adt_Date': self._val(item, 'Date'),
                             'adt_Description': self._val(item, 'Description'),
+                            'adt_DocumentOnly': self._bool_val(item, 'DocumentOnly'),
                             'adt_ExternalRef': self._val(item, 'ExternalRef'),
                             'adt_LastModifiedDateTime': self._val(item, 'LastModifiedDateTime'),
                             # 'location_code': str(self._val(item, 'LocationID') or ''), # JSON menggunakan LocationID

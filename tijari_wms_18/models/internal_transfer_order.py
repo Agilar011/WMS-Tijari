@@ -37,6 +37,7 @@ class InternalTransferOrder(models.Model):
             ('inter_warehouse', 'Inter Warehouse'),
             ('intra_warehouse', 'Intra Warehouse'),
             ('consignment', 'Consignment'),
+            ('vendor_return', 'Vendor Return'),
         ],
         string='Transaction Type',
         default='inter_warehouse',
@@ -124,12 +125,29 @@ class InternalTransferOrder(models.Model):
     @api.depends('picking_ids')
     def _compute_picking_count(self):
         for order in self:
-            order.picking_count = len(order.picking_ids)
+            order.picking_count = len(order._get_related_pickings())
 
     @api.depends('picking_ids.move_ids')
     def _compute_generated_move_ids(self):
         for order in self:
-            order.generated_move_ids = order.picking_ids.move_ids
+            order.generated_move_ids = order._get_related_pickings().move_ids
+
+    def _get_related_pickings(self):
+        self.ensure_one()
+        pickings = self.picking_ids
+        if self.id:
+            pickings |= self.env['stock.picking'].search([
+                ('internal_transfer_order_id', '=', self.id),
+            ])
+        return pickings
+
+    def _get_vendor_return_receipt_picking(self):
+        self.ensure_one()
+        if self.transaction_type != 'vendor_return':
+            return self.env['stock.picking']
+        return self._get_related_pickings().filtered(
+            lambda picking: picking.internal_transfer_leg == 'receipt'
+        )[:1]
 
     @api.onchange('location_id', 'location_dest_id')
     def _onchange_locations(self):
@@ -153,6 +171,8 @@ class InternalTransferOrder(models.Model):
         return warehouses.filtered(
             lambda warehouse: self._location_belongs_to(
                 self.location_id, warehouse.lot_stock_id
+            ) or self._location_belongs_to(
+                self.location_id, warehouse.view_location_id
             )
         )[:1]
 
@@ -195,6 +215,51 @@ class InternalTransferOrder(models.Model):
         return self._get_required_picking_type(
             'Receipt Internal',
             'internal',
+        )
+
+    def _get_vendor_return_receipt_picking_type(self):
+        self.ensure_one()
+        warehouse = self._get_source_warehouse()
+        domain = [
+            ('code', '=', 'internal'),
+            ('name', '=', 'Receipt Internal'),
+        ]
+        if warehouse:
+            domain.append(('warehouse_id', '=', warehouse.id))
+        picking_type = self.env['stock.picking.type'].search(domain, limit=1)
+        if picking_type:
+            return picking_type
+
+        warehouse_code = warehouse.code if warehouse else False
+        picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
+            target_operation_type='direct_receipt',
+            api_acumatica='vendor_return',
+            document_only=True,
+            warehouse_code=warehouse_code,
+        )
+        if picking_type:
+            return picking_type
+
+        incoming_domain = [('code', '=', 'incoming')]
+        if warehouse:
+            incoming_domain.append(('warehouse_id', '=', warehouse.id))
+        picking_type = self.env['stock.picking.type'].search(incoming_domain, limit=1)
+        if not picking_type:
+            raise ValidationError(
+                'Operation type penerimaan Vendor Return belum dikonfigurasi.'
+            )
+        return picking_type
+
+    def _get_vendor_return_direct_delivery_picking_type(self):
+        self.ensure_one()
+        warehouse = self._get_source_warehouse()
+        warehouse_code = warehouse.code if warehouse else False
+        return self.env['stock.picking.type'].resolve_document_only_picking_type(
+            target_operation_type='direct_delivery_order',
+            api_acumatica='vendor_return',
+            document_only=True,
+            warehouse_code=warehouse_code,
+            required=True,
         )
 
     def _get_required_picking_type(self, name, operation_category=False):
@@ -306,6 +371,8 @@ class InternalTransferOrder(models.Model):
         self.ensure_one()
         if self.transaction_type == 'consignment':
             return 'Shipment Consignment'
+        if self.transaction_type == 'vendor_return':
+            return 'Vendor Return'
         return 'Internal Transfer'
 
     def _get_picking_mapped_dest_location(self, leg):
@@ -340,7 +407,7 @@ class InternalTransferOrder(models.Model):
 
     def _get_picking_partner(self, leg):
         self.ensure_one()
-        if self.transaction_type != 'consignment':
+        if self.transaction_type not in ('consignment', 'vendor_return'):
             return self.env['res.partner']
         if leg == 'receipt':
             return self._get_warehouse_partner()
@@ -517,14 +584,9 @@ class InternalTransferOrder(models.Model):
 
     def action_generate_internal_pickings(self):
         for order in self:
-            if order.picking_ids:
+            if order._get_related_pickings():
                 continue
 
-            receipt_picking_type = order._get_receipt_internal_picking_type()
-            if not receipt_picking_type:
-                raise ValidationError(
-                    'Operation type Receipt Internal belum dikonfigurasi.'
-                )
             if not order.location_id or not order.location_dest_id:
                 raise ValidationError(
                     'Source Location dan Destination Location harus diisi.'
@@ -535,7 +597,30 @@ class InternalTransferOrder(models.Model):
             if not order.move_ids:
                 raise ValidationError('Operation line belum diisi.')
 
-            if order.transaction_type == 'intra_warehouse':
+            if order.transaction_type == 'vendor_return':
+                receipt_picking_type = order._get_vendor_return_receipt_picking_type()
+                picking_specs = [
+                    (
+                        order._get_vendor_return_direct_delivery_picking_type(),
+                        order.location_id,
+                        transit_location,
+                        'Direct Delivery',
+                        'delivery',
+                    ),
+                    (
+                        receipt_picking_type,
+                        transit_location,
+                        order.location_dest_id,
+                        'Transfer IN',
+                        'receipt',
+                    ),
+                ]
+            elif order.transaction_type == 'intra_warehouse':
+                receipt_picking_type = order._get_receipt_internal_picking_type()
+                if not receipt_picking_type:
+                    raise ValidationError(
+                        'Operation type Receipt Internal belum dikonfigurasi.'
+                    )
                 picking_specs = [
                     (
                         order._get_required_picking_type('Pick Internal', 'pick'),
@@ -553,6 +638,11 @@ class InternalTransferOrder(models.Model):
                     ),
                 ]
             elif order.transfer_type == 'transfer_in':
+                receipt_picking_type = order._get_receipt_internal_picking_type()
+                if not receipt_picking_type:
+                    raise ValidationError(
+                        'Operation type Receipt Internal belum dikonfigurasi.'
+                    )
                 picking_specs = [
                     (
                         order._get_internal_picking_type(),
@@ -570,6 +660,11 @@ class InternalTransferOrder(models.Model):
                     ),
                 ]
             else:
+                receipt_picking_type = order._get_receipt_internal_picking_type()
+                if not receipt_picking_type:
+                    raise ValidationError(
+                        'Operation type Receipt Internal belum dikonfigurasi.'
+                    )
                 packing_zone = order._get_or_create_packing_zone_location()
                 picking_specs = [
                     (
@@ -603,7 +698,7 @@ class InternalTransferOrder(models.Model):
         return True
 
     def action_ready(self):
-        orders_to_generate = self.filtered(lambda order: not order.picking_ids)
+        orders_to_generate = self.filtered(lambda order: not order._get_related_pickings())
         if orders_to_generate:
             orders_to_generate.action_generate_internal_pickings()
         existing_orders = self - orders_to_generate
@@ -613,11 +708,12 @@ class InternalTransferOrder(models.Model):
 
     def action_done(self):
         for order in self:
-            if not order.picking_ids:
+            related_pickings = order._get_related_pickings()
+            if not related_pickings:
                 raise ValidationError(
                     'Transfer belum dibuat. Set Ready terlebih dahulu untuk generate transfer.'
                 )
-            pending_pickings = order.picking_ids.filtered(
+            pending_pickings = related_pickings.filtered(
                 lambda picking: picking.state != 'done'
             )
             if pending_pickings:
@@ -635,10 +731,11 @@ class InternalTransferOrder(models.Model):
 
     def action_view_pickings(self):
         self.ensure_one()
+        pickings = self._get_related_pickings()
         action = self.env['ir.actions.actions']._for_xml_id(
             'stock.action_picking_tree_all'
         )
-        action['domain'] = [('id', 'in', self.picking_ids.ids)]
+        action['domain'] = [('id', 'in', pickings.ids)]
         action['context'] = {'create': False}
         return action
 
