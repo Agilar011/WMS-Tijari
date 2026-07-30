@@ -22,6 +22,8 @@
             <list string="Data Credit Memo Consignment">
                 <!-- <field name="id" string="ID"/> -->
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="adt_Type" string="Type"/>
+                <field name="adt_ConsignmentType" string="Consignment Type"/>
                 <field name="adt_CustomerID" string="Customer ID"/>
                 <field name="total_qty" string="total Quantity"/>
                 <field name="import_state" widget="badge"

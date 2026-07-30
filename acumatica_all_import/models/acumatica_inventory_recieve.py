@@ -315,6 +315,15 @@ class AcumaticaInventoryRecievedLine(models.Model):
             'transfer_receipt',
         )
 
+    def _find_partner(self, line):
+        Partner = self.env['res.partner']
+        partner = False
+        if line.customer_code:
+            partner = Partner.search([('company_registry', '=', line.customer_code), ('is_company', '=', True)], limit=1)
+            if not partner:
+                partner = Partner.search([('name', '=', line.customer_code), ('is_company', '=', True)], limit=1)
+        return partner
+
     def _find_product(self, line):
         Product = self.env['product.product']
         product = False
@@ -619,6 +628,17 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 f'Location with code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
+        partner = False
+        owner = False
+        if receive.transfer_type in ['Change Item', 'Change Item Discontinue', 'Toko Pegang DO']:
+            partner = receive._find_partner(receive)
+            if receive.transfer_type == 'Toko Pegang DO':
+                owner = partner
+            if not partner:
+                error_messages.append(
+                    f'Partner with code {receive.customer_code} was not found in the WMS | WMS Dependency : MASTER CUSTOMER.'
+                )
+
         # picking_type = PickingType.search([
         #     ('warehouse_id', '=', warehouse.id if warehouse else False),
         #     ('operation_category', '=', 'internal'),
@@ -644,11 +664,13 @@ class AcumaticaInventoryRecievedLine(models.Model):
             )
 
         picking_vals = {
+            'partner_id': partner.id if partner else False,
             'origin': origin,
             'picking_type_id': picking_type.id,
             'adt_dest_location_id': dest_location.id if dest_location else False,
             'scheduled_date': receive._parse_dt(receive.scheduled_date),
             'note': receive.note or False,
+            'owner_id': owner.id if owner else False,
 
             'adt_branch_warehouse': receive.branch_warehouse or False,
             'adt_actual_qty': self._parse_float(receive.actual_qty),

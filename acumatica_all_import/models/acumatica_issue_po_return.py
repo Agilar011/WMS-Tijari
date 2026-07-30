@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaIssuePoReturnConfig(models.Model):
     _name = 'acumatica.issue.po.return.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Inventory Receipt Import'
+    _description = 'Konfigurasi Koneksi Acumatica - PO Return Import'
     _rec_name = 'name'
 
     name = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
@@ -148,7 +148,7 @@ class AcumaticaIssuePoReturnConfig(models.Model):
                 header = {
                     'external_id': item.get('id', '') or '',
                     'row_number': row_number,
-                    'note': item.get('note', {}).get('value', '') or '',
+                    'note': self._val(item, 'NoteHeader') or item.get('note', {}).get('value', '') or '',
                     'branch_warehouse': self._val(item, 'Branch'),
                     'actual_qty': self._val(item, 'ControlQty'),
                     'scheduled_date': self._val(item, 'Date'),
@@ -174,28 +174,61 @@ class AcumaticaIssuePoReturnConfig(models.Model):
                     details = []
 
                 if not details:
-                    result.append(dict(header, line_nbr='0'))
+                    result.append({
+                        **header,
+                        'line_external_id': item.get('id', '') or '',
+                        'line_note': self._val(item, 'LineNote'),
+                        'description': self._val(item, 'LineDescription'),
+                        'inventory_id': self._val(item, 'LineInventoryID'),
+                        'line_nbr': str(self._val(item, 'LineNbr') or 0),
+                        'line_type': self._val(item, 'LineType'),
+                        'location_dest_code': self._val(item, 'LineLocation'),
+                        'open_qty': self._val(item, 'LineOpenQty'),
+                        'order_qty': self._val(item, 'LineOrderedQty'),
+                        'po_line_number': self._val(item, 'LinePOLineNbr'),
+                        'po_number': self._val(item, 'LinePOOrderNbr'),
+                        'po_type': self._val(item, 'LinePOOrderType') or self._val(item, 'Type'),
+                        'po_receipt_line_number': self._val(item, 'LinePOReceiptLineNbr'),
+                        'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
+                        'product_uom_qty': self._val(item, 'LineReceiptQty'),
+                        'transaction_description': self._val(item, 'LineDescription'),
+                        'transfer_order_line_number': self._val(item, 'LineTransferOrderLineNbr'),
+                        'transfer_order_number': self._val(item, 'LineTransferOrderNbr'),
+                        'transfer_order_type': self._val(item, 'LineTransferOrderType'),
+                        'transfer_shipment_number': self._val(item, 'LineTransferShipmentNbr'),
+                        'uom_code': self._val(item, 'LineUOM'),
+                        'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+                        'warehouse_code': self._val(item, 'LineWarehouseID') or header.get('warehouse_code'),
+                    })
                     continue
 
                 for detail in details:
                     line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    description = self._val(detail, 'Description') or self._val(detail, 'TransactionDescription')
-                    warehouse_dest_code = self._val(detail, 'Warehouse') or self._val(detail, 'LineWarehouseID') or header.get('warehouse_code')
+                    description = (
+                        self._val(detail, 'LineDescription')
+                        or self._val(detail, 'Description')
+                        or self._val(detail, 'TransactionDescription')
+                    )
+                    warehouse_dest_code = (
+                        self._val(detail, 'LineWarehouseID')
+                        or self._val(detail, 'Warehouse')
+                        or header.get('warehouse_code')
+                    )
 
                     result.append({
                         **header,
                         'line_external_id': detail.get('id', '') or '',
-                        'line_note': detail.get('note', {}).get('value', '') or '',
+                        'line_note': self._val(detail, 'LineNote') or detail.get('note', {}).get('value', '') or '',
                         'description': description,
                         'inventory_id': self._val(detail, 'InventoryID') or self._val(detail, 'LineInventoryID'),
                         'line_nbr': str(line_nbr),
                         'line_type': self._val(detail, 'LineType'),
-                        'location_dest_code': self._val(detail, 'Location'),
-                        'open_qty': self._val(detail, 'OpenQty'),
-                        'order_qty': self._val(detail, 'OrderedQty'),
-                        'product_uom_qty': self._val(detail, 'ReceiptQty'),
-                        'transaction_description': self._val(detail, 'TransactionDescription'),
-                        'uom_code': self._val(detail, 'UOM'),
+                        'location_dest_code': self._val(detail, 'LineLocation') or self._val(detail, 'Location'),
+                        'open_qty': self._val(detail, 'LineOpenQty') or self._val(detail, 'OpenQty'),
+                        'order_qty': self._val(detail, 'LineOrderedQty') or self._val(detail, 'OrderedQty'),
+                        'product_uom_qty': self._val(detail, 'LineReceiptQty') or self._val(detail, 'ReceiptQty'),
+                        'transaction_description': self._val(detail, 'LineDescription') or self._val(detail, 'TransactionDescription'),
+                        'uom_code': self._val(detail, 'LineUOM') or self._val(detail, 'UOM'),
                         'warehouse_dest_code': warehouse_dest_code,
                         'warehouse_code': warehouse_dest_code,
                     })

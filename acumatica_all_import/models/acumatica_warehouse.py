@@ -96,6 +96,20 @@ class AcumaticaWarehouseLine(models.Model):
             ('usage', '=', 'view'),
         ], limit=1)
 
+    def _find_virtual_location_for_building(self, building_id):
+        building_code = (building_id or '').strip().upper()
+        if not building_code or building_code == 'WH33':
+            return self.env['stock.location'].browse()
+
+        parent = self._get_virtual_locations_parent()
+        if not parent:
+            return self.env['stock.location'].browse()
+
+        return self.env['stock.location'].sudo().search([
+            ('name', '=', building_code),
+            ('location_id', '=', parent.id),
+        ], limit=1)
+
     def _create_virtual_location_for_building(self, building_id):
         building_code = (building_id or '').strip().upper()
         if not building_code or building_code == 'WH33':
@@ -105,18 +119,14 @@ class AcumaticaWarehouseLine(models.Model):
         if not parent:
             raise UserError('Parent location "Virtual Locations" tidak ditemukan.')
 
-        Location = self.env['stock.location'].sudo()
-        virtual_location = Location.search([
-            ('name', '=', building_code),
-            ('location_id', '=', parent.id),
-        ], limit=1)
+        virtual_location = self._find_virtual_location_for_building(building_code)
         if virtual_location:
             return virtual_location
 
-        return Location.create({
+        return self.env['stock.location'].sudo().create({
             'name': building_code,
             'location_id': parent.id,
-            'usage': 'transit',
+            'usage': 'inventory',
             'company_id': False,
         })
 
@@ -212,6 +222,9 @@ class AcumaticaWarehouseLine(models.Model):
                     'building': line.building_id,
                     'is_active': bool(line.building_id),
                 }
+
+                if line.building_id and not self._find_virtual_location_for_building(line.building_id):
+                    self._generate_virtual_locations_for_existing_buildings()
 
                 existing = self._find_existing_location(line)
                 if existing:

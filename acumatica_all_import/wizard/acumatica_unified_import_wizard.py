@@ -300,7 +300,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'transfer_shipment',
         # 'issue_change_item',
         'inventory_issue',
-        # 'issue_po_return',
+        'issue_po_return',
         'transfer_one_step',
         'transfer_two_step',
         'invoice_consignment',

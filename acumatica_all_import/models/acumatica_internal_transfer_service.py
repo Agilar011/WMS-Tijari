@@ -6,10 +6,12 @@ class AcumaticaInternalTransferService(models.AbstractModel):
     _name = 'acumatica.internal.transfer.service'
     _description = 'Acumatica Internal Transfer Import Helper'
 
-    def _find_location_mapping(self, code, label):
+    def _find_location_mapping(self, code, label, required=True, require_odoo_location=True):
         Mapping = self.env['stock.location.acumatica']
         clean_code = (code or '').strip()
         if not clean_code:
+            if not required:
+                return Mapping.browse()
             raise UserError(f'{label} kosong.')
 
         mapping = Mapping.search([
@@ -22,18 +24,69 @@ class AcumaticaInternalTransferService(models.AbstractModel):
                 ('active', '=', True),
             ], limit=1)
         if not mapping:
+            if not required:
+                return Mapping.browse()
             raise UserError(f'{label} mapping tidak ditemukan di stock.location.acumatica: {clean_code}')
-        if not mapping.odoo_location_id:
+        if require_odoo_location and not mapping.odoo_location_id:
             raise UserError(f'{label} mapping belum punya Odoo location: {clean_code}')
         return mapping
 
-    def classify(self, from_code, to_code, from_label='FromWarehouseID', to_label='ToWarehouseID'):
-        from_mapping = self._find_location_mapping(from_code, from_label)
-        to_mapping = self._find_location_mapping(to_code, to_label)
+    def _get_building_code(self, mapping=False, code=False):
+        building_code = (
+            (mapping.odoo_building_id.code if mapping and mapping.odoo_building_id else False)
+            or (mapping.building if mapping else False)
+            or (mapping.code.split('-')[0] if mapping and mapping.code else False)
+            or ((code or '').split('-')[0] if code else False)
+        )
+        return (building_code or '').strip().upper()
+
+    def _is_intra_warehouse(self, from_mapping=False, from_code=False, to_mapping=False, to_code=False):
+        from_building = self._get_building_code(from_mapping, from_code)
+        to_building = self._get_building_code(to_mapping, to_code)
+        return bool(from_building and to_building and from_building == to_building)
+
+    def _require_mapping_location(self, mapping, code, label):
+        if mapping and mapping.odoo_location_id:
+            return mapping
+        return self._find_location_mapping(code, label)
+
+    def classify(
+        self,
+        from_code,
+        to_code,
+        from_label='FromWarehouseID',
+        to_label='ToWarehouseID',
+        check_same_location_mapping=False,
+        require_from_odoo_location=True,
+        require_to_odoo_location=True,
+    ):
+        from_mapping = self._find_location_mapping(
+            from_code,
+            from_label,
+            required=require_from_odoo_location,
+            require_odoo_location=require_from_odoo_location,
+        )
+        to_mapping = self._find_location_mapping(
+            to_code,
+            to_label,
+            required=require_to_odoo_location,
+            require_odoo_location=require_to_odoo_location,
+        )
+
+        is_intra_warehouse = self._is_intra_warehouse(
+            from_mapping,
+            from_code,
+            to_mapping,
+            to_code,
+        )
+        if is_intra_warehouse:
+            from_mapping = self._require_mapping_location(from_mapping, from_code, from_label)
+            to_mapping = self._require_mapping_location(to_mapping, to_code, to_label)
+
         source_location = from_mapping.odoo_location_id
         destination_location = to_mapping.odoo_location_id
 
-        if source_location == destination_location:
+        if check_same_location_mapping and source_location == destination_location:
             return {
                 'status': 'skip',
                 'message': f'Skipped: {from_label} dan {to_label} map ke Odoo location yang sama.',
@@ -44,10 +97,8 @@ class AcumaticaInternalTransferService(models.AbstractModel):
                 'transaction_type': False,
             }
 
-        source_warehouse = from_mapping.odoo_building_id
-        destination_warehouse = to_mapping.odoo_building_id
         transaction_type = 'inter_warehouse'
-        if source_warehouse and destination_warehouse and source_warehouse == destination_warehouse:
+        if is_intra_warehouse:
             transaction_type = 'intra_warehouse'
 
         return {
@@ -102,24 +153,61 @@ class AcumaticaInternalTransferService(models.AbstractModel):
         virtual_location = self.get_or_create_virtual_building_location(building_code)
         return virtual_location or mapping.odoo_location_id
 
-    def classify_transfer_out_to_virtual(self, from_code, to_code, from_label='FromWarehouseID', to_label='ToWarehouseID'):
-        transfer_info = self.classify(from_code, to_code, from_label, to_label)
+    def get_virtual_destination_location(self, mapping=False, code=False):
+        building_code = self._get_building_code(mapping, code)
+        virtual_location = self.get_or_create_virtual_building_location(building_code)
+        return virtual_location or (mapping.odoo_location_id if mapping else False)
+
+    def classify_transfer_out_to_virtual(
+        self,
+        from_code,
+        to_code,
+        from_label='FromWarehouseID',
+        to_label='ToWarehouseID',
+        check_same_location_mapping=False,
+    ):
+        transfer_info = self.classify(
+            from_code,
+            to_code,
+            from_label,
+            to_label,
+            check_same_location_mapping=check_same_location_mapping,
+            require_from_odoo_location=True,
+            require_to_odoo_location=False,
+        )
         if transfer_info['status'] == 'skip':
             return transfer_info
 
         if transfer_info['transaction_type'] == 'inter_warehouse':
-            transfer_info['destination_location'] = self.get_virtual_destination_location_from_mapping(
-                transfer_info['to_mapping']
+            transfer_info['destination_location'] = self.get_virtual_destination_location(
+                transfer_info['to_mapping'],
+                to_code,
             )
         return transfer_info
 
-    def classify_transfer_in_from_virtual(self, from_code, to_code, from_label='FromWarehouseID', to_label='ToWarehouseID'):
-        from_mapping = self._find_location_mapping(from_code, from_label)
+    def classify_transfer_in_from_virtual(
+        self,
+        from_code,
+        to_code,
+        from_label='FromWarehouseID',
+        to_label='ToWarehouseID',
+        check_same_location_mapping=False,
+    ):
+        from_mapping = self._find_location_mapping(
+            from_code,
+            from_label,
+            required=False,
+            require_odoo_location=False,
+        )
         to_mapping = self._find_location_mapping(to_code, to_label)
+
+        if self._is_intra_warehouse(from_mapping, from_code, to_mapping, to_code):
+            from_mapping = self._require_mapping_location(from_mapping, from_code, from_label)
+
         source_location = from_mapping.odoo_location_id
         destination_location = to_mapping.odoo_location_id
 
-        if source_location == destination_location:
+        if check_same_location_mapping and source_location == destination_location:
             return {
                 'status': 'skip',
                 'message': f'Skipped: {from_label} dan {to_label} map ke Odoo location yang sama.',
@@ -130,7 +218,10 @@ class AcumaticaInternalTransferService(models.AbstractModel):
                 'transaction_type': False,
             }
 
-        virtual_source_location = self.get_virtual_destination_location_from_mapping(from_mapping)
+        virtual_source_location = self.get_virtual_destination_location(
+            from_mapping,
+            from_code,
+        )
         return {
             'status': 'import',
             'message': False,
