@@ -169,167 +169,6 @@ class AcumaticaKitAssemblyConfig(models.Model):
         except Exception:
             return False        
         
-    def fetch_kit_assembly_data(self, limit=100, offset=0):
-        """Fetch 1 page Kit Assembly dari Acumatica (paging via $top/$skip)."""
-        # print("==========================================================================================")
-        # print("ACTION: Fetch data from Acumatica")
-        # print("==========================================================================================")
-
-        self.ensure_one()
-        session = self._do_login()
-        staging_header = self.env['acumatica.kit.assembly']
-        staging_line = self.env['acumatica.kit.assembly.component']
-        try:
-            endpoint = f"{self.api_url}/KitAssembly"
-            # print(f"Fetching Kit Assembly data from {endpoint} with limit={limit} and offset={offset}...")
-            params = {'$top': limit, '$skip': offset, '$expand': 'StockComponents'}
-
-            response = session.get(endpoint, params=params, timeout=60)
-            if response.status_code != 200:
-                raise UserError(
-                    f'Gagal ambil data Kit Assembly '
-                    f'(HTTP {response.status_code}): {response.text}'
-                )
-
-            raw_data = self._normalize_rows(response.json())
-            result = []
-
-            for item in raw_data:
-
-                last_modified_datetime = self._parse_datetime(item.get('LastModifiedDateTime'))
-                print(f"Last Modified Date Time: :{last_modified_datetime}")
-                header = {
-                    'name': self._val(item, 'ReferenceNbr'),
-                    'external_id': item.get('id', '') or '',
-                    'row_number': item.get('rowNumber', 0) or 0,
-                    'description': self._val(item, 'Description'),
-                    'inventory_id': self._val(item, 'InventoryID'),
-                    'last_modified_datetime': last_modified_datetime,
-                    'location': self._val(item, 'Location'),
-                    'post_period': self._val(item, 'PostPeriod'),
-                    'quantity': self._val(item, 'Qty'),
-                    'reason_code': self._val(item, 'ReasonCode'),
-                    'reference_nbr': self._val(item, 'ReferenceNbr'),
-                    'requested_on': self._val(item, 'RequestedOn'),
-                    'revision': self._val(item, 'Revision'),
-                    'status': self._val(item, 'Status'),
-                    'type': self._val(item, 'Type'),
-                    'uom': self._val(item, 'UOM'),
-                    'warehouse': self._val(item, 'Warehouse'),
-                }
-
-                # === PRINT DATA HEADER ===
-                # print("==========================================================================================")
-                # print("HEADER DATA:")
-                # for h_key, h_val in header.items():
-                    # print(f"{h_key:<25} : {h_val}")
-
-                assembly = self.env['acumatica.kit.assembly'].create(header)  # Simpan header ke staging untuk referensi, bisa dihapus jika tidak perlu
-                print(f"Created staging header record with ID {assembly.id} for ReferenceNbr {header['reference_nbr']}")
-
-                stock_components = item.get('StockComponents') or []
-                if isinstance(stock_components, dict):
-                    stock_components = stock_components.get('value', []) or []
-                if not isinstance(stock_components, list):
-                    stock_components = []
-
-                if not stock_components:
-                    # print("-- (No Components Available)") # Info jika component kosong
-                    result.append(dict(header, line_nbr='0'))
-                    # print("==========================================================================================")
-                    continue
-
-                # === PRINT DATA COMPONENT ===
-                # print("COMPONENTS:")
-                for component in stock_components:
-                    line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
-                    
-                    # Buat dictionary component data untuk mempermudah perulangan print
-                    component_data = {
-                        'line_external_id': component.get('id', '') or '',
-                        'line_note': component.get('note', {}).get('value', '') or '',
-                        'line_inventory_id': self._val(component, 'InventoryID'),
-                        'line_component_qty': self._val(component, 'ComponentQty'),
-                        'line_nbr': str(line_nbr),
-                        'line_location_id': self._val(component, 'LocationID'),
-                        'line_quantity': self._val(component, 'Qty'),
-                        'line_reason_code': self._val(component, 'ReasonCode'),
-                        'stock_inventory_id': self._val(component, 'StockInventoryID'),
-                        'line_uom': self._val(component, 'UOM'),
-                        'assembly_id': assembly.id,  # Simpan component dengan relasi ke header yang sudah dibuat, bisa dihapus jika tidak perlu
-                    }
-                    
-                    # Print setiap field di dalam component ini dengan awalan '--'
-                    # print("  ----------------------------------------")
-                    # for c_key, c_val in component_data.items():
-                        # print(f"  -- {c_key:<25} : {c_val}")
-
-                    assembly_line = self.env['acumatica.kit.assembly.component'].create(component_data)  # Simpan component ke staging, bisa dihapus jika tidak perlu
-                    # print(f"  Created staging component record with ID {assembly_line.id} for LineNbr {component_data['line_nbr']} under ReferenceNbr {header['reference_nbr']}")
-                    
-                    # Tetap masukkan ke hasil akhir Odoo wizard Anda
-                    result.append({**header, **component_data})
-                
-                # print("==========================================================================================")
-
-
-            # for item in raw_data:
-            #     header = {
-            #         'external_id': item.get('id', '') or '',
-            #         'row_number': item.get('rowNumber', 0) or 0,
-            #         'description': self._val(item, 'Description'),
-            #         'inventory_id': self._val(item, 'InventoryID'),
-            #         'last_modified_datetime': self._val(item, 'LastModifiedDateTime'),
-            #         'location': self._val(item, 'Location'),
-            #         'post_period': self._val(item, 'PostPeriod'),
-            #         'quantity': self._val(item, 'Qty'),
-            #         'reason_code': self._val(item, 'ReasonCode'),
-            #         'reference_nbr': self._val(item, 'ReferenceNbr'),
-            #         'requested_on': self._val(item, 'RequestedOn'),
-            #         'revision': self._val(item, 'Revision'),
-            #         'status': self._val(item, 'Status'),
-            #         'type': self._val(item, 'Type'),
-            #         'uom': self._val(item, 'UOM'),
-            #         'warehouse': self._val(item, 'Warehouse'),
-
-
-            #     }
-
-            #     stock_components = item.get('StockComponents') or []
-            #     if isinstance(stock_components, dict):
-            #         stock_components = stock_components.get('value', []) or []
-            #     if not isinstance(stock_components, list):
-            #         stock_components = []
-
-            #     if not stock_components:
-            #         result.append(dict(header, line_nbr='0'))
-            #         continue
-
-            #     for component in stock_components:
-            #         line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
-            #         result.append({
-            #             **header,
-            #             'line_external_id': component.get('id', '') or '',
-            #             'line_note': component.get('note', {}).get('value', '') or '',
-            #             'line_inventory_id': self._val(component, 'InventoryID'),
-            #             'line_component_qty': self._val(component, 'ComponentQty'),
-            #             'line_nbr': str(line_nbr),
-            #             'line_location_id': self._val(component, 'LocationID'),
-            #             'line_quantity': self._val(component, 'Qty'),
-            #             'line_reason_code': self._val(component, 'ReasonCode'),
-            #             'stock_inventory_id': self._val(component, 'StockInventoryID'),
-            #             'line_uom': self._val(component, 'UOM'),
-            #         })
-
-            
-            _logger.info(
-                'Berhasil ambil %s rows Kit Assembly dari Acumatica (skip=%s, top=%s)',
-                len(result), offset, limit,
-            )
-            return result
-        finally:
-            self._do_logout(session)
-            self.last_sync = fields.Datetime.now()
 
 class AcumaticaKitAssembly(models.Model):
     _name = 'acumatica.kit.assembly'
@@ -406,6 +245,12 @@ class AcumaticaKitAssembly(models.Model):
         string='Components',
     )
 
+    config_id = fields.Many2one(
+            'acumatica.config',
+            string='Konfigurasi',
+            readonly=True,
+            ondelete='cascade',
+        )
     _sql_constraints = [
         (
             'reference_nbr_unique',
@@ -413,6 +258,164 @@ class AcumaticaKitAssembly(models.Model):
             'Reference Number must be unique.'
         )
     ]
+
+    def action_import_this(self):
+        self.ensure_one()
+        return self._do_import()
+
+    def action_import_selected(self):
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        if not lines:
+            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
+        return lines._do_import()
+
+    def _do_import(self):
+        print("Starting import process...")
+        Manufacturing = self.env['mrp.production']
+        PickingType = self.env['stock.picking.type']
+        Bom = self.env['mrp.bom']
+        BomLine = self.env['mrp.bom.line']
+        Warehouse = self.env['stock.location.acumatica']
+        mapping_location = self.env['stock.location.acumatica']
+        header_reference = self.env['acumatica.kit.assembly']
+        component_reference = self.env['acumatica.kit.assembly.component']
+        stock_picking = self.env['stock.picking']
+        Move = self.env['stock.move']
+        looping_count = 0
+        
+        imported = 0
+        updated = 0
+        error = 0
+
+        # proses per reference number
+        for reference_nbr in self.mapped('reference_nbr'):
+            try:
+                vals = {}
+                header = header_reference.search([('name', '=', reference_nbr)], limit=1)
+                print(f"Header Value : {header.name}")
+
+                warehouse = Warehouse.search([('code', '=', header.warehouse)], limit=1)
+                if not warehouse:
+                    print(f"Warehouse tidak ditemukan untuk: {header.warehouse}")
+                    error += 1
+                    continue
+
+                processed_product = self.env['product.product'].search([
+                    ('default_code', '=', header.inventory_id),
+                ], limit=1)
+                if not processed_product:
+                    print(f"Processed product not found for: {header.inventory_id}")
+                    error += 1
+                    continue
+
+                picking_type = PickingType.search([
+                    ('name', '=', 'Manufacturing'),
+                    ('warehouse_id', '=', warehouse.odoo_location_id.warehouse_id.id),
+                ], limit=1)
+
+                if not picking_type:
+                    print("Manufacturing Picking Type tidak ditemukan.")
+                    error += 1
+                    continue
+
+                vals = {
+                    'name': reference_nbr,
+                    'product_id': processed_product.id,
+                    'product_qty': header.quantity,
+                    'product_uom_id': processed_product.product_tmpl_id.uom_id.id,
+                    'date_start': header.requested_on,
+                    'user_id': self.env.uid,
+                    'picking_type_id': picking_type.id,
+                    'location_src_id': picking_type.default_location_src_id.id,
+                    'location_dest_id': picking_type.default_location_dest_id.id,
+                    'company_id': warehouse.odoo_location_id.warehouse_id.company_id.id,
+                }
+
+                manufacturing_check = Manufacturing.search(
+                    [('origin', '=', header.name)],
+                    limit=1,
+                )
+
+                if not manufacturing_check:
+                    manufacturing = Manufacturing.create(vals)
+                    imported += 1
+                else:
+                    manufacturing = manufacturing_check
+                    updated += 1
+
+                component = component_reference.search([
+                    ('assembly_id', '=', header.id)
+                ])
+
+                for item in component:
+                    processed_product = self.env['product.product'].search([
+                        ('default_code', '=', item.stock_inventory_id),
+                    ], limit=1)
+
+                    if not processed_product:
+                        error += 1
+                        continue
+
+                    move_vals = {
+                        'product_id': processed_product.id,
+                        'product_uom_qty': item.line_quantity,
+                        'product_uom': processed_product.product_tmpl_id.uom_id.id,
+                        'location_id': picking_type.default_location_src_id.id,
+                        'raw_material_production_id': manufacturing.id,
+                    }
+
+                    if not manufacturing_check:
+                        Move.create(move_vals)
+
+            except Exception as e:
+                error += 1
+                print(f"Error processing {reference_nbr}: {e}")
+
+        total = len(self.mapped('reference_nbr'))
+
+        msg = (
+            f"Import Kit Assembly selesai.\n\n"
+            f"Total Reference Number : {total}\n"
+            f"Manufacturing Order dibuat : {imported}\n"
+            f"Manufacturing Order sudah ada : {updated}\n"
+            f"Error : {error}"
+        )
+
+        self.write({
+            'import_message': msg,
+            'mrp_production_id': manufacturing.id,
+            'import_state': 'imported',
+        })
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Import Kit Assembly',
+                'message': msg,
+                'type': 'success' if error == 0 else 'warning',
+                'sticky': True,
+            }
+        }
+
+    # ─── Misc Actions ────────────────────────────────
+    def action_reset_pending(self):
+        self.filtered(lambda l: l.import_state == 'error').write({
+            'import_state':   'pending',
+            'import_message': False,
+        })
+
+    def action_open_product(self):
+        self.ensure_one()
+        if not self.odoo_product_id:
+            raise UserError('Belum diimport.')
+        return {
+            'type':      'ir.actions.act_window',
+            'res_model': 'product.template',
+            'res_id':    self.odoo_product_id.id,
+            'view_mode': 'form',
+        }
+
 
 class AcumaticaKitAssemblyComponent(models.Model):
     _name = 'acumatica.kit.assembly.component'
@@ -674,15 +677,16 @@ class AcumaticaKitAssemblyLine(models.Model):
 
     def _do_import(self):
         print("Starting import process...")
-        manufacturing = self.env['mrp.production']
+        Manufacturing = self.env['mrp.production']
         PickingType = self.env['stock.picking.type']
         Bom = self.env['mrp.bom']
         BomLine = self.env['mrp.bom.line']
-        warehouse = self.env['stock.warehouse']
+        Warehouse = self.env['stock.warehouse']
         mapping_location = self.env['stock.location.acumatica']
         header_reference = self.env['acumatica.kit.assembly']
         component_reference = self.env['acumatica.kit.assembly.component']
         stock_picking = self.env['stock.picking']
+        Move = self.env['stock.move']
         looping_count = 0
         
 
@@ -698,29 +702,49 @@ class AcumaticaKitAssemblyLine(models.Model):
             header = header_reference.search([('name', '=', reference_nbr)])
             print(f"Header Value : {header.name} ")
 
-            processed_product = self.env['product.template'].search([
+            warehouse = Warehouse.search([('code', '=', header.warehouse)], limit=1)
+            if not warehouse:
+                print(f"Warehouse tidak ditemukan untuk: {header.warehouse}")
+
+            processed_product = self.env['product.product'].search([
                     ('default_code', '=', header.inventory_id),
                 ], limit=1)
-            print(f"Processed product : {processed_product.name}")
+            if not processed_product:
+                print(f"Processed product not found for: {header.inventory_id}")
 
+            picking_type = PickingType.search([
+                ('name', '=', 'Manufacturing'),
+                ('warehouse_id', '=', warehouse.id),
+            ], limit=1)
 
             vals = {
-                'product_tmpl_id' : processed_product.id,
+                'name' : reference_nbr,
+                'product_id' : processed_product.id,
                 'product_qty' : header.quantity,
-                'code' : header.name,
-                'type' : 'phantom',
-                'product_uom_id' : processed_product.uom_id.id,
-
+                'product_uom_id' : processed_product.product_tmpl_id.xuom_id.id,
+                'scheduled_date': header.requested_on,
+                'user_id': self.env.uid,
+                'picking_type_id': picking_type.id,
+                'location_src_id': picking_type.default_location_id_src_id.id,
+                'location_dest_id': picking_type.default_location_id_dest_id.id,
+                'source' : reference_nbr,
+                'company_id' : warehouse.company_id.id,
             }
+            manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)])
+            if not manufacturing_check:
+                manufacturing = Manufacturing.create(vals)
+                print(f"Created manufacture: {manufacturing}")
 
-            boms = self.env['mrp.bom'].search([('code', '=', reference_nbr)], limit=1)
 
-            if boms:
-                Bom = boms
-            if not boms:
-                Bom = Bom.create(vals)
 
-            print(Bom)
+            # boms = self.env['mrp.bom'].search([('code', '=', reference_nbr)], limit=1)
+
+            # if boms:
+            #     Bom = boms
+            # if not boms:
+            #     Bom = Bom.create(vals)
+
+            # print(Bom)
             vals = {}
 
             component = component_reference.search([('assembly_id', '=', header.id)])
@@ -733,151 +757,146 @@ class AcumaticaKitAssemblyLine(models.Model):
                 )
                 print(component)
                 
+
                 vals = {
-                    'product_id' : component.id,
-                    'product_qty' : item.line_quantity,
+                    'product_id' : component.product_id.id,
+                    'product_uom_qty' : item.line_quantity,
                     'product_uom_id' : component.uom_id.id,
-                    'bom_id' : Bom.id
+                    'location_id' : picking_type.default_location_id_src_id.id,
+                    'raw_material_production_id' : manufacturing.id,
                 }
-                BomsLine = self.env['mrp.bom.line'].search([('bom_id', '=', Bom.id)])
-                if BomsLine:
-                    BomLine = BomsLine
 
-                if not BomsLine:
-                    BomLine = BomLine.create(vals)
-                    
-                print(BomLine)
-
+                if not manufacturing_check:
+                    move = Move.create(vals)
                 vals = {}
             
 
-        picking_type = PickingType.search([
-            ('code', '=', 'mrp_operation'),
-        ], limit=1)
+        # picking_type = PickingType.search([
+        #     ('name', '=', 'Pick Components'),
+        # ], limit=1)
 
-        if picking_type:
-            print(f"Found picking type for code 'mrp_operation': {picking_type.id}")
+        # if picking_type:
+        #     print(f"Found picking type for code 'mrp_operation': {picking_type.id}")
 
-        if not picking_type:
-            raise UserError('Picking type receipt/incoming tidak ditemukan.')
+        # if not picking_type:
+        #     raise UserError('Picking type Manufacture tidak ditemukan.')
         
-        kit_assembly_warehouse = mapping_location.search([('code', '=', header.warehouse)], limit=1)
-        print(kit_assembly_warehouse)
+        # kit_assembly_warehouse = mapping_location.search([('code', '=', header.warehouse)], limit=1)
+        # print(kit_assembly_warehouse)
 
-        company_id = kit_assembly_warehouse.odoo_building_id.id
-        print(f"Determined company for warehouse mapping: {kit_assembly_warehouse.odoo_building_id.id if kit_assembly_warehouse and kit_assembly_warehouse.odoo_building_id else 'None'}")
+        # company_id = kit_assembly_warehouse.odoo_building_id.id
+        # print(f"Determined company for warehouse mapping: {kit_assembly_warehouse.odoo_building_id.id if kit_assembly_warehouse and kit_assembly_warehouse.odoo_building_id else 'None'}")
 
-        product_id = self.env['product.product'].search([
-                ('product_tmpl_id', '=', processed_product.id),
-            ], limit=1)
+        # product_id = self.env['product.product'].search([
+        #         ('product_tmpl_id', '=', processed_product.id),
+        #     ], limit=1)
         
-        print(product_id)
+        # print(product_id)
 
         
-        vals = {
-                'product_id': product_id.id,
-                'product_uom_id': processed_product.uom_id.id,
-                'picking_type_id': picking_type.id,  # Replace with actual picking type ID if needed
-                'location_src_id': (
-                    kit_assembly_warehouse.odoo_location_id.id
-                    if kit_assembly_warehouse and kit_assembly_warehouse.odoo_location_id
-                    else False
-                ),
+        # vals = {
+        #         'product_id': product_id.id,
+        #         'product_uom_id': processed_product.uom_id.id,
+        #         # 'picking_type_id': picking_type.id,  # Replace with actual picking type ID if needed
+        #         'location_src_id': (
+        #             kit_assembly_warehouse.odoo_location_id.id
+        #             if kit_assembly_warehouse and kit_assembly_warehouse.odoo_location_id
+        #             else False
+        #         ),
 
-                'location_dest_id': (
-                    kit_assembly_warehouse.odoo_location_id.id
-                    if kit_assembly_warehouse and kit_assembly_warehouse.odoo_location_id
-                    else False
-                ),
-                'bom_id' : Bom.id,
-                'location_final_id': False,  # Replace with actual final location ID if needed
-                'user_id': self.env.uid,
-                'company_id': company_id, #ambil dari company aditya
-                'procurement_group_id': False,
-                'orderpoint_id': False,
-                'production_location_id': False,
-                'create_uid': False,
-                'write_uid': False,
-                'name': False,
-                'priority': False,
-                'origin': header.name,
-                'product_qty': header.quantity,
-                'qty_producing': header.quantity,
-                'date_deadline': False,
-                'date_start': fields.Datetime.now(),
-                'date_finished': False,
-                'create_date': fields.Datetime.now(),
-                'write_date': fields.Datetime.now(),
-                'product_uom_qty': False,
-            }
+        #         # 'location_dest_id': (
+        #         #     kit_assembly_warehouse.odoo_location_id.id
+        #         #     if kit_assembly_warehouse and kit_assembly_warehouse.odoo_location_id
+        #         #     else False
+        #         # ),
+        #         # 'bom_id' : Bom.id,
+        #         # 'location_final_id': False,  # Replace with actual final location ID if needed
+        #         'user_id': self.env.uid,
+        #         'company_id': company_id, #ambil dari company aditya
+        #         'procurement_group_id': False,
+        #         'orderpoint_id': False,
+        #         'production_location_id': False,
+        #         'create_uid': False,
+        #         'write_uid': False,
+        #         'name': False,
+        #         'priority': False,
+        #         'origin': header.name,
+        #         'product_qty': header.quantity,
+        #         'qty_producing': header.quantity,
+        #         'date_deadline': False,
+        #         'date_start': fields.Datetime.now(),
+        #         'date_finished': False,
+        #         'create_date': fields.Datetime.now(),
+        #         'write_date': fields.Datetime.now(),
+        #         'product_uom_qty': False,
+        #     }
         
-        manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)])
-        if manufacturing_check:
-            print("Create MO Skipped")
-        if not manufacturing_check:
-            if kit_assembly_warehouse.odoo_location_id.id:
-                manufacturing = manufacturing.create(vals)
-                print(f"Created : {manufacturing}")
+        # if manufacturing_check:
+        #     print("Create MO Skipped")
+        # if not manufacturing_check:
+        #     if kit_assembly_warehouse.odoo_location_id.id:
+        #         manufacturing = manufacturing.create(vals)
+        #         print(f"Created : {manufacturing}")
                 
-            if not kit_assembly_warehouse.odoo_location_id.id:
-                print('created skipped cause location not found')
+        #     if not kit_assembly_warehouse.odoo_location_id.id:
+        #         print('created skipped cause location not found')
 
 
 # Block Kode Generate 1-Step Transfer Pemindahan barang dari penyimpanan ke Assembly Line
-        operation_type = self.env['stock.picking.type'].search([('code', '=', 'internal'), ('name', '=', 'Pick Components')], limit=1)
+        # operation_type = self.env['stock.picking.type'].search([('code', '=', 'internal'), ('name', '=', 'Pick Components')], limit=1)
 
-        total_moving_qty = 0 
+        # total_moving_qty = 0 
 
-        component = component_reference.search([('assembly_id', '=', header.id)])
-        for item in component:
-            total_moving_qty += item.line_quantity
+        # component = component_reference.search([('assembly_id', '=', header.id)])
+        # for item in component:
+        #     total_moving_qty += item.line_quantity
 
-        vals = {
-            'picking_type_id' : operation_type.id,
-            'location_id' : operation_type.default_location_src_id.id,
-            'location_dest_id' : operation_type.default_location_dest_id.id,
-            'scheduled_date' : fields.Datetime.now(),
-            'origin' : header.name,
-            'adt_type' : "1-Step",
-            'adt_total_qty' : total_moving_qty,
-        }
-        if operation_type.default_location_dest_id.usage == 'customer':
-            raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
+        # vals = {
+        #     'picking_type_id' : operation_type.id,
+        #     'location_id' : operation_type.default_location_src_id.id,
+        #     'location_dest_id' : operation_type.default_location_dest_id.id,
+        #     'scheduled_date' : fields.Datetime.now(),
+        #     'origin' : header.name,
+        #     'adt_type' : "1-Step",
+        #     'adt_total_qty' : total_moving_qty,
+        # }
+        # if operation_type.default_location_dest_id.usage == 'customer':
+        #     raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
 
-        if manufacturing_check:
-            print("Create MO Skipped")
-        if not manufacturing_check:
-            if kit_assembly_warehouse.odoo_location_id.id:
-                # stock_picking = self.env['stock.picking']
-                stock_picking = stock_picking.create(vals)
-                print(stock_picking.name)
+        # if manufacturing_check:
+        #     print("Create MO Skipped")
+        # if not manufacturing_check:
+        #     if kit_assembly_warehouse.odoo_location_id.id:
+        #         # stock_picking = self.env['stock.picking']
+        #         stock_picking = stock_picking.create(vals)
+        #         print(stock_picking.name)
                 
-            if not kit_assembly_warehouse.odoo_location_id.id:
-                print('created skipped cause location not found')
+        #     if not kit_assembly_warehouse.odoo_location_id.id:
+        #         print('created skipped cause location not found')
 
-        for item in component:
-            component = self.env['product.template'].search(
-                [('default_code', '=', item.stock_inventory_id)],
-                limit=1
-            )
+        # for item in component:
+        #     component = self.env['product.template'].search(
+        #         [('default_code', '=', item.stock_inventory_id)],
+        #         limit=1
+        #     )
             
-            vals = {
-                    'name' : stock_picking.name,
-                    'product_id' : component.id,
-                    'product_uom_qty' : item.line_quantity,
-                    'product_uom' : component.uom_id.id,
-                    'picking_id' : stock_picking.id
-                }
+        #     vals = {
+        #             'name' : stock_picking.name,
+        #             'product_id' : component.id,
+        #             'product_uom_qty' : item.line_quantity,
+        #             'product_uom' : component.uom_id.id,
+        #             'picking_id' : stock_picking.id
+        #         }
 
-            if manufacturing_check:
-                print("Create MO Skipped")
-            if not manufacturing_check:
-                if kit_assembly_warehouse.odoo_location_id.id:
-                    stock_move = self.env['stock.move']
-                    stock_move = stock_move.create(vals)
+        #     if manufacturing_check:
+        #         print("Create MO Skipped")
+        #     if not manufacturing_check:
+        #         if kit_assembly_warehouse.odoo_location_id.id:
+        #             stock_move = self.env['stock.move']
+        #             stock_move = stock_move.create(vals)
                     
-                if not kit_assembly_warehouse.odoo_location_id.id:
-                    print('created skipped cause location not found')
+        #         if not kit_assembly_warehouse.odoo_location_id.id:
+        #             print('created skipped cause location not found')
 
         msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
         return {

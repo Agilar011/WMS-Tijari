@@ -208,7 +208,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'label': 'Manufacturing Order',
             'wizard_model': 'import.kit.assembly.wizard',
             'config_field': 'kit_assembly_config_id',
-            'line_model': 'acumatica.kit.assembly.line',
+            'line_model': 'acumatica.kit.assembly',
             'result_name': 'Hasil Import Manufacturing Order',
             'staging_name': 'Data Manufacturing Order dari Acumatica',
             'extra_fields': [],

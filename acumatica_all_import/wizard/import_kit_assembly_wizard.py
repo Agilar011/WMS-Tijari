@@ -98,7 +98,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
         for i in range(loop_count):
             offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.config_id.fetch_kit_assembly_data(
+            batch_data = self.fetch_kit_assembly_data(
                 limit=self.batch_size,
                 offset=offset,
             )
@@ -188,6 +188,205 @@ class ImportKitAssemblyWizard(models.TransientModel):
     # =========================
     # VIEW STAGING
     # =========================
+
+    def fetch_kit_assembly_data(self, limit=100, offset=0):
+        """Fetch 1 page Kit Assembly dari Acumatica (paging via $top/$skip)."""
+        # print("==========================================================================================")
+        # print("ACTION: Fetch data from Acumatica")
+        # print("==========================================================================================")
+
+        self.ensure_one()
+        session = self.config_id._do_login()
+        staging_header = self.env['acumatica.kit.assembly']
+        staging_line = self.env['acumatica.kit.assembly.component']
+        try:
+            endpoint = f"{self.config_id.api_url}/KitAssembly"
+            # print(f"Fetching Kit Assembly data from {endpoint} with limit={limit} and offset={offset}...")
+            params = {'$top': limit, '$skip': offset, '$expand': 'StockComponents',  '$filter': "Warehouse eq 'WH33-FG'"}
+
+            response = session.get(endpoint, params=params, timeout=60)
+            if response.status_code != 200:
+                raise UserError(
+                    f'Gagal ambil data Kit Assembly '
+                    f'(HTTP {response.status_code}): {response.text}'
+                )
+
+            raw_data = self.config_id._normalize_rows(response.json())
+            result = []
+
+            for item in raw_data:
+
+                last_modified_datetime = self._parse_datetime(item.get('LastModifiedDateTime'))
+                print(f"Last Modified Date Time: :{last_modified_datetime}")
+                print(self._val(item, 'Warehouse'))
+                header = {
+                    'name': self._val(item, 'ReferenceNbr'),
+                    'external_id': item.get('id', '') or '',
+                    'row_number': item.get('rowNumber', 0) or 0,
+                    'description': self._val(item, 'Description'),
+                    'inventory_id': self._val(item, 'InventoryID'),
+                    'last_modified_datetime': last_modified_datetime,
+                    'location': self._val(item, 'Location'),
+                    'post_period': self._val(item, 'PostPeriod'),
+                    'quantity': self._val(item, 'Qty'),
+                    'reason_code': self._val(item, 'ReasonCode'),
+                    'reference_nbr': self._val(item, 'ReferenceNbr'),
+                    'requested_on': self._val(item, 'RequestedOn'),
+                    'revision': self._val(item, 'Revision'),
+                    'status': self._val(item, 'Status'),
+                    'type': self._val(item, 'Type'),
+                    'uom': self._val(item, 'UOM'),
+                    'warehouse': self._val(item, 'Warehouse'),
+                    'config_id' : self.config_id.id
+                }
+
+                # === PRINT DATA HEADER ===
+                # print("==========================================================================================")
+                # print("HEADER DATA:")
+                # for h_key, h_val in header.items():
+                    # print(f"{h_key:<25} : {h_val}")
+
+                assembly = self.env['acumatica.kit.assembly'].create(header)  # Simpan header ke staging untuk referensi, bisa dihapus jika tidak perlu
+                print(f"Created staging header record with ID {assembly.id} for ReferenceNbr {header['reference_nbr']}")
+
+                stock_components = item.get('StockComponents') or []
+                if isinstance(stock_components, dict):
+                    stock_components = stock_components.get('value', []) or []
+                if not isinstance(stock_components, list):
+                    stock_components = []
+
+                if not stock_components:
+                    # print("-- (No Components Available)") # Info jika component kosong
+                    result.append(dict(header, line_nbr='0'))
+                    # print("==========================================================================================")
+                    continue
+
+                # === PRINT DATA COMPONENT ===
+                # print("COMPONENTS:")
+                for component in stock_components:
+                    line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
+                    
+                    # Buat dictionary component data untuk mempermudah perulangan print
+                    component_data = {
+                        'line_external_id': component.get('id', '') or '',
+                        'line_note': component.get('note', {}).get('value', '') or '',
+                        'line_inventory_id': self._val(component, 'InventoryID'),
+                        'line_component_qty': self._val(component, 'ComponentQty'),
+                        'line_nbr': str(line_nbr),
+                        'line_location_id': self._val(component, 'LocationID'),
+                        'line_quantity': self._val(component, 'Qty'),
+                        'line_reason_code': self._val(component, 'ReasonCode'),
+                        'stock_inventory_id': self._val(component, 'StockInventoryID'),
+                        'line_uom': self._val(component, 'UOM'),
+                        'assembly_id': assembly.id,  # Simpan component dengan relasi ke header yang sudah dibuat, bisa dihapus jika tidak perlu
+                    }
+                    
+                    # Print setiap field di dalam component ini dengan awalan '--'
+                    # print("  ----------------------------------------")
+                    # for c_key, c_val in component_data.items():
+                        # print(f"  -- {c_key:<25} : {c_val}")
+
+                    assembly_line = self.env['acumatica.kit.assembly.component'].create(component_data)  # Simpan component ke staging, bisa dihapus jika tidak perlu
+                    # print(f"  Created staging component record with ID {assembly_line.id} for LineNbr {component_data['line_nbr']} under ReferenceNbr {header['reference_nbr']}")
+                    
+                    # Tetap masukkan ke hasil akhir Odoo wizard Anda
+                    result.append({**header, **component_data})
+                
+                # print("==========================================================================================")
+
+
+            # for item in raw_data:
+            #     header = {
+            #         'external_id': item.get('id', '') or '',
+            #         'row_number': item.get('rowNumber', 0) or 0,
+            #         'description': self._val(item, 'Description'),
+            #         'inventory_id': self._val(item, 'InventoryID'),
+            #         'last_modified_datetime': self._val(item, 'LastModifiedDateTime'),
+            #         'location': self._val(item, 'Location'),
+            #         'post_period': self._val(item, 'PostPeriod'),
+            #         'quantity': self._val(item, 'Qty'),
+            #         'reason_code': self._val(item, 'ReasonCode'),
+            #         'reference_nbr': self._val(item, 'ReferenceNbr'),
+            #         'requested_on': self._val(item, 'RequestedOn'),
+            #         'revision': self._val(item, 'Revision'),
+            #         'status': self._val(item, 'Status'),
+            #         'type': self._val(item, 'Type'),
+            #         'uom': self._val(item, 'UOM'),
+            #         'warehouse': self._val(item, 'Warehouse'),
+
+
+            #     }
+
+            #     stock_components = item.get('StockComponents') or []
+            #     if isinstance(stock_components, dict):
+            #         stock_components = stock_components.get('value', []) or []
+            #     if not isinstance(stock_components, list):
+            #         stock_components = []
+
+            #     if not stock_components:
+            #         result.append(dict(header, line_nbr='0'))
+            #         continue
+
+            #     for component in stock_components:
+            #         line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
+            #         result.append({
+            #             **header,
+            #             'line_external_id': component.get('id', '') or '',
+            #             'line_note': component.get('note', {}).get('value', '') or '',
+            #             'line_inventory_id': self._val(component, 'InventoryID'),
+            #             'line_component_qty': self._val(component, 'ComponentQty'),
+            #             'line_nbr': str(line_nbr),
+            #             'line_location_id': self._val(component, 'LocationID'),
+            #             'line_quantity': self._val(component, 'Qty'),
+            #             'line_reason_code': self._val(component, 'ReasonCode'),
+            #             'stock_inventory_id': self._val(component, 'StockInventoryID'),
+            #             'line_uom': self._val(component, 'UOM'),
+            #         })
+
+            
+            _logger.info(
+                'Berhasil ambil %s rows Kit Assembly dari Acumatica (skip=%s, top=%s)',
+                len(result), offset, limit,
+            )
+            return result
+        finally:
+            self.config_id._do_logout(session)
+            self.config_id.last_sync = fields.Datetime.now()
+
+    @staticmethod
+    def _val(item, key):
+        value = item.get(key, {})
+        if isinstance(value, dict):
+            return value.get('value', '') or ''
+        return value or ''
+
+    @staticmethod
+    def _normalize_rows(payload):
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            if isinstance(payload.get('value'), list):
+                return payload.get('value')
+            if isinstance(payload.get('rows'), list):
+                return payload.get('rows')
+        return []
+
+    def _parse_datetime(self, value):
+        if not value:
+            return False
+
+        if isinstance(value, datetime):
+            return value
+
+        try:
+            # Support:
+            # 2011-12-09T22:18:00+07:00
+            # 2011-12-09T22:18:00Z
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception:
+            return False        
+
+
     def action_view_staging(self):
         self.ensure_one()
         return {
