@@ -110,6 +110,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
             data = raw_data.get("InventoryIssueGIDetails", [])
             for row_number, item in enumerate(data, start=1):
+                print('='*100)
+                # print(f"ROW Data: {item}")
                 ref = self._val(item, 'ReferenceNbr')
                 if reference_nbr and ref != reference_nbr:
                     continue
@@ -117,8 +119,12 @@ class ImportInventoryIssueWizard(models.TransientModel):
                 details = self._extract_details(item, self.config_id.odata_expand or 'InventoryIssueGIDetails')
                 if not details:
                     details = [item]
+                    # print(f"Detail: {details}")
+                    # print('='*100)
 
-                warehouse_code = self._coalesce_val(item, 'Warehouse', 'LineWarehouseID')
+                # warehouse_code = self._coalesce_val(item, 'Warehouse', 'LineWarehouseID')
+                warehouse_code = self._val(item, 'LineWarehouse')
+                print(f"warehouse Code from API: {warehouse_code}")
                 header_id = ref or item.get('id', '')
 
                 if header_id not in headers_seen:
@@ -217,6 +223,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
     def _create_inventory_issue_lines(self, data):
         if not data:
             return self.env['acumatica.inventory.issue.line']
+
+        
         return self.env['acumatica.inventory.issue.line'].create(data)
 
     def _create_inventory_issue_lines_product(self, data, headers):
@@ -237,7 +245,10 @@ class ImportInventoryIssueWizard(models.TransientModel):
             if line_vals['receipt_line_id']:
                 product_vals.append(line_vals)
         if product_vals:
-            self.env['acumatica.inventory.issue.product'].create(product_vals)
+            print(f"Created product with owner: {line_vals.get('customer_id')}")
+            created_product_line = self.env['acumatica.inventory.issue.product'].create(product_vals)
+            # if not created_product_line.customer_id:
+            #     print(f"Created product without owner: {created_product_line}")
 
     # ---------------------------------------------------------
     # Filter
@@ -377,19 +388,25 @@ class ImportInventoryIssueWizard(models.TransientModel):
     # ---------------------------------------------------------
     
     def _build_inventory_issue_detail(self, header_id, detail, warehouse_code=None):
+        product_owner = self._val(detail, 'CustomerID'),
+        if product_owner:
+            print(f"Product Owner from API: {product_owner}")
+
+
         return {
             'header_external_id': header_id,
             'line_external_id': detail.get('id', '') or '',
             'line_nbr': str(self._val(detail, 'LineNbr')),
             'line_note': self._val(detail, 'LineNote'),
             'branch_warehouse': self._val(detail, 'LineBranch'),
-            'line_description': self._val(detail, 'LineDescription'),
+            'line_description': self._val(detail, 'LineInventoryName'),
             'inventory_id': self._val(detail, 'LineInventoryID'),
             'location_code': self._val(detail, 'LineLocation'),
             'product_uom_qty': str(self._val(detail, 'LineQuantity')),
             'line_trans_type': self._val(detail, 'LineTranType'),
             'uom_code': self._val(detail, 'LineUOM'),
-            'warehouse_code': self._val(detail, 'LineWarehouseID') or warehouse_code,
+            'warehouse_code': self._val(detail, 'LineWarehouse') or warehouse_code,
+            'customer_id': self._val(detail, 'CustomerID'),
         }
         
 
@@ -658,6 +675,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         warehouse_code = warehouse_code or self._coalesce_val(header, 'Warehouse', 'WarehouseID', 'LineWarehouseID')
+        # print(type(warehouse_code))
         type = False
 
         document_only_type = PickingType.resolve_document_only_picking_type(
@@ -677,7 +695,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
         if location and location.odoo_building_id:
             type = PickingType.search([
                 ('warehouse_id', '=', location.odoo_building_id.id),
-                ('code', '=', 'outgoing'),
+                ('code', '=', 'internal'),
                 ('is_default_api', '=', True)
             ], limit=1)
 

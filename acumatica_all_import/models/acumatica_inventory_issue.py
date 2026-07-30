@@ -249,6 +249,36 @@ class AcumaticaInventoryIssueLine(models.Model):
         #     location = warehouse.lot_stock_id
         return location
 
+    def _find_bad_stock_location(self, warehouse):
+        """Return the internal Bad Stock location belonging to ``warehouse``."""
+        return self.env['stock.location'].search([
+            ('id', 'child_of', warehouse.view_location_id.id),
+            ('usage', '=', 'internal'),
+            # Nama lokasi di warehouse dapat memakai penanda, misalnya
+            # "Bad Stock (BS)". Tetap batasi pencarian ke warehouse ini.
+            ('name', '=ilike', 'Bad Stock%'),
+        ], limit=1)
+
+    def _find_customer(self, customer_code):
+        print('def _find_customer')
+        """Find the Odoo customer using the Acumatica CustomerID."""
+        if not customer_code:
+            return self.env['res.partner']
+
+        if customer_code:
+            print(f"Customer Code: {customer_code}")
+            partner = self.env['res.partner'].search([('adt_b_account_id', '=', customer_code)], limit=1)
+            if not partner:
+                partner = self.env['res.partner'].search([('name', '=', customer_code)], limit=1)
+
+            print(f"Partner from search_partner: {partner}")
+        return partner
+            
+        # return self.env['res.partner'].search([
+        #     ('company_registry', '=', customer_code),
+        #     ('is_company', '=', True),
+        # ], limit=1)
+
     def _find_uom(self, line, product=False):
         Uom = self.env['uom.uom']
         uom = False
@@ -301,13 +331,21 @@ class AcumaticaInventoryIssueLine(models.Model):
                     
                 source_location = picking_type.default_location_src_id
                 dest_location = picking_type.default_location_dest_id
+                if (first.trans_type or '').strip().casefold() == 'disposal':
+                    dest_location = self._find_bad_stock_location(warehouse)
+                    if not dest_location:
+                        raise UserError(
+                            f'Lokasi internal "Bad Stock" tidak ditemukan pada warehouse '
+                            f'{warehouse.display_name}.'
+                        )
+                    
                 
                 if not source_location:
                     raise UserError('Source location warehouse tidak ditemukan.')
                 if not dest_location:
                     raise UserError('Destination location tidak ditemukan.')
-                if dest_location.usage == 'customer':
-                    raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
+                # if dest_location.usage == 'customer':
+                    # raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
                     
                 vals = {
                     'origin': first.reference_nbr,
@@ -325,6 +363,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     'adt_warehouse_code': first.warehouse_code or False,
                     'adt_external_id': first.external_id or False,
                     'adt_type': first.trans_type or False,
+                    'transaction_type' : 'outbound'
                 }
                 
                 picking = Picking.search([('origin', '=', first.reference_nbr)], limit=1)
@@ -335,29 +374,52 @@ class AcumaticaInventoryIssueLine(models.Model):
                     picking.write(vals)
                     action_state = 'updated'
                     updated += 1
+                    print(f"Update Picking: {picking}")
                 else:
                     picking = Picking.create(vals)
                     action_state = 'imported'
                     imported += 1
+                    print(f"Create Picking: {picking}")
 
                 to_create_move = self.env['acumatica.inventory.issue.product'].search([('receipt_line_id', '=', first.id)])
                     
                 for line in to_create_move:
-                    # print(line)
+                    print("Processed Stock Move")
+
+                    customer = False
+                    if line.customer_id:
+                        customer = self._find_customer(line.customer_id)
+
+                    owner_id = False
+
+                    if (first.trans_type or "").strip().casefold() == "toko pegang do":
+                        if not customer:
+                            raise UserError(
+                                f"Customer dengan CustomerID {line.customer_id or '-'} "
+                                f"tidak ditemukan untuk baris Disposal."
+                            )
+                        owner_id = customer.id
+                    else:
+                        owner_id = customer.id if customer else False
+
                     product = self._find_product(line)
                     uom = self._find_uom(line, product)
                     qty = self._parse_int(line.product_uom_qty)
                     print(f"Qty value before: {line.product_uom_qty} and after: {qty}")
                     
-                    existing_move = Move.search([
+                    move_domain = [
                         ('picking_id', '=', picking.id),
                         ('product_id', '=', product.id),
-                    ], limit=1)
+                    ]
+                    if owner_id:
+                        move_domain.append(('owner_id', '=', owner_id))
+                    existing_move = Move.search(move_domain, limit=1)
                     
                     if existing_move:
                         existing_move.write({
                             'product_uom_qty': qty,
                             'name': line.line_description or product.display_name,
+                            'owner_id': owner_id,
                         })
                         first.write({
                             'import_state': action_state,
@@ -374,6 +436,9 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'location_id': source_location.id,
                             'location_dest_id': dest_location.id,
                             'description_picking': line.line_description or False,
+                            'transaction_type' : 'outbound',
+                            'adt_type': first.trans_type or False,
+                            'owner_id': owner_id,
                         })
                         first.write({
                             'import_state': action_state,
@@ -512,3 +577,4 @@ class AcumaticaInventoryIssueProduct(models.Model):
     uom_code = fields.Char(string='UOM', readonly=True)
     warehouse_code = fields.Char(string='Product Warehouse', readonly=True)
     header_external_id = fields.Char(string='UUID Header', readonly=True)
+    customer_id = fields.Char(string='Customer ID', readonly=True)
