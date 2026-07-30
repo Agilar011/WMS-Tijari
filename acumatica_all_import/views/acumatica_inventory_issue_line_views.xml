@@ -92,6 +92,7 @@
                                     <field name="inventory_id"/>
                                     <field name="line_description"/>
                                     <field name="warehouse_code"/>
+                                    <field name="customer_id"/>
                                     <field name="product_uom_qty"/>
                                 </list>
                             </field>

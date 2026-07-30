@@ -9,6 +9,7 @@
             <!-- First row of detailed stock_move_line outbound - pick -->
             <xpath expr="//field[@name='quant_id']" position="before">
                 <field name="id" string="Line ID"  column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
+                <field name="adt_owner_id" string="Owner" column_invisible="0"/>
                 <!-- <field name="adt_dest_location" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/> -->
                 <field name="adt_dest_location_id" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
                 <!-- <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/> -->

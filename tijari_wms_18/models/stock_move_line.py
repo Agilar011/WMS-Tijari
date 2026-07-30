@@ -128,6 +128,10 @@ class StockMoveLine(models.Model):
         related="move_id.picking_type_name",
         store=False,
     )
+    picking_type_name = fields.Char(
+        related="move_id.picking_type_name",
+        store=False,
+    )
     allowed_lot_ids = fields.Many2many(
         "stock.lot",
         string="Allowed Lots",
@@ -135,6 +139,14 @@ class StockMoveLine(models.Model):
     )
 
     second_matching = fields.Char(string="second_matching")
+
+    adt_owner_id = fields.Many2one(
+        "res.partner",
+        related="move_id.owner_id",
+        store=True,
+        readonly=True,
+    )
+
 
     @api.depends(
         "move_id",

@@ -90,6 +90,19 @@ class StockMove(models.Model):
         store=True,
     )
 
+    confirmation_quantity = fields.Float(
+        string='Confirmation Qty',
+        compute='_compute_confirmation_quantity',
+        store=True,
+    )
+
+    owner_id = fields.Many2one(
+            "res.partner",
+            string="Owner",
+            store=True,
+            readonly=False,
+        )
+
     @api.depends('product_uom_qty', 'quantity', 'picking_type_name', 'confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
@@ -101,11 +114,6 @@ class StockMove(models.Model):
             move.difference_quantity = difference if difference > 0 else 0.0
 
 
-    confirmation_quantity = fields.Float(
-        string='Confirmation Qty',
-        compute='_compute_confirmation_quantity',
-        store=True,
-    )
 
     @api.depends('move_line_ids.confirmation_quantity')
     def _compute_confirmation_quantity(self):
