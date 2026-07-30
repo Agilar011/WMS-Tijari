@@ -430,11 +430,40 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         }
 
     def _vendor_return_direct_transfer_header_vals(self, item, row_number):
-        return self._direct_transfer_header_vals(
+        vals = self._direct_transfer_header_vals(
             item,
             row_number,
             api_acumatica="vendor_return",
         )
+        from_warehouse = vals.get("adt_FromWarehouseID")
+        document_only = vals.get("adt_DocumentOnly")
+        picking_type = self._search_picking_type(
+            from_warehouse,
+            "outgoing",
+            document_only=document_only,
+            api_acumatica="vendor_return",
+            target_operation_type="direct_delivery_order",
+        )
+        vals["picking_type_id"] = picking_type.id if picking_type else False
+        return vals
+
+    def _vendor_return_document_direct_transfer_header_vals(self, item, row_number):
+        vals = self._direct_transfer_header_vals(
+            item,
+            row_number,
+            api_acumatica="vendor_return",
+        )
+        from_warehouse = vals.get("adt_FromWarehouseID")
+        document_only = vals.get("adt_DocumentOnly")
+        picking_type = self._env()["stock.picking.type"].sudo().resolve_document_only_picking_type(
+            target_operation_type="direct_delivery_order",
+            api_acumatica="vendor_return",
+            document_only=document_only,
+            warehouse_code=from_warehouse,
+            required=True,
+        )
+        vals["picking_type_id"] = picking_type.id if picking_type else False
+        return vals
 
     def _direct_transfer_product_vals(self, item, header):
         return {
@@ -1128,7 +1157,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "header_model": "acumatica.direct.transfer.staging",
                 "product_model": "acumatica.direct.transfer.staging.line",
                 "line_relation": "line_ids",
-                "header_vals": self._vendor_return_direct_transfer_header_vals,
+                "header_vals": self._vendor_return_document_direct_transfer_header_vals,
                 "product_vals": self._direct_transfer_product_vals,
             },
             "transfer_one_step": {

@@ -104,6 +104,7 @@ class ImportDirectTransferWizard(models.TransientModel):
         type = False
 
         document_only_type = PickingType.resolve_document_only_picking_type(
+            target_operation_type='direct_delivery_order',
             api_acumatica='vendor_return',
             document_only=header.get('adt_DocumentOnly'),
             warehouse_code=header.get('adt_FromWarehouseID'),
@@ -123,9 +124,9 @@ class ImportDirectTransferWizard(models.TransientModel):
             print(f"location : {location.odoo_building_id.id}")
             type = PickingType.search([
                 ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),
+                ('code', '=', 'outgoing'),
                 ('is_default_api', '=', True)
-            ])
+            ], limit=1)
 
             print(f"Type: {type}")
 
