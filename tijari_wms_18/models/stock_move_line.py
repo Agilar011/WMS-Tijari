@@ -184,7 +184,6 @@ class StockMoveLine(models.Model):
                 line.product_lot_id = line.lot_id.id
                 line.lot_name = line.lot_id.name
 
-        
         # _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
         Quant = self.env["stock.quant"]
 
@@ -195,18 +194,34 @@ class StockMoveLine(models.Model):
             if not line.product_id or not line.source_location_id:
                 continue
 
-            quants = Quant.search([
+            domain = [
                 ("product_id", "=", line.product_id.id),
                 ("location_id", "child_of", line.source_location_id.id),
                 ("quantity", ">", 0),
                 ("lot_id", "!=", False),
-            ])
+            ]
+
+            # ===========================
+            # TAMBAHAN UNTUK TOKO PEGANG DO
+            # ===========================
+            print(line.move_id.picking_id.adt_type)
+            if (
+                line.move_id.picking_id.adt_type == 'Toko Pegang DO'
+                # and line.owner_id
+            ):
+                domain.append(("owner_id", "=", line.move_id.owner_id.id))
+                print(f"Running domain with owner : {line.move_id.owner_id.name} ")
+            # ===========================
+
+            quants = Quant.search(domain)
 
             line.temp_quant_ids = [(6, 0, quants.mapped("lot_id").ids)]
 
-            print(f"Quant domain: {line.temp_quant_ids}")
-            # print(f"Confirm line matching: {line.matching}")
+            for item in line.temp_quant_ids:
+                print(f"Quant domained: {item.lot_id.name}")
 
+            print(f"Quant domain: {line.temp_quant_ids}")
+            
 
     @api.onchange("product_id", "source_location_id")
     def _onchange_source_location(self):

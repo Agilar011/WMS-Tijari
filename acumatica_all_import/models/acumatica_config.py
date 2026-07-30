@@ -2,7 +2,6 @@ import requests
 import json
 import logging
 from datetime import datetime
-
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
 
