@@ -128,6 +128,10 @@ class StockMoveLine(models.Model):
         related="move_id.picking_type_name",
         store=False,
     )
+    picking_type_name = fields.Char(
+        related="move_id.picking_type_name",
+        store=False,
+    )
     allowed_lot_ids = fields.Many2many(
         "stock.lot",
         string="Allowed Lots",
@@ -135,6 +139,14 @@ class StockMoveLine(models.Model):
     )
 
     second_matching = fields.Char(string="second_matching")
+
+    adt_owner_id = fields.Many2one(
+        "res.partner",
+        related="move_id.owner_id",
+        store=True,
+        readonly=True,
+    )
+
 
     @api.depends(
         "move_id",
@@ -163,6 +175,15 @@ class StockMoveLine(models.Model):
     @api.depends("product_id", "source_location_id")
     def _compute_temp_quant_ids(self):
         print('def _compute_temp_quant_ids(self):')
+        for line in self:
+            if line.move_id.transaction_type == 'outbound' and line.move_id.picking_type_name == 'Pack':
+                print('Auto matching source_location_id and product_lot_id in Pack transaction')
+                print(line.location_id.id)
+                print(line.lot_id.id)
+                line.source_location_id = line.location_id
+                line.product_lot_id = line.lot_id.id
+                line.lot_name = line.lot_id.name
+
         # _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
         Quant = self.env["stock.quant"]
 
@@ -173,18 +194,34 @@ class StockMoveLine(models.Model):
             if not line.product_id or not line.source_location_id:
                 continue
 
-            quants = Quant.search([
+            domain = [
                 ("product_id", "=", line.product_id.id),
                 ("location_id", "child_of", line.source_location_id.id),
                 ("quantity", ">", 0),
                 ("lot_id", "!=", False),
-            ])
+            ]
+
+            # ===========================
+            # TAMBAHAN UNTUK TOKO PEGANG DO
+            # ===========================
+            print(line.move_id.picking_id.adt_type)
+            if (
+                line.move_id.picking_id.adt_type == 'Toko Pegang DO'
+                # and line.owner_id
+            ):
+                domain.append(("owner_id", "=", line.move_id.owner_id.id))
+                print(f"Running domain with owner : {line.move_id.owner_id.name} ")
+            # ===========================
+
+            quants = Quant.search(domain)
 
             line.temp_quant_ids = [(6, 0, quants.mapped("lot_id").ids)]
 
-            print(f"Quant domain: {line.temp_quant_ids}")
-            # print(f"Confirm line matching: {line.matching}")
+            for item in line.temp_quant_ids:
+                print(f"Quant domained: {item.lot_id.name}")
 
+            print(f"Quant domain: {line.temp_quant_ids}")
+            
 
     @api.onchange("product_id", "source_location_id")
     def _onchange_source_location(self):
@@ -865,11 +902,16 @@ class StockMoveLine(models.Model):
     #         line.matching = 'match' if lot_match and location_match else 'not_match'
 
     def _update_move_picked(self):
+        print(f"_update_move_picked: {self}")
         for move in self.mapped('move_id'):
+            if move.raw_material_production_id != False:
+                continue
             move.picked = (
                 move.move_line_ids
                 and all(line.matching == 'match' for line in move.move_line_ids)
             )
+            print(move.picked)
+
 
     def _get_matching_status(self):
         """Return the matching result using the reference fields for each operation."""
@@ -878,7 +920,7 @@ class StockMoveLine(models.Model):
             return 'not_match'
 
         picking_name = self.picking_id.picking_type_id.name
-        if picking_name in ('Pick', 'Pick Internal'):
+        if picking_name in ('Pick', 'Pick Internal', 'Pick Components'):
             expected_location = self.source_location_id or self.location_id
             expected_lot = self.product_lot_id or self.lot_id
         elif picking_name in ('Receipts', 'Receipt Internal'):
@@ -898,7 +940,7 @@ class StockMoveLine(models.Model):
     def _compute_matching(self):
         for line in self:
             line.matching = line._get_matching_status()
-            if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal'):
+            if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
                 line.second_matching = (
                     'Match' if line.matching == 'match' else 'Not Match'
                 )
@@ -913,7 +955,7 @@ class StockMoveLine(models.Model):
             picking_name = line.move_id.picking_id.picking_type_id.name
             print(f"validate stock move line with picking type name: {picking_name}")
 
-            if picking_name and picking_name == 'Pick':
+            if picking_name and picking_name in ( 'Pick', 'Pick Components'):
                 loc_code = str(line.location_id.unique_code or '').strip()
                 product_code = str(line.lot_id.name or '').strip()
 

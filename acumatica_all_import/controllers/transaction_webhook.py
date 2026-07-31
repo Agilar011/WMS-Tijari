@@ -789,6 +789,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "product_uom_qty": self._first_value(item, "LineQuantity", "Quantity", "product_uom_qty"),
             "uom_code": self._first_value(item, "LineUOM", "UOM", "uom_code"),
             "warehouse_code": self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_code"),
+            "customer_id": self._first_value(item, "CustomerID", "customer_id"),
         }
 
     def _transfer_one_step_header_vals(self, item, row_number, api_acumatica="transfer_one_step"):

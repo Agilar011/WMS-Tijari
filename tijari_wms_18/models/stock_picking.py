@@ -971,7 +971,7 @@ class StockPicking(models.Model):
         for picking in self:
             # Pick harus diblokir sebelum validasi standar Odoo memproses
             # perpindahan stok apabila masih ada line yang belum Match.
-            if picking.picking_type_id.name in ('Pick', 'Pick Internal'):
+            if picking.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
                 picking._check_validate_requirements()
 
             if picking.picking_type_id.name not in ('Pick', 'Receipt'):
@@ -1105,7 +1105,7 @@ class StockPicking(models.Model):
             error_messages.append(
                 (
                     "Semua product harus dalam kondisi picked.\n"
-                    "Move yang belum picked:\n%s"
+                    "Produk yang belum Terambil:\n%s"
                 )
                 % products
             )
@@ -1128,7 +1128,7 @@ class StockPicking(models.Model):
                 (
                     "Semua product harus memiliki status matching "
                     "'Match'.\n"
-                    "Move line yang belum match:\n%s"
+                    "Detail produk yang belum match:\n%s"
                 )
                 % lines
             )

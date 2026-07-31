@@ -70,6 +70,7 @@
             </xpath>
 
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
+                    <field name="owner_id"/>
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
