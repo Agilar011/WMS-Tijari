@@ -43,6 +43,7 @@
         'views/stock_report_aging_views.xml',
         'views/stock_report_inherit_inventory.xml',
         'views/stock_report_velocity_views.xml',
+        'views/stock_scrap.xml',
         'views/templates.xml',
         'views/wms_operations_action.xml',
         'views/wms_operations_menu.xml',
