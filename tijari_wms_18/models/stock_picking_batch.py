@@ -166,8 +166,42 @@ class StockPickingBatch(models.Model):
                 lambda line: (
                     line.state not in ('done', 'cancel')
                     and line.quantity > 0
+                    and (line.lot_id or line.lot_name)
                 )
             )
+            if batch.picking_type_name in ('Receipts', 'Receipt Internal'):
+                unfinished_lines = move_lines.filtered(
+                    lambda line: line.putaway_status != 'finished'
+                )
+
+                if not unfinished_lines:
+                    continue
+
+                lines = "\n".join(
+                    "- %s | Lot/Serial: %s | Qty: %s | Status: %s"
+                    % (
+                        line.product_id.display_name,
+                        line.lot_id.name or line.lot_name or "-",
+                        line.quantity,
+                        dict(line._fields['putaway_status'].selection).get(
+                            line.putaway_status,
+                            line.putaway_status or "-"
+                        ),
+                    )
+                    for line in unfinished_lines
+                )
+                raise UserError(
+                    _(
+                        "Validation blocked.\n\n"
+                        "Semua move line putaway batch harus memiliki status "
+                        "'Finished' sebelum batch divalidasi.\n\n"
+                        "Move line yang belum finish:\n%s"
+                    )
+                    % lines
+                )
+
+                continue
+
             unmatched_lines = move_lines.filtered(
                 lambda line: line.matching != 'match'
             )

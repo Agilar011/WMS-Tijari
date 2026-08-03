@@ -1,6 +1,32 @@
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
+class StockLocation(models.Model):
+    _inherit = 'stock.location'
+
+    @api.depends('name', 'complete_name')
+    @api.depends_context('show_location_short_name')
+    def _compute_display_name(self):
+        if not self.env.context.get('show_location_short_name'):
+            return super()._compute_display_name()
+
+        for location in self:
+            location.display_name = location.name
+
+    @api.model
+    @api.readonly
+    def name_search(self, name='', args=None, operator='ilike', limit=100):
+        if not self.env.context.get('show_location_short_name'):
+            return super().name_search(name=name, args=args, operator=operator, limit=limit)
+
+        return super(StockLocation, self.with_context(show_location_short_name=False)).name_search(
+            name=name,
+            args=args,
+            operator=operator,
+            limit=limit,
+        )
+
+
 class StockLocationAcumatica(models.Model):
     _name = 'stock.location.acumatica'
     _description = 'Location mapping untuk grouping location dari Acumatica ke location di Odoo (untuk kebutuhan import data dari Acumatica). stock.location.acumatica -> stock.location'

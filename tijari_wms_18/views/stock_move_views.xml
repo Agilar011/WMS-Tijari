@@ -36,7 +36,7 @@
                         type="object"
                         string="Validate Lot"
                         class="btn-warning"
-                        invisible="not display_assign_serial"/>
+                        invisible="not display_assign_serial or picking_type_name in ['Receipts', 'Receipt Internal']"/>
                 </span>
             </xpath>
 
@@ -66,11 +66,12 @@
                     icon="fa-sticky-note"
                     title="Note"
                     />
+                <field name="location_dest_id" />
 
             </xpath>
 
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
-                    <field name="owner_id"/>
+                    <field name="owner_id" column_invisible="1"/>
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
@@ -83,9 +84,11 @@
                         invisible="picking_type_name not in ['Receipts', 'Receipt Internal'] or state == 'draft'"/>
             </xpath>
 
-            <xpath expr="//field[@name='quantity']" position="after">
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='quantity']" position="replace">
+                <field name="quantity" string="Picked Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                 <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
-                <field name="confirmation_quantity" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
+                <field name="confirmation_quantity" string="Stored Qty" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
             </xpath>
 
         </field>

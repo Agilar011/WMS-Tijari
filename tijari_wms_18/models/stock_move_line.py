@@ -1,6 +1,7 @@
 
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools import float_compare
 import logging
 _logger = logging.getLogger(__name__)
 
@@ -48,6 +49,14 @@ class StockMoveLine(models.Model):
         ],
         store=True,
     )
+    putaway_status = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished')
+        ],
+        string='Putaway Status',
+        default='unfinished',
+    )
 
     operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
@@ -70,6 +79,32 @@ class StockMoveLine(models.Model):
         related='picking_id.picking_type_code',
         store=False,
     )
+
+    def _check_putaway_stored_qty_limit(self):
+        for line in self:
+            if line.picking_type_name not in ('Receipts', 'Receipt Internal'):
+                continue
+
+            rounding = line.product_uom_id.rounding if line.product_uom_id else 0.01
+            if float_compare(
+                line.confirmation_quantity,
+                line.quantity,
+                precision_rounding=rounding,
+            ) > 0:
+                raise ValidationError(_(
+                    "Stored Qty tidak boleh lebih besar dari Picked Qty.\n"
+                    "Product: %s\n"
+                    "Stored Qty: %s\n"
+                    "Picked Qty: %s"
+                ) % (
+                    line.product_id.display_name,
+                    line.confirmation_quantity,
+                    line.quantity,
+                ))
+
+    @api.constrains('confirmation_quantity', 'quantity', 'picking_type_name')
+    def _constrains_putaway_stored_qty_limit(self):
+        self._check_putaway_stored_qty_limit()
     origin = fields.Char(
         related='picking_id.origin',
         string='Source Document',
@@ -816,33 +851,60 @@ class StockMoveLine(models.Model):
 
         result = {}
         for line in self:
+            picking_type_name = line.picking_type_name
             vals = {field_name: scanned_code}
             if field_name == 'confirmation_lot_code':
                 lot = line._find_lot_by_scan_code(scanned_code)
                 vals['matching_lot_id'] = lot.id if lot else False
             elif field_name == 'confirmation_location_code':
                 location = line._find_loc_by_scan_code(scanned_code)
-                vals['matching_loc_dest_id'] = location.id if location else False
+                if picking_type_name in ['Receipts', 'Receipt Internal']:
+                    vals['location_dest_id'] = location.id if location else False
+                else:
+                    vals['matching_loc_dest_id'] = location.id if location else False
 
             line.write(vals)
 
             matching_labels = dict(line._fields['matching'].selection)
+            status_labels = dict(line._fields['putaway_status'].selection)
             result = {
                 'id': line.id,
-                field_name: scanned_code,
-                'matching': line.matching,
-                'matching_label': matching_labels.get(line.matching, line.matching or ''),
-                'matching_lot_id': [
-                    line.matching_lot_id.id,
-                    line.matching_lot_id.display_name,
-                ] if line.matching_lot_id else False,
-                'matching_loc_dest_id': [
-                    line.matching_loc_dest_id.id,
-                    line.matching_loc_dest_id.display_name,
-                ] if line.matching_loc_dest_id else False,
+                field_name: scanned_code
+                # 'matching': line.matching,
+                # 'matching_label': matching_labels.get(line.matching, line.matching or ''),
+                # 'matching_lot_id': [
+                #     line.matching_lot_id.id,
+                #     line.matching_lot_id.display_name,
+                # ] if line.matching_lot_id else False,
             }
 
+            if picking_type_name in ['Receipts', 'Receipt Internal']:
+                result['putaway_status'] = line.putaway_status
+                result['putaway_status_label'] = status_labels.get(line.putaway_status, line.putaway_status or '')
+                result['location_dest_id'] = [
+                    line.location_dest_id.id,
+                    line.location_dest_id.name,
+                ] if line.location_dest_id else False
+            else:
+                result['matching'] = line.matching
+                result['matching_label'] = matching_labels.get(line.matching, line.matching or '')
+                result['matching_lot_id'] = [
+                    line.matching_lot_id.id,
+                    line.matching_lot_id.display_name,
+                ] if line.matching_lot_id else False
+                result['matching_loc_dest_id'] = [
+                    line.matching_loc_dest_id.id,
+                    line.matching_loc_dest_id.display_name,
+                ] if line.matching_loc_dest_id else False
+
         return result
+
+    def action_mark_putaway_finished(self):
+        if self.confirmation_quantity == 0:
+            raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+        self._check_putaway_stored_qty_limit()
+        self.write({'putaway_status': 'finished'})
+        return True
 
 
     @api.onchange('confirmation_location_code')
@@ -936,6 +998,10 @@ class StockMoveLine(models.Model):
             else 'not_match'
         )
 
+    @api.onchange('confirmation_quantity')
+    def _onchange_putaway_stored_qty_limit(self):
+        self._check_putaway_stored_qty_limit()
+
     @api.onchange('confirmation_quantity', 'auto_input_code', 'matching_lot_id', 'matching_loc_dest_id')
     def _compute_matching(self):
         for line in self:
@@ -983,4 +1049,3 @@ class StockMoveLine(models.Model):
             #     line.matching = 'match'
             #     sml = self.env['stock.move.line'].browse(line._origin.id)
             #     sml.write({'matching': 'match'})
-
