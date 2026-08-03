@@ -863,7 +863,7 @@ class StockPicking(models.Model):
             lambda picking: picking.internal_transfer_order_id
             and picking.state not in ('done', 'cancel')
         )
-        internal_transfer_pickings.action_assign()
+        # internal_transfer_pickings.action_assign()
         missing_lot_lines = internal_transfer_pickings.move_line_ids.filtered(
             lambda line: line.product_id.tracking != 'none'
             and not line.lot_id
