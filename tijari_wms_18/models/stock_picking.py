@@ -213,7 +213,7 @@ class StockPicking(models.Model):
     shipment_information = fields.Selection([
         ('partial', 'Partial Shipment'),
         ('full_shipment', 'Full Shipment'),
-        ('full_return', 'Canceled'),
+        # ('full_return', 'Canceled'),
     ], string='Informasi TMS', help='Status shipment yang akan dikirimkan dari TMS.')
 
     status_ba = fields.Selection([
@@ -662,11 +662,30 @@ class StockPicking(models.Model):
     
     def action_mark_as_done(self):
         self.ensure_one()
-        if self.wms_state == 'return_shipment':
-            self.wms_state = 'done'
-
-        else: 
-            raise UserError('Shipment return tidak bisa diselesaikan tanpa membuat dokumen return')
+        
+        if self.wms_state != "return_shipment":
+            raise UserError(
+                _("Only documents in Returned Items state can be completed.")
+            )
+    
+        return_picking = self.env["stock.picking"].search([
+            ("return_id", "=", self.id)
+        ], limit=1)
+    
+        if not return_picking:
+            raise UserError(
+                _("Return document has not been created yet.")
+            )
+    
+        if return_picking.state != "done":
+            raise UserError(
+                _("Please validate the Return document first.")
+            )
+    
+        self.state = "done"
+    
+        return True
+    
 
     @api.onchange("state")
     def _onchange_state_update_wms_state(self):
@@ -1136,6 +1155,70 @@ class StockPicking(models.Model):
         if error_messages:
             raise UserError("\n\n".join(error_messages))
 
+    def action_fetch_actual_qty(self):
+        self.ensure_one()
+
+        data = self._get_actual_qty_data()
+
+        self._apply_actual_qty(data)
+
+
+    def _get_actual_qty_data(self):
+        """
+        Temporary mock implementation.
+        Replace with Acumatica API once available.
+        """
+
+        import random
+
+        result = []
+
+        for move in self.move_ids:
+
+            planned_qty = move.product_uom_qty
+
+            is_match = random.random() < 0.5
+
+            if is_match:
+                actual_qty = planned_qty
+            else:
+                shortage = random.randint(
+                    1,
+                    min(5, int(planned_qty))
+                )
+                actual_qty = planned_qty - shortage
+
+            result.append({
+                "inventory_id": move.product_id.default_code,
+                "actual_qty": actual_qty,
+            })
+
+        return result
+    
+    def _apply_actual_qty(self, data):
+
+        mapping = {
+            item["inventory_id"]: item
+            for item in data
+        }
+
+        all_match = True
+
+        for move in self.move_ids:
+
+            api = mapping.get(move.product_id.default_code)
+
+            if not api:
+                continue
+
+            actual_qty = api["actual_qty"]
+
+            move.so_confirmation_quantity = actual_qty
+
+            if actual_qty != move.product_uom_qty:
+                all_match = False
+
+        self.shipment_information = "full_shipment" if all_match else "partial"
 
 # ================================================================================================
 # Temp Storage function create move line qr code        
