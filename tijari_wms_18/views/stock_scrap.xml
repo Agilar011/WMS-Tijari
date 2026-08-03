@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_stock_scrap_inherit_wms" model="ir.ui.view">
+        <field name="name">stock.scrap.inherit.wms</field>
+        <field name="model">stock.scrap</field>
+        <field name="inherit_id" ref="stock.stock_scrap_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//button[@name='action_validate']" position="attributes">
+                <attribute name="invisible">
+                    state == 'done' or availability_state != 'available'
+                </attribute>
+            </xpath>
+            <xpath expr="//button[@name='action_validate']" position="before">
+                <button
+                    name="action_check_availability"
+                    string="Check Availability"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'draft'"
+                />
+            </xpath>
+            <xpath expr="//field[@name='product_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+                <attribute name="required">0</attribute>
+            </xpath>
+            <xpath expr="//field[@name='scrap_qty']" position="attributes">
+                <attribute name="invisible">1</attribute>
+                <attribute name="required">0</attribute>
+            </xpath>
+            <xpath expr="//field[@name='product_uom_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+                <attribute name="required">0</attribute>
+            </xpath>
+            <xpath expr="//field[@name='lot_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+                <attribute name="required">0</attribute>
+            </xpath>
+            <xpath expr="//field[@name='scrap_reason_tag_ids']" position="after">
+                <field 
+                    name="availability_state"
+                    widget="badge"
+                    decoration-warning="availability_state == 'waiting'"
+                    decoration-success="availability_state == 'available'"
+                    decoration-danger="availability_state == 'insufficient'"
+                    readonly="1"
+                />
+                <field name="last_availability_check"
+                    readonly="1"
+                />
+            </xpath>
+            <xpath expr="//field[@name='origin']" position="after">
+                <field name="picking_id" invisible="1" />
+            </xpath>
+            <xpath expr="//sheet" position="inside">
+                <notebook>
+                    <page name="item_to_scrap" string="Item to Scrap">
+                        <field name="scrap_line_ids"
+                            readonly="1"
+                            nolabel="1">
+
+                            <list create="0"
+                                edit="0"
+                                delete="0">
+
+                                <field name="product_id"/>
+
+                                <field name="demand_qty"/>
+
+                                <field name="available_qty"/>
+
+                                <field name="scrapped_qty"/>
+
+                                <field name="availability_state"
+                                    widget="badge"
+                                    decoration-warning="availability_state == 'waiting'"
+                                    decoration-success="availability_state == 'available'"
+                                    decoration-danger="availability_state == 'insufficient'"
+                                />
+
+                                <field name="product_uom_id"/>
+
+                                <field name="move_id" optional="hide"/>
+
+                                <button
+                                    name="action_show_details"
+                                    type="object"
+                                    icon="fa-list"
+                                    invisible="not move_id"
+                                />
+
+                            </list>
+
+                        </field>
+                    </page>
+                </notebook>
+            </xpath>
+        </field>
+    </record>
+    
+    <record id="picking_view_inherit_stock_scrap" model="ir.ui.view">
+        <field name="name">picking.view.inherit.stock.scrap</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button
+                    name="action_generate_scrap"
+                    string="Generate Scrap"
+                    type="object"
+                    class="oe_highlight"
+                    invisible="not show_generate_scrap"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

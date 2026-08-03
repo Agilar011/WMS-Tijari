@@ -12,3 +12,6 @@ access_stock_location_acumatica_user,access.stock.location.acumatica.user,model_
 access_internal_transfer_order_user,access.internal.transfer.order.user,model_internal_transfer_order,base.group_user,1,1,1,1
 access_loginext_master_country_user,loginext.master.country,model_loginext_master_country,base.group_user,1,1,1,1
 access_loginext_master_state_user,loginext.master.state,model_loginext_master_state,base.group_user,1,1,1,1
+
+access_stock_scrap_user,stock.scrap,model_stock_scrap,base.group_user,1,1,1,1
+access_stock_scrap_line_user,stock.scrap.line,model_stock_scrap_line,base.group_user,1,1,1,1

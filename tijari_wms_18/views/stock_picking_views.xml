@@ -45,8 +45,8 @@
                 class="btn-primary"
                 invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel', 'return_shipment')"/>
                 
-                <button name="action_get_loginext"
-                string="Get Response"
+                <button name="action_fetch_actual_qty"
+                string="Get Shipment Data"
                 type="object"
                 class="btn-primary"
                 invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
@@ -61,7 +61,7 @@
                 <button
                     name="action_mark_as_done"
                     type="object"
-                    string="Confirm Shipment"
+                    string="Set to Done"
                     class="btn-primary"
                     invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state != 'return_shipment'"/>
 
