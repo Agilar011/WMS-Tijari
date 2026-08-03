@@ -124,6 +124,12 @@ function applyMoveLineScanResult(action, result) {
     if (Object.prototype.hasOwnProperty.call(result, "matching_loc_dest_id")) {
         setCellText(row, "matching_loc_dest_id", result.matching_loc_dest_id?.[1] || "");
     }
+    if (Object.prototype.hasOwnProperty.call(result, "location_dest_id")) {
+        setCellText(row, "location_dest_id", result.location_dest_id?.[1] || "");
+    }
+    if (Object.prototype.hasOwnProperty.call(result, "putaway_status")) {
+        setBadgeCell(row, "putaway_status", result.putaway_status_label || result.putaway_status, result.putaway_status);
+    }
 }
 
 async function focusMoveLineField(env, action) {

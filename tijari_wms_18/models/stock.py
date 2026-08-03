@@ -167,7 +167,9 @@ class StockPicking(models.Model):
         for picking in self:
             if picking.adt_is_document_only or picking.picking_type_id.is_document_only_api:
                 continue
-            if picking.picking_type_id.name not in ('Pick', 'Receipt'):
+            if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+                picking._check_putaway_status_requirements()
+            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal'):
                 print(f"Run validate all except pick and receipt")
                 # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
                 for move in picking.move_ids:
@@ -196,21 +198,26 @@ class StockPicking(models.Model):
 
         for rec in self:
             is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
+            is_receipt_putaway = rec.picking_type_id.name in ('Receipts', 'Receipt Internal')
             print(rec.picking_type_id.operation_category)
             if not is_document_only:
                 for line in rec.move_line_ids:
                     print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
-                    line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
-                    if not line.lot_name:
+                    if not is_receipt_putaway:
+                        line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
+                    if not is_receipt_putaway and not line.lot_name:
                         print(f"Missing lot: {line}")
                         raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
 
-                rec._check_validate_requirements()
+                if is_receipt_putaway:
+                    rec._check_putaway_status_requirements()
+                else:
+                    rec._check_validate_requirements()
                 operation_category = rec.picking_type_id.operation_category
                 print(f">>> Validating picking {rec.id} - Picking Type: {rec.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
 
                 # Hanya enforce untuk PUT dan DELIVERY
-                if operation_category in ['put', 'delivery']:
+                if not is_receipt_putaway and operation_category in ['put', 'delivery']:
                     for line in rec.move_line_ids:
                         # Jika belum dicek (invisible), tidak dianggap ok
                         print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
@@ -228,6 +235,8 @@ class StockPicking(models.Model):
             pickings = self.env["stock.picking"].search([])
             if rec.picking_type_id.code != "incoming":
                 continue
+
+            rec._check_putaway_quantity_vs_demand()
 
             storage_pickings = self.env["stock.picking"].search([
                 ("origin", "ilike", rec.origin or rec.name),
@@ -274,29 +283,13 @@ class StockPicking(models.Model):
                             "product_note": receipt_move.product_note,
                         })
 
-            for move in rec.move_ids:
-                if move.quantity > move.product_uom_qty:
-                    total_qty = sum(line.mapped("quantity"))
-                    raise UserError(
-                        _(
-                            "Product: %s\n"
-                            "Lot: %s\n"
-                            "Total QTY: %s\n"
-                            "Demand: %s\n\n"
-                            "Quantity exceeds demand."
-                        ) % (
-                            move.product_id.display_name,
-                            line.lot_id.name or "-",
-                            move.quantity,
-                            move.product_uom_qty,
-                        )
-                    )
-
         return res
 
     def _check_validate_requirements(self):
         self.ensure_one()
         _logger.info("Check Validate on = %s", self.id)
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+            return self._check_putaway_status_requirements()
 
         active_moves = self.move_ids.filtered(
             lambda move: move.state != "cancel"
@@ -352,6 +345,36 @@ class StockPicking(models.Model):
         if error_messages:
             raise UserError("\n\n".join(error_messages))
 
+    def _check_putaway_status_requirements(self):
+        self.ensure_one()
+        move_lines = self.move_line_ids.filtered(
+            lambda line: line.state != "cancel" and line.quantity > 0
+        )
+        unfinished_lines = move_lines.filtered(
+            lambda line: line.putaway_status != "finished"
+        )
+
+        if not unfinished_lines:
+            return
+
+        lines = "\n".join(
+            "- %s | Qty: %s | Status: %s"
+            % (
+                line.product_id.display_name,
+                line.quantity,
+                dict(line._fields["putaway_status"].selection).get(
+                    line.putaway_status,
+                    line.putaway_status or "-"
+                ),
+            )
+            for line in unfinished_lines
+        )
+        raise UserError(_(
+            "Validation blocked.\n\n"
+            "Semua move line putaway harus memiliki status 'Finished'.\n"
+            "Move line yang belum finish:\n%s"
+        ) % lines)
+
     def action_print_warehouse_receipt(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
@@ -383,8 +406,9 @@ class StockPicking(models.Model):
                 if not final_dest_location:
                     continue
 
-                move.location_dest_id = picking.adt_dest_location_id
-                move.adt_dest_location_id = picking.adt_dest_location_id
+                if not move.location_dest_id or not move.adt_dest_location_id:
+                    move.location_dest_id = picking.adt_dest_location_id
+                    move.adt_dest_location_id = picking.adt_dest_location_id
 
                 if move.move_line_ids:
                     move.move_line_ids.write({

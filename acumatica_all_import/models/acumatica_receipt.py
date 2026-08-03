@@ -429,7 +429,7 @@ class AcumaticaReceiptLine(models.Model):
                     'product_uom_qty': qty,
                     'product_uom': uom.id if uom else product.uom_id.id,
                     'location_id': picking.location_id.id if picking else False,
-                    'location_dest_id': picking.location_dest_id.id if picking else False,
+                    'location_dest_id': adt_dest_location,
                     'warehouse_id': warehouse.id if warehouse else False,
                     'description_picking': receipt_line.description or False,
                     'adt_dest_location_id': adt_dest_location,

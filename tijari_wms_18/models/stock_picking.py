@@ -11,6 +11,7 @@ import requests
 from collections import defaultdict
 from odoo import models, api, fields, _
 from odoo.exceptions import ValidationError, UserError
+from odoo.tools import float_compare
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 
 _logger = logging.getLogger(__name__)
@@ -217,7 +218,7 @@ class StockPicking(models.Model):
     ], string='Informasi TMS', help='Status shipment yang akan dikirimkan dari TMS.')
 
     status_ba = fields.Selection([
-        ('conform', 'Conform'),
+        ('conform', 'Confirmed'),
         ('discrepancy', 'Discrepancy'),],
     string='Status BA',
     )
@@ -290,9 +291,9 @@ class StockPicking(models.Model):
 
                 move_lines = move.move_line_ids
                 quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
-                move.write({
-                    'quantity': quantity,
-                })
+                # move.write({
+                #     'quantity': quantity,
+                # })
                 if move_lines:
                     if len(move_lines) > 1:
                         move_lines[:-1].write({
@@ -988,12 +989,16 @@ class StockPicking(models.Model):
 
     def button_validate(self):
         for picking in self:
+            if picking.adt_is_document_only or picking.picking_type_id.is_document_only_api:
+                continue
             # Pick harus diblokir sebelum validasi standar Odoo memproses
             # perpindahan stok apabila masih ada line yang belum Match.
             if picking.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
                 picking._check_validate_requirements()
+            if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+                picking._check_putaway_status_requirements()
 
-            if picking.picking_type_id.name not in ('Pick', 'Receipt'):
+            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal'):
                 print(f"Run validate all except pick and receipt")
                 # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
                 for move in picking.move_ids:
@@ -1017,22 +1022,30 @@ class StockPicking(models.Model):
         res = super().button_validate()
 
         for rec in self:
+            is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
+            if is_document_only:
+                continue
             print(rec.picking_type_id.name)
+            is_receipt_putaway = rec.picking_type_id.name in ('Receipts', 'Receipt Internal')
             for line in rec.move_line_ids:
                 print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
-                line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
-                if not line.lot_name:
+                if not is_receipt_putaway:
+                    line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
+                if not is_receipt_putaway and not line.lot_name:
                     print(f"Missing lot: {line}")
                     raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
                 
 
-            picking._check_validate_requirements()
-            operation_category = picking.picking_type_id.operation_category
-            print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
+            if is_receipt_putaway:
+                rec._check_putaway_status_requirements()
+            else:
+                rec._check_validate_requirements()
+            operation_category = rec.picking_type_id.operation_category
+            print(f">>> Validating picking {rec.id} - Picking Type: {rec.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
 
             # Hanya enforce untuk PUT dan DELIVERY
-            if operation_category in ['put', 'delivery']:
-                for line in picking.move_line_ids:
+            if not is_receipt_putaway and operation_category in ['put', 'delivery']:
+                for line in rec.move_line_ids:
                     # Jika belum dicek (invisible), tidak dianggap ok
                     print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
                     # line.matching = 'match'
@@ -1048,27 +1061,29 @@ class StockPicking(models.Model):
                         ))
                                         
             pickings = self.env["stock.picking"].search([])
-            if picking.picking_type_id.code != "incoming":
+            if rec.picking_type_id.code != "incoming":
                 continue
 
+            rec._check_putaway_quantity_vs_demand()
+
             storage_pickings = self.env["stock.picking"].search([
-                ("origin", "ilike", picking.origin or picking.name),
+                ("origin", "ilike", rec.origin or rec.name),
                 ("picking_type_id.code", "=", "internal"),
             ], limit=1)
-            total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
-            picking.write({
+            total_qty = sum(rec.move_ids.move_line_ids.mapped("quantity"))
+            rec.write({
                 'adt_total_qty': total_qty
             })
 
             storage_pickings.write({
-                "adt_dest_location_id": picking.adt_dest_location_id,
-                "adt_type": picking.adt_type,
-                "note" : picking.note,
+                "adt_dest_location_id": rec.adt_dest_location_id,
+                "adt_type": rec.adt_type,
+                "note" : rec.note,
             })
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
-                    receipt_move = picking.move_ids.filtered(
+                    receipt_move = rec.move_ids.filtered(
                         lambda m: m.product_id == storage_move.product_id
                     )[:1]
 
@@ -1077,29 +1092,48 @@ class StockPicking(models.Model):
                             "product_note": receipt_move.product_note,
                         })
 
-            for move in picking.move_ids:
-                if move.quantity > move.product_uom_qty:
-                    total_qty = sum(line.mapped("quantity"))
+        return res
+
+    def _check_putaway_quantity_vs_demand(self):
+        for picking in self:
+            if picking.picking_type_id.name not in ('Receipts', 'Receipt Internal'):
+                continue
+
+            has_discrepancy = False
+            for move in picking.move_ids.filtered(lambda item: item.state != 'cancel'):
+                demand_qty = move.product_uom_qty
+                putaway_qty = move.confirmation_quantity
+                rounding = move.product_uom.rounding if move.product_uom else 0.01
+                comparison = float_compare(
+                    putaway_qty,
+                    demand_qty,
+                    precision_rounding=rounding,
+                )
+                if comparison > 0:
                     raise UserError(
                         _(
                             "Product: %s\n"
                             "Lot: %s\n"
-                            "Total QTY: %s\n"
+                            "Stored Qty: %s\n"
                             "Demand: %s\n\n"
                             "Quantity exceeds demand."
                         ) % (
                             move.product_id.display_name,
-                            line.lot_id.name or "-",
-                            move.quantity,
-                            move.product_uom_qty,
+                            move.lot_ids.name or "-",
+                            putaway_qty,
+                            demand_qty,
                         )
                     )
+                if comparison < 0:
+                    has_discrepancy = True
 
-        return res
+            picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
 
     def _check_validate_requirements(self):
         self.ensure_one()
         _logger.info("Check Validate on = %s", self.id)
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+            return self._check_putaway_status_requirements()
 
         active_moves = self.move_ids.filtered(
             lambda move: move.state != "cancel"
@@ -1220,7 +1254,59 @@ class StockPicking(models.Model):
 
         self.shipment_information = "full_shipment" if all_match else "partial"
 
-# ================================================================================================
+        if not unfinished_lines:
+            return
+
+        lines = "\n".join(
+            "- %s | Qty: %s | Status: %s"
+            % (
+                line.product_id.display_name,
+                line.quantity,
+                dict(line._fields["putaway_status"].selection).get(
+                    line.putaway_status,
+                    line.putaway_status or "-"
+                ),
+            )
+            for line in unfinished_lines
+        )
+        raise UserError(_(
+            "Validation blocked.\n\n"
+            "Semua move line putaway harus memiliki status 'Finished'.\n"
+            "Move line yang belum finish:\n%s"
+        ) % lines)
+
+    def _check_putaway_status_requirements(self):
+        self.ensure_one()
+        move_lines = self.move_line_ids.filtered(
+            lambda line: line.state != "cancel" and line.quantity > 0
+        )
+        unfinished_lines = move_lines.filtered(
+            lambda line: line.putaway_status != "finished"
+        )
+
+        if not unfinished_lines:
+            return
+
+        lines = "\n".join(
+            "- %s | Qty: %s | Status: %s"
+            % (
+                line.product_id.display_name,
+                line.quantity,
+                dict(line._fields["putaway_status"].selection).get(
+                    line.putaway_status,
+                    line.putaway_status or "-"
+                ),
+            )
+            for line in unfinished_lines
+        )
+        raise UserError(_(
+            "Validation blocked.\n\n"
+            "Semua move line putaway harus memiliki status 'Finished'.\n"
+            "Move line yang belum finish:\n%s"
+        ) % lines)
+
+
+    # ================================================================================================
 # Temp Storage function create move line qr code        
 # ================================================================================================
 
