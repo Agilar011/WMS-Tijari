@@ -71,6 +71,7 @@
 
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
                     <field name="owner_id" column_invisible="1"/>
+                    <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
@@ -86,7 +87,6 @@
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='quantity']" position="replace">
                 <field name="quantity" string="Picked Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                 <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
                 <field name="confirmation_quantity" string="Stored Qty" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
             </xpath>
 
@@ -160,8 +160,18 @@
                         <field name="lot_name" readonly="1" force_save="1" optional="hide"/>
                         <field name="result_package_id" readonly="1" force_save="1" string="Packages"/>
 
-                        <field name="quantity" string="Qty In Pack"/>
-                        <field name="product_uom_id" string="Uom"/>
+                        <field name="quantity" string="Qty In Pack" readonly="picker_status == 'finished'"/>
+                        <field name="product_uom_id" string="Uom" readonly="picker_status == 'finished'"/>
+                        <field name="picker_status" string="Picker Status"
+                                decoration-success="picker_status == 'finished'"
+                                decoration-danger="picker_status == 'unfinished'"
+                                widget="badge"/>
+                        <button name="action_mark_picker_finished"
+                                type="object"
+                                icon="fa-check"
+                                class="btn-success"
+                                title="Finish Picker"
+                                invisible="picker_status == 'finished'"/>
 
                     </list>
                 </field>
