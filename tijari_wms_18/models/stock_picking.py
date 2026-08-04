@@ -1272,24 +1272,6 @@ class StockPicking(models.Model):
 
         self.shipment_information = "full_shipment" if all_match else "partial"
 
-        lines = "\n".join(
-            "- %s | Qty: %s | Status: %s"
-            % (
-                line.product_id.display_name,
-                line.quantity,
-                dict(line._fields["putaway_status"].selection).get(
-                    line.putaway_status,
-                    line.putaway_status or "-"
-                ),
-            )
-            for line in unfinished_lines
-        )
-        raise UserError(_(
-            "Validation blocked.\n\n"
-            "Semua move line putaway harus memiliki status 'Finished'.\n"
-            "Move line yang belum finish:\n%s"
-        ) % lines)
-
     def _check_putaway_status_requirements(self):
         self.ensure_one()
         move_lines = self.move_line_ids.filtered(
