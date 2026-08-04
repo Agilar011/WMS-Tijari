@@ -75,10 +75,10 @@
                     </group>
                 </sheet>
                 <footer>
-                    <button name="action_fetch_data" string="1. Tarik Data" type="object" class="btn-primary"/>
-                    <button name="action_import_pending_batch" string="2. Import Pending per Batch" type="object" class="btn-secondary" invisible="state == 'draft'"/>
+                    <button name="action_fetch_data" string="Get Data" type="object" class="btn-primary"/>
+                    <button name="action_import_pending_batch" string="Import &amp; Generate Data" type="object" class="btn-secondary" invisible="state == 'draft'"/>
                     <!-- <button name="action_fetch_and_import_batch" string="Tarik + Import Batch" type="object" class="btn-primary"/> -->
-                    <button name="action_view_staging" string="Lihat Staging" type="object" invisible="state == 'draft'"/>
+                    <button name="action_view_staging" string="Import Data" type="object" invisible="state == 'draft'"/>
                     <button name="action_reset" string="Reset Wizard" type="object"/>
                     <button string="Tutup" special="cancel"/>
                 </footer>

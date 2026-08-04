@@ -380,25 +380,25 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         self.config_id = config if config else False
 
     import_category = fields.Selection([
-        ('transaction', 'Transaction'),
+        ('transaction', 'Master Transaction'),
         ('master', 'Master Data'),
     ], string='Import Category', required=True, default='transaction')
 
     import_type = fields.Selection(
         selection=_get_import_type_selection,
-        string='Data to Import',
+        string='Data',
         required=True,
         default='po_receipt',
     )
     import_type_transaction = fields.Selection(
         selection=_get_import_type_selection_transaction,
-        string='Data to Import',
+        string='Data',
         required=True,
         default='po_receipt',
     )
     import_type_master = fields.Selection(
         selection=_get_import_type_selection_master,
-        string='Data to Import',
+        string='Data',
         required=True,
         default='customer',
     )
