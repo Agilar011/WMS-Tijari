@@ -1272,9 +1272,6 @@ class StockPicking(models.Model):
 
         self.shipment_information = "full_shipment" if all_match else "partial"
 
-        if not unfinished_lines:
-            return
-
         lines = "\n".join(
             "- %s | Qty: %s | Status: %s"
             % (
