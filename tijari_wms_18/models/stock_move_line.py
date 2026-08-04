@@ -58,6 +58,15 @@ class StockMoveLine(models.Model):
         default='unfinished',
     )
 
+    picker_status = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished')
+        ],
+        string='Picker Status',
+        default='unfinished',
+    )
+
     operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
     allocation_storage = fields.Many2one(
@@ -904,6 +913,12 @@ class StockMoveLine(models.Model):
             raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
         self._check_putaway_stored_qty_limit()
         self.write({'putaway_status': 'finished'})
+        return True
+
+    def action_mark_picker_finished(self):
+        if self.quantity == 0:
+            raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+        self.write({'picker_status': 'finished'})
         return True
 
 

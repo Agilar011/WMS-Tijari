@@ -229,12 +229,21 @@ class StockPicking(models.Model):
         ('internal', 'Internal'),
     ], string='Type transaksi', readonly=True)
 
+    def _get_putaway_base_move_lines(self):
+        self.ensure_one()
+
+        return self.move_line_ids.filtered(
+                lambda line: (
+                    line.quantity > 0
+                    and (line.lot_id or line.lot_name)
+                    and line.picker_status == 'finished'
+                )
+            )
+
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
-        move_lines = self.move_line_ids.filtered(
-                lambda line: line.quantity > 0 and (line.lot_id or line.lot_name)
-            )
+        move_lines = self._get_putaway_base_move_lines()
         if self.putaway_product_id:
             move_lines = move_lines.filtered(
                 lambda line: line.product_id == self.putaway_product_id and line.quantity > 0
@@ -249,16 +258,23 @@ class StockPicking(models.Model):
                 picking.wms_state = picking.state
             
 
-    @api.depends('move_ids.product_id')
+    @api.depends(
+        'move_line_ids',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+        'move_line_ids.quantity',
+        'move_line_ids.picker_status',
+    )
     def _compute_allowed_putaway_product_ids(self):
         for picking in self:
-            picking.allowed_putaway_product_ids = picking.move_ids.product_id
+            picking.allowed_putaway_product_ids = picking._get_putaway_base_move_lines().product_id
 
     @api.depends(
         'putaway_product_id',
         'move_line_ids',
         'move_line_ids.product_id',
         'move_line_ids.lot_id',
+        'move_line_ids.picker_status',
     )
     def _compute_putaway_values(self):
         for picking in self:
@@ -997,6 +1013,7 @@ class StockPicking(models.Model):
                 picking._check_validate_requirements()
             if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
                 picking._check_putaway_status_requirements()
+                picking._check_picker_status_requirements()
 
             if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal'):
                 print(f"Run validate all except pick and receipt")
@@ -1038,6 +1055,7 @@ class StockPicking(models.Model):
 
             if is_receipt_putaway:
                 rec._check_putaway_status_requirements()
+                rec._check_picker_status_requirements()
             else:
                 rec._check_validate_requirements()
             operation_category = rec.picking_type_id.operation_category
@@ -1133,7 +1151,7 @@ class StockPicking(models.Model):
         self.ensure_one()
         _logger.info("Check Validate on = %s", self.id)
         if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
-            return self._check_putaway_status_requirements()
+            return self._check_putaway_status_requirements() and self._check_picker_status_requirements()
 
         active_moves = self.move_ids.filtered(
             lambda move: move.state != "cancel"
@@ -1302,6 +1320,36 @@ class StockPicking(models.Model):
         raise UserError(_(
             "Validation blocked.\n\n"
             "Semua move line putaway harus memiliki status 'Finished'.\n"
+            "Move line yang belum finish:\n%s"
+        ) % lines)
+
+    def _check_picker_status_requirements(self):
+        self.ensure_one()
+        move_lines = self.move_line_ids.filtered(
+            lambda line: line.state != "cancel" and line.quantity > 0
+        )
+        unfinished_lines = move_lines.filtered(
+            lambda line: line.picker_status != "finished"
+        )
+
+        if not unfinished_lines:
+            return
+
+        lines = "\n".join(
+            "- %s | Qty: %s | Status: %s"
+            % (
+                line.product_id.display_name,
+                line.quantity,
+                dict(line._fields["picker_status"].selection).get(
+                    line.picker_status,
+                    line.picker_status or "-"
+                ),
+            )
+            for line in unfinished_lines
+        )
+        raise UserError(_(
+            "Validation blocked.\n\n"
+            "Semua move line picker harus memiliki status 'Finished'.\n"
             "Move line yang belum finish:\n%s"
         ) % lines)
 
