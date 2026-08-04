@@ -162,7 +162,7 @@
 
                         <field name="quantity" string="Qty In Pack" readonly="picker_status == 'finished'"/>
                         <field name="product_uom_id" string="Uom" readonly="picker_status == 'finished'"/>
-                        <field name="picker_status" string="Picker Status"
+                        <field name="picker_status" string="Status"
                                 decoration-success="picker_status == 'finished'"
                                 decoration-danger="picker_status == 'unfinished'"
                                 widget="badge"/>
