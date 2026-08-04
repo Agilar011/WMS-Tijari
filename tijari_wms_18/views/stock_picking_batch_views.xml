@@ -59,10 +59,11 @@
                             <field name="product_id" readonly="1"/>
                             <field name="location_dest_id"
                                 string="Store To"
+                                readonly="putaway_status == 'finished'"
                                 context="{'show_location_short_name': True}"
                                 domain="[('id', 'child_of', adt_dest_location_id)]"/>
                             <field name="quantity" string="Picked Qty" readonly="1"/>
-                            <field name="confirmation_quantity" string="Stored Qty" force_save="1"/>
+                            <field name="confirmation_quantity" string="Stored Qty" readonly="putaway_status == 'finished'" force_save="1"/>
                             <field name="product_uom_id" readonly="1" string="UoM"/>
                             <field name="adt_dest_location_id" column_invisible="1"/>
                             <field name="allowed_matching_lot_ids" column_invisible="1"/>
@@ -82,6 +83,13 @@
                                 class="btn-success"
                                 title="Finish Putaway"
                                 invisible="putaway_status == 'finished'"/>
+
+                            <button name="action_mark_putaway_unfinished"
+                                type="object"
+                                icon="fa-undo"
+                                class="btn-danger"
+                                title="Undo Putaway"
+                                invisible="putaway_status == 'unfinished'"/>
                         </list>
                     </field>
                 </page>
@@ -121,7 +129,8 @@
                     <field name="batch_origin" string="No. Transaksi"/>
                     <field name="product_id" required="1" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0"/>
                     <field name="product_uom_qty" string="Demand" readonly="not is_initial_demand_editable"/>
-                    <field name="quantity" string="Qty" readonly="not is_quantity_done_editable"/>
+                    <field name="quantity" string="Picked Qty" readonly="not is_quantity_done_editable"/>
+                    <field name="confirmation_quantity" string="Stored Qty"/>
                     <field name="product_uom" readonly="state != 'draft' and id" options="{'no_open': True, 'no_create': True}" string="UoM" groups="uom.group_uom"/>
                     <field name="lot_ids" widget="many2many_tags" string="Lot/Serial Number" groups="stock.group_production_lot"/>
                     <field name="difference_quantity" string="Different Qty" readonly="1" decoration-danger="difference_quantity &gt; 0"/>

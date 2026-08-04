@@ -864,13 +864,17 @@ class StockMoveLine(models.Model):
             vals = {field_name: scanned_code}
             if field_name == 'confirmation_lot_code':
                 lot = line._find_lot_by_scan_code(scanned_code)
-                vals['matching_lot_id'] = lot.id if lot else False
+                if not lot:
+                    raise ValidationError(_("Barcode tidak terdaftar."))
+                vals['matching_lot_id'] = lot.id
             elif field_name == 'confirmation_location_code':
                 location = line._find_loc_by_scan_code(scanned_code)
+                if not location:
+                    raise ValidationError(_("Barcode tidak terdaftar."))
                 if picking_type_name in ['Receipts', 'Receipt Internal']:
-                    vals['location_dest_id'] = location.id if location else False
+                    vals['location_dest_id'] = location.id
                 else:
-                    vals['matching_loc_dest_id'] = location.id if location else False
+                    vals['matching_loc_dest_id'] = location.id
 
             line.write(vals)
 
@@ -914,6 +918,11 @@ class StockMoveLine(models.Model):
         self._check_putaway_stored_qty_limit()
         self.write({'putaway_status': 'finished'})
         return True
+
+    def action_mark_putaway_unfinished(self):
+        self.write({'putaway_status': 'unfinished'})
+        return True
+
 
     def action_mark_picker_finished(self):
         if self.quantity == 0:
