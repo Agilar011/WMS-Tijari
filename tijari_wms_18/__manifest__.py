@@ -55,6 +55,7 @@
             'tijari_wms_18/static/src/scss/list_table_auto_layout.scss',
             'tijari_wms_18/static/src/js/list_table_auto_layout.js',
             'tijari_wms_18/static/src/js/focus_move_line_field.js',
+            'tijari_wms_18/static/src/js/auto_save_view_button.js',
             'tijari_wms_18/static/src/js/generate_lot_button.js',
             'tijari_wms_18/static/src/xml/generate_lot_button.xml',
             'tijari_wms_18/static/src/xml/auto_input_code.xml',

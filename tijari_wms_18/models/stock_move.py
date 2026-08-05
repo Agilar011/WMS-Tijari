@@ -528,7 +528,7 @@ class StockMove(models.Model):
         base_dest_location = (
             picking.adt_dest_location_id
             if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Direct Receipt']
-            else self.location_dest_id
+            else self.adt_dest_location_id
         )
 
         if not base_dest_location:

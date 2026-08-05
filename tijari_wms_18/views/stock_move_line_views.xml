@@ -143,6 +143,19 @@
                 <field name="adt_dest_location_id" optional="hide" />
             </xpath>
 
+            <xpath expr="//field[@name='quantity']" position="replace">
+                <field name="confirmation_quantity"
+                    string="Quantity"
+                    readonly="state in ('done', 'cancel') and is_locked"
+                    force_save="1"
+                    column_invisible="context.get('picking_type_name') not in ['Receipts', 'Receipt Internal']"/>
+                <field name="quantity"
+                    string="Quantity"
+                    readonly="state in ('done', 'cancel') and is_locked"
+                    force_save="1"
+                    column_invisible="context.get('picking_type_name') in ['Receipts', 'Receipt Internal']"/>
+            </xpath>
+
         </field>
     </record>
 
