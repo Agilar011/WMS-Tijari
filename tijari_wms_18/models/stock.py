@@ -406,7 +406,7 @@ class StockPicking(models.Model):
                 if not final_dest_location:
                     continue
 
-                if not move.location_dest_id or not move.adt_dest_location_id:
+                if not move.adt_dest_location_id:
                     move.location_dest_id = picking.adt_dest_location_id
                     move.adt_dest_location_id = picking.adt_dest_location_id
 
@@ -777,15 +777,34 @@ class StockMoveLine(models.Model):
     @api.onchange('product_id')
     def _onchange_product_copy_previous_lot(self):
 
-        if not self.move_id:
-            return
+        for line in self:
+            if not line.move_id:
+                continue
 
-        last_line = self.move_id.move_line_ids.filtered(
-            lambda l: l.lot_id
-        )
+            previous_lines = line.move_id.move_line_ids.filtered(
+                lambda l: l != line
+            )
+            last_lot_line = previous_lines.filtered(lambda l: l.lot_id)
 
-        if last_line:
-            self.lot_id = last_line[-1].lot_id
+            if last_lot_line:
+                line.lot_id = last_lot_line[-1].lot_id
+
+            if not line.env.context.get('copy_previous_picker_location'):
+                continue
+
+            last_location_line = previous_lines.filtered(
+                lambda l: l.location_id or l.location_dest_id or l.source_location_id
+            )
+            if not last_location_line:
+                continue
+
+            previous_line = last_location_line[-1]
+            if previous_line.location_id:
+                line.location_id = previous_line.location_id
+            if previous_line.location_dest_id:
+                line.location_dest_id = previous_line.location_dest_id
+            if previous_line.source_location_id:
+                line.source_location_id = previous_line.source_location_id
                 
     @api.onchange('quant_id')
     def _onchange_move_line_ids(self):

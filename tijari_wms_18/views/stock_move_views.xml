@@ -141,7 +141,8 @@
                         'default_location_id': location_id, 
                         'default_location_dest_id': location_dest_id,
                         'default_company_id': company_id, 
-                        'active_picking_id': picking_id
+                        'active_picking_id': picking_id,
+                        'copy_previous_picker_location': True
                     }"
                     widget="sml_x2_many">
                     <list editable="bottom">
@@ -169,7 +170,7 @@
                         <button name="action_mark_picker_finished"
                                 type="object"
                                 icon="fa-check"
-                                class="btn-success"
+                                class="btn-success o_wms_auto_save_before_action"
                                 title="Finish Picker"
                                 invisible="picker_status == 'finished'"/>
 

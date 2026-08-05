@@ -93,6 +93,12 @@ class StockPicking(models.Model):
             self._set_document_only_picking_type()
         return result
 
+    def action_detailed_operations(self):
+        action = super().action_detailed_operations()
+        action.setdefault('context', {})
+        action['context']['picking_type_name'] = self.picking_type_name
+        return action
+
     @staticmethod
     def _document_only_value(value):
         if isinstance(value, bool):
