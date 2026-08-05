@@ -8,15 +8,15 @@
 
             <!-- First row of detailed stock_move_line outbound - pick -->
             <xpath expr="//field[@name='quant_id']" position="before">
-                <field name="id" string="Line ID"  column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
+                <!-- <field name="id" string="Line ID" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/> -->
                 <!-- <field name="adt_owner_id" string="Owner" column_invisible="0"/> -->
                 <!-- <field name="adt_dest_location" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/> -->
-                <field name="adt_dest_location_id" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
+                <field name="product_lot_id" string="Lot" column_invisible="parent.picking_type_name not in ['Pack', 'Pick', 'Pick Internal', 'Pick Components']"/>
+                <!-- <field name="adt_dest_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/> -->
                 <!-- <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/> -->
                 <!-- <field name="quant_id" optional="hide"/> -->
                 <field name="source_location_id" context="{'show_location_short_name': True}" string="Pick From" column_invisible="parent.picking_type_name not in ['Pack','Pick', 'Pick Internal', 'Pick Components']" force_save="1"/>
                 <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
-                <field name="product_lot_id" string="Lot" column_invisible="parent.picking_type_name not in ['Pack', 'Pick', 'Pick Internal', 'Pick Components']"/>
                 <field name="selected_quant_id" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
             </xpath>
 
@@ -25,11 +25,9 @@
                 <field name="quant_id" column_invisible="parent.picking_type_name in ['Pack', 'Pick', 'Receipts', 'Receipt Internal', 'Pick Components']"/>
             </xpath>
 
-            <!-- <xpath expr="//field[@name='result_package_id']" position="attributes"> -->
-                <!-- <attribute name="column_invisible"> -->
-                    <!-- parent.picking_type_name in ['Pick', 'Receipts', 'Receipt Internal'] -->
-                <!-- </attribute> -->
-            <!-- </xpath> -->
+            <!-- <xpath expr="//field[@name='result_package_id']" position="replace">
+                <attribute name="optional">hide</attribute>
+            </xpath> -->
             
            <xpath expr="//field[last()]" position="after">
 
@@ -38,7 +36,7 @@
                 <field name="matching_loc_dest_id" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']" />
                 <field name="matching" column_invisible="1" force_save="1" />
 
-                <field name="second_matching" string="Matching Status"
+                <field name="second_matching"
                     decoration-success="second_matching == 'Match'"
                     decoration-danger="second_matching == 'Not Match'" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']" readonly="1" force_save="1"/>
 

@@ -11,10 +11,10 @@
             <xpath expr="//widget[@name='import_lots']" position="before">
                 <div>
                     <field name="picking_type_name" invisible="1"/>
-                    <!-- <div invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">
+                    <div invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">
                         <field name="unfiltered_dest" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'"/>
                         <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">Pengambilan Item berdasarkan lokasi mapping</span>
-                    </div> -->
+                    </div>
                         <button name="action_validate_lot_pick"
                             type="object"
                             string="Validate Lot"
@@ -85,8 +85,8 @@
             </xpath>
 
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='quantity']" position="replace">
-                <field name="quantity" string="Picked Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="quantity" string="Picked Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                 <field name="confirmation_quantity" string="Stored Qty" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
             </xpath>
 
