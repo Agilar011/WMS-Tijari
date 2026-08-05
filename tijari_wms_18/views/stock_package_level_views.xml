@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="view_package_level_tree_inherit_wms" model="ir.ui.view">
+        <field name="name">stock.package.level.tree.inherit.wms</field>
+        <field name="model">stock.package_level</field>
+        <field name="inherit_id" ref="stock.package_level_tree_view_picking"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='is_done']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
+
+            <field name='is_done' position="after">
+                <field name="status"
+                    decoration-success="status == 'finished'"
+                    decoration-danger="status == 'unfinished'" widget="badge" />
+                <button name="action_mark_finished"
+                    type="object"
+                    icon="fa-check"
+                    class="btn-success"
+                    title="Finish Package"
+                    invisible="status == 'finished'"/>
+
+                <button name="action_mark_unfinished"
+                    type="object"
+                    icon="fa-undo"
+                    class="btn-danger"
+                    title="Undo Package"
+                    invisible="status != 'finished'"/>
+            </field>
+
+        </field>
+    </record>
+
+</odoo>

@@ -83,6 +83,53 @@ class StockPicking(models.Model):
         readonly=False,
     )
 
+    available_package_ids = fields.Many2many(
+        "stock.quant.package",
+        compute="_compute_available_package_ids",
+        string="Available Packages",
+    )
+
+    scanned_package_id = fields.Many2one(
+        "stock.quant.package",
+        string="Package Number",
+    )
+
+    filtered_package_level_ids = fields.One2many(
+        "stock.package_level",
+        compute="_compute_filtered_package_level_ids",
+    )
+
+    @api.depends("package_level_ids")
+    def _compute_available_package_ids(self):
+        for picking in self:
+            picking.available_package_ids = (
+                picking.package_level_ids.mapped("package_id")
+            )
+
+    @api.depends(
+        "package_level_ids",
+        "scanned_package_id",
+    )
+    def _compute_filtered_package_level_ids(self):
+
+        for picking in self:
+
+            if not picking.scanned_package_id:
+
+                picking.filtered_package_level_ids = (
+                    picking.package_level_ids
+                )
+
+            else:
+
+                picking.filtered_package_level_ids = (
+                    picking.package_level_ids.filtered(
+                        lambda p:
+                        p.package_id
+                        == picking.scanned_package_id
+                    )
+                )
+
     def write(self, vals):
         result = super().write(vals)
         if 'adt_is_document_only' not in vals and ({'origin', 'adt_type'} & set(vals)):
@@ -1017,6 +1064,7 @@ class StockPicking(models.Model):
             # perpindahan stok apabila masih ada line yang belum Match.
             if picking.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
                 picking._check_validate_requirements()
+                picking._check_pick_quantity_vs_demand()
             if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
                 picking._check_putaway_status_requirements()
                 picking._check_picker_status_requirements()
@@ -1118,6 +1166,38 @@ class StockPicking(models.Model):
 
         return res
 
+    def _check_pick_quantity_vs_demand(self):
+        for picking in self:
+            has_discrepancy = False
+            for move in picking.move_ids.filtered(lambda item: item.state != 'cancel'):
+                demand_qty = move.product_uom_qty
+                picked_qty = move.quantity
+                rounding = move.product_uom.rounding if move.product_uom else 0.01
+                comparison = float_compare(
+                    picked_qty,
+                    demand_qty,
+                    precision_rounding=rounding,
+                )
+                if comparison > 0:
+                    raise UserError(
+                        _(
+                            "Product: %s\n"
+                            "Lot: %s\n"
+                            "Stored Qty: %s\n"
+                            "Demand: %s\n\n"
+                            "Quantity exceeds demand."
+                        ) % (
+                            move.product_id.display_name,
+                            move.lot_ids.name or "-",
+                            picked_qty,
+                            demand_qty,
+                        )
+                    )
+                if comparison < 0:
+                    has_discrepancy = True
+
+            picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
+    
     def _check_putaway_quantity_vs_demand(self):
         for picking in self:
             if picking.picking_type_id.name not in ('Receipts', 'Receipt Internal'):

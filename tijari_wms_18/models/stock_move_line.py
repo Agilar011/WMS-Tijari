@@ -101,13 +101,13 @@ class StockMoveLine(models.Model):
     )
     matching_lot_id = fields.Many2one(
         comodel_name="stock.lot",
-        string="Matching Lot",
+        string="Confirm Lot",
         domain="[('id', 'in', allowed_matching_lot_ids)]",
         store=True
     )
     matching_loc_dest_id = fields.Many2one(
         comodel_name="stock.location",
-        string="Matching Location Dest",
+        string="Confirm Location",
         domain="[('id', 'child_of', adt_dest_location_id)]",
         store=True
     )
@@ -168,7 +168,7 @@ class StockMoveLine(models.Model):
         compute="_compute_allowed_lot_ids",
     )
 
-    second_matching = fields.Char(string="second_matching")
+    second_matching = fields.Char(string="Status")
 
     adt_owner_id = fields.Many2one(
         "res.partner",
@@ -1011,8 +1011,9 @@ class StockMoveLine(models.Model):
     def _update_move_picked(self):
         print(f"_update_move_picked: {self}")
         for move in self.mapped('move_id'):
-            if move.raw_material_production_id != False:
-                continue
+            # Buat apaan ya ini, mon maap
+            # if move.raw_material_production_id != False:
+            #     continue
             move.picked = (
                 move.move_line_ids
                 and all(line.matching == 'match' for line in move.move_line_ids)

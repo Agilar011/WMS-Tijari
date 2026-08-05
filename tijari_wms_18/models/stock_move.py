@@ -336,7 +336,7 @@ class StockMove(models.Model):
             for item in move.move_line_ids:
                 if move.unfiltered_dest:
                     item.parent_location_id = item.adt_dest_location_id.id
-                    item.source_location_id = False
+                    # item.source_location_id = False
                     item.unfiltered_dest = value
 
                     _logger.info("parent_location_id: %s", item.parent_location_id.name)
@@ -345,7 +345,7 @@ class StockMove(models.Model):
 
                 else:
                     item.parent_location_id = move.picking_id.picking_type_id.default_location_src_id.id
-                    item.source_location_id = False
+                    # item.source_location_id = False
                     item.unfiltered_dest = value
 
                     _logger.info("parent_location_id: %s", item.parent_location_id.name)
