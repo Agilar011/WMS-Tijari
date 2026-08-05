@@ -944,6 +944,8 @@ class StockMoveLine(models.Model):
 
 
     def action_mark_picker_finished(self):
+        if not self.lot_id:
+            raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
         if self.quantity == 0:
             raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
         self.write({'picker_status': 'finished'})
