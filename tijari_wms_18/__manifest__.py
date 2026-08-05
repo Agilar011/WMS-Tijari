@@ -40,6 +40,7 @@
         'views/stock_picking_type_views.xml',
         'views/stock_picking_views.xml',
         'views/stock_picking_batch_views.xml',
+        'views/stock_package_level_views.xml',
         'views/stock_report_aging_views.xml',
         'views/stock_report_inherit_inventory.xml',
         'views/stock_report_velocity_views.xml',
