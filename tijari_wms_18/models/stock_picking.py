@@ -93,6 +93,7 @@ class StockPicking(models.Model):
         "stock.quant.package",
         string="Package Number",
     )
+    scan_package_button = fields.Boolean(string="Scan Package")
 
     filtered_package_level_ids = fields.One2many(
         "stock.package_level",
@@ -706,6 +707,17 @@ class StockPicking(models.Model):
             },
         }
 
+    def action_prepare_scan_package(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'adt_scan_qr_to_picking_package',
+            'params': {
+                'picking_id': self.id,
+                'title': 'Scan Package QR Code',
+            },
+        }
+
     def _find_product_by_scan_code(self, scan_code):
         Product = self.env['product.product']
 
@@ -728,6 +740,25 @@ class StockPicking(models.Model):
         return {
             'product_id': product.id,
             'display_name': product.display_name,
+        }
+
+    def action_apply_scanned_package(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        package = self.available_package_ids.filtered(
+            lambda available_package: available_package.name == scanned_code
+        )[:1]
+
+        if not package:
+            raise ValidationError(
+                "Package tidak ditemukan untuk kode scan: %s" % scanned_code
+            )
+
+        self.write({"scanned_package_id": package.id})
+
+        return {
+            "package_id": package.id,
+            "display_name": package.display_name,
         }
     
     def action_mark_as_done(self):

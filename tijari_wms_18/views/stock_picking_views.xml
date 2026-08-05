@@ -100,6 +100,10 @@
 
                     <group>
                         <group>
+                            <field name="scan_package_button"
+                                widget="adt_scan_package_button"
+                                nolabel="1"
+                                invisible="picking_type_name != 'Delivery Orders'"/>
                             <field name="available_package_ids" invisible='1' />
                             <field name="scanned_package_id"
                                 placeholder="Scan a QR code or select a package..."

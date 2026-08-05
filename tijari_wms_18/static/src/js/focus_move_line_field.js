@@ -635,6 +635,28 @@ async function scanQrToPickingProduct(env, action) {
     }
 }
 
+async function scanQrToPickingPackage(env, action) {
+    const params = action.params || {};
+    const resModel = params.res_model || "stock.picking";
+    const resId = params.res_id || params.picking_id;
+
+    if (!resId) {
+        return;
+    }
+
+    try {
+        const scannedCode = await scanQrFromCamera(params.title);
+        await env.services.orm.call(
+            resModel,
+            "action_apply_scanned_package",
+            [[resId], scannedCode]
+        );
+    } catch (error) {
+        notifyScannerError(env, error);
+        return;
+    }
+}
+
 class MoveLineScanButton extends Component {
     static props = { ...standardFieldProps };
 
@@ -730,9 +752,45 @@ class ProductScanButton extends Component {
     }
 }
 
+class PackageScanButton extends Component {
+    static props = { ...standardFieldProps };
+    static template = "tijari.PackageScanButton";
+
+    setup() {
+        this.orm = useService("orm");
+        this.notification = useService("notification");
+    }
+
+    async onClick(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        const { resId, resModel } = this.props.record;
+        if (!resId || !resModel) {
+            return;
+        }
+
+        let scannedCode;
+        try {
+            scannedCode = await scanQrFromCamera("Scan Package QR Code");
+        } catch (error) {
+            notifyScannerError(this.notification, error);
+            return;
+        }
+
+        await this.orm.call(
+            resModel,
+            "action_apply_scanned_package",
+            [[resId], scannedCode]
+        );
+        await this.props.record.load();
+    }
+}
+
 registry.category("actions").add("adt_focus_move_line_field", focusMoveLineField);
 registry.category("actions").add("adt_scan_qr_to_move_line_field", scanQrToMoveLineField);
 registry.category("actions").add("adt_scan_qr_to_picking_product", scanQrToPickingProduct);
+registry.category("actions").add("adt_scan_qr_to_picking_package", scanQrToPickingPackage);
 registry.category("fields").add("adt_scan_lot_button", {
     component: MoveLineScanLotButton,
 });
@@ -741,5 +799,8 @@ registry.category("fields").add("adt_scan_location_button", {
 });
 registry.category("fields").add("adt_scan_product_button", {
     component: ProductScanButton,
+});
+registry.category("fields").add("adt_scan_package_button", {
+    component: PackageScanButton,
 });
 // registry.category("actions").add("adt_scan_qr_to_move_line_field", focusMoveLineField);
