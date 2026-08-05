@@ -11,10 +11,10 @@
             <xpath expr="//widget[@name='import_lots']" position="before">
                 <div>
                     <field name="picking_type_name" invisible="1"/>
-                    <div invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">
+                    <!-- <div invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">
                         <field name="unfiltered_dest" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'"/>
                         <span style="margin-right: 4px;" invisible="picking_type_name != 'Pick' and transaction_type != 'outbound'">Pengambilan Item berdasarkan lokasi mapping</span>
-                    </div>
+                    </div> -->
                         <button name="action_validate_lot_pick"
                             type="object"
                             string="Validate Lot"
