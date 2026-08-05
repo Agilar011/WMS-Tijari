@@ -70,7 +70,8 @@
             </xpath>
 
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
-                    <field name="owner_id" column_invisible="1"/>
+                    <field name="adt_type" column_invisible="1"/>
+                    <field name="owner_id" column_invisible="parent.adt_type != 'Toko Pegang DO'"/>
                     <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
                     <button name="action_print_lot_number_line"
                         type="object"
@@ -110,6 +111,8 @@
         <field name="model">stock.move</field>
         <field name="arch" type="xml">
             <form>
+                <field name="adt_type" invisible="1"/>
+                <field name="owner_id" invisible="1"/>
                 <div class="grid-container">
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                         
@@ -155,7 +158,9 @@
                         <field name="tracking" column_invisible="1"/>
                         <field name="state" column_invisible="1"/>
                         <field name="is_locked" column_invisible="1"/>
-                        <field name="quant_id" column_invisible="1"/>
+                        <field name="temp_quant_ids" column_invisible="1"/>
+                        <field name="temp_lot_ids" column_invisible="1"/>
+                        <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1"/>
                         <field name="lot_id" string="Lot/Serial Number" readonly="1" force_save="1" groups="stock.group_production_lot"/>
                         <field name="lot_name" readonly="1" force_save="1" optional="hide"/>

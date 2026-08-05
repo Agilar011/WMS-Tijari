@@ -288,6 +288,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
             'actual_amount': self._val(item, 'ControlAmount'),
             'total_amount': self._val(item, 'TotalAmount'),
+            'customer_id': self._val(item, 'CustomerID'),
         }
 
 
@@ -692,10 +693,14 @@ class ImportInventoryIssueWizard(models.TransientModel):
             ('code', '=', warehouse_code)
         ], limit=1)
 
+        picking_code = 'internal'
+        if (self._val(header, 'TransType') or '').strip().casefold() == 'toko pegang do':
+            picking_code = 'outgoing'
+
         if location and location.odoo_building_id:
             type = PickingType.search([
                 ('warehouse_id', '=', location.odoo_building_id.id),
-                ('code', '=', 'internal'),
+                ('code', '=', picking_code),
                 ('is_default_api', '=', True)
             ], limit=1)
 

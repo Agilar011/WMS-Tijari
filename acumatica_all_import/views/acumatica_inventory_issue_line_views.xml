@@ -71,8 +71,10 @@
                     <group string="Header">
                         <group>
                             <field name="reference_nbr" readonly="1"/>
+                            <field name="picking_type_id"/>
                             <field name="scheduled_date" readonly="1"/>
                             <field name="status" readonly="1"/>
+                            <field name="customer_id"/>
                             <field name="trans_type" readonly="1"/>
                             <field name="actual_qty" readonly="1"/>
                             <field name="total_qty" readonly="1"/>

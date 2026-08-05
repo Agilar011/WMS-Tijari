@@ -5,10 +5,114 @@ import { useService } from "@web/core/utils/hooks";
 import { Component } from "@odoo/owl";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 
+const ZXING_BROWSER_CDN_URLS = [
+    "/tijari_wms_18/static/src/lib/zxing-browser.min.js",
+    "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js",
+    "https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js",
+];
 const SCANNER_FALLBACK_MESSAGE = "Scanner kamera tidak tersedia. Input manual diaktifkan.";
+
+let zxingBrowserLoadPromise = null;
 
 function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loadScript(src) {
+    const existingScript = document.querySelector(`script[src="${src}"]`);
+    if (existingScript) {
+        return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error("Library scanner gagal dimuat."));
+        document.head.append(script);
+    });
+}
+
+async function loadZxingBrowser() {
+    if (window.ZXingBrowser) {
+        return window.ZXingBrowser;
+    }
+
+    zxingBrowserLoadPromise = zxingBrowserLoadPromise || (async () => {
+        let lastError = null;
+        for (const src of ZXING_BROWSER_CDN_URLS) {
+            try {
+                await loadScript(src);
+                if (window.ZXingBrowser) {
+                    return;
+                }
+            } catch (error) {
+                lastError = error;
+            }
+        }
+        throw lastError || new Error("Library scanner gagal dimuat.");
+    })();
+    await zxingBrowserLoadPromise;
+
+    if (!window.ZXingBrowser) {
+        throw new Error("Library scanner tidak tersedia.");
+    }
+
+    return window.ZXingBrowser;
+}
+
+function getScannerErrorMessage(error) {
+    const name = error?.name || "";
+    const message = error?.message || "";
+
+    if (!window.isSecureContext) {
+        return "Akses kamera butuh HTTPS. Pastikan halaman dibuka lewat https://wms-aditya.duckdns.org.";
+    }
+    if (name === "NotAllowedError" || name === "SecurityError") {
+        return "Akses kamera ditolak. Izinkan camera permission untuk situs WMS di browser dan OS.";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        return "Kamera tidak ditemukan di device ini.";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+        return "Kamera tidak bisa dibuka. Tutup aplikasi/tab lain yang sedang memakai kamera, lalu coba lagi.";
+    }
+    if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+        return "Kamera tersedia, tapi constraint kamera tidak cocok. Coba pilih/aktifkan kamera lain.";
+    }
+
+    return message || SCANNER_FALLBACK_MESSAGE;
+}
+
+function isCameraAccessError(error) {
+    return [
+        "NotAllowedError",
+        "SecurityError",
+        "NotFoundError",
+        "DevicesNotFoundError",
+        "NotReadableError",
+        "TrackStartError",
+        "OverconstrainedError",
+        "ConstraintNotSatisfiedError",
+    ].includes(error?.name || "");
+}
+
+function isCameraRetryableError(error) {
+    return [
+        "NotFoundError",
+        "DevicesNotFoundError",
+        "OverconstrainedError",
+        "ConstraintNotSatisfiedError",
+    ].includes(error?.name || "");
+}
+
+function notifyScannerError(envOrService, error) {
+    const notification = envOrService?.services?.notification || envOrService;
+    notification?.add?.(getScannerErrorMessage(error), {
+        title: "Scan barcode gagal",
+        type: "danger",
+    });
 }
 
 function findRowById(recordId) {
@@ -126,6 +230,9 @@ function applyMoveLineScanResult(action, result) {
     }
     if (Object.prototype.hasOwnProperty.call(result, "location_dest_id")) {
         setCellText(row, "location_dest_id", result.location_dest_id?.[1] || "");
+    }
+    if (Object.prototype.hasOwnProperty.call(result, "location_putaway_id")) {
+        setCellText(row, "location_putaway_id", result.location_putaway_id?.[1] || "");
     }
     if (Object.prototype.hasOwnProperty.call(result, "putaway_status")) {
         setBadgeCell(row, "putaway_status", result.putaway_status_label || result.putaway_status, result.putaway_status);
@@ -297,15 +404,66 @@ function createScannerDialog(title) {
     overlay.append(dialog);
     document.body.append(overlay);
 
-    return { overlay, video, closeButton };
+    return { overlay, video, closeButton, status };
 }
 
 function stopStream(stream) {
     stream?.getTracks?.().forEach((track) => track.stop());
 }
 
+function getVideoConstraintCandidates() {
+    return [
+        {
+            video: {
+                facingMode: { ideal: "environment" },
+            },
+            audio: false,
+        },
+        {
+            video: true,
+            audio: false,
+        },
+    ];
+}
+
+async function getUserMediaWithFallback() {
+    let lastError = null;
+
+    for (const constraints of getVideoConstraintCandidates()) {
+        try {
+            return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+            lastError = error;
+            if (!isCameraRetryableError(error)) {
+                throw error;
+            }
+        }
+    }
+
+    throw lastError || new Error(SCANNER_FALLBACK_MESSAGE);
+}
+
 async function scanQrFromCamera(title) {
-    if (!navigator.mediaDevices?.getUserMedia || !window.BarcodeDetector) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(SCANNER_FALLBACK_MESSAGE);
+    }
+
+    try {
+        return await scanQrWithZxing(title);
+    } catch (zxingError) {
+        if (isCameraAccessError(zxingError)) {
+            throw zxingError;
+        }
+        if (!window.BarcodeDetector) {
+            throw zxingError;
+        }
+    }
+
+    return scanQrWithBarcodeDetector(title);
+}
+
+async function scanQrWithBarcodeDetector(title) {
+    if (!window.BarcodeDetector) {
         throw new Error(SCANNER_FALLBACK_MESSAGE);
     }
 
@@ -325,12 +483,7 @@ async function scanQrFromCamera(title) {
     dialog.closeButton.addEventListener("click", close);
 
     try {
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { ideal: "environment" },
-            },
-            audio: false,
-        });
+        stream = await getUserMediaWithFallback();
         dialog.video.srcObject = stream;
         await dialog.video.play();
 
@@ -367,6 +520,71 @@ async function scanQrFromCamera(title) {
     }
 }
 
+async function scanQrWithZxing(title) {
+    const ZXingBrowser = await loadZxingBrowser();
+    const dialog = createScannerDialog(title);
+    let controls = null;
+    let stopped = false;
+
+    const close = () => {
+        if (stopped) {
+            return;
+        }
+        stopped = true;
+        controls?.stop?.();
+        dialog.overlay.remove();
+    };
+
+    dialog.closeButton.addEventListener("click", close);
+    dialog.status.textContent = "Membuka kamera...";
+
+    try {
+        const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+        const constraintsCandidates = getVideoConstraintCandidates();
+
+        return await new Promise((resolve, reject) => {
+            dialog.closeButton.addEventListener("click", () => reject(new Error("Scan dibatalkan.")), {
+                once: true,
+            });
+
+            const startScan = (index) => {
+                const constraints = constraintsCandidates[index];
+                codeReader.decodeFromConstraints(
+                    constraints,
+                    dialog.video,
+                    (result) => {
+                        const value = result?.getText?.() || result?.text;
+                        if (!value) {
+                            return;
+                        }
+
+                        close();
+                        resolve(value);
+                    }
+                ).then(
+                    (scanControls) => {
+                        controls = scanControls;
+                        dialog.status.textContent = "Arahkan kamera ke QR/barcode.";
+                    },
+                    (error) => {
+                        if (isCameraRetryableError(error) && index < constraintsCandidates.length - 1) {
+                            startScan(index + 1);
+                            return;
+                        }
+                        close();
+                        reject(error);
+                    }
+                );
+            };
+
+            startScan(0);
+        });
+    } catch (error) {
+        close();
+        throw error;
+    }
+}
+
 async function scanQrToMoveLineField(env, action) {
     const params = action.params || {};
     const fieldName = params.field_name;
@@ -390,6 +608,7 @@ async function scanQrToMoveLineField(env, action) {
             await setMoveLineFieldValue(action, scannedCode);
         }
     } catch (error) {
+        notifyScannerError(env, error);
         await focusMoveLineField(env, action);
     }
 }
@@ -411,6 +630,7 @@ async function scanQrToPickingProduct(env, action) {
             [[resId], scannedCode]
         );
     } catch (error) {
+        notifyScannerError(env, error);
         return;
     }
 }
@@ -420,6 +640,7 @@ class MoveLineScanButton extends Component {
 
     setup() {
         this.orm = useService("orm");
+        this.notification = useService("notification");
     }
 
     get fieldName() {
@@ -446,7 +667,8 @@ class MoveLineScanButton extends Component {
         let scannedCode;
         try {
             scannedCode = await scanQrFromCamera(this.title);
-        } catch {
+        } catch (error) {
+            notifyScannerError(this.notification, error);
             return;
         }
 
@@ -479,6 +701,7 @@ class ProductScanButton extends Component {
 
     setup() {
         this.orm = useService("orm");
+        this.notification = useService("notification");
     }
 
     async onClick(ev) {
@@ -493,7 +716,8 @@ class ProductScanButton extends Component {
         let scannedCode;
         try {
             scannedCode = await scanQrFromCamera("Scan Product QR Code");
-        } catch {
+        } catch (error) {
+            notifyScannerError(this.notification, error);
             return;
         }
 

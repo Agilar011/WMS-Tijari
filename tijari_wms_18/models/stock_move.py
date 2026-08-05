@@ -517,7 +517,7 @@ class StockMove(models.Model):
         res = super().create(vals)
         for line in res:
             if not line.adt_dest_location_id:
-                line.adt_dest_location_id = line.location_id
+                line.adt_dest_location_id = line.picking_id.adt_dest_location_id or line.picking_id.picking_type_id.default_location_dest_id
 
         return res
 
