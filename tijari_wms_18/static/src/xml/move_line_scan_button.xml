@@ -18,4 +18,14 @@
             Scan Product
         </button>
     </t>
+
+    <t t-name="tijari.PackageScanButton" owl="1">
+        <button t-on-click="onClick"
+                type="button"
+                class="btn btn-primary oe_inline o_wms_scan_package_button"
+                title="Scan Package">
+            <i class="fa fa-barcode me-1"/>
+            Scan Package
+        </button>
+    </t>
 </templates>

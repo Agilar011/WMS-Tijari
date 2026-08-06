@@ -66,6 +66,10 @@ class StockMoveLine(models.Model):
         string='Picker Status',
         default='unfinished',
     )
+    location_putaway_id = fields.Many2one(
+        "stock.location",
+        string="Putaway Location",
+    )
 
     operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
@@ -89,31 +93,6 @@ class StockMoveLine(models.Model):
         store=False,
     )
 
-    def _check_putaway_stored_qty_limit(self):
-        for line in self:
-            if line.picking_type_name not in ('Receipts', 'Receipt Internal'):
-                continue
-
-            rounding = line.product_uom_id.rounding if line.product_uom_id else 0.01
-            if float_compare(
-                line.confirmation_quantity,
-                line.quantity,
-                precision_rounding=rounding,
-            ) > 0:
-                raise ValidationError(_(
-                    "Stored Qty tidak boleh lebih besar dari Picked Qty.\n"
-                    "Product: %s\n"
-                    "Stored Qty: %s\n"
-                    "Picked Qty: %s"
-                ) % (
-                    line.product_id.display_name,
-                    line.confirmation_quantity,
-                    line.quantity,
-                ))
-
-    @api.constrains('confirmation_quantity', 'quantity', 'picking_type_name')
-    def _constrains_putaway_stored_qty_limit(self):
-        self._check_putaway_stored_qty_limit()
     origin = fields.Char(
         related='picking_id.origin',
         string='Source Document',
@@ -152,18 +131,25 @@ class StockMoveLine(models.Model):
     product_lot_id = fields.Many2one(
         "stock.lot",
         string="Lot",
-        domain="[('id', 'in', temp_quant_ids)]",
+        domain="[('id', 'in', temp_lot_ids)]",
     )
 
     selected_quant_id = fields.Many2one(
         "stock.quant",
         string="Selected Quant",
+        domain="[('id', 'in', temp_quant_ids)]",
         readonly=True,
     )
 
     temp_quant_ids = fields.Many2many(
         "stock.quant",
         string="Temporary Quants",
+        compute="_compute_temp_quant_ids",
+        store=False,
+    )
+    temp_lot_ids = fields.Many2many(
+        "stock.lot",
+        string="Temporary Lots",
         compute="_compute_temp_quant_ids",
         store=False,
     )
@@ -216,13 +202,19 @@ class StockMoveLine(models.Model):
         for line in self:
             line.allowed_matching_lot_ids = line.picking_id.move_line_ids.mapped("lot_id")
 
-    @api.depends(
-            "product_id",
-            "location_id",
-            "lot_id",
-            "move_id.transaction_type",
-            "move_id.picking_type_name",
-    )
+    def _get_owner_quant_domain(self):
+        self.ensure_one()
+        domain = [
+            ("product_id", "=", self.product_id.id),
+            ("location_id", "child_of", self.source_location_id.id),
+            ("quantity", ">", 0),
+            ("lot_id", "!=", False),
+        ]
+        if self.move_id.picking_id.adt_type == 'Toko Pegang DO' and self.move_id.owner_id:
+            domain.append(("owner_id", "=", self.move_id.owner_id.id))
+        return domain
+
+    @api.depends("product_id", "source_location_id", "move_id.owner_id", "move_id.picking_id.adt_type")
     def _compute_temp_quant_ids(self):
         print('def _compute_temp_quant_ids(self):')
         for line in self:
@@ -240,32 +232,25 @@ class StockMoveLine(models.Model):
         for line in self:
 
             line.temp_quant_ids = False
+            line.temp_lot_ids = False
 
             if not line.product_id or not line.source_location_id:
                 continue
 
-            domain = [
-                ("product_id", "=", line.product_id.id),
-                ("location_id", "child_of", line.source_location_id.id),
-                ("quantity", ">", 0),
-                ("lot_id", "!=", False),
-            ]
+            domain = line._get_owner_quant_domain()
 
             # ===========================
             # TAMBAHAN UNTUK TOKO PEGANG DO
             # ===========================
             print(line.move_id.picking_id.adt_type)
-            if (
-                line.move_id.picking_id.adt_type == 'Toko Pegang DO'
-                # and line.owner_id
-            ):
-                domain.append(("owner_id", "=", line.move_id.owner_id.id))
+            if line.move_id.picking_id.adt_type == 'Toko Pegang DO' and line.move_id.owner_id:
                 print(f"Running domain with owner : {line.move_id.owner_id.name} ")
             # ===========================
 
             quants = Quant.search(domain)
 
-            line.temp_quant_ids = [(6, 0, quants.mapped("lot_id").ids)]
+            line.temp_quant_ids = [(6, 0, quants.ids)]
+            line.temp_lot_ids = [(6, 0, quants.mapped("lot_id").ids)]
 
             for item in line.temp_quant_ids:
                 print(f"Quant domained: {item.lot_id.name}")
@@ -288,12 +273,7 @@ class StockMoveLine(models.Model):
                 }
             }
 
-        quants = self.env["stock.quant"].search([
-            ("product_id", "=", self.product_id.id),
-            ("location_id", "child_of", self.source_location_id.id),
-            ("quantity", ">", 0),
-            ("lot_id", "!=", False),
-        ])
+        quants = self.env["stock.quant"].search(self._get_owner_quant_domain())
 
         lot_ids = quants.mapped("lot_id").ids
         print(f"Lot found: {lot_ids}")
@@ -318,12 +298,7 @@ class StockMoveLine(models.Model):
             return
 
         quant = self.env["stock.quant"].search(
-            [
-                ("product_id", "=", self.product_id.id),
-                ("location_id", "child_of", self.source_location_id.id),
-                ("lot_id", "=", self.product_lot_id.id),
-                ("quantity", ">", 0),
-            ],
+            self._get_owner_quant_domain() + [("lot_id", "=", self.product_lot_id.id)],
             order="quantity desc",
             limit=1,
         )
@@ -855,7 +830,7 @@ class StockMoveLine(models.Model):
             'type': 'ir.actions.client',
             'tag': 'adt_scan_qr_to_move_line_field',
             'params': {
-                'field_name': 'matching_lot_id',
+                'field_name': 'confirmation_lot_code',
                 'move_line_id': self.id,
                 'title': _('Scan Lot QR Code'),
             },
@@ -869,7 +844,7 @@ class StockMoveLine(models.Model):
             'type': 'ir.actions.client',
             'tag': 'adt_scan_qr_to_move_line_field',
             'params': {
-                'field_name': 'matching_loc_dest_id',
+                'field_name': 'confirmation_location_code',
                 'move_line_id': self.id,
                 'title': _('Scan Location QR Code'),
             },
@@ -897,6 +872,7 @@ class StockMoveLine(models.Model):
                 if not location:
                     raise ValidationError(_("Barcode tidak terdaftar."))
                 if picking_type_name in ['Receipts', 'Receipt Internal']:
+                    vals['location_putaway_id'] = location.id
                     vals['location_dest_id'] = location.id
                 else:
                     vals['matching_loc_dest_id'] = location.id
@@ -919,6 +895,10 @@ class StockMoveLine(models.Model):
             if picking_type_name in ['Receipts', 'Receipt Internal']:
                 result['putaway_status'] = line.putaway_status
                 result['putaway_status_label'] = status_labels.get(line.putaway_status, line.putaway_status or '')
+                result['location_putaway_id'] = [
+                    line.location_putaway_id.id,
+                    line.location_putaway_id.name,
+                ] if line.location_putaway_id else False
                 result['location_dest_id'] = [
                     line.location_dest_id.id,
                     line.location_dest_id.name,
@@ -938,9 +918,16 @@ class StockMoveLine(models.Model):
         return result
 
     def action_mark_putaway_finished(self):
+        if not self.location_putaway_id and self.confirmation_quantity == 0:
+            raise ValidationError(_("Location putaway dan Quantity tidak boleh kosong, silahkan input location putaway dan quantity terlebih dahulu"))
         if self.confirmation_quantity == 0:
             raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
-        self._check_putaway_stored_qty_limit()
+        if not self.location_putaway_id:
+            raise ValidationError(_("Location putaway tidak boleh kosong, silahkan input location putaway terlebih dahulu"))
+        if self.confirmation_quantity > self.quantity:
+            raise ValidationError(_("Stored Qty tidak boleh lebih besar dari Picked Qty, silahkan input quantity yang sesuai"))
+        if self.confirmation_quantity < self.quantity:
+            raise ValidationError(_("Stored Qty tidak boleh kurang dari Picked Qty, silahkan input quantity yang sesuai"))
         self.write({'putaway_status': 'finished'})
         return True
 
@@ -957,6 +944,13 @@ class StockMoveLine(models.Model):
         self.write({'picker_status': 'finished'})
         return True
 
+
+    @api.onchange('location_putaway_id')
+    def _onchange_location_putaway_id(self):
+        for line in self:
+
+            if line.location_putaway_id:
+                line.location_dest_id = line.location_putaway_id.id
 
     @api.onchange('confirmation_location_code')
     def _onchange_confirmation_location_code(self):
@@ -1049,10 +1043,6 @@ class StockMoveLine(models.Model):
             and expected_lot == self.matching_lot_id
             else 'not_match'
         )
-
-    @api.onchange('confirmation_quantity')
-    def _onchange_putaway_stored_qty_limit(self):
-        self._check_putaway_stored_qty_limit()
 
     @api.onchange('confirmation_quantity', 'auto_input_code', 'matching_lot_id', 'matching_loc_dest_id')
     def _compute_matching(self):

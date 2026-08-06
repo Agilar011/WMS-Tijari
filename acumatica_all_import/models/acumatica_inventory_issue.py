@@ -195,6 +195,7 @@ class AcumaticaInventoryIssueLine(models.Model):
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+    customer_id = fields.Char(string='Customer ID')
 
     # ---------------------------------------------------------
     # BUTTONS
