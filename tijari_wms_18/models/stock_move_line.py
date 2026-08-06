@@ -1063,7 +1063,7 @@ class StockMoveLine(models.Model):
             picking_name = line.move_id.picking_id.picking_type_id.name
             print(f"validate stock move line with picking type name: {picking_name}")
 
-            if picking_name and picking_name in ( 'Pick', 'Pick Components'):
+            if picking_name and picking_name in ( 'Pick', 'Pick Components', 'Pick Internal'):
                 loc_code = str(line.location_id.unique_code or '').strip()
                 product_code = str(line.lot_id.name or '').strip()
 
