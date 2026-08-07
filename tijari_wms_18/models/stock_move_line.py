@@ -266,16 +266,6 @@ class StockMoveLine(models.Model):
                 print(f"Quant domained: {item.lot_id.name}")
 
             print(f"Quant domain: {line.temp_quant_ids}")
-            
-
-    @api.onchange("product_id")
-    def _onchange_product_id(self):
-
-        self.quant_id = False
-        self.lot_id = False
-        self.location_id = False
-
-        return self._refresh_quant()
 
     @api.onchange("lot_id", "location_id")
     def _onchange_quant_fields(self):
@@ -452,7 +442,7 @@ class StockMoveLine(models.Model):
 
     @api.onchange('product_id')
     def _onchange_product_copy_previous_lot(self):
-        print('def _onchange_product_copy_previous_lot(self)')
+        _logger.info('def _onchange_product_copy_previous_lot(self)')
 
         for line in self:
             if not line.move_id:
@@ -578,7 +568,7 @@ class StockMoveLine(models.Model):
     
             domain = [
                 ("product_id", "=", self.product_id.id),
-                ("location_id", "child_of", self.source_location_id.id),
+                ("location_id", "child_of", self.adt_dest_location_id.id),
                 ("quantity", ">", 0),
                 ("lot_id", "!=", False),
             ]
@@ -632,7 +622,7 @@ class StockMoveLine(models.Model):
             # location_domain = line._get_base_quant_domain()
 
             locations = Location.search(
-                [('id', 'child_of', self.location_id.id)]
+                [('id', 'child_of', line.adt_dest_location_id.id)]
             )
 
             line.available_location_ids = [
@@ -646,7 +636,7 @@ class StockMoveLine(models.Model):
         quants = self._get_base_quant_domain()
         available_lots = Quant.search(quants).mapped("lot_id")
         available_locations = self.env['stock.location'].search(
-            [('id', 'child_of', self.source_location_id.id)]
+            [('id', 'child_of', self.adt_dest_location_id.id)]
         )
 
         # ------------------------------------------------------
@@ -672,7 +662,7 @@ class StockMoveLine(models.Model):
                     ("id", "in", available_lots.ids)
                 ],
                 "location_id": [
-                    ("id", "in", available_locations)
+                    ("id", "in", available_locations.ids)
                 ],
             }
         }
