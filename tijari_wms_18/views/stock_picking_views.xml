@@ -11,7 +11,7 @@
                 <field name="wms_state"
                     widget="statusbar"
                     statusbar_visible="draft,assigned,waiting_response,done"
-                    invisible="adt_type not in ['Sales Order Shipment', 'SO Shipment']"    
+                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment', 'SO Shipment']"    
                 />
             </xpath>
 
@@ -25,7 +25,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="adt_type in ['Sales Order Shipment', 'SO Shipment']"/>
+                    invisible="picking_type_name in ['Delivery Orders'] and adt_type in ['Sales Order Shipment', 'SO Shipment']"/>
 
             </xpath>            
 
@@ -41,14 +41,21 @@
 
             <xpath expr="//button[@name='button_validate']" position="after">
 
-                <button name="action_post_loginext"
+                <button name="button_validate"
                 string="Validate"
                 type="object"
                 class="btn-primary"
                 invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel', 'return_shipment')"/>
+
                 
                 <button name="action_fetch_actual_qty"
-                string="Get Shipment Data"
+                string="Get Full Shipment Data"
+                type="object"
+                class="btn-primary"
+                invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+
+                <button name="action_fetch_partial_shipment"
+                string="Get Partial Shipment Data"
                 type="object"
                 class="btn-primary"
                 invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
@@ -198,6 +205,23 @@
                                 context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
                                 domain="[('product_id','=',product_id)]"
                             />
+                            <field name="shipped_qty" optional='hide' />
+                            <field name="status_check"
+                                decoration-success="status_check == 'finished'"
+                                decoration-danger="status_check == 'unfinished'" widget="badge" />
+                            <button name="action_mark_check_finished"
+                                type="object"
+                                icon="fa-check"
+                                class="btn-success"
+                                title="Finish Package"
+                                invisible="status_check == 'finished'"/>
+
+                            <button name="action_mark_check_unfinished"
+                                type="object"
+                                icon="fa-undo"
+                                class="btn-danger"
+                                title="Undo Package"
+                                invisible="status_check != 'finished'"/>
                         </list>
                     </field>
                     <field name="id" invisible="1"/>

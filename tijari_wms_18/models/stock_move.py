@@ -1,5 +1,5 @@
 from odoo.tools.float_utils import float_compare, float_round
-from odoo import api, models, fields
+from odoo import _, api, models, fields
 import base64
 import os
 from PIL import Image
@@ -103,6 +103,24 @@ class StockMove(models.Model):
             store=True,
             readonly=False,
         )
+
+    shipped_qty = fields.Float('Shipped Qty')
+
+    status_check = fields.Selection([
+        ('finished', 'Finished'),
+        ('unfinished', 'Unfinished'),
+    ], string='Status', default='unfinished')
+
+    def action_mark_check_finished(self):
+        if self.so_confirmation_quantity == 0:
+            raise ValidationError(_("Confirmation Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+        # self._check_so_confirmation_quantity()
+        self.write({'status_check': 'finished'})
+        return True
+
+    def action_mark_check_unfinished(self):
+        self.write({'status_check': 'unfinished'})
+        return True
 
     def _update_reserved_quantity_vals(
         self,
