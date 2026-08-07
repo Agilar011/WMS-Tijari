@@ -20,7 +20,7 @@
                 <field name="location_id" domain="[('id', 'in', available_location_ids)]" context="{'show_location_short_name': True}" string="Pick From" column_invisible="parent.picking_type_name not in ['Pack','Pick', 'Pick Internal', 'Pick Components']" force_save="1"/>
                 <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
                 <field name="temp_lot_ids" optional="hide" column_invisible="1"/>
-                <field name="product_lot_id" string="Lot" column_invisible="parent.picking_type_name not in ['Pack', 'Pick', 'Pick Internal', 'Pick Components']"/>
+                <!-- <field name="product_lot_id" string="Lot" column_invisible="parent.picking_type_name not in ['Pack', 'Pick', 'Pick Internal', 'Pick Components']"/> -->
                 <field name="selected_quant_id" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
                 <field name="available_lot_ids" column_invisible='1' />
                 <field name="available_location_ids" column_invisible='1' />

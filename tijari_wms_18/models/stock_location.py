@@ -11,7 +11,10 @@ class StockLocation(models.Model):
             return super()._compute_display_name()
 
         for location in self:
-            location.display_name = location.warehouse_id.code + '/' if location.warehouse_id else '' + location.name
+
+            location.display_name = (
+                (location.warehouse_id.code + '/') if location.warehouse_id else ''
+            ) + location.name
 
     @api.model
     @api.readonly
