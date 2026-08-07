@@ -60,6 +60,7 @@
             'tijari_wms_18/static/src/js/stock_move_line_owner_quant_domain.js',
             'tijari_wms_18/static/src/js/auto_save_view_button.js',
             'tijari_wms_18/static/src/js/generate_lot_button.js',
+            'tijari_wms_18/static/src/js/hide_zero_remaining.js',
             'tijari_wms_18/static/src/xml/generate_lot_button.xml',
             'tijari_wms_18/static/src/xml/auto_input_code.xml',
             'tijari_wms_18/static/src/xml/action_generate_selected_lot.xml',

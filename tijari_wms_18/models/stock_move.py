@@ -83,6 +83,7 @@ class StockMove(models.Model):
     
     remaining_package_qty = fields.Float(
         compute="_compute_remaining_package_qty",
+        store=True,
         string="Remaining Package Qty",
     )
     difference_quantity = fields.Float(
