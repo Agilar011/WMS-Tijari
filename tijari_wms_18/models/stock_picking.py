@@ -310,7 +310,6 @@ class StockPicking(models.Model):
         for picking in self:
             if picking.state != "done":
                 picking.wms_state = picking.state
-            
 
     @api.depends(
         'move_line_ids',
@@ -783,7 +782,7 @@ class StockPicking(models.Model):
                 _("Please validate the Return document first.")
             )
     
-        self.state = "done"
+        self.wms_state = "done"
     
         return True
     
@@ -808,249 +807,170 @@ class StockPicking(models.Model):
     # Prepare Payload
     # ==========================================================
 
-    def _prepare_loginext_payload(self):
-        self.ensure_one()
-        print(self)
+    # def _prepare_loginext_payload(self):
+    #     self.ensure_one()
+    #     print(self)
 
-        print(self.origin)
+    #     print(self.origin)
 
-        header_to_send = self.env["loginext.staging.data"].search(
-            [("odoo_shipment_number", "=", self.origin)],
-            limit=1,
-        )
-        print(header_to_send)
+    #     header_to_send = self.env["loginext.staging.data"].search(
+    #         [("odoo_shipment_number", "=", self.origin)],
+    #         limit=1,
+    #     )
+    #     print(header_to_send)
 
-        if not header_to_send:
-            raise UserError("Data staging TMS tidak dapat ditemukan")
+    #     if not header_to_send:
+    #         raise UserError("Data staging TMS tidak dapat ditemukan")
         
-        return {
-            "orderNo": header_to_send.loginext_order_no,
-            "shipmentOrderDt": self._format_datetime(
-                header_to_send.loginext_shipment_order_dt
-            ),
-            "shipmentOrderTypeCd": header_to_send.loginext_shipment_order_type_cd,
-            "orderState": header_to_send.loginext_order_state,
-            "distributionCenter": header_to_send.loginext_distribution_center,
-            "returnBranch": header_to_send.loginext_return_branch,
-            "packageWeight": str(header_to_send.loginext_package_weight or 0),
-            "packageVolume": str(header_to_send.loginext_package_volume or 0),
-            "preparationTime": 30,
-            "paymentType": header_to_send.loginext_payment_type,
-            "packageValue": str(header_to_send.loginext_package_value or 0),
-            "numberOfItems": header_to_send.loginext_number_of_items or 0,
-            "partialDeliveryAllowedFl": "Y" if header_to_send.loginext_partial_delivery_allowed_fl else "N",
-            "returnAllowedFl": "Y" if header_to_send.loginext_return_allowed_fl else "N",
-            "cancellationAllowedFl": "Y" if header_to_send.loginext_cancellation_allowed_fl else "N",
-            "deliverServiceTime": '30',
-            "deliverStartTimeWindow": self._format_datetime(header_to_send.loginext_deliver_start_time_window),
-            "deliverEndTimeWindow": self._format_datetime(header_to_send.loginext_deliver_end_time_window),
-            "deliveryType": header_to_send.loginext_delivery_type,
-            "deliverBranch": header_to_send.loginext_deliver_branch,
-            "deliverAccountCode": header_to_send.loginext_deliver_account_code,
-            "deliverAccountName": header_to_send.loginext_deliver_account_name,
-            "deliverApartment": header_to_send.loginext_deliver_apartment,
-            "deliverStreetName": header_to_send.loginext_deliver_street_name,
-            "deliverLocality": header_to_send.loginext_deliver_locality,
-            "deliverCity": header_to_send.loginext_deliver_city,
-            "deliverState": header_to_send.loginext_deliver_state,
-            "deliverCountry": header_to_send.loginext_deliver_country,
-            "deliverPinCode": header_to_send.loginext_deliver_pin_code,
-            "deliverAddressTimezone": header_to_send.loginext_deliver_address_timezone,
-            "deliverNotes": header_to_send.loginext_deliver_notes,
-            "shipmentCrateMappings": [
-                {
-                    "crateCd": crate.loginext_crate_cd,
-                    "crateName": crate.loginext_crate_name,
-                    "crateType": crate.loginext_crate_type,
-                    "crateWeight": crate.loginext_crate_weight,
-                    "shipmentlineitems": [
-                        {
-                            "itemCd": item.loginext_item_cd,
-                            "itemName": item.loginext_item_name,
-                            "itemPrice": item.loginext_item_price,
-                            "itemQuantity": item.loginext_item_quantity,
-                            "itemType": item.loginext_item_type,
-                            "itemWeight": item.loginext_item_weight,
-                        }
-                        for item in crate.item_ids
-                    ],
-                }
-                for crate in header_to_send.crate_ids
-            ],
-        }
+    #     return {
+    #         "orderNo": header_to_send.loginext_order_no,
+    #         "shipmentOrderDt": self._format_datetime(
+    #             header_to_send.loginext_shipment_order_dt
+    #         ),
+    #         "shipmentOrderTypeCd": header_to_send.loginext_shipment_order_type_cd,
+    #         "orderState": header_to_send.loginext_order_state,
+    #         "distributionCenter": header_to_send.loginext_distribution_center,
+    #         "returnBranch": header_to_send.loginext_return_branch,
+    #         "packageWeight": str(header_to_send.loginext_package_weight or 0),
+    #         "packageVolume": str(header_to_send.loginext_package_volume or 0),
+    #         "preparationTime": 30,
+    #         "paymentType": header_to_send.loginext_payment_type,
+    #         "packageValue": str(header_to_send.loginext_package_value or 0),
+    #         "numberOfItems": header_to_send.loginext_number_of_items or 0,
+    #         "partialDeliveryAllowedFl": "Y" if header_to_send.loginext_partial_delivery_allowed_fl else "N",
+    #         "returnAllowedFl": "Y" if header_to_send.loginext_return_allowed_fl else "N",
+    #         "cancellationAllowedFl": "Y" if header_to_send.loginext_cancellation_allowed_fl else "N",
+    #         "deliverServiceTime": '30',
+    #         "deliverStartTimeWindow": self._format_datetime(header_to_send.loginext_deliver_start_time_window),
+    #         "deliverEndTimeWindow": self._format_datetime(header_to_send.loginext_deliver_end_time_window),
+    #         "deliveryType": header_to_send.loginext_delivery_type,
+    #         "deliverBranch": header_to_send.loginext_deliver_branch,
+    #         "deliverAccountCode": header_to_send.loginext_deliver_account_code,
+    #         "deliverAccountName": header_to_send.loginext_deliver_account_name,
+    #         "deliverApartment": header_to_send.loginext_deliver_apartment,
+    #         "deliverStreetName": header_to_send.loginext_deliver_street_name,
+    #         "deliverLocality": header_to_send.loginext_deliver_locality,
+    #         "deliverCity": header_to_send.loginext_deliver_city,
+    #         "deliverState": header_to_send.loginext_deliver_state,
+    #         "deliverCountry": header_to_send.loginext_deliver_country,
+    #         "deliverPinCode": header_to_send.loginext_deliver_pin_code,
+    #         "deliverAddressTimezone": header_to_send.loginext_deliver_address_timezone,
+    #         "deliverNotes": header_to_send.loginext_deliver_notes,
+    #         "shipmentCrateMappings": [
+    #             {
+    #                 "crateCd": crate.loginext_crate_cd,
+    #                 "crateName": crate.loginext_crate_name,
+    #                 "crateType": crate.loginext_crate_type,
+    #                 "crateWeight": crate.loginext_crate_weight,
+    #                 "shipmentlineitems": [
+    #                     {
+    #                         "itemCd": item.loginext_item_cd,
+    #                         "itemName": item.loginext_item_name,
+    #                         "itemPrice": item.loginext_item_price,
+    #                         "itemQuantity": item.loginext_item_quantity,
+    #                         "itemType": item.loginext_item_type,
+    #                         "itemWeight": item.loginext_item_weight,
+    #                     }
+    #                     for item in crate.item_ids
+    #                 ],
+    #             }
+    #             for crate in header_to_send.crate_ids
+    #         ],
+    #     }
 
     # ==========================================================
     # POST API
     # ==========================================================
 
     def action_post_loginext(self):
-        print("=" * 80)
-        print("Sent LOGINEXT REQUEST")
-        self.wms_state = 'waiting_response'
+        # print("=" * 80)
+        # print("Sent LOGINEXT REQUEST")
+        # self.wms_state = 'waiting_response'
 
-        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
-        CREATE_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v2/create"
+        # LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
+        # CREATE_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v2/create"
 
-        USERNAME = "api.tms@aditya.co.id"
-        PASSWORD = "9CE5Q8Jz_#xXR"
+        # USERNAME = "api.tms@aditya.co.id"
+        # PASSWORD = "9CE5Q8Jz_#xXR"
 
-        body = [
-            rec._prepare_loginext_payload()
-            for rec in self
-        ]
+        # body = [
+        #     rec._prepare_loginext_payload()
+        #     for rec in self
+        # ]
 
-        print("=" * 80)
-        print("LOGINEXT REQUEST")
-        print("=" * 80)
-        print(json.dumps(body, indent=4))
+        # print("=" * 80)
+        # print("LOGINEXT REQUEST")
+        # print("=" * 80)
+        # print(json.dumps(body, indent=4))
 
-        session = requests.Session()
+        # session = requests.Session()
 
-        try:
-            # ======================================================
-            # LOGIN
-            # ======================================================
+        # try:
+        #     # ======================================================
+        #     # LOGIN
+        #     # ======================================================
 
-            login_payload = {
-                "userName": USERNAME,
-                "password": PASSWORD,
-                "sessionExpiryTimeout": "1",
-            }
+        #     login_payload = {
+        #         "userName": USERNAME,
+        #         "password": PASSWORD,
+        #         "sessionExpiryTimeout": "1",
+        #     }
 
-            login_response = session.post(
-                LOGIN_URL,
-                json=login_payload,
-                timeout=30,
-            )
+        #     login_response = session.post(
+        #         LOGIN_URL,
+        #         json=login_payload,
+        #         timeout=30,
+        #     )
 
-            print("=" * 80)
-            print("LOGINEXT LOGIN RESPONSE")
-            print("=" * 80)
-            print(f"Status : {login_response.status_code}")
-            print(login_response.text)
+        #     print("=" * 80)
+        #     print("LOGINEXT LOGIN RESPONSE")
+        #     print("=" * 80)
+        #     print(f"Status : {login_response.status_code}")
+        #     print(login_response.text)
 
 
-            login_response.raise_for_status()
-            www_authenticate = login_response.headers.get("WWW-Authenticate")
-            # ======================================================
-            # CREATE SHIPMENT
-            # ======================================================
+        #     login_response.raise_for_status()
+        #     www_authenticate = login_response.headers.get("WWW-Authenticate")
+        #     # ======================================================
+        #     # CREATE SHIPMENT
+        #     # ======================================================
 
-            headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
+        #     headers = {
+        #         "Content-Type": "application/json",
+        #         "Accept": "application/json",
+        #     }
 
-            if www_authenticate:
-                headers["WWW-Authenticate"] = www_authenticate
+        #     if www_authenticate:
+        #         headers["WWW-Authenticate"] = www_authenticate
 
-            print("Sent Response to Loginext")
-            response = session.post(
-                CREATE_URL,
-                headers=headers,
-                json=body,
-                timeout=1,
-            )
+        #     print("Sent Response to Loginext")
+        #     response = session.post(
+        #         CREATE_URL,
+        #         headers=headers,
+        #         json=body,
+        #         timeout=1,
+        #     )
 
-            print("=" * 80)
-            print("LOGINEXT CREATE RESPONSE")
-            print("=" * 80)
-            print(f"Status : {response.status_code}")
-            print(response.text)
+        #     print("=" * 80)
+        #     print("LOGINEXT CREATE RESPONSE")
+        #     print("=" * 80)
+        #     print(f"Status : {response.status_code}")
+        #     print(response.text)
 
-            response.raise_for_status()
+        #     response.raise_for_status()
 
-            print("=" * 80)
-            print("END LOGINEXT REQUEST")
-            print("=" * 80)
+        #     print("=" * 80)
+        #     print("END LOGINEXT REQUEST")
+        #     print("=" * 80)
 
             res = self.button_validate()
 
             return res
 
 
-        except requests.exceptions.RequestException as e:
-            _logger.exception(e)
-            raise UserError(f"Loginext API Error\n\n{e}")
-
-    def action_get_loginext(self):
-        _logger.info("=" * 80)
-        _logger.info("Get LOGINEXT REQUEST")
-        # print(self)
-        """
-        Get Shipment dari Loginext berdasarkan tanggal dan Order No.
-        """
-
-        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
-        SHIPMENT_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v1/shipment"
-
-        USERNAME = "api.tms@aditya.co.id"
-        PASSWORD = "9CE5Q8Jz_#xXR"
-
-        session = requests.Session()
-
-        try:
-            # ==========================================================
-            # LOGIN
-            # ==========================================================
-            login_payload = {
-                "userName": USERNAME,
-                "password": PASSWORD,
-                "sessionExpiryTimeout": "1",
-            }
-
-            login_response = session.post(
-                LOGIN_URL,
-                json=login_payload,
-                timeout=30,
-            )
-
-            _logger.info("=" * 80)
-            _logger.info("LOGINEXT LOGIN")
-            _logger.info(login_response.text)
-            _logger.info("=" * 80)
-
-            login_response.raise_for_status()
-            www_authenticate = login_response.headers.get("WWW-Authenticate")
-            # ==========================================================
-            # GET SHIPMENT
-            # ==========================================================
-            params = {
-                "start_date": "2026-04-20 00:00:00",
-                "end_date": "2026-07-23 00:00:00",
-                "order_no": f"testing-dev-{self.origin}",
-            }
-
-            headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
-
-
-            if www_authenticate:
-                headers["WWW-Authenticate"] = www_authenticate
-
-            response = session.get(
-                SHIPMENT_URL,
-                params=params,
-                headers=headers,
-                timeout=120,
-            )
-
-            _logger.info("=" * 80)
-            _logger.info("LOGINEXT GET SHIPMENT")
-            _logger.info("Request URL : %s", response.request.url)
-            _logger.info("Status Code : %s", response.status_code)
-            _logger.info(response.text)
-            _logger.info("=" * 80)
-
-            response.raise_for_status()
-
-            return response.json()
-
-        except requests.exceptions.RequestException as e:
-            _logger.exception(e)
-            raise UserError(f"Loginext API Error\n\n{e}")
+        # except requests.exceptions.RequestException as e:
+        #     _logger.exception(e)
+        #     raise UserError(f"Loginext API Error\n\n{e}")
 
     def action_assign(self):
         _logger.info(">>> action_assign CALLED %s", self.ids)
@@ -1078,14 +998,17 @@ class StockPicking(models.Model):
 
     def action_confirm_shipment(self):
         self.ensure_one()
+
         if not self.shipment_information:
-            raise UserError('Informasi TMS tidak boleh kosong')
+            raise UserError(_("Shipment Information is required."))
 
-        if self.shipment_information == 'full_shipment':
-            self.wms_state = 'done'
+        if self.shipment_information == "full_shipment":
+            self.wms_state = "done"
+            return
 
-        if self.shipment_information != 'full_shipment':
-            self.wms_state = 'return_shipment'     
+        self._generate_return_from_actual_qty()
+
+        self.wms_state = "return_shipment"
 
     def button_validate(self):
         for picking in self:
@@ -1124,6 +1047,33 @@ class StockPicking(models.Model):
         res = super().button_validate()
 
         for rec in self:
+            # _logger.info("=" * 80)
+            # _logger.info("Picking : %s", rec.name)
+            # _logger.info("State   : %s", rec.state)
+            # _logger.info("Origin  : %s", rec.origin)
+            # _logger.info("Return  : %s", rec.return_id.name if rec.return_id else "-")
+            # _logger.info("Move IDs: %s", rec.move_ids.ids)
+
+            # for move in rec.move_ids:
+            #     _logger.info(
+            #         "Move %-20s | State=%s | Qty=%s",
+            #         move.product_id.display_name,
+            #         move.state,
+            #         move.quantity,
+            #     )
+
+            #     for ml in move.move_line_ids:
+            #         _logger.info(
+            #             "    ML |  Done=%s | Lot=%s | Src=%s | Dest=%s",
+            #             ml.quantity,
+            #             ml.lot_id.name,
+            #             ml.location_id.display_name,
+            #             ml.location_dest_id.display_name,
+            #         )
+
+            # _logger.info("=" * 80)
+
+            # raise UserError('STOP')
             is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
             if is_document_only:
                 continue
@@ -1137,7 +1087,6 @@ class StockPicking(models.Model):
                     print(f"Missing lot: {line}")
                     raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
                 
-
             if is_receipt_putaway:
                 rec._check_putaway_status_requirements()
                 rec._check_picker_status_requirements()
@@ -1162,7 +1111,18 @@ class StockPicking(models.Model):
                             "Status: ❌ NOT MATCH\n\n"
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
-                                        
+
+            if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
+                rec.wms_state = 'waiting_response'
+
+            if (
+                rec.state == "done"
+                and rec.return_id
+                and rec.return_id.wms_state == "return_shipment"
+            ):
+                
+                rec.return_id.wms_state = "done"
+                                             
             pickings = self.env["stock.picking"].search([])
             if rec.picking_type_id.code != "incoming":
                 continue
@@ -1270,6 +1230,9 @@ class StockPicking(models.Model):
         if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
             return self._check_putaway_status_requirements() and self._check_picker_status_requirements()
 
+        if self.picking_type_name not in ['Pick', 'Pick Internal']:
+            return
+
         active_moves = self.move_ids.filtered(
             lambda move: move.state != "cancel"
         )
@@ -1324,6 +1287,85 @@ class StockPicking(models.Model):
         if error_messages:
             raise UserError("\n\n".join(error_messages))
 
+    def _get_acumatica_config(self):
+
+        config = self.env["ir.config_parameter"].sudo()
+
+        return {
+            "auth_url": config.get_param("tijari.acumatica_auth_url"),
+            "api_url": config.get_param("tijari.acumatica_api_url"),
+            "login_endpoint": config.get_param("tijari.acumatica_endpoint_login"),
+            "shipment_endpoint": config.get_param("tijari.acumatica_endpoint_shipment"),
+            "username": config.get_param("tijari.acumatica_username"),
+            "password": config.get_param("tijari.acumatica_password"),
+            "company": config.get_param("tijari.acumatica_company"),
+        }
+
+    def action_login_acumatica(self):
+        """Authenticate to Acumatica and return authenticated session."""
+
+        config = self._get_acumatica_config()
+
+        required = (
+            "auth_url",
+            "login_endpoint",
+            "username",
+            "password",
+            "company",
+        )
+
+        for key in required:
+            if not config.get(key):
+                raise UserError(
+                    _("Acumatica configuration '%s' is missing.") % key
+                )
+
+        login_url = (
+            config["auth_url"]
+            + config["login_endpoint"]
+        )
+
+        payload = {
+            "name": config["username"],
+            "password": config["password"],
+            "company": config["company"],
+        }
+
+        session = requests.Session()
+
+        _logger.info("=" * 80)
+        _logger.info("ACUMATICA LOGIN")
+        _logger.info("POST %s", login_url)
+
+        try:
+
+            response = session.post(
+                login_url,
+                json=payload,
+                timeout=60,
+            )
+
+            _logger.info("Status Code : %s", response.status_code)
+            _logger.info("Response    : %s", response.text)
+            _logger.info("=" * 80)
+
+            response.raise_for_status()
+
+            return session
+
+        except requests.exceptions.RequestException as exc:
+
+            error_message = ""
+
+            try:
+                error_message = response.text
+            except Exception:
+                pass
+
+            raise UserError(_(
+                "Failed to login to Acumatica.\n\n%s"
+            ) % (error_message or str(exc)))
+
     def action_fetch_actual_qty(self):
         self.ensure_one()
 
@@ -1331,8 +1373,15 @@ class StockPicking(models.Model):
 
         self._apply_actual_qty(data)
 
+    def action_fetch_partial_shipment(self):
+        self.ensure_one()
 
-    def _get_actual_qty_data(self):
+        data = self._get_actual_qty_data(is_match=False)
+
+        self._apply_actual_qty(data)
+
+
+    def _get_actual_qty_data(self, is_match=True):
         """
         Temporary mock implementation.
         Replace with Acumatica API once available.
@@ -1346,16 +1395,16 @@ class StockPicking(models.Model):
 
             planned_qty = move.product_uom_qty
 
-            is_match = random.random() < 0.5
+            # is_match = random.random() < 0.5
 
             if is_match:
                 actual_qty = planned_qty
             else:
-                shortage = random.randint(
-                    1,
-                    min(5, int(planned_qty))
-                )
-                actual_qty = planned_qty - shortage
+                # shortage = random.randint(
+                #     1,
+                #     min(5, int(planned_qty))
+                # )
+                actual_qty = planned_qty - 1
 
             result.append({
                 "inventory_id": move.product_id.default_code,
@@ -1382,12 +1431,36 @@ class StockPicking(models.Model):
 
             actual_qty = api["actual_qty"]
 
-            move.so_confirmation_quantity = actual_qty
+            move.shipped_qty = actual_qty
 
             if actual_qty != move.product_uom_qty:
                 all_match = False
 
         self.shipment_information = "full_shipment" if all_match else "partial"
+
+    def _generate_return_from_actual_qty(self):
+        ReturnWizard = self.env["stock.return.picking"]
+
+        wizard = ReturnWizard.with_context(
+            active_id=self.id,
+            active_ids=self.ids,
+            active_model="stock.picking",
+        ).create({})
+
+        for line in wizard.product_return_moves:
+
+            move = line.move_id
+
+            actual = move.shipped_qty
+
+            planned = move.quantity
+
+            line.quantity = max(planned - actual, 0)
+
+        result = wizard.action_create_returns()
+
+        return result
+
 
     def _check_putaway_status_requirements(self):
         self.ensure_one()
