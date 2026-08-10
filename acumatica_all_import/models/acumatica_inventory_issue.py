@@ -190,6 +190,11 @@ class AcumaticaInventoryIssueLine(models.Model):
     ], default='pending', readonly=True)
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Delivery Order di Odoo', readonly=True)
+    odoo_internal_transfer_order_id = fields.Many2one(
+        'internal.transfer.order',
+        string='Internal Transfer Order di Odoo',
+        readonly=True,
+    )
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -260,6 +265,22 @@ class AcumaticaInventoryIssueLine(models.Model):
             ('name', '=ilike', 'Bad Stock%'),
         ], limit=1)
 
+    def _is_disposal(self):
+        self.ensure_one()
+        return (self.trans_type or '').strip().casefold() == 'disposal'
+
+    def _prepare_disposal_internal_transfer(self, first, source_location, dest_location):
+        TransferService = self.env['acumatica.internal.transfer.service']
+        return TransferService.prepare_order(
+            first.reference_nbr,
+            source_location,
+            dest_location,
+            'intra_warehouse',
+            schedule_date=self._parse_dt(first.scheduled_date),
+            note=first.note or first.description or False,
+            transfer_type='transfer_out',
+        )
+
     def _find_customer(self, customer_code):
         print('def _find_customer')
         """Find the Odoo customer using the Acumatica CustomerID."""
@@ -326,19 +347,27 @@ class AcumaticaInventoryIssueLine(models.Model):
                 if not warehouse:
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
                     
+                is_disposal = first._is_disposal()
                 picking_type = first.picking_type_id
-                if not picking_type:
+                if not picking_type and not is_disposal:
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
-                    
-                source_location = picking_type.default_location_src_id
-                dest_location = picking_type.default_location_dest_id
-                if (first.trans_type or '').strip().casefold() == 'disposal':
+
+                if is_disposal:
+                    if warehouse._name != 'stock.warehouse':
+                        raise UserError(
+                            f'Warehouse mapping untuk code {first.warehouse_code or "-"} '
+                            f'belum punya Building Grouping.'
+                        )
+                    source_location = warehouse.lot_stock_id
                     dest_location = self._find_bad_stock_location(warehouse)
                     if not dest_location:
                         raise UserError(
                             f'Lokasi internal "Bad Stock" tidak ditemukan pada warehouse '
                             f'{warehouse.display_name}.'
                         )
+                else:
+                    source_location = picking_type.default_location_src_id
+                    dest_location = picking_type.default_location_dest_id
                     
                 
                 if not source_location:
@@ -347,6 +376,53 @@ class AcumaticaInventoryIssueLine(models.Model):
                     raise UserError('Destination location tidak ditemukan.')
                 # if dest_location.usage == 'customer':
                     # raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
+
+                if is_disposal:
+                    order, action_state = self._prepare_disposal_internal_transfer(
+                        first,
+                        source_location,
+                        dest_location,
+                    )
+                    to_create_move = self.env['acumatica.inventory.issue.product'].search([('receipt_line_id', '=', first.id)])
+
+                    for line in to_create_move:
+                        print("Processed Internal Transfer Move")
+
+                        product = self._find_product(line)
+                        if not product:
+                            raise UserError(
+                                f'Product tidak ditemukan untuk InventoryID: {line.inventory_id or "-"}'
+                            )
+
+                        uom = self._find_uom(line, product)
+                        qty = self._parse_int(line.product_uom_qty)
+                        move_vals = {
+                            'name': line.line_description or product.display_name,
+                            'product_id': product.id,
+                            'product_uom_qty': qty,
+                            'product_uom': uom.id if uom else product.uom_id.id,
+                            'location_id': source_location.id,
+                            'location_dest_id': dest_location.id,
+                            'internal_transfer_order_id': order.id,
+                            'description_picking': line.line_description or False,
+                            'transaction_type': 'internal',
+                            'adt_type': first.trans_type or False,
+                        }
+                        move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
+                        Move.create(move_vals)
+
+                    first.write({
+                        'import_state': action_state,
+                        'import_message': f'{action_state.title()}: {order.name}',
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': order.id,
+                    })
+
+                    self.env.cr.execute('RELEASE SAVEPOINT import_issue_line')
+                    self.env.cr.commit()
+                    imported += 1 if action_state == 'imported' else 0
+                    updated += 1 if action_state == 'updated' else 0
+                    continue
                     
                 vals = {
                     'origin': first.reference_nbr,
@@ -426,6 +502,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'import_state': action_state,
                             'import_message': f'{action_state.title()}: {picking.name} (move updated)',
                             'odoo_picking_id': picking.id,
+                            'odoo_internal_transfer_order_id': False,
                         })
                     else:
                         Move.create({
@@ -445,6 +522,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'import_state': action_state,
                             'import_message': f'{action_state.title()}: {picking.name}',
                             'odoo_picking_id': picking.id,
+                            'odoo_internal_transfer_order_id': False,
                         })
 
                 if first.document_only:
@@ -466,7 +544,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                 
                 error += len(issue_lines)
                 
-        msg = f'Import selesai: {imported} delivery dibuat, {updated} delivery diupdate, {error} line error.'
+        msg = f'Import selesai: {imported} dokumen dibuat, {updated} dokumen diupdate, {error} line error.'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -503,8 +581,14 @@ class AcumaticaInventoryIssueLine(models.Model):
     @api.depends('reference_nbr')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
+        InternalTransferOrder = self.env['internal.transfer.order']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.reference_nbr and Picking.search_count([('origin', '=', rec.reference_nbr)]))
+            rec.exists_in_odoo = bool(
+                rec.reference_nbr and (
+                    Picking.search_count([('origin', '=', rec.reference_nbr)])
+                    or InternalTransferOrder.search_count([('external_ref', '=', rec.reference_nbr)])
+                )
+            )
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -542,6 +626,14 @@ class AcumaticaInventoryIssueLine(models.Model):
 
     def action_open_picking(self):
         self.ensure_one()
+        if self.odoo_internal_transfer_order_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'internal.transfer.order',
+                'res_id': self.odoo_internal_transfer_order_id.id,
+                'view_mode': 'form',
+                'target': 'current',
+            }
         if not self.odoo_picking_id:
             raise UserError('Belum ada picking Odoo.')
         return {

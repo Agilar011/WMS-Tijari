@@ -72,6 +72,7 @@
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
                     <field name="adt_type" column_invisible="1"/>
                     <field name="owner_id" column_invisible="parent.adt_type != 'Toko Pegang DO'"/>
+                    <field name="adt_dest_location_id"/>
                     <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
                     <button name="action_print_lot_number_line"
                         type="object"

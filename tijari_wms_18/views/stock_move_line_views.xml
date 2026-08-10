@@ -50,21 +50,19 @@
 
            <xpath expr="//field[last()]" position="after">
 
-                <button name="action_prepare_scan_lot"
-                        type="object"
-                        icon="fa-barcode"
-                        title="Validate Lot"
+                <field name="confirmation_lot_code"
+                        string=""
+                        widget="adt_scan_lot_button"
+                        readonly="1"
                         invisible="matching == 'match'"
-                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"
-                        class="btn-secondary"/>
+                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
 
-                <button name="action_prepare_scan_location"
-                        type="object"
-                        icon="fa-map-marker"
-                        title="Validate Location"
+                <field name="confirmation_location_code"
+                        string=""
+                        widget="adt_scan_location_button"
+                        readonly="1"
                         invisible="matching == 'match'"
-                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"
-                        class="btn-secondary"/>
+                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
                 <!-- <field name="second_matching" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" /> -->
                 <!-- <field name="third_matching" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" /> -->
             </xpath>
