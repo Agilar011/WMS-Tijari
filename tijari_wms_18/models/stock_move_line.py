@@ -154,6 +154,16 @@ class StockMoveLine(models.Model):
         store=False,
     )
 
+    available_lot_ids = fields.Many2many(
+        "stock.lot",
+        compute="_compute_available_quant_fields",
+    )
+
+    available_location_ids = fields.Many2many(
+        "stock.location",
+        compute="_compute_available_quant_fields",
+    )
+
     picking_type_name = fields.Char(
         related="move_id.picking_type_name",
         store=False,
@@ -256,7 +266,11 @@ class StockMoveLine(models.Model):
                 print(f"Quant domained: {item.lot_id.name}")
 
             print(f"Quant domain: {line.temp_quant_ids}")
-            
+
+    @api.onchange("lot_id", "location_id")
+    def _onchange_quant_fields(self):
+
+        return self._refresh_quant()
 
     @api.onchange("product_id", "source_location_id")
     def _onchange_source_location(self):
@@ -428,7 +442,7 @@ class StockMoveLine(models.Model):
 
     @api.onchange('product_id')
     def _onchange_product_copy_previous_lot(self):
-        print('def _onchange_product_copy_previous_lot(self)')
+        _logger.info('def _onchange_product_copy_previous_lot(self)')
 
         for line in self:
             if not line.move_id:
@@ -548,6 +562,111 @@ class StockMoveLine(models.Model):
             rec.lot_button = " "
 
     # ---------- Helpers ----------
+
+    def _get_base_quant_domain(self):
+            self.ensure_one()
+    
+            domain = [
+                ("product_id", "=", self.product_id.id),
+                ("location_id", "child_of", self.adt_dest_location_id.id),
+                ("quantity", ">", 0),
+                ("lot_id", "!=", False),
+            ]
+    
+            if (
+                self.move_id.picking_id.adt_type == "Toko Pegang DO"
+                and self.move_id.owner_id
+            ):
+                domain.append(
+                    ("owner_id", "=", self.move_id.owner_id.id)
+                )
+    
+            return domain
+    
+    @api.depends(
+        "product_id",
+        "source_location_id",
+        "lot_id",
+        "location_id",
+    )
+    def _compute_available_quant_fields(self):
+
+        Quant = self.env["stock.quant"]
+
+        for line in self:
+
+            line.available_lot_ids = False
+            line.available_location_ids = False
+
+            if (
+                not line.product_id
+                or not line.location_id
+            ):
+                continue
+
+            # ----------------------------------
+            # Available Lots
+            # ----------------------------------
+
+            lot_domain = line._get_base_quant_domain()
+
+            lots = Quant.search(lot_domain).mapped("lot_id")
+
+            line.available_lot_ids = [(6, 0, lots.ids)]
+
+            # ----------------------------------
+            # Available Locations
+            # ----------------------------------
+            
+            Location = self.env['stock.location']
+            # location_domain = line._get_base_quant_domain()
+
+            locations = Location.search(
+                [('id', 'child_of', line.adt_dest_location_id.id)]
+            )
+
+            line.available_location_ids = [
+                (6, 0, locations.ids)
+            ]
+
+    def _refresh_quant(self):
+        self.ensure_one()
+
+        Quant = self.env['stock.quant']
+        quants = self._get_base_quant_domain()
+        available_lots = Quant.search(quants).mapped("lot_id")
+        available_locations = self.env['stock.location'].search(
+            [('id', 'child_of', self.adt_dest_location_id.id)]
+        )
+
+        # ------------------------------------------------------
+        # Sync Quant
+        # ------------------------------------------------------
+
+        self.quant_id = False
+
+        if self.lot_id and self.location_id:
+
+            quant = self.env["stock.quant"].search([
+                ("product_id", "=", self.product_id.id),
+                ("lot_id", "=", self.lot_id.id),
+                ("location_id", "=", self.location_id.id),
+                ("quantity", ">", 0),
+            ], limit=1)
+
+            self.quant_id = quant
+
+        return {
+            "domain": {
+                "lot_id": [
+                    ("id", "in", available_lots.ids)
+                ],
+                "location_id": [
+                    ("id", "in", available_locations.ids)
+                ],
+            }
+        }
+
     def _tjr_is_incoming_tracked(self):
         print(f">>> Checking if line {self.id} is incoming tracked...") # Cek di terminal Odoo
         self.ensure_one()
@@ -1023,6 +1142,10 @@ class StockMoveLine(models.Model):
             # Buat apaan ya ini, mon maap
             # if move.raw_material_production_id != False:
             #     continue
+            if move.picking_id.return_id:
+                move.picked = True
+                continue
+
             move.picked = (
                 move.move_line_ids
                 and all(line.matching == 'match' for line in move.move_line_ids)
