@@ -19,9 +19,9 @@
                         </group>
                         <group string="Master Source">
                             <field name="location_code"/>
-                            <field name="transfer_source_location_code" invisible="generate_type != 'inventory_receipt'"/>
+                            <field name="transfer_source_location_code" invisible="generate_type not in ['inventory_receipt', 'transfer_shipment', 'sotr', 'transfer_one_step', 'transfer_two_step']"/>
                             <field name="vendor_id" invisible="generate_type not in ['po_receipt', 'po_return']"/>
-                            <field name="customer_id" invisible="generate_type not in ['inventory_receipt', 'so_return']"/>
+                            <field name="customer_id" invisible="generate_type not in ['inventory_receipt', 'inventory_issue', 'so_return']"/>
                             <field name="product_ids" widget="many2many_tags"/>
                             <field name="uom_id"/>
                         </group>
@@ -48,6 +48,17 @@
                             <field name="import_state"/>
                         </list>
                     </field>
+                    <field name="generated_inventory_issue_ids" invisible="not generated_inventory_issue_ids" readonly="1">
+                        <list>
+                            <field name="reference_nbr"/>
+                            <field name="trans_type"/>
+                            <field name="document_only"/>
+                            <field name="customer_id"/>
+                            <field name="warehouse_code"/>
+                            <field name="total_qty"/>
+                            <field name="import_state"/>
+                        </list>
+                    </field>
                     <field name="generated_shipment_ids" invisible="not generated_shipment_ids" readonly="1">
                         <list>
                             <field name="shipment_nbr"/>
@@ -64,6 +75,48 @@
                             <field name="document_only"/>
                             <field name="vendor_code"/>
                             <field name="warehouse_code"/>
+                            <field name="total_qty"/>
+                            <field name="import_state"/>
+                        </list>
+                    </field>
+                    <field name="generated_transfer_shipment_ids" invisible="not generated_transfer_shipment_ids" readonly="1">
+                        <list>
+                            <field name="shipment_nbr"/>
+                            <field name="document_only"/>
+                            <field name="warehouse_code"/>
+                            <field name="warehouse_dest_code"/>
+                            <field name="shipped_qty"/>
+                            <field name="import_state"/>
+                        </list>
+                    </field>
+                    <field name="generated_transfer_ids" invisible="not generated_transfer_ids" readonly="1">
+                        <list>
+                            <field name="receipt_nbr"/>
+                            <field name="document_only"/>
+                            <field name="warehouse_code"/>
+                            <field name="warehouse_dest_code"/>
+                            <field name="total_qty"/>
+                            <field name="import_state"/>
+                        </list>
+                    </field>
+                    <field name="generated_transfer_one_step_ids" invisible="not generated_transfer_one_step_ids" readonly="1">
+                        <list>
+                            <field name="reference_nbr"/>
+                            <field name="document_only"/>
+                            <field name="transfer_type"/>
+                            <field name="from_warehouse_code"/>
+                            <field name="to_warehouse_code"/>
+                            <field name="total_qty"/>
+                            <field name="import_state"/>
+                        </list>
+                    </field>
+                    <field name="generated_transfer_two_step_ids" invisible="not generated_transfer_two_step_ids" readonly="1">
+                        <list>
+                            <field name="reference_nbr"/>
+                            <field name="document_only"/>
+                            <field name="transfer_type"/>
+                            <field name="from_warehouse_code"/>
+                            <field name="to_warehouse_code"/>
                             <field name="total_qty"/>
                             <field name="import_state"/>
                         </list>

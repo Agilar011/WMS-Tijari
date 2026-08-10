@@ -504,8 +504,8 @@ class WmsApiController(http.Controller):
                     else difference_text
                 ),
                 'demand': float(line.product_uom_qty or 0),
-                'demand1': float(line.quantity or 0),
-                'qty': float(line.quantity or 0),
+                'demand1': float(line.confirmation_quantity or 0),
+                'qty': float(line.confirmation_quantity or 0),
                 'qty2': float(line.product_uom_qty or 0),
                 'ket': ''
             }

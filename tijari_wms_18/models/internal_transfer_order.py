@@ -568,7 +568,7 @@ class InternalTransferOrder(models.Model):
             if not self.transit_location_id:
                 self.transit_location_id = transit_location
             delivery_picking = self._create_transfer_picking(
-                self._get_required_picking_type('Transfer Internal', 'internal'),
+                self._get_transfer_out_picking_type(),
                 loading_dock,
                 transit_location,
                 'Transfer OUT',
@@ -645,7 +645,7 @@ class InternalTransferOrder(models.Model):
                     )
                 picking_specs = [
                     (
-                        order._get_internal_picking_type(),
+                        order._get_transfer_out_picking_type(),
                         order.location_id,
                         transit_location,
                         'Transfer OUT',
@@ -803,6 +803,67 @@ class StockPicking(models.Model):
                 'lot_name': False,
             })
 
+    def _is_disposal_receipt_internal_transfer(self):
+        self.ensure_one()
+        order = self.internal_transfer_order_id
+        return bool(
+            order
+            and order.transaction_type == 'intra_warehouse'
+            and self.internal_transfer_leg == 'receipt'
+            and any(
+                (adt_type or '').strip().casefold() == 'disposal'
+                for adt_type in self.move_ids.mapped('adt_type')
+            )
+        )
+
+    def _set_disposal_receipt_done_quantities(self):
+        MoveLine = self.env['stock.move.line']
+        quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
+        for picking in self.filtered(lambda item: item._is_disposal_receipt_internal_transfer()):
+            for move in picking.move_ids.filtered(lambda item: item.state not in ('done', 'cancel')):
+                quantity = move.product_uom_qty
+                if not quantity:
+                    continue
+
+                move_lines = move.move_line_ids
+                if not move_lines:
+                    move_lines = MoveLine.create({
+                        'picking_id': picking.id,
+                        'move_id': move.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                    })
+
+                zero_lines = move_lines[:-1]
+                if zero_lines:
+                    zero_lines.with_context(skip_matching_sync=True).write({
+                        quantity_field: 0.0,
+                        'confirmation_quantity': 0.0,
+                        'matching': 'match',
+                        'putaway_status': 'finished',
+                        'picker_status': 'finished',
+                        'picked': True,
+                    })
+
+                done_line = move_lines[-1]
+                done_line_vals = {
+                    quantity_field: quantity,
+                    'confirmation_quantity': quantity,
+                    'location_dest_id': move.location_dest_id.id,
+                    'location_putaway_id': move.location_dest_id.id,
+                    'matching_loc_dest_id': move.location_dest_id.id,
+                    'matching': 'match',
+                    'putaway_status': 'finished',
+                    'picker_status': 'finished',
+                    'picked': True,
+                }
+                if done_line.lot_id:
+                    done_line_vals['matching_lot_id'] = done_line.lot_id.id
+                done_line.with_context(skip_matching_sync=True).write(done_line_vals)
+                move.picked = True
+
     def button_validate(self):
         for picking in self:
             order = picking.internal_transfer_order_id
@@ -884,6 +945,8 @@ class StockPicking(models.Model):
         fifo_lot_lines = missing_lot_lines - transfer_in_virtual_lines
         if fifo_lot_lines:
             fifo_lot_lines.action_generate_or_pick_lot()
+
+        self._set_disposal_receipt_done_quantities()
 
         result = super().button_validate()
 

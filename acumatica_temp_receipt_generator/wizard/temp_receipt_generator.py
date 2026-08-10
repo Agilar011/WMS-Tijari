@@ -16,13 +16,25 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         ('INVR', 'Inventory Receive'),
         ('CHGD', 'Change Item Discontinue'),
     )
+    INVENTORY_ISSUE_TYPES = (
+        ('ISSU', 'Issue'),
+        ('TPDO', 'Toko Pegang DO'),
+        ('CHGI', 'Change Item'),
+        ('CHGD', 'Change Item Discontinue'),
+        ('DISP', 'Disposal'),
+    )
     CUSTOMER_REQUIRED_TYPES = {'Toko Pegang DO', 'Change Item', 'Change Item Discontinue'}
 
     generate_type = fields.Selection([
         ('po_receipt', 'PO Receipt'),
         ('inventory_receipt', 'Inventory Receipt'),
+        ('inventory_issue', 'Inventory Issue'),
         ('so_return', 'SO Return'),
         ('po_return', 'PO Return'),
+        ('transfer_shipment', 'Transfer Shipment'),
+        ('sotr', 'SOTR'),
+        ('transfer_one_step', 'Transfer 1 Step'),
+        ('transfer_two_step', 'Transfer 2 Step'),
     ], string='Generate Type', default='po_receipt', required=True)
     document_only = fields.Boolean(string='Document Only')
     random_data = fields.Boolean(string='Random Data', default=True)
@@ -75,6 +87,14 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         string='Generated Inventory Receipts',
         readonly=True,
     )
+    generated_inventory_issue_ids = fields.Many2many(
+        'acumatica.inventory.issue.line',
+        'acum_temp_inv_issue_generated_rel',
+        'wizard_id',
+        'inventory_issue_id',
+        string='Generated Inventory Issues',
+        readonly=True,
+    )
     generated_shipment_ids = fields.Many2many(
         'acumatica.shipment.line',
         'acum_temp_so_return_generated_rel',
@@ -89,6 +109,38 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         'wizard_id',
         'po_return_id',
         string='Generated PO Returns',
+        readonly=True,
+    )
+    generated_transfer_shipment_ids = fields.Many2many(
+        'acumatica.transfer.shipment.line',
+        'acum_temp_transfer_shipment_generated_rel',
+        'wizard_id',
+        'transfer_shipment_id',
+        string='Generated Transfer Shipments',
+        readonly=True,
+    )
+    generated_transfer_ids = fields.Many2many(
+        'acumatica.transfer.line',
+        'acum_temp_sotr_generated_rel',
+        'wizard_id',
+        'transfer_id',
+        string='Generated SOTR',
+        readonly=True,
+    )
+    generated_transfer_one_step_ids = fields.Many2many(
+        'acumatica.transfer.one.step.line',
+        'acum_temp_transfer_one_step_generated_rel',
+        'wizard_id',
+        'transfer_one_step_id',
+        string='Generated Transfer 1 Step',
+        readonly=True,
+    )
+    generated_transfer_two_step_ids = fields.Many2many(
+        'acumatica.transfer.two.step.line',
+        'acum_temp_transfer_two_step_generated_rel',
+        'wizard_id',
+        'transfer_two_step_id',
+        string='Generated Transfer 2 Step',
         readonly=True,
     )
 
@@ -322,6 +374,23 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
             ], limit=1)
         return config
 
+    def _get_inventory_issue_config(self):
+        return self._get_acumatica_config('inventory_issue')
+
+    def _get_acumatica_config(self, config_type):
+        Config = self.env['acumatica.config'].sudo()
+        config = Config.search([
+            ('active', '=', True),
+            ('config_type', '=', config_type),
+            ('is_default', '=', True),
+        ], limit=1)
+        if not config:
+            config = Config.search([
+                ('active', '=', True),
+                ('config_type', '=', config_type),
+            ], limit=1)
+        return config
+
     @staticmethod
     def _normalize_transfer_type(value):
         return (value or '').strip().lower().replace('-', '_').replace(' ', '_')
@@ -351,6 +420,58 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         return PickingType.search([
             ('warehouse_id', '=', warehouse.id),
             ('code', '=', 'internal' if type_key == 'transfer_in' else 'incoming'),
+            ('is_default_api', '=', True),
+        ], limit=1)
+
+    def _get_inventory_issue_picking_type(self, trans_type, location_code):
+        PickingType = self.env['stock.picking.type'].sudo()
+        Location = self.env['stock.location.acumatica'].sudo()
+        if self.document_only:
+            document_type = PickingType.resolve_document_only_picking_type(
+                api_acumatica='inventory_issue',
+                document_only=True,
+                warehouse_code=location_code,
+                required=False,
+            )
+            if document_type:
+                return document_type
+
+        location = Location.search([
+            ('code', '=', location_code),
+            ('is_active', '=', True),
+        ], limit=1) or Location.search([
+            ('code', '=', location_code),
+        ], limit=1)
+        warehouse = location.odoo_building_id if location and location.odoo_building_id else self._get_wh33_warehouse()
+        picking_code = 'outgoing' if (trans_type or '').strip().casefold() == 'toko pegang do' else 'internal'
+        return PickingType.search([
+            ('warehouse_id', '=', warehouse.id if warehouse else False),
+            ('code', '=', picking_code),
+            ('is_default_api', '=', True),
+        ], limit=1)
+
+    def _get_transfer_picking_type(self, api_acumatica, warehouse_code, document_only=False):
+        PickingType = self.env['stock.picking.type'].sudo()
+        Location = self.env['stock.location.acumatica'].sudo()
+        if document_only:
+            document_type = PickingType.resolve_document_only_picking_type(
+                api_acumatica=api_acumatica,
+                document_only=True,
+                warehouse_code=warehouse_code,
+                required=False,
+            )
+            if document_type:
+                return document_type
+
+        location = Location.search([
+            ('code', '=', warehouse_code),
+            ('is_active', '=', True),
+        ], limit=1)
+        warehouse = location.odoo_building_id if location and location.odoo_building_id else self._get_wh33_warehouse()
+        operation_code = 'incoming' if api_acumatica == 'so_transfer' else 'internal'
+        return PickingType.search([
+            ('warehouse_id', '=', warehouse.id if warehouse else False),
+            ('code', '=', operation_code),
             ('is_default_api', '=', True),
         ], limit=1)
 
@@ -439,6 +560,29 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
             raise UserError('\n'.join(errors))
         return customers, products, warehouse, location, source_location, config, picking_types
 
+    def _validate_inventory_issue_master_data(self):
+        errors = []
+        products, warehouse, location = self._validate_common_master_data()
+        customers = self._get_customer_pool()
+        config = self._get_inventory_issue_config()
+        picking_types = {}
+        location_code = location.code if location else self.location_code
+
+        if not customers:
+            errors.append(_('Customer master tidak ditemukan untuk Inventory Issue Toko Pegang DO / Change Item.'))
+        elif not all(customer.company_registry or customer.name for customer in customers):
+            errors.append(_('Ada customer tanpa company registry atau nama valid.'))
+
+        for _code, trans_type in self.INVENTORY_ISSUE_TYPES:
+            picking_type = self._get_inventory_issue_picking_type(trans_type, location_code)
+            picking_types[trans_type] = picking_type
+            if trans_type != 'Disposal' and not picking_type:
+                errors.append(_('Operation Type untuk Inventory Issue type %s tidak ditemukan.') % trans_type)
+
+        if errors:
+            raise UserError('\n'.join(errors))
+        return customers, products, warehouse, location, config, picking_types
+
     def _validate_so_return_master_data(self):
         errors = []
         products, warehouse, location = self._validate_common_master_data()
@@ -476,6 +620,75 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
             raise UserError('\n'.join(errors))
         return vendors, products, warehouse, location, picking_type
 
+    def _validate_transfer_shipment_master_data(self):
+        errors = []
+        products, warehouse, source_location = self._validate_common_master_data()
+        destination_location = self._get_transfer_source_location(source_location)
+        source_code = source_location.code if source_location else self.location_code
+        picking_type = self._get_transfer_picking_type(
+            'transfer_shipment',
+            source_code,
+            document_only=self.document_only,
+        )
+        config = self._get_acumatica_config('transfer_shipment')
+
+        if not destination_location:
+            errors.append(_('Destination location untuk Transfer Shipment tidak ditemukan.'))
+        elif not destination_location.odoo_location_id:
+            errors.append(_('Destination location %s belum punya Odoo Location.') % destination_location.code)
+        if not picking_type:
+            errors.append(_('Operation Type Transfer Shipment untuk %s tidak ditemukan.') % source_code)
+
+        if errors:
+            raise UserError('\n'.join(errors))
+        return products, warehouse, source_location, destination_location, picking_type, config
+
+    def _validate_sotr_master_data(self):
+        errors = []
+        products, warehouse, destination_location = self._validate_common_master_data()
+        source_location = self._get_transfer_source_location(destination_location)
+        destination_code = destination_location.code if destination_location else self.location_code
+        picking_type = self._get_transfer_picking_type(
+            'so_transfer',
+            'WH33',
+            document_only=self.document_only,
+        )
+        config = self._get_acumatica_config('so_transfer')
+
+        if not source_location:
+            errors.append(_('Source location untuk SOTR tidak ditemukan.'))
+        elif not source_location.odoo_location_id:
+            errors.append(_('Source location %s belum punya Odoo Location.') % source_location.code)
+        if not picking_type:
+            errors.append(_('Operation Type SOTR untuk WH33 tidak ditemukan.'))
+
+        if errors:
+            raise UserError('\n'.join(errors))
+        return products, warehouse, source_location, destination_location, picking_type, config
+
+    def _validate_transfer_order_master_data(self, api_acumatica, label):
+        errors = []
+        products, warehouse, source_location = self._validate_common_master_data()
+        destination_location = self._get_transfer_source_location(source_location)
+        source_code = source_location.code if source_location else self.location_code
+        picking_type = self._get_transfer_picking_type(
+            api_acumatica,
+            source_code,
+            document_only=self.document_only,
+        )
+        config = self._get_acumatica_config(api_acumatica)
+
+        if not destination_location:
+            errors.append(_('Destination location untuk %s tidak ditemukan.') % label)
+        elif not destination_location.odoo_location_id:
+            errors.append(_('Destination location %s belum punya Odoo Location.') % destination_location.code)
+        if not picking_type:
+            errors.append(_('Operation Type %s untuk %s tidak ditemukan.') % (label, source_code))
+
+        if errors:
+            raise UserError('\n'.join(errors))
+        return products, warehouse, source_location, destination_location, picking_type, config
+
     def _receipt_number(self, sequence):
         self.ensure_one()
         prefix = (self.receipt_prefix or 'TMP-R26').strip()
@@ -486,6 +699,11 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         prefix = (self.receipt_prefix or 'TMP-R26').strip()
         return '%s-%s-%04d' % (prefix, type_code, sequence)
 
+    def _inventory_issue_reference_number(self, type_code, sequence):
+        self.ensure_one()
+        prefix = (self.receipt_prefix or 'TMP-R26').strip()
+        return '%s-II-%s-%04d' % (prefix, type_code, sequence)
+
     def _shipment_number(self, sequence):
         self.ensure_one()
         prefix = (self.receipt_prefix or 'TMP-R26').strip()
@@ -495,6 +713,21 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         self.ensure_one()
         prefix = (self.receipt_prefix or 'TMP-R26').strip()
         return '%s-POR-%04d' % (prefix, sequence)
+
+    def _transfer_shipment_number(self, sequence):
+        self.ensure_one()
+        prefix = (self.receipt_prefix or 'TMP-R26').strip()
+        return '%s-TS-%04d' % (prefix, sequence)
+
+    def _sotr_receipt_number(self, sequence):
+        self.ensure_one()
+        prefix = (self.receipt_prefix or 'TMP-R26').strip()
+        return '%s-SOTR-%04d' % (prefix, sequence)
+
+    def _transfer_order_number(self, suffix, sequence):
+        self.ensure_one()
+        prefix = (self.receipt_prefix or 'TMP-R26').strip()
+        return '%s-%s-%04d' % (prefix, suffix, sequence)
 
     def _external_id(self, receipt_nbr):
         return 'TEMP-%s' % receipt_nbr
@@ -515,10 +748,20 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         self.ensure_one()
         if self.generate_type == 'inventory_receipt':
             return self._generate_inventory_receipts()
+        if self.generate_type == 'inventory_issue':
+            return self._generate_inventory_issues()
         if self.generate_type == 'so_return':
             return self._generate_so_returns()
         if self.generate_type == 'po_return':
             return self._generate_po_returns()
+        if self.generate_type == 'transfer_shipment':
+            return self._generate_transfer_shipments()
+        if self.generate_type == 'sotr':
+            return self._generate_sotr_receipts()
+        if self.generate_type == 'transfer_one_step':
+            return self._generate_transfer_one_step()
+        if self.generate_type == 'transfer_two_step':
+            return self._generate_transfer_two_step()
         return self._generate_po_receipts()
 
     def _generate_po_receipts(self):
@@ -583,8 +826,13 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
 
         self.generated_receipt_ids = [(6, 0, generated.ids)]
         self.generated_inventory_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_issue_ids = [(5, 0, 0)]
         self.generated_shipment_ids = [(5, 0, 0)]
         self.generated_po_return_ids = [(5, 0, 0)]
+        self.generated_transfer_shipment_ids = [(5, 0, 0)]
+        self.generated_transfer_ids = [(5, 0, 0)]
+        self.generated_transfer_one_step_ids = [(5, 0, 0)]
+        self.generated_transfer_two_step_ids = [(5, 0, 0)]
         return {
             'type': 'ir.actions.act_window',
             'name': _('Generated WH33 PO Receipt Staging'),
@@ -699,8 +947,13 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
 
         self.generated_inventory_receipt_ids = [(6, 0, generated.ids)]
         self.generated_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_issue_ids = [(5, 0, 0)]
         self.generated_shipment_ids = [(5, 0, 0)]
         self.generated_po_return_ids = [(5, 0, 0)]
+        self.generated_transfer_shipment_ids = [(5, 0, 0)]
+        self.generated_transfer_ids = [(5, 0, 0)]
+        self.generated_transfer_one_step_ids = [(5, 0, 0)]
+        self.generated_transfer_two_step_ids = [(5, 0, 0)]
         return {
             'type': 'ir.actions.act_window',
             'name': _('Generated WH33 Inventory Receipt Staging'),
@@ -728,6 +981,131 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
                 'product_uom_qty': str(qty),
                 'uom_code': uom.name,
                 'warehouse_dest_code': destination_code,
+            })
+        return line_vals
+
+    def _generate_inventory_issues(self):
+        self.ensure_one()
+        customers, products, warehouse, location, config, picking_types = self._validate_inventory_issue_master_data()
+        Issue = self.env['acumatica.inventory.issue.line'].sudo()
+        ProductLine = self.env['acumatica.inventory.issue.product'].sudo()
+        Picking = self.env['stock.picking'].sudo()
+        InternalTransferOrder = self.env['internal.transfer.order'].sudo()
+        sync_date = fields.Datetime.now()
+        generated = Issue.browse()
+        scheduled_date = self._scheduled_date()
+        location_code = location.code or self.location_code
+
+        row_number = 0
+        for type_code, trans_type in self.INVENTORY_ISSUE_TYPES:
+            for receipt_index in range(1, self.receipt_count + 1):
+                row_number += 1
+                reference_nbr = self._inventory_issue_reference_number(type_code, receipt_index)
+                customer = self._pick_record(customers, row_number)
+                issue_products = self._pick_products(products, row_number)
+                line_quantities = [
+                    self._line_quantity(line_index, row_number)
+                    for line_index in range(1, len(issue_products) + 1)
+                ]
+                line_total_qty = sum(line_quantities)
+                existing_picking = Picking.search([('origin', '=', reference_nbr)], limit=1)
+                existing_order = InternalTransferOrder.search([('external_ref', '=', reference_nbr)], limit=1)
+                needs_customer = trans_type in self.CUSTOMER_REQUIRED_TYPES
+                customer_code = (getattr(customer, 'adt_b_account_id', False) or customer.name) if needs_customer else False
+                picking_type = picking_types.get(trans_type)
+                header_vals = {
+                    'external_id': self._external_id(reference_nbr),
+                    'line_external_id': '%s-LINE-1' % self._external_id(reference_nbr),
+                    'row_number': row_number,
+                    'reference_nbr': reference_nbr,
+                    'scheduled_date': scheduled_date,
+                    'description': 'Temporary WH33 Inventory Issue %s' % trans_type,
+                    'external_ref': 'EXT-%s' % reference_nbr,
+                    'document_only': self.document_only,
+                    'status': 'Balanced',
+                    'actual_qty': str(line_total_qty),
+                    'total_qty': str(line_total_qty),
+                    'actual_amount': '0',
+                    'total_amount': '0',
+                    'post_period': self._post_period(),
+                    'acumatica_write_date': fields.Datetime.to_string(sync_date),
+                    'trans_type': trans_type,
+                    'note': self.MARKER,
+                    'line_nbr': '1',
+                    'line_description': issue_products[:1].display_name if issue_products else False,
+                    'inventory_id': issue_products[:1].default_code if issue_products else False,
+                    'location_code': location_code,
+                    'product_uom_qty': str(line_total_qty),
+                    'line_trans_type': trans_type,
+                    'uom_code': (self.uom_id or issue_products[:1].uom_id).name if issue_products else False,
+                    'warehouse_code': location_code,
+                    'branch_warehouse': warehouse.code,
+                    'line_note': self.MARKER,
+                    'customer_id': customer_code,
+                    'picking_type_id': picking_type.id if picking_type else False,
+                    'config_id': config.id if config else False,
+                    'odoo_picking_id': existing_picking.id if existing_picking else False,
+                    'odoo_internal_transfer_order_id': existing_order.id if existing_order else False,
+                    'import_state': 'pending',
+                    'import_message': '%s: Sudah ada -> akan diupdate' % reference_nbr if existing_picking or existing_order else '',
+                    'selected': True,
+                    'sync_date': sync_date,
+                }
+                issue = Issue.search([('reference_nbr', '=', reference_nbr)], limit=1)
+                if issue:
+                    issue.write(header_vals)
+                else:
+                    issue = Issue.create(header_vals)
+
+                ProductLine.search([('receipt_line_id', '=', issue.id)]).unlink()
+                ProductLine.create(self._inventory_issue_product_line_values(
+                    issue,
+                    issue_products,
+                    location_code,
+                    trans_type,
+                    customer_code,
+                    line_quantities,
+                ))
+                generated |= issue
+
+        self.generated_inventory_issue_ids = [(6, 0, generated.ids)]
+        self.generated_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_receipt_ids = [(5, 0, 0)]
+        self.generated_shipment_ids = [(5, 0, 0)]
+        self.generated_po_return_ids = [(5, 0, 0)]
+        self.generated_transfer_shipment_ids = [(5, 0, 0)]
+        self.generated_transfer_ids = [(5, 0, 0)]
+        self.generated_transfer_one_step_ids = [(5, 0, 0)]
+        self.generated_transfer_two_step_ids = [(5, 0, 0)]
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Generated WH33 Inventory Issue Staging'),
+            'res_model': 'acumatica.inventory.issue.line',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', generated.ids)],
+            'context': {'create': False},
+        }
+
+    def _inventory_issue_product_line_values(self, issue, products, location_code, trans_type, customer_code, line_quantities):
+        line_vals = []
+        for line_index, product in enumerate(products, start=1):
+            uom = self.uom_id or product.uom_id
+            qty = line_quantities[line_index - 1]
+            line_vals.append({
+                'receipt_line_id': issue.id,
+                'header_external_id': issue.external_id,
+                'line_external_id': '%s-LINE-%s' % (issue.external_id, line_index),
+                'line_note': self.MARKER,
+                'branch_warehouse': 'WH33',
+                'line_description': product.display_name,
+                'inventory_id': product.default_code,
+                'line_nbr': str(line_index),
+                'location_code': location_code,
+                'product_uom_qty': str(qty),
+                'line_trans_type': trans_type,
+                'uom_code': uom.name,
+                'warehouse_code': location_code,
+                'customer_id': customer_code,
             })
         return line_vals
 
@@ -803,7 +1181,12 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         self.generated_shipment_ids = [(6, 0, generated.ids)]
         self.generated_receipt_ids = [(5, 0, 0)]
         self.generated_inventory_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_issue_ids = [(5, 0, 0)]
         self.generated_po_return_ids = [(5, 0, 0)]
+        self.generated_transfer_shipment_ids = [(5, 0, 0)]
+        self.generated_transfer_ids = [(5, 0, 0)]
+        self.generated_transfer_one_step_ids = [(5, 0, 0)]
+        self.generated_transfer_two_step_ids = [(5, 0, 0)]
         return {
             'type': 'ir.actions.act_window',
             'name': _('Generated WH33 SO Return Staging'),
@@ -923,7 +1306,12 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         self.generated_po_return_ids = [(6, 0, generated.ids)]
         self.generated_receipt_ids = [(5, 0, 0)]
         self.generated_inventory_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_issue_ids = [(5, 0, 0)]
         self.generated_shipment_ids = [(5, 0, 0)]
+        self.generated_transfer_shipment_ids = [(5, 0, 0)]
+        self.generated_transfer_ids = [(5, 0, 0)]
+        self.generated_transfer_one_step_ids = [(5, 0, 0)]
+        self.generated_transfer_two_step_ids = [(5, 0, 0)]
         return {
             'type': 'ir.actions.act_window',
             'name': _('Generated WH33 PO Return Staging'),
@@ -953,10 +1341,532 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
             })
         return line_vals
 
+    def _generate_transfer_shipments(self):
+        self.ensure_one()
+        products, warehouse, source_location, destination_location, picking_type, config = self._validate_transfer_shipment_master_data()
+        Shipment = self.env['acumatica.transfer.shipment.line'].sudo()
+        ProductLine = self.env['acumatica.transfer.shipment.line.product'].sudo()
+        InternalTransferOrder = self.env['internal.transfer.order'].sudo()
+        Picking = self.env['stock.picking'].sudo()
+        sync_date = fields.Datetime.now()
+        generated = Shipment.browse()
+        scheduled_date = self._scheduled_date()
+        source_code = source_location.code or self.location_code
+        destination_code = destination_location.code
+
+        for shipment_index in range(1, self.receipt_count + 1):
+            shipment_nbr = self._transfer_shipment_number(shipment_index)
+            shipment_products = self._pick_products(products, shipment_index)
+            line_quantities = [
+                self._line_quantity(line_index, shipment_index)
+                for line_index in range(1, len(shipment_products) + 1)
+            ]
+            line_total_qty = sum(line_quantities)
+            existing_picking = Picking.search([('origin', '=', shipment_nbr)], limit=1)
+            existing_order = InternalTransferOrder.search([('external_ref', '=', shipment_nbr)], limit=1)
+            header_vals = {
+                'external_id': self._external_id(shipment_nbr),
+                'row_number': shipment_index,
+                'note': self.MARKER,
+                'building_code': warehouse.code,
+                'shipment_nbr': shipment_nbr,
+                'description': 'Temporary WH33 Transfer Shipment',
+                'document_only': self.document_only,
+                'header_location_code': source_code,
+                'operation': 'Issue',
+                'scheduled_date': scheduled_date,
+                'shipped_qty': str(line_total_qty),
+                'status': 'Open',
+                'warehouse_dest_code': destination_code,
+                'shipment_type': 'Transfer',
+                'warehouse_code': source_code,
+                'actual_qty': str(line_total_qty),
+                'acumatica_write_date': fields.Datetime.to_string(sync_date),
+                'package_count': '1',
+                'package_weight': '0',
+                'picking_type_id': picking_type.id,
+                'config_id': config.id if config else False,
+                'odoo_picking_id': existing_picking.id if existing_picking else False,
+                'odoo_internal_transfer_order_id': existing_order.id if existing_order else False,
+                'import_state': 'pending',
+                'import_message': '%s: Sudah ada -> akan diupdate' % shipment_nbr if existing_picking or existing_order else '',
+                'selected': True,
+                'sync_date': sync_date,
+            }
+            shipment = Shipment.search([('shipment_nbr', '=', shipment_nbr)], limit=1)
+            if shipment:
+                shipment.write(header_vals)
+            else:
+                shipment = Shipment.create(header_vals)
+
+            ProductLine.search([('shipment_id', '=', shipment.id)]).unlink()
+            ProductLine.create(self._transfer_shipment_product_line_values(
+                shipment,
+                shipment_products,
+                source_code,
+                destination_code,
+                line_quantities,
+            ))
+            generated |= shipment
+
+        self.generated_transfer_shipment_ids = [(6, 0, generated.ids)]
+        self.generated_transfer_ids = [(5, 0, 0)]
+        self.generated_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_issue_ids = [(5, 0, 0)]
+        self.generated_shipment_ids = [(5, 0, 0)]
+        self.generated_po_return_ids = [(5, 0, 0)]
+        self.generated_transfer_one_step_ids = [(5, 0, 0)]
+        self.generated_transfer_two_step_ids = [(5, 0, 0)]
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Generated WH33 Transfer Shipment Staging'),
+            'res_model': 'acumatica.transfer.shipment.line',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', generated.ids)],
+            'context': {'create': False},
+        }
+
+    def _transfer_shipment_product_line_values(self, shipment, products, source_code, destination_code, line_quantities):
+        line_vals = []
+        for line_index, product in enumerate(products, start=1):
+            uom = self.uom_id or product.uom_id
+            qty = line_quantities[line_index - 1]
+            line_vals.append({
+                'shipment_id': shipment.id,
+                'shipment_nbr': shipment.shipment_nbr,
+                'line_external_id': '%s-LINE-%s' % (shipment.external_id, line_index),
+                'line_note': self.MARKER,
+                'line_row_number': str(line_index),
+                'line_description': product.display_name,
+                'is_free_item': 'False',
+                'inventory_id': product.default_code,
+                'line_nbr': str(line_index),
+                'location_dest_code': destination_code,
+                'open_qty': '0',
+                'order_qty': str(qty),
+                'order_line_number': str(line_index),
+                'order_number': 'TO-%s' % shipment.shipment_nbr,
+                'order_type': 'Transfer Order',
+                'original_qty': str(qty),
+                'product_uom_qty': str(qty),
+                'uom_code': uom.name,
+                'line_warehouse_code': source_code,
+            })
+        return line_vals
+
+    def _generate_sotr_receipts(self):
+        self.ensure_one()
+        products, warehouse, source_location, destination_location, picking_type, config = self._validate_sotr_master_data()
+        Transfer = self.env['acumatica.transfer.line'].sudo()
+        ProductLine = self.env['acumatica.transfer.product.line'].sudo()
+        InternalTransferOrder = self.env['internal.transfer.order'].sudo()
+        Picking = self.env['stock.picking'].sudo()
+        sync_date = fields.Datetime.now()
+        generated = Transfer.browse()
+        scheduled_date = self._scheduled_date()
+        source_code = source_location.code
+        destination_code = destination_location.code or self.location_code
+
+        for receipt_index in range(1, self.receipt_count + 1):
+            receipt_nbr = self._sotr_receipt_number(receipt_index)
+            transfer_order_number = 'TO-%s' % receipt_nbr
+            transfer_shipment_number = 'TS-%s' % receipt_nbr
+            receipt_products = self._pick_products(products, receipt_index)
+            line_quantities = [
+                self._line_quantity(line_index, receipt_index)
+                for line_index in range(1, len(receipt_products) + 1)
+            ]
+            line_total_qty = sum(line_quantities)
+            first_product = receipt_products[:1]
+            first_uom = self.uom_id or first_product.uom_id
+            existing_picking = Picking.search([('origin', '=', receipt_nbr)], limit=1)
+            existing_order = InternalTransferOrder.search([('external_ref', '=', receipt_nbr)], limit=1)
+            header_vals = {
+                'external_id': self._external_id(receipt_nbr),
+                'line_external_id': '%s-LINE-1' % self._external_id(receipt_nbr),
+                'row_number': receipt_index,
+                'receipt_nbr': receipt_nbr,
+                'transfer_order_number': transfer_order_number,
+                'transfer_order_line_number': '1',
+                'transfer_order_type': 'Transfer Order',
+                'transfer_shipment_number': transfer_shipment_number,
+                'scheduled_date': scheduled_date,
+                'warehouse_code': source_code,
+                'warehouse_dest_code': destination_code,
+                'header_location_code': 'TRANSIT',
+                'location_dest_code': destination_code,
+                'status': 'Balanced',
+                'receipt_type': 'Transfer Receipt',
+                'actual_qty': str(line_total_qty),
+                'total_qty': str(line_total_qty),
+                'is_hold': 'False',
+                'document_only': self.document_only,
+                'inventory_ref': 'IR-%s' % receipt_nbr,
+                'post_period': self._post_period(),
+                'acumatica_write_date': fields.Datetime.to_string(sync_date),
+                'note': self.MARKER,
+                'branch_warehouse': warehouse.code,
+                'line_nbr': '1',
+                'description': first_product.display_name if first_product else False,
+                'transaction_description': first_product.display_name if first_product else False,
+                'inventory_id': first_product.default_code if first_product else False,
+                'line_type': 'Goods for IN',
+                'open_qty': '0',
+                'order_qty': str(line_total_qty),
+                'product_uom_qty': str(line_total_qty),
+                'uom_code': first_uom.name if first_uom else False,
+                'picking_type_id': picking_type.id,
+                'config_id': config.id if config else False,
+                'odoo_picking_id': existing_picking.id if existing_picking else False,
+                'odoo_internal_transfer_order_id': existing_order.id if existing_order else False,
+                'import_state': 'pending',
+                'import_message': '%s: Sudah ada -> akan diupdate' % receipt_nbr if existing_picking or existing_order else '',
+                'selected': True,
+                'sync_date': sync_date,
+            }
+            transfer = Transfer.search([('receipt_nbr', '=', receipt_nbr)], limit=1)
+            if transfer:
+                transfer.write(header_vals)
+            else:
+                transfer = Transfer.create(header_vals)
+
+            ProductLine.search([('transfer_line_id', '=', transfer.id)]).unlink()
+            ProductLine.create(self._sotr_product_line_values(
+                transfer,
+                receipt_products,
+                destination_code,
+                transfer_order_number,
+                transfer_shipment_number,
+                line_quantities,
+            ))
+            generated |= transfer
+
+        self.generated_transfer_ids = [(6, 0, generated.ids)]
+        self.generated_transfer_shipment_ids = [(5, 0, 0)]
+        self.generated_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_issue_ids = [(5, 0, 0)]
+        self.generated_shipment_ids = [(5, 0, 0)]
+        self.generated_po_return_ids = [(5, 0, 0)]
+        self.generated_transfer_one_step_ids = [(5, 0, 0)]
+        self.generated_transfer_two_step_ids = [(5, 0, 0)]
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Generated WH33 SOTR Staging'),
+            'res_model': 'acumatica.transfer.line',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', generated.ids)],
+            'context': {'create': False},
+        }
+
+    def _sotr_product_line_values(self, transfer, products, destination_code, transfer_order_number, transfer_shipment_number, line_quantities):
+        line_vals = []
+        for line_index, product in enumerate(products, start=1):
+            uom = self.uom_id or product.uom_id
+            qty = line_quantities[line_index - 1]
+            line_vals.append({
+                'header_external_id': transfer.external_id,
+                'transfer_line_id': transfer.id,
+                'receipt_nbr': transfer.receipt_nbr,
+                'line_external_id': '%s-LINE-%s' % (transfer.external_id, line_index),
+                'line_nbr': str(line_index),
+                'description': product.display_name,
+                'transaction_description': product.display_name,
+                'inventory_id': product.default_code,
+                'line_type': 'Goods for IN',
+                'location_dest_code': destination_code,
+                'open_qty': '0',
+                'order_qty': str(qty),
+                'product_uom_qty': str(qty),
+                'transfer_order_number': transfer_order_number,
+                'transfer_order_line_number': str(line_index),
+                'transfer_order_type': 'Transfer Order',
+                'transfer_shipment_number': transfer_shipment_number,
+                'uom_code': uom.name,
+                'warehouse_dest_code': destination_code,
+                'line_note': self.MARKER,
+            })
+        return line_vals
+
+    def _transfer_header_values(
+        self,
+        reference_nbr,
+        receipt_index,
+        warehouse,
+        source_code,
+        destination_code,
+        transfer_type,
+        line_total_qty,
+        picking_type,
+        config,
+        sync_date,
+        existing_order=False,
+    ):
+        return {
+            'external_id': self._external_id(reference_nbr),
+            'line_external_id': '%s-LINE-1' % self._external_id(reference_nbr),
+            'row_number': receipt_index,
+            'reference_nbr': reference_nbr,
+            'scheduled_date': self._scheduled_date(),
+            'to_warehouse_code': destination_code,
+            'description': 'Temporary WH33 %s' % transfer_type,
+            'from_warehouse_code': source_code,
+            'status': 'Balanced',
+            'transfer_type': transfer_type,
+            'trans_type': 'Transfer',
+            'total_qty': str(line_total_qty),
+            'is_hold': 'False',
+            'post_period': self._post_period(),
+            'acumatica_write_date': fields.Datetime.to_string(sync_date),
+            'note': self.MARKER,
+            'document_only': self.document_only,
+            'line_nbr': '1',
+            'line_note': self.MARKER,
+            'picking_type_id': picking_type.id,
+            'config_id': config.id if config else False,
+            'odoo_internal_transfer_order_id': existing_order.id if existing_order else False,
+            'import_state': 'pending',
+            'import_message': '%s: Sudah ada -> akan diupdate' % reference_nbr if existing_order else '',
+            'selected': True,
+            'sync_date': sync_date,
+        }
+
+    def _generate_transfer_one_step(self):
+        self.ensure_one()
+        products, warehouse, source_location, destination_location, picking_type, config = self._validate_transfer_order_master_data(
+            'transfer_one_step',
+            'Transfer 1 Step',
+        )
+        Header = self.env['acumatica.transfer.one.step.line'].sudo()
+        Detail = self.env['acumatica.transfer.one.step.product'].sudo()
+        InternalTransferOrder = self.env['internal.transfer.order'].sudo()
+        sync_date = fields.Datetime.now()
+        generated = Header.browse()
+        source_code = source_location.code or self.location_code
+        destination_code = destination_location.code
+
+        for receipt_index in range(1, self.receipt_count + 1):
+            reference_nbr = self._transfer_order_number('T1S', receipt_index)
+            receipt_products = self._pick_products(products, receipt_index)
+            line_quantities = [
+                self._line_quantity(line_index, receipt_index)
+                for line_index in range(1, len(receipt_products) + 1)
+            ]
+            line_total_qty = sum(line_quantities)
+            first_product = receipt_products[:1]
+            first_uom = self.uom_id or first_product.uom_id
+            existing_order = InternalTransferOrder.search([('external_ref', '=', reference_nbr)], limit=1)
+            header_vals = self._transfer_header_values(
+                reference_nbr,
+                receipt_index,
+                warehouse,
+                source_code,
+                destination_code,
+                '1-Step',
+                line_total_qty,
+                picking_type,
+                config,
+                sync_date,
+                existing_order=existing_order,
+            )
+            header_vals.update({
+                'line_description': first_product.display_name if first_product else False,
+                'inventory_id': first_product.default_code if first_product else False,
+                'from_location_code': source_code,
+                'to_location_code': destination_code,
+                'quantity': str(line_total_qty),
+                'uom_code': first_uom.name if first_uom else False,
+            })
+            transfer = Header.search([('reference_nbr', '=', reference_nbr)], limit=1)
+            if transfer:
+                transfer.write(header_vals)
+            else:
+                transfer = Header.create(header_vals)
+
+            Detail.search([('header_id', '=', transfer.id)]).unlink()
+            Detail.create(self._transfer_one_step_line_values(
+                transfer,
+                receipt_products,
+                source_code,
+                destination_code,
+                line_quantities,
+            ))
+            generated |= transfer
+
+        self.generated_transfer_one_step_ids = [(6, 0, generated.ids)]
+        self.generated_transfer_two_step_ids = [(5, 0, 0)]
+        self.generated_transfer_ids = [(5, 0, 0)]
+        self.generated_transfer_shipment_ids = [(5, 0, 0)]
+        self.generated_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_issue_ids = [(5, 0, 0)]
+        self.generated_shipment_ids = [(5, 0, 0)]
+        self.generated_po_return_ids = [(5, 0, 0)]
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Generated WH33 Transfer 1 Step Staging'),
+            'res_model': 'acumatica.transfer.one.step.line',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', generated.ids)],
+            'context': {'create': False},
+        }
+
+    def _transfer_one_step_line_values(self, transfer, products, source_code, destination_code, line_quantities):
+        line_vals = []
+        for line_index, product in enumerate(products, start=1):
+            uom = self.uom_id or product.uom_id
+            qty = line_quantities[line_index - 1]
+            line_vals.append({
+                'header_id': transfer.id,
+                'acumatica_header_id': transfer.external_id,
+                'line_nbr': line_index,
+                'inventory_id': product.default_code,
+                'line_description': product.display_name,
+                'line_note': self.MARKER,
+                'from_location_code': source_code,
+                'to_location_code': destination_code,
+                'quantity': qty,
+                'uom_code': uom.name,
+            })
+        return line_vals
+
+    def _generate_transfer_two_step(self):
+        self.ensure_one()
+        products, warehouse, source_location, destination_location, picking_type, config = self._validate_transfer_order_master_data(
+            'transfer_two_step',
+            'Transfer 2 Step',
+        )
+        Header = self.env['acumatica.transfer.two.step.line'].sudo()
+        Detail = self.env['acumatica.transfer.two.step.line.product'].sudo()
+        InternalTransferOrder = self.env['internal.transfer.order'].sudo()
+        sync_date = fields.Datetime.now()
+        generated = Header.browse()
+        source_code = source_location.code or self.location_code
+        destination_code = destination_location.code
+
+        for receipt_index in range(1, self.receipt_count + 1):
+            reference_nbr = self._transfer_order_number('T2S', receipt_index)
+            receipt_products = self._pick_products(products, receipt_index)
+            line_quantities = [
+                self._line_quantity(line_index, receipt_index)
+                for line_index in range(1, len(receipt_products) + 1)
+            ]
+            line_total_qty = sum(line_quantities)
+            first_product = receipt_products[:1]
+            first_uom = self.uom_id or first_product.uom_id
+            existing_order = InternalTransferOrder.search([('external_ref', '=', reference_nbr)], limit=1)
+            header_vals = self._transfer_header_values(
+                reference_nbr,
+                receipt_index,
+                warehouse,
+                source_code,
+                destination_code,
+                '2-Step',
+                line_total_qty,
+                picking_type,
+                config,
+                sync_date,
+                existing_order=existing_order,
+            )
+            header_vals.update({
+                'line_description': first_product.display_name if first_product else False,
+                'inventory_id': first_product.default_code if first_product else False,
+                'from_location_code': source_code,
+                'to_location_code': destination_code,
+                'quantity': str(line_total_qty),
+                'uom_code': first_uom.name if first_uom else False,
+            })
+            transfer = Header.search([('reference_nbr', '=', reference_nbr)], limit=1)
+            if transfer:
+                transfer.write(header_vals)
+            else:
+                transfer = Header.create(header_vals)
+
+            Detail.search([('header_id', '=', transfer.id)]).unlink()
+            Detail.create(self._transfer_two_step_line_values(
+                transfer,
+                receipt_products,
+                source_code,
+                destination_code,
+                line_quantities,
+            ))
+            generated |= transfer
+
+        self.generated_transfer_two_step_ids = [(6, 0, generated.ids)]
+        self.generated_transfer_one_step_ids = [(5, 0, 0)]
+        self.generated_transfer_ids = [(5, 0, 0)]
+        self.generated_transfer_shipment_ids = [(5, 0, 0)]
+        self.generated_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_receipt_ids = [(5, 0, 0)]
+        self.generated_inventory_issue_ids = [(5, 0, 0)]
+        self.generated_shipment_ids = [(5, 0, 0)]
+        self.generated_po_return_ids = [(5, 0, 0)]
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Generated WH33 Transfer 2 Step Staging'),
+            'res_model': 'acumatica.transfer.two.step.line',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', generated.ids)],
+            'context': {'create': False},
+        }
+
+    def _transfer_two_step_line_values(self, transfer, products, source_code, destination_code, line_quantities):
+        line_vals = []
+        for line_index, product in enumerate(products, start=1):
+            uom = self.uom_id or product.uom_id
+            qty = line_quantities[line_index - 1]
+            line_vals.append({
+                'header_id': transfer.id,
+                'acumatica_header_id': transfer.external_id,
+                'adt_rowNumber': str(line_index),
+                'adt_note': self.MARKER,
+                'adt_Description': product.display_name,
+                'adt_FromLocationID': source_code,
+                'adt_InventoryID': product.default_code,
+                'adt_LineNumber': str(line_index),
+                'adt_Quantity': str(qty),
+                'adt_ToLocationID': destination_code,
+                'adt_UOM': uom.name,
+                'import_state': 'pending',
+                'selected': True,
+                'config_id': transfer.config_id.id if transfer.config_id else False,
+                'sync_date': fields.Datetime.now(),
+            })
+        return line_vals
+
     def action_cleanup_generated_receipts(self):
         self.ensure_one()
         prefix = (self.receipt_prefix or 'TMP-R26').strip() + '-%'
-        if self.generate_type == 'po_return':
+        if self.generate_type == 'transfer_shipment':
+            receipts = self.env['acumatica.transfer.shipment.line'].sudo().search([
+                ('note', '=', self.MARKER),
+                ('odoo_picking_id', '=', False),
+                ('odoo_internal_transfer_order_id', '=', False),
+                ('shipment_nbr', '=like', prefix),
+            ])
+        elif self.generate_type == 'sotr':
+            receipts = self.env['acumatica.transfer.line'].sudo().search([
+                ('note', '=', self.MARKER),
+                ('odoo_picking_id', '=', False),
+                ('odoo_internal_transfer_order_id', '=', False),
+                ('receipt_nbr', '=like', prefix),
+            ])
+        elif self.generate_type == 'transfer_one_step':
+            receipts = self.env['acumatica.transfer.one.step.line'].sudo().search([
+                ('note', '=', self.MARKER),
+                ('odoo_picking_id', '=', False),
+                ('odoo_internal_transfer_order_id', '=', False),
+                ('reference_nbr', '=like', prefix),
+            ])
+        elif self.generate_type == 'transfer_two_step':
+            receipts = self.env['acumatica.transfer.two.step.line'].sudo().search([
+                ('note', '=', self.MARKER),
+                ('odoo_picking_id', '=', False),
+                ('odoo_internal_transfer_order_id', '=', False),
+                ('reference_nbr', '=like', prefix),
+            ])
+        elif self.generate_type == 'po_return':
             receipts = self.env['acumatica.issue.po.return.line'].sudo().search([
                 ('note', '=', self.MARKER),
                 ('odoo_picking_id', '=', False),
@@ -970,6 +1880,13 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
             ])
         elif self.generate_type == 'inventory_receipt':
             receipts = self.env['acumatica.inventory.recieved.line'].sudo().search([
+                ('note', '=', self.MARKER),
+                ('odoo_picking_id', '=', False),
+                ('odoo_internal_transfer_order_id', '=', False),
+                ('reference_nbr', '=like', prefix),
+            ])
+        elif self.generate_type == 'inventory_issue':
+            receipts = self.env['acumatica.inventory.issue.line'].sudo().search([
                 ('note', '=', self.MARKER),
                 ('odoo_picking_id', '=', False),
                 ('odoo_internal_transfer_order_id', '=', False),
