@@ -21,6 +21,8 @@
                     <button name="action_import_selected" string="Import Selected Record" type="object" class="btn-primary"/>
                 </header> -->
                 <field name="receipt_nbr"/>
+                <field name="receipt_type"/>
+                <field name="document_only"/>
                 <field name="vendor_code"/>
                 <field name="building_code"/>
                 <field name="total_qty"/>
@@ -50,6 +52,7 @@
                         <group>
                             <field name="receipt_nbr"/>
                             <field name="picking_type_id"/>
+                            <field name="document_only"/>
                             <field name="vendor_code"/>
                             <field name="partner_ref"/>
                             <field name="scheduled_date"/>

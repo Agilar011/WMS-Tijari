@@ -1,7 +1,7 @@
 import requests
 import json
 import logging
-
+from datetime import datetime
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
 
@@ -78,7 +78,7 @@ class AcumaticaConfig(models.Model):
             ('so_transfer', 'SO Transfer'),
             ('receipt_external', 'Receipt External'),
             ('receipt_change_item', 'Receipt Change Item'),
-            ('inventory_received', 'Inventory Received'),
+            ('inventory_received', 'Inventory Receipt'),
             ('toko_pegang_do', 'Toko Pegang DO'),
             ('shipment_so', 'Shipment SO Return'),
             ('so_shipment', 'SO Shipment'),
@@ -137,6 +137,52 @@ class AcumaticaConfig(models.Model):
             return self._create_default_kit_assembly_config()
 
         return self.browse()
+
+    @api.model
+    def _normalize_inventory_receive_type(self, value):
+        if not value:
+            return 'inventory_receive'
+        return str(value).strip().lower().replace('-', '_').replace(' ', '_')
+
+    def _resolve_inventory_receive_picking_type(self, transfer_type=False, warehouse_code=False, document_only=False):
+        self.ensure_one()
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+        type_key = self._normalize_inventory_receive_type(transfer_type)
+        domain_by_type = {
+            'toko_pegang_do': [('code', '=', 'incoming')],
+            'transfer_in': [('code', '=', 'internal')],
+            'change_item': [('code', '=', 'incoming')],
+            'inventory_receive': [('code', '=', 'incoming')],
+            'inventory_received': [('code', '=', 'incoming')],
+            'inventory_receipt': [('code', '=', 'incoming')],
+        }
+
+        picking_type_domain = domain_by_type.get(type_key)
+        if picking_type_domain:
+            domain = list(picking_type_domain) + [('is_default_api', '=', True)]
+            if warehouse_code:
+                location = Location.search([('code', '=', warehouse_code)], limit=1)
+                if location and location.odoo_building_id:
+                    domain.append(('warehouse_id', '=', location.odoo_building_id.id))
+            picking_type = PickingType.search(domain, limit=1)
+            if picking_type:
+                return picking_type
+
+            picking_type = PickingType.search(
+                list(picking_type_domain) + [('is_default_api', '=', True)],
+                limit=1,
+            )
+            if picking_type:
+                return picking_type
+
+        if document_only and type_key != 'transfer_in':
+            return PickingType.resolve_document_only_picking_type(
+                api_acumatica='inventory_received',
+                document_only=document_only,
+                warehouse_code=warehouse_code,
+            )
+        return PickingType.browse()
 
     @api.model
     def _create_default_kit_assembly_config(self):
@@ -317,89 +363,180 @@ class AcumaticaConfig(models.Model):
                 return payload.get('rows')
         return []
 
-    def fetch_kit_assembly_data(self, limit=100, offset=0):
-        self.ensure_one()
-        endpoint_name = self.endpoint_name or 'KitAssembly'
-        expand = self.odata_expand or 'StockComponents'
-        session = self._do_login()
+    def _parse_datetime(self, value):
+        if not value:
+            return False
+
+        if isinstance(value, datetime):
+            return value
+
         try:
-            endpoint = f"{self.api_url}/{endpoint_name}"
-            params = {
-                '$top': limit,
-                '$skip': offset,
-            }
-            if expand:
-                params['$expand'] = expand
-            if self.odata_select:
-                params['$select'] = self.odata_select
-            if self.odata_filter:
-                params['$filter'] = self.odata_filter
+            # Support:
+            # 2011-12-09T22:18:00+07:00
+            # 2011-12-09T22:18:00Z
+            return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except Exception:
+            return False        
+        
 
-            response = session.get(endpoint, params=params, timeout=60)
-            if response.status_code != 200:
-                raise UserError(
-                    f'Gagal ambil data Kit Assembly (HTTP {response.status_code}): {response.text}'
-                )
+    # def fetch_kit_assembly_data(self, limit=100, offset=0):
+    #     """Fetch 1 page Kit Assembly dari Acumatica (paging via $top/$skip)."""
+    #     # print("==========================================================================================")
+    #     # print("ACTION: Fetch data from Acumatica")
+    #     # print("==========================================================================================")
 
-            raw_data = self._normalize_rows(response.json())
-            result = []
+    #     self.ensure_one()
+    #     session = self._do_login()
+    #     staging_header = self.env['acumatica.kit.assembly']
+    #     staging_line = self.env['acumatica.kit.assembly.component']
+    #     try:
+    #         endpoint = f"{self.api_url}/KitAssembly"
+    #         # print(f"Fetching Kit Assembly data from {endpoint} with limit={limit} and offset={offset}...")
+    #         params = {'$top': limit, '$skip': offset, '$expand': 'StockComponents'}
 
-            for item in raw_data:
-                header = {
-                    'name': self._val(item, 'ReferenceNbr'),
-                    'external_id': item.get('id', '') or '',
-                    'row_number': item.get('rowNumber', 0) or 0,
-                    'description': self._val(item, 'Description'),
-                    'inventory_id': self._val(item, 'InventoryID'),
-                    'last_modified_datetime': self._val(item, 'LastModifiedDateTime'),
-                    'location': self._val(item, 'Location'),
-                    'post_period': self._val(item, 'PostPeriod'),
-                    'quantity': self._val(item, 'Qty'),
-                    'reason_code': self._val(item, 'ReasonCode'),
-                    'reference_nbr': self._val(item, 'ReferenceNbr'),
-                    'requested_on': self._val(item, 'RequestedOn'),
-                    'revision': self._val(item, 'Revision'),
-                    'status': self._val(item, 'Status'),
-                    'type': self._val(item, 'Type'),
-                    'uom': self._val(item, 'UOM'),
-                    'warehouse': self._val(item, 'Warehouse'),
-                }
+    #         response = session.get(endpoint, params=params, timeout=60)
+    #         if response.status_code != 200:
+    #             raise UserError(
+    #                 f'Gagal ambil data Kit Assembly '
+    #                 f'(HTTP {response.status_code}): {response.text}'
+    #             )
 
-                assembly = self.env['acumatica.kit.assembly'].create(header)
+    #         raw_data = self._normalize_rows(response.json())
+    #         result = []
 
-                stock_components = item.get('StockComponents') or []
-                if isinstance(stock_components, dict):
-                    stock_components = stock_components.get('value', []) or []
-                if not isinstance(stock_components, list):
-                    stock_components = []
+    #         for item in raw_data:
 
-                if not stock_components:
-                    result.append(dict(header, line_nbr='0'))
-                    continue
+    #             last_modified_datetime = self._parse_datetime(item.get('LastModifiedDateTime'))
+    #             print(f"Last Modified Date Time: :{last_modified_datetime}")
+    #             header = {
+    #                 'name': self._val(item, 'ReferenceNbr'),
+    #                 'external_id': item.get('id', '') or '',
+    #                 'row_number': item.get('rowNumber', 0) or 0,
+    #                 'description': self._val(item, 'Description'),
+    #                 'inventory_id': self._val(item, 'InventoryID'),
+    #                 'last_modified_datetime': last_modified_datetime,
+    #                 'location': self._val(item, 'Location'),
+    #                 'post_period': self._val(item, 'PostPeriod'),
+    #                 'quantity': self._val(item, 'Qty'),
+    #                 'reason_code': self._val(item, 'ReasonCode'),
+    #                 'reference_nbr': self._val(item, 'ReferenceNbr'),
+    #                 'requested_on': self._val(item, 'RequestedOn'),
+    #                 'revision': self._val(item, 'Revision'),
+    #                 'status': self._val(item, 'Status'),
+    #                 'type': self._val(item, 'Type'),
+    #                 'uom': self._val(item, 'UOM'),
+    #                 'warehouse': self._val(item, 'Warehouse'),
+    #             }
 
-                for component in stock_components:
-                    line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
-                    component_data = {
-                        'line_external_id': component.get('id', '') or '',
-                        'line_note': component.get('note', {}).get('value', '') or '',
-                        'line_inventory_id': self._val(component, 'InventoryID'),
-                        'line_component_qty': self._val(component, 'ComponentQty'),
-                        'line_nbr': str(line_nbr),
-                        'line_location_id': self._val(component, 'LocationID'),
-                        'line_quantity': self._val(component, 'Qty'),
-                        'line_reason_code': self._val(component, 'ReasonCode'),
-                        'stock_inventory_id': self._val(component, 'StockInventoryID'),
-                        'line_uom': self._val(component, 'UOM'),
-                        'assembly_id': assembly.id,
-                    }
-                    self.env['acumatica.kit.assembly.component'].create(component_data)
-                    result.append({**header, **component_data})
+    #             # === PRINT DATA HEADER ===
+    #             # print("==========================================================================================")
+    #             # print("HEADER DATA:")
+    #             # for h_key, h_val in header.items():
+    #                 # print(f"{h_key:<25} : {h_val}")
 
-            _logger.info(
-                'Berhasil ambil %s rows Kit Assembly dari Acumatica (skip=%s, top=%s)',
-                len(result), offset, limit,
-            )
-            return result
-        finally:
-            self._do_logout(session)
-            self.last_sync = fields.Datetime.now()
+    #             assembly = self.env['acumatica.kit.assembly'].create(header)  # Simpan header ke staging untuk referensi, bisa dihapus jika tidak perlu
+    #             print(f"Created staging header record with ID {assembly.id} for ReferenceNbr {header['reference_nbr']}")
+
+    #             stock_components = item.get('StockComponents') or []
+    #             if isinstance(stock_components, dict):
+    #                 stock_components = stock_components.get('value', []) or []
+    #             if not isinstance(stock_components, list):
+    #                 stock_components = []
+
+    #             if not stock_components:
+    #                 # print("-- (No Components Available)") # Info jika component kosong
+    #                 result.append(dict(header, line_nbr='0'))
+    #                 # print("==========================================================================================")
+    #                 continue
+
+    #             # === PRINT DATA COMPONENT ===
+    #             # print("COMPONENTS:")
+    #             for component in stock_components:
+    #                 line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
+                    
+    #                 # Buat dictionary component data untuk mempermudah perulangan print
+    #                 component_data = {
+    #                     'line_external_id': component.get('id', '') or '',
+    #                     'line_note': component.get('note', {}).get('value', '') or '',
+    #                     'line_inventory_id': self._val(component, 'InventoryID'),
+    #                     'line_component_qty': self._val(component, 'ComponentQty'),
+    #                     'line_nbr': str(line_nbr),
+    #                     'line_location_id': self._val(component, 'LocationID'),
+    #                     'line_quantity': self._val(component, 'Qty'),
+    #                     'line_reason_code': self._val(component, 'ReasonCode'),
+    #                     'stock_inventory_id': self._val(component, 'StockInventoryID'),
+    #                     'line_uom': self._val(component, 'UOM'),
+    #                     'assembly_id': assembly.id,  # Simpan component dengan relasi ke header yang sudah dibuat, bisa dihapus jika tidak perlu
+    #                 }
+                    
+    #                 # Print setiap field di dalam component ini dengan awalan '--'
+    #                 # print("  ----------------------------------------")
+    #                 # for c_key, c_val in component_data.items():
+    #                     # print(f"  -- {c_key:<25} : {c_val}")
+
+    #                 assembly_line = self.env['acumatica.kit.assembly.component'].create(component_data)  # Simpan component ke staging, bisa dihapus jika tidak perlu
+    #                 # print(f"  Created staging component record with ID {assembly_line.id} for LineNbr {component_data['line_nbr']} under ReferenceNbr {header['reference_nbr']}")
+                    
+    #                 # Tetap masukkan ke hasil akhir Odoo wizard Anda
+    #                 result.append({**header, **component_data})
+                
+    #             # print("==========================================================================================")
+
+
+    #         # for item in raw_data:
+    #         #     header = {
+    #         #         'external_id': item.get('id', '') or '',
+    #         #         'row_number': item.get('rowNumber', 0) or 0,
+    #         #         'description': self._val(item, 'Description'),
+    #         #         'inventory_id': self._val(item, 'InventoryID'),
+    #         #         'last_modified_datetime': self._val(item, 'LastModifiedDateTime'),
+    #         #         'location': self._val(item, 'Location'),
+    #         #         'post_period': self._val(item, 'PostPeriod'),
+    #         #         'quantity': self._val(item, 'Qty'),
+    #         #         'reason_code': self._val(item, 'ReasonCode'),
+    #         #         'reference_nbr': self._val(item, 'ReferenceNbr'),
+    #         #         'requested_on': self._val(item, 'RequestedOn'),
+    #         #         'revision': self._val(item, 'Revision'),
+    #         #         'status': self._val(item, 'Status'),
+    #         #         'type': self._val(item, 'Type'),
+    #         #         'uom': self._val(item, 'UOM'),
+    #         #         'warehouse': self._val(item, 'Warehouse'),
+
+
+    #         #     }
+
+    #         #     stock_components = item.get('StockComponents') or []
+    #         #     if isinstance(stock_components, dict):
+    #         #         stock_components = stock_components.get('value', []) or []
+    #         #     if not isinstance(stock_components, list):
+    #         #         stock_components = []
+
+    #         #     if not stock_components:
+    #         #         result.append(dict(header, line_nbr='0'))
+    #         #         continue
+
+    #         #     for component in stock_components:
+    #         #         line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
+    #         #         result.append({
+    #         #             **header,
+    #         #             'line_external_id': component.get('id', '') or '',
+    #         #             'line_note': component.get('note', {}).get('value', '') or '',
+    #         #             'line_inventory_id': self._val(component, 'InventoryID'),
+    #         #             'line_component_qty': self._val(component, 'ComponentQty'),
+    #         #             'line_nbr': str(line_nbr),
+    #         #             'line_location_id': self._val(component, 'LocationID'),
+    #         #             'line_quantity': self._val(component, 'Qty'),
+    #         #             'line_reason_code': self._val(component, 'ReasonCode'),
+    #         #             'stock_inventory_id': self._val(component, 'StockInventoryID'),
+    #         #             'line_uom': self._val(component, 'UOM'),
+    #         #         })
+
+            
+    #         _logger.info(
+    #             'Berhasil ambil %s rows Kit Assembly dari Acumatica (skip=%s, top=%s)',
+    #             len(result), offset, limit,
+    #         )
+    #         return result
+    #     finally:
+    #         self._do_logout(session)
+    #         self.last_sync = fields.Datetime.now()

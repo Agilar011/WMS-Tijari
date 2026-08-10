@@ -9,8 +9,13 @@
             <xpath expr="//field[@name='code']" position="after">
                 <field name="operation_category" required="1"/>
                 <field name="is_default_api" />
+                <field name="is_document_only_api" />
             </xpath>
         </field>
+    </record>
+
+    <record id="stock.stock_picking_type_action" model="ir.actions.act_window">
+        <field name="context">{'search_default_groupby_warehouse_id': 1}</field>
     </record>
 
     <record id="view_lot_form_inherit_custom" model="ir.ui.view">

@@ -1,6 +1,7 @@
 
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools import float_compare
 import logging
 _logger = logging.getLogger(__name__)
 
@@ -48,6 +49,27 @@ class StockMoveLine(models.Model):
         ],
         store=True,
     )
+    putaway_status = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished')
+        ],
+        string='Putaway Status',
+        default='unfinished',
+    )
+
+    picker_status = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished')
+        ],
+        string='Picker Status',
+        default='unfinished',
+    )
+    location_putaway_id = fields.Many2one(
+        "stock.location",
+        string="Putaway Location",
+    )
 
     operation_category = fields.Selection(related='picking_id.picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
 
@@ -70,6 +92,7 @@ class StockMoveLine(models.Model):
         related='picking_id.picking_type_code',
         store=False,
     )
+
     origin = fields.Char(
         related='picking_id.origin',
         string='Source Document',
@@ -78,13 +101,13 @@ class StockMoveLine(models.Model):
     )
     matching_lot_id = fields.Many2one(
         comodel_name="stock.lot",
-        string="Matching Lot",
+        string="Confirm Lot",
         domain="[('id', 'in', allowed_matching_lot_ids)]",
         store=True
     )
     matching_loc_dest_id = fields.Many2one(
         comodel_name="stock.location",
-        string="Matching Location Dest",
+        string="Confirm Location",
         domain="[('id', 'child_of', adt_dest_location_id)]",
         store=True
     )
@@ -108,12 +131,13 @@ class StockMoveLine(models.Model):
     product_lot_id = fields.Many2one(
         "stock.lot",
         string="Lot",
-        domain="[('id', 'in', temp_quant_ids)]",
+        domain="[('id', 'in', temp_lot_ids)]",
     )
 
     selected_quant_id = fields.Many2one(
         "stock.quant",
         string="Selected Quant",
+        domain="[('id', 'in', temp_quant_ids)]",
         readonly=True,
     )
 
@@ -123,7 +147,27 @@ class StockMoveLine(models.Model):
         compute="_compute_temp_quant_ids",
         store=False,
     )
+    temp_lot_ids = fields.Many2many(
+        "stock.lot",
+        string="Temporary Lots",
+        compute="_compute_temp_quant_ids",
+        store=False,
+    )
 
+    available_lot_ids = fields.Many2many(
+        "stock.lot",
+        compute="_compute_available_quant_fields",
+    )
+
+    available_location_ids = fields.Many2many(
+        "stock.location",
+        compute="_compute_available_quant_fields",
+    )
+
+    picking_type_name = fields.Char(
+        related="move_id.picking_type_name",
+        store=False,
+    )
     picking_type_name = fields.Char(
         related="move_id.picking_type_name",
         store=False,
@@ -134,7 +178,15 @@ class StockMoveLine(models.Model):
         compute="_compute_allowed_lot_ids",
     )
 
-    second_matching = fields.Char(string="second_matching")
+    second_matching = fields.Char(string="Status")
+
+    adt_owner_id = fields.Many2one(
+        "res.partner",
+        related="move_id.owner_id",
+        store=True,
+        readonly=True,
+    )
+
 
     @api.depends(
         "move_id",
@@ -160,31 +212,65 @@ class StockMoveLine(models.Model):
         for line in self:
             line.allowed_matching_lot_ids = line.picking_id.move_line_ids.mapped("lot_id")
 
-    @api.depends("product_id", "source_location_id")
+    def _get_owner_quant_domain(self):
+        self.ensure_one()
+        domain = [
+            ("product_id", "=", self.product_id.id),
+            ("location_id", "child_of", self.source_location_id.id),
+            ("quantity", ">", 0),
+            ("lot_id", "!=", False),
+        ]
+        if self.move_id.picking_id.adt_type == 'Toko Pegang DO' and self.move_id.owner_id:
+            domain.append(("owner_id", "=", self.move_id.owner_id.id))
+        return domain
+
+    @api.depends("product_id", "source_location_id", "move_id.owner_id", "move_id.picking_id.adt_type")
     def _compute_temp_quant_ids(self):
         print('def _compute_temp_quant_ids(self):')
+        for line in self:
+            if line.move_id.transaction_type == 'outbound' and line.move_id.picking_type_name == 'Pack':
+                print('Auto matching source_location_id and product_lot_id in Pack transaction')
+                print(line.location_id.id)
+                print(line.lot_id.id)
+                line.source_location_id = line.location_id
+                line.product_lot_id = line.lot_id.id
+                line.lot_name = line.lot_id.name
+
         # _logger.info("Running Onchange on pick type: %s", self.picking_type_name)
         Quant = self.env["stock.quant"]
 
         for line in self:
 
             line.temp_quant_ids = False
+            line.temp_lot_ids = False
 
             if not line.product_id or not line.source_location_id:
                 continue
 
-            quants = Quant.search([
-                ("product_id", "=", line.product_id.id),
-                ("location_id", "child_of", line.source_location_id.id),
-                ("quantity", ">", 0),
-                ("lot_id", "!=", False),
-            ])
+            domain = line._get_owner_quant_domain()
 
-            line.temp_quant_ids = [(6, 0, quants.mapped("lot_id").ids)]
+            # ===========================
+            # TAMBAHAN UNTUK TOKO PEGANG DO
+            # ===========================
+            print(line.move_id.picking_id.adt_type)
+            if line.move_id.picking_id.adt_type == 'Toko Pegang DO' and line.move_id.owner_id:
+                print(f"Running domain with owner : {line.move_id.owner_id.name} ")
+            # ===========================
+
+            quants = Quant.search(domain)
+
+            line.temp_quant_ids = [(6, 0, quants.ids)]
+            line.temp_lot_ids = [(6, 0, quants.mapped("lot_id").ids)]
+
+            for item in line.temp_quant_ids:
+                print(f"Quant domained: {item.lot_id.name}")
 
             print(f"Quant domain: {line.temp_quant_ids}")
-            # print(f"Confirm line matching: {line.matching}")
 
+    @api.onchange("lot_id", "location_id")
+    def _onchange_quant_fields(self):
+
+        return self._refresh_quant()
 
     @api.onchange("product_id", "source_location_id")
     def _onchange_source_location(self):
@@ -201,12 +287,7 @@ class StockMoveLine(models.Model):
                 }
             }
 
-        quants = self.env["stock.quant"].search([
-            ("product_id", "=", self.product_id.id),
-            ("location_id", "child_of", self.source_location_id.id),
-            ("quantity", ">", 0),
-            ("lot_id", "!=", False),
-        ])
+        quants = self.env["stock.quant"].search(self._get_owner_quant_domain())
 
         lot_ids = quants.mapped("lot_id").ids
         print(f"Lot found: {lot_ids}")
@@ -231,12 +312,7 @@ class StockMoveLine(models.Model):
             return
 
         quant = self.env["stock.quant"].search(
-            [
-                ("product_id", "=", self.product_id.id),
-                ("location_id", "child_of", self.source_location_id.id),
-                ("lot_id", "=", self.product_lot_id.id),
-                ("quantity", ">", 0),
-            ],
+            self._get_owner_quant_domain() + [("lot_id", "=", self.product_lot_id.id)],
             order="quantity desc",
             limit=1,
         )
@@ -265,6 +341,22 @@ class StockMoveLine(models.Model):
 
         if {'quantity', 'move_id', 'picking_id'} & set(vals):
             pickings._sync_adt_quantities_from_moves()
+
+        matching_inputs = {
+            'matching_lot_id', 'matching_loc_dest_id',
+            'source_location_id', 'product_lot_id',
+            'location_id', 'location_dest_id', 'lot_id',
+        }
+        if not self.env.context.get('skip_matching_sync') and matching_inputs & set(vals):
+            for line in self:
+                matching = line._get_matching_status()
+                status_vals = {'matching': matching}
+                if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal'):
+                    status_vals['second_matching'] = (
+                        'Match' if matching == 'match' else 'Not Match'
+                    )
+                if any(line[field] != value for field, value in status_vals.items()):
+                    line.with_context(skip_matching_sync=True).write(status_vals)
 
         self._update_move_picked()
 
@@ -350,17 +442,36 @@ class StockMoveLine(models.Model):
 
     @api.onchange('product_id')
     def _onchange_product_copy_previous_lot(self):
-        print('def _onchange_product_copy_previous_lot(self)')
+        _logger.info('def _onchange_product_copy_previous_lot(self)')
 
-        if not self.move_id:
-            return
+        for line in self:
+            if not line.move_id:
+                continue
 
-        last_line = self.move_id.move_line_ids.filtered(
-            lambda l: l.lot_id
-        )
+            previous_lines = line.move_id.move_line_ids.filtered(
+                lambda l: l != line
+            )
+            last_lot_line = previous_lines.filtered(lambda l: l.lot_id)
 
-        if last_line:
-            self.lot_id = last_line[-1].lot_id
+            if last_lot_line:
+                line.lot_id = last_lot_line[-1].lot_id
+
+            if not line.env.context.get('copy_previous_picker_location'):
+                continue
+
+            last_location_line = previous_lines.filtered(
+                lambda l: l.location_id or l.location_dest_id or l.source_location_id
+            )
+            if not last_location_line:
+                continue
+
+            previous_line = last_location_line[-1]
+            if previous_line.location_id:
+                line.location_id = previous_line.location_id
+            if previous_line.location_dest_id:
+                line.location_dest_id = previous_line.location_dest_id
+            if previous_line.source_location_id:
+                line.source_location_id = previous_line.source_location_id
                 
     @api.onchange('quant_id')
     def _onchange_move_line_ids(self):
@@ -451,6 +562,111 @@ class StockMoveLine(models.Model):
             rec.lot_button = " "
 
     # ---------- Helpers ----------
+
+    def _get_base_quant_domain(self):
+            self.ensure_one()
+    
+            domain = [
+                ("product_id", "=", self.product_id.id),
+                ("location_id", "child_of", self.adt_dest_location_id.id),
+                ("quantity", ">", 0),
+                ("lot_id", "!=", False),
+            ]
+    
+            if (
+                self.move_id.picking_id.adt_type == "Toko Pegang DO"
+                and self.move_id.owner_id
+            ):
+                domain.append(
+                    ("owner_id", "=", self.move_id.owner_id.id)
+                )
+    
+            return domain
+    
+    @api.depends(
+        "product_id",
+        "source_location_id",
+        "lot_id",
+        "location_id",
+    )
+    def _compute_available_quant_fields(self):
+
+        Quant = self.env["stock.quant"]
+
+        for line in self:
+
+            line.available_lot_ids = False
+            line.available_location_ids = False
+
+            if (
+                not line.product_id
+                or not line.location_id
+            ):
+                continue
+
+            # ----------------------------------
+            # Available Lots
+            # ----------------------------------
+
+            lot_domain = line._get_base_quant_domain()
+
+            lots = Quant.search(lot_domain).mapped("lot_id")
+
+            line.available_lot_ids = [(6, 0, lots.ids)]
+
+            # ----------------------------------
+            # Available Locations
+            # ----------------------------------
+            
+            Location = self.env['stock.location']
+            # location_domain = line._get_base_quant_domain()
+
+            locations = Location.search(
+                [('id', 'child_of', line.adt_dest_location_id.id)]
+            )
+
+            line.available_location_ids = [
+                (6, 0, locations.ids)
+            ]
+
+    def _refresh_quant(self):
+        self.ensure_one()
+
+        Quant = self.env['stock.quant']
+        quants = self._get_base_quant_domain()
+        available_lots = Quant.search(quants).mapped("lot_id")
+        available_locations = self.env['stock.location'].search(
+            [('id', 'child_of', self.adt_dest_location_id.id)]
+        )
+
+        # ------------------------------------------------------
+        # Sync Quant
+        # ------------------------------------------------------
+
+        self.quant_id = False
+
+        if self.lot_id and self.location_id:
+
+            quant = self.env["stock.quant"].search([
+                ("product_id", "=", self.product_id.id),
+                ("lot_id", "=", self.lot_id.id),
+                ("location_id", "=", self.location_id.id),
+                ("quantity", ">", 0),
+            ], limit=1)
+
+            self.quant_id = quant
+
+        return {
+            "domain": {
+                "lot_id": [
+                    ("id", "in", available_lots.ids)
+                ],
+                "location_id": [
+                    ("id", "in", available_locations.ids)
+                ],
+            }
+        }
+
     def _tjr_is_incoming_tracked(self):
         print(f">>> Checking if line {self.id} is incoming tracked...") # Cek di terminal Odoo
         self.ensure_one()
@@ -700,7 +916,7 @@ class StockMoveLine(models.Model):
                       
             if not chosen:
                 print(f">>> chosen {chosen}") # Cek di terminal Odoo
-                print(f">>> chosen lot {q.lot_id.name} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
+                # print(f">>> chosen lot {q.lot_id.name} - Product: {line.product_id.display_name}") # Cek di terminal Odoo
                 # Tidak ada lot yg cukup → pilih lot tertua yang punya sedikit stok (sebagai hint)
                 partial = next((q for q in quants if Quant._get_available_quantity(
                     line.product_id, q.location_id, lot_id=q.lot_id,
@@ -733,7 +949,7 @@ class StockMoveLine(models.Model):
             'type': 'ir.actions.client',
             'tag': 'adt_scan_qr_to_move_line_field',
             'params': {
-                'field_name': 'matching_lot_id',
+                'field_name': 'confirmation_lot_code',
                 'move_line_id': self.id,
                 'title': _('Scan Lot QR Code'),
             },
@@ -747,7 +963,7 @@ class StockMoveLine(models.Model):
             'type': 'ir.actions.client',
             'tag': 'adt_scan_qr_to_move_line_field',
             'params': {
-                'field_name': 'matching_loc_dest_id',
+                'field_name': 'confirmation_location_code',
                 'move_line_id': self.id,
                 'title': _('Scan Location QR Code'),
             },
@@ -757,52 +973,109 @@ class StockMoveLine(models.Model):
         allowed_fields = {
             'confirmation_lot_code',
             'confirmation_location_code',
+            'matching_lot_id',
+            'matching_loc_dest_id',
         }
         if field_name not in allowed_fields:
             raise ValidationError(_("Field scan tidak valid."))
 
         result = {}
         for line in self:
-            line.write({field_name: scanned_code})
-            if field_name == 'confirmation_lot_code':
+            picking_type_name = line.picking_type_name
+            vals = {}
+            if field_name in ('confirmation_lot_code', 'matching_lot_id'):
                 lot = line._find_lot_by_scan_code(scanned_code)
-                line.write({
-                    'matching_lot_id': lot.id if lot else False,
-                })
-            elif field_name == 'confirmation_location_code':
+                if not lot:
+                    raise ValidationError(_("Barcode tidak terdaftar."))
+                if field_name == 'confirmation_lot_code':
+                    vals['confirmation_lot_code'] = scanned_code
+                vals['matching_lot_id'] = lot.id
+            elif field_name in ('confirmation_location_code', 'matching_loc_dest_id'):
                 location = line._find_loc_by_scan_code(scanned_code)
-                line.write({
-                    'matching_loc_dest_id': location.id if location else False,
-                })
+                if not location:
+                    raise ValidationError(_("Barcode tidak terdaftar."))
+                if field_name == 'confirmation_location_code':
+                    vals['confirmation_location_code'] = scanned_code
+                if picking_type_name in ['Receipts', 'Receipt Internal'] and field_name == 'confirmation_location_code':
+                    vals['location_putaway_id'] = location.id
+                    vals['location_dest_id'] = location.id
+                else:
+                    vals['matching_loc_dest_id'] = location.id
 
-            if line.matching_lot_id and line.matching_loc_dest_id:
-                line.matching = (
-                    'match'
-                    if line.matching_lot_id == line.lot_id
-                    and line.matching_loc_dest_id == line.location_dest_id
-                    else 'not_match'
-                )
-            else:
-                line.matching = 'not_match'
+            line.write(vals)
 
             matching_labels = dict(line._fields['matching'].selection)
+            status_labels = dict(line._fields['putaway_status'].selection)
             result = {
                 'id': line.id,
-                field_name: scanned_code,
-                'matching': line.matching,
-                'matching_label': matching_labels.get(line.matching, line.matching or ''),
-                'matching_lot_id': [
+                field_name: scanned_code
+                # 'matching': line.matching,
+                # 'matching_label': matching_labels.get(line.matching, line.matching or ''),
+                # 'matching_lot_id': [
+                #     line.matching_lot_id.id,
+                #     line.matching_lot_id.display_name,
+                # ] if line.matching_lot_id else False,
+            }
+
+            if picking_type_name in ['Receipts', 'Receipt Internal']:
+                result['putaway_status'] = line.putaway_status
+                result['putaway_status_label'] = status_labels.get(line.putaway_status, line.putaway_status or '')
+                result['location_putaway_id'] = [
+                    line.location_putaway_id.id,
+                    line.location_putaway_id.name,
+                ] if line.location_putaway_id else False
+                result['location_dest_id'] = [
+                    line.location_dest_id.id,
+                    line.location_dest_id.name,
+                ] if line.location_dest_id else False
+            else:
+                result['matching'] = line.matching
+                result['matching_label'] = matching_labels.get(line.matching, line.matching or '')
+                result['matching_lot_id'] = [
                     line.matching_lot_id.id,
                     line.matching_lot_id.display_name,
-                ] if line.matching_lot_id else False,
-                'matching_loc_dest_id': [
+                ] if line.matching_lot_id else False
+                result['matching_loc_dest_id'] = [
                     line.matching_loc_dest_id.id,
                     line.matching_loc_dest_id.display_name,
-                ] if line.matching_loc_dest_id else False,
-            }
+                ] if line.matching_loc_dest_id else False
 
         return result
 
+    def action_mark_putaway_finished(self):
+        if not self.location_putaway_id and self.confirmation_quantity == 0:
+            raise ValidationError(_("Location putaway dan Quantity tidak boleh kosong, silahkan input location putaway dan quantity terlebih dahulu"))
+        if self.confirmation_quantity == 0:
+            raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+        if not self.location_putaway_id:
+            raise ValidationError(_("Location putaway tidak boleh kosong, silahkan input location putaway terlebih dahulu"))
+        if self.confirmation_quantity > self.quantity:
+            raise ValidationError(_("Stored Qty tidak boleh lebih besar dari Picked Qty, silahkan input quantity yang sesuai"))
+        if self.confirmation_quantity < self.quantity:
+            raise ValidationError(_("Stored Qty tidak boleh kurang dari Picked Qty, silahkan input quantity yang sesuai"))
+        self.write({'putaway_status': 'finished'})
+        return True
+
+    def action_mark_putaway_unfinished(self):
+        self.write({'putaway_status': 'unfinished'})
+        return True
+
+
+    def action_mark_picker_finished(self):
+        if not self.lot_id:
+            raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
+        if self.quantity == 0:
+            raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+        self.write({'picker_status': 'finished'})
+        return True
+
+
+    @api.onchange('location_putaway_id')
+    def _onchange_location_putaway_id(self):
+        for line in self:
+
+            if line.location_putaway_id:
+                line.location_dest_id = line.location_putaway_id.id
 
     @api.onchange('confirmation_location_code')
     def _onchange_confirmation_location_code(self):
@@ -818,15 +1091,12 @@ class StockMoveLine(models.Model):
             wizard.matching_loc_dest_id = location.id
 
     def _find_lot_by_scan_code(self, lot_code):
-        lot = False
         Lot = self.env['stock.lot']
+        lot_code = (lot_code or '').strip()
+        if not lot_code:
+            return Lot.browse()
 
-        lot = Lot.search([
-            ('name', '=', lot_code)
-        ], limit=1)
-        # if not lot:
-        #     raise ValidationError("Lot Tidak Ditemukan")
-        return lot
+        return Lot.search([('name', '=', lot_code)], limit=1)
 
     @api.onchange('confirmation_lot_code')
     def _onchange_confirmation_lot_code(self):
@@ -839,15 +1109,21 @@ class StockMoveLine(models.Model):
                 wizard.matching = 'not_match'
 
             wizard.matching_lot_id = lot.id
-    def _find_loc_by_scan_code(self, lot_code):
-        loc = False
+    def _find_loc_by_scan_code(self, location_code):
         Loc = self.env['stock.location']
+        location_code = (location_code or '').strip()
+        if not location_code:
+            return Loc.browse()
 
-        loc = Loc.search([
-            ('unique_code', '=', lot_code)
-        ], limit=1)
+        search_fields = ['unique_code', 'barcode', 'complete_name', 'name']
+        for field_name in search_fields:
+            if field_name not in Loc._fields:
+                continue
+            loc = Loc.search([(field_name, '=', location_code)], limit=1)
+            if loc:
+                return loc
 
-        return loc
+        return Loc.browse()
 
     # @api.onchange('matching_lot_id', 'matching_loc_dest_id')
     # def _onchange_update_matching_status(self):
@@ -861,98 +1137,57 @@ class StockMoveLine(models.Model):
     #         line.matching = 'match' if lot_match and location_match else 'not_match'
 
     def _update_move_picked(self):
-        for item in self:
-            print(item.matching)
         for move in self.mapped('move_id'):
-            move.picked = (
+
+            # Matching hanya berlaku untuk stock move yang
+            # merupakan bagian dari picking.
+            if not move.picking_id:
+                continue
+
+            # Return picking tidak melalui proses matching WMS.
+            if move.picking_id.return_id:
+                move.picked = True
+                continue
+
+            move.picked = bool(
                 move.move_line_ids
-                and all(line.matching == 'match' for line in move.move_line_ids)
+                and all(
+                    line.matching == 'match'
+                    for line in move.move_line_ids
+                )
             )
 
+    def _get_matching_status(self):
+        """Return the matching result using the reference fields for each operation."""
+        self.ensure_one()
+        if not self.matching_lot_id or not self.matching_loc_dest_id:
+            return 'not_match'
+
+        picking_name = self.picking_id.picking_type_id.name
+        if picking_name in ('Pick', 'Pick Internal', 'Pick Components'):
+            expected_location = self.source_location_id or self.location_id
+            expected_lot = self.product_lot_id or self.lot_id
+        elif picking_name in ('Receipts', 'Receipt Internal'):
+            expected_location = self.location_dest_id
+            expected_lot = self.lot_id
+        else:
+            return 'not_match'
+
+        return (
+            'match'
+            if expected_location == self.matching_loc_dest_id
+            and expected_lot == self.matching_lot_id
+            else 'not_match'
+        )
 
     @api.onchange('confirmation_quantity', 'auto_input_code', 'matching_lot_id', 'matching_loc_dest_id')
     def _compute_matching(self):
-        print('def _compute_matching(self)')
-        print('run validate code')
-        import logging
-        _logger = logging.getLogger(__name__)
-
         for line in self:
-            picking_type = line.picking_id.picking_type_id
-
-            # 1. Validasi awal: pastikan input user tidak kosong atau hanya berisi spasi
-            conf_loc = str(line.matching_loc_dest_id or '').strip()
-            conf_lot = str(line.matching_lot_id or '').strip()
-
-            loc_ok = False
-            lot_ok = False
-            
-            if not conf_loc and not conf_lot:
-                line.matching = 'not_match'
-                line.second_matching = 'not_match'
-                continue
-            
-            if picking_type and picking_type.name in ('Pick', 'Pick Internal'):
-                print('='*100)
-                print(f'run validate code for pick: {self}')
-                # loc_code = str(line.location_id.unique_code or '').strip()
-                # product_code = str(line.lot_id.name or '').strip()
-                loc_ok = bool(line.source_location_id.id == line.matching_loc_dest_id.id)
-                lot_ok = bool(line.product_lot_id.id == line.matching_lot_id.id)
-                print(f"Source Location: {line.source_location_id}")
-                print(f"Location to match: {line.matching_loc_dest_id}")
-                print(f"Product ID: {line.product_lot_id}")
-                print(f"Product to match: {line.matching_lot_id}")
-                print(f"Matching Location STatus: {loc_ok}")
-                print(f"Matching LOT Status: {lot_ok}")
-
-
-                if loc_ok and lot_ok:
-                    line.matching = 'match'
-                    line.second_matching = 'Match'
-
-                    line.write({'second_matching': 'Match'})
-                    print('finish validating match status')
-                    print(line._cache)
-                    print("CACHE MATCH =", line._cache.get(self._fields['matching']))                    
-                    continue
-                else:
-                    line.matching = 'not_match'
-                    line.second_matching = 'Not Match'
-                    line.write({'second_matching': 'Not Match'})
-
-                    
-                    continue
-
-            if picking_type and picking_type.name in ('Receipts', 'Receipt Internal'):
-                print('run validate code for receipt')
-                loc_code = str(line.location_dest_id.unique_code or '').strip()
-                product_code = str(line.lot_id.name or '').strip()
-
-                loc_ok = bool(line.location_dest_id.id == line.matching_loc_dest_id.id)
-                lot_ok = bool(line.lot_id.id == line.matching_lot_id.id)
-                if loc_ok and lot_ok:
-                    line.matching = 'match'
-                    continue
-                else:
-                    line.matching = 'not_match'
-
-                    
-                    continue
-
-
-            if not picking_type or picking_type.name not in ('Pick', 'Pack', 'Receipts', 'Pick Internal', 'Receipt Internal'):
-                raise ValueError('validation is not config yet')
-                
-            # 2. Ambil data pembanding dari database dan bersihkan teksnya
-
-            # 3. Lakukan perbandingan dengan mengabaikan huruf besar/kecil (.lower())
-
-            # matching = 'match' if loc_ok and lot_ok else 'not_match'
-            # _logger.info(f"{str(loc_ok)} - {str(lot_ok)}")
-            # _logger.info(f"{matching}")
-            # 4. Tentukan hasil akhir
-            # line.matching = 'match'
+            line.matching = line._get_matching_status()
+            if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
+                line.second_matching = (
+                    'Match' if line.matching == 'match' else 'Not Match'
+                )
 
 
             
@@ -964,14 +1199,14 @@ class StockMoveLine(models.Model):
             picking_name = line.move_id.picking_id.picking_type_id.name
             print(f"validate stock move line with picking type name: {picking_name}")
 
-            if picking_name and picking_name == 'Pick':
+            if picking_name and picking_name in ( 'Pick', 'Pick Components', 'Pick Internal'):
                 loc_code = str(line.location_id.unique_code or '').strip()
                 product_code = str(line.lot_id.name or '').strip()
 
                 line.confirmation_location_code = loc_code
                 line.confirmation_lot_code = product_code
                 line.matching_lot_id = line.product_lot_id.id
-                line.source_location_id = line.matching_loc_dest_id.id
+                line.matching_loc_dest_id = line.source_location_id.id
                 line.matching = 'match'
                 line.second_matching = 'Match'
 
@@ -992,4 +1227,3 @@ class StockMoveLine(models.Model):
             #     line.matching = 'match'
             #     sml = self.env['stock.move.line'].browse(line._origin.id)
             #     sml.write({'matching': 'match'})
-

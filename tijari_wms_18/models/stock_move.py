@@ -1,4 +1,5 @@
-from odoo import api, models, fields
+from odoo.tools.float_utils import float_compare, float_round
+from odoo import _, api, models, fields
 import base64
 import os
 from PIL import Image
@@ -77,10 +78,12 @@ class StockMove(models.Model):
         readonly=True
     ) 
 
-    temp_float = fields.Float(string="Confirmation Quantity",
-    ) 
+    # temp_float = fields.Float(string="Confirmation Quantity")
+    so_confirmation_quantity = fields.Float(string="Confirmation Quantity")
+    
     remaining_package_qty = fields.Float(
         compute="_compute_remaining_package_qty",
+        store=True,
         string="Remaining Package Qty",
     )
     difference_quantity = fields.Float(
@@ -89,6 +92,180 @@ class StockMove(models.Model):
         store=True,
     )
 
+    confirmation_quantity = fields.Float(
+        string='Confirmation Qty',
+        compute='_compute_confirmation_quantity',
+        store=True,
+    )
+
+    owner_id = fields.Many2one(
+            "res.partner",
+            string="Owner",
+            store=True,
+            readonly=False,
+        )
+
+    shipped_qty = fields.Float('Shipped Qty')
+
+    status_check = fields.Selection([
+        ('finished', 'Finished'),
+        ('unfinished', 'Unfinished'),
+    ], string='Status', default='unfinished')
+
+    def action_mark_check_finished(self):
+        if self.so_confirmation_quantity == 0:
+            raise ValidationError(_("Confirmation Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+        # self._check_so_confirmation_quantity()
+        self.write({'status_check': 'finished'})
+        return True
+
+    def action_mark_check_unfinished(self):
+        self.write({'status_check': 'unfinished'})
+        return True
+
+    def _update_reserved_quantity_vals(
+        self,
+        need,
+        location_id,
+        lot_id=None,
+        package_id=None,
+        owner_id=None,
+        strict=True,
+    ):
+        self.ensure_one()
+
+        if not lot_id:
+            lot_id = self.env["stock.lot"]
+        if not package_id:
+            package_id = self.env["stock.quant.package"]
+        if not owner_id:
+            owner_id = self.env["res.partner"]
+
+        # ======================================================
+        # CUSTOM : TOKO PEGANG DO
+        # ======================================================
+        if (
+            self.picking_id.adt_type == "Toko Pegang DO"
+        ):
+            owner_id = self.owner_id
+        # ======================================================
+
+        quants = self.env["stock.quant"]._get_reserve_quantity(
+            self.product_id,
+            location_id,
+            need,
+            product_packaging_id=self.product_packaging_id,
+            uom_id=self.product_uom,
+            lot_id=lot_id,
+            package_id=package_id,
+            owner_id=owner_id,
+            strict=strict,
+        )
+
+        taken_quantity = 0
+        rounding = self.env["decimal.precision"].precision_get(
+            "Product Unit of Measure"
+        )
+
+        candidate_lines = {}
+        for line in self.move_line_ids:
+            if line.result_package_id or line.product_id.tracking == "serial":
+                continue
+            candidate_lines[
+                (
+                    line.location_id,
+                    line.lot_id,
+                    line.package_id,
+                    line.owner_id,
+                )
+            ] = line
+
+        move_line_vals = []
+        grouped_quants = {}
+
+        for quant, quantity in quants:
+            key = (
+                quant.location_id,
+                quant.lot_id,
+                quant.package_id,
+                quant.owner_id,
+            )
+
+            if key not in grouped_quants:
+                grouped_quants[key] = [quant, quantity]
+            else:
+                grouped_quants[key][1] += quantity
+
+        for reserved_quant, quantity in grouped_quants.values():
+            taken_quantity += quantity
+
+            to_update = candidate_lines.get(
+                (
+                    reserved_quant.location_id,
+                    reserved_quant.lot_id,
+                    reserved_quant.package_id,
+                    reserved_quant.owner_id,
+                )
+            )
+
+            if to_update:
+                uom_quantity = self.product_id.uom_id._compute_quantity(
+                    quantity,
+                    to_update.product_uom_id,
+                    rounding_method="HALF-UP",
+                )
+
+                uom_quantity = float_round(
+                    uom_quantity,
+                    precision_digits=rounding,
+                )
+
+                uom_quantity_back_to_product_uom = (
+                    to_update.product_uom_id._compute_quantity(
+                        uom_quantity,
+                        self.product_id.uom_id,
+                        rounding_method="HALF-UP",
+                    )
+                )
+
+            if (
+                to_update
+                and float_compare(
+                    quantity,
+                    uom_quantity_back_to_product_uom,
+                    precision_digits=rounding,
+                )
+                == 0
+            ):
+                to_update.with_context(
+                    reserved_quant=reserved_quant
+                ).quantity += uom_quantity
+
+            else:
+                if (
+                    self.product_id.tracking == "serial"
+                    and (
+                        self.picking_type_id.use_create_lots
+                        or self.picking_type_id.use_existing_lots
+                    )
+                ):
+                    vals_list = self._add_serial_move_line_to_vals_list(
+                        reserved_quant,
+                        quantity,
+                    )
+                    if vals_list:
+                        move_line_vals += vals_list
+
+                else:
+                    move_line_vals.append(
+                        self._prepare_move_line_vals(
+                            quantity=quantity,
+                            reserved_quant=reserved_quant,
+                        )
+                    )
+
+        return move_line_vals, taken_quantity
+    
     @api.depends('product_uom_qty', 'quantity', 'picking_type_name', 'confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
@@ -100,11 +277,6 @@ class StockMove(models.Model):
             move.difference_quantity = difference if difference > 0 else 0.0
 
 
-    confirmation_quantity = fields.Float(
-        string='Confirmation Qty',
-        compute='_compute_confirmation_quantity',
-        store=True,
-    )
 
     @api.depends('move_line_ids.confirmation_quantity')
     def _compute_confirmation_quantity(self):
@@ -140,6 +312,8 @@ class StockMove(models.Model):
                 line._compute_auto_input_code()
                 
     def action_validate_lot(self):
+        print('action_validate_lot')
+
         for move in self:
             picking_type = move.picking_id.picking_type_id
             for line in move.move_line_ids:
@@ -160,15 +334,9 @@ class StockMove(models.Model):
                 self._check_match_status()
 
     def _check_match_status(self):
+        print('_check_match_status')
         for move in self.move_line_ids:
-            loc_ok = bool(move.location_dest_id.id == move.matching_loc_dest_id.id)
-            lot_ok = bool(move.lot_id.id == move.matching_lot_id.id)
-            if loc_ok and lot_ok:
-                move.matching = 'match'
-                continue
-            else:
-                move.matching = 'not_match'
-                continue 
+            move.matching = move._get_matching_status()
 
     @api.onchange('unfiltered_dest')
     def action_toggle_unfiltered_dest(self):
@@ -187,7 +355,7 @@ class StockMove(models.Model):
             for item in move.move_line_ids:
                 if move.unfiltered_dest:
                     item.parent_location_id = item.adt_dest_location_id.id
-                    item.source_location_id = False
+                    # item.source_location_id = False
                     item.unfiltered_dest = value
 
                     _logger.info("parent_location_id: %s", item.parent_location_id.name)
@@ -196,7 +364,7 @@ class StockMove(models.Model):
 
                 else:
                     item.parent_location_id = move.picking_id.picking_type_id.default_location_src_id.id
-                    item.source_location_id = False
+                    # item.source_location_id = False
                     item.unfiltered_dest = value
 
                     _logger.info("parent_location_id: %s", item.parent_location_id.name)
@@ -368,7 +536,7 @@ class StockMove(models.Model):
         res = super().create(vals)
         for line in res:
             if not line.adt_dest_location_id:
-                line.adt_dest_location_id = line.location_id
+                line.adt_dest_location_id = line.picking_id.adt_dest_location_id or line.picking_id.picking_type_id.default_location_dest_id
 
         return res
 
@@ -378,8 +546,8 @@ class StockMove(models.Model):
         picking = self.picking_id
         base_dest_location = (
             picking.adt_dest_location_id
-            if picking and picking.adt_dest_location_id
-            else self.location_dest_id
+            if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Direct Receipt']
+            else self.adt_dest_location_id
         )
 
         if not base_dest_location:

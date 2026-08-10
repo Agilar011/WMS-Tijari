@@ -121,66 +121,6 @@ class AcumaticaInventoryStockConfig(models.Model):
         }
         return body
 
-    def fetch_inventory_stock_data(self, warehouse=None, inventory_id=None, odata_expand=None, odata_top=None):
-        self.ensure_one()
-        session = self._do_login()
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name.lstrip('/')}"
-            params = {}
-            expand_value = odata_expand if odata_expand is not None else self.odata_expand
-            top_value = odata_top if odata_top is not None else self.odata_top
-
-            if expand_value:
-                params['$expand'] = expand_value
-            if top_value:
-                params['$top'] = top_value
-
-            payload = self._build_request_body(
-                warehouse=warehouse or '',
-                inventory_id=inventory_id or '',
-            )
-
-            response = session.put(endpoint, params=params, json=payload)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Inventory Stock (HTTP {response.status_code}): {response.text}')
-
-            raw_data = self._normalize_rows(response.json())
-            result = []
-            for row_number, item in enumerate(raw_data, start=1):
-                details = item.get('InventorySiteInquiryDetails') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-                if not details:
-                    details = [{}]
-
-                for detail in details:
-                    result.append({
-                        'external_id': item.get('id', '') or '',
-                        'row_number': item.get('rowNumber', row_number) or row_number,
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_row_number': detail.get('rowNumber', 0) or 0,
-                        'note': self._val(detail, 'note') or self._val(item, 'note'),
-                        'warehouse_code': self._val(detail, 'WarehouseID') or self._val(item, 'WarehouseID') or '',
-                        'inventory_id': self._val(detail, 'InventoryID') or self._val(item, 'InventoryID'),
-                        'description': self._val(detail, 'Description'),
-                        'branch': self._val(detail, 'Branch'),
-                        'item_status': self._val(detail, 'ItemStatus'),
-                        'kode_barang_dan_jasa': self._val(detail, 'KodeBarangdanJasa'),
-                        'product_group': self._val(detail, 'ProductGroup'),
-                        'available': self._parse_float(self._val(detail, 'Available')),
-                        'on_hand_acumatica': self._parse_float(self._val(detail, 'OnHand')),
-                        'sync_date': fields.Datetime.now(),
-                    })
-
-            _logger.info("Berhasil ambil %s rows Inventory Stock dari Acumatica", len(result))
-            return result
-        finally:
-            self._do_logout(session)
-            self.last_sync = fields.Datetime.now()
-
     @staticmethod
     def _parse_float(value):
         try:
@@ -462,4 +402,3 @@ class AcumaticaInventoryStockLine(models.Model):
                 'sticky': True,
             }
         }
-

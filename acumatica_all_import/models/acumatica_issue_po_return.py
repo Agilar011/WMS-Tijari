@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaIssuePoReturnConfig(models.Model):
     _name = 'acumatica.issue.po.return.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Inventory Receipt Import'
+    _description = 'Konfigurasi Koneksi Acumatica - PO Return Import'
     _rec_name = 'name'
 
     name = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
@@ -125,37 +125,30 @@ class AcumaticaIssuePoReturnConfig(models.Model):
         try:
             endpoint = f"{self.api_url}/{self.endpoint_name}"
             params = {'$top': limit, '$skip': offset}
-            filters = []
 
             if self.odata_expand:
                 params['$expand'] = self.odata_expand
 
-            if self.odata_select:
-                params['$select'] = self.odata_select
-            if receipt_nbr:
-                filters.append(f"ReceiptNbr eq '{receipt_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-            if self.odata_filter:
-                filters.append(f"({self.odata_filter})")
-            else:
-                filters.append("(Type eq 'Receipt')")
+            body = {
+                "BuildingID": {
+                    "value": "WH33"
+                }
+            }
 
-            if filters:
-                params['$filter'] = ' and '.join(filters)       
-
-            response = session.get(endpoint, params=params, timeout=90)
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Inventory Receipt (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+            raw_payload = response.json()
+            raw_data = raw_payload.get('PurchaseReceiptGIDetails') if isinstance(raw_payload, dict) else None
+            raw_data = raw_data or self._normalize_rows(raw_payload)
             result = []
 
             for row_number, item in enumerate(raw_data, start=1):
                 header = {
                     'external_id': item.get('id', '') or '',
                     'row_number': row_number,
-                    'note': item.get('note', {}).get('value', '') or '',
+                    'note': self._val(item, 'NoteHeader') or item.get('note', {}).get('value', '') or '',
                     'branch_warehouse': self._val(item, 'Branch'),
                     'actual_qty': self._val(item, 'ControlQty'),
                     'scheduled_date': self._val(item, 'Date'),
@@ -170,7 +163,7 @@ class AcumaticaIssuePoReturnConfig(models.Model):
                     'receipt_type': self._val(item, 'Type'),
                     'vendor_code': self._val(item, 'VendorID'),
                     'partner_ref': self._val(item, 'VendorRef'),
-                    'warehouse_code': self._val(item, 'Warehouse'),
+                    'warehouse_code': self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
                 }
                 print(f" Get data : {header['receipt_nbr']}, Type: {header['receipt_type']}, Status: {header['status']}")           
 
@@ -181,29 +174,63 @@ class AcumaticaIssuePoReturnConfig(models.Model):
                     details = []
 
                 if not details:
-                    result.append(dict(header, line_nbr='0'))
+                    result.append({
+                        **header,
+                        'line_external_id': item.get('id', '') or '',
+                        'line_note': self._val(item, 'LineNote'),
+                        'description': self._val(item, 'LineDescription'),
+                        'inventory_id': self._val(item, 'LineInventoryID'),
+                        'line_nbr': str(self._val(item, 'LineNbr') or 0),
+                        'line_type': self._val(item, 'LineType'),
+                        'location_dest_code': self._val(item, 'LineLocation'),
+                        'open_qty': self._val(item, 'LineOpenQty'),
+                        'order_qty': self._val(item, 'LineOrderedQty'),
+                        'po_line_number': self._val(item, 'LinePOLineNbr'),
+                        'po_number': self._val(item, 'LinePOOrderNbr'),
+                        'po_type': self._val(item, 'LinePOOrderType') or self._val(item, 'Type'),
+                        'po_receipt_line_number': self._val(item, 'LinePOReceiptLineNbr'),
+                        'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
+                        'product_uom_qty': self._val(item, 'LineReceiptQty'),
+                        'transaction_description': self._val(item, 'LineDescription'),
+                        'transfer_order_line_number': self._val(item, 'LineTransferOrderLineNbr'),
+                        'transfer_order_number': self._val(item, 'LineTransferOrderNbr'),
+                        'transfer_order_type': self._val(item, 'LineTransferOrderType'),
+                        'transfer_shipment_number': self._val(item, 'LineTransferShipmentNbr'),
+                        'uom_code': self._val(item, 'LineUOM'),
+                        'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+                        'warehouse_code': self._val(item, 'LineWarehouseID') or header.get('warehouse_code'),
+                    })
                     continue
 
                 for detail in details:
                     line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    description = self._val(detail, 'Description') or self._val(detail, 'TransactionDescription')
-                    warehouse_dest_code = self._val(detail, 'Warehouse') or header.get('warehouse_code')
+                    description = (
+                        self._val(detail, 'LineDescription')
+                        or self._val(detail, 'Description')
+                        or self._val(detail, 'TransactionDescription')
+                    )
+                    warehouse_dest_code = (
+                        self._val(detail, 'LineWarehouseID')
+                        or self._val(detail, 'Warehouse')
+                        or header.get('warehouse_code')
+                    )
 
                     result.append({
                         **header,
                         'line_external_id': detail.get('id', '') or '',
-                        'line_note': detail.get('note', {}).get('value', '') or '',
+                        'line_note': self._val(detail, 'LineNote') or detail.get('note', {}).get('value', '') or '',
                         'description': description,
-                        'inventory_id': self._val(detail, 'InventoryID'),
+                        'inventory_id': self._val(detail, 'InventoryID') or self._val(detail, 'LineInventoryID'),
                         'line_nbr': str(line_nbr),
                         'line_type': self._val(detail, 'LineType'),
-                        'location_dest_code': self._val(detail, 'Location'),
-                        'open_qty': self._val(detail, 'OpenQty'),
-                        'order_qty': self._val(detail, 'OrderedQty'),
-                        'product_uom_qty': self._val(detail, 'ReceiptQty'),
-                        'transaction_description': self._val(detail, 'TransactionDescription'),
-                        'uom_code': self._val(detail, 'UOM'),
+                        'location_dest_code': self._val(detail, 'LineLocation') or self._val(detail, 'Location'),
+                        'open_qty': self._val(detail, 'LineOpenQty') or self._val(detail, 'OpenQty'),
+                        'order_qty': self._val(detail, 'LineOrderedQty') or self._val(detail, 'OrderedQty'),
+                        'product_uom_qty': self._val(detail, 'LineReceiptQty') or self._val(detail, 'ReceiptQty'),
+                        'transaction_description': self._val(detail, 'LineDescription') or self._val(detail, 'TransactionDescription'),
+                        'uom_code': self._val(detail, 'LineUOM') or self._val(detail, 'UOM'),
                         'warehouse_dest_code': warehouse_dest_code,
+                        'warehouse_code': warehouse_dest_code,
                     })
 
             _logger.info("Berhasil ambil %s rows Inventory Receipt dari Acumatica", len(result))
@@ -236,6 +263,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
     actual_qty = fields.Char(string='Control Qty', readonly=True)
     total_qty = fields.Char(string='Total Qty', readonly=True)
     is_hold = fields.Char(string='Hold', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     inventory_ref = fields.Char(string='Inventory Ref Nbr', readonly=True)
     post_period = fields.Char(string='Post Period', readonly=True)
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
@@ -446,6 +474,8 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             f'Location tujuan tidak ditemukan untuk code: '
                             f'{first.location_dest_code or first.header_location_code or "-"}'
                         )
+                    if dest_location.usage == 'customer':
+                        raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
 
                     origin = first.receipt_nbr or first.po_number or False
 
@@ -458,7 +488,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             if picking_type.default_location_src_id
                             else self.env.ref('stock.stock_location_suppliers').id
                         ),
-                        'location_dest_id': picking_type.default_location_dest_id.id,
+                        'location_dest_id': dest_location.id,
                         'scheduled_date': self._parse_dt(first.scheduled_date) if hasattr(first, 'scheduled_date') and first.scheduled_date else fields.Datetime.now(),
                         'origin': origin,
                         'note': first.note or False,
@@ -543,6 +573,9 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         
                         move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
                         Move.create(move_vals)
+
+                    if receipt_lines.filtered('document_only'):
+                        picking.action_validate_document_only_import(force=True)
 
                     # Jika seluruh baris produk di atas sukses tanpa error, tandai status sebagai imported
                     receipt_lines.write({

@@ -300,6 +300,14 @@ class ImportIssueWizard(models.TransientModel):
         warehouse_code = header.get('WarehouseID')
         type = False
 
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='issue_change_item',
+            document_only=self._bool_value(header.get('DocumentOnly')),
+            warehouse_code=warehouse_code,
+        )
+        if document_only_type:
+            return document_only_type
+
         print(f"Warehouse Code: {warehouse_code}")
 
         location = Location.search([

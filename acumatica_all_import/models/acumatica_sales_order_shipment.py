@@ -54,7 +54,7 @@ class AcumaticaShipmentGIStaging(models.Model):
     adt_CountryName = fields.Char(string="CountryName")
     adt_CustomerID = fields.Char(string="CustomerID")
     adt_CustomerName = fields.Char(string="CustomerName")
-    adt_DocumentOnly = fields.Char(string="DocumentOnly")
+    adt_DocumentOnly = fields.Boolean(string="DocumentOnly")
     adt_FOBPoint = fields.Char(string="FOBPoint")
     adt_FOBPointDescription = fields.Char(string="FOBPointDescription")
     adt_LineDescription = fields.Char(string="LineDescription")
@@ -314,6 +314,9 @@ class AcumaticaShipmentGIStaging(models.Model):
                     if create_tms_state == True:
                         created_loginext_header.loginext_number_of_items = move_count
 
+                    if shipment.adt_DocumentOnly:
+                        picking.action_validate_document_only_import(force=True)
+
                     # Tandai sukses jika semua proses di atas berhasil tanpa memicu exception
                     shipment.write({
                         'import_state': 'imported',
@@ -409,6 +412,12 @@ class AcumaticaShipmentGIStaging(models.Model):
                 f"Source location mapping WarehouseID {shipment.adt_WarehouseID or '-'} tidak ditemukan."
             )
 
+        partner = self._find_partner(shipment.adt_CustomerID)
+        if not partner:
+            raise UserError(
+                f"Customer {shipment.adt_CustomerID or '-'} tidak ditemukan di Odoo."
+            )
+
         destination_location = self._get_or_create_consignment_location(
             source_location,
             shipment.adt_CustomerID,
@@ -421,6 +430,14 @@ class AcumaticaShipmentGIStaging(models.Model):
             ship_date = fields.Datetime.to_datetime(clean_date_str)
         else:
             ship_date = shipment.adt_ShipDate if shipment.adt_ShipDate else fields.Datetime.now()
+
+        shipment_location_id = shipment.adt_WarehouseID
+        shipment_weight = shipment.adt_ShipmentWeight
+        shipment_volume = shipment.adt_ShipmentVolume
+        shipment_city = shipment.adt_City
+        shipment_country = self._find_loginext_country(shipment.adt_CountryName)
+        shipment_postal_code = shipment.adt_PostalCode
+        shipment_street = shipment.adt_AddressLine
 
         order = InternalTransferOrder.search([
             ('external_ref', '=', shipment.adt_ShipmentNbr),
@@ -438,6 +455,7 @@ class AcumaticaShipmentGIStaging(models.Model):
             order.write({
                 'transaction_type': 'consignment',
                 'transfer_type': 'transfer_out',
+                'partner_id': partner.id,
                 'location_id': source_location.id,
                 'location_dest_id': destination_location.id,
                 'transit_location_id': transit_location.id,
@@ -452,6 +470,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'external_ref': shipment.adt_ShipmentNbr,
                 'transaction_type': 'consignment',
                 'transfer_type': 'transfer_out',
+                'partner_id': partner.id,
                 'location_id': source_location.id,
                 'location_dest_id': destination_location.id,
                 'transit_location_id': transit_location.id,
@@ -465,7 +484,30 @@ class AcumaticaShipmentGIStaging(models.Model):
         if not move_items:
             raise UserError(f"Shipment {shipment.adt_ShipmentNbr} tidak punya detail line.")
 
+        created_loginext_header = False
+        create_tms_state = False
+        exist_post_data = self.env['loginext.staging.data'].search([
+            ('odoo_shipment_number', '=', shipment.adt_ShipmentNbr),
+        ], limit=1)
+        if not exist_post_data:
+            create_tms_state = True
+            created_loginext_header = self._build_loginext_header(
+                shipment.adt_ShipmentNbr,
+                ship_date,
+                shipment_location_id,
+                shipment_weight,
+                shipment_volume,
+                partner,
+                shipment_city,
+                shipment_country,
+                shipment_postal_code,
+                shipment_street,
+                shipment.adt_ShipmentNbr,
+            )
+
+        move_count = 0
         for item in move_items:
+            move_count += 1
             product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
             if not product:
                 raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
@@ -497,6 +539,19 @@ class AcumaticaShipmentGIStaging(models.Model):
             }
             move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
             Move.create(move_vals)
+
+            if create_tms_state:
+                self._build_loginext_item(
+                    product,
+                    shipment.adt_OrderType,
+                    created_loginext_header.id,
+                    move_count,
+                    shipment.adt_ShipmentWeight,
+                    qty,
+                )
+
+        if create_tms_state:
+            created_loginext_header.loginext_number_of_items = move_count
 
         shipment.write({
             'import_state': action_state,
@@ -1191,6 +1246,7 @@ class AcumaticaSalesOrderShipmentShipToAddressStaging(models.Model):
     city = fields.Char(string='City', readonly=True)
     country = fields.Char(string='Country', readonly=True)
     countryname = fields.Char(string='Country Name', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     postalcode = fields.Char(string='Postal Code', readonly=True)
     state = fields.Char(string='State', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
@@ -1349,6 +1405,19 @@ class AcumaticaShipmentConfig(models.Model):
         return value or ''
 
     @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
+
+    @staticmethod
     def _normalize_rows(payload):
         if isinstance(payload, list):
             return payload
@@ -1394,7 +1463,7 @@ class AcumaticaShipmentConfig(models.Model):
                 endpoint,
                 params=params,
                 json={},
-                timeout=90
+                timeout=300
             )
 
 
@@ -1436,7 +1505,7 @@ class AcumaticaShipmentConfig(models.Model):
                     "customer": self._val(item, "Customer"),
                     "customer_name": self._val(item, "CustomerName"),
 
-                    "document_only": self._val(item, "DocumentOnly"),
+                    "document_only": self._bool_val(item, "DocumentOnly"),
 
                     "fob_point": self._val(item, "FOBPoint"),
                     "fob_point_description": self._val(

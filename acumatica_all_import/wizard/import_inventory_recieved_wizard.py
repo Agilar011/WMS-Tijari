@@ -10,7 +10,7 @@ _logger = logging.getLogger(__name__)
 
 class ImportInventoryRecievedWizard(models.TransientModel):
     _name = 'import.inventory.recieved.wizard'
-    _description = 'Wizard Import Inventory Recieved dari Acumatica'
+    _description = 'Wizard Import Inventory Receipt dari Acumatica'
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
     fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
@@ -57,22 +57,17 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         if self.odata_filter:
             params.append(self.odata_filter)
 
-        for i in range(loop_count):
-            offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.fetch_inventory_recieved_data(
-                limit=self.batch_size,
-                offset=offset,
-                reference_nbr=self.reference_nbr,
-                odata_filter=params if params else None,
-            )
+        # for i in range(loop_count):
+        #     offset = self.fetch_skip + (i * self.batch_size)
+        #     batch_data = self.fetch_inventory_recieved_data()
 
-            if not batch_data:
-                break
+        #     if not batch_data:
+        #         break
 
-            raw_list += batch_data
-
-        self.total_fetched = raw_list
-        if not raw_list:
+        #     raw_list += batch_data
+        batch_data = self.fetch_inventory_recieved_data()
+        self.total_fetched = batch_data
+        if not batch_data:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
     @staticmethod
@@ -81,6 +76,19 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         if isinstance(value, dict):
             return value.get('value', '') or ''
         return value or ''
+
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
 
     @staticmethod
     def _normalize_rows(payload):
@@ -107,6 +115,14 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         Location = self.env['stock.location.acumatica']
         type = False
 
+        mapped_type = self.config_id._resolve_inventory_receive_picking_type(
+            transfer_type=header.get('transfer_type'),
+            document_only=header.get('document_only'),
+            warehouse_code=header.get('warehouse_code'),
+        )
+        if mapped_type:
+            return mapped_type
+
         location = Location.search([
             ('code', '=', header['warehouse_code'])
         ])
@@ -119,136 +135,128 @@ class ImportInventoryRecievedWizard(models.TransientModel):
 
         return type if type else None
 
-    def fetch_inventory_recieved_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
+    def _coalesce_val(self, item, *keys):
+        for key in keys:
+            value = self._val(item, key)
+            if value not in (False, None, ''):
+                return value
+        return ''
+
+    def _extract_details(self, item, detail_key):
+        details = item.get(detail_key) or item.get('Details') or []
+        if isinstance(details, dict):
+            details = details.get('value', []) or []
+        return details if isinstance(details, list) else []
+
+    def _is_transfer_in_type(self, value):
+        return str(value or '').strip().lower().replace('-', '_').replace(' ', '_') in (
+            'transfer_in',
+            'transfer_receipt',
+        )
+
+    def _build_inventory_receipt_header(self, row_number, item, header_id, warehouse_code, warehouse_dest_code=False):
+        transfer_type = self._val(item, 'TransType')
+        header = {
+            'external_id': header_id,
+            'row_number': item.get('rowNumber') or row_number,
+            'note': self._val(item, 'NoteHeader'),
+            'branch_warehouse': self._val(item, 'Branch'),
+            'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
+            'actual_qty': self._val(item, 'ControlQty'),
+            'customer_code': self._val(item, 'CustomerID'),
+            'scheduled_date': self._val(item, 'Date'),
+            'description': self._val(item, 'Description'),
+            'document_only': self._bool_val(item, 'DocumentOnly'),
+            'external_ref': self._val(item, 'ExternalRef'),
+            'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+            'location_code': str(self._val(item, 'Location')),
+            'post_period': str(self._val(item, 'PostPeriod')),
+            'reference_nbr': self._val(item, 'ReferenceNbr'),
+            'shipment_nbr': self._val(item, 'ShipmentNbr'),
+            'status': self._val(item, 'Status'),
+            'total_qty': str(self._val(item, 'TotalQty')),
+            'transfer_nbr': self._val(item, 'TransferNbr'),
+            'transfer_type': transfer_type,
+            'warehouse_code': warehouse_code,
+            'warehouse_dest_code': warehouse_dest_code or warehouse_code,
+        }
+        picking_type = self._search_picking_type(header)
+        header['picking_type_id'] = picking_type.id if picking_type else None
+        return header
+
+    def _build_inventory_receipt_detail(self, header_id, detail, warehouse_code):
+        return {
+            'header_external_id': header_id,
+            'line_external_id': detail.get('id', '') or '',
+            'line_nbr': str(self._val(detail, 'LineNbr')),
+            'line_note': self._val(detail, 'LineNote'),
+            'branch_warehouse': self._val(detail, 'LineBranch'),
+            'line_description': self._val(detail, 'LineInventoryName'),
+            'inventory_id': self._val(detail, 'LineInventoryID'),
+            'location_code': self._val(detail, 'LineLocation'),
+            'product_uom_qty': str(self._val(detail, 'LineQuantity')),
+            'uom_code': self._val(detail, 'LineUOM'),
+            'warehouse_dest_code': warehouse_code,
+        }
+
+    def fetch_inventory_recieved_data(self):
         self.ensure_one()
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-            filters = []
-
+            params = {}
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-            if self.config_id.odata_select:
-                params['$select'] = self.config_id.odata_select
-            if reference_nbr:
-                filters.append(f"ReferenceNbr eq '{reference_nbr}'")
-            if odata_filter:
-                filters.append(self.config_id.odata_filter)
-                filters.extend(odata_filter)
-            else:
-                filters.append(f"({self.config_id.odata_filter})")
-            if filters:
-                params['$filter'] = ' and '.join(filters)
 
-            response = session.get(endpoint, params=params, timeout=60)
+            response = session.put(endpoint, params=params, json={"TransType": {"value": ""}}, timeout=300)
             if response.status_code != 200:
-                raise UserError(f'Gagal fetch data (HTTP {response.status_code}): {response.text}')
+                raise UserError(f'Gagal fetch data Inventory Receipt (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+            raw_data = response.json()
             result = []
             detail_result = []
+            headers_seen = set()
 
-            for row_number, item in enumerate(raw_data, start=1):
-                header = {
-                    'external_id': item.get('id', '') or '',
-                    'row_number': item.get('rowNumber', '') or '',
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'branch_warehouse': self._val(item, 'Branch'),
-                    'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
-                    'actual_qty': self._val(item, 'ControlQty'),
-                    'customer_code': self._val(item, 'Customer'),
-                    'scheduled_date': self._val(item, 'Date'),
-                    'description': self._val(item, 'Description'),
-                    # DocumentOnly
-                    'external_ref': self._val(item, 'ExternalRef'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'location_code': str(self._val(item, 'Location')),
-                    'post_period': str(self._val(item, 'PostPeriod')),
-                    'reference_nbr': self._val(item, 'ReferenceNbr'),
-                    'shipment_nbr': self._val(item, 'ShipmentNbr'),
-                    'status': self._val(item, 'Status'),
-                    'total_qty': str(self._val(item, 'TotalQty')),
-                    'transfer_nbr': self._val(item, 'TransferNbr'),
-                    'transfer_type': self._val(item, 'TransType'),
-                    'warehouse_code': self._val(item, 'Warehouse')
-                }
-                
-                details = item.get('Details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
+            data = raw_data.get("InventoryReceiptGIDetails", [])
+            for row_number, item in enumerate(data, start=1):
+                ref = self._val(item, 'ReferenceNbr')
+                details = self._extract_details(item, self.config_id.odata_expand or 'InventoryReceiptGIDetails')
+                if not details:
+                    details = [item]
 
+                transfer_type = self._val(item, 'TransType')
+                line_warehouse = self._val(item, 'LineWarehouse') or self._val(item, 'LineWarehouseID')
+                if self._is_transfer_in_type(transfer_type):
+                    warehouse_code = (
+                        self._val(item, 'FromWarehouseID')
+                        or self._val(item, 'WarehouseID')
+                        or line_warehouse
+                    )
+                    warehouse_dest_code = (
+                        self._val(item, 'ToWarehouseID')
+                        or self._val(item, 'Warehouse')
+                        or self._val(item, 'LineWarehouseID')
+                        or line_warehouse
+                    )
+                else:
+                    warehouse_code = line_warehouse
+                    warehouse_dest_code = warehouse_code
+                header_id = ref or item.get('id', '')
 
-                # transfer_nbr = header['transfer_nbr']
-                # if transfer_nbr:
-                #     dest_warehouse_data = self.search_dest_warehouse(transfer_nbr, session)
-                #     if dest_warehouse_data:
-                #         header["warehouse_code"] = dest_warehouse_data.get('source_warehouse')
-                        # header["warehouse_dest_code"] = dest_warehouse_data.get('dest_warehouse')
-
-                if not header['warehouse_code'] and details:
-                    header["warehouse_code"] = self._val(details[0], 'Warehouse')
-                    type = self._search_picking_type(header)
-                    header['picking_type_id'] = type.id if type else None
-
-                result.append(header)
-
+                if header_id not in headers_seen:
+                    result.append(self._build_inventory_receipt_header(row_number, item, header_id, warehouse_code, warehouse_dest_code))
+                    headers_seen.add(header_id)
 
                 for detail in details:
-                    detail_result.append({        
-                        'header_external_id': header['external_id'],
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_nbr': str(self._val(detail, 'LineNbr')),
-                        'line_note': self._val(detail, 'note'),
-                        'branch_warehouse': self._val(detail, 'Branch'),
-                        'line_description': self._val(detail, 'Description'),
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'location_code': self._val(detail, 'Location'),
-                        'product_uom_qty': str(self._val(detail, 'Quantity')),
-                        'uom_code': self._val(detail, 'UOM'),
-                        'warehouse_dest_code': self._val(detail, 'Warehouse'),
-                    })
+                    detail_result.append(self._build_inventory_receipt_detail(header_id, detail, warehouse_dest_code))
 
             self.config_id.last_sync = fields.Datetime.now()
-            _logger.info("Berhasil ambil %s rows PO inventory dari Acumatica", len(result))
+            _logger.info("Berhasil ambil %s rows Inventory Receipt dari Acumatica", len(result))
             self._validate_staging_against_picking(result, detail_result)
             return len(result)
 
         finally:
             self.config_id._do_logout(session)
-
-    # def search_dest_warehouse(self, transfer_nbr, session):
-    #     self.ensure_one()
-    #     if not transfer_nbr:
-    #         return None
-    #     try:
-    #         endpoint = f"{self.config_id.api_url}/TransferOrder"
-    #         params = {
-    #             '$select': 'ToWarehouseID, FromWarehouseID, ReferenceNbr', 
-    #             '$filter': f"ReferenceNbr eq '{transfer_nbr}'"
-    #         }
-
-    #         response = session.get(endpoint, params=params, timeout=90)
-    #         if response.status_code != 200:
-    #             raise UserError(f'Gagal ambil data Destination Warehouse (HTTP {response.status_code}): {response.text}')
-
-    #         raw_data = self._normalize_rows(response.json())
-
-    #         item = raw_data[0]  # misal ambil data pertama
-
-    #         result = {
-    #             'shipment_number': self._val(item, 'ShipmentNbr'),
-    #             'dest_warehouse': self._val(item, 'ToWarehouseID'),
-    #             'source_warehouse': self._val(item, 'FromWarehouseID'),
-    #         }
-
-    #         _logger.info('Berhasil ambil data Warehouse dari Transfer', len(result))
-    #         return result
-    #     except Exception as e:
-    #         _logger.error('Gagal ambil data Warehouse dari Transfer: %s', str(e))
-    #         return None
 
     def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']
@@ -420,7 +428,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Data Inventory Recieved dari Acumatica',
+            'name': 'Data Inventory Receipt dari Acumatica',
             'res_model': 'acumatica.inventory.recieved.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
@@ -440,7 +448,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         self.state = 'done'
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Hasil Import Inventory Recieved',
+            'name': 'Hasil Import Inventory Receipt',
             'res_model': 'acumatica.inventory.recieved.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],

@@ -38,32 +38,69 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             ("code", "=", warehouse_code)
         ], limit=1)
 
-    def _search_picking_type(self, warehouse_code, picking_code="incoming"):
+    def _search_picking_type(
+        self,
+        warehouse_code,
+        picking_code="incoming",
+        document_only=False,
+        api_acumatica=False,
+        target_operation_type=False,
+    ):
+        PickingType = self._env()["stock.picking.type"].sudo()
+        target_picking_type = PickingType.resolve_document_only_picking_type(
+            target_operation_type=target_operation_type,
+            api_acumatica=api_acumatica,
+            document_only=document_only,
+            warehouse_code=warehouse_code,
+        )
+        if target_picking_type:
+            return target_picking_type
+
         if not warehouse_code:
-            return self._env()["stock.picking.type"].sudo().browse()
+            return PickingType.browse()
 
         warehouse = self._search_warehouse(warehouse_code)
         if not warehouse:
-            return self._env()["stock.picking.type"].sudo().browse()
+            return PickingType.browse()
 
-        return self._env()["stock.picking.type"].sudo().search([
+        return PickingType.search([
             ("warehouse_id", "=", warehouse.id),
             ("code", "=", picking_code),
             ("is_default_api", "=", True),
         ], limit=1)
 
-    def _search_incoming_picking_type(self, warehouse_code):
-        return self._search_picking_type(warehouse_code, "incoming")
+    def _search_incoming_picking_type(self, warehouse_code, document_only=False, api_acumatica=False):
+        return self._search_picking_type(
+            warehouse_code,
+            "incoming",
+            document_only=document_only,
+            api_acumatica=api_acumatica,
+        )
 
-    def _search_internal_picking_type(self, warehouse_code):
-        return self._search_picking_type(warehouse_code, "internal")
+    def _search_internal_picking_type(self, warehouse_code, document_only=False, api_acumatica=False):
+        return self._search_picking_type(
+            warehouse_code,
+            "internal",
+            document_only=document_only,
+            api_acumatica=api_acumatica,
+        )
 
-    def _search_outgoing_picking_type(self, warehouse_code):
-        return self._search_picking_type(warehouse_code, "outgoing")
+    def _search_outgoing_picking_type(self, warehouse_code, document_only=False, api_acumatica=False):
+        return self._search_picking_type(
+            warehouse_code,
+            "outgoing",
+            document_only=document_only,
+            api_acumatica=api_acumatica,
+        )
 
     def _receipt_header_vals(self, item, row_number):
         building_code = self._first_value(item, "BuildingID", "building_code")
-        picking_type = self._search_incoming_picking_type(building_code)
+        document_only = self._bool_value(item, "DocumentOnly", "document_only")
+        picking_type = self._search_incoming_picking_type(
+            building_code,
+            document_only=document_only,
+            api_acumatica="po_receipt",
+        )
         return {
             "external_id": item.get("id") or item.get("external_id") or "",
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
@@ -73,6 +110,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "actual_qty": self._first_value(item, "ControlQty", "actual_qty"),
             "scheduled_date": self._first_value(item, "Date", "scheduled_date"),
             "is_hold": self._first_value(item, "Hold", "is_hold"),
+            "document_only": document_only,
             "inventory_ref": self._first_value(item, "InventoryRefNbr", "inventory_ref"),
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
             "header_location_code": self._first_value(item, "Location", "header_location_code"),
@@ -123,7 +161,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _po_return_header_vals(self, item, row_number):
         warehouse_code = self._first_value(item, "Warehouse", "WarehouseID", "LineWarehouseID", "warehouse_code")
-        picking_type = self._search_outgoing_picking_type(warehouse_code)
+        document_only = self._bool_value(item, "DocumentOnly", "document_only")
+        picking_type = self._search_outgoing_picking_type(
+            warehouse_code,
+            document_only=document_only,
+            api_acumatica="issue_po_return",
+        )
         return {
             "external_id": item.get("id") or item.get("external_id") or "",
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
@@ -132,6 +175,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "actual_qty": self._first_value(item, "ControlQty", "actual_qty"),
             "scheduled_date": self._first_value(item, "Date", "scheduled_date"),
             "is_hold": self._first_value(item, "Hold", "is_hold"),
+            "document_only": document_only,
             "inventory_ref": self._first_value(item, "InventoryRefNbr", "inventory_ref"),
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
             "header_location_code": self._first_value(item, "Location", "header_location_code"),
@@ -172,6 +216,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "external_id": item.get("id") or item.get("external_id") or "",
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "description": self._first_value(item, "Description", "description"),
+            "document_only": self._bool_value(item, "DocumentOnly", "document_only"),
             "inventory_id": self._first_value(item, "InventoryID", "inventory_id"),
             "last_modified_datetime": self._datetime_value(item, "LastModifiedDateTime", "last_modified_datetime"),
             "location": self._first_value(item, "Location", "location"),
@@ -324,7 +369,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
     def _so_transfer_header_vals(self, item, row_number):
         vals = self._receipt_header_vals(item, row_number)
         warehouse_code = self._first_value(item, "BuildingID", "Warehouse", "LineWarehouseID", "WarehouseID", "warehouse_code")
-        picking_type = self._search_internal_picking_type(warehouse_code)
+        document_only = self._bool_value(item, "DocumentOnly", "document_only")
+        picking_type = self._search_internal_picking_type(
+            warehouse_code,
+            document_only=document_only,
+            api_acumatica="so_transfer",
+        )
         vals.update({
             "warehouse_dest_code": self._first_value(item, "Warehouse", "LineWarehouseID", "WarehouseID", "warehouse_dest_code"),
             "location_dest_code": self._first_value(item, "LineLocation", "Location", "location_dest_code"),
@@ -344,16 +394,21 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         vals["warehouse_dest_code"] = self._first_value(item, "Warehouse", "LineWarehouseID", "WarehouseID", "warehouse_dest_code")
         return vals
 
-    def _direct_transfer_header_vals(self, item, row_number):
+    def _direct_transfer_header_vals(self, item, row_number, api_acumatica=False):
         from_warehouse = self._first_value(item, "FromWarehouseID", "adt_FromWarehouseID")
-        picking_type = self._search_internal_picking_type(from_warehouse)
+        document_only = self._bool_value(item, "DocumentOnly", "adt_DocumentOnly")
+        picking_type = self._search_internal_picking_type(
+            from_warehouse,
+            document_only=document_only,
+            api_acumatica=api_acumatica,
+        )
         return {
             "adt_id": item.get("id") or item.get("adt_id") or "",
             "adt_rowNumber": self._int_value(item, "rowNumber", "adt_rowNumber") or row_number,
             "adt_note": self._first_value(item, "note", "Note", "adt_note"),
             "adt_Date": self._first_value(item, "Date", "adt_Date"),
             "adt_Description": self._first_value(item, "Description", "adt_Description"),
-            "adt_DocumentOnly": self._first_value(item, "DocumentOnly", "adt_DocumentOnly"),
+            "adt_DocumentOnly": document_only,
             "adt_ExternalRef": self._first_value(item, "ExternalRef", "adt_ExternalRef"),
             "adt_FromWarehouseID": from_warehouse,
             "adt_Hold": self._bool_value(item, "Hold", "adt_Hold"),
@@ -373,6 +428,42 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "selected": True,
             "sync_date": fields.Datetime.now(),
         }
+
+    def _vendor_return_direct_transfer_header_vals(self, item, row_number):
+        vals = self._direct_transfer_header_vals(
+            item,
+            row_number,
+            api_acumatica="vendor_return",
+        )
+        from_warehouse = vals.get("adt_FromWarehouseID")
+        document_only = vals.get("adt_DocumentOnly")
+        picking_type = self._search_picking_type(
+            from_warehouse,
+            "outgoing",
+            document_only=document_only,
+            api_acumatica="vendor_return",
+            target_operation_type="direct_delivery_order",
+        )
+        vals["picking_type_id"] = picking_type.id if picking_type else False
+        return vals
+
+    def _vendor_return_document_direct_transfer_header_vals(self, item, row_number):
+        vals = self._direct_transfer_header_vals(
+            item,
+            row_number,
+            api_acumatica="vendor_return",
+        )
+        from_warehouse = vals.get("adt_FromWarehouseID")
+        document_only = vals.get("adt_DocumentOnly")
+        picking_type = self._env()["stock.picking.type"].sudo().resolve_document_only_picking_type(
+            target_operation_type="direct_delivery_order",
+            api_acumatica="vendor_return",
+            document_only=document_only,
+            warehouse_code=from_warehouse,
+            required=True,
+        )
+        vals["picking_type_id"] = picking_type.id if picking_type else False
+        return vals
 
     def _direct_transfer_product_vals(self, item, header):
         return {
@@ -395,7 +486,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _receipt_external_header_vals(self, item, row_number):
         building_code = self._first_value(item, "BuildingID", "building_code")
-        picking_type = self._search_incoming_picking_type(building_code)
+        document_only = self._bool_value(item, "DocumentOnly", "document_only")
+        picking_type = self._search_incoming_picking_type(
+            building_code,
+            document_only=document_only,
+            api_acumatica="receipt_change_item",
+        )
         return {
             "external_id": item.get("id") or item.get("external_id") or "",
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
@@ -407,6 +503,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "customer_code": self._first_value(item, "CustomerID", "customer_code"),
             "scheduled_date": self._first_value(item, "Date", "scheduled_date"),
             "description": self._first_value(item, "Description", "description"),
+            "document_only": document_only,
             "external_ref": self._first_value(item, "ExternalRef", "external_ref"),
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
             "location_code": self._first_value(item, "Location", "location_code"),
@@ -453,6 +550,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "actual_qty": self._first_value(item, "ControlQty", "actual_qty"),
             "partner_code": self._first_value(item, "CustomerID", "partner_code"),
             "description": self._first_value(item, "Description", "description"),
+            "document_only": self._bool_value(item, "DocumentOnly", "document_only"),
             "fob_point": self._first_value(item, "FOBPoint", "fob_point"),
             "fob_point_description": self._first_value(item, "FOBPointDescription", "fob_point_description"),
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
@@ -508,7 +606,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _toko_pegang_do_header_vals(self, item, row_number):
         warehouse_code = self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_code")
-        picking_type = self._search_incoming_picking_type(warehouse_code)
+        document_only = self._bool_value(item, "DocumentOnly", "document_only")
+        picking_type = self._search_incoming_picking_type(
+            warehouse_code,
+            document_only=document_only,
+            api_acumatica="receipt_toko_pegang_do",
+        )
         return {
             "external_id": item.get("id") or item.get("external_id") or "",
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
@@ -519,6 +622,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "customer_code": self._first_value(item, "CustomerID", "customer_code"),
             "scheduled_date": self._first_value(item, "Date", "scheduled_date"),
             "description": self._first_value(item, "Description", "description"),
+            "document_only": document_only,
             "external_ref": self._first_value(item, "ExternalRef", "external_ref"),
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
             "location_code": self._first_value(item, "Location", "location_code"),
@@ -556,7 +660,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _transfer_shipment_header_vals(self, item, row_number):
         warehouse_code = self._first_value(item, "WarehouseID", "Warehouse", "warehouse_code")
-        picking_type = self._search_internal_picking_type(warehouse_code)
+        document_only = self._bool_value(item, "DocumentOnly", "document_only")
+        picking_type = self._search_internal_picking_type(
+            warehouse_code,
+            document_only=document_only,
+            api_acumatica="transfer_shipment",
+        )
         custom_payload = item.get("custom")
         return {
             "external_id": item.get("id") or item.get("external_id") or "",
@@ -567,7 +676,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "partner_code": self._first_value(item, "CustomerID", "partner_code"),
             "customer_name": self._first_value(item, "CustomerName", "customer_name"),
             "description": self._first_value(item, "Description", "description"),
-            "document_only": self._first_value(item, "DocumentOnly", "document_only"),
+            "document_only": document_only,
             "fob_point": self._first_value(item, "FOBPoint", "fob_point"),
             "is_hold": self._first_value(item, "Hold", "is_hold"),
             "is_insurance": self._first_value(item, "Insurance", "is_insurance"),
@@ -628,7 +737,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _inventory_issue_header_vals(self, item, row_number):
         warehouse_code = self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_code")
-        picking_type = self._search_outgoing_picking_type(warehouse_code)
+        document_only = self._bool_value(item, "DocumentOnly", "document_only")
+        picking_type = self._search_outgoing_picking_type(
+            warehouse_code,
+            document_only=document_only,
+            api_acumatica="inventory_issue",
+        )
         return {
             "external_id": item.get("id") or item.get("external_id") or "",
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
@@ -636,6 +750,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "reference_nbr": self._first_value(item, "ReferenceNbr", "reference_nbr"),
             "scheduled_date": self._first_value(item, "Date", "scheduled_date"),
             "description": self._first_value(item, "Description", "description"),
+            "document_only": document_only,
             "external_ref": self._first_value(item, "ExternalRef", "external_ref"),
             "status": self._first_value(item, "Status", "status"),
             "actual_qty": self._first_value(item, "ControlQty", "actual_qty"),
@@ -674,17 +789,24 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "product_uom_qty": self._first_value(item, "LineQuantity", "Quantity", "product_uom_qty"),
             "uom_code": self._first_value(item, "LineUOM", "UOM", "uom_code"),
             "warehouse_code": self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_code"),
+            "customer_id": self._first_value(item, "CustomerID", "customer_id"),
         }
 
-    def _transfer_one_step_header_vals(self, item, row_number):
+    def _transfer_one_step_header_vals(self, item, row_number, api_acumatica="transfer_one_step"):
         from_warehouse = self._first_value(item, "FromWarehouseID", "from_warehouse_code")
-        picking_type = self._search_internal_picking_type(from_warehouse)
+        document_only = self._bool_value(item, "DocumentOnly", "document_only")
+        picking_type = self._search_internal_picking_type(
+            from_warehouse,
+            document_only=document_only,
+            api_acumatica=api_acumatica,
+        )
         return {
             "external_id": item.get("id") or item.get("external_id") or "",
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "note": self._note_value(item),
             "scheduled_date": self._first_value(item, "Date", "scheduled_date"),
             "description": self._first_value(item, "Description", "description"),
+            "document_only": document_only,
             "from_warehouse_code": from_warehouse,
             "is_hold": self._first_value(item, "Hold", "is_hold"),
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
@@ -717,7 +839,11 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         }
 
     def _transfer_two_step_header_vals(self, item, row_number):
-        return self._transfer_one_step_header_vals(item, row_number)
+        return self._transfer_one_step_header_vals(
+            item,
+            row_number,
+            api_acumatica="transfer_two_step",
+        )
 
     def _transfer_two_step_product_vals(self, item, header):
         return {
@@ -752,6 +878,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_CustomerOrder": self._first_value(item, "CustomerOrder", "adt_CustomerOrder"),
             "adt_Date": self._first_value(item, "Date", "adt_Date"),
             "adt_Description": self._first_value(item, "Description", "adt_Description"),
+            "adt_DocumentOnly": self._bool_value(item, "DocumentOnly", "adt_DocumentOnly"),
             "adt_DueDate": self._first_value(item, "DueDate", "adt_DueDate"),
             "adt_LastModifiedDateTime": self._first_value(item, "LastModifiedDateTime", "adt_LastModifiedDateTime"),
             "adt_LocationID": self._first_value(item, "LocationID", "adt_LocationID"),
@@ -795,7 +922,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _receipt_transfer_in_header_vals(self, item, row_number):
         warehouse_code = self._first_value(item, "Warehouse", "WarehouseID", "adt_Warehouse")
-        picking_type = self._search_internal_picking_type(warehouse_code)
+        document_only = self._bool_value(item, "DocumentOnly", "adt_DocumentOnly")
+        picking_type = self._search_internal_picking_type(
+            warehouse_code,
+            document_only=document_only,
+            api_acumatica="transfer_in",
+        )
         return {
             "adt_id": item.get("id") or item.get("adt_id") or "",
             "adt_rowNumber": self._first_value(item, "rowNumber", "adt_rowNumber") or row_number,
@@ -806,7 +938,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_Customer": self._first_value(item, "Customer", "CustomerID", "adt_Customer"),
             "adt_Date": self._first_value(item, "Date", "adt_Date"),
             "adt_Description": self._first_value(item, "Description", "adt_Description"),
-            "adt_DocumentOnly": self._first_value(item, "DocumentOnly", "adt_DocumentOnly"),
+            "adt_DocumentOnly": document_only,
             "adt_ExternalRef": self._first_value(item, "ExternalRef", "adt_ExternalRef"),
             "adt_LastModifiedDateTime": self._first_value(item, "LastModifiedDateTime", "adt_LastModifiedDateTime"),
             "adt_Location": self._first_value(item, "Location", "adt_Location"),
@@ -846,7 +978,13 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _so_shipment_header_vals(self, item, row_number, picking_code="outgoing"):
         warehouse_code = self._first_value(item, "WarehouseID", "Warehouse", "adt_WarehouseID")
-        picking_type = self._search_picking_type(warehouse_code, picking_code)
+        document_only = self._bool_value(item, "DocumentOnly", "adt_DocumentOnly")
+        picking_type = self._search_picking_type(
+            warehouse_code,
+            picking_code,
+            document_only=document_only,
+            api_acumatica="so_shipment",
+        )
         return {
             "acumatica_id": item.get("id") or item.get("acumatica_id") or "",
             "adt_rowNumber": self._first_value(item, "rowNumber", "adt_rowNumber") or row_number,
@@ -854,7 +992,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_BuildingID": self._first_value(item, "BuildingID", "adt_BuildingID"),
             "adt_CustomerID": self._first_value(item, "CustomerID", "adt_CustomerID"),
             "adt_CustomerName": self._first_value(item, "CustomerName", "adt_CustomerName"),
-            "adt_DocumentOnly": self._first_value(item, "DocumentOnly", "adt_DocumentOnly"),
+            "adt_DocumentOnly": document_only,
             "adt_FOBPoint": self._first_value(item, "FOBPoint", "adt_FOBPoint"),
             "adt_FOBPointDescription": self._first_value(item, "FOBPointDescription", "adt_FOBPointDescription"),
             "adt_LineDescription": self._first_value(item, "LineDescription", "Description", "adt_LineDescription"),
@@ -1008,7 +1146,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "header_model": "acumatica.vendor.return.direct.transfer.staging",
                 "product_model": "acumatica.vendor.return.direct.transfer.staging.line",
                 "line_relation": "line_ids",
-                "header_vals": self._direct_transfer_header_vals,
+                "header_vals": self._vendor_return_direct_transfer_header_vals,
                 "product_vals": self._direct_transfer_product_vals,
             },
             "vendor_return_document_direct_transfer": {
@@ -1019,7 +1157,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "header_model": "acumatica.direct.transfer.staging",
                 "product_model": "acumatica.direct.transfer.staging.line",
                 "line_relation": "line_ids",
-                "header_vals": self._direct_transfer_header_vals,
+                "header_vals": self._vendor_return_document_direct_transfer_header_vals,
                 "product_vals": self._direct_transfer_product_vals,
             },
             "transfer_one_step": {
@@ -1109,12 +1247,20 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
     def _normalize_transaction_type(self, transaction_type):
         key = (transaction_type or "").strip().lower().replace("-", "_")
         aliases = {
+            "inventory_receipt": "inventory_receipt_external",
+            "inventory_received": "inventory_receipt_external",
             "inventory_receipt_toko_pegang_do": "toko_pegang_do",
             "receipt_toko_pegang_do": "toko_pegang_do",
             "receipt_transfer_in": "inventory_receipt_transfer_wh_in",
             "inventory_receipt_transfer_in": "inventory_receipt_transfer_wh_in",
+            "shipment_so_return": "shipment_return",
+            "so_shipment_return": "shipment_return",
             "sotr": "so_transfer",
             "inventory_issue_change_item": "inventory_issue",
+            "issue_change_item": "inventory_issue",
+            "vendor_return": "vendor_return_direct_transfer",
+            "vendor_return_direct": "vendor_return_direct_transfer",
+            "shipment_so": "so_shipment",
         }
         return aliases.get(key, key)
 
@@ -1290,6 +1436,6 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             _logger.exception("Unexpected error in transaction webhook")
             return self._json_response("error", _("Unexpected server error: %s") % str(exc), http_status=500)
 
-    @http.route("/acumatica/webhook/transaction/<string:transaction_type>", type="http", auth="public", methods=["POST"], csrf=False)
+    @http.route("/acumatica/webhook/<string:transaction_type>", type="http", auth="public", methods=["POST"], csrf=False)
     def acumatica_flat_transaction_webhook(self, transaction_type, **kwargs):
         return self._transaction_webhook(transaction_type, **kwargs)

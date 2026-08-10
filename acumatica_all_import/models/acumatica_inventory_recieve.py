@@ -102,6 +102,19 @@ class AcumaticaInventoryRecievedConfig(models.Model):
         return value or ''
 
     @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
+
+    @staticmethod
     def _normalize_rows(payload):
         if isinstance(payload, list):
             return payload
@@ -153,7 +166,7 @@ class AcumaticaInventoryRecievedConfig(models.Model):
                     # Customer
                     'scheduled_date': self._val(item, 'Date'),
                     'header_description': self._val(header, 'Description'),
-                    # DocumentOnly
+                    'document_only': self._bool_val(item, 'DocumentOnly'),
                     # ExternalRef
                     'acumatica_write_date': self._val(header, 'LastModifiedDateTime'),
                     # Location
@@ -234,6 +247,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     transfer_type = fields.Char(string='Transfer Type', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
     external_ref = fields.Char(string='External Ref', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     customer_code = fields.Char(string='Customer Code', readonly=True)
     shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
     transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
@@ -249,6 +263,11 @@ class AcumaticaInventoryRecievedLine(models.Model):
     ], default='pending', readonly=True)
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Delivery Order di Odoo', readonly=True)
+    odoo_internal_transfer_order_id = fields.Many2one(
+        'internal.transfer.order',
+        string='Internal Transfer Order di Odoo',
+        readonly=True,
+    )
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -259,8 +278,15 @@ class AcumaticaInventoryRecievedLine(models.Model):
     @api.depends('reference_nbr')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
+        InternalTransferOrder = self.env['internal.transfer.order']
         for rec in self:
-            rec.exists_in_odoo = bool(rec.reference_nbr and Picking.search_count([('origin', '=', rec.reference_nbr)]))
+            rec.exists_in_odoo = bool(
+                rec.reference_nbr
+                and (
+                    Picking.search_count([('origin', '=', rec.reference_nbr)])
+                    or InternalTransferOrder.search_count([('external_ref', '=', rec.reference_nbr)])
+                )
+            )
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -277,6 +303,26 @@ class AcumaticaInventoryRecievedLine(models.Model):
             return float(value or 0)
         except Exception:
             return 0.0
+
+    @staticmethod
+    def _normalize_transfer_type(value):
+        return (value or '').strip().lower().replace('-', '_').replace(' ', '_')
+
+    def _is_transfer_in(self):
+        self.ensure_one()
+        return self._normalize_transfer_type(self.transfer_type) in (
+            'transfer_in',
+            'transfer_receipt',
+        )
+
+    def _find_partner(self, line):
+        Partner = self.env['res.partner']
+        partner = False
+        if line.customer_code:
+            partner = Partner.search([('company_registry', '=', line.customer_code), ('is_company', '=', True)], limit=1)
+            if not partner:
+                partner = Partner.search([('name', '=', line.customer_code), ('is_company', '=', True)], limit=1)
+        return partner
 
     def _find_product(self, line):
         Product = self.env['product.product']
@@ -315,6 +361,18 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 else:
                     location = location.odoo_location_id
         return location
+
+    def _find_line_location_dest(self, line):
+        Location = self.env['stock.location.acumatica']
+        for code in (line.warehouse_dest_code, line.location_code):
+            if not code:
+                continue
+            mapping = Location.search([('code', '=', code), ('active', '=', True)], limit=1)
+            if not mapping:
+                mapping = Location.search([('name', '=', code), ('active', '=', True)], limit=1)
+            if mapping and mapping.odoo_location_id:
+                return mapping.odoo_location_id
+        return self.env['stock.location']
 
     def _find_uom(self, line, product=False):
         Uom = self.env['uom.uom']
@@ -400,8 +458,152 @@ class AcumaticaInventoryRecievedLine(models.Model):
         if error_data:
             error_data.write({'state': 'resolved'})
 
+    def _import_single_transfer_in(self, receive):
+        receive.ensure_one()
+
+        TransferService = self.env['acumatica.internal.transfer.service']
+        Move = self.env['stock.move']
+
+        origin = receive.reference_nbr or False
+        header_payload = receive.read()[0] if receive.exists() else {}
+        error_messages = []
+        error_line_payloads = []
+
+        source_code = receive.warehouse_code
+        destination_code = receive.warehouse_dest_code or receive.warehouse_code
+        try:
+            transfer_info = TransferService.classify_transfer_in_from_virtual(
+                source_code,
+                destination_code,
+                'FromWarehouseID',
+                'ToWarehouseID',
+            )
+        except UserError as error:
+            error_messages.append(str(error))
+            transfer_info = False
+
+        if transfer_info and transfer_info['status'] == 'skip':
+            receive.write({
+                'import_state': 'updated',
+                'import_message': transfer_info['message'],
+                'odoo_internal_transfer_order_id': False,
+                'odoo_picking_id': False,
+            })
+            self._resolve_error_tracking(receive)
+            return 'updated'
+
+        if error_messages:
+            raise InventoryImportError(
+                '\n'.join(error_messages),
+                payload={'header': header_payload},
+            )
+
+        source_location = transfer_info['source_location']
+        destination_location = transfer_info['destination_location']
+        order, action_state = TransferService.prepare_order(
+            origin,
+            source_location,
+            destination_location,
+            transfer_info['transaction_type'],
+            schedule_date=receive._parse_dt(receive.scheduled_date),
+            note=receive.note or False,
+            transfer_type='transfer_in',
+        )
+
+        order.write({'validation_policy': 'validate_all'})
+
+        for receive_line in receive.product_line_ids:
+            move_vals = {}
+            try:
+                product = receive._find_product(receive_line)
+                if not product:
+                    error_messages.append(
+                        f'Product with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
+                    )
+                    error_line_payloads.append({
+                        'inventory_id': receive_line.inventory_id or False,
+                        'product_name': receive_line.line_description or False,
+                        'qty': receive._parse_float(receive_line.product_uom_qty),
+                        'uom': receive_line.uom_code or False,
+                        'payload': receive_line.read()[0] if receive_line.exists() else {},
+                    })
+                    continue
+
+                uom = receive._find_uom(receive_line, product)
+                if product and not uom:
+                    error_messages.append(
+                        f'UOM with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER UOM.'
+                    )
+                    error_line_payloads.append({
+                        'inventory_id': receive_line.inventory_id or False,
+                        'product_name': receive_line.line_description or False,
+                        'qty': receive._parse_float(receive_line.product_uom_qty),
+                        'uom': receive_line.uom_code or False,
+                        'payload': receive_line.read()[0] if receive_line.exists() else {},
+                    })
+                    continue
+
+                qty = receive._parse_float(receive_line.product_uom_qty)
+                line_destination = receive._find_line_location_dest(receive_line) or destination_location
+                move_vals = {
+                    'adt_inventory_id': receive_line.inventory_id or False,
+                    'adt_line_nbr': receive_line.line_nbr or False,
+                    'adt_uom_code': receive_line.uom_code or False,
+                    'adt_warehouse_dest_code': receive_line.warehouse_dest_code or False,
+                    'adt_location_dest_code': receive_line.location_code or False,
+                    'adt_quantity': qty,
+                    'adt_type': receive.transfer_type or 'Transfer In',
+                    'product_note': receive_line.line_note or False,
+                    'location_dest_id': line_destination.id,
+                }
+                move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
+                TransferService.create_order_move(
+                    order,
+                    product,
+                    qty,
+                    uom=uom,
+                    name=receive_line.line_description or product.display_name,
+                    description=receive_line.line_description or False,
+                    extra_vals=move_vals,
+                )
+
+            except InventoryImportError:
+                raise
+            except Exception as line_error:
+                _logger.exception("Error import transfer in line %s", receive_line.id)
+                error_messages.append(str(line_error))
+                error_line_payloads.append({
+                    'inventory_id': receive_line.inventory_id or False,
+                    'product_name': receive_line.line_description or False,
+                    'qty': receive._parse_float(receive_line.product_uom_qty),
+                    'uom': receive_line.uom_code or False,
+                    'payload': move_vals if move_vals else (receive_line.read()[0] if receive_line.exists() else {}),
+                })
+
+        if error_messages:
+            raise InventoryImportError(
+                '\n'.join(error_messages),
+                payload={
+                    'header': header_payload,
+                    'order_id': order.id if order else False,
+                },
+                line_payloads=error_line_payloads,
+            )
+
+        receive.write({
+            'import_state': action_state,
+            'import_message': f'{action_state.title()}: {order.name if order else False}',
+            'odoo_internal_transfer_order_id': order.id if order else False,
+            'odoo_picking_id': False,
+        })
+        self._resolve_error_tracking(receive)
+        return action_state
+
     def _import_single_receive(self, receive):
         receive.ensure_one()
+
+        if receive._is_transfer_in():
+            return receive._import_single_transfer_in(receive)
 
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
@@ -426,12 +628,28 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 f'Location with code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
+        partner = False
+        owner = False
+        if receive.transfer_type in ['Change Item', 'Change Item Discontinue', 'Toko Pegang DO']:
+            partner = receive._find_partner(receive)
+            if receive.transfer_type == 'Toko Pegang DO':
+                owner = partner
+            if not partner:
+                error_messages.append(
+                    f'Partner with code {receive.customer_code} was not found in the WMS | WMS Dependency : MASTER CUSTOMER.'
+                )
+
         # picking_type = PickingType.search([
         #     ('warehouse_id', '=', warehouse.id if warehouse else False),
         #     ('operation_category', '=', 'internal'),
         #     ('code', '=', 'internal'),
         # ], limit=1)
-        picking_type = self.picking_type_id
+        picking_type = receive.config_id._resolve_inventory_receive_picking_type(
+            transfer_type=receive.transfer_type,
+            document_only=receive.document_only,
+            warehouse_code=receive.warehouse_code,
+        ) if receive.config_id else receive.picking_type_id
+        picking_type = picking_type or receive.picking_type_id
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {receive.warehouse_code}'
@@ -446,11 +664,13 @@ class AcumaticaInventoryRecievedLine(models.Model):
             )
 
         picking_vals = {
+            'partner_id': partner.id if partner else False,
             'origin': origin,
             'picking_type_id': picking_type.id,
             'adt_dest_location_id': dest_location.id if dest_location else False,
             'scheduled_date': receive._parse_dt(receive.scheduled_date),
             'note': receive.note or False,
+            'owner_id': owner.id if owner else False,
 
             'adt_branch_warehouse': receive.branch_warehouse or False,
             'adt_actual_qty': self._parse_float(receive.actual_qty),
@@ -563,6 +783,9 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 line_payloads=error_line_payloads,
             )
 
+        if receive.document_only:
+            picking.action_validate_document_only_import(force=True)
+
         receive.write({
             'import_state': action_state,
             'import_message': f'{action_state.title()}: {picking.name if picking else False}',
@@ -614,7 +837,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 except Exception:
                     _logger.exception(
                         "Failed to persist error tracking for receive %s",
-                        receive.receive_nbr or receive.id,
+                        receive.reference_nbr or receive.id,
                     )
 
                 receive.write({
@@ -641,6 +864,13 @@ class AcumaticaInventoryRecievedLine(models.Model):
 
     def action_open_picking(self):
         self.ensure_one()
+        if self.odoo_internal_transfer_order_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'internal.transfer.order',
+                'res_id': self.odoo_internal_transfer_order_id.id,
+                'view_mode': 'form',
+            }
         if not self.odoo_picking_id:
             raise UserError('Belum diimport, belum ada delivery order di Odoo.')
         return {

@@ -9,8 +9,9 @@ import logging
 import json
 import requests
 from collections import defaultdict
-from odoo import models, api, fields
+from odoo import models, api, fields, _
 from odoo.exceptions import ValidationError, UserError
+from odoo.tools import float_compare
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 
 _logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class StockPicking(models.Model):
     adt_to_warehouse_code = fields.Char(string='To Warehouse (Acumatica)')
     adt_from_warehouse_code = fields.Char(string='From Warehouse (Acumatica)')
     adt_description = fields.Char(string='Description (Acumatica)')
+    adt_is_document_only = fields.Boolean(string='Is Document Only', index=True, copy=False)
 
     adt_actual_amount = fields.Float(string='Control Amount (Acumatica)')
     adt_total_amount = fields.Float(string='Total Amount (Acumatica)')
@@ -80,6 +82,185 @@ class StockPicking(models.Model):
         compute='_compute_putaway_values',
         readonly=False,
     )
+    allowed_picker_product_ids = fields.Many2many(
+        'product.product',
+        compute='_compute_allowed_picker_product_ids',
+    )
+    scan_picker_product_button = fields.Boolean(string='Scan Product')
+    picker_product_id = fields.Many2one(
+        'product.product',
+        string="Product Name",
+    )
+    picker_move_ids = fields.Many2many(
+        comodel_name="stock.move",
+        string="Stock Moves",
+        compute='_compute_picker_values',
+        readonly=False,
+    )
+
+    available_package_ids = fields.Many2many(
+        "stock.quant.package",
+        compute="_compute_available_package_ids",
+        string="Available Packages",
+    )
+
+    scanned_package_id = fields.Many2one(
+        "stock.quant.package",
+        string="Package Number",
+    )
+    scan_package_button = fields.Boolean(string="Scan Package")
+
+    filtered_package_level_ids = fields.One2many(
+        "stock.package_level",
+        compute="_compute_filtered_package_level_ids",
+    )
+
+    @api.depends("package_level_ids")
+    def _compute_available_package_ids(self):
+        for picking in self:
+            picking.available_package_ids = (
+                picking.package_level_ids.mapped("package_id")
+            )
+
+    @api.depends(
+        "package_level_ids",
+        "scanned_package_id",
+    )
+    def _compute_filtered_package_level_ids(self):
+
+        for picking in self:
+
+            if not picking.scanned_package_id:
+
+                picking.filtered_package_level_ids = (
+                    picking.package_level_ids
+                )
+
+            else:
+
+                picking.filtered_package_level_ids = (
+                    picking.package_level_ids.filtered(
+                        lambda p:
+                        p.package_id
+                        == picking.scanned_package_id
+                    )
+                )
+
+    def write(self, vals):
+        result = super().write(vals)
+        if 'adt_is_document_only' not in vals and ({'origin', 'adt_type'} & set(vals)):
+            self._set_acumatica_document_only_flag()
+        if not self.env.context.get('skip_document_only_picking_type_sync') and (
+            {'adt_is_document_only', 'picking_type_id', 'origin', 'adt_type'} & set(vals)
+        ):
+            self._set_document_only_picking_type()
+        return result
+
+    def action_detailed_operations(self):
+        action = super().action_detailed_operations()
+        action.setdefault('context', {})
+        action['context']['picking_type_name'] = self.picking_type_name
+        return action
+
+    @staticmethod
+    def _document_only_value(value):
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _set_acumatica_document_only_flag(self):
+        staging_specs = [
+            ('acumatica.receipt.line', 'receipt_nbr', 'document_only'),
+            ('acumatica.transfer.line', 'reference_nbr', 'document_only'),
+            ('acumatica.receipt.change.item.line', 'reference_nbr', 'document_only'),
+            ('acumatica.inventory.recieved.line', 'reference_nbr', 'document_only'),
+            ('acumatica.shipment.line', 'shipment_nbr', 'document_only'),
+            ('acumatica.shipment.gi.staging', 'adt_ShipmentNbr', 'adt_DocumentOnly'),
+            ('acumatica.issue.line', 'reference_nbr', 'document_only'),
+            ('acumatica.inventory.issue.line', 'reference_nbr', 'document_only'),
+            ('acumatica.issue.po.return.line', 'reference_nbr', 'document_only'),
+            ('acumatica.transfer.shipment.line', 'shipment_nbr', 'document_only'),
+            ('acumatica.transfer.one.step.line', 'reference_nbr', 'document_only'),
+            ('acumatica.transfer.two.step.line', 'reference_nbr', 'document_only'),
+            ('acumatica.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
+            ('acumatica.vendor.return.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
+            ('acumatica.receipt.external.line', 'reference_nbr', 'document_only'),
+            ('acumatica.toko.pegang.do.line', 'reference_nbr', 'document_only'),
+        ]
+        for picking in self:
+            if picking.adt_is_document_only or not picking.origin:
+                continue
+            is_document_only = False
+            for model_name, reference_field, document_field in staging_specs:
+                if model_name not in self.env.registry.models:
+                    continue
+                Model = self.env[model_name].sudo()
+                if reference_field not in Model._fields or document_field not in Model._fields:
+                    continue
+                staging = Model.search([(reference_field, '=', picking.origin)], limit=1)
+                if staging and self._document_only_value(staging[document_field]):
+                    is_document_only = True
+                    break
+            if is_document_only:
+                picking.sudo().with_context(skip_document_only_sync=True).write({'adt_is_document_only': True})
+        self._set_document_only_picking_type()
+
+    def _get_document_only_operation(self):
+        self.ensure_one()
+        picking_type_code = self.picking_type_id.code
+        if picking_type_code == 'incoming':
+            return 'direct_receipt'
+        if picking_type_code == 'outgoing':
+            return 'direct_delivery_order'
+
+        adt_type = (self.adt_type or '').strip().lower()
+        if any(token in adt_type for token in ('receipt', 'transfer in', 'return')):
+            return 'direct_receipt'
+        if any(token in adt_type for token in ('issue', 'shipment', 'delivery', 'transfer out')):
+            return 'direct_delivery_order'
+        return False
+
+    def _set_document_only_picking_type(self):
+        PickingType = self.env['stock.picking.type'].sudo()
+        for picking in self:
+            if not picking.adt_is_document_only:
+                continue
+            if picking.picking_type_id.is_document_only_api:
+                continue
+
+            operation = picking._get_document_only_operation()
+            if not operation:
+                continue
+
+            warehouse = picking.picking_type_id.warehouse_id or picking.location_dest_id.warehouse_id or picking.location_id.warehouse_id
+            document_only_type = PickingType.resolve_document_only_picking_type(
+                target_operation_type=operation,
+                document_only=True,
+                warehouse_code=warehouse.code if warehouse else False,
+            )
+            if document_only_type and document_only_type != picking.picking_type_id:
+                picking.with_context(skip_document_only_picking_type_sync=True).sudo().write({
+                    'picking_type_id': document_only_type.id,
+                })
+
+    def _adt_preserve_document_only_destination(self):
+        for picking in self:
+            if not picking.adt_dest_location_id:
+                continue
+            if picking.location_dest_id != picking.adt_dest_location_id:
+                picking.with_context(skip_document_only_sync=True).sudo().write({
+                    'location_dest_id': picking.adt_dest_location_id.id,
+                })
+            picking.move_ids.sudo().write({
+                'location_dest_id': picking.adt_dest_location_id.id,
+                'adt_dest_location_id': picking.adt_dest_location_id.id,
+            })
+            picking.move_line_ids.sudo().write({
+                'location_dest_id': picking.adt_dest_location_id.id,
+            })
+
 
     wms_state = fields.Selection(
         selection=[
@@ -102,11 +283,11 @@ class StockPicking(models.Model):
     shipment_information = fields.Selection([
         ('partial', 'Partial Shipment'),
         ('full_shipment', 'Full Shipment'),
-        ('full_return', 'Canceled'),
+        # ('full_return', 'Canceled'),
     ], string='Informasi TMS', help='Status shipment yang akan dikirimkan dari TMS.')
 
     status_ba = fields.Selection([
-        ('conform', 'Conform'),
+        ('conform', 'Confirmed'),
         ('discrepancy', 'Discrepancy'),],
     string='Status BA',
     )
@@ -117,12 +298,21 @@ class StockPicking(models.Model):
         ('internal', 'Internal'),
     ], string='Type transaksi', readonly=True)
 
+    def _get_putaway_base_move_lines(self):
+        self.ensure_one()
+
+        return self.move_line_ids.filtered(
+                lambda line: (
+                    line.quantity > 0
+                    and (line.lot_id or line.lot_name)
+                    and line.picker_status == 'finished'
+                )
+            )
+
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
-        move_lines = self.move_line_ids.filtered(
-                lambda line: line.quantity > 0 and (line.lot_id or line.lot_name)
-            )
+        move_lines = self._get_putaway_base_move_lines()
         if self.putaway_product_id:
             move_lines = move_lines.filtered(
                 lambda line: line.product_id == self.putaway_product_id and line.quantity > 0
@@ -130,23 +320,59 @@ class StockPicking(models.Model):
 
         return move_lines
 
+    def _get_picker_base_moves(self):
+        self.ensure_one()
+
+        return self.move_ids_without_package.filtered(
+            lambda move: (
+                move.state != 'cancel'
+                and move.product_id
+            )
+        )
+
+    def _get_picker_moves(self):
+        self.ensure_one()
+
+        moves = self._get_picker_base_moves()
+        if self.picker_product_id:
+            moves = moves.filtered(
+                lambda move: move.product_id == self.picker_product_id
+            )
+
+        return moves
+
     @api.depends("state")
     def _compute_wms_state(self):
         for picking in self:
             if picking.state != "done":
                 picking.wms_state = picking.state
-            
 
-    @api.depends('move_ids.product_id')
+    @api.depends(
+        'move_line_ids',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+        'move_line_ids.quantity',
+        'move_line_ids.picker_status',
+    )
     def _compute_allowed_putaway_product_ids(self):
         for picking in self:
-            picking.allowed_putaway_product_ids = picking.move_ids.product_id
+            picking.allowed_putaway_product_ids = picking._get_putaway_base_move_lines().product_id
+
+    @api.depends(
+        'move_ids_without_package',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.state',
+    )
+    def _compute_allowed_picker_product_ids(self):
+        for picking in self:
+            picking.allowed_picker_product_ids = picking._get_picker_base_moves().product_id
 
     @api.depends(
         'putaway_product_id',
         'move_line_ids',
         'move_line_ids.product_id',
         'move_line_ids.lot_id',
+        'move_line_ids.picker_status',
     )
     def _compute_putaway_values(self):
         for picking in self:
@@ -158,6 +384,16 @@ class StockPicking(models.Model):
                 else False
             )
 
+    @api.depends(
+        'picker_product_id',
+        'move_ids_without_package',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.state',
+    )
+    def _compute_picker_values(self):
+        for picking in self:
+            picking.picker_move_ids = picking._get_picker_moves()
+
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):
         for picking in self:
@@ -168,6 +404,101 @@ class StockPicking(models.Model):
                 if picking.putaway_product_id
                 else False
             )
+
+    @api.onchange('picker_product_id')
+    def _onchange_picker_product_id(self):
+        for picking in self:
+            picking.picker_move_ids = picking._get_picker_moves()
+
+    def _set_document_only_done_quantities(self):
+        MoveLine = self.env['stock.move.line'].sudo()
+        for picking in self:
+            for move in picking.move_ids.filtered(lambda line: line.state not in ('done', 'cancel')):
+                quantity = move.product_uom_qty
+                if not quantity:
+                    continue
+
+                move_lines = move.move_line_ids
+                quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
+                # move.write({
+                #     'quantity': quantity,
+                # })
+                if move_lines:
+                    if len(move_lines) > 1:
+                        move_lines[:-1].write({
+                            quantity_field: 0.0,
+                            'picked': False,
+                        })
+                    line_vals = {
+                        quantity_field: quantity,
+                        'picked': True,
+                    }
+                    if (
+                        move.product_id.tracking != 'none'
+                        and not move_lines[-1].lot_id
+                        and not move_lines[-1].lot_name
+                    ):
+                        line_vals['lot_name'] = picking.origin or picking.name or 'DOCUMENT ONLY'
+                    move_lines[-1].write(line_vals)
+                else:
+                    move_line_vals = {
+                        'picking_id': picking.id,
+                        'move_id': move.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                        quantity_field: quantity,
+                        'picked': True,
+                    }
+                    if move.product_id.tracking != 'none':
+                        move_line_vals['lot_name'] = picking.origin or picking.name or 'DOCUMENT ONLY'
+                    MoveLine.create(move_line_vals)
+
+                move.move_line_ids.flush_recordset([quantity_field, 'picked'])
+                move.flush_recordset(['quantity', 'picked'])
+                self.env.cr.execute(
+                    "UPDATE stock_move_line SET picked = TRUE WHERE move_id = %s",
+                    [move.id],
+                )
+                self.env.cr.execute(
+                    "UPDATE stock_move SET picked = TRUE WHERE id = %s",
+                    [move.id],
+                )
+                move.move_line_ids.invalidate_recordset(['picked'])
+                move.invalidate_recordset(['picked'])
+
+    def _process_document_only_validation_action(self, action):
+        if not isinstance(action, dict):
+            return
+
+        model_name = action.get('res_model')
+        context = action.get('context') or {}
+        if model_name == 'stock.immediate.transfer':
+            wizard = self.env[model_name].with_context(context).create({})
+            wizard.process()
+        elif model_name == 'stock.backorder.confirmation':
+            wizard = self.env[model_name].with_context(context).create({})
+            wizard.process_cancel_backorder()
+
+    def action_validate_document_only_import(self, force=False):
+        for picking in self:
+            if force and not picking.adt_is_document_only:
+                picking.sudo().write({'adt_is_document_only': True})
+            if not picking.adt_is_document_only or picking.state in ('done', 'cancel'):
+                continue
+            if not picking.move_ids:
+                raise UserError(_("Document only picking %s has no lines to validate.") % picking.display_name)
+
+            picking._adt_preserve_document_only_destination()
+            picking.action_confirm()
+            picking.action_assign()
+            picking.button_validate()
+            picking._adt_preserve_document_only_destination()
+            # picking._set_document_only_done_quantities()
+            # action = picking.with_context().button_validate()
+            # picking._process_document_only_validation_action(action)
+        return True
 
 
 # Function to foward adt_type from parent picking
@@ -197,6 +528,8 @@ class StockPicking(models.Model):
 
         # # Panggil fungsi super() dengan melewatkan vals_list yang sudah diperbarui
         pickings = super(StockPicking, self).create(vals_list)
+        pickings._set_acumatica_document_only_flag()
+        pickings._set_document_only_picking_type()
         print(pickings)
         return pickings
 
@@ -330,11 +663,6 @@ class StockPicking(models.Model):
                             print(line)
                             if line.lot_id:
                                 print(line.lot_id)
-                                # vals = {
-                                #     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
-                                # }
-                                # vals['product_lot_id'] = line.lot_id.id
-                                # line.write(vals)
                                 print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
                                 line.write({
                                     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
@@ -438,6 +766,17 @@ class StockPicking(models.Model):
             },
         }
 
+    def action_prepare_scan_package(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'adt_scan_qr_to_picking_package',
+            'params': {
+                'picking_id': self.id,
+                'title': 'Scan Package QR Code',
+            },
+        }
+
     def _find_product_by_scan_code(self, scan_code):
         Product = self.env['product.product']
 
@@ -461,14 +800,74 @@ class StockPicking(models.Model):
             'product_id': product.id,
             'display_name': product.display_name,
         }
+
+    def action_apply_scanned_picker_product(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        product = self._find_product_by_scan_code(scanned_code)
+
+        if not product:
+            raise ValidationError("Product tidak ditemukan untuk kode scan: %s" % scanned_code)
+
+        picker_moves = self._get_picker_base_moves().filtered(
+            lambda move: move.product_id == product
+        )
+        if not picker_moves:
+            raise ValidationError(_("Product hasil scan tidak ada di dokumen ini."))
+
+        self.write({'picker_product_id': product.id})
+
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+            'move_ids': picker_moves.ids,
+        }
+
+    def action_apply_scanned_package(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        package = self.available_package_ids.filtered(
+            lambda available_package: available_package.name == scanned_code
+        )[:1]
+
+        if not package:
+            raise ValidationError(
+                "Package tidak ditemukan untuk kode scan: %s" % scanned_code
+            )
+
+        self.write({"scanned_package_id": package.id})
+
+        return {
+            "package_id": package.id,
+            "display_name": package.display_name,
+        }
     
     def action_mark_as_done(self):
         self.ensure_one()
-        if self.wms_state == 'return_shipment':
-            self.wms_state = 'done'
-
-        else: 
-            raise UserError('Shipment return tidak bisa diselesaikan tanpa membuat dokumen return')
+        
+        if self.wms_state != "return_shipment":
+            raise UserError(
+                _("Only documents in Returned Items state can be completed.")
+            )
+    
+        return_picking = self.env["stock.picking"].search([
+            ("return_id", "=", self.id)
+        ], limit=1)
+    
+        if not return_picking:
+            raise UserError(
+                _("Return document has not been created yet.")
+            )
+    
+        if return_picking.state != "done":
+            raise UserError(
+                _("Please validate the Return document first.")
+            )
+    
+        self.wms_state = "done"
+    
+        return True
+    
 
     @api.onchange("state")
     def _onchange_state_update_wms_state(self):
@@ -490,249 +889,170 @@ class StockPicking(models.Model):
     # Prepare Payload
     # ==========================================================
 
-    def _prepare_loginext_payload(self):
-        self.ensure_one()
-        print(self)
+    # def _prepare_loginext_payload(self):
+    #     self.ensure_one()
+    #     print(self)
 
-        print(self.origin)
+    #     print(self.origin)
 
-        header_to_send = self.env["loginext.staging.data"].search(
-            [("odoo_shipment_number", "=", self.origin)],
-            limit=1,
-        )
-        print(header_to_send)
+    #     header_to_send = self.env["loginext.staging.data"].search(
+    #         [("odoo_shipment_number", "=", self.origin)],
+    #         limit=1,
+    #     )
+    #     print(header_to_send)
 
-        if not header_to_send:
-            raise UserError("Data staging TMS tidak dapat ditemukan")
+    #     if not header_to_send:
+    #         raise UserError("Data staging TMS tidak dapat ditemukan")
         
-        return {
-            "orderNo": header_to_send.loginext_order_no,
-            "shipmentOrderDt": self._format_datetime(
-                header_to_send.loginext_shipment_order_dt
-            ),
-            "shipmentOrderTypeCd": header_to_send.loginext_shipment_order_type_cd,
-            "orderState": header_to_send.loginext_order_state,
-            "distributionCenter": header_to_send.loginext_distribution_center,
-            "returnBranch": header_to_send.loginext_return_branch,
-            "packageWeight": str(header_to_send.loginext_package_weight or 0),
-            "packageVolume": str(header_to_send.loginext_package_volume or 0),
-            "preparationTime": 30,
-            "paymentType": header_to_send.loginext_payment_type,
-            "packageValue": str(header_to_send.loginext_package_value or 0),
-            "numberOfItems": header_to_send.loginext_number_of_items or 0,
-            "partialDeliveryAllowedFl": "Y" if header_to_send.loginext_partial_delivery_allowed_fl else "N",
-            "returnAllowedFl": "Y" if header_to_send.loginext_return_allowed_fl else "N",
-            "cancellationAllowedFl": "Y" if header_to_send.loginext_cancellation_allowed_fl else "N",
-            "deliverServiceTime": '30',
-            "deliverStartTimeWindow": self._format_datetime(header_to_send.loginext_deliver_start_time_window),
-            "deliverEndTimeWindow": self._format_datetime(header_to_send.loginext_deliver_end_time_window),
-            "deliveryType": header_to_send.loginext_delivery_type,
-            "deliverBranch": header_to_send.loginext_deliver_branch,
-            "deliverAccountCode": header_to_send.loginext_deliver_account_code,
-            "deliverAccountName": header_to_send.loginext_deliver_account_name,
-            "deliverApartment": header_to_send.loginext_deliver_apartment,
-            "deliverStreetName": header_to_send.loginext_deliver_street_name,
-            "deliverLocality": header_to_send.loginext_deliver_locality,
-            "deliverCity": header_to_send.loginext_deliver_city,
-            "deliverState": header_to_send.loginext_deliver_state,
-            "deliverCountry": header_to_send.loginext_deliver_country,
-            "deliverPinCode": header_to_send.loginext_deliver_pin_code,
-            "deliverAddressTimezone": header_to_send.loginext_deliver_address_timezone,
-            "deliverNotes": header_to_send.loginext_deliver_notes,
-            "shipmentCrateMappings": [
-                {
-                    "crateCd": crate.loginext_crate_cd,
-                    "crateName": crate.loginext_crate_name,
-                    "crateType": crate.loginext_crate_type,
-                    "crateWeight": crate.loginext_crate_weight,
-                    "shipmentlineitems": [
-                        {
-                            "itemCd": item.loginext_item_cd,
-                            "itemName": item.loginext_item_name,
-                            "itemPrice": item.loginext_item_price,
-                            "itemQuantity": item.loginext_item_quantity,
-                            "itemType": item.loginext_item_type,
-                            "itemWeight": item.loginext_item_weight,
-                        }
-                        for item in crate.item_ids
-                    ],
-                }
-                for crate in header_to_send.crate_ids
-            ],
-        }
+    #     return {
+    #         "orderNo": header_to_send.loginext_order_no,
+    #         "shipmentOrderDt": self._format_datetime(
+    #             header_to_send.loginext_shipment_order_dt
+    #         ),
+    #         "shipmentOrderTypeCd": header_to_send.loginext_shipment_order_type_cd,
+    #         "orderState": header_to_send.loginext_order_state,
+    #         "distributionCenter": header_to_send.loginext_distribution_center,
+    #         "returnBranch": header_to_send.loginext_return_branch,
+    #         "packageWeight": str(header_to_send.loginext_package_weight or 0),
+    #         "packageVolume": str(header_to_send.loginext_package_volume or 0),
+    #         "preparationTime": 30,
+    #         "paymentType": header_to_send.loginext_payment_type,
+    #         "packageValue": str(header_to_send.loginext_package_value or 0),
+    #         "numberOfItems": header_to_send.loginext_number_of_items or 0,
+    #         "partialDeliveryAllowedFl": "Y" if header_to_send.loginext_partial_delivery_allowed_fl else "N",
+    #         "returnAllowedFl": "Y" if header_to_send.loginext_return_allowed_fl else "N",
+    #         "cancellationAllowedFl": "Y" if header_to_send.loginext_cancellation_allowed_fl else "N",
+    #         "deliverServiceTime": '30',
+    #         "deliverStartTimeWindow": self._format_datetime(header_to_send.loginext_deliver_start_time_window),
+    #         "deliverEndTimeWindow": self._format_datetime(header_to_send.loginext_deliver_end_time_window),
+    #         "deliveryType": header_to_send.loginext_delivery_type,
+    #         "deliverBranch": header_to_send.loginext_deliver_branch,
+    #         "deliverAccountCode": header_to_send.loginext_deliver_account_code,
+    #         "deliverAccountName": header_to_send.loginext_deliver_account_name,
+    #         "deliverApartment": header_to_send.loginext_deliver_apartment,
+    #         "deliverStreetName": header_to_send.loginext_deliver_street_name,
+    #         "deliverLocality": header_to_send.loginext_deliver_locality,
+    #         "deliverCity": header_to_send.loginext_deliver_city,
+    #         "deliverState": header_to_send.loginext_deliver_state,
+    #         "deliverCountry": header_to_send.loginext_deliver_country,
+    #         "deliverPinCode": header_to_send.loginext_deliver_pin_code,
+    #         "deliverAddressTimezone": header_to_send.loginext_deliver_address_timezone,
+    #         "deliverNotes": header_to_send.loginext_deliver_notes,
+    #         "shipmentCrateMappings": [
+    #             {
+    #                 "crateCd": crate.loginext_crate_cd,
+    #                 "crateName": crate.loginext_crate_name,
+    #                 "crateType": crate.loginext_crate_type,
+    #                 "crateWeight": crate.loginext_crate_weight,
+    #                 "shipmentlineitems": [
+    #                     {
+    #                         "itemCd": item.loginext_item_cd,
+    #                         "itemName": item.loginext_item_name,
+    #                         "itemPrice": item.loginext_item_price,
+    #                         "itemQuantity": item.loginext_item_quantity,
+    #                         "itemType": item.loginext_item_type,
+    #                         "itemWeight": item.loginext_item_weight,
+    #                     }
+    #                     for item in crate.item_ids
+    #                 ],
+    #             }
+    #             for crate in header_to_send.crate_ids
+    #         ],
+    #     }
 
     # ==========================================================
     # POST API
     # ==========================================================
 
     def action_post_loginext(self):
-        print("=" * 80)
-        print("Sent LOGINEXT REQUEST")
-        self.wms_state = 'waiting_response'
+        # print("=" * 80)
+        # print("Sent LOGINEXT REQUEST")
+        # self.wms_state = 'waiting_response'
 
-        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
-        CREATE_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v2/create"
+        # LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
+        # CREATE_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v2/create"
 
-        USERNAME = "api.tms@aditya.co.id"
-        PASSWORD = "9CE5Q8Jz_#xXR"
+        # USERNAME = "api.tms@aditya.co.id"
+        # PASSWORD = "9CE5Q8Jz_#xXR"
 
-        body = [
-            rec._prepare_loginext_payload()
-            for rec in self
-        ]
+        # body = [
+        #     rec._prepare_loginext_payload()
+        #     for rec in self
+        # ]
 
-        print("=" * 80)
-        print("LOGINEXT REQUEST")
-        print("=" * 80)
-        print(json.dumps(body, indent=4))
+        # print("=" * 80)
+        # print("LOGINEXT REQUEST")
+        # print("=" * 80)
+        # print(json.dumps(body, indent=4))
 
-        session = requests.Session()
+        # session = requests.Session()
 
-        try:
-            # ======================================================
-            # LOGIN
-            # ======================================================
+        # try:
+        #     # ======================================================
+        #     # LOGIN
+        #     # ======================================================
 
-            login_payload = {
-                "userName": USERNAME,
-                "password": PASSWORD,
-                "sessionExpiryTimeout": "1",
-            }
+        #     login_payload = {
+        #         "userName": USERNAME,
+        #         "password": PASSWORD,
+        #         "sessionExpiryTimeout": "1",
+        #     }
 
-            login_response = session.post(
-                LOGIN_URL,
-                json=login_payload,
-                timeout=30,
-            )
+        #     login_response = session.post(
+        #         LOGIN_URL,
+        #         json=login_payload,
+        #         timeout=30,
+        #     )
 
-            print("=" * 80)
-            print("LOGINEXT LOGIN RESPONSE")
-            print("=" * 80)
-            print(f"Status : {login_response.status_code}")
-            print(login_response.text)
+        #     print("=" * 80)
+        #     print("LOGINEXT LOGIN RESPONSE")
+        #     print("=" * 80)
+        #     print(f"Status : {login_response.status_code}")
+        #     print(login_response.text)
 
 
-            login_response.raise_for_status()
-            www_authenticate = login_response.headers.get("WWW-Authenticate")
-            # ======================================================
-            # CREATE SHIPMENT
-            # ======================================================
+        #     login_response.raise_for_status()
+        #     www_authenticate = login_response.headers.get("WWW-Authenticate")
+        #     # ======================================================
+        #     # CREATE SHIPMENT
+        #     # ======================================================
 
-            headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
+        #     headers = {
+        #         "Content-Type": "application/json",
+        #         "Accept": "application/json",
+        #     }
 
-            if www_authenticate:
-                headers["WWW-Authenticate"] = www_authenticate
+        #     if www_authenticate:
+        #         headers["WWW-Authenticate"] = www_authenticate
 
-            print("Sent Response to Loginext")
-            response = session.post(
-                CREATE_URL,
-                headers=headers,
-                json=body,
-                timeout=1,
-            )
+        #     print("Sent Response to Loginext")
+        #     response = session.post(
+        #         CREATE_URL,
+        #         headers=headers,
+        #         json=body,
+        #         timeout=1,
+        #     )
 
-            print("=" * 80)
-            print("LOGINEXT CREATE RESPONSE")
-            print("=" * 80)
-            print(f"Status : {response.status_code}")
-            print(response.text)
+        #     print("=" * 80)
+        #     print("LOGINEXT CREATE RESPONSE")
+        #     print("=" * 80)
+        #     print(f"Status : {response.status_code}")
+        #     print(response.text)
 
-            response.raise_for_status()
+        #     response.raise_for_status()
 
-            print("=" * 80)
-            print("END LOGINEXT REQUEST")
-            print("=" * 80)
+        #     print("=" * 80)
+        #     print("END LOGINEXT REQUEST")
+        #     print("=" * 80)
 
             res = self.button_validate()
 
             return res
 
 
-        except requests.exceptions.RequestException as e:
-            _logger.exception(e)
-            raise UserError(f"Loginext API Error\n\n{e}")
-
-    def action_get_loginext(self):
-        _logger.info("=" * 80)
-        _logger.info("Get LOGINEXT REQUEST")
-        # print(self)
-        """
-        Get Shipment dari Loginext berdasarkan tanggal dan Order No.
-        """
-
-        LOGIN_URL = "https://api.loginextsolutions.com/LoginApp/login/authenticate"
-        SHIPMENT_URL = "https://api.loginextsolutions.com/ShipmentApp/mile/v1/shipment"
-
-        USERNAME = "api.tms@aditya.co.id"
-        PASSWORD = "9CE5Q8Jz_#xXR"
-
-        session = requests.Session()
-
-        try:
-            # ==========================================================
-            # LOGIN
-            # ==========================================================
-            login_payload = {
-                "userName": USERNAME,
-                "password": PASSWORD,
-                "sessionExpiryTimeout": "1",
-            }
-
-            login_response = session.post(
-                LOGIN_URL,
-                json=login_payload,
-                timeout=30,
-            )
-
-            _logger.info("=" * 80)
-            _logger.info("LOGINEXT LOGIN")
-            _logger.info(login_response.text)
-            _logger.info("=" * 80)
-
-            login_response.raise_for_status()
-            www_authenticate = login_response.headers.get("WWW-Authenticate")
-            # ==========================================================
-            # GET SHIPMENT
-            # ==========================================================
-            params = {
-                "start_date": "2026-04-20 00:00:00",
-                "end_date": "2026-07-23 00:00:00",
-                "order_no": f"testing-dev-{self.origin}",
-            }
-
-            headers = {
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-            }
-
-
-            if www_authenticate:
-                headers["WWW-Authenticate"] = www_authenticate
-
-            response = session.get(
-                SHIPMENT_URL,
-                params=params,
-                headers=headers,
-                timeout=120,
-            )
-
-            _logger.info("=" * 80)
-            _logger.info("LOGINEXT GET SHIPMENT")
-            _logger.info("Request URL : %s", response.request.url)
-            _logger.info("Status Code : %s", response.status_code)
-            _logger.info(response.text)
-            _logger.info("=" * 80)
-
-            response.raise_for_status()
-
-            return response.json()
-
-        except requests.exceptions.RequestException as e:
-            _logger.exception(e)
-            raise UserError(f"Loginext API Error\n\n{e}")
+        # except requests.exceptions.RequestException as e:
+        #     _logger.exception(e)
+        #     raise UserError(f"Loginext API Error\n\n{e}")
 
     def action_assign(self):
         _logger.info(">>> action_assign CALLED %s", self.ids)
@@ -760,18 +1080,532 @@ class StockPicking(models.Model):
 
     def action_confirm_shipment(self):
         self.ensure_one()
+
         if not self.shipment_information:
-            raise UserError('Informasi TMS tidak boleh kosong')
+            raise UserError(_("Shipment Information is required."))
 
-        if self.shipment_information == 'full_shipment':
-            self.wms_state = 'done'
+        if self.shipment_information == "full_shipment":
+            self.wms_state = "done"
+            return
 
-        if self.shipment_information != 'full_shipment':
-            self.wms_state = 'return_shipment'     
-        # self.shipment_information = 'full_shipment'
-        # self.wms_state = 'done' 
+        self._generate_return_from_actual_qty()
 
-# ================================================================================================
+        self.wms_state = "return_shipment"
+
+    def button_validate(self):
+        for picking in self:
+            if picking.adt_is_document_only or picking.picking_type_id.is_document_only_api:
+                continue
+            # Pick harus diblokir sebelum validasi standar Odoo memproses
+            # perpindahan stok apabila masih ada line yang belum Match.
+            if picking.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
+                picking._check_validate_requirements()
+                picking._check_pick_quantity_vs_demand()
+            if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+                picking._check_putaway_status_requirements()
+                picking._check_picker_status_requirements()
+
+            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal'):
+                print(f"Run validate all except pick and receipt")
+                # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
+                for move in picking.move_ids:
+                    # Jika move memiliki move_line_ids, lakukan update massal di level DB
+                    for line in move.move_line_ids:
+                        loc_code = str(line.location_id.unique_code or '').strip()
+                        product_code = str(line.lot_id.name or '').strip()
+                        vals = {
+                            'confirmation_location_code': loc_code,
+                            'confirmation_lot_code': product_code,
+                            'matching': 'match',
+                        }
+                        print(f"Write vals = {vals}")
+
+                        line.write(vals)
+
+                        print(f"After write = {line.matching}")
+
+                        print(f"After write line {line.id} = {line.matching} for picking: {picking.id}")
+
+        res = super().button_validate()
+
+        for rec in self:
+            # _logger.info("=" * 80)
+            # _logger.info("Picking : %s", rec.name)
+            # _logger.info("State   : %s", rec.state)
+            # _logger.info("Origin  : %s", rec.origin)
+            # _logger.info("Return  : %s", rec.return_id.name if rec.return_id else "-")
+            # _logger.info("Move IDs: %s", rec.move_ids.ids)
+
+            # for move in rec.move_ids:
+            #     _logger.info(
+            #         "Move %-20s | State=%s | Qty=%s",
+            #         move.product_id.display_name,
+            #         move.state,
+            #         move.quantity,
+            #     )
+
+            #     for ml in move.move_line_ids:
+            #         _logger.info(
+            #             "    ML |  Done=%s | Lot=%s | Src=%s | Dest=%s",
+            #             ml.quantity,
+            #             ml.lot_id.name,
+            #             ml.location_id.display_name,
+            #             ml.location_dest_id.display_name,
+            #         )
+
+            # _logger.info("=" * 80)
+
+            # raise UserError('STOP')
+            is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
+            if is_document_only:
+                continue
+            print(rec.picking_type_id.name)
+            is_receipt_putaway = rec.picking_type_id.name in ('Receipts', 'Receipt Internal')
+            for line in rec.move_line_ids:
+                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
+                if not is_receipt_putaway:
+                    line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
+                if not is_receipt_putaway and not line.lot_name:
+                    print(f"Missing lot: {line}")
+                    raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
+                
+            if is_receipt_putaway:
+                rec._check_putaway_status_requirements()
+                rec._check_picker_status_requirements()
+            else:
+                rec._check_validate_requirements()
+            operation_category = rec.picking_type_id.operation_category
+            print(f">>> Validating picking {rec.id} - Picking Type: {rec.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
+
+            # Hanya enforce untuk PUT dan DELIVERY
+            if not is_receipt_putaway and operation_category in ['put', 'delivery']:
+                for line in rec.move_line_ids:
+                    # Jika belum dicek (invisible), tidak dianggap ok
+                    print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+                    # line.matching = 'match'
+                    print(f">>> Matching status for line {line.id}: {line.matching}") # Cek di terminal Odoo
+                    if line.matching != 'match':
+                        raise UserError(_(
+                            "Validation blocked.\n\n"
+                            "Line:\n"
+                            f"- Product: {line.product_id.display_name}\n"
+                            f"- Qty: {line.quantity or line.product_uom_qty}\n\n"
+                            "Status: ❌ NOT MATCH\n\n"
+                            "Silakan pastikan scan location dan/atau lot sudah benar."
+                        ))
+
+            if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
+                rec.wms_state = 'waiting_response'
+
+            if (
+                rec.state == "done"
+                and rec.return_id
+                and rec.return_id.wms_state == "return_shipment"
+            ):
+                
+                rec.return_id.wms_state = "done"
+                                             
+            pickings = self.env["stock.picking"].search([])
+            if rec.picking_type_id.code != "incoming":
+                continue
+
+            rec._check_putaway_quantity_vs_demand()
+
+            storage_pickings = self.env["stock.picking"].search([
+                ("origin", "ilike", rec.origin or rec.name),
+                ("picking_type_id.code", "=", "internal"),
+            ], limit=1)
+            total_qty = sum(rec.move_ids.move_line_ids.mapped("quantity"))
+            rec.write({
+                'adt_total_qty': total_qty
+            })
+
+            storage_pickings.write({
+                "adt_dest_location_id": rec.adt_dest_location_id,
+                "adt_type": rec.adt_type,
+                "note" : rec.note,
+            })
+
+            for storage in storage_pickings:
+                for storage_move in storage.move_ids:
+                    receipt_move = rec.move_ids.filtered(
+                        lambda m: m.product_id == storage_move.product_id
+                    )[:1]
+
+                    if receipt_move:
+                        storage_move.write({
+                            "product_note": receipt_move.product_note,
+                        })
+
+        return res
+
+    def _check_pick_quantity_vs_demand(self):
+        for picking in self:
+            has_discrepancy = False
+            for move in picking.move_ids.filtered(lambda item: item.state != 'cancel'):
+                demand_qty = move.product_uom_qty
+                picked_qty = move.quantity
+                rounding = move.product_uom.rounding if move.product_uom else 0.01
+                comparison = float_compare(
+                    picked_qty,
+                    demand_qty,
+                    precision_rounding=rounding,
+                )
+                if comparison > 0:
+                    raise UserError(
+                        _(
+                            "Product: %s\n"
+                            "Lot: %s\n"
+                            "Stored Qty: %s\n"
+                            "Demand: %s\n\n"
+                            "Quantity exceeds demand."
+                        ) % (
+                            move.product_id.display_name,
+                            move.lot_ids.name or "-",
+                            picked_qty,
+                            demand_qty,
+                        )
+                    )
+                if comparison < 0:
+                    has_discrepancy = True
+
+            picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
+    
+    def _check_putaway_quantity_vs_demand(self):
+        for picking in self:
+            if picking.picking_type_id.name not in ('Receipts', 'Receipt Internal'):
+                continue
+
+            has_discrepancy = False
+            for move in picking.move_ids.filtered(lambda item: item.state != 'cancel'):
+                demand_qty = move.product_uom_qty
+                putaway_qty = move.confirmation_quantity
+                rounding = move.product_uom.rounding if move.product_uom else 0.01
+                comparison = float_compare(
+                    putaway_qty,
+                    demand_qty,
+                    precision_rounding=rounding,
+                )
+                if comparison > 0:
+                    raise UserError(
+                        _(
+                            "Product: %s\n"
+                            "Lot: %s\n"
+                            "Stored Qty: %s\n"
+                            "Demand: %s\n\n"
+                            "Quantity exceeds demand."
+                        ) % (
+                            move.product_id.display_name,
+                            move.lot_ids.name or "-",
+                            putaway_qty,
+                            demand_qty,
+                        )
+                    )
+                if comparison < 0:
+                    has_discrepancy = True
+
+            picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
+
+    def _check_validate_requirements(self):
+        self.ensure_one()
+        _logger.info("Check Validate on = %s", self.id)
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+            return self._check_putaway_status_requirements() and self._check_picker_status_requirements()
+
+        if self.picking_type_name not in ['Pick', 'Pick Internal']:
+            return
+
+        active_moves = self.move_ids.filtered(
+            lambda move: move.state != "cancel"
+        )
+
+        unpicked_moves = active_moves.filtered(
+            lambda move: not move.picked
+        )
+
+        unmatched_move_lines = active_moves.move_line_ids.filtered(
+            lambda line: line.matching != "match"
+        )
+
+        error_messages = []
+
+        if unpicked_moves:
+            products = "\n".join(
+                f"- {move.product_id.display_name}"
+                for move in unpicked_moves
+            )
+
+            error_messages.append(
+                (
+                    "Semua product harus dalam kondisi picked.\n"
+                    "Produk yang belum Terambil:\n%s"
+                )
+                % products
+            )
+
+        if unmatched_move_lines:
+            lines = "\n".join(
+                "- %s | Lot/Serial: %s | Matching: %s"
+                % (
+                    line.product_id.display_name,
+                    line.lot_id.name or line.lot_name or "-",
+                    dict(line._fields["matching"].selection).get(
+                        line.matching,
+                        line.matching or "-"
+                    ),
+                )
+                for line in unmatched_move_lines
+            )
+
+            error_messages.append(
+                (
+                    "Semua product harus memiliki status matching "
+                    "'Match'.\n"
+                    "Detail produk yang belum match:\n%s"
+                )
+                % lines
+            )
+
+        if error_messages:
+            raise UserError("\n\n".join(error_messages))
+
+    def _get_acumatica_config(self):
+
+        config = self.env["ir.config_parameter"].sudo()
+
+        return {
+            "auth_url": config.get_param("tijari.acumatica_auth_url"),
+            "api_url": config.get_param("tijari.acumatica_api_url"),
+            "login_endpoint": config.get_param("tijari.acumatica_endpoint_login"),
+            "shipment_endpoint": config.get_param("tijari.acumatica_endpoint_shipment"),
+            "username": config.get_param("tijari.acumatica_username"),
+            "password": config.get_param("tijari.acumatica_password"),
+            "company": config.get_param("tijari.acumatica_company"),
+        }
+
+    def action_login_acumatica(self):
+        """Authenticate to Acumatica and return authenticated session."""
+
+        config = self._get_acumatica_config()
+
+        required = (
+            "auth_url",
+            "login_endpoint",
+            "username",
+            "password",
+            "company",
+        )
+
+        for key in required:
+            if not config.get(key):
+                raise UserError(
+                    _("Acumatica configuration '%s' is missing.") % key
+                )
+
+        login_url = (
+            config["auth_url"]
+            + config["login_endpoint"]
+        )
+
+        payload = {
+            "name": config["username"],
+            "password": config["password"],
+            "company": config["company"],
+        }
+
+        session = requests.Session()
+
+        _logger.info("=" * 80)
+        _logger.info("ACUMATICA LOGIN")
+        _logger.info("POST %s", login_url)
+
+        try:
+
+            response = session.post(
+                login_url,
+                json=payload,
+                timeout=60,
+            )
+
+            _logger.info("Status Code : %s", response.status_code)
+            _logger.info("Response    : %s", response.text)
+            _logger.info("=" * 80)
+
+            response.raise_for_status()
+
+            return session
+
+        except requests.exceptions.RequestException as exc:
+
+            error_message = ""
+
+            try:
+                error_message = response.text
+            except Exception:
+                pass
+
+            raise UserError(_(
+                "Failed to login to Acumatica.\n\n%s"
+            ) % (error_message or str(exc)))
+
+    def action_fetch_actual_qty(self):
+        self.ensure_one()
+
+        data = self._get_actual_qty_data()
+
+        self._apply_actual_qty(data)
+
+    def action_fetch_partial_shipment(self):
+        self.ensure_one()
+
+        data = self._get_actual_qty_data(is_match=False)
+
+        self._apply_actual_qty(data)
+
+
+    def _get_actual_qty_data(self, is_match=True):
+        """
+        Temporary mock implementation.
+        Replace with Acumatica API once available.
+        """
+
+        import random
+
+        result = []
+
+        for move in self.move_ids:
+
+            planned_qty = move.product_uom_qty
+
+            # is_match = random.random() < 0.5
+
+            if is_match:
+                actual_qty = planned_qty
+            else:
+                # shortage = random.randint(
+                #     1,
+                #     min(5, int(planned_qty))
+                # )
+                actual_qty = planned_qty - 1
+
+            result.append({
+                "inventory_id": move.product_id.default_code,
+                "actual_qty": actual_qty,
+            })
+
+        return result
+    
+    def _apply_actual_qty(self, data):
+
+        mapping = {
+            item["inventory_id"]: item
+            for item in data
+        }
+
+        all_match = True
+
+        for move in self.move_ids:
+
+            api = mapping.get(move.product_id.default_code)
+
+            if not api:
+                continue
+
+            actual_qty = api["actual_qty"]
+
+            move.shipped_qty = actual_qty
+
+            if actual_qty != move.product_uom_qty:
+                all_match = False
+
+        self.shipment_information = "full_shipment" if all_match else "partial"
+
+    def _generate_return_from_actual_qty(self):
+        ReturnWizard = self.env["stock.return.picking"]
+
+        wizard = ReturnWizard.with_context(
+            active_id=self.id,
+            active_ids=self.ids,
+            active_model="stock.picking",
+        ).create({})
+
+        for line in wizard.product_return_moves:
+
+            move = line.move_id
+
+            actual = move.shipped_qty
+
+            planned = move.quantity
+
+            line.quantity = max(planned - actual, 0)
+
+        result = wizard.action_create_returns()
+
+        return result
+
+
+    def _check_putaway_status_requirements(self):
+        self.ensure_one()
+        move_lines = self.move_line_ids.filtered(
+            lambda line: line.state != "cancel" and line.quantity > 0
+        )
+        unfinished_lines = move_lines.filtered(
+            lambda line: line.putaway_status != "finished"
+        )
+
+        if not unfinished_lines:
+            return
+
+        lines = "\n".join(
+            "- %s | Qty: %s | Status: %s"
+            % (
+                line.product_id.display_name,
+                line.quantity,
+                dict(line._fields["putaway_status"].selection).get(
+                    line.putaway_status,
+                    line.putaway_status or "-"
+                ),
+            )
+            for line in unfinished_lines
+        )
+        raise UserError(_(
+            "Validation blocked.\n\n"
+            "Semua move line putaway harus memiliki status 'Finished'.\n"
+            "Move line yang belum finish:\n%s"
+        ) % lines)
+
+    def _check_picker_status_requirements(self):
+        self.ensure_one()
+        move_lines = self.move_line_ids.filtered(
+            lambda line: line.state != "cancel" and line.quantity > 0
+        )
+        unfinished_lines = move_lines.filtered(
+            lambda line: line.picker_status != "finished"
+        )
+
+        if not unfinished_lines:
+            return
+
+        lines = "\n".join(
+            "- %s | Qty: %s | Status: %s"
+            % (
+                line.product_id.display_name,
+                line.quantity,
+                dict(line._fields["picker_status"].selection).get(
+                    line.picker_status,
+                    line.picker_status or "-"
+                ),
+            )
+            for line in unfinished_lines
+        )
+        raise UserError(_(
+            "Validation blocked.\n\n"
+            "Semua move line picker harus memiliki status 'Finished'.\n"
+            "Move line yang belum finish:\n%s"
+        ) % lines)
+
+
+    # ================================================================================================
 # Temp Storage function create move line qr code        
 # ================================================================================================
 

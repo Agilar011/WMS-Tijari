@@ -39,7 +39,7 @@
                         <field name="inventory_stock_config_id" invisible="import_type != 'inventory_stock'" required="import_type == 'inventory_stock'"/>
                         -->
                     </group>
-                    <group string="Filter Fetch" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment']">
+                    <group string="Filter Fetch" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment', 'issue_po_return', 'so_transfer', 'transfer_shipment', 'invoice_consignment', 'inventory_received', 'inventory_issue']">
                         <field name="fetch_limit"/>
                         <field name="fetch_skip"/>
                         <field name="batch_size"/>
@@ -55,7 +55,7 @@
                         <field name="odata_expand"/>
                         <field name="odata_top"/>
                     </group>
-                    <group string="Date Range" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment']">
+                    <group string="Date Range" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment', 'issue_po_return', 'so_transfer', 'transfer_shipment', 'invoice_consignment', 'inventory_received', 'inventory_issue']">
                         <field name="date_period"/>
                         <field name="start_date" invisible="date_period != True"/>
                         <field name="end_date" invisible="date_period != True"/>
@@ -75,10 +75,10 @@
                     </group>
                 </sheet>
                 <footer>
-                    <button name="action_fetch_data" string="1. Tarik Data" type="object" class="btn-primary"/>
-                    <button name="action_import_pending_batch" string="2. Import Pending per Batch" type="object" class="btn-secondary" invisible="state == 'draft'"/>
+                    <button name="action_fetch_data" string="Get Data" type="object" class="btn-primary"/>
+                    <button name="action_import_pending_batch" string="Import &amp; Generate Data" type="object" class="btn-secondary" invisible="state == 'draft'"/>
                     <!-- <button name="action_fetch_and_import_batch" string="Tarik + Import Batch" type="object" class="btn-primary"/> -->
-                    <button name="action_view_staging" string="Lihat Staging" type="object" invisible="state == 'draft'"/>
+                    <button name="action_view_staging" string="Import Data" type="object" invisible="state == 'draft'"/>
                     <button name="action_reset" string="Reset Wizard" type="object"/>
                     <button string="Tutup" special="cancel"/>
                 </footer>

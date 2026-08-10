@@ -15,9 +15,11 @@
         <field name="name">acumatica.issue.po.return.line.list</field>
         <field name="model">acumatica.issue.po.return.line</field>
         <field name="arch" type="xml">
-            <list string="Data PO Return" create="0" delete="0">
+            <list string="Data PO Return">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="receipt_nbr"/>
+                <field name="receipt_type"/>
+                <field name="document_only"/>
                 <field name="vendor_code"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>

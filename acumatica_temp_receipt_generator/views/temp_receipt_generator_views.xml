@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_acumatica_temp_receipt_generator_wizard_form" model="ir.ui.view">
+        <field name="name">acumatica.temp.receipt.generator.wizard.form</field>
+        <field name="model">acumatica.temp.receipt.generator.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Generate Dummy Receipt WH33">
+                <sheet>
+                    <group>
+                        <group string="Receipt">
+                            <field name="generate_type"/>
+                            <field name="document_only"/>
+                            <field name="random_data"/>
+                            <field name="receipt_prefix"/>
+                            <field name="receipt_count"/>
+                            <field name="lines_per_receipt"/>
+                            <field name="receipt_date"/>
+                            <field name="line_qty"/>
+                        </group>
+                        <group string="Master Source">
+                            <field name="location_code"/>
+                            <field name="transfer_source_location_code" invisible="generate_type != 'inventory_receipt'"/>
+                            <field name="vendor_id" invisible="generate_type not in ['po_receipt', 'po_return']"/>
+                            <field name="customer_id" invisible="generate_type not in ['inventory_receipt', 'so_return']"/>
+                            <field name="product_ids" widget="many2many_tags"/>
+                            <field name="uom_id"/>
+                        </group>
+                    </group>
+                    <field name="generated_receipt_ids" invisible="not generated_receipt_ids" readonly="1">
+                        <list>
+                            <field name="receipt_nbr"/>
+                            <field name="document_only"/>
+                            <field name="vendor_code"/>
+                            <field name="warehouse_code"/>
+                            <field name="total_qty"/>
+                            <field name="import_state"/>
+                        </list>
+                    </field>
+                    <field name="generated_inventory_receipt_ids" invisible="not generated_inventory_receipt_ids" readonly="1">
+                        <list>
+                            <field name="reference_nbr"/>
+                            <field name="transfer_type"/>
+                            <field name="document_only"/>
+                            <field name="customer_code"/>
+                            <field name="warehouse_code"/>
+                            <field name="warehouse_dest_code"/>
+                            <field name="total_qty"/>
+                            <field name="import_state"/>
+                        </list>
+                    </field>
+                    <field name="generated_shipment_ids" invisible="not generated_shipment_ids" readonly="1">
+                        <list>
+                            <field name="shipment_nbr"/>
+                            <field name="document_only"/>
+                            <field name="partner_code"/>
+                            <field name="warehouse_code"/>
+                            <field name="shipped_qty"/>
+                            <field name="import_state"/>
+                        </list>
+                    </field>
+                    <field name="generated_po_return_ids" invisible="not generated_po_return_ids" readonly="1">
+                        <list>
+                            <field name="receipt_nbr"/>
+                            <field name="document_only"/>
+                            <field name="vendor_code"/>
+                            <field name="warehouse_code"/>
+                            <field name="total_qty"/>
+                            <field name="import_state"/>
+                        </list>
+                    </field>
+                </sheet>
+                <footer>
+                    <button name="action_generate_receipts" string="Generate Staging" type="object" class="btn-primary"/>
+                    <button name="action_cleanup_generated_receipts" string="Cleanup Dummy" type="object" class="btn-secondary" confirm="Hapus staging dummy yang belum diimport?"/>
+                    <button string="Cancel" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_temp_receipt_generator_wizard" model="ir.actions.act_window">
+        <field name="name">Generate Dummy Receipt WH33</field>
+        <field name="res_model">acumatica.temp.receipt.generator.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+    <menuitem id="menu_acumatica_temp_tools"
+              name="Tools"
+              parent="acumatica_all_import.menu_acumatica_all_import_root"
+              sequence="25"/>
+
+    <menuitem id="menu_acumatica_temp_receipt_generator"
+              name="Generate Dummy Receipt WH33"
+              parent="menu_acumatica_temp_tools"
+              action="action_acumatica_temp_receipt_generator_wizard"
+              sequence="10"/>
+</odoo>

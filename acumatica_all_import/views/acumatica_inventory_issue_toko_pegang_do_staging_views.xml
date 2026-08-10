@@ -22,6 +22,8 @@
             <list string="Data Issue : Toko Pegang DO">
                 <!-- <field name="id" string="ID"/> -->
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
+                <field name="adt_TransType"/>
+                <field name="adt_document_only"/>
                 <!-- <field name="create_date" string="Date"/> -->
                 <!-- <field name="odoo_picking_id" string="Delivery Order"/> -->
                 <field name="import_state" widget="badge"

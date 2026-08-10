@@ -89,6 +89,72 @@ class WmsApiController(http.Controller):
             body['details'] = details
         return request.make_json_response(body, status=status)
 
+    def _document_only_value(self, value):
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _get_payload_value(self, payload, *keys):
+        for key in keys:
+            if payload.get(key) not in (False, None, ''):
+                return payload.get(key)
+        return False
+
+    def _resolve_picking_type_from_payload(self, PickingType, payload, operation_category):
+        document_only = self._document_only_value(
+            self._get_payload_value(payload, 'document_only', 'adt_is_document_only', 'adt_DocumentOnly')
+        )
+        target_picking_type = PickingType.resolve_document_only_picking_type(
+            target_picking_type_id=self._get_payload_value(payload, 'target_picking_type_id', 'picking_type_id'),
+            target_operation_type=self._get_payload_value(payload, 'target_operation_type', 'target_operation_type_code'),
+            api_acumatica=self._get_payload_value(payload, 'api_acumatica', 'api_type'),
+            document_only=document_only,
+            warehouse_code=self._get_payload_value(payload, 'warehouse_code', 'adt_warehouse_code'),
+            required=bool(
+                self._get_payload_value(payload, 'target_picking_type_id', 'picking_type_id')
+                or self._get_payload_value(payload, 'target_operation_type', 'target_operation_type_code')
+            ),
+        )
+        if target_picking_type:
+            return target_picking_type
+
+        picking_type_domain = [('operation_category', '=', operation_category)]
+        picking_type_code = payload.get('picking_type_code')
+        if picking_type_code:
+            picking_type_domain.append(('sequence_code', '=', picking_type_code))
+        picking_type = PickingType.search(picking_type_domain, limit=1)
+        if not picking_type:
+            raise UserError(_("No picking type configured for operation_category = '%s'") % operation_category)
+        return picking_type
+
+    def _prepare_acumatica_header_vals(self, payload, transaction_type):
+        vals = {
+            'transaction_type': transaction_type,
+        }
+        field_mapping = {
+            'adt_type': 'adt_type',
+            'adt_external_ref': 'external_ref',
+            'adt_warehouse_code': 'warehouse_code',
+            'adt_external_id': 'external_id',
+            'adt_description': 'description',
+        }
+        for field_name, payload_key in field_mapping.items():
+            if payload.get(payload_key):
+                vals[field_name] = payload.get(payload_key)
+
+        document_only = self._document_only_value(
+            self._get_payload_value(payload, 'document_only', 'adt_is_document_only', 'adt_DocumentOnly')
+        )
+        if (
+            document_only
+            or self._get_payload_value(payload, 'target_picking_type_id', 'picking_type_id')
+            or self._get_payload_value(payload, 'target_operation_type', 'target_operation_type_code')
+        ):
+            vals['adt_is_document_only'] = True
+        return vals
+
     # =========================================================
     #  POST /wms/api/receiving  -> create inbound / receiving
     # =========================================================
@@ -130,15 +196,17 @@ class WmsApiController(http.Controller):
             if not partner:
                 raise UserError(_("Vendor not found (vendor_code or vendor_name required)"))
 
-            # 2) Cari picking type (operation_category = 'receive')
-            picking_type_domain = [('operation_category', '=', 'receive')]
-            if picking_type_code:
-                picking_type_domain.append(('sequence_code', '=', picking_type_code))
-            picking_type = PickingType.search(picking_type_domain, limit=1)
-            if not picking_type:
-                raise UserError(_("No picking type configured for operation_category = 'receive'"))
+            # 2) Cari picking type dari target staging/payload, fallback ke kategori receive.
+            picking_type = self._resolve_picking_type_from_payload(
+                PickingType,
+                payload,
+                'receive',
+            )
 
-            location_src_id = Location.search([('complete_name', '=', 'Partners/Vendors')], limit=1)
+            location_src_id = (
+                picking_type.default_location_src_id
+                or Location.search([('complete_name', '=', 'Partners/Vendors')], limit=1)
+            )
             # 3) Create picking (draft)
             picking_vals = {
                 'picking_type_id': picking_type.id,
@@ -148,6 +216,7 @@ class WmsApiController(http.Controller):
                 'location_id': location_src_id.id,
                 'location_dest_id': picking_type.default_location_dest_id.id,
             }
+            picking_vals.update(self._prepare_acumatica_header_vals(payload, 'inbound'))
 
             picking = Picking.create(picking_vals)
 
@@ -248,7 +317,7 @@ class WmsApiController(http.Controller):
         if not ok:
             return self._json_error(err, status=401)
 
-        payload = {}
+        payload = kwargs
         _logger.info("WMS Delivery payload: %s", payload)
 
         try:
@@ -281,15 +350,17 @@ class WmsApiController(http.Controller):
             if not partner:
                 raise UserError(_("Customer not found (customer_code or customer_name required)"))
 
-            # 2) Picking Type (operation_category = 'delivery')
-            picking_type_domain = [('operation_category', '=', 'delivery')]
-            if picking_type_code:
-                picking_type_domain.append(('sequence_code', '=', picking_type_code))
-            picking_type = PickingType.search(picking_type_domain, limit=1)
-            if not picking_type:
-                raise UserError(_("No picking type configured for operation_category = 'delivery'"))
+            # 2) Cari picking type dari target staging/payload, fallback ke kategori delivery.
+            picking_type = self._resolve_picking_type_from_payload(
+                PickingType,
+                payload,
+                'delivery',
+            )
 
-            location_dest_id = Location.search([('complete_name', '=', 'Partners/Customers')], limit=1)
+            location_dest_id = (
+                picking_type.default_location_dest_id
+                or Location.search([('complete_name', '=', 'Partners/Customers')], limit=1)
+            )
             # 3) Create picking
             picking_vals = {
                 'picking_type_id': picking_type.id,
@@ -299,6 +370,7 @@ class WmsApiController(http.Controller):
                 'location_id': picking_type.default_location_src_id.id,
                 'location_dest_id': location_dest_id.id
             }
+            picking_vals.update(self._prepare_acumatica_header_vals(payload, 'outbound'))
 
             picking = Picking.create(picking_vals)
 

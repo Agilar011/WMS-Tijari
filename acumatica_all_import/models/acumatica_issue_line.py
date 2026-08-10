@@ -96,6 +96,19 @@ class AcumaticaIssueConfig(models.Model):
         return value or ''
 
     @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
+
+    @staticmethod
     def _normalize_rows(payload):
         if isinstance(payload, list):
             return payload
@@ -148,6 +161,7 @@ class AcumaticaIssueConfig(models.Model):
                     'scheduled_date': self._val(item, 'Date'),
                     'description': self._val(item, 'Description'),
                     'external_ref': self._val(item, 'ExternalRef'),
+                    'document_only': self._bool_val(item, 'DocumentOnly'),
                     'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
                     'post_period': self._val(item, 'PostPeriod'),
                     'reference_nbr': self._val(item, 'ReferenceNbr'),
@@ -214,6 +228,7 @@ class AcumaticaIssueLine(models.Model):
     scheduled_date = fields.Char(string='Date', readonly=True)
     description = fields.Char(string='Header Description', readonly=True)
     external_ref = fields.Char(string='External Ref', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     status = fields.Char(string='Status', readonly=True)
     actual_qty = fields.Char(string='Control Qty', readonly=True)
     total_qty = fields.Char(string='Total Qty', readonly=True)
@@ -309,8 +324,6 @@ class AcumaticaIssueLine(models.Model):
                 location = Location.search([('name', '=', code)], limit=1)
         if not location and warehouse:
             location = warehouse.lot_stock_id
-        if not location and fallback == 'customer':
-            location = self.env.ref('stock.stock_location_customers', raise_if_not_found=False)
         return location
 
     def _find_uom(self, line, product=False):
@@ -359,11 +372,13 @@ class AcumaticaIssueLine(models.Model):
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
 
                 source_location = warehouse.lot_stock_id or picking_type.default_location_src_id
-                dest_location = picking_type.default_location_dest_id or self.env.ref('stock.stock_location_customers', raise_if_not_found=False)
+                dest_location = picking_type.default_location_dest_id
                 if not source_location:
                     raise UserError('Source location warehouse tidak ditemukan.')
                 if not dest_location:
-                    raise UserError('Destination location customer tidak ditemukan.')
+                    raise UserError('Destination location tidak ditemukan.')
+                if dest_location.usage == 'customer':
+                    raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
 
                 vals = {
                     'origin': first.reference_nbr,
@@ -443,6 +458,9 @@ class AcumaticaIssueLine(models.Model):
                         'import_message': f'{action_state.title()}: {picking.name}',
                         'odoo_picking_id': picking.id,
                     })
+
+                if issue_lines.filtered('document_only'):
+                    picking.action_validate_document_only_import(force=True)
             except Exception as e:
                 _logger.exception('Error import issue %s', issue_key)
                 issue_lines.write({'import_state': 'error', 'import_message': str(e)[:200]})

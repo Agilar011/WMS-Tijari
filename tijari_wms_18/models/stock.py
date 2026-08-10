@@ -152,8 +152,24 @@ class StockPicking(models.Model):
             })
 
     def button_validate(self):
+        document_only_pickings = self.filtered(
+            lambda picking: picking.adt_is_document_only or picking.picking_type_id.is_document_only_api
+        )
+        for picking in document_only_pickings.filtered(lambda item: item.state not in ('done', 'cancel')):
+            picking._adt_preserve_document_only_destination()
+            if picking.state == 'draft':
+                picking.action_confirm()
+            if picking.state in ('confirmed', 'waiting', 'assigned'):
+                picking.action_assign()
+            picking._adt_preserve_document_only_destination()
+            picking._set_document_only_done_quantities()
+
         for picking in self:
-            if picking.picking_type_id.name not in ('Pick', 'Receipt'):
+            if picking.adt_is_document_only or picking.picking_type_id.is_document_only_api:
+                continue
+            if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+                picking._check_putaway_status_requirements()
+            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal'):
                 print(f"Run validate all except pick and receipt")
                 # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
                 for move in picking.move_ids:
@@ -174,55 +190,67 @@ class StockPicking(models.Model):
 
                         print(f"After write line {line.id} = {line.matching} for picking: {picking.id}")
 
-        res = super().button_validate()
+        if document_only_pickings:
+            res = super(StockPicking, self.with_context(skip_sanity_check=True)).button_validate()
+        else:
+            res = super().button_validate()
+        document_only_pickings._adt_preserve_document_only_destination()
 
         for rec in self:
+            is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
+            is_receipt_putaway = rec.picking_type_id.name in ('Receipts', 'Receipt Internal')
             print(rec.picking_type_id.operation_category)
-            for line in rec.move_line_ids:
-                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
-                line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
-                if not line.lot_name:
-                    print(f"Missing lot: {line}")
-                    raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
-                
+            if not is_document_only:
+                for line in rec.move_line_ids:
+                    print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
+                    if not is_receipt_putaway:
+                        line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
+                    if not is_receipt_putaway and not line.lot_name:
+                        print(f"Missing lot: {line}")
+                        raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
 
-            picking._check_validate_requirements()
-            operation_category = picking.picking_type_id.operation_category
-            print(f">>> Validating picking {picking.id} - Picking Type: {picking.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
+                if is_receipt_putaway:
+                    rec._check_putaway_status_requirements()
+                else:
+                    rec._check_validate_requirements()
+                operation_category = rec.picking_type_id.operation_category
+                print(f">>> Validating picking {rec.id} - Picking Type: {rec.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
 
-            # Hanya enforce untuk PUT dan DELIVERY
-            if operation_category in ['put', 'delivery']:
-                for line in picking.move_line_ids:
-                    # Jika belum dicek (invisible), tidak dianggap ok
-                    print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
-                    # line.matching = 'match'
-                    print(f">>> Matching status for line {line.id}: {line.matching}") # Cek di terminal Odoo
-                    if line.matching != 'match':
-                        raise UserError(_(
-                            "Validation blocked.\n\n"
-                            "Line:\n"
-                            f"- Product: {line.product_id.display_name}\n"
-                            f"- Qty: {line.quantity or line.product_uom_qty}\n\n"
-                            "Status: ❌ NOT MATCH\n\n"
-                            "Silakan pastikan scan location dan/atau lot sudah benar."
-                        ))
+                # Hanya enforce untuk PUT dan DELIVERY
+                if not is_receipt_putaway and operation_category in ['put', 'delivery']:
+                    for line in rec.move_line_ids:
+                        # Jika belum dicek (invisible), tidak dianggap ok
+                        print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+                        # line.matching = 'match'
+                        print(f">>> Matching status for line {line.id}: {line.matching}") # Cek di terminal Odoo
+                        if line.matching != 'match':
+                            raise UserError(_(
+                                "Validation blocked.\n\n"
+                                "Line:\n"
+                                f"- Product: {line.product_id.display_name}\n"
+                                f"- Qty: {line.quantity or line.product_uom_qty}\n\n"
+                                "Status: ❌ NOT MATCH\n\n"
+                                "Silakan pastikan scan location dan/atau lot sudah benar."
+                            ))
             pickings = self.env["stock.picking"].search([])
-            if picking.picking_type_id.code != "incoming":
+            if rec.picking_type_id.code != "incoming":
                 continue
 
+            rec._check_putaway_quantity_vs_demand()
+
             storage_pickings = self.env["stock.picking"].search([
-                ("origin", "ilike", picking.origin or picking.name),
+                ("origin", "ilike", rec.origin or rec.name),
                 ("picking_type_id.code", "=", "internal"),
             ], limit=1)
-            total_qty = sum(picking.move_ids.move_line_ids.mapped("quantity"))
-            picking.write({
+            total_qty = sum(rec.move_ids.move_line_ids.mapped("quantity"))
+            rec.write({
                 'adt_total_qty': total_qty
             })
 
             storage_pickings.write({
-                "adt_dest_location_id": picking.adt_dest_location_id,
-                "adt_type": picking.adt_type,
-                "note" : picking.note,
+                "adt_dest_location_id": rec.adt_dest_location_id,
+                "adt_type": rec.adt_type,
+                "note" : rec.note,
             })
             # for ml in picking.move_line_ids:
                 # if not ml.allocation_storage:
@@ -246,7 +274,7 @@ class StockPicking(models.Model):
 
             for storage in storage_pickings:
                 for storage_move in storage.move_ids:
-                    receipt_move = picking.move_ids.filtered(
+                    receipt_move = rec.move_ids.filtered(
                         lambda m: m.product_id == storage_move.product_id
                     )[:1]
 
@@ -255,29 +283,13 @@ class StockPicking(models.Model):
                             "product_note": receipt_move.product_note,
                         })
 
-            for move in picking.move_ids:
-                if move.quantity > move.product_uom_qty:
-                    total_qty = sum(line.mapped("quantity"))
-                    raise UserError(
-                        _(
-                            "Product: %s\n"
-                            "Lot: %s\n"
-                            "Total QTY: %s\n"
-                            "Demand: %s\n\n"
-                            "Quantity exceeds demand."
-                        ) % (
-                            move.product_id.display_name,
-                            line.lot_id.name or "-",
-                            move.quantity,
-                            move.product_uom_qty,
-                        )
-                    )
-
         return res
 
     def _check_validate_requirements(self):
         self.ensure_one()
         _logger.info("Check Validate on = %s", self.id)
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+            return self._check_putaway_status_requirements()
 
         active_moves = self.move_ids.filtered(
             lambda move: move.state != "cancel"
@@ -333,6 +345,36 @@ class StockPicking(models.Model):
         if error_messages:
             raise UserError("\n\n".join(error_messages))
 
+    def _check_putaway_status_requirements(self):
+        self.ensure_one()
+        move_lines = self.move_line_ids.filtered(
+            lambda line: line.state != "cancel" and line.quantity > 0
+        )
+        unfinished_lines = move_lines.filtered(
+            lambda line: line.putaway_status != "finished"
+        )
+
+        if not unfinished_lines:
+            return
+
+        lines = "\n".join(
+            "- %s | Qty: %s | Status: %s"
+            % (
+                line.product_id.display_name,
+                line.quantity,
+                dict(line._fields["putaway_status"].selection).get(
+                    line.putaway_status,
+                    line.putaway_status or "-"
+                ),
+            )
+            for line in unfinished_lines
+        )
+        raise UserError(_(
+            "Validation blocked.\n\n"
+            "Semua move line putaway harus memiliki status 'Finished'.\n"
+            "Move line yang belum finish:\n%s"
+        ) % lines)
+
     def action_print_warehouse_receipt(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
@@ -364,8 +406,9 @@ class StockPicking(models.Model):
                 if not final_dest_location:
                     continue
 
-                move.location_dest_id = picking.adt_dest_location_id
-                move.adt_dest_location_id = picking.adt_dest_location_id
+                if not move.adt_dest_location_id:
+                    move.location_dest_id = picking.adt_dest_location_id
+                    move.adt_dest_location_id = picking.adt_dest_location_id
 
                 if move.move_line_ids:
                     move.move_line_ids.write({
@@ -395,6 +438,123 @@ class StockPickingType(models.Model):
     ], string='Operation Category', required=False, default='others') 
 
     is_default_api = fields.Boolean(string="Default Picking Type For API")
+    is_document_only_api = fields.Boolean(string="Document Only API")
+
+    @api.model
+    def _normalize_document_only_operation(self, value):
+        if not value:
+            return False
+        normalized = str(value).strip().lower().replace('-', '_').replace(' ', '_')
+        aliases = {
+            'direct_receipt': 'direct_receipt',
+            'receipt': 'direct_receipt',
+            'receive': 'direct_receipt',
+            'incoming': 'direct_receipt',
+            'direct_delivery_order': 'direct_delivery_order',
+            'delivery': 'direct_delivery_order',
+            'delivery_order': 'direct_delivery_order',
+            'outgoing': 'direct_delivery_order',
+        }
+        return aliases.get(normalized)
+
+    @api.model
+    def _normalize_api_acumatica(self, value):
+        if not value:
+            return False
+        return str(value).strip().lower().replace('-', '_').replace(' ', '_')
+
+    @api.model
+    def _get_document_only_operation_by_api(self):
+        return {
+            'po_receipt': 'direct_receipt',
+            'receipt_change_item': 'direct_receipt',
+            'inventory_received': 'direct_receipt',
+            'inventory_receive': 'direct_receipt',
+            'receipt_toko_pegang_do': 'direct_receipt',
+            'transfer_in': 'direct_receipt',
+            'so_transfer': 'direct_receipt',
+            'sotr': 'direct_receipt',
+            'vendor_return': 'direct_delivery_order',
+            'so_shipment': 'direct_delivery_order',
+            'so_shipment_toko_pegang_do': 'direct_delivery_order',
+            'so_shipment_co': 'direct_delivery_order',
+            'transfer_shipment': 'direct_delivery_order',
+            'issue_change_item': 'direct_delivery_order',
+            'inventory_issue': 'direct_delivery_order',
+            'issue_change_item_discontinue': 'direct_delivery_order',
+            'issue_po_return': 'direct_delivery_order',
+            'po_return': 'direct_delivery_order',
+            'transfer_one_step': 'direct_delivery_order',
+            'transfer_two_step': 'direct_delivery_order',
+        }
+
+    @api.model
+    def _get_document_only_picking_type(self, operation, warehouse_code=False, required=True):
+        operation = self._normalize_document_only_operation(operation)
+        operation_vals = {
+            'direct_receipt': ('Direct Receipt', 'DRC'),
+            'direct_delivery_order': ('Direct Delivery Order', 'DDO'),
+        }
+        if operation not in operation_vals:
+            if required:
+                raise UserError(_("Unsupported document only operation: %s") % operation)
+            return self.browse()
+
+        name, sequence_code = operation_vals[operation]
+        domain = [
+            ('is_document_only_api', '=', True),
+            ('sequence_code', '=', sequence_code),
+        ]
+        if warehouse_code:
+            warehouse = self.env['stock.warehouse'].sudo().search([
+                '|',
+                ('code', '=', warehouse_code),
+                ('name', '=', warehouse_code),
+            ], limit=1)
+            if warehouse:
+                domain.append(('warehouse_id', '=', warehouse.id))
+
+        picking_type = self.sudo().search(domain, limit=1)
+        if not picking_type:
+            picking_type = self.sudo().search([
+                ('is_document_only_api', '=', True),
+                ('name', '=', name),
+            ], limit=1)
+        if not picking_type and required:
+            raise UserError(_("No document only picking type configured for %s") % name)
+        return picking_type
+
+    @api.model
+    def resolve_document_only_picking_type(
+        self,
+        target_picking_type_id=False,
+        target_operation_type=False,
+        api_acumatica=False,
+        document_only=False,
+        warehouse_code=False,
+        required=False,
+    ):
+        if target_picking_type_id:
+            picking_type = self.sudo().browse(int(target_picking_type_id)).exists()
+            if picking_type:
+                return picking_type
+            if required:
+                raise UserError(_("Target picking type not found: %s") % target_picking_type_id)
+
+        operation = self._normalize_document_only_operation(target_operation_type)
+        if not operation and document_only:
+            operation = self._get_document_only_operation_by_api().get(
+                self._normalize_api_acumatica(api_acumatica)
+            )
+        if operation:
+            return self._get_document_only_picking_type(
+                operation,
+                warehouse_code=warehouse_code,
+                required=required,
+            )
+        if required:
+            raise UserError(_("Document only operation type is not provided"))
+        return self.browse()
 
     # def get_action_picking_tree_draft(self):
     #     self.ensure_one()
@@ -508,17 +668,17 @@ class StockMoveLine(models.Model):
         move_lines.mapped('picking_id')._sync_adt_quantities_from_moves()
         return move_lines
 
-    def write(self, vals):
-        pickings = self.mapped('picking_id')
-        res = super().write(vals)
-        pickings |= self.mapped('picking_id')
+    # def write(self, vals):
+    #     pickings = self.mapped('picking_id')
+    #     res = super().write(vals)
+    #     pickings |= self.mapped('picking_id')
 
-        if {'quantity', 'move_id', 'picking_id'} & set(vals):
-            pickings._sync_adt_quantities_from_moves()
+    #     if {'quantity', 'move_id', 'picking_id'} & set(vals):
+    #         pickings._sync_adt_quantities_from_moves()
 
-        self._update_move_picked()
+    #     self._update_move_picked()
 
-        return res
+    #     return res
 
     def unlink(self):
         pickings = self.mapped('picking_id')
@@ -526,83 +686,83 @@ class StockMoveLine(models.Model):
         pickings._sync_adt_quantities_from_moves()
         return res
 
-    @api.depends(
-        'confirmation_location_code',
-        'confirmation_lot_code',
-        'location_id',
-        'location_dest_id',
-        'lot_id',
-        'picking_id',
-        'picking_id.picking_type_id',
-        'picking_id.picking_type_id.operation_category',
-    )
-    def _compute_matching(self):
-        print(">>> Computing matching status...") # Cek di terminal Odoo
-        for line in self:
-            print(f">>> Evaluating line {line.id} - Product: {line}") # Cek di terminal Odoo
-            matching = line.matching
+    # @api.depends(
+    #     'confirmation_location_code',
+    #     'confirmation_lot_code',
+    #     'location_id',
+    #     'location_dest_id',
+    #     'lot_id',
+    #     'picking_id',
+    #     'picking_id.picking_type_id',
+    #     'picking_id.picking_type_id.operation_category',
+    # )
+    # def _compute_matching(self):
+    #     print(">>> Computing matching status...") # Cek di terminal Odoo
+    #     for line in self:
+    #         print(f">>> Evaluating line {line.id} - Product: {line}") # Cek di terminal Odoo
+    #         matching = line.matching
 
-            picking_type = line.picking_id.picking_type_id
-            operation_category = picking_type.operation_category if picking_type else False
-            print(f">>> Line {line.id} - Operation Category: {operation_category}") # Cek di terminal Odoo
+    #         picking_type = line.picking_id.picking_type_id
+    #         operation_category = picking_type.operation_category if picking_type else False
+    #         print(f">>> Line {line.id} - Operation Category: {operation_category}") # Cek di terminal Odoo
 
-            # Untuk PUT → cek unique_code lokasi (aku anggap DESTINATION location)
-            if operation_category == 'put':
-                print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
-                print(f">>> Operation Category: PUT") # Cek di terminal Odoo
-                # kalau belum ada input, keep invisible
-                print(f">>> Line Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
-                print(f">>> Line Confirmation Lot Code: {line.confirmation_lot_code}") # Cek di terminal Odoo
-                if line.confirmation_location_code or line.confirmation_lot_code:
-                    print(f">>> Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
-                    print(f">>> Confirmation Lot Code: {line.confirmation_lot_code}") #
-                    dest_loc = line.location_dest_id
-                    dest_code = dest_loc.unique_code if dest_loc else False
-                    print(f">>> Destination Location unique code: {dest_code}") # Cek di terminal Odoo
-                    print(f">>> Line Lot ID: {line.lot_id}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
-                    lot = line.lot_id
+    #         # Untuk PUT → cek unique_code lokasi (aku anggap DESTINATION location)
+    #         if operation_category == 'put':
+    #             print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
+    #             print(f">>> Operation Category: PUT") # Cek di terminal Odoo
+    #             # kalau belum ada input, keep invisible
+    #             print(f">>> Line Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
+    #             print(f">>> Line Confirmation Lot Code: {line.confirmation_lot_code}") # Cek di terminal Odoo
+    #             if line.confirmation_location_code or line.confirmation_lot_code:
+    #                 print(f">>> Confirmation Location Code: {line.confirmation_location_code}") # Cek di terminal Odoo
+    #                 print(f">>> Confirmation Lot Code: {line.confirmation_lot_code}") #
+    #                 dest_loc = line.location_dest_id
+    #                 dest_code = dest_loc.unique_code if dest_loc else False
+    #                 print(f">>> Destination Location unique code: {dest_code}") # Cek di terminal Odoo
+    #                 print(f">>> Line Lot ID: {line.lot_id}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+    #                 lot = line.lot_id
 
-                    loc_ok = bool(dest_code and line.confirmation_location_code == dest_code)
-                    lot_ok = bool(lot and line.confirmation_lot_code and line.confirmation_lot_code == lot.name)
+    #                 loc_ok = bool(dest_code and line.confirmation_location_code == dest_code)
+    #                 lot_ok = bool(lot and line.confirmation_lot_code and line.confirmation_lot_code == lot.name)
 
-                    if loc_ok and lot_ok:
-                        matching = 'match'
-                    else:
-                        matching = 'not_match'
+    #                 if loc_ok and lot_ok:
+    #                     matching = 'match'
+    #                 else:
+    #                     matching = 'not_match'
 
-                    print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
+    #                 print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
 
-            # Untuk PACK → cek lot + unique_code (aku anggap SOURCE location)
-            elif operation_category == 'delivery':
-                print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
-                print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
-                print(f">>> Evaluating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
-                # kalau belum ada input sama sekali, invisible
-                if line.confirmation_location_code or line.confirmation_lot_code:
-                    loc_code = line.location_id.unique_code if line.location_id else (line.quant_id.location_id.unique_code if line.quant_id and line.quant_id.location_id else 'N/A')
-                    lot_code = line.lot_id.name if line.lot_id else (line.quant_id.lot_id.name if line.quant_id and line.quant_id.lot_id else 'N/A')
-                    print(f">>> Information to match : Lot Code = {lot_code}, Location Code = {loc_code}") # Cek di terminal Odoo
-                    # src_loc = line.location_id
-                    # src_code = src_loc.unique_code if src_loc else False
-                    # lot = line.lot_id
-                    # src_code = line.quant_id.location_id.unique_code if line.quant_id.location_id else False
-                    # lot = line.quant_id.lot_id.name
+    #         # Untuk PACK → cek lot + unique_code (aku anggap SOURCE location)
+    #         elif operation_category == 'delivery':
+    #             print(f">>> picking_type_code: {line.picking_type_id.code if line.picking_id and line.picking_id.picking_type_id else 'N/A'}") # Cek di terminal Odoo
+    #             print(f">>> Operation Category: DELIVERY") # Cek di terminal Odoo
+    #             print(f">>> Evaluating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+    #             # kalau belum ada input sama sekali, invisible
+    #             if line.confirmation_location_code or line.confirmation_lot_code:
+    #                 loc_code = line.location_id.unique_code if line.location_id else (line.quant_id.location_id.unique_code if line.quant_id and line.quant_id.location_id else 'N/A')
+    #                 lot_code = line.lot_id.name if line.lot_id else (line.quant_id.lot_id.name if line.quant_id and line.quant_id.lot_id else 'N/A')
+    #                 print(f">>> Information to match : Lot Code = {lot_code}, Location Code = {loc_code}") # Cek di terminal Odoo
+    #                 # src_loc = line.location_id
+    #                 # src_code = src_loc.unique_code if src_loc else False
+    #                 # lot = line.lot_id
+    #                 # src_code = line.quant_id.location_id.unique_code if line.quant_id.location_id else False
+    #                 # lot = line.quant_id.lot_id.name
 
-                    # kondisi match
-                    loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
-                    lot_ok = bool(lot_code and line.confirmation_lot_code == lot_code)
+    #                 # kondisi match
+    #                 loc_ok = bool(loc_code and line.confirmation_location_code == loc_code)
+    #                 lot_ok = bool(lot_code and line.confirmation_lot_code == lot_code)
 
-                    if loc_ok and lot_ok:
-                        matching = 'match'
-                    else:
-                        matching = 'not_match'
+    #                 if loc_ok and lot_ok:
+    #                     matching = 'match'
+    #                 else:
+    #                     matching = 'not_match'
 
-                    print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
+    #                 print(f">>> Location Match: {loc_ok}, Lot Match: {lot_ok}, Overall Matching Status: {matching}") # Cek di terminal Odoo
 
-            if line.matching_lot_id.id == line.lot_id.id and line.matching_loc_dest_id.id == line.location_dest_id.id:
-                matching = 'match'
+    #         if line.matching_lot_id.id == line.lot_id.id and line.matching_loc_dest_id.id == line.location_dest_id.id:
+    #             matching = 'match'
 
-            line.matching = matching
+    #         line.matching = matching
 
     # @api.depends('matching')
     # def _compute_matching_html(self):
@@ -617,15 +777,34 @@ class StockMoveLine(models.Model):
     @api.onchange('product_id')
     def _onchange_product_copy_previous_lot(self):
 
-        if not self.move_id:
-            return
+        for line in self:
+            if not line.move_id:
+                continue
 
-        last_line = self.move_id.move_line_ids.filtered(
-            lambda l: l.lot_id
-        )
+            previous_lines = line.move_id.move_line_ids.filtered(
+                lambda l: l != line
+            )
+            last_lot_line = previous_lines.filtered(lambda l: l.lot_id)
 
-        if last_line:
-            self.lot_id = last_line[-1].lot_id
+            if last_lot_line:
+                line.lot_id = last_lot_line[-1].lot_id
+
+            if not line.env.context.get('copy_previous_picker_location'):
+                continue
+
+            last_location_line = previous_lines.filtered(
+                lambda l: l.location_id or l.location_dest_id or l.source_location_id
+            )
+            if not last_location_line:
+                continue
+
+            previous_line = last_location_line[-1]
+            if previous_line.location_id:
+                line.location_id = previous_line.location_id
+            if previous_line.location_dest_id:
+                line.location_dest_id = previous_line.location_dest_id
+            if previous_line.source_location_id:
+                line.source_location_id = previous_line.source_location_id
                 
     @api.onchange('quant_id')
     def _onchange_move_line_ids(self):
@@ -1035,15 +1214,12 @@ class StockMoveLine(models.Model):
             wizard.matching_loc_dest_id = location.id
 
     def _find_lot_by_scan_code(self, lot_code):
-        lot = False
         Lot = self.env['stock.lot']
+        lot_code = (lot_code or '').strip()
+        if not lot_code:
+            return Lot.browse()
 
-        lot = Lot.search([
-            ('name', '=', lot_code)
-        ], limit=1)
-        # if not lot:
-        #     raise ValidationError("Lot Tidak Ditemukan")
-        return lot
+        return Lot.search([('name', '=', lot_code)], limit=1)
 
     @api.onchange('confirmation_lot_code')
     def _onchange_confirmation_lot_code(self):
@@ -1055,15 +1231,21 @@ class StockMoveLine(models.Model):
                 wizard.matching = 'not_match'
 
             wizard.matching_lot_id = lot.id
-    def _find_loc_by_scan_code(self, lot_code):
-        loc = False
+    def _find_loc_by_scan_code(self, location_code):
         Loc = self.env['stock.location']
+        location_code = (location_code or '').strip()
+        if not location_code:
+            return Loc.browse()
 
-        loc = Loc.search([
-            ('unique_code', '=', lot_code)
-        ], limit=1)
+        search_fields = ['unique_code', 'barcode', 'complete_name', 'name']
+        for field_name in search_fields:
+            if field_name not in Loc._fields:
+                continue
+            loc = Loc.search([(field_name, '=', location_code)], limit=1)
+            if loc:
+                return loc
 
-        return loc
+        return Loc.browse()
 
     @api.onchange('matching_lot_id', 'matching_loc_dest_id')
     def _onchange_update_matching_status(self):

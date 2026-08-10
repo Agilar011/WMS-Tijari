@@ -35,12 +35,21 @@ class StockPickingBatch(models.Model):
         store=False,
     )
 
+    def _get_putaway_base_move_lines(self):
+        self.ensure_one()
+
+        return self._get_batch_move_lines().filtered(
+            lambda line: (
+                (line.lot_id or line.lot_name)
+                and line.quantity > 0
+                and line.picker_status == 'finished'
+            )
+        )
+
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
-        move_lines = self._get_batch_move_lines().filtered(
-            lambda line: (line.lot_id or line.lot_name) and line.quantity > 0
-        )
+        move_lines = self._get_putaway_base_move_lines()
         if self.putaway_product_id:
             move_lines = move_lines.filtered(
                 lambda line: line.product_id == self.putaway_product_id
@@ -57,13 +66,13 @@ class StockPickingBatch(models.Model):
         'move_ids.product_id',
         'move_ids.move_line_ids',
         'move_ids.move_line_ids.product_id',
+        'move_ids.move_line_ids.lot_id',
+        'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_product_ids(self):
         for batch in self:
-            batch.allowed_putaway_product_ids = (
-                batch._get_batch_move_lines().product_id
-                or batch.move_ids.product_id
-            )
+            batch.allowed_putaway_product_ids = batch._get_putaway_base_move_lines().product_id
 
     @api.depends(
         'putaway_product_id',
@@ -72,6 +81,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.product_id',
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_move_line_ids(self):
         for batch in self:
@@ -84,6 +94,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.product_id',
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.picker_status',
     )
     def _compute_putaway_values(self):
         for batch in self:
@@ -166,8 +177,42 @@ class StockPickingBatch(models.Model):
                 lambda line: (
                     line.state not in ('done', 'cancel')
                     and line.quantity > 0
+                    and (line.lot_id or line.lot_name)
                 )
             )
+            if batch.picking_type_name in ('Receipts', 'Receipt Internal'):
+                unfinished_lines = move_lines.filtered(
+                    lambda line: line.putaway_status != 'finished'
+                )
+
+                if not unfinished_lines:
+                    continue
+
+                lines = "\n".join(
+                    "- %s | Lot/Serial: %s | Qty: %s | Status: %s"
+                    % (
+                        line.product_id.display_name,
+                        line.lot_id.name or line.lot_name or "-",
+                        line.quantity,
+                        dict(line._fields['putaway_status'].selection).get(
+                            line.putaway_status,
+                            line.putaway_status or "-"
+                        ),
+                    )
+                    for line in unfinished_lines
+                )
+                raise UserError(
+                    _(
+                        "Validation blocked.\n\n"
+                        "Semua move line putaway batch harus memiliki status "
+                        "'Finished' sebelum batch divalidasi.\n\n"
+                        "Move line yang belum finish:\n%s"
+                    )
+                    % lines
+                )
+
+                continue
+
             unmatched_lines = move_lines.filtered(
                 lambda line: line.matching != 'match'
             )

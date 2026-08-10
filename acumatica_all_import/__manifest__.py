@@ -35,6 +35,8 @@
           'views/acumatica_transfer_two_step_config_views.xml',
           'views/acumatica_transfer_two_step_line_views.xml',
           'data/acumatica_config_data.xml',
+          'data/inventory_receipt_transfer_in_dummy_data.xml',
+          'data/sotr_staging_dummy_data.xml',
           'views/acumatica_customer_line_views.xml',
           'views/acumatica_customer_location_views.xml',
           'views/acumatica_non_stock_item_line_views.xml',

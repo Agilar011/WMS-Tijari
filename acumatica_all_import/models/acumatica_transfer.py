@@ -238,6 +238,7 @@ class AcumaticaTransferProductLine(models.Model):
 
     header_external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
     transfer_line_id = fields.Many2one('acumatica.transfer.line', string='Transfer', ondelete='cascade')
+    receipt_nbr = fields.Char(string='Receipt Number', index=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)
     
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
@@ -291,6 +292,7 @@ class AcumaticaTransferLine(models.Model):
     actual_qty = fields.Char(string='Control Qty', readonly=True)
     total_qty = fields.Char(string='Total Qty', readonly=True)
     is_hold = fields.Char(string='Hold', readonly=True)
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     inventory_ref = fields.Char(string='Inventory Ref Nbr', readonly=True)
     post_period = fields.Char(string='Post Period', readonly=True)
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
@@ -321,6 +323,11 @@ class AcumaticaTransferLine(models.Model):
     ], default='pending', readonly=True)
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Internal Transfer di Odoo', readonly=True)
+    odoo_internal_transfer_order_id = fields.Many2one(
+        'internal.transfer.order',
+        string='Internal Transfer Order di Odoo',
+        readonly=True,
+    )
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -333,9 +340,16 @@ class AcumaticaTransferLine(models.Model):
     @api.depends('receipt_nbr')
     def _compute_exists_in_odoo(self):
         Picking = self.env['stock.picking']
+        InternalTransferOrder = self.env['internal.transfer.order']
         for rec in self:
             origin = rec.receipt_nbr
-            rec.exists_in_odoo = bool(origin and Picking.search_count([('origin', '=', origin)]))
+            rec.exists_in_odoo = bool(
+                origin
+                and (
+                    Picking.search_count([('origin', '=', origin)])
+                    or InternalTransferOrder.search_count([('external_ref', '=', origin)])
+                )
+            )
 
     @staticmethod
     def _parse_dt(dt_str):
@@ -476,8 +490,160 @@ class AcumaticaTransferLine(models.Model):
         if error_data:
             error_data.write({'state': 'resolved'})
 
+    def _import_single_receipt_as_transfer_in(self, receipt):
+        receipt.ensure_one()
+
+        TransferService = self.env['acumatica.internal.transfer.service']
+        Move = self.env['stock.move']
+
+        origin = receipt.receipt_nbr or False
+        header_payload = receipt.read()[0] if receipt.exists() else {}
+        error_messages = []
+        error_line_payloads = []
+
+        source_code = receipt.warehouse_code
+        destination_code = receipt.warehouse_dest_code
+        try:
+            transfer_info = TransferService.classify_transfer_in_from_virtual(
+                source_code,
+                destination_code,
+                'FromWarehouseID',
+                'ToWarehouseID',
+            )
+        except UserError as error:
+            error_messages.append(str(error))
+            transfer_info = False
+
+        if transfer_info and transfer_info['status'] == 'skip':
+            receipt.write({
+                'import_state': 'updated',
+                'import_message': transfer_info['message'],
+                'odoo_internal_transfer_order_id': False,
+                'odoo_picking_id': False,
+            })
+            self._resolve_error_tracking(receipt)
+            return 'updated'
+
+        if error_messages:
+            raise ReceiptImportError(
+                '\n'.join(error_messages),
+                payload={'header': header_payload},
+            )
+
+        source_location = transfer_info['source_location']
+        destination_location = transfer_info['destination_location']
+        order, action_state = TransferService.prepare_order(
+            origin,
+            source_location,
+            destination_location,
+            transfer_info['transaction_type'],
+            schedule_date=receipt._parse_dt(receipt.scheduled_date),
+            note=receipt.note or False,
+            transfer_type='transfer_in',
+        )
+        order.write({'validation_policy': 'validate_all'})
+
+        for receipt_line in receipt.product_line_ids:
+            move_vals = {}
+            try:
+                product = receipt._find_product(receipt_line)
+                if not product:
+                    error_messages.append(
+                        f'Product with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
+                    )
+                    error_line_payloads.append({
+                        'inventory_id': receipt_line.inventory_id or False,
+                        'product_name': receipt_line.description or False,
+                        'qty': receipt._parse_float(receipt_line.product_uom_qty),
+                        'uom': receipt_line.uom_code or False,
+                        'payload': receipt_line.read()[0] if receipt_line.exists() else {},
+                    })
+                    continue
+
+                uom = receipt._find_uom(receipt_line, product)
+                if product and not uom:
+                    error_messages.append(
+                        f'UOM with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER UOM.'
+                    )
+                    error_line_payloads.append({
+                        'inventory_id': receipt_line.inventory_id or False,
+                        'product_name': receipt_line.description or False,
+                        'qty': receipt._parse_float(receipt_line.product_uom_qty),
+                        'uom': receipt_line.uom_code or False,
+                        'payload': receipt_line.read()[0] if receipt_line.exists() else {},
+                    })
+                    continue
+
+                qty = receipt._parse_float(receipt_line.product_uom_qty)
+                move_vals = {
+                    'adt_line_external_id': receipt_line.line_external_id or False,
+                    'adt_inventory_id': receipt_line.inventory_id or False,
+                    'adt_line_nbr': receipt_line.line_nbr or False,
+                    'adt_line_type': receipt_line.line_type or False,
+                    'adt_open_qty': receipt._parse_float(receipt_line.open_qty),
+                    'adt_order_qty': receipt._parse_float(receipt_line.order_qty),
+                    'adt_po_line_number': receipt_line.po_line_number or False,
+                    'adt_po_number': receipt_line.po_number or False,
+                    'adt_po_type': receipt_line.po_type or False,
+                    'adt_po_receipt_line_number': receipt_line.po_receipt_line_number or False,
+                    'adt_po_receipt_number': receipt_line.po_receipt_number or False,
+                    'adt_transfer_order_line_number': receipt_line.transfer_order_line_number or False,
+                    'adt_transfer_order_number': receipt_line.transfer_order_number or False,
+                    'adt_transfer_order_type': receipt_line.transfer_order_type or False,
+                    'adt_transfer_shipment_number': receipt_line.transfer_shipment_number or False,
+                    'adt_uom_code': receipt_line.uom_code or False,
+                    'adt_warehouse_dest_code': receipt_line.warehouse_dest_code or False,
+                    'adt_location_dest_code': receipt_line.location_dest_code or False,
+                    'adt_quantity': qty,
+                    'adt_type': receipt.receipt_type or 'Transfer Receipt',
+                    'product_note': receipt_line.line_note or False,
+                }
+                move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
+                TransferService.create_order_move(
+                    order,
+                    product,
+                    qty,
+                    uom=uom,
+                    name=receipt_line.transaction_description or receipt_line.description or product.display_name,
+                    description=receipt_line.description or False,
+                    extra_vals=move_vals,
+                )
+
+            except ReceiptImportError:
+                raise
+            except Exception as line_error:
+                _logger.exception("Error import transfer receipt line %s", receipt_line.id)
+                error_messages.append(str(line_error))
+                error_line_payloads.append({
+                    'inventory_id': receipt_line.inventory_id or False,
+                    'product_name': receipt_line.description or False,
+                    'qty': receipt._parse_float(receipt_line.product_uom_qty),
+                    'uom': receipt_line.uom_code or False,
+                    'payload': move_vals if move_vals else (receipt_line.read()[0] if receipt_line.exists() else {}),
+                })
+
+        if error_messages:
+            raise ReceiptImportError(
+                '\n'.join(error_messages),
+                payload={
+                    'header': header_payload,
+                    'order_id': order.id if order else False,
+                },
+                line_payloads=error_line_payloads,
+            )
+
+        receipt.write({
+            'import_state': action_state,
+            'import_message': f'{action_state.title()}: {order.name if order else False}',
+            'odoo_internal_transfer_order_id': order.id if order else False,
+            'odoo_picking_id': False,
+        })
+        self._resolve_error_tracking(receipt)
+        return action_state
+
     def _import_single_receipt(self, receipt):
         receipt.ensure_one()
+        return receipt._import_single_receipt_as_transfer_in(receipt)
 
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
@@ -678,6 +844,9 @@ class AcumaticaTransferLine(models.Model):
                 line_payloads=error_line_payloads,
             )
 
+        if receipt.document_only:
+            picking.action_validate_document_only_import(force=True)
+
         receipt.write({
             'import_state': action_state,
             'import_message': f'{action_state.title()}: {picking.name if picking else False}',
@@ -757,6 +926,13 @@ class AcumaticaTransferLine(models.Model):
 
     def action_open_picking(self):
         self.ensure_one()
+        if self.odoo_internal_transfer_order_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'internal.transfer.order',
+                'res_id': self.odoo_internal_transfer_order_id.id,
+                'view_mode': 'form',
+            }
         if not self.odoo_picking_id:
             raise UserError('Belum diimport, belum ada transfer di Odoo.')
         return {

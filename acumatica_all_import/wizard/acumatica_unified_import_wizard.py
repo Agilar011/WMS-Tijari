@@ -208,7 +208,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'label': 'Manufacturing Order',
             'wizard_model': 'import.kit.assembly.wizard',
             'config_field': 'kit_assembly_config_id',
-            'line_model': 'acumatica.kit.assembly.line',
+            'line_model': 'acumatica.kit.assembly',
             'result_name': 'Hasil Import Manufacturing Order',
             'staging_name': 'Data Manufacturing Order dari Acumatica',
             'extra_fields': [],
@@ -290,25 +290,25 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     TRANSACTION_TYPES = [
         'po_receipt',
         'so_transfer',
-        'receipt_change_item',
-        'receipt_external',
+        # 'receipt_change_item',
+        # 'receipt_external',
         'inventory_received',
-        'toko_pegang_do',
+        # 'toko_pegang_do',
         'shipment_so',
+        'kit_assembly',
         'so_shipment',
         'transfer_shipment',
-        'issue_change_item',
+        # 'issue_change_item',
         'inventory_issue',
         'issue_po_return',
         'transfer_one_step',
         'transfer_two_step',
-        'kit_assembly',
         'invoice_consignment',
-        'inventory_issue_toko_pegang_do',
+        # 'inventory_issue_toko_pegang_do',
         'vendor_return_direct_transfer',
         'vendor_return_document_direct_transfer',
         'credit_memo_consignment',
-        'inventory_receipt_transfer_wh_in'
+        # 'inventory_receipt_transfer_wh_in'
     ]
 
     def _get_import_type_selection(self):
@@ -380,25 +380,25 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         self.config_id = config if config else False
 
     import_category = fields.Selection([
-        ('transaction', 'Transaction'),
+        ('transaction', 'Master Transaction'),
         ('master', 'Master Data'),
     ], string='Import Category', required=True, default='transaction')
 
     import_type = fields.Selection(
         selection=_get_import_type_selection,
-        string='Data to Import',
+        string='Data',
         required=True,
         default='po_receipt',
     )
     import_type_transaction = fields.Selection(
         selection=_get_import_type_selection_transaction,
-        string='Data to Import',
+        string='Data',
         required=True,
         default='po_receipt',
     )
     import_type_master = fields.Selection(
         selection=_get_import_type_selection_master,
-        string='Data to Import',
+        string='Data',
         required=True,
         default='customer',
     )

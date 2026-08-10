@@ -39,6 +39,9 @@
             <list string="Data SO Shipment" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="adt_ShipmentNbr"/>
+                <field name="adt_OrderType"/>
+                <field name="adt_ShipmentType"/>
+                <field name="adt_DocumentOnly"/>
                 <field name="adt_CustomerID"/>
                 <field name="adt_WarehouseID"/>
                 <field name="total_qty"/>

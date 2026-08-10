@@ -42,6 +42,19 @@ class ImportTransferShipmentWizard(models.TransientModel):
         return value or ''
 
     @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
+
+    def _bool_val(self, item, key):
+        return self._bool_value(item.get(key, {}))
+
+    @staticmethod
     def _normalize_rows(payload):
         if isinstance(payload, list):
             return payload
@@ -52,7 +65,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
                 return payload.get('rows')
         return []
 
-    def fetch_transfer_shipment_data(self, limit=50, offset=0, shipment_nbr=False, last_modified_from=False, odata_filter=False):
+    def fetch_transfer_shipment_data(self):
         self.ensure_one()
 
         # print("\n" + "="*60)
@@ -76,162 +89,100 @@ class ImportTransferShipmentWizard(models.TransientModel):
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-            filters = []
-
-            if self.wh33_filter:
-                filters.append("startswith(WarehouseID,'WH33')")
-            # if self.start_date and self.end_date:
-            #     filters.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+            params = {}
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-            if self.config_id.odata_select:
-                params['$select'] = self.config_id.odata_select
-            if shipment_nbr:
-                filters.append(f"ShipmentNbr eq '{shipment_nbr}'")
 
-            if self.start_date and self.end_date:
-                start_date_datetime_str = datetime.combine(
-                    fields.Date.to_date(self.start_date),
-                    time.min,
-                    tzinfo=timezone.utc,
-                ).isoformat().replace("+00:00", "Z")
-                end_date_datetime_str = datetime.combine(
-                    fields.Date.to_date(self.end_date),
-                    time.min,
-                    tzinfo=timezone.utc,
-                ).isoformat().replace("+00:00", "Z")
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{start_date_datetime_str}' and LastModifiedDateTime le datetimeoffset'{end_date_datetime_str}'")
-
-            if odata_filter:
-                filters.append(f"({odata_filter})")
-            elif self.config_id.odata_filter:
-                filters.append(f"({self.config_id.odata_filter})")
-
-            if filters:
-                params['$filter'] = ' and '.join(filters)
+            body = {
+                "BuildingID": {
+                    "value": "WH33"
+                }
+            }
 
             _logger.info("Filter API -> Endpoint: %s | Params: %s", endpoint, params)
 
-
-            response = session.get(endpoint, params=params, timeout=90)
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Transfer Shipment (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+            raw_payload = response.json()
+            raw_data = (
+                raw_payload.get('ShipmentTransferGIDetails')
+                if raw_payload
+                else None
+            ) 
             result = []
             result_line = []
+            seen_shipments = set()
 
             for row_number, item in enumerate(raw_data, start=1):
-                PickingType = self.env['stock.picking.type']
-                
-                # KOREKSI 1: Ambil string kode gudang dari dictionary JSON Acumatica secara aman
-                warehouse_code = item.get('WarehouseID', {}).get('value') if item.get('WarehouseID') else False
-                
-                print(f"Warehouse Code: {warehouse_code}")                
-                # Inisialisasi variabel ID dengan nilai False (Standar Odoo)
-                picking_type_id = False
+                shipment_nbr = self._val(item, "ShipmentNbr")
 
-                if warehouse_code:
-                    # KOREKSI 2: Gunakan tanda titik (.) untuk nama model Odoo di self.env
-                    # Pastikan nama model 'acumatica.transfer.shipment.inter.wh.out.staging.line' sesuai file py Anda
-                    staging_line_model = self.env['acumatica.transfer.shipment.line']
-                    
-                    source_wh = staging_line_model._find_warehouse_by_code(warehouse_code)
-
-                    print(f"source_wh: {source_wh}")
-                    
-                    if source_wh:
-                        picking_type = PickingType.search([
-                            ('warehouse_id', '=', source_wh.id),
-                            ('is_default_api', '=', True),
-                            ('code', '=', 'internal'),
-                        ], limit=1) or PickingType.search([('code', '=', 'outgoing')], limit=1)
-
-                        # KOREKSI 3: Gunakan variabel baru untuk menampung ID agar tidak menimpa recordset
-                        if picking_type:
-                            picking_type_id = picking_type.id
-                            print(f"Picking Type: {picking_type_id}")
-
-                if not picking_type_id:
-                    # print(f"debug : ERROR: Picking type outgoing tidak ditemukan")
-                    picking_type_id = False  # Gunakan False, bukan None
-
-                header = {
-                    'external_id': item.get('id', '') or '',
-                    'row_number': row_number,
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'actual_qty': self._val(item, 'ControlQty'),
-                    'partner_code': self._val(item, 'CustomerID'),
-                    'description': self._val(item, 'Description'),
-                    'fob_point': self._val(item, 'FOBPoint'),
-                    'is_hold': self._val(item, 'Hold'),
-                    'is_insurance': self._val(item, 'Insurance'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'header_location_code': self._val(item, 'LocationID'),
-                    'operation': self._val(item, 'Operation'),
-                    'package_count': self._val(item, 'PackageCount'),
-                    'package_weight': self._val(item, 'PackageWeight'),
-                    'is_picked': self._val(item, 'Picked'),
-                    'scheduled_date': self._val(item, 'ShipmentDate'),
-                    'shipment_nbr': self._val(item, 'ShipmentNbr'),
-                    'shipped_qty': self._val(item, 'ShippedQty'),
-                    'shipped_volume': self._val(item, 'ShippedVolume'),
-                    'shipped_weight': self._val(item, 'ShippedWeight'),
-                    'shipping_terms': self._val(item, 'ShippingTerms'),
-                    'shipping_zone': self._val(item, 'ShippingZoneID'),
-                    'ship_via': self._val(item, 'ShipVia'),
-                    'status': self._val(item, 'Status'),
-                    'warehouse_dest_code': self._val(item, 'ToWarehouseID'),
-                    'shipment_type': self._val(item, 'Type'),
-                    'warehouse_code': self._val(item, 'WarehouseID'),
-                    'is_unlimited_packages': self._val(item, 'UnlimitedPackages'),
-                    'picking_type_id' : picking_type_id
-                }
-                # print(header)
-                # result.append(header)
-
-                details = item.get('Details') or item.get('details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-                if not details:
-                    result.append(dict(header, line_nbr='0'))
-
-                    continue
-                # if header['warehouse_code']:
-                #     type = self._search_picking_type(header)
-
-                #     print(type)
-                #     header['picking_type_id'] = type.id if type else None
-                result.append(dict(header))
-
-
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    result_line.append({
-                        'shipment_external_id' : item.get('id', ''),
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'line_row_number': detail.get('rowNumber') or '',
-                        'line_description': self._val(detail, 'Description'),
-                        'is_free_item': self._val(detail, 'FreeItem'),
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'location_dest_code': self._val(detail, 'LocationID'),
-                        'open_qty': self._val(detail, 'OpenQty'),
-                        'order_qty': self._val(detail, 'OrderedQty'),
-                        'order_line_number': self._val(detail, 'OrderLineNbr'),
-                        'order_number': self._val(detail, 'OrderNbr'),
-                        'order_type': self._val(detail, 'OrderType'),
-                        'original_qty': self._val(detail, 'OriginalQty'),
-                        'product_uom_qty': self._val(detail, 'ShippedQty'),
-                        'uom_code': self._val(detail, 'UOM'),
-                        'line_warehouse_code': self._val(detail, 'WarehouseID'),
+                if shipment_nbr and shipment_nbr not in seen_shipments:
+                    seen_shipments.add(shipment_nbr)
+                    type = self._search_picking_type({
+                        'warehouse_code': self._val(item, 'WarehouseID') or self._val(item, 'LineWarehouseID'),
+                        'document_only': self._bool_val(item, 'DocumentOnly'),
                     })
+
+                    result.append({
+                        'external_id': item.get('id', '') or '',
+                        'row_number': row_number,
+                        'note': self._val(item, 'NoteHeader') or '',
+                        'building_code': self._val(item, 'BuildingID'),
+                        'actual_qty': self._val(item, 'ControlQty') or self._val(item, 'ShipmentQty'),
+                        'partner_code': self._val(item, 'CustomerID'),
+                        'customer_name': self._val(item, 'CustomerName'),
+                        'description': self._val(item, 'Description') or self._val(item, 'LineDescription'),
+                        'fob_point': self._val(item, 'FOBPoint'),
+                        'is_hold': self._val(item, 'Hold'),
+                        'is_insurance': self._val(item, 'Insurance'),
+                        'document_only': self._bool_val(item, 'DocumentOnly'),
+                        'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+                        'header_location_code': self._val(item, 'LocationID'),
+                        'location_name': self._val(item, 'LocationName'),
+                        'operation': self._val(item, 'Operation'),
+                        'package_count': self._val(item, 'PackageCount'),
+                        'package_weight': self._val(item, 'PackageWeight'),
+                        'is_picked': self._val(item, 'Picked'),
+                        'scheduled_date': self._val(item, 'ShipmentDate') or self._val(item, 'ShipDate'),
+                        'shipment_nbr': shipment_nbr,
+                        'shipped_qty': self._val(item, 'ShippedQty') or self._val(item, 'ShipmentQty'),
+                        'shipped_volume': self._val(item, 'ShippedVolume') or self._val(item, 'ShipmentVolume'),
+                        'shipped_weight': self._val(item, 'ShippedWeight') or self._val(item, 'ShipmentWeight'),
+                        'shipping_terms': self._val(item, 'ShippingTerms'),
+                        'shipping_zone': self._val(item, 'ShippingZoneID'),
+                        'ship_via': self._val(item, 'ShipVia'),
+                        'status': self._val(item, 'Status'),
+                        'warehouse_dest_code': self._val(item, 'ToWarehouseID'),
+                        'shipment_type': self._val(item, 'Type') or self._val(item, 'ShipmentType'),
+                        'warehouse_code': self._val(item, 'WarehouseID') or self._val(item, 'LineWarehouseID'),
+                        'is_unlimited_packages': self._val(item, 'UnlimitedPackages'),
+                        'picking_type_id': type.id if type else None,
+
+                    })
+
+                result_line.append({
+                    'shipment_nbr': shipment_nbr,
+                    'line_external_id': item.get('id', '') or '',
+                    'line_note': self._val(item, 'LineNote'),
+                    'line_row_number': item.get('rowNumber') or '',
+                    'line_description': self._val(item, 'LineDescription'),
+                    'is_free_item': self._val(item, 'LineFreeItem'),
+                    'inventory_id': self._val(item, 'LineInventoryID'),
+                    'line_nbr': str(self._val(item, 'LineNbr') or item.get('rowNumber') or 0),
+                    'location_dest_code': self._val(item, 'LineLocationID') or self._val(item, 'LineLocation'),
+                    'open_qty': self._val(item, 'LineOpenQty'),
+                    'order_qty': self._val(item, 'LineOrderedQty') or self._val(item, 'LineQuantity'),
+                    'order_line_number': self._val(item, 'LineOrderLineNbr'),
+                    'order_number': self._val(item, 'LineOrderNbr') or self._val(item, 'OrderNbr'),
+                    'order_type': self._val(item, 'LineOrderType') or self._val(item, 'OrderType'),
+                    'original_qty': self._val(item, 'LineOriginalQty'),
+                    'product_uom_qty': self._val(item, 'LineShippedQty') or self._val(item, 'ShippedQty') or self._val(item, 'LineQuantity'),
+                    'uom_code': self._val(item, 'LineUOM'),
+                    'line_warehouse_code': self._val(item, 'LineWarehouseID') or self._val(item, 'WarehouseID'),
+                })
 
             return result, result_line
         except Exception:
@@ -251,28 +202,18 @@ class ImportTransferShipmentWizard(models.TransientModel):
         raw_line_list = []
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
 
-        for i in range(loop_count):
-            offset = self.fetch_skip + (i * self.batch_size)
+        # for i in range(loop_count):
+        #     offset = self.fetch_skip + (i * self.batch_size)
 
-            result_dict, line_dict = self.fetch_transfer_shipment_data(
-                limit=self.batch_size,
-                offset=offset,
-                shipment_nbr=self.shipment_nbr,
-                last_modified_from=self.last_modified_from,
-                odata_filter=self.odata_filter,
-            )
+        result_dict, line_dict = self.fetch_transfer_shipment_data()
 
-            # Ambil list data dari masing-masing dictionary dengan aman
-            batch_data = result_dict if isinstance(result_dict, list) else []
-            batch_data_line = line_dict if isinstance(line_dict, list) else []
+        # Ambil list data dari masing-masing dictionary dengan aman
+        batch_data = result_dict if isinstance(result_dict, list) else []
+        batch_data_line = line_dict if isinstance(line_dict, list) else []
 
-            # Hentikan loop jika tidak ada data baru yang ditarik
-            if not batch_data and not batch_data_line:
-                break
-
-            # Masukkan data ke dalam list utama
-            raw_list.extend(batch_data)
-            raw_line_list.extend(batch_data_line)
+        # Masukkan data ke dalam list utama
+        raw_list.extend(batch_data)
+        raw_line_list.extend(batch_data_line)
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
@@ -317,7 +258,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
 
             for line in raw_line_list:
                 print(line)
-                if line.get('shipment_external_id') == item.get('external_id'):
+                if line.get('shipment_nbr') == item.get('shipment_nbr'):
                     vals_line = ({
                         'shipment_id' : created_shipment.id,
                         'line_external_id' : line.get('line_external_id'),
@@ -358,10 +299,21 @@ class ImportTransferShipmentWizard(models.TransientModel):
     def _search_picking_type(self, header):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
+        warehouse_code = header.get('warehouse_code') or header.get('line_warehouse_code')
+        type = False
+
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='transfer_shipment',
+            document_only=header.get('document_only'),
+            warehouse_code=warehouse_code,
+        )
+        if document_only_type:
+            return document_only_type
 
         location = Location.search([
-            ('code', '=', header['warehouse_code'])
-        ])
+            ('code', '=', warehouse_code),
+            ('is_active', '=', True),
+        ], limit=1)
 
         
         if location:
@@ -370,7 +322,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
                 ('warehouse_id', '=', location.odoo_building_id.id if location else False),
                 ('code', '=', 'internal'),
                 ('is_default_api', '=', True)
-            ])
+            ], limit=1)
 
         return type if type else None
 

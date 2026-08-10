@@ -18,6 +18,8 @@
         <field name="arch" type="xml">
             <list string="Data Receipt : Toko Pegang DO">
                 <field name="reference_nbr"/>
+                <field name="transfer_type"/>
+                <field name="document_only"/>
                 <field name="customer_code"/>
                 <field name="warehouse_code"/>
                 <field name="import_state" widget="badge"

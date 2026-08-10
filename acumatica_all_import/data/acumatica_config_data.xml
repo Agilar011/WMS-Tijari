@@ -30,16 +30,16 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_so_transfer_default" model="acumatica.config">
-            <field name="name">Acumatica SO Transfer - Default</field>
+            <field name="name">Acumatica SO Transfer V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">so_transfer</field>
-            <field name="endpoint_name">PurchaseReceipt</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">Type eq 'Transfer Receipt' and Status eq 'On Hold'</field>
+            <field name="endpoint_name">PurchaseReceiptGI</field>
+            <field name="odata_expand">PurchaseReceiptGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
@@ -89,16 +89,16 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_inventory_received_default" model="acumatica.config">
-            <field name="name">Acumatica Inventory Received - Default</field>
+            <field name="name">Acumatica Inventory Receipt V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">inventory_received</field>
-            <field name="endpoint_name">InventoryReceipt</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">TransType eq 'Inventory Receive' and (Status eq 'On Hold' or Status eq 'Balanced')</field>
+            <field name="endpoint_name">InventoryReceiptGI</field>
+            <field name="odata_expand">InventoryReceiptGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
@@ -133,16 +133,16 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_transfer_shipment_default" model="acumatica.config">
-            <field name="name">Acumatica Transfer Shipment - Default</field>
+            <field name="name">Acumatica Transfer Shipment V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">transfer_shipment</field>
-            <field name="endpoint_name">Shipment</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">Type eq 'Transfer' and Operation eq 'Issue'</field>
+            <field name="endpoint_name">ShipmentTransferGI</field>
+            <field name="odata_expand">ShipmentTransferGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
@@ -162,30 +162,31 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_inventory_issue_default" model="acumatica.config">
-            <field name="name">Acumatica Inventory Issue - Default</field>
+            <field name="name">Acumatica Inventory Issue V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">inventory_issue</field>
-            <field name="endpoint_name">Shipment</field>
-            <field name="odata_filter">TransType eq 'Issue' and (Status eq 'On Hold' or Status eq 'Balanced')</field>
+            <field name="endpoint_name">InventoryIssueGI</field>
+            <field name="odata_expand">InventoryIssueGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_issue_po_return_default" model="acumatica.config">
-            <field name="name">Acumatica Issue PO Return - Default</field>
+            <field name="name">Acumatica Issue PO Return V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">issue_po_return</field>
-            <field name="endpoint_name">PurchaseReceipt</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">Type eq 'Return'</field>
+            <field name="endpoint_name">PurchaseReceiptGI</field>
+            <field name="odata_expand">PurchaseReceiptGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
@@ -235,16 +236,16 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_invoice_consignment_default" model="acumatica.config">
-            <field name="name">Acumatica Invoice Consignment - Default</field>
+            <field name="name">Acumatica Invoice Consignment V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">invoice_consignment</field>
-            <field name="endpoint_name">Invoice</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">Type eq 'Invoice' and Status eq 'Open' and ConsignmentType eq 'Billing Notation'</field>
+            <field name="endpoint_name">InvoiceGI</field>
+            <field name="odata_expand">InvoiceGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>

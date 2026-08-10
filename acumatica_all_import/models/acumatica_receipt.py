@@ -72,6 +72,7 @@ class AcumaticaReceiptLine(models.Model):
     actual_qty = fields.Char(string='Control Qty')
     total_qty = fields.Char(string='Total Qty')
     is_hold = fields.Char(string='Hold')
+    document_only = fields.Boolean(string='Document Only')
     inventory_ref = fields.Char(string='Inventory Ref Nbr')
     post_period = fields.Char(string='Post Period')
     acumatica_write_date = fields.Char(string='Last Modified')
@@ -428,7 +429,7 @@ class AcumaticaReceiptLine(models.Model):
                     'product_uom_qty': qty,
                     'product_uom': uom.id if uom else product.uom_id.id,
                     'location_id': picking.location_id.id if picking else False,
-                    'location_dest_id': picking.location_dest_id.id if picking else False,
+                    'location_dest_id': adt_dest_location,
                     'warehouse_id': warehouse.id if warehouse else False,
                     'description_picking': receipt_line.description or False,
                     'adt_dest_location_id': adt_dest_location,
@@ -480,6 +481,9 @@ class AcumaticaReceiptLine(models.Model):
                 },
                 line_payloads=all_line_payloads,
             )
+
+        if receipt.document_only:
+            picking.action_validate_document_only_import(force=True)
 
         receipt.write({
             'import_state': action_state,

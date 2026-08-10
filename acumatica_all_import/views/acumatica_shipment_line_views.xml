@@ -39,6 +39,7 @@
         <field name="arch" type="xml">
             <list string="Data SO Return" multi_edit="1">
                 <field name="shipment_nbr"/>
+                <field name="shipment_type"/>
                 <field name="warehouse_code" string="Warehouse"/>
                 <field name="partner_code"/>
                 <field name="actual_qty" string="Qty"/>

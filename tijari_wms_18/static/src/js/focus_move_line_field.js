@@ -5,10 +5,114 @@ import { useService } from "@web/core/utils/hooks";
 import { Component } from "@odoo/owl";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 
+const ZXING_BROWSER_CDN_URLS = [
+    "/tijari_wms_18/static/src/lib/zxing-browser.min.js",
+    "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js",
+    "https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js",
+];
 const SCANNER_FALLBACK_MESSAGE = "Scanner kamera tidak tersedia. Input manual diaktifkan.";
+
+let zxingBrowserLoadPromise = null;
 
 function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loadScript(src) {
+    const existingScript = document.querySelector(`script[src="${src}"]`);
+    if (existingScript) {
+        return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error("Library scanner gagal dimuat."));
+        document.head.append(script);
+    });
+}
+
+async function loadZxingBrowser() {
+    if (window.ZXingBrowser) {
+        return window.ZXingBrowser;
+    }
+
+    zxingBrowserLoadPromise = zxingBrowserLoadPromise || (async () => {
+        let lastError = null;
+        for (const src of ZXING_BROWSER_CDN_URLS) {
+            try {
+                await loadScript(src);
+                if (window.ZXingBrowser) {
+                    return;
+                }
+            } catch (error) {
+                lastError = error;
+            }
+        }
+        throw lastError || new Error("Library scanner gagal dimuat.");
+    })();
+    await zxingBrowserLoadPromise;
+
+    if (!window.ZXingBrowser) {
+        throw new Error("Library scanner tidak tersedia.");
+    }
+
+    return window.ZXingBrowser;
+}
+
+function getScannerErrorMessage(error) {
+    const name = error?.name || "";
+    const message = error?.data?.message || error?.data?.arguments?.[0] || error?.message || "";
+
+    if (!window.isSecureContext) {
+        return "Akses kamera butuh HTTPS. Pastikan halaman dibuka lewat https://wms-aditya.duckdns.org.";
+    }
+    if (name === "NotAllowedError" || name === "SecurityError") {
+        return "Akses kamera ditolak. Izinkan camera permission untuk situs WMS di browser dan OS.";
+    }
+    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        return "Kamera tidak ditemukan di device ini.";
+    }
+    if (name === "NotReadableError" || name === "TrackStartError") {
+        return "Kamera tidak bisa dibuka. Tutup aplikasi/tab lain yang sedang memakai kamera, lalu coba lagi.";
+    }
+    if (name === "OverconstrainedError" || name === "ConstraintNotSatisfiedError") {
+        return "Kamera tersedia, tapi constraint kamera tidak cocok. Coba pilih/aktifkan kamera lain.";
+    }
+
+    return message || SCANNER_FALLBACK_MESSAGE;
+}
+
+function isCameraAccessError(error) {
+    return [
+        "NotAllowedError",
+        "SecurityError",
+        "NotFoundError",
+        "DevicesNotFoundError",
+        "NotReadableError",
+        "TrackStartError",
+        "OverconstrainedError",
+        "ConstraintNotSatisfiedError",
+    ].includes(error?.name || "");
+}
+
+function isCameraRetryableError(error) {
+    return [
+        "NotFoundError",
+        "DevicesNotFoundError",
+        "OverconstrainedError",
+        "ConstraintNotSatisfiedError",
+    ].includes(error?.name || "");
+}
+
+function notifyScannerError(envOrService, error) {
+    const notification = envOrService?.services?.notification || envOrService;
+    notification?.add?.(getScannerErrorMessage(error), {
+        title: "Scan barcode gagal",
+        type: "danger",
+    });
 }
 
 function findRowById(recordId) {
@@ -123,6 +227,15 @@ function applyMoveLineScanResult(action, result) {
     }
     if (Object.prototype.hasOwnProperty.call(result, "matching_loc_dest_id")) {
         setCellText(row, "matching_loc_dest_id", result.matching_loc_dest_id?.[1] || "");
+    }
+    if (Object.prototype.hasOwnProperty.call(result, "location_dest_id")) {
+        setCellText(row, "location_dest_id", result.location_dest_id?.[1] || "");
+    }
+    if (Object.prototype.hasOwnProperty.call(result, "location_putaway_id")) {
+        setCellText(row, "location_putaway_id", result.location_putaway_id?.[1] || "");
+    }
+    if (Object.prototype.hasOwnProperty.call(result, "putaway_status")) {
+        setBadgeCell(row, "putaway_status", result.putaway_status_label || result.putaway_status, result.putaway_status);
     }
 }
 
@@ -291,15 +404,66 @@ function createScannerDialog(title) {
     overlay.append(dialog);
     document.body.append(overlay);
 
-    return { overlay, video, closeButton };
+    return { overlay, video, closeButton, status };
 }
 
 function stopStream(stream) {
     stream?.getTracks?.().forEach((track) => track.stop());
 }
 
+function getVideoConstraintCandidates() {
+    return [
+        {
+            video: {
+                facingMode: { ideal: "environment" },
+            },
+            audio: false,
+        },
+        {
+            video: true,
+            audio: false,
+        },
+    ];
+}
+
+async function getUserMediaWithFallback() {
+    let lastError = null;
+
+    for (const constraints of getVideoConstraintCandidates()) {
+        try {
+            return await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (error) {
+            lastError = error;
+            if (!isCameraRetryableError(error)) {
+                throw error;
+            }
+        }
+    }
+
+    throw lastError || new Error(SCANNER_FALLBACK_MESSAGE);
+}
+
 async function scanQrFromCamera(title) {
-    if (!navigator.mediaDevices?.getUserMedia || !window.BarcodeDetector) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(SCANNER_FALLBACK_MESSAGE);
+    }
+
+    try {
+        return await scanQrWithZxing(title);
+    } catch (zxingError) {
+        if (isCameraAccessError(zxingError)) {
+            throw zxingError;
+        }
+        if (!window.BarcodeDetector) {
+            throw zxingError;
+        }
+    }
+
+    return scanQrWithBarcodeDetector(title);
+}
+
+async function scanQrWithBarcodeDetector(title) {
+    if (!window.BarcodeDetector) {
         throw new Error(SCANNER_FALLBACK_MESSAGE);
     }
 
@@ -319,12 +483,7 @@ async function scanQrFromCamera(title) {
     dialog.closeButton.addEventListener("click", close);
 
     try {
-        stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { ideal: "environment" },
-            },
-            audio: false,
-        });
+        stream = await getUserMediaWithFallback();
         dialog.video.srcObject = stream;
         await dialog.video.play();
 
@@ -361,6 +520,71 @@ async function scanQrFromCamera(title) {
     }
 }
 
+async function scanQrWithZxing(title) {
+    const ZXingBrowser = await loadZxingBrowser();
+    const dialog = createScannerDialog(title);
+    let controls = null;
+    let stopped = false;
+
+    const close = () => {
+        if (stopped) {
+            return;
+        }
+        stopped = true;
+        controls?.stop?.();
+        dialog.overlay.remove();
+    };
+
+    dialog.closeButton.addEventListener("click", close);
+    dialog.status.textContent = "Membuka kamera...";
+
+    try {
+        const codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+        const constraintsCandidates = getVideoConstraintCandidates();
+
+        return await new Promise((resolve, reject) => {
+            dialog.closeButton.addEventListener("click", () => reject(new Error("Scan dibatalkan.")), {
+                once: true,
+            });
+
+            const startScan = (index) => {
+                const constraints = constraintsCandidates[index];
+                codeReader.decodeFromConstraints(
+                    constraints,
+                    dialog.video,
+                    (result) => {
+                        const value = result?.getText?.() || result?.text;
+                        if (!value) {
+                            return;
+                        }
+
+                        close();
+                        resolve(value);
+                    }
+                ).then(
+                    (scanControls) => {
+                        controls = scanControls;
+                        dialog.status.textContent = "Arahkan kamera ke QR/barcode.";
+                    },
+                    (error) => {
+                        if (isCameraRetryableError(error) && index < constraintsCandidates.length - 1) {
+                            startScan(index + 1);
+                            return;
+                        }
+                        close();
+                        reject(error);
+                    }
+                );
+            };
+
+            startScan(0);
+        });
+    } catch (error) {
+        close();
+        throw error;
+    }
+}
+
 async function scanQrToMoveLineField(env, action) {
     const params = action.params || {};
     const fieldName = params.field_name;
@@ -384,6 +608,7 @@ async function scanQrToMoveLineField(env, action) {
             await setMoveLineFieldValue(action, scannedCode);
         }
     } catch (error) {
+        notifyScannerError(env, error);
         await focusMoveLineField(env, action);
     }
 }
@@ -405,6 +630,29 @@ async function scanQrToPickingProduct(env, action) {
             [[resId], scannedCode]
         );
     } catch (error) {
+        notifyScannerError(env, error);
+        return;
+    }
+}
+
+async function scanQrToPickingPackage(env, action) {
+    const params = action.params || {};
+    const resModel = params.res_model || "stock.picking";
+    const resId = params.res_id || params.picking_id;
+
+    if (!resId) {
+        return;
+    }
+
+    try {
+        const scannedCode = await scanQrFromCamera(params.title);
+        await env.services.orm.call(
+            resModel,
+            "action_apply_scanned_package",
+            [[resId], scannedCode]
+        );
+    } catch (error) {
+        notifyScannerError(env, error);
         return;
     }
 }
@@ -414,9 +662,18 @@ class MoveLineScanButton extends Component {
 
     setup() {
         this.orm = useService("orm");
+        this.notification = useService("notification");
     }
 
     get fieldName() {
+        const pickingTypeName = this.props.record.data?.picking_type_name;
+        const isPickFlow = ["Pick", "Pick Internal", "Pick Components"].includes(pickingTypeName);
+        if (isPickFlow && this.constructor.scanFieldName === "confirmation_lot_code") {
+            return "matching_lot_id";
+        }
+        if (isPickFlow && this.constructor.scanFieldName === "confirmation_location_code") {
+            return "matching_loc_dest_id";
+        }
         return this.constructor.scanFieldName;
     }
 
@@ -440,15 +697,25 @@ class MoveLineScanButton extends Component {
         let scannedCode;
         try {
             scannedCode = await scanQrFromCamera(this.title);
-        } catch {
+        } catch (error) {
+            notifyScannerError(this.notification, error);
             return;
         }
 
-        await this.orm.call(
+        const result = await this.orm.call(
             "stock.move.line",
             "action_apply_scanned_field",
             [[moveLineId], this.fieldName, scannedCode]
         );
+        const updates = {};
+        for (const fieldName of ["matching_lot_id", "matching_loc_dest_id"]) {
+            if (Object.prototype.hasOwnProperty.call(result || {}, fieldName)) {
+                updates[fieldName] = result[fieldName] || false;
+            }
+        }
+        if (Object.keys(updates).length) {
+            await this.props.record.update(updates);
+        }
         await this.props.record.load();
     }
 }
@@ -473,6 +740,11 @@ class ProductScanButton extends Component {
 
     setup() {
         this.orm = useService("orm");
+        this.notification = useService("notification");
+    }
+
+    get applyMethodName() {
+        return "action_apply_scanned_product";
     }
 
     async onClick(ev) {
@@ -487,13 +759,55 @@ class ProductScanButton extends Component {
         let scannedCode;
         try {
             scannedCode = await scanQrFromCamera("Scan Product QR Code");
-        } catch {
+        } catch (error) {
+            notifyScannerError(this.notification, error);
             return;
         }
 
         await this.orm.call(
             resModel,
-            "action_apply_scanned_product",
+            this.applyMethodName,
+            [[resId], scannedCode]
+        );
+        await this.props.record.load();
+    }
+}
+
+class PickerProductScanButton extends ProductScanButton {
+    get applyMethodName() {
+        return "action_apply_scanned_picker_product";
+    }
+}
+
+class PackageScanButton extends Component {
+    static props = { ...standardFieldProps };
+    static template = "tijari.PackageScanButton";
+
+    setup() {
+        this.orm = useService("orm");
+        this.notification = useService("notification");
+    }
+
+    async onClick(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+
+        const { resId, resModel } = this.props.record;
+        if (!resId || !resModel) {
+            return;
+        }
+
+        let scannedCode;
+        try {
+            scannedCode = await scanQrFromCamera("Scan Package QR Code");
+        } catch (error) {
+            notifyScannerError(this.notification, error);
+            return;
+        }
+
+        await this.orm.call(
+            resModel,
+            "action_apply_scanned_package",
             [[resId], scannedCode]
         );
         await this.props.record.load();
@@ -503,6 +817,7 @@ class ProductScanButton extends Component {
 registry.category("actions").add("adt_focus_move_line_field", focusMoveLineField);
 registry.category("actions").add("adt_scan_qr_to_move_line_field", scanQrToMoveLineField);
 registry.category("actions").add("adt_scan_qr_to_picking_product", scanQrToPickingProduct);
+registry.category("actions").add("adt_scan_qr_to_picking_package", scanQrToPickingPackage);
 registry.category("fields").add("adt_scan_lot_button", {
     component: MoveLineScanLotButton,
 });
@@ -511,5 +826,11 @@ registry.category("fields").add("adt_scan_location_button", {
 });
 registry.category("fields").add("adt_scan_product_button", {
     component: ProductScanButton,
+});
+registry.category("fields").add("adt_scan_picker_product_button", {
+    component: PickerProductScanButton,
+});
+registry.category("fields").add("adt_scan_package_button", {
+    component: PackageScanButton,
 });
 // registry.category("actions").add("adt_scan_qr_to_move_line_field", focusMoveLineField);

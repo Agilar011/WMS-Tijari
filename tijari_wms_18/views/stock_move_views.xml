@@ -36,7 +36,7 @@
                         type="object"
                         string="Validate Lot"
                         class="btn-warning"
-                        invisible="not display_assign_serial"/>
+                        invisible="not display_assign_serial or picking_type_name in ['Receipts', 'Receipt Internal']"/>
                 </span>
             </xpath>
 
@@ -70,6 +70,10 @@
             </xpath>
 
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
+                    <field name="adt_type" column_invisible="1"/>
+                    <field name="owner_id" column_invisible="parent.adt_type != 'Toko Pegang DO'"/>
+                    <field name="adt_dest_location_id"/>
+                    <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
@@ -82,9 +86,10 @@
                         invisible="picking_type_name not in ['Receipts', 'Receipt Internal'] or state == 'draft'"/>
             </xpath>
 
-            <xpath expr="//field[@name='quantity']" position="after">
-                <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
-                <field name="confirmation_quantity" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='quantity']" position="replace">
+                <field name="quantity" string="Picked Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="confirmation_quantity" string="Stored Qty" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
             </xpath>
 
         </field>
@@ -107,6 +112,8 @@
         <field name="model">stock.move</field>
         <field name="arch" type="xml">
             <form>
+                <field name="adt_type" invisible="1"/>
+                <field name="owner_id" invisible="1"/>
                 <div class="grid-container">
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                         
@@ -138,7 +145,8 @@
                         'default_location_id': location_id, 
                         'default_location_dest_id': location_dest_id,
                         'default_company_id': company_id, 
-                        'active_picking_id': picking_id
+                        'active_picking_id': picking_id,
+                        'copy_previous_picker_location': True
                     }"
                     widget="sml_x2_many">
                     <list editable="bottom">
@@ -151,14 +159,26 @@
                         <field name="tracking" column_invisible="1"/>
                         <field name="state" column_invisible="1"/>
                         <field name="is_locked" column_invisible="1"/>
-                        <field name="quant_id" column_invisible="1"/>
+                        <field name="temp_quant_ids" column_invisible="1"/>
+                        <field name="temp_lot_ids" column_invisible="1"/>
+                        <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1"/>
                         <field name="lot_id" string="Lot/Serial Number" readonly="1" force_save="1" groups="stock.group_production_lot"/>
                         <field name="lot_name" readonly="1" force_save="1" optional="hide"/>
                         <field name="result_package_id" readonly="1" force_save="1" string="Packages"/>
 
-                        <field name="quantity" string="Qty In Pack"/>
-                        <field name="product_uom_id" string="Uom"/>
+                        <field name="quantity" string="Qty In Pack" readonly="picker_status == 'finished'"/>
+                        <field name="product_uom_id" string="Uom" readonly="picker_status == 'finished'"/>
+                        <field name="picker_status" string="Status"
+                                decoration-success="picker_status == 'finished'"
+                                decoration-danger="picker_status == 'unfinished'"
+                                widget="badge"/>
+                        <button name="action_mark_picker_finished"
+                                type="object"
+                                icon="fa-check"
+                                class="btn-success o_wms_auto_save_before_action"
+                                title="Finish Picker"
+                                invisible="picker_status == 'finished'"/>
 
                     </list>
                 </field>

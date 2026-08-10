@@ -27,7 +27,7 @@
                        decoration-warning="import_state == 'pending'"/>
                 <field name="import_message"/>
                 <field name="sync_date"/>
-                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <!-- <button name="action_import_this" string="Import" type="object" icon="fa-upload"/> -->
             </list>
         </field>
     </record>
@@ -53,10 +53,7 @@
                             <field name="kode_barang_dan_jasa"/>
                         </group>
                         <group string="Quantity">
-                            <field name="available"/>
                             <field name="on_hand_acumatica"/>
-                            <field name="odoo_on_hand"/>
-                            <field name="match_status" readonly="1"/>
                         </group>
                     </group>
                     <group>

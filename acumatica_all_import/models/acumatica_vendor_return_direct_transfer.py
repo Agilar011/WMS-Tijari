@@ -40,7 +40,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_note = fields.Char(string="Note Header")
     adt_Date = fields.Char(string="Transfer Date")
     adt_Description = fields.Char(string="Description Header")
-    adt_DocumentOnly = fields.Char(string="Document Only")
+    adt_DocumentOnly = fields.Boolean(string="Document Only")
     adt_ExternalRef = fields.Char(string="External Ref")
     adt_FromWarehouseID = fields.Char(string="From Warehouse ID")
     adt_Hold = fields.Boolean(string="Hold Status")
@@ -54,6 +54,148 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_ToWarehouseID = fields.Char(string="To Warehouse ID")
     adt_TransferType = fields.Char(string="Transfer Type")
     adt_TransType = fields.Char(string="Transaction Type")
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        records._fill_vendor_return_picking_type()
+        return records
+
+    def write(self, vals):
+        result = super().write(vals)
+        if 'picking_type_id' not in vals and {'adt_FromWarehouseID', 'adt_DocumentOnly'} & set(vals):
+            self._fill_vendor_return_picking_type()
+        return result
+
+    def _resolve_vendor_return_picking_type(self, warehouse_code=False):
+        PickingType = self.env['stock.picking.type'].sudo()
+        picking_type = PickingType.resolve_document_only_picking_type(
+            target_operation_type='direct_delivery_order',
+            api_acumatica='vendor_return',
+            document_only=True,
+            warehouse_code=warehouse_code,
+        )
+        if picking_type:
+            return picking_type
+
+        warehouse = self._find_warehouse_by_code(warehouse_code)
+        domain = [
+            ('code', '=', 'outgoing'),
+            ('is_default_api', '=', True),
+        ]
+        if warehouse:
+            domain.append(('warehouse_id', '=', warehouse.id))
+        picking_type = PickingType.search(domain, limit=1)
+        if picking_type:
+            return picking_type
+
+        return PickingType.search([
+            ('code', '=', 'outgoing'),
+            ('is_default_api', '=', True),
+        ], limit=1)
+
+    def _fill_vendor_return_picking_type(self):
+        for rec in self:
+            if rec.picking_type_id:
+                continue
+            picking_type = rec._resolve_vendor_return_picking_type(rec.adt_FromWarehouseID)
+            if picking_type:
+                rec.picking_type_id = picking_type.id
+        return True
+
+    def action_fill_picking_type_id(self):
+        self._fill_vendor_return_picking_type()
+        missing = self.filtered(lambda rec: not rec.picking_type_id)
+        if missing:
+            raise UserError(
+                'Picking Type Direct Delivery Order tidak ditemukan untuk: %s'
+                % ', '.join(missing.mapped('adt_ReferenceNbr'))
+            )
+        return True
+
+    def _get_or_create_consignment_location(
+        self, source_location=False, customer_code=False, cons_location_code=False
+    ):
+        Location = self.env['stock.location'].sudo()
+        if not source_location:
+            raise UserError('Source location wajib diisi untuk membuat lokasi consignment.')
+
+        customer_code = (customer_code or '').strip() or 'Unknown Customer'
+        cons_location_code = (cons_location_code or '').strip() or 'Consignment'
+
+        def get_or_create_child(parent, name, is_consignment=False):
+            location = Location.search([
+                ('location_id', '=', parent.id),
+                ('name', '=', name),
+            ], limit=1)
+            vals = {
+                'name': name,
+                'usage': 'internal',
+                'location_id': parent.id,
+            }
+            if source_location.company_id:
+                vals['company_id'] = source_location.company_id.id
+            if 'is_consignment' in Location._fields:
+                vals['is_consignment'] = is_consignment
+            if location:
+                write_vals = {}
+                if is_consignment and not location.is_consignment:
+                    write_vals['is_consignment'] = True
+                if write_vals:
+                    location.write(write_vals)
+                return location
+            return Location.create(vals)
+
+        warehouse_root = source_location
+        warehouse = self.env['stock.warehouse'].sudo().search([]).filtered(
+            lambda wh: source_location.parent_path.startswith(wh.view_location_id.parent_path)
+        )[:1]
+        if warehouse:
+            warehouse_root = warehouse.view_location_id
+
+        cons_root = get_or_create_child(warehouse_root, 'CONS')
+        customer_location = get_or_create_child(cons_root, customer_code)
+        return get_or_create_child(
+            customer_location,
+            cons_location_code,
+            is_consignment=True,
+        )
+
+    def _get_vendor_return_base_location(self, first, picking_type):
+        destination_warehouse = self._find_warehouse_by_code(first.adt_ToWarehouseID)
+        if destination_warehouse and destination_warehouse.lot_stock_id:
+            return destination_warehouse.lot_stock_id
+        return picking_type.default_location_src_id
+
+    def _get_vendor_return_source_location(self, first, picking_type):
+        warehouse_src = self._find_warehouse_by_code(first.adt_FromWarehouseID)
+        if warehouse_src and warehouse_src.lot_stock_id:
+            return warehouse_src.lot_stock_id
+
+        base_location = self._get_vendor_return_base_location(first, picking_type)
+        if not base_location:
+            raise UserError(
+                f"Lokasi basis consignment tidak ditemukan untuk Vendor Return {first.adt_ReferenceNbr or '-'}."
+            )
+
+        first_line = first.line_ids[:1]
+        cons_location_code = (
+            (first_line.adt_FromLocationID if first_line else False)
+            or (first_line.adt_ToLocationID if first_line else False)
+            or first.adt_FromWarehouseID
+            or 'Consignment'
+        )
+        return self._get_or_create_consignment_location(
+            base_location,
+            first.adt_FromWarehouseID,
+            cons_location_code,
+        )
+
+    def _get_vendor_return_destination_location(self, first, picking_type):
+        destination_warehouse = self._find_warehouse_by_code(first.adt_ToWarehouseID)
+        if destination_warehouse and destination_warehouse.lot_stock_id:
+            return destination_warehouse.lot_stock_id
+        return picking_type.default_location_dest_id
 
     # =========================================================================
     # CORE PROCESS FUNCTIONS FOR DIRECT TRANSFER IMPORT
@@ -72,9 +214,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         return self._do_import()
 
     def _do_import(self):
-        """Fungsi utama eksekusi pembuatan dokumen Stock Picking & Stock Move"""
-        Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
+        """Fungsi utama eksekusi pembuatan dokumen Internal Transfer Order."""
 
         imported = 0
         updated = 0
@@ -83,7 +223,10 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         # Ambil daftar unik reference number agar tidak memproses dokumen yang sama berulang kali
         for reference_nbr in self.mapped('adt_ReferenceNbr'):
             receipt_lines = self.filtered(
-                lambda l: l.adt_ReferenceNbr == reference_nbr and l.import_state in ['pending', 'error']
+                lambda l: l.adt_ReferenceNbr == reference_nbr and (
+                    l.import_state in ['pending', 'error']
+                    or not l.odoo_internal_transfer_order_id
+                )
             )
             if not receipt_lines:
                 continue
@@ -103,38 +246,42 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 with self.env.cr.savepoint():
                     print(f"[DIRECT TRANSFER] Processing Document: {origin}")
 
-                    transfer_service = self.env['acumatica.internal.transfer.service']
-                    transfer_info = transfer_service.classify(
-                        first.adt_FromWarehouseID,
-                        first.adt_ToWarehouseID,
-                        'FromWarehouseID',
-                        'ToWarehouseID',
-                    )
-                    if transfer_info['status'] == 'skip':
-                        receipt_lines.write({
-                            'import_state': 'updated',
-                            'import_message': transfer_info['message'],
-                            'odoo_picking_id': False,
-                            'odoo_internal_transfer_order_id': False,
-                        })
-                        updated += 1
-                        continue
+                    # Tentukan jenis operasi picking (Operation Type)
+                    first._fill_vendor_return_picking_type()
+                    picking_type = first.picking_type_id
+                    if not picking_type:
+                        raise UserError(f"Picking type (Operation Type) belum diatur pada header staging ID {first.id}.")
 
+                    source_location = self._get_vendor_return_source_location(first, picking_type)
+                    dest_location = self._get_vendor_return_destination_location(first, picking_type)
+                    if not source_location:
+                        raise UserError(f"Lokasi asal tidak ditemukan untuk code: {first.adt_FromWarehouseID or '-'}.")
+                    if not dest_location:
+                        raise UserError(f"Lokasi tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}.")
+
+                    transfer_service = self.env['acumatica.internal.transfer.service']
                     order, action_state = transfer_service.prepare_order(
                         origin,
-                        transfer_info['source_location'],
-                        transfer_info['destination_location'],
-                        transfer_info['transaction_type'],
+                        source_location,
+                        dest_location,
+                        'vendor_return',
                         self._parse_dt(first.adt_Date),
                         first.adt_note or False,
+                        transfer_type='transfer_out',
                     )
 
                     for line in to_create_move_lines:
+                        # Cari data produk Odoo berdasarkan InventoryID Acumatica
                         product = self._find_product_by_code(line.adt_InventoryID)
                         if not product:
                             raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or '-'}")
+
+                        # Cari data satuan (UOM)
+                        # uom = self._find_uom_by_name(line.adt_UOM, product)
                         qty = self._parse_float(line.adt_Quantity)
+
                         transfer_service.create_order_move(order, product, qty, product.uom_id, line.adt_Description or product.display_name, line.adt_Description or False, {
+                            'description_picking': line.adt_Description or False,
                             'adt_line_external_id': line.adt_id or False,
                             'adt_inventory_id': line.adt_InventoryID or False,
                             'adt_line_nbr': line.adt_rowNumber or False,
@@ -147,143 +294,19 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             'adt_transfer_order_line_number': line.adt_LineNumber or line.adt_rowNumber or False,
                             'adt_transfer_order_type': first.adt_TransferType or first.adt_ReturnType or False,
                             'adt_quantity': qty,
-                            'adt_type': first.adt_TransferType or 'Vendor Return CO',
+                            'adt_type': 'Vendor Return',
+                            'transaction_type': 'internal',
                         })
 
-                    receipt_lines.write({
+                    # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
+                    first.write({
                         'import_state': action_state,
                         'import_message': f'Sukses diproses ke Internal Transfer ({order.name})',
                         'odoo_picking_id': False,
                         'odoo_internal_transfer_order_id': order.id,
                     })
+
                     if action_state == 'imported':
-                        imported += 1
-                    else:
-                        updated += 1
-                    continue
-
-                    # Tentukan jenis operasi picking (Operation Type)
-                    picking_type = first.picking_type_id
-                    if not picking_type:
-                        raise UserError(f"Picking type (Operation Type) belum diatur pada header staging ID {first.id}.")
-
-                    # Cari master data gudang asal (FromWarehouseID)
-                    warehouse_src = self._find_warehouse_by_code(first.adt_FromWarehouseID)
-                    if not warehouse_src:
-                        warehouse_src = picking_type.default_location_src_id.id
-                        # raise UserError(f"Gudang asal tidak ditemukan untuk code: {first.adt_FromWarehouseID or '-'}")
-
-                    # Cari master data gudang tujuan (ToWarehouseID)
-                    warehouse_dest = self._find_warehouse_by_code(first.adt_ToWarehouseID)
-                    if not warehouse_dest:
-                        warehouse_dest = picking_type.default_location_dest_id.id
-                        # raise UserError(f"Gudang tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}")
-
-
-                    # Definisikan dictionary payload data stock.picking Odoo
-                    vals = {
-                        'picking_type_id': picking_type.id,
-                        'location_id': picking_type.default_location_src_id.id or warehouse_src.lot_stock_id.id,
-                        'location_dest_id': picking_type.default_location_dest_id.id or warehouse_dest.lot_stock_id.id,
-                        'scheduled_date': self._parse_dt(first.adt_Date),
-                        'origin': origin,
-                        'note': first.adt_note or False,
-                        
-                        # Sinkronisasi Field Kustom ke Tabel stock.picking (jika kolomnya eksis)
-                        'adt_receipt_nbr': origin,
-                        'adt_branch_warehouse': first.adt_PostPeriod or False,
-                        'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
-                        'adt_status': first.adt_Status or False,
-                        # 'adt_type': first.adt_Type or False,
-                        'adt_external_id': first.adt_id or False,
-                    }
-
-                    # Filter field agar steril dari KeyError field kustom yang tidak terdaftar di stock.picking
-                    vals = {k: v for k, v in vals.items() if k in Picking._fields}
-
-                    # Cek pencegahan duplikasi (Dedup Dokumen via Origin)
-                    picking = Picking.search([('origin', '=', origin)], limit=1)
-                    is_new_picking = False
-
-                    if picking:
-                        if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
-                            raise UserError(f"Dokumen {origin} sudah divalidasi di Odoo (State: {picking.state}), update digagalkan.")
-                        picking.write(vals)
-                        action_state = 'updated'
-                    else:
-                        picking = Picking.create(vals)
-                        is_new_picking = True
-                        action_state = 'imported'
-
-                    # ---------------------------------------------------------
-                    # BULK CREATION STOCK MOVES (DETAIL LINES)
-                    # ---------------------------------------------------------
-                    moves_to_create = []
-
-                    for line in to_create_move_lines:
-                        # Cari data produk Odoo berdasarkan InventoryID Acumatica
-                        product = self._find_product_by_code(line.adt_InventoryID)
-                        if not product:
-                            raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or '-'}")
-
-                        # Cari data satuan (UOM)
-                        # uom = self._find_uom_by_name(line.adt_UOM, product)
-                        qty = self._parse_float(line.adt_Quantity)
-
-                        # Tentukan lokasi detail per baris barang secara spesifik (jika ada)
-                        line_loc_src = picking.location_id
-                        line_loc_dest = picking.location_dest_id
-
-                        # DEDUP LOGIKA: Mengunci kombinasi ID Produk + Nomor Baris asli Acumatica
-                        move_domain = [('picking_id', '=', picking.id)]
-                        if 'adt_line_external_id' in Move._fields and line.adt_id:
-                            move_domain.append(('adt_line_external_id', '=', line.adt_id))
-                        else:
-                            move_domain += [
-                                ('product_id', '=', product.id),
-                                ('adt_line_nbr', '=', line.adt_rowNumber or False)
-                            ]
-
-                        existing_move = Move.search(move_domain, limit=1)
-                        if existing_move:
-                            continue
-
-                        # Bangun dictionary baris barang tunggal
-                        single_move_vals = {
-                            'name': line.adt_Description or product.display_name,
-                            'picking_id': picking.id,
-                            'product_id': product.id,
-                            'product_uom_qty': qty,
-                            'product_uom': product.uom_id.id,
-                            'location_id': line_loc_src.id,
-                            'location_dest_id': line_loc_dest.id,
-                            'description_picking': line.adt_Description or False,
-                            
-                            # Custom tracking audit trail
-                            'adt_line_external_id': line.adt_id or False,
-                            'adt_inventory_id': line.adt_InventoryID or False,
-                            'adt_line_nbr': line.adt_rowNumber or False,
-                            'adt_open_qty': qty,
-                            'adt_order_qty': qty,
-                            'adt_uom_code': line.adt_UOM or False,
-                        }
-
-                        # Sterilkan data dari Invalid Field khusus stock.move
-                        single_move_vals = {k: v for k, v in single_move_vals.items() if k in Move._fields}
-                        moves_to_create.append(single_move_vals)
-
-                    # Eksekusi pembuatan seluruh Stock Moves secara massal di luar perulangan
-                    if moves_to_create:
-                        Move.create(moves_to_create)
-
-                    # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
-                    first.write({
-                        'import_state': action_state,
-                        'import_message': f'Sukses diproses ke Odoo ({picking.name})',
-                        'odoo_picking_id': picking.id,
-                    })
-
-                    if is_new_picking:
                         imported += 1
                     else:
                         updated += 1
@@ -352,6 +375,8 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     def action_open_picking(self):
         self.ensure_one()
         if self.odoo_internal_transfer_order_id:
+            if self.odoo_internal_transfer_order_id.picking_count:
+                return self.odoo_internal_transfer_order_id.action_view_pickings()
             return {
                 'type': 'ir.actions.act_window',
                 'res_model': 'internal.transfer.order',

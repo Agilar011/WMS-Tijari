@@ -247,8 +247,8 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                         if type_record:
                             created_header.write({'picking_type_id': type_record.id if type_record else False})
 
-                        if not type_record:
-                            raise UserError("Picking type untuk warehouse tersebut tidak ditemukan")
+                        # if not type_record:
+                        #     raise UserError("Picking type untuk warehouse tersebut tidak ditemukan")
                                 
 
 

@@ -17,6 +17,7 @@
         <field name="arch" type="xml">
             <search string="Cari Data Issue : Change Item">
                 <field name="reference_nbr"/>
+                <field name="document_only"/>
                 <field name="inventory_id"/>
                 <field name="line_description"/>
                 <field name="import_state"/>
@@ -34,6 +35,7 @@
             <list string="Data Issue : Change Item" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="reference_nbr"/>
+                <field name="trans_type"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
                 <!-- <field name="line_description"/> -->

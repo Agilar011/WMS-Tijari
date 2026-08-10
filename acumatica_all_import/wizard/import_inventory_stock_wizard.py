@@ -46,13 +46,113 @@ class ImportInventoryStockWizard(models.TransientModel):
         if not self.config_id:
             return
         self.odata_expand = self.config_id.odata_expand or self.odata_expand
-        self.odata_top = self.config_id.odata_top or self.odata_top
-        self.warehouse_value = self.config_id.request_warehouse_value or self.warehouse_value
-        self.inventory_id_value = self.config_id.request_inventory_id_value or self.inventory_id_value
+        if 'odata_top' in self.config_id._fields:
+            self.odata_top = self.config_id.odata_top or self.odata_top
+        if 'request_warehouse_value' in self.config_id._fields:
+            self.warehouse_value = self.config_id.request_warehouse_value or self.warehouse_value
+        if 'request_inventory_id_value' in self.config_id._fields:
+            self.inventory_id_value = self.config_id.request_inventory_id_value or self.inventory_id_value
+
+    @staticmethod
+    def _val(item, key):
+        value = item.get(key, {})
+        if isinstance(value, dict):
+            return value.get('value', '') or ''
+        return value or ''
+
+    @staticmethod
+    def _normalize_rows(payload):
+        if isinstance(payload, list):
+            return payload
+        if isinstance(payload, dict):
+            if isinstance(payload.get('value'), list):
+                return payload.get('value')
+            if isinstance(payload.get('rows'), list):
+                return payload.get('rows')
+            return [payload]
+        return []
+
+    @staticmethod
+    def _parse_float(value):
+        try:
+            return float(value or 0)
+        except Exception:
+            return 0.0
+
+    def _build_request_body(self, warehouse=None, inventory_id=None):
+        self.ensure_one()
+        return {
+            'Warehouse': {'value': warehouse if warehouse is not None else self.warehouse_value or ''},
+            'InventoryID': {'value': inventory_id if inventory_id is not None else self.inventory_id_value or ''},
+        }
+
+    def fetch_inventory_stock_data(self, warehouse=None, inventory_id=None, odata_expand=None, odata_top=None):
+        self.ensure_one()
+        config = self.config_id
+        if not config:
+            raise UserError('Pilih konfigurasi API terlebih dahulu.')
+
+        session = config._do_login()
+        try:
+            endpoint = f"{config.api_url}/{config.endpoint_name.lstrip('/')}"
+            params = {}
+            expand_value = odata_expand if odata_expand is not None else self.odata_expand
+            top_value = odata_top if odata_top is not None else self.odata_top
+
+            if expand_value:
+                params['$expand'] = expand_value
+            if top_value:
+                params['$top'] = top_value
+
+            payload = self._build_request_body(
+                warehouse=warehouse or '',
+                inventory_id=inventory_id or '',
+            )
+
+            response = session.put(endpoint, params=params, json=payload, timeout=300)
+            if response.status_code != 200:
+                raise UserError(f'Gagal ambil data Inventory Stock (HTTP {response.status_code}): {response.text}')
+
+            raw_data = self._normalize_rows(response.json())
+            result = []
+            for row_number, item in enumerate(raw_data, start=1):
+                details = item.get('InventorySiteInquiryDetails') or []
+                if isinstance(details, dict):
+                    details = details.get('value', []) or []
+                if not isinstance(details, list):
+                    details = []
+
+                if not details:
+                    details = [{}]
+
+                for detail in details:
+                    result.append({
+                        'external_id': item.get('id', '') or '',
+                        'row_number': item.get('rowNumber', row_number) or row_number,
+                        'line_external_id': detail.get('id', '') or '',
+                        'line_row_number': detail.get('rowNumber', 0) or 0,
+                        'note': self._val(detail, 'note') or self._val(item, 'note'),
+                        'warehouse_code': self._val(detail, 'WarehouseID') or self._val(item, 'WarehouseID') or '',
+                        'inventory_id': self._val(detail, 'InventoryID') or self._val(item, 'InventoryID'),
+                        'description': self._val(detail, 'Description'),
+                        'branch': self._val(detail, 'Branch'),
+                        'item_status': self._val(detail, 'ItemStatus'),
+                        'kode_barang_dan_jasa': self._val(detail, 'KodeBarangdanJasa'),
+                        'product_group': self._val(detail, 'ProductGroup'),
+                        'available': self._parse_float(self._val(detail, 'Available')),
+                        'on_hand_acumatica': self._parse_float(self._val(detail, 'OnHand')),
+                        'sync_date': fields.Datetime.now(),
+                    })
+
+            _logger.info("Berhasil ambil %s rows Inventory Stock dari Acumatica", len(result))
+            return result
+        finally:
+            config._do_logout(session)
+            config.last_sync = fields.Datetime.now()
 
     def action_fetch_data(self):
         self.ensure_one()
-        raw_list = self.config_id.fetch_inventory_stock_data(
+        raw_list = self.fetch_inventory_stock_data(
             warehouse=self.warehouse_value,
             inventory_id=self.inventory_id_value,
             odata_expand=self.odata_expand or None,

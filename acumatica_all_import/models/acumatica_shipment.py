@@ -66,6 +66,7 @@ class AcumaticaShipmentLine(models.Model):
     header_location_code = fields.Char(string='Location Header')
     header_location_name = fields.Char(string='Location Header Name')
     status = fields.Char(string='Status')
+    document_only = fields.Boolean(string='Document Only', readonly=True)
     shipment_type = fields.Char(string='Type')
     operation = fields.Char(string='Operation')
 
@@ -357,7 +358,8 @@ class AcumaticaShipmentLine(models.Model):
             'adt_acumatica_write_date': self._parse_dt(shipment.acumatica_write_date),
             'adt_total_qty': self._parse_float(shipment.actual_qty),
             'adt_actual_qty': self._parse_float(shipment.actual_qty),
-            'adt_type': shipment.shipment_type or False
+            'adt_type': 'SO Return' if shipment.shipment_type == 'Shipment' else shipment.shipment_type,
+            # 'adt_type': shipment.shipment_type or False
 
         }
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}

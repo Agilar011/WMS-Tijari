@@ -18,6 +18,8 @@
         <field name="arch" type="xml">
             <search string="Cari Data Issue : Inventory Issue">
                 <field name="reference_nbr"/>
+                <field name="trans_type"/>
+                <field name="document_only"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
                 <field name="import_state"/>
@@ -35,6 +37,8 @@
             <list string="Data Issue : Inventory Issue" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="reference_nbr"/>
+                <field name="trans_type"/>
+                <field name="document_only"/>
                 <!-- <field name="vendor_code"/> -->
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
@@ -48,8 +52,9 @@
                        decoration-warning="import_state == 'pending'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
+                <field name="odoo_internal_transfer_order_id" column_invisible="1"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>            </list>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>            </list>
         </field>
     </record>
 
@@ -60,15 +65,17 @@
             <form string="Data Issue : Inventory Issue">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
-                    <button name="action_open_picking" type="object" string="Open Delivery Order" class="btn-secondary" invisible="not odoo_picking_id"/>
+                    <button name="action_open_picking" type="object" string="Open Odoo Document" class="btn-secondary" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                     <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
                 </header>
                 <sheet>
                     <group string="Header">
                         <group>
                             <field name="reference_nbr" readonly="1"/>
+                            <field name="picking_type_id"/>
                             <field name="scheduled_date" readonly="1"/>
                             <field name="status" readonly="1"/>
+                            <field name="customer_id"/>
                             <field name="trans_type" readonly="1"/>
                             <field name="actual_qty" readonly="1"/>
                             <field name="total_qty" readonly="1"/>
@@ -88,6 +95,7 @@
                                     <field name="inventory_id"/>
                                     <field name="line_description"/>
                                     <field name="warehouse_code"/>
+                                    <field name="customer_id"/>
                                     <field name="product_uom_qty"/>
                                 </list>
                             </field>
@@ -96,6 +104,7 @@
                     <group>
                         <field name="import_message" readonly="1" widget="text"/>
                         <field name="odoo_picking_id" readonly="1"/>
+                        <field name="odoo_internal_transfer_order_id" readonly="1"/>
                         <field name="exists_in_odoo" readonly="1"/>
                     </group>
                 </sheet>

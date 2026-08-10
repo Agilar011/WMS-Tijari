@@ -152,7 +152,7 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "uom": {
                 "model_name": "acumatica.uom.line",
                 "vals_getter": self._uom_vals,
-                "lookup_fields": [("unit_id",), ("external_id",)],
+                "lookup_fields": [("unit_id",), ("description",), ("external_id",)],
                 "payload_keys": ("Inserted", "records", "data", "value"),
                 "label": "UoM",
             },
