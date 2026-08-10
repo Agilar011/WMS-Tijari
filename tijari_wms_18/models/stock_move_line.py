@@ -1137,21 +1137,25 @@ class StockMoveLine(models.Model):
     #         line.matching = 'match' if lot_match and location_match else 'not_match'
 
     def _update_move_picked(self):
-        print(f"_update_move_picked: {self}")
         for move in self.mapped('move_id'):
-            # Buat apaan ya ini, mon maap
-            # if move.raw_material_production_id != False:
-            #     continue
+
+            # Matching hanya berlaku untuk stock move yang
+            # merupakan bagian dari picking.
+            if not move.picking_id:
+                continue
+
+            # Return picking tidak melalui proses matching WMS.
             if move.picking_id.return_id:
                 move.picked = True
                 continue
 
-            move.picked = (
+            move.picked = bool(
                 move.move_line_ids
-                and all(line.matching == 'match' for line in move.move_line_ids)
+                and all(
+                    line.matching == 'match'
+                    for line in move.move_line_ids
+                )
             )
-            print(move.picked)
-
 
     def _get_matching_status(self):
         """Return the matching result using the reference fields for each operation."""
