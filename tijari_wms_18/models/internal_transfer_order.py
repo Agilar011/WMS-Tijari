@@ -568,7 +568,7 @@ class InternalTransferOrder(models.Model):
             if not self.transit_location_id:
                 self.transit_location_id = transit_location
             delivery_picking = self._create_transfer_picking(
-                self._get_transfer_out_picking_type(),
+                self._get_required_picking_type('Transfer Internal', 'internal'),
                 loading_dock,
                 transit_location,
                 'Transfer OUT',
@@ -645,7 +645,7 @@ class InternalTransferOrder(models.Model):
                     )
                 picking_specs = [
                     (
-                        order._get_transfer_out_picking_type(),
+                        order._get_required_picking_type('Transfer Internal', 'internal'),
                         order.location_id,
                         transit_location,
                         'Transfer OUT',
@@ -803,23 +803,14 @@ class StockPicking(models.Model):
                 'lot_name': False,
             })
 
-    def _is_disposal_receipt_internal_transfer(self):
-        self.ensure_one()
-        order = self.internal_transfer_order_id
-        return bool(
-            order
-            and order.transaction_type == 'intra_warehouse'
-            and self.internal_transfer_leg == 'receipt'
-            and any(
-                (adt_type or '').strip().casefold() == 'disposal'
-                for adt_type in self.move_ids.mapped('adt_type')
-            )
-        )
-
-    def _set_disposal_receipt_done_quantities(self):
+    def _set_receipt_done_quantities(self):
         MoveLine = self.env['stock.move.line']
         quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
-        for picking in self.filtered(lambda item: item._is_disposal_receipt_internal_transfer()):
+        receipt_pickings = self.filtered(
+            lambda item: item.picking_type_id.name in ('Receipts', 'Receipt Internal')
+            and item.state not in ('done', 'cancel')
+        )
+        for picking in receipt_pickings:
             for move in picking.move_ids.filtered(lambda item: item.state not in ('done', 'cancel')):
                 quantity = move.product_uom_qty
                 if not quantity:
@@ -946,7 +937,7 @@ class StockPicking(models.Model):
         if fifo_lot_lines:
             fifo_lot_lines.action_generate_or_pick_lot()
 
-        self._set_disposal_receipt_done_quantities()
+        self._set_receipt_done_quantities()
 
         result = super().button_validate()
 
