@@ -64,7 +64,7 @@ async function loadZxingBrowser() {
 
 function getScannerErrorMessage(error) {
     const name = error?.name || "";
-    const message = error?.message || "";
+    const message = error?.data?.message || error?.data?.arguments?.[0] || error?.message || "";
 
     if (!window.isSecureContext) {
         return "Akses kamera butuh HTTPS. Pastikan halaman dibuka lewat https://wms-aditya.duckdns.org.";
@@ -666,6 +666,14 @@ class MoveLineScanButton extends Component {
     }
 
     get fieldName() {
+        const pickingTypeName = this.props.record.data?.picking_type_name;
+        const isPickFlow = ["Pick", "Pick Internal", "Pick Components"].includes(pickingTypeName);
+        if (isPickFlow && this.constructor.scanFieldName === "confirmation_lot_code") {
+            return "matching_lot_id";
+        }
+        if (isPickFlow && this.constructor.scanFieldName === "confirmation_location_code") {
+            return "matching_loc_dest_id";
+        }
         return this.constructor.scanFieldName;
     }
 
@@ -694,11 +702,20 @@ class MoveLineScanButton extends Component {
             return;
         }
 
-        await this.orm.call(
+        const result = await this.orm.call(
             "stock.move.line",
             "action_apply_scanned_field",
             [[moveLineId], this.fieldName, scannedCode]
         );
+        const updates = {};
+        for (const fieldName of ["matching_lot_id", "matching_loc_dest_id"]) {
+            if (Object.prototype.hasOwnProperty.call(result || {}, fieldName)) {
+                updates[fieldName] = result[fieldName] || false;
+            }
+        }
+        if (Object.keys(updates).length) {
+            await this.props.record.update(updates);
+        }
         await this.props.record.load();
     }
 }
@@ -726,6 +743,10 @@ class ProductScanButton extends Component {
         this.notification = useService("notification");
     }
 
+    get applyMethodName() {
+        return "action_apply_scanned_product";
+    }
+
     async onClick(ev) {
         ev.preventDefault();
         ev.stopPropagation();
@@ -745,10 +766,16 @@ class ProductScanButton extends Component {
 
         await this.orm.call(
             resModel,
-            "action_apply_scanned_product",
+            this.applyMethodName,
             [[resId], scannedCode]
         );
         await this.props.record.load();
+    }
+}
+
+class PickerProductScanButton extends ProductScanButton {
+    get applyMethodName() {
+        return "action_apply_scanned_picker_product";
     }
 }
 
@@ -799,6 +826,9 @@ registry.category("fields").add("adt_scan_location_button", {
 });
 registry.category("fields").add("adt_scan_product_button", {
     component: ProductScanButton,
+});
+registry.category("fields").add("adt_scan_picker_product_button", {
+    component: PickerProductScanButton,
 });
 registry.category("fields").add("adt_scan_package_button", {
     component: PackageScanButton,

@@ -1214,15 +1214,12 @@ class StockMoveLine(models.Model):
             wizard.matching_loc_dest_id = location.id
 
     def _find_lot_by_scan_code(self, lot_code):
-        lot = False
         Lot = self.env['stock.lot']
+        lot_code = (lot_code or '').strip()
+        if not lot_code:
+            return Lot.browse()
 
-        lot = Lot.search([
-            ('name', '=', lot_code)
-        ], limit=1)
-        # if not lot:
-        #     raise ValidationError("Lot Tidak Ditemukan")
-        return lot
+        return Lot.search([('name', '=', lot_code)], limit=1)
 
     @api.onchange('confirmation_lot_code')
     def _onchange_confirmation_lot_code(self):
@@ -1234,15 +1231,21 @@ class StockMoveLine(models.Model):
                 wizard.matching = 'not_match'
 
             wizard.matching_lot_id = lot.id
-    def _find_loc_by_scan_code(self, lot_code):
-        loc = False
+    def _find_loc_by_scan_code(self, location_code):
         Loc = self.env['stock.location']
+        location_code = (location_code or '').strip()
+        if not location_code:
+            return Loc.browse()
 
-        loc = Loc.search([
-            ('unique_code', '=', lot_code)
-        ], limit=1)
+        search_fields = ['unique_code', 'barcode', 'complete_name', 'name']
+        for field_name in search_fields:
+            if field_name not in Loc._fields:
+                continue
+            loc = Loc.search([(field_name, '=', location_code)], limit=1)
+            if loc:
+                return loc
 
-        return loc
+        return Loc.browse()
 
     @api.onchange('matching_lot_id', 'matching_loc_dest_id')
     def _onchange_update_matching_status(self):

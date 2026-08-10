@@ -82,6 +82,21 @@ class StockPicking(models.Model):
         compute='_compute_putaway_values',
         readonly=False,
     )
+    allowed_picker_product_ids = fields.Many2many(
+        'product.product',
+        compute='_compute_allowed_picker_product_ids',
+    )
+    scan_picker_product_button = fields.Boolean(string='Scan Product')
+    picker_product_id = fields.Many2one(
+        'product.product',
+        string="Product Name",
+    )
+    picker_move_ids = fields.Many2many(
+        comodel_name="stock.move",
+        string="Stock Moves",
+        compute='_compute_picker_values',
+        readonly=False,
+    )
 
     available_package_ids = fields.Many2many(
         "stock.quant.package",
@@ -305,6 +320,27 @@ class StockPicking(models.Model):
 
         return move_lines
 
+    def _get_picker_base_moves(self):
+        self.ensure_one()
+
+        return self.move_ids_without_package.filtered(
+            lambda move: (
+                move.state != 'cancel'
+                and move.product_id
+            )
+        )
+
+    def _get_picker_moves(self):
+        self.ensure_one()
+
+        moves = self._get_picker_base_moves()
+        if self.picker_product_id:
+            moves = moves.filtered(
+                lambda move: move.product_id == self.picker_product_id
+            )
+
+        return moves
+
     @api.depends("state")
     def _compute_wms_state(self):
         for picking in self:
@@ -324,6 +360,15 @@ class StockPicking(models.Model):
             picking.allowed_putaway_product_ids = picking._get_putaway_base_move_lines().product_id
 
     @api.depends(
+        'move_ids_without_package',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.state',
+    )
+    def _compute_allowed_picker_product_ids(self):
+        for picking in self:
+            picking.allowed_picker_product_ids = picking._get_picker_base_moves().product_id
+
+    @api.depends(
         'putaway_product_id',
         'move_line_ids',
         'move_line_ids.product_id',
@@ -340,6 +385,16 @@ class StockPicking(models.Model):
                 else False
             )
 
+    @api.depends(
+        'picker_product_id',
+        'move_ids_without_package',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.state',
+    )
+    def _compute_picker_values(self):
+        for picking in self:
+            picking.picker_move_ids = picking._get_picker_moves()
+
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):
         for picking in self:
@@ -350,6 +405,11 @@ class StockPicking(models.Model):
                 if picking.putaway_product_id
                 else False
             )
+
+    @api.onchange('picker_product_id')
+    def _onchange_picker_product_id(self):
+        for picking in self:
+            picking.picker_move_ids = picking._get_picker_moves()
 
     def _set_document_only_done_quantities(self):
         MoveLine = self.env['stock.move.line'].sudo()
@@ -740,6 +800,28 @@ class StockPicking(models.Model):
         return {
             'product_id': product.id,
             'display_name': product.display_name,
+        }
+
+    def action_apply_scanned_picker_product(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        product = self._find_product_by_scan_code(scanned_code)
+
+        if not product:
+            raise ValidationError("Product tidak ditemukan untuk kode scan: %s" % scanned_code)
+
+        picker_moves = self._get_picker_base_moves().filtered(
+            lambda move: move.product_id == product
+        )
+        if not picker_moves:
+            raise ValidationError(_("Product hasil scan tidak ada di dokumen ini."))
+
+        self.write({'picker_product_id': product.id})
+
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+            'move_ids': picker_moves.ids,
         }
 
     def action_apply_scanned_package(self, scanned_code):

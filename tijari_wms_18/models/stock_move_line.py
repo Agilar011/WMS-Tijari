@@ -854,6 +854,8 @@ class StockMoveLine(models.Model):
         allowed_fields = {
             'confirmation_lot_code',
             'confirmation_location_code',
+            'matching_lot_id',
+            'matching_loc_dest_id',
         }
         if field_name not in allowed_fields:
             raise ValidationError(_("Field scan tidak valid."))
@@ -861,17 +863,21 @@ class StockMoveLine(models.Model):
         result = {}
         for line in self:
             picking_type_name = line.picking_type_name
-            vals = {field_name: scanned_code}
-            if field_name == 'confirmation_lot_code':
+            vals = {}
+            if field_name in ('confirmation_lot_code', 'matching_lot_id'):
                 lot = line._find_lot_by_scan_code(scanned_code)
                 if not lot:
                     raise ValidationError(_("Barcode tidak terdaftar."))
+                if field_name == 'confirmation_lot_code':
+                    vals['confirmation_lot_code'] = scanned_code
                 vals['matching_lot_id'] = lot.id
-            elif field_name == 'confirmation_location_code':
+            elif field_name in ('confirmation_location_code', 'matching_loc_dest_id'):
                 location = line._find_loc_by_scan_code(scanned_code)
                 if not location:
                     raise ValidationError(_("Barcode tidak terdaftar."))
-                if picking_type_name in ['Receipts', 'Receipt Internal']:
+                if field_name == 'confirmation_location_code':
+                    vals['confirmation_location_code'] = scanned_code
+                if picking_type_name in ['Receipts', 'Receipt Internal'] and field_name == 'confirmation_location_code':
                     vals['location_putaway_id'] = location.id
                     vals['location_dest_id'] = location.id
                 else:
@@ -966,15 +972,12 @@ class StockMoveLine(models.Model):
             wizard.matching_loc_dest_id = location.id
 
     def _find_lot_by_scan_code(self, lot_code):
-        lot = False
         Lot = self.env['stock.lot']
+        lot_code = (lot_code or '').strip()
+        if not lot_code:
+            return Lot.browse()
 
-        lot = Lot.search([
-            ('name', '=', lot_code)
-        ], limit=1)
-        # if not lot:
-        #     raise ValidationError("Lot Tidak Ditemukan")
-        return lot
+        return Lot.search([('name', '=', lot_code)], limit=1)
 
     @api.onchange('confirmation_lot_code')
     def _onchange_confirmation_lot_code(self):
@@ -987,15 +990,21 @@ class StockMoveLine(models.Model):
                 wizard.matching = 'not_match'
 
             wizard.matching_lot_id = lot.id
-    def _find_loc_by_scan_code(self, lot_code):
-        loc = False
+    def _find_loc_by_scan_code(self, location_code):
         Loc = self.env['stock.location']
+        location_code = (location_code or '').strip()
+        if not location_code:
+            return Loc.browse()
 
-        loc = Loc.search([
-            ('unique_code', '=', lot_code)
-        ], limit=1)
+        search_fields = ['unique_code', 'barcode', 'complete_name', 'name']
+        for field_name in search_fields:
+            if field_name not in Loc._fields:
+                continue
+            loc = Loc.search([(field_name, '=', location_code)], limit=1)
+            if loc:
+                return loc
 
-        return loc
+        return Loc.browse()
 
     # @api.onchange('matching_lot_id', 'matching_loc_dest_id')
     # def _onchange_update_matching_status(self):
