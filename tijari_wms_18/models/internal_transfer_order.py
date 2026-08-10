@@ -568,7 +568,7 @@ class InternalTransferOrder(models.Model):
             if not self.transit_location_id:
                 self.transit_location_id = transit_location
             delivery_picking = self._create_transfer_picking(
-                self._get_required_picking_type('Transfer Internal', 'internal'),
+                self._get_transfer_out_picking_type(),
                 loading_dock,
                 transit_location,
                 'Transfer OUT',
@@ -645,7 +645,7 @@ class InternalTransferOrder(models.Model):
                     )
                 picking_specs = [
                     (
-                        order._get_internal_picking_type(),
+                        order._get_transfer_out_picking_type(),
                         order.location_id,
                         transit_location,
                         'Transfer OUT',
