@@ -347,6 +347,8 @@ class AcumaticaKitAssembly(models.Model):
                     ('assembly_id', '=', header.id)
                 ])
 
+                raw_moves = []
+
                 for item in component:
                     processed_product = self.env['product.product'].search([
                         ('default_code', '=', item.stock_inventory_id),
@@ -356,16 +358,18 @@ class AcumaticaKitAssembly(models.Model):
                         error += 1
                         continue
 
-                    move_vals = {
+                    raw_moves.append((0, 0, {
                         'product_id': processed_product.id,
                         'product_uom_qty': item.line_quantity,
                         'product_uom': processed_product.product_tmpl_id.uom_id.id,
                         'location_id': picking_type.default_location_src_id.id,
                         'raw_material_production_id': manufacturing.id,
-                    }
-
-                    if not manufacturing_check:
-                        Move.create(move_vals)
+                    }))
+                    
+                    if raw_moves and not manufacturing_check:
+                        manufacturing.write({
+                            'move_raw_ids': raw_moves,
+                        })
 
             except Exception as e:
                 error += 1
@@ -766,8 +770,8 @@ class AcumaticaKitAssemblyLine(models.Model):
                     'raw_material_production_id' : manufacturing.id,
                 }
 
-                if not manufacturing_check:
-                    move = Move.create(vals)
+                # if not manufacturing_check:
+                #     move = Move.create(vals)
                 vals = {}
             
 
