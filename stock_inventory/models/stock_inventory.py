@@ -352,7 +352,10 @@ class InventoryAdjustmentsGroup(models.Model):
         )
         self.action_submit_approval()
         self.state = "in_progress"
-        return
+        return {
+            "type": "ir.actions.client",
+            "tag": "reload",
+        }
 
     def action_state_to_wait_approval(self):
         self.ensure_one()
@@ -376,7 +379,10 @@ class InventoryAdjustmentsGroup(models.Model):
                 "current_inventory_id": False,
             }
         )
-        return
+        return {
+                    "type": "ir.actions.client",
+                    "tag": "reload",
+                }
 
     def action_auto_state_to_done(self):
         self.ensure_one()
@@ -386,19 +392,30 @@ class InventoryAdjustmentsGroup(models.Model):
 
     def action_state_to_draft(self):
         self.ensure_one()
-        self.state = "draft"
-        self.stock_quant_ids.filtered(
+
+        quants = self.stock_quant_ids.filtered(
             lambda q: q.current_inventory_id.id == self.id
-        ).update(
-            {
+        )
+
+        for quant in quants:
+            quant.inventory_quantity = quant.quantity
+
+            quant.write({
                 "to_do": False,
                 "user_id": False,
                 "inventory_date": False,
                 "current_inventory_id": False,
-            }
-        )
-        self.stock_quant_ids = None
-        return
+            })
+
+        self.write({
+            "state": "draft",
+            "stock_quant_ids": False,
+        })
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "reload",
+        }
 
     def action_state_to_cancel(self):
         self.ensure_one()
