@@ -137,7 +137,7 @@ class ImportTransferWizard(models.TransientModel):
                 raise UserError(f'Gagal ambil data Transfer Receipt (HTTP {response.status_code}): {response.text}')
 
             raw_payload = response.json()
-            flat_data = raw_payload.get('PurchaseReceiptGIDetails') if isinstance(raw_payload, dict) else None
+            flat_data = raw_payload.get('SOTRGIDetails') if isinstance(raw_payload, dict) else None
             raw_data = flat_data or self._normalize_rows(raw_payload)
             print(f"raw data: {raw_data}")
             result = []
@@ -161,7 +161,7 @@ class ImportTransferWizard(models.TransientModel):
                     document_only = self._bool_val(item, 'DocumentOnly')
                     type = self._search_picking_type(building_code, document_only=document_only)
 
-                    header = {
+                    result.append({
                         'external_id': item.get('id', '') or '',
                         'row_number': row_number,
                         'note': item.get('HeaderNote', {}).get('value', '') or '',
@@ -184,7 +184,7 @@ class ImportTransferWizard(models.TransientModel):
                         'warehouse_dest_code': shipment_warehouse.get('dest_warehouse') or self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
                         'picking_type_id': type.id if type else None,
 
-                        }
+                        })
 
                 detail_result.append({
                     # 'header_external_id': item.get('id', '') or '',
@@ -343,26 +343,26 @@ class ImportTransferWizard(models.TransientModel):
     def filter_product_line(self, data, update, create):
         # buat set dari semua external_id di update
         update_ids = {
-            item.get('vals', {}).get('external_id')
+            item.get('vals', {}).get('receipt_nbr')
             for item in update
-            if item.get('vals', {}).get('external_id')
+            if item.get('vals', {}).get('receipt_nbr')
         }
 
         # filter data yang header_external_id ada di update_ids
         update_final = [
             line 
             for line in data 
-            if line['header_external_id'] in update_ids
+            if line['receipt_nbr'] in update_ids
         ]
 
         # buat set dari semua external_id di create
         create_ids = {
-            crt['external_id'] 
+            crt['receipt_nbr'] 
             for crt in create
         }
 
         # filter data yang header_external_id ada di create_ids
-        create_final = [line for line in data if line['header_external_id'] in create_ids]
+        create_final = [line for line in data if line['receipt_nbr'] in create_ids]
 
         return update_final, create_final
         
@@ -374,31 +374,31 @@ class ImportTransferWizard(models.TransientModel):
         :param receipts: recordset receipt
         :return: list of dict yang header_external_id-nya ada di receipts
         """
-        receipt_ids = {rec['external_id'] for rec in receipts}
+        receipt_ids = {rec['receipt_nbr'] for rec in receipts}
 
         filtered_data = [
             vals for vals in data
-            if vals.get('header_external_id') in receipt_ids
+            if vals.get('receipt_nbr') in receipt_ids
         ]
 
         return filtered_data
 
     def _create_receipt_lines_product(self, data, receipts):
         receipt_map = {
-            rec['external_id']: rec.id
+            rec['receipt_nbr']: rec.id
             for rec in receipts
         }
 
         for vals in data:
             vals['transfer_line_id'] = receipt_map.get(
-                vals['header_external_id']
+                vals['receipt_nbr']
             )
 
         self.env['acumatica.transfer.product.line'].create(data)
 
     def _update_receipt_lines_product(self, data, receipts):
         receipt_map = {
-            rec['vals']['external_id']: rec['record']['id']
+            rec['vals']['receipt_nbr']: rec['record']['id']
             for rec in receipts
             if rec.get('vals')
             and rec.get('record')
@@ -407,7 +407,7 @@ class ImportTransferWizard(models.TransientModel):
         product_line = self.env['acumatica.transfer.product.line']
 
         for vals in data:
-            ext_id = vals.get('header_external_id')
+            ext_id = vals.get('receipt_nbr')
             vals['transfer_line_id'] = receipt_map.get(ext_id)
             if vals['transfer_line_id']:
                 product_line.browse(vals['transfer_line_id']).write(vals)

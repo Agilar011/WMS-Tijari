@@ -325,6 +325,25 @@ class InternalTransferOrder(models.Model):
             })
         return loading_dock
 
+    def _get_order_adt_dest_location(self):
+        self.ensure_one()
+        if self.transfer_type == 'transfer_in':
+            return self.location_dest_id
+        return self.location_id
+
+    def _sync_order_adt_dest_location(self):
+        for order in self:
+            dest_location = order._get_order_adt_dest_location()
+            vals = {
+                'adt_dest_location_id': dest_location.id if dest_location else False,
+            }
+            order.move_ids.write(vals)
+            pickings = order._get_related_pickings().filtered(
+                lambda picking: picking.state not in ('done', 'cancel')
+            )
+            pickings.write(vals)
+            pickings.move_ids.write(vals)
+
     def _prepare_picking_vals(self, picking_type, location, location_dest, suffix, leg):
         self.ensure_one()
         vals = {
@@ -342,7 +361,7 @@ class InternalTransferOrder(models.Model):
         partner = self._get_picking_partner(leg)
         if partner:
             vals['partner_id'] = partner.id
-        dest_location = self._get_picking_mapped_dest_location(leg)
+        dest_location = self._get_order_adt_dest_location()
         if dest_location:
             vals['adt_dest_location_id'] = dest_location.id
         return vals
@@ -375,11 +394,15 @@ class InternalTransferOrder(models.Model):
             return 'Vendor Return'
         return 'Internal Transfer'
 
-    def _get_picking_mapped_dest_location(self, leg):
+    def _get_move_mapped_location_name(self, leg):
         self.ensure_one()
         if leg == 'receipt':
-            return self.location_dest_id
-        return self.env['stock.location']
+            location = self.location_dest_id
+        elif leg == 'delivery':
+            location = self.location_id
+        else:
+            location = self.env['stock.location']
+        return location.complete_name or location.display_name or False
 
     def _get_warehouse_partner(self):
         self.ensure_one()
@@ -433,8 +456,11 @@ class InternalTransferOrder(models.Model):
             'adt_quantity': source_move.adt_quantity,
             'adt_type': source_move.adt_type,
             'product_note': source_move.product_note,
+            'adt_dest_location': self._get_move_mapped_location_name(
+                picking.internal_transfer_leg
+            ),
         }
-        if picking.internal_transfer_leg == 'receipt' and picking.adt_dest_location_id:
+        if picking.adt_dest_location_id:
             vals['adt_dest_location_id'] = picking.adt_dest_location_id.id
         return self.env['stock.move'].create(vals)
 
@@ -478,6 +504,15 @@ class InternalTransferOrder(models.Model):
             for previous_move, next_move in zip(previous_moves, next_moves):
                 previous_move.move_dest_ids = [(4, next_move.id)]
 
+    def _set_staged_picking_ready(self, picking):
+        if not picking:
+            return
+
+        if picking.state == 'draft':
+            picking.action_confirm()
+        if picking.move_ids.filtered(lambda move: move.state not in ('done', 'cancel')):
+            picking.action_assign()
+
     def _create_transfer_picking(
         self, picking_type, location, location_dest, suffix, leg,
         previous_picking=False,
@@ -519,13 +554,16 @@ class InternalTransferOrder(models.Model):
         }
         partner = self._get_picking_partner(leg)
         vals['partner_id'] = partner.id if partner else False
-        dest_location = self._get_picking_mapped_dest_location(leg)
+        dest_location = self._get_order_adt_dest_location()
         vals['adt_dest_location_id'] = dest_location.id if dest_location else False
         next_picking.write(vals)
-        if leg == 'receipt' and next_picking.adt_dest_location_id:
+        if next_picking.adt_dest_location_id:
             next_picking.move_ids.write({
                 'adt_dest_location_id': next_picking.adt_dest_location_id.id,
             })
+        next_picking.move_ids.write({
+            'adt_dest_location': self._get_move_mapped_location_name(leg),
+        })
         self.picking_ids = [(4, next_picking.id)]
         return next_picking
 
@@ -538,11 +576,12 @@ class InternalTransferOrder(models.Model):
         if done_picking.internal_transfer_leg == 'pick' and 'pack' not in existing_legs:
             route_picking = self._adopt_next_picking(done_picking, 'Pack', 'pack')
             if route_picking:
+                self._set_staged_picking_ready(route_picking)
                 return route_picking
 
             packing_zone = self._get_or_create_packing_zone_location()
             loading_dock = self._get_or_create_loading_dock_location()
-            return self._create_transfer_picking(
+            pack_picking = self._create_transfer_picking(
                 self._get_required_picking_type('Pack Internal', 'pack'),
                 packing_zone,
                 loading_dock,
@@ -550,6 +589,8 @@ class InternalTransferOrder(models.Model):
                 'pack',
                 previous_picking=done_picking,
             )
+            self._set_staged_picking_ready(pack_picking)
+            return pack_picking
         if done_picking.internal_transfer_leg == 'pack' and 'delivery' not in existing_legs:
             route_picking = self._adopt_next_picking(
                 done_picking,
@@ -561,6 +602,7 @@ class InternalTransferOrder(models.Model):
                     lambda picking: picking.internal_transfer_leg == 'receipt'
                 )[:1]
                 self._link_picking_moves(route_picking, receipt_picking)
+                self._set_staged_picking_ready(route_picking)
                 return route_picking
 
             loading_dock = self._get_or_create_loading_dock_location()
@@ -579,6 +621,7 @@ class InternalTransferOrder(models.Model):
                 lambda picking: picking.internal_transfer_leg == 'receipt'
             )[:1]
             self._link_picking_moves(delivery_picking, receipt_picking)
+            self._set_staged_picking_ready(delivery_picking)
             return delivery_picking
         return False
 
@@ -596,6 +639,7 @@ class InternalTransferOrder(models.Model):
                 order.transit_location_id = transit_location
             if not order.move_ids:
                 raise ValidationError('Operation line belum diisi.')
+            order._sync_order_adt_dest_location()
 
             if order.transaction_type == 'vendor_return':
                 receipt_picking_type = order._get_vendor_return_receipt_picking_type()
@@ -698,6 +742,7 @@ class InternalTransferOrder(models.Model):
         return True
 
     def action_ready(self):
+        self._sync_order_adt_dest_location()
         orders_to_generate = self.filtered(lambda order: not order._get_related_pickings())
         if orders_to_generate:
             orders_to_generate.action_generate_internal_pickings()

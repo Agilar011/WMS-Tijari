@@ -11,7 +11,7 @@
                 <field name="wms_state"
                     widget="statusbar"
                     statusbar_visible="draft,assigned,waiting_response,done"
-                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment', 'SO Shipment']"    
+                    invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']"    
                 />
             </xpath>
 
@@ -25,7 +25,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="picking_type_name in ['Delivery Orders'] and adt_type in ['Sales Order Shipment', 'SO Shipment']"/>
+                    invisible="picking_type_name in ['Delivery Orders', 'Transfer Internal']"/>
 
             </xpath>            
 
@@ -110,7 +110,7 @@
                             <field name="scan_package_button"
                                 widget="adt_scan_package_button"
                                 nolabel="1"
-                                invisible="picking_type_name != 'Delivery Orders'"/>
+                                invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']"/>
                             <field name="available_package_ids" invisible='1' />
                             <field name="scanned_package_id"
                                 placeholder="Scan a QR code or select a package..."

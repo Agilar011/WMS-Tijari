@@ -411,6 +411,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                         move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
                         Move.create(move_vals)
 
+                    self.env['acumatica.internal.transfer.service'].set_order_ready(order)
                     first.write({
                         'import_state': action_state,
                         'import_message': f'{action_state.title()}: {order.name}',

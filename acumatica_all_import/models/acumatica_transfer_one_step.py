@@ -334,6 +334,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                         _logger.exception('Error import transfer one step line %s', line.id)
                         raise UserError(str(line_e))
 
+                transfer_service.set_order_ready(order)
                 receipt_lines.write({
                     'import_state': action_state,
                     'import_message': f'{action_state.title()}: {order.name}',

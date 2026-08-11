@@ -74,9 +74,10 @@ class StockMove(models.Model):
     ], string='Type transaksi', readonly=True)
 
     
-    adt_dest_location = fields.Char(string="Mappped Location",
-        readonly=True
-    ) 
+    adt_dest_location = fields.Char(
+        string="Mapped Location",
+        readonly=True,
+    )
 
     # temp_float = fields.Float(string="Confirmation Quantity")
     so_confirmation_quantity = fields.Float(string="Confirmation Quantity")

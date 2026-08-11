@@ -122,7 +122,7 @@ class AcumaticaInternalTransferService(models.AbstractModel):
 
     def get_or_create_virtual_building_location(self, building_code):
         code = (building_code or '').strip().upper()
-        if not code or code == 'WH33':
+        if not code:
             return self.env['stock.location'].browse()
 
         parent = self._get_virtual_locations_parent()
@@ -135,12 +135,14 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             ('location_id', '=', parent.id),
         ], limit=1)
         if virtual_location:
+            if virtual_location.usage == 'transit':
+                virtual_location.write({'usage': 'inventory'})
             return virtual_location
 
         return Location.create({
             'name': code,
             'location_id': parent.id,
-            'usage': 'transit',
+            'usage': 'inventory',
             'company_id': False,
         })
 
@@ -284,3 +286,8 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             vals.update(extra_vals)
         vals = {key: value for key, value in vals.items() if key in Move._fields}
         return Move.create(vals)
+
+    def set_order_ready(self, order):
+        if order:
+            order.action_ready()
+        return True

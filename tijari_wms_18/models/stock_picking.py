@@ -1194,7 +1194,7 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-            if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
+            if rec.picking_type_name in ['Delivery Orders', 'Transfer Internal']:
                 rec.wms_state = 'waiting_response'
 
             if (

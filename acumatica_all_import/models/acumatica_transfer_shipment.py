@@ -566,6 +566,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                     line_payloads=all_line_payloads,
                 )
 
+            transfer_service.set_order_ready(order)
             shipment.write({
                 'import_state': action_state,
                 'import_message': f'{action_state.title()}: {order.name if order else False}',
