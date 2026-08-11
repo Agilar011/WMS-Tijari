@@ -405,6 +405,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         'adt_type': first.transfer_type or 'Transfer Two Step',
                     })
 
+                transfer_service.set_order_ready(order)
                 receipt_lines.write({
                     'import_state': action_state,
                     'import_message': f'{action_state.title()}: {order.name}',

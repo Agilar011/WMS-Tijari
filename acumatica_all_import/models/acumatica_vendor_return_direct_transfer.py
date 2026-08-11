@@ -298,6 +298,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             'transaction_type': 'internal',
                         })
 
+                    transfer_service.set_order_ready(order)
                     # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
                     first.write({
                         'import_state': action_state,

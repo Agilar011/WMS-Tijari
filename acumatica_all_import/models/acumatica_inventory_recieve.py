@@ -590,6 +590,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 line_payloads=error_line_payloads,
             )
 
+        TransferService.set_order_ready(order)
         receive.write({
             'import_state': action_state,
             'import_message': f'{action_state.title()}: {order.name if order else False}',

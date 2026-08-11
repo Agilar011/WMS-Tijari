@@ -553,6 +553,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         if create_tms_state:
             created_loginext_header.loginext_number_of_items = move_count
 
+        order.action_ready()
         shipment.write({
             'import_state': action_state,
             'import_message': f"{action_state.title()}: {order.name}",
