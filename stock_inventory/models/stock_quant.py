@@ -80,6 +80,24 @@ class StockQuant(models.Model):
     def _get_inventory_fields_write(self):
         return super()._get_inventory_fields_write() + ["to_do"]
 
+    # def generate_lot_stock_quant(self):
+    #     for quant in self:
+    #         if (
+    #             quant.product_id.tracking == "lot"
+    #             and not quant.lot_id
+    #         ):
+    #             lot_name = self.env["ir.sequence"].next_by_code(
+    #                 "stock.lot.inventory.adjustment"
+    #             )
+
+    #             lot = self.env["stock.lot"].create({
+    #                 "name": lot_name,
+    #                 "product_id": quant.product_id.id,
+    #                 "company_id": quant.company_id.id,
+    #             })
+
+    #             quant.lot_id = lot.id
+
     @api.model_create_multi
     def create(self, vals_list):
         res = super().create(vals_list)

@@ -365,9 +365,27 @@ class InventoryAdjustmentsGroup(models.Model):
     def action_state_to_done(self):
         self.ensure_one()
         self._check_inventory_adjustments_is_set()
+
         stock_quant_ids = self.stock_quant_ids.filtered(lambda q: q.inventory_quantity and q.inventory_diff_quantity != 0)
         for quant in stock_quant_ids:
+            # if (
+            #     quant.product_id.tracking == "lot"
+            #     and not quant.lot_id
+            # ):
+            #     lot_name = self.env["ir.sequence"].next_by_code(
+            #         "stock.lot.adjustment"
+            #     )
+
+            #     lot = self.env["stock.lot"].create({
+            #         "name": lot_name,
+            #         "product_id": quant.product_id.id,
+            #         "company_id": quant.company_id.id,
+            #     })
+
+            #     quant.lot_id = lot.id
+
             quant.action_apply_inventory()
+
         self.state = "done"
         self.stock_quant_ids.filtered(
             lambda q: q.current_inventory_id.id == self.id
