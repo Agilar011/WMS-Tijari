@@ -149,7 +149,7 @@
         <field name="name">Internal Transfer Orders</field>
         <field name="res_model">internal.transfer.order</field>
         <field name="view_mode">list,form</field>
-        <field name="context">{'search_default_draft': 1}</field>
+        <field name="context">{'search_default_ready': 1}</field>
     </record>
 
 </odoo>

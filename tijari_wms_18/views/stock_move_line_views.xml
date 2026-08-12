@@ -104,6 +104,7 @@
 
             <xpath expr="//field[@name='location_dest_id']" position="replace">
 
+                <field name="location_dest_id" column_invisible="1" force_save="1" context="{'show_location_short_name': True}"/>
                 <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
                 <field name="allowed_matching_lot_ids" column_invisible="1"/>
                 <field name="matching_lot_id" column_invisible="1" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
