@@ -905,10 +905,6 @@ class StockPicking(models.Model):
             order = picking.internal_transfer_order_id
             if (
                 order
-                and (
-                    order.transfer_type != 'transfer_in'
-                    or order.transaction_type == 'intra_warehouse'
-                )
                 and order.validation_policy == 'validate_all'
                 and picking.internal_transfer_leg in ('pack', 'delivery', 'receipt')
             ):
@@ -918,10 +914,11 @@ class StockPicking(models.Model):
                     previous_legs = ['pick']
                     error_message = 'Pack belum bisa divalidasi sebelum Pick selesai.'
                 elif picking.internal_transfer_leg == 'delivery':
-                    previous_legs = ['pick', 'pack']
-                    error_message = (
-                        'Transfer OUT belum bisa divalidasi sebelum Pick dan Pack selesai.'
-                    )
+                    if order.transfer_type != 'transfer_in':
+                        previous_legs = ['pick', 'pack']
+                        error_message = (
+                            'Transfer OUT belum bisa divalidasi sebelum Pick dan Pack selesai.'
+                        )
                 elif picking.internal_transfer_leg == 'receipt':
                     if order.transaction_type == 'intra_warehouse':
                         previous_legs = ['pick']
@@ -939,7 +936,7 @@ class StockPicking(models.Model):
                             'Transfer IN belum bisa divalidasi sebelum Pick, Pack, dan Transfer OUT selesai.'
                         )
 
-                previous_pickings = order.picking_ids.filtered(
+                previous_pickings = order._get_related_pickings().filtered(
                     lambda item: item.internal_transfer_leg in previous_legs
                 )
                 existing_previous_legs = set(
