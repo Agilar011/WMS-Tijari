@@ -1,5 +1,6 @@
-from odoo import api, fields, models
-from odoo.exceptions import ValidationError
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError, ValidationError
+from odoo.tools import OrderedSet, float_compare, float_round
 
 
 class InternalTransferOrder(models.Model):
@@ -823,6 +824,42 @@ class StockPicking(models.Model):
         index=True,
     )
 
+    def _is_transfer_in_inter_warehouse_delivery_without_lot(self):
+        self.ensure_one()
+        order = self.internal_transfer_order_id
+        return bool(
+            order
+            and order.transaction_type == 'inter_warehouse'
+            and order.transfer_type == 'transfer_in'
+            and self.internal_transfer_leg == 'delivery'
+        )
+
+    def _is_transfer_in_inter_warehouse_receipt_lot_source(self):
+        self.ensure_one()
+        order = self.internal_transfer_order_id
+        return bool(
+            order
+            and order.transaction_type == 'inter_warehouse'
+            and order.transfer_type == 'transfer_in'
+            and self.internal_transfer_leg == 'receipt'
+        )
+
+    def _assign_transfer_in_delivery_no_lot_names(self):
+        for picking in self:
+            for line in picking.move_line_ids.filtered(
+                lambda item: item.product_id.tracking != 'none'
+                and not item.lot_id
+                and not item.lot_name
+            ):
+                product_code = line.product_id.default_code or line.product_id.id
+                line.write({
+                    'lot_id': False,
+                    'lot_name': 'NO LOT - %s - %s' % (
+                        picking.origin or picking.name,
+                        product_code,
+                    ),
+                })
+
     def _assign_transfer_in_virtual_lots(self):
         Lot = self.env['stock.lot']
         for line in self.move_line_ids.filtered(
@@ -958,6 +995,8 @@ class StockPicking(models.Model):
             and picking.state not in ('done', 'cancel')
         )
         # internal_transfer_pickings.action_assign()
+        self._set_receipt_done_quantities()
+
         missing_lot_lines = internal_transfer_pickings.move_line_ids.filtered(
             lambda line: line.product_id.tracking != 'none'
             and not line.lot_id
@@ -966,6 +1005,7 @@ class StockPicking(models.Model):
         transfer_in_virtual_pickings = internal_transfer_pickings.filtered(
             lambda picking: picking.internal_transfer_order_id.transfer_type == 'transfer_in'
             and picking.internal_transfer_leg == 'delivery'
+            and picking.internal_transfer_order_id.transaction_type != 'inter_warehouse'
             and picking.location_id
             and picking.location_id.complete_name.startswith('Virtual Locations/')
         )
@@ -975,11 +1015,32 @@ class StockPicking(models.Model):
         if transfer_in_virtual_lines:
             transfer_in_virtual_lines.picking_id._assign_transfer_in_virtual_lots()
 
-        fifo_lot_lines = missing_lot_lines - transfer_in_virtual_lines
+        no_lot_delivery_pickings = internal_transfer_pickings.filtered(
+            lambda picking: picking._is_transfer_in_inter_warehouse_delivery_without_lot()
+        )
+        no_lot_delivery_lines = missing_lot_lines.filtered(
+            lambda line: line.picking_id in no_lot_delivery_pickings
+        )
+        if no_lot_delivery_lines:
+            no_lot_delivery_lines.picking_id._assign_transfer_in_delivery_no_lot_names()
+
+        transfer_in_receipt_pickings = internal_transfer_pickings.filtered(
+            lambda picking: picking._is_transfer_in_inter_warehouse_receipt_lot_source()
+        )
+        transfer_in_receipt_lines = missing_lot_lines.filtered(
+            lambda line: line.picking_id in transfer_in_receipt_pickings
+        )
+        if transfer_in_receipt_lines:
+            transfer_in_receipt_lines.picking_id._assign_transfer_in_virtual_lots()
+
+        fifo_lot_lines = (
+            missing_lot_lines
+            - transfer_in_virtual_lines
+            - no_lot_delivery_lines
+            - transfer_in_receipt_lines
+        )
         if fifo_lot_lines:
             fifo_lot_lines.action_generate_or_pick_lot()
-
-        self._set_receipt_done_quantities()
 
         result = super().button_validate()
 
@@ -995,3 +1056,115 @@ class StockPicking(models.Model):
                 order.state = 'done'
 
         return result
+
+
+class StockMoveLine(models.Model):
+    _inherit = 'stock.move.line'
+
+    def _is_transfer_in_inter_warehouse_delivery_without_lot(self):
+        self.ensure_one()
+        picking = self.picking_id
+        return bool(
+            picking
+            and picking._is_transfer_in_inter_warehouse_delivery_without_lot()
+            and self.product_id.tracking != 'none'
+            and not self.lot_id
+        )
+
+    def _action_done(self):
+        no_lot_delivery_lines = self.filtered(
+            lambda line: line._is_transfer_in_inter_warehouse_delivery_without_lot()
+        )
+        regular_lines = self - no_lot_delivery_lines
+
+        result = True
+        if regular_lines:
+            result = super(StockMoveLine, regular_lines)._action_done()
+        if no_lot_delivery_lines:
+            no_lot_delivery_lines._action_done_without_lot_creation()
+        return result
+
+    def _action_done_without_lot_creation(self):
+        ml_ids_to_delete = OrderedSet()
+
+        for ml in self:
+            uom_qty = float_round(
+                ml.quantity,
+                precision_rounding=ml.product_uom_id.rounding,
+                rounding_method='HALF-UP',
+            )
+            precision_digits = self.env['decimal.precision'].precision_get(
+                'Product Unit of Measure'
+            )
+            quantity = float_round(
+                ml.quantity,
+                precision_digits=precision_digits,
+                rounding_method='HALF-UP',
+            )
+            if float_compare(uom_qty, quantity, precision_digits=precision_digits) != 0:
+                raise UserError(_(
+                    'The quantity done for the product "%(product)s" doesn\'t respect '
+                    'the rounding precision defined on the unit of measure "%(unit)s". '
+                    'Please change the quantity done or the rounding precision of your '
+                    'unit of measure.',
+                    product=ml.product_id.display_name,
+                    unit=ml.product_uom_id.name,
+                ))
+
+            qty_done_float_compared = float_compare(
+                ml.quantity,
+                0,
+                precision_rounding=ml.product_uom_id.rounding,
+            )
+            if qty_done_float_compared < 0:
+                raise UserError(_('No negative quantities allowed'))
+            if qty_done_float_compared == 0 and not ml.is_inventory:
+                ml_ids_to_delete.add(ml.id)
+
+        mls_to_delete = self.env['stock.move.line'].browse(ml_ids_to_delete)
+        mls_to_delete.unlink()
+
+        mls_todo = self - mls_to_delete
+        mls_todo._check_company()
+
+        ml_ids_to_ignore = OrderedSet()
+        quants_cache = self.env['stock.quant']._get_quants_by_products_locations(
+            mls_todo.product_id,
+            mls_todo.location_id | mls_todo.location_dest_id,
+            extra_domain=[('lot_id', '=', False)],
+        )
+
+        for ml in mls_todo.with_context(quants_cache=quants_cache):
+            ml._synchronize_quant(
+                -ml.quantity_product_uom,
+                ml.location_id,
+                action="reserved",
+                lot=self.env['stock.lot'],
+            )
+            available_qty, in_date = ml._synchronize_quant(
+                -ml.quantity_product_uom,
+                ml.location_id,
+                lot=self.env['stock.lot'],
+            )
+            ml._synchronize_quant(
+                ml.quantity_product_uom,
+                ml.location_dest_id,
+                package=ml.result_package_id,
+                in_date=in_date,
+                lot=self.env['stock.lot'],
+            )
+            if available_qty < 0:
+                ml.with_context(quants_cache=None)._free_reservation(
+                    ml.product_id,
+                    ml.location_id,
+                    abs(available_qty),
+                    lot_id=self.env['stock.lot'],
+                    package_id=ml.package_id,
+                    owner_id=ml.owner_id,
+                    ml_ids_to_ignore=ml_ids_to_ignore,
+                )
+            ml_ids_to_ignore.add(ml.id)
+
+        mls_todo.write({
+            'date': fields.Datetime.now(),
+        })

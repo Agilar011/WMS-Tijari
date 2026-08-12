@@ -163,7 +163,7 @@
 	                    </field>
 	                </page>
 
-	                <page string="Putaway" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
+	                <page string="Putaway" invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Internal Transfers']">
 	                    <group>
 	                        <field name="scan_product_button"
                             widget="adt_scan_product_button"

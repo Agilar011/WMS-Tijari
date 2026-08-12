@@ -279,6 +279,7 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
     def _get_acumatica_location(self, code=False, wh33_fallback=True):
         Location = self.env['stock.location.acumatica'].sudo()
         location = Location.browse()
+        code = (code or '').strip()
         if code:
             location = Location.search([('code', '=', code)], limit=1)
         if not location and wh33_fallback:
@@ -290,9 +291,9 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
 
     def _get_transfer_source_location(self, destination_location):
         self.ensure_one()
-        location = self._get_acumatica_location(self.transfer_source_location_code, wh33_fallback=False)
-        if location and location.odoo_location_id:
-            return location
+        source_code = (self.transfer_source_location_code or '').strip()
+        if source_code:
+            return self._get_acumatica_location(source_code, wh33_fallback=False)
 
         domain = [('odoo_location_id', '!=', False)]
         if destination_location:
