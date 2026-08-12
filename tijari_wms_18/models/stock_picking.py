@@ -95,7 +95,7 @@ class StockPicking(models.Model):
         comodel_name="stock.move",
         string="Stock Moves",
         compute='_compute_picker_values',
-        readonly=False,
+        readonly=True,
     )
 
     available_package_ids = fields.Many2many(
@@ -325,7 +325,8 @@ class StockPicking(models.Model):
 
         return self.move_ids_without_package.filtered(
             lambda move: (
-                move.state != 'cancel'
+                move._origin.id
+                and move.state != 'cancel'
                 and move.product_id
             )
         )
@@ -654,6 +655,16 @@ class StockPicking(models.Model):
     
     def action_confirm(self):
         _logger.info(">>> action_confirm CALLED %s", self.ids)
+        # for picking in self:
+        #     if (
+        #         picking.picking_type_name == 'Internal Transfers'
+        #         and picking.location_id
+        #         and picking.location_dest_id
+        #         and picking.location_id == picking.location_dest_id
+        #     ):
+        #         raise ValidationError(
+        #             _("Source Location dan Destination Location tidak boleh sama.")
+        #         )
 
         res = super().action_confirm()
         
@@ -676,8 +687,22 @@ class StockPicking(models.Model):
         domain="[('usage', '=', 'internal')]",
         string="Mapped Location",
     )
+    internal_transfer_adt_dest_location_id = fields.Many2one(
+        "stock.location",
+        string="Mapped Location",
+    )
     note_ba = fields.Text(string="Notes For Official Report")
     picking_type_name = fields.Char(string="Picking Type Name", related="picking_type_id.name", store=True)
+
+    @api.onchange('internal_transfer_adt_dest_location_id')
+    def _onchange_internal_transfer_adt_dest_location_id(self):
+        for picking in self:
+            if picking.picking_type_name != 'Internal Transfers':
+                continue
+            location = picking.internal_transfer_adt_dest_location_id
+            picking.location_id = location
+            picking.location_dest_id = location
+            picking.adt_dest_location_id = location
 
     def _allow_custom_push_destination(self):
         self.ensure_one()
@@ -1309,7 +1334,7 @@ class StockPicking(models.Model):
     def _check_validate_requirements(self):
         self.ensure_one()
         _logger.info("Check Validate on = %s", self.id)
-        if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Internal Transfers'):
             return self._check_putaway_status_requirements() and self._check_picker_status_requirements()
 
         if self.picking_type_name not in ['Pick', 'Pick Internal']:

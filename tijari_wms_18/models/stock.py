@@ -288,7 +288,7 @@ class StockPicking(models.Model):
     def _check_validate_requirements(self):
         self.ensure_one()
         _logger.info("Check Validate on = %s", self.id)
-        if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Internal Transfers'):
             return self._check_putaway_status_requirements()
 
         active_moves = self.move_ids.filtered(

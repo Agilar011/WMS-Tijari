@@ -187,7 +187,6 @@ class StockMoveLine(models.Model):
         readonly=True,
     )
 
-
     @api.depends(
         "move_id",
         "move_id.move_line_ids.lot_id",
@@ -351,7 +350,7 @@ class StockMoveLine(models.Model):
             for line in self:
                 matching = line._get_matching_status()
                 status_vals = {'matching': matching}
-                if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal'):
+                if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Internal Transfers'):
                     status_vals['second_matching'] = (
                         'Match' if matching == 'match' else 'Not Match'
                     )
@@ -674,7 +673,17 @@ class StockMoveLine(models.Model):
         # Cek tipe picking dari berbagai sumber (picking_id atau dari context)
         picking_type = self.picking_id.picking_type_id or self.move_id.picking_type_id
         print(f">>> Line {self.id} - Picking Type: {picking_type.name if picking_type else 'N/A'}") # Cek di terminal Odoo
-        is_incoming = picking_type.code == 'incoming' or self._context.get('default_picking_type_code') == 'incoming'
+        is_internal_transfer_receipt = (
+            self.picking_id
+            and 'internal_transfer_leg' in self.picking_id._fields
+            and self.picking_id.internal_transfer_leg == 'receipt'
+        )
+        is_incoming = (
+            (picking_type and picking_type.code == 'incoming')
+            or self._context.get('default_picking_type_code') == 'incoming'
+            or (picking_type and picking_type.name in ('Receipts', 'Receipt Internal'))
+            or is_internal_transfer_receipt
+        )
         
         return (
             is_incoming
@@ -734,9 +743,7 @@ class StockMoveLine(models.Model):
         Quant = self.env['stock.quant']
         for line in self:
 
-            is_incoming = self.env.context.get('default_picking_type_code') == 'incoming' or \
-                          line.picking_id.picking_type_code == 'incoming' or \
-                          line.picking_id.picking_type_id.code == 'incoming'
+            is_incoming = line._tjr_is_incoming_tracked()
             
             # print(f">>> Is Incoming: {is_incoming}") # Cek di terminal Odoo
 
@@ -756,6 +763,7 @@ class StockMoveLine(models.Model):
                 des_parent_code = self.location_dest_id.location_id.name if self.location_dest_id and self.location_dest_id.location_id else False
                 print(f">>> Lokasi Tujuan: {des_parent_code}") # Cek di terminal Odoo
 
+                warehouse = line.picking_id.picking_type_id.warehouse_id
                 kode_warehouse = des_parent_code or (warehouse.code if warehouse else False)
                 if not kode_warehouse:
                     kode_warehouse = "WH"  # Fallback jika gudang tidak teridentifikasi
@@ -1164,7 +1172,7 @@ class StockMoveLine(models.Model):
             return 'not_match'
 
         picking_name = self.picking_id.picking_type_id.name
-        if picking_name in ('Pick', 'Pick Internal', 'Pick Components'):
+        if picking_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
             expected_location = self.source_location_id or self.location_id
             expected_lot = self.product_lot_id or self.lot_id
         elif picking_name in ('Receipts', 'Receipt Internal'):
@@ -1184,11 +1192,12 @@ class StockMoveLine(models.Model):
     def _compute_matching(self):
         for line in self:
             line.matching = line._get_matching_status()
-            if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
+            if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
                 line.second_matching = (
                     'Match' if line.matching == 'match' else 'Not Match'
                 )
-
+            if line.picking_id.picking_type_id.name in ( 'Internal Transfers') and line.matching == 'match':
+                line.picker_status = 'finished'
 
             
     @api.onchange('auto_input_code')
