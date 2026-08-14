@@ -63,9 +63,23 @@ class StockMove(models.Model):
     )
 
     picking_type_name = fields.Char(
-        related="picking_id.picking_type_id.name",
-        store=False,
+        string="Operation Type",
+        compute="_compute_get_picking_type_name",
+        store=True
+        
     )
+
+    @api.depends(
+        "picking_id",
+        "raw_material_production_id",
+    )
+    def _compute_get_picking_type_name(self):
+        for rec in self:
+            if rec.picking_id:
+                rec.picking_type_name = rec.picking_id.picking_type_id.name
+            if rec.raw_material_production_id:
+                rec.picking_type_name = rec.raw_material_production_id.picking_type_id.name
+
 
     transaction_type = fields.Selection([
         ('inbound', 'Inbound'),
