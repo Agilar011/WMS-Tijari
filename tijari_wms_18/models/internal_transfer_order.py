@@ -514,6 +514,35 @@ class InternalTransferOrder(models.Model):
         if picking.move_ids.filtered(lambda move: move.state not in ('done', 'cancel')):
             picking.action_assign()
 
+    def _auto_validate_pickings_by_leg(self, legs):
+        for order in self:
+            pickings = order._get_related_pickings().filtered(
+                lambda picking: picking.internal_transfer_leg in legs
+                and picking.state not in ('done', 'cancel')
+            ).sorted(lambda picking: picking.internal_transfer_sequence)
+            for picking in pickings:
+                order._set_staged_picking_ready(picking)
+                picking._set_internal_transfer_auto_done_quantities()
+                action = picking.button_validate()
+                picking._process_internal_transfer_auto_validation_action(action)
+                if picking.state != 'done':
+                    raise UserError(_(
+                        'Auto validation gagal untuk %s. Picking masih di state %s.'
+                    ) % (picking.display_name, picking.state))
+        return True
+
+    def action_auto_validate_transfer_in_delivery(self):
+        transfer_in_orders = self.filtered(
+            lambda order: order.transfer_type == 'transfer_in'
+        )
+        return transfer_in_orders._auto_validate_pickings_by_leg(('delivery',))
+
+    def action_auto_validate_transfer_out_receipt(self):
+        transfer_out_orders = self.filtered(
+            lambda order: order.transfer_type == 'transfer_out'
+        )
+        return transfer_out_orders._auto_validate_pickings_by_leg(('receipt',))
+
     def _create_transfer_picking(
         self, picking_type, location, location_dest, suffix, leg,
         previous_picking=False,
@@ -937,6 +966,70 @@ class StockPicking(models.Model):
                 done_line.with_context(skip_matching_sync=True).write(done_line_vals)
                 move.picked = True
 
+    def _set_internal_transfer_auto_done_quantities(self):
+        MoveLine = self.env['stock.move.line']
+        quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
+        for picking in self.filtered(
+            lambda item: item.internal_transfer_order_id
+            and item.state not in ('done', 'cancel')
+        ):
+            for move in picking.move_ids.filtered(lambda item: item.state not in ('done', 'cancel')):
+                quantity = move.product_uom_qty
+                if not quantity:
+                    continue
+
+                move_lines = move.move_line_ids
+                if not move_lines:
+                    move_lines = MoveLine.create({
+                        'picking_id': picking.id,
+                        'move_id': move.id,
+                        'product_id': move.product_id.id,
+                        'product_uom_id': move.product_uom.id,
+                        'location_id': move.location_id.id,
+                        'location_dest_id': move.location_dest_id.id,
+                    })
+
+                zero_lines = move_lines[:-1]
+                if zero_lines:
+                    zero_lines.with_context(skip_matching_sync=True).write({
+                        quantity_field: 0.0,
+                        'confirmation_quantity': 0.0,
+                        'matching': 'match',
+                        'putaway_status': 'finished',
+                        'picker_status': 'finished',
+                        'picked': True,
+                    })
+
+                done_line = move_lines[-1]
+                line_vals = {
+                    quantity_field: quantity,
+                    'confirmation_quantity': quantity,
+                    'location_dest_id': move.location_dest_id.id,
+                    'location_putaway_id': move.location_dest_id.id,
+                    'matching_loc_dest_id': move.location_dest_id.id,
+                    'matching': 'match',
+                    'putaway_status': 'finished',
+                    'picker_status': 'finished',
+                    'picked': True,
+                }
+                if done_line.lot_id:
+                    line_vals['matching_lot_id'] = done_line.lot_id.id
+                done_line.with_context(skip_matching_sync=True).write(line_vals)
+                move.picked = True
+
+    def _process_internal_transfer_auto_validation_action(self, action):
+        if not isinstance(action, dict):
+            return
+
+        model_name = action.get('res_model')
+        context = action.get('context') or {}
+        if model_name == 'stock.immediate.transfer':
+            wizard = self.env[model_name].with_context(context).create({})
+            wizard.process()
+        elif model_name == 'stock.backorder.confirmation':
+            wizard = self.env[model_name].with_context(context).create({})
+            wizard.process_cancel_backorder()
+
     def button_validate(self):
         for picking in self:
             order = picking.internal_transfer_order_id
@@ -1048,6 +1141,17 @@ class StockPicking(models.Model):
             order = picking.internal_transfer_order_id
             if order and picking.state == 'done':
                 order._generate_next_staged_picking(picking)
+                if (
+                    order.transfer_type == 'transfer_out'
+                    and (
+                        picking.internal_transfer_leg == 'delivery'
+                        or (
+                            order.transaction_type == 'intra_warehouse'
+                            and picking.internal_transfer_leg == 'pick'
+                        )
+                    )
+                ):
+                    order.action_auto_validate_transfer_out_receipt()
             if (
                 order
                 and order.picking_ids

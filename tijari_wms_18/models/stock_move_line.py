@@ -679,9 +679,9 @@ class StockMoveLine(models.Model):
             and self.picking_id.internal_transfer_leg == 'receipt'
         )
         is_incoming = (
-            (picking_type and picking_type.code == 'incoming')
+            picking_type.code == 'incoming'
             or self._context.get('default_picking_type_code') == 'incoming'
-            or (picking_type and picking_type.name in ('Receipts', 'Receipt Internal'))
+            or picking_type.name in ('Receipts', 'Receipt Internal')
             or is_internal_transfer_receipt
         )
         

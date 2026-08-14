@@ -632,7 +632,10 @@ class AcumaticaTransferLine(models.Model):
                 line_payloads=error_line_payloads,
             )
 
-        TransferService.set_order_ready(order)
+        TransferService.set_order_ready(
+            order,
+            auto_validate_transfer_in_delivery=True,
+        )
         receipt.write({
             'import_state': action_state,
             'import_message': f'{action_state.title()}: {order.name if order else False}',

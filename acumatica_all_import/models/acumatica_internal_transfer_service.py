@@ -168,24 +168,30 @@ class AcumaticaInternalTransferService(models.AbstractModel):
         to_label='ToWarehouseID',
         check_same_location_mapping=False,
     ):
-        transfer_info = self.classify(
+        from_mapping = self._find_location_mapping(
             from_code,
-            to_code,
             from_label,
-            to_label,
-            check_same_location_mapping=check_same_location_mapping,
-            require_from_odoo_location=True,
-            require_to_odoo_location=False,
+            required=True,
+            require_odoo_location=True,
         )
-        if transfer_info['status'] == 'skip':
-            return transfer_info
+        if not (to_code or '').strip():
+            raise UserError(f'{to_label} kosong.')
 
-        if transfer_info['transaction_type'] == 'inter_warehouse':
-            transfer_info['destination_location'] = self.get_virtual_destination_location(
-                transfer_info['to_mapping'],
-                to_code,
-            )
-        return transfer_info
+        destination_location = self.get_virtual_destination_location(
+            code=to_code,
+        )
+        if not destination_location:
+            raise UserError(f'Virtual destination location untuk {to_label} tidak ditemukan: {to_code}')
+
+        return {
+            'status': 'import',
+            'message': False,
+            'from_mapping': from_mapping,
+            'to_mapping': self.env['stock.location.acumatica'].browse(),
+            'source_location': from_mapping.odoo_location_id,
+            'destination_location': destination_location,
+            'transaction_type': 'inter_warehouse',
+        }
 
     def classify_transfer_in_from_virtual(
         self,
@@ -287,7 +293,9 @@ class AcumaticaInternalTransferService(models.AbstractModel):
         vals = {key: value for key, value in vals.items() if key in Move._fields}
         return Move.create(vals)
 
-    def set_order_ready(self, order):
+    def set_order_ready(self, order, auto_validate_transfer_in_delivery=False):
         if order:
             order.action_ready()
+            if auto_validate_transfer_in_delivery:
+                order.action_auto_validate_transfer_in_delivery()
         return True

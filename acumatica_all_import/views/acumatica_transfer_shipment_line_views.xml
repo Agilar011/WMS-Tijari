@@ -76,8 +76,8 @@
                             <field name="odoo_picking_id" readonly="1"/>
                             <field name="partner_code" readonly="1"/>
                             <field name="shipment_type" readonly="1"/>
-                            <field name="warehouse_code" readonly="1"/>
-                            <field name="warehouse_dest_code" readonly="1"/>
+                            <field name="warehouse_code"/>
+                            <field name="warehouse_dest_code"/>
                             <field name="header_location_code" readonly="1"/>
                             <field name="scheduled_date" readonly="1"/>
                             <!-- <field name="order_number" readonly="1"/>

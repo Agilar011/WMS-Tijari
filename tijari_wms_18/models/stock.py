@@ -500,26 +500,10 @@ class StockPickingType(models.Model):
                 raise UserError(_("Unsupported document only operation: %s") % operation)
             return self.browse()
 
-        name, sequence_code = operation_vals[operation]
-        domain = [
-            ('is_document_only_api', '=', True),
-            ('sequence_code', '=', sequence_code),
-        ]
-        if warehouse_code:
-            warehouse = self.env['stock.warehouse'].sudo().search([
-                '|',
-                ('code', '=', warehouse_code),
-                ('name', '=', warehouse_code),
-            ], limit=1)
-            if warehouse:
-                domain.append(('warehouse_id', '=', warehouse.id))
-
-        picking_type = self.sudo().search(domain, limit=1)
-        if not picking_type:
-            picking_type = self.sudo().search([
-                ('is_document_only_api', '=', True),
-                ('name', '=', name),
-            ], limit=1)
+        name, _sequence_code = operation_vals[operation]
+        picking_type = self.sudo().search([
+            ('name', '=', name),
+        ], limit=1)
         if not picking_type and required:
             raise UserError(_("No document only picking type configured for %s") % name)
         return picking_type
