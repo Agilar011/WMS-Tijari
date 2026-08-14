@@ -381,7 +381,7 @@ class AcumaticaKitAssembly(models.Model):
 
                     else:
                         manufacturing = Manufacturing.create({
-                            "name": reference_nbr,
+                            "origin": reference_nbr,
                             "product_id": finished_product.id,
                             "product_qty": header.quantity,
                             "product_uom_id": finished_product.uom_id.id,
