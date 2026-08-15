@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="tijari_wms_inherit_mrp_prodction_views" model="ir.ui.view">
+        <field name="name">tijari.wms.inherit.mrp.prodction.views</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='picking_type_id']" position="after">
+                <field name="picking_type_name" invisible='1' />
+            </xpath>    
+
+            <xpath expr="//field[@name='move_raw_ids']/list/field[@name='picked']" position="attributes">
+                <attribute name="optional">hide</attribute>
+                <attribute name="readonly">1</attribute>
+                <attribute name="force_save">1</attribute>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

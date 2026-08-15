@@ -168,10 +168,7 @@ class StockMoveLine(models.Model):
         related="move_id.picking_type_name",
         store=False,
     )
-    picking_type_name = fields.Char(
-        related="move_id.picking_type_name",
-        store=False,
-    )
+   
     allowed_lot_ids = fields.Many2many(
         "stock.lot",
         string="Allowed Lots",
@@ -209,7 +206,7 @@ class StockMoveLine(models.Model):
     )
     def _compute_allowed_matching_lot_ids(self):
         for line in self:
-            line.allowed_matching_lot_ids = line.picking_id.move_line_ids.mapped("lot_id")
+            line.allowed_matching_lot_ids = line.picking_id.move_line_ids.mapped("lot_id") or line.move_id.move_line_ids.mapped("lot_id")
 
     def _get_owner_quant_domain(self):
         self.ensure_one()
@@ -341,22 +338,23 @@ class StockMoveLine(models.Model):
         if {'quantity', 'move_id', 'picking_id'} & set(vals):
             pickings._sync_adt_quantities_from_moves()
 
-        matching_inputs = {
-            'matching_lot_id', 'matching_loc_dest_id',
-            'source_location_id', 'product_lot_id',
-            'location_id', 'location_dest_id', 'lot_id',
-        }
-        if not self.env.context.get('skip_matching_sync') and matching_inputs & set(vals):
-            for line in self:
-                matching = line._get_matching_status()
-                status_vals = {'matching': matching}
-                if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Internal Transfers'):
-                    status_vals['second_matching'] = (
-                        'Match' if matching == 'match' else 'Not Match'
-                    )
-                if any(line[field] != value for field, value in status_vals.items()):
-                    line.with_context(skip_matching_sync=True).write(status_vals)
-
+        # matching_inputs = {
+        #     'matching_lot_id', 'matching_loc_dest_id',
+        #     'source_location_id', 'product_lot_id',
+        #     'location_id', 'location_dest_id', 'lot_id',
+        # }
+        # if not self.env.context.get('skip_matching_sync') and matching_inputs & set(vals):
+        #     for line in self:
+        #         matching = line._get_matching_status() if not line.move_id.is_manufacturing else line._get_matching_status_mo()
+        #         status_vals = {'matching': matching}
+        #         if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Internal Transfers') or line.move_id.is_manufacturing:
+        #             status_vals['second_matching'] = (
+        #                 'Match' if matching == 'match' else 'Not Match'
+        #             )
+                
+        #         if any(line[field] != value for field, value in status_vals.items()):
+        #               line.with_context(skip_matching_sync=True).write(status_vals)
+        
         self._update_move_picked()
 
         return res
@@ -1149,14 +1147,14 @@ class StockMoveLine(models.Model):
 
             # Matching hanya berlaku untuk stock move yang
             # merupakan bagian dari picking.
-            if not move.picking_id:
-                continue
+            # if not move.picking_id:
+            #     continue
 
             # Return picking tidak melalui proses matching WMS.
             if move.picking_id.return_id:
                 move.picked = True
                 continue
-
+            
             move.picked = bool(
                 move.move_line_ids
                 and all(
@@ -1168,10 +1166,10 @@ class StockMoveLine(models.Model):
     def _get_matching_status(self):
         """Return the matching result using the reference fields for each operation."""
         self.ensure_one()
+        picking_name = self.picking_id.picking_type_id.name
         if not self.matching_lot_id or not self.matching_loc_dest_id:
             return 'not_match'
 
-        picking_name = self.picking_id.picking_type_id.name
         if picking_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
             expected_location = self.source_location_id or self.location_id
             expected_lot = self.product_lot_id or self.lot_id
@@ -1188,17 +1186,46 @@ class StockMoveLine(models.Model):
             else 'not_match'
         )
 
+    #ONLY LOT CONFIRMATION
+    def _get_matching_status_mo(self):
+            """Return the matching result using the reference fields for each operation."""
+            self.ensure_one()
+            if not self.matching_lot_id:
+                return 'not_match'
+    
+            expected_lot = self.lot_id
+            
+            return (
+                'match'
+                if expected_lot == self.matching_lot_id
+                else 'not_match'
+            )
+    
+
     @api.onchange('confirmation_quantity', 'auto_input_code', 'matching_lot_id', 'matching_loc_dest_id')
     def _compute_matching(self):
         for line in self:
-            line.matching = line._get_matching_status()
-            if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
+            if line.picking_id:
+                if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
+                    line.matching = line._get_matching_status()
+                    line.second_matching = (
+                        'Match' if line.matching == 'match' else 'Not Match'
+                    )
+                elif line.picking_id.picking_type_id.name in ('Internal Transfers') and line.matching == 'match':
+                    line.matching = line._get_matching_status()
+                    line.picker_status = 'finished'
+                elif line.picking_id.picking_type_id.name in ('Receipt Internal'):
+                    line.matching = line._get_matching_status_mo()
+                    line.second_matching = (
+                        'Match' if line.matching == 'match' else 'Not Match'
+                                    )
+            elif line.move_id.raw_material_production_id:
+                line.matching = line._get_matching_status_mo()
                 line.second_matching = (
                     'Match' if line.matching == 'match' else 'Not Match'
                 )
-            if line.picking_id.picking_type_id.name in ( 'Internal Transfers') and line.matching == 'match':
-                line.picker_status = 'finished'
-
+                
+                
             
     @api.onchange('auto_input_code')
     def _compute_auto_input_code(self):

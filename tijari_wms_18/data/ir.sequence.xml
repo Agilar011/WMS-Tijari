@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="seq_lot_manufacture" model="ir.sequence">
+        <field name="name">Lot Number - Manufacture</field>
+        <field name="code">stock.lot.manufacture</field>
+        <field name="prefix">MFG/</field>
+        <field name="padding">6</field>
+    </record>
+
+    <record id="seq_lot_inventory_adjustment" model="ir.sequence">
+        <field name="name">Lot Number - Inventory Adjustment</field>
+        <field name="code">stock.lot.inventory.adjustment</field>
+        <field name="prefix">ADJ/</field>
+        <field name="padding">6</field>
+    </record>
+
+</odoo>

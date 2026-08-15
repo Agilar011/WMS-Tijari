@@ -35,7 +35,27 @@
                 <attribute name="invisible">1</attribute>
                 <attribute name="required">0</attribute>
             </xpath>
+            <xpath expr="//field[@name='location_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='scrap_location_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
             <xpath expr="//field[@name='scrap_reason_tag_ids']" position="after">
+                <field 
+                    name="location_id" 
+                    options="{'no_create': True, 'no_open': True}" 
+                    groups="stock.group_stock_multi_locations" 
+                    force_save="1" 
+                    readonly="state == 'done'"
+                />
+                <field 
+                    name="scrap_location_id" 
+                    options="{'no_create': True, 'no_open': True}" 
+                    groups="stock.group_stock_multi_locations" 
+                    force_save="1" 
+                    readonly="state == 'done'"
+                />
                 <field 
                     name="availability_state"
                     widget="badge"
@@ -48,9 +68,7 @@
                     readonly="1"
                 />
             </xpath>
-            <xpath expr="//field[@name='origin']" position="after">
-                <field name="picking_id" invisible="1" />
-            </xpath>
+            
             <xpath expr="//sheet" position="inside">
                 <notebook>
                     <page name="item_to_scrap" string="Item to Scrap">
@@ -66,7 +84,7 @@
 
                                 <field name="demand_qty"/>
 
-                                <field name="available_qty"/>
+                                <field name="available_qty" optional="hide"/>
 
                                 <field name="scrapped_qty"/>
 
@@ -75,17 +93,24 @@
                                     decoration-warning="availability_state == 'waiting'"
                                     decoration-success="availability_state == 'available'"
                                     decoration-danger="availability_state == 'insufficient'"
+                                    optional="hide"
                                 />
 
                                 <field name="product_uom_id"/>
 
+                                <field name="location_id" optional="hide"/>
+
+                                <field name="receipt_move_id" optional="hide"/>
+
                                 <field name="move_id" optional="hide"/>
+
+                                <field name="scrap_move_id" optional="hide" />
 
                                 <button
                                     name="action_show_details"
                                     type="object"
                                     icon="fa-list"
-                                    invisible="not move_id"
+                                    invisible="not scrap_move_id"
                                 />
 
                             </list>
@@ -110,6 +135,43 @@
                     class="oe_highlight"
                     invisible="not show_generate_scrap"/>
             </xpath>
+        </field>
+    </record>
+
+    <record id="wms_scrap_move_view_form" model="ir.ui.view">
+        <field name="name">wms.scrap.move.view.form</field>
+        <field name="model">wms.scrap.move</field>
+        <field name="arch" type="xml">
+            <form string="">
+                <sheet>
+                    <field name="receipt_move_id" invisible='1' />
+                    <group>
+                        <group>
+                            <field name="product_id" readonly="id or move_line_ids"/>
+                            <label for="demand_qty"/>
+                            <div class="o_row">
+                                <span><field name="demand_qty" nolabel="1"/></span>
+                                <span><field name="product_uom" groups="uom.group_uom" nolabel="1" options="{'no_open': True}"/></span>
+                            </div>
+                        </group>
+                    </group>
+                    <field name="move_line_ids">
+                        <list editable="bottom">
+                            <field name="lot_id" />
+                            <field name="location_id" />
+                            <field name="quantity" />
+                            <field name="product_uom_id" />
+                            <field name="matching_lot_id" />
+                            <field 
+                                name="match_status" 
+                                widget="badge"
+                                decoration-success="match_status == 'match'"
+                                decoration-danger="match_status == 'not_match'"
+                            />
+                        </list>
+                    </field>
+                </sheet>
+            </form>
         </field>
     </record>
 </odoo>
