@@ -975,6 +975,11 @@ class StockMoveLine(models.Model):
             },
         }
 
+    @api.onchange('matching')
+    def _onchange_matching(self):
+        for line in self:
+            line._update_move_picked()
+
     def action_apply_scanned_field(self, field_name, scanned_code):
         allowed_fields = {
             'confirmation_lot_code',

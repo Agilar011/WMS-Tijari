@@ -38,6 +38,19 @@ class StockMove(models.Model):
     adt_quantity = fields.Float(string='Quantity (Acumatica)')
     adt_type = fields.Char(string='Type (Acumatica)')
     adt_acumatica_write_date = fields.Datetime(string='Last Modified (Acumatica)')
+    allocation_id = fields.Char(string='Allocation ID')
+    allocation_note = fields.Text(string='Allocation Note')
+    allocation_Description = fields.Text(string='Allocation Description')
+    allocation_InventoryID = fields.Char(string='Allocation Inventory ID')
+    allocation_LocationID = fields.Char(string='Allocation Location ID')
+    allocation_Quantity = fields.Float(string='Allocation Quantity')
+    allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
+    allocation_UOM = fields.Char(string='Allocation UOM')
+    adt_dest_location_id = fields.Many2one(
+        "stock.location",
+        domain="[('usage', '=', 'internal')]",
+        string="Mapped Location",
+    )
     product_note = fields.Text(string='Product Note')
     batch_adt_type = fields.Char(
         related='picking_id.adt_type',
@@ -299,6 +312,37 @@ class StockMove(models.Model):
             total_confirmation_quantity = sum(move.move_line_ids.mapped('confirmation_quantity'))
             move.confirmation_quantity = total_confirmation_quantity if total_confirmation_quantity > 0 else 0.0
 
+    def action_generate_lot(self):
+        for move in self:
+            print(move.product_id)
+            print(move.product_uom)
+            print(move.product_id.uom_id)
+            move.move_line_ids.generate_lot()
+
+    @api.onchange("move_line_ids")
+    def _onchange_move_line_ids(self):
+        for move in self:
+            total_qty = sum(move.move_line_ids.mapped("quantity"))
+
+            if total_qty > move.product_uom_qty:
+                return {
+                    "warning": {
+                        "title": _("Invalid Quantity"),
+                        "message": _(
+                            "The total quantity (%s) cannot exceed the demand (%s)."
+                        ) % (total_qty, move.product_uom_qty),
+                    }
+                }
+
+    @api.onchange('product_uom_qty', 'quantity')
+    def _onchange_sync_picking_quantities(self):
+        for move in self:
+            picking = move.picking_id
+            if not picking:
+                continue
+
+            picking._sync_adt_quantities_from_moves()
+
 
     @api.depends(
         "quantity",
@@ -552,7 +596,24 @@ class StockMove(models.Model):
         for line in res:
             if not line.adt_dest_location_id:
                 line.adt_dest_location_id = line.picking_id.adt_dest_location_id or line.picking_id.picking_type_id.default_location_dest_id
+        res.mapped('picking_id')._sync_adt_quantities_from_moves()
 
+        return res
+
+    def write(self, vals):
+        pickings = self.mapped('picking_id')
+        res = super().write(vals)
+        pickings |= self.mapped('picking_id')
+
+        if {'product_uom_qty', 'quantity', 'picking_id'} & set(vals):
+            pickings._sync_adt_quantities_from_moves()
+
+        return res
+
+    def unlink(self):
+        pickings = self.mapped('picking_id')
+        res = super().unlink()
+        pickings._sync_adt_quantities_from_moves()
         return res
 
     def _adt_get_final_dest_location(self):

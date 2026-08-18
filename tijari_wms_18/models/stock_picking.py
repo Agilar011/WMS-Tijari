@@ -37,11 +37,14 @@ class StockPicking(models.Model):
     
     adt_external_ref = fields.Char(string='External Ref (Acumatica)')
     adt_warehouse_code = fields.Char(string='Warehouse (Acumatica)')
-    adt_external_id = fields.Char(string='UUID Header Acumatica')
+    adt_external_id = fields.Char(string='UUID Header Acumatica', index=True)
     adt_to_warehouse_code = fields.Char(string='To Warehouse (Acumatica)')
     adt_from_warehouse_code = fields.Char(string='From Warehouse (Acumatica)')
     adt_description = fields.Char(string='Description (Acumatica)')
     adt_is_document_only = fields.Boolean(string='Is Document Only', index=True, copy=False)
+    operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
+    adt_destination_location_address = fields.Char(string='Destination Address')
+    qr_code_image = fields.Binary(string='Sign')
 
     adt_actual_amount = fields.Float(string='Control Amount (Acumatica)')
     adt_total_amount = fields.Float(string='Total Amount (Acumatica)')
@@ -114,6 +117,13 @@ class StockPicking(models.Model):
         "stock.package_level",
         compute="_compute_filtered_package_level_ids",
     )
+
+    def _sync_adt_quantities_from_moves(self):
+        for picking in self:
+            picking.update({
+                'adt_total_qty': sum(picking.move_ids.mapped('product_uom_qty')),
+                'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
+            })
 
     @api.depends("package_level_ids")
     def _compute_available_package_ids(self):
@@ -667,6 +677,8 @@ class StockPicking(models.Model):
         #         )
 
         res = super().action_confirm()
+        self._adt_apply_dest_location_to_move_lines()
+        self._remove_qty_move_line()
         
         for picking in self:
                     for move in picking.move_ids:
@@ -681,6 +693,33 @@ class StockPicking(models.Model):
                                 })        
 
         return res
+
+    def _adt_apply_dest_location_to_move_lines(self):
+        for picking in self:
+            if not picking.adt_dest_location_id:
+                continue
+
+            for move in picking.move_ids_without_package:
+                final_dest_location = move._adt_get_final_dest_location()
+                if not final_dest_location:
+                    continue
+
+                if not move.adt_dest_location_id:
+                    move.location_dest_id = picking.adt_dest_location_id
+                    move.adt_dest_location_id = picking.adt_dest_location_id
+
+                if move.move_line_ids:
+                    move.move_line_ids.write({
+                        'location_dest_id': final_dest_location.id,
+                    })
+
+    def _remove_qty_move_line(self):
+        # for move in self.move_ids:
+        #     move.action_generate_lot()
+        #     for line in move.move_line_ids:
+        #         line.quantity = 0
+        for move in self.move_line_ids:
+            move.quantity = 0
 
     adt_dest_location_id = fields.Many2one(
         "stock.location",
@@ -755,6 +794,20 @@ class StockPicking(models.Model):
                 'default_attachment_ids': [(6, 0, [attachment_new.id])],
             },
         }
+
+    def action_print_warehouse_receipt(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/warehouse_receipt?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
+
+    def do_print_picking(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/warehouse_receipt?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
 
     def action_open_stock_move_scan_wizard(self):
         self.ensure_one()
@@ -1118,6 +1171,18 @@ class StockPicking(models.Model):
         self.wms_state = "return_shipment"
 
     def button_validate(self):
+        document_only_pickings = self.filtered(
+            lambda picking: picking.adt_is_document_only or picking.picking_type_id.is_document_only_api
+        )
+        for picking in document_only_pickings.filtered(lambda item: item.state not in ('done', 'cancel')):
+            picking._adt_preserve_document_only_destination()
+            if picking.state == 'draft':
+                picking.action_confirm()
+            if picking.state in ('confirmed', 'waiting', 'assigned'):
+                picking.action_assign()
+            picking._adt_preserve_document_only_destination()
+            picking._set_document_only_done_quantities()
+
         for picking in self:
             if picking.adt_is_document_only or picking.picking_type_id.is_document_only_api:
                 continue
@@ -1151,7 +1216,11 @@ class StockPicking(models.Model):
 
                         print(f"After write line {line.id} = {line.matching} for picking: {picking.id}")
 
-        res = super().button_validate()
+        if document_only_pickings:
+            res = super(StockPicking, self.with_context(skip_sanity_check=True)).button_validate()
+        else:
+            res = super().button_validate()
+        document_only_pickings._adt_preserve_document_only_destination()
 
         for rec in self:
             # _logger.info("=" * 80)
