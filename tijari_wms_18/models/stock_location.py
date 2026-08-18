@@ -1,8 +1,16 @@
+import base64
+import hashlib
+
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
 class StockLocation(models.Model):
     _inherit = 'stock.location'
+
+    sequence = fields.Boolean(string='Sequence', default=False, help='Indicates if the location uses sequence for operations')
+    unique_code = fields.Char(string='Unique Code', help='A unique code for the location')
+    is_location_mapping = fields.Boolean(string="Parent Mapping Location")
+    is_consignment = fields.Boolean(string="Consignment Location")
 
     @api.depends('name', 'complete_name')
     @api.depends_context('show_location_short_name')
@@ -25,6 +33,13 @@ class StockLocation(models.Model):
             operator=operator,
             limit=limit,
         )
+
+    def generate_unique_code(self):
+        for location in self:
+            if not location.unique_code:
+                raw = f"{location.id}-{location.create_date}".encode("utf-8")
+                hash_str = base64.b32encode(hashlib.sha256(raw).digest())[:8].decode()
+                location.unique_code = f"LOC-{hash_str}"
 
 
 class StockLocationAcumatica(models.Model):
