@@ -12,11 +12,18 @@
             </xpath>
             <xpath expr="//button[@name='action_validate']" position="before">
                 <button
+                    name="action_mark_as_to_do"
+                    string="Mark As To Do"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'draft'"
+                />
+                <button
                     name="action_check_availability"
                     string="Check Availability"
                     type="object"
                     class="btn-primary"
-                    invisible="state != 'draft'"
+                    invisible="state != 'ready'"
                 />
             </xpath>
             <xpath expr="//field[@name='product_id']" position="attributes">
@@ -128,12 +135,12 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
-                <button
+                <!-- <button
                     name="action_generate_scrap"
                     string="Generate Scrap"
                     type="object"
                     class="oe_highlight"
-                    invisible="not show_generate_scrap"/>
+                    invisible="not show_generate_scrap"/> -->
             </xpath>
         </field>
     </record>
