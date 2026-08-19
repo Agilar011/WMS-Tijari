@@ -874,13 +874,13 @@ class AcumaticaKitAssemblyLine(models.Model):
                 'name' : reference_nbr,
                 'product_id' : processed_product.id,
                 'product_qty' : header.quantity,
-                'product_uom_id' : processed_product.product_tmpl_id.xuom_id.id,
-                'scheduled_date': header.requested_on,
+                'product_uom_id' : processed_product.product_tmpl_id.uom_id.id,
+                # 'scheduled_date': header.requested_on,
                 'user_id': self.env.uid,
                 'picking_type_id': picking_type.id,
-                'location_src_id': picking_type.default_location_id_src_id.id,
-                'location_dest_id': picking_type.default_location_id_dest_id.id,
-                'source' : reference_nbr,
+                'location_src_id': picking_type.default_location_src_id.id,
+                'location_dest_id': picking_type.default_location_dest_id.id,
+                # 'source' : reference_nbr,
                 'company_id' : warehouse.company_id.id,
             }
             manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)])
@@ -915,7 +915,7 @@ class AcumaticaKitAssemblyLine(models.Model):
                     'product_id' : component.product_id.id,
                     'product_uom_qty' : item.line_quantity,
                     'product_uom_id' : component.uom_id.id,
-                    'location_id' : picking_type.default_location_id_src_id.id,
+                    'location_id' : picking_type.default_location_src_id.id,
                     'raw_material_production_id' : manufacturing.id,
                 }
 

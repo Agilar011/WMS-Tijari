@@ -53,8 +53,6 @@ class AcumaticaWebhookLog(models.Model):
 
     @staticmethod
     def _processing_payload(payload):
-        if isinstance(payload, dict) and isinstance(payload.get('Inserted'), list):
-            return {'records': payload.get('Inserted') or []}
         return payload
 
     def action_process_to_staging(self):
