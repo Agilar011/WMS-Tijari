@@ -366,6 +366,13 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "product_lines": staging_lines,
         }
 
+    def _process_so_shipment_completed_webhook(self, payload, config):
+        return {
+            "transaction_type": "so_shipment_completed",
+            "log_only": True,
+            "message": "Shipment Completed webhook is stored in Webhook Logs only.",
+        }
+
     def _so_transfer_header_vals(self, item, row_number):
         vals = self._receipt_header_vals(item, row_number)
         warehouse_code = self._first_value(item, "BuildingID", "Warehouse", "LineWarehouseID", "WarehouseID", "warehouse_code")
@@ -604,13 +611,13 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "warehouse_dest_code": self._first_value(item, "LineWarehouseID", "warehouse_dest_code"),
         }
 
-    def _toko_pegang_do_header_vals(self, item, row_number):
+    def _inventory_receipt_base_header_vals(self, item, row_number):
         warehouse_code = self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_code")
         document_only = self._bool_value(item, "DocumentOnly", "document_only")
         picking_type = self._search_incoming_picking_type(
             warehouse_code,
             document_only=document_only,
-            api_acumatica="receipt_toko_pegang_do",
+            api_acumatica="inventory_receipt",
         )
         return {
             "external_id": item.get("id") or item.get("external_id") or "",
@@ -642,7 +649,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "sync_date": fields.Datetime.now(),
         }
 
-    def _toko_pegang_do_product_vals(self, item, header):
+    def _inventory_receipt_product_vals(self, item, header):
         return {
             "header_external_id": item.get("id") or item.get("external_id") or "",
             "inventory_line_id": header.id,
@@ -657,6 +664,21 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "uom_code": self._first_value(item, "LineUOM", "UOM", "uom_code"),
             "warehouse_dest_code": self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_dest_code"),
         }
+
+    def _inventory_receipt_header_vals(self, item, row_number):
+        vals = self._inventory_receipt_base_header_vals(item, row_number)
+        transfer_type = self._first_value(item, "TransferType", "TransType", "transfer_type")
+        transfer_type_key = str(transfer_type or "").strip().lower().replace("-", "_").replace(" ", "_")
+        picking_code = "internal" if transfer_type_key in ("transfer_in", "transfer_receipt") else "incoming"
+        picking_type = self._search_picking_type(
+            vals.get("warehouse_code"),
+            picking_code,
+            document_only=vals.get("document_only"),
+            api_acumatica="inventory_receipt",
+        )
+        vals["transfer_type"] = transfer_type
+        vals["picking_type_id"] = picking_type.id if picking_type else False
+        return vals
 
     def _transfer_shipment_header_vals(self, item, row_number):
         warehouse_code = self._first_value(item, "WarehouseID", "Warehouse", "warehouse_code")
@@ -1055,7 +1077,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         return {
             "po_receipt": {
                 "label": "PO Receipt",
-                "records_keys": ("PurchaseReceiptGIDetails", "records", "data", "value"),
+                "records_keys": ("PurchaseReceiptGIDetails",),
                 "document_keys": ("ReceiptNbr", "receipt_nbr"),
                 "document_field": "receipt_nbr",
                 "header_model": "acumatica.receipt.line",
@@ -1065,7 +1087,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "po_return": {
                 "label": "PO Return",
-                "records_keys": ("PurchaseReceiptGIDetails", "records", "data", "value"),
+                "records_keys": ("PurchaseReceiptReturnGIDetails",),
                 "document_keys": ("ReceiptNbr", "receipt_nbr"),
                 "document_field": "receipt_nbr",
                 "header_model": "acumatica.issue.po.return.line",
@@ -1073,19 +1095,19 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "header_vals": self._po_return_header_vals,
                 "product_vals": self._po_return_product_vals,
             },
-            "toko_pegang_do": {
-                "label": "Inventory Receipt : Toko Pegang DO",
-                "records_keys": ("InventoryReceiptExternalGIDetails", "records", "data", "value"),
+            "inventory_receipt": {
+                "label": "Inventory Receipt",
+                "records_keys": ("InventoryReceiptGIDetails",),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
-                "header_model": "acumatica.toko.pegang.do.line",
-                "product_model": "acumatica.toko.pegang.do.product.line",
-                "header_vals": self._toko_pegang_do_header_vals,
-                "product_vals": self._toko_pegang_do_product_vals,
+                "header_model": "acumatica.inventory.recieved.line",
+                "product_model": "acumatica.inventory.recieved.product.line",
+                "header_vals": self._inventory_receipt_header_vals,
+                "product_vals": self._inventory_receipt_product_vals,
             },
             "so_transfer": {
                 "label": "SO Transfer",
-                "records_keys": ("TransferOrderGIDetails", "PurchaseReceiptGIDetails", "records", "data", "value"),
+                "records_keys": ("SOTRGIDetails",),
                 "document_keys": ("ReceiptNbr", "receipt_nbr"),
                 "document_field": "receipt_nbr",
                 "header_model": "acumatica.transfer.line",
@@ -1095,7 +1117,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "transfer_shipment": {
                 "label": "Transfer Shipment",
-                "records_keys": ("ShipmentGIDetails", "Details", "records", "data", "value"),
+                "records_keys": ("ShipmentTransferGIDetails",),
                 "document_keys": ("ShipmentNbr", "shipment_nbr"),
                 "document_field": "shipment_nbr",
                 "header_model": "acumatica.transfer.shipment.line",
@@ -1106,7 +1128,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "inventory_issue": {
                 "label": "Inventory Issue",
-                "records_keys": ("Inserted", "records", "data", "value"),
+                "records_keys": ("InventoryIssueGIDetails",),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "header_model": "acumatica.inventory.issue.line",
@@ -1116,7 +1138,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "so_shipment": {
                 "label": "SO Shipment",
-                "records_keys": ("ShipmentGIDetails", "records", "data", "value"),
+                "records_keys": ("ShipmentGIDetails",),
                 "detail_keys": ("ShipmentGIDetails", "Details", "details"),
                 "document_keys": ("ShipmentNbr", "adt_ShipmentNbr"),
                 "document_field": "adt_ShipmentNbr",
@@ -1128,7 +1150,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "so_shipment_consignment": {
                 "label": "SO Shipment Consignment",
-                "records_keys": ("ShipmentGIDetails", "records", "data", "value"),
+                "records_keys": ("ShipmentGIDetails",),
                 "detail_keys": ("ShipmentGIDetails", "Details", "details"),
                 "document_keys": ("ShipmentNbr", "adt_ShipmentNbr"),
                 "document_field": "adt_ShipmentNbr",
@@ -1138,9 +1160,14 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "header_vals": self._so_shipment_consignment_header_vals,
                 "product_vals": self._so_shipment_line_vals,
             },
-            "vendor_return_direct_transfer": {
-                "label": "Vendor Return Direct Transfer",
-                "records_keys": ("records", "data", "value"),
+            "so_shipment_completed": {
+                "label": "SO Shipment Completed (Log Only)",
+                "records_keys": ("ShipmentCompletedGIDetails",),
+                "processor": self._process_so_shipment_completed_webhook,
+            },
+            "vendor_return": {
+                "label": "Vendor Return",
+                "records_keys": ("VendorReturnGIDetails",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.vendor.return.direct.transfer.staging",
@@ -1149,9 +1176,9 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "header_vals": self._vendor_return_direct_transfer_header_vals,
                 "product_vals": self._direct_transfer_product_vals,
             },
-            "vendor_return_document_direct_transfer": {
-                "label": "Vendor Return Document Direct Transfer",
-                "records_keys": ("records", "data", "value"),
+            "vendor_return_document": {
+                "label": "Vendor Return Document",
+                "records_keys": ("VendorReturnDocumentGIDetails",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.direct.transfer.staging",
@@ -1162,7 +1189,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "transfer_one_step": {
                 "label": "Transfer Intra Warehouse Out (1 Step)",
-                "records_keys": ("records", "data", "value"),
+                "records_keys": ("TransferPinjamanGIDetails",),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "header_model": "acumatica.transfer.one.step.line",
@@ -1173,7 +1200,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "transfer_two_step": {
                 "label": "Transfer Intra Warehouse Out (2 Step)",
-                "records_keys": ("records", "data", "value"),
+                "records_keys": ("TransferPinjamanGIDetails",),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "header_model": "acumatica.transfer.two.step.line",
@@ -1184,7 +1211,18 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "credit_memo_consignment": {
                 "label": "Credit Memo Consignment",
-                "records_keys": ("records", "data", "value"),
+                "records_keys": ("CreditMemoConsignmentGIDetails",),
+                "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
+                "document_field": "adt_ReferenceNbr",
+                "header_model": "acumatica.credit.memo.consignment.staging",
+                "product_model": "acumatica.credit.memo.consignment.staging.line",
+                "line_relation": "line_ids",
+                "header_vals": self._credit_memo_consignment_header_vals,
+                "product_vals": self._credit_memo_consignment_product_vals,
+            },
+            "invoice_credit_memo_consignment": {
+                "label": "Invoice Credit Memo Consignment",
+                "records_keys": ("InvoiceCreditMemoConsignmentGIDetails",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.credit.memo.consignment.staging",
@@ -1195,7 +1233,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "invoice_consignment": {
                 "label": "Invoice Consignment",
-                "records_keys": ("records", "data", "value"),
+                "records_keys": ("InvoiceConsignmentGIDetails",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.invoice.consignment.staging",
@@ -1205,7 +1243,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "inventory_receipt_transfer_wh_in": {
                 "label": "Inventory Receipt : Transfer In",
-                "records_keys": ("records", "data", "value"),
+                "records_keys": ("InventoryReceiptGIDetails",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.inventory.receipt.transfer.wh.in.staging",
@@ -1216,25 +1254,15 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "kit_assembly": {
                 "label": "Kit Assembly",
-                "records_keys": ("records", "data", "value"),
+                "records_keys": ("KitAssemblyGIDetails",),
                 "detail_keys": ("StockComponents", "stock_components", "Components", "components", "Details", "details"),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "processor": self._process_kit_assembly_webhook,
             },
-            "inventory_receipt_external": {
-                "label": "Inventory Receipt External",
-                "records_keys": ("InventoryReceiptExternalGIDetails", "records", "data", "value"),
-                "document_keys": ("ReferenceNbr", "reference_nbr"),
-                "document_field": "reference_nbr",
-                "header_model": "acumatica.receipt.external.line",
-                "product_model": "acumatica.receipt.external.product.line",
-                "header_vals": self._receipt_external_header_vals,
-                "product_vals": self._receipt_external_product_vals,
-            },
             "shipment_return": {
                 "label": "Shipment Return",
-                "records_keys": ("ShipmentReturnGIDetails", "records", "data", "value"),
+                "records_keys": ("ShipmentReturnGIDetails",),
                 "document_keys": ("ShipmentNbr", "shipment_nbr"),
                 "document_field": "shipment_nbr",
                 "header_model": "acumatica.shipment.line",
@@ -1247,20 +1275,28 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
     def _normalize_transaction_type(self, transaction_type):
         key = (transaction_type or "").strip().lower().replace("-", "_")
         aliases = {
-            "inventory_receipt": "inventory_receipt_external",
-            "inventory_received": "inventory_receipt_external",
-            "inventory_receipt_toko_pegang_do": "toko_pegang_do",
-            "receipt_toko_pegang_do": "toko_pegang_do",
+            "inventory_receipt": "inventory_receipt",
+            "inventory_received": "inventory_receipt",
             "receipt_transfer_in": "inventory_receipt_transfer_wh_in",
             "inventory_receipt_transfer_in": "inventory_receipt_transfer_wh_in",
             "shipment_so_return": "shipment_return",
             "so_shipment_return": "shipment_return",
+            "shipment_completed": "so_shipment_completed",
+            "so_shipment_complete": "so_shipment_completed",
+            "shipment_complete": "so_shipment_completed",
             "sotr": "so_transfer",
             "inventory_issue_change_item": "inventory_issue",
             "issue_change_item": "inventory_issue",
-            "vendor_return": "vendor_return_direct_transfer",
-            "vendor_return_direct": "vendor_return_direct_transfer",
+            "vendor_return": "vendor_return",
+            "vendor_return_direct": "vendor_return",
+            "vendor_return_direct_transfer": "vendor_return",
+            "vendor_return_document_direct_transfer": "vendor_return_document",
             "shipment_so": "so_shipment",
+            "invoicecreditmemo": "invoice_credit_memo_consignment",
+            "invoicecreditmemoconsignment": "invoice_credit_memo_consignment",
+            "invoicecreditmemoconsignmentgi": "invoice_credit_memo_consignment",
+            "invoice_credit_memo": "invoice_credit_memo_consignment",
+            "invoice_credit_memo_consignment_gi": "invoice_credit_memo_consignment",
         }
         return aliases.get(key, key)
 
