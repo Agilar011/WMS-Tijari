@@ -115,7 +115,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
             "header_location_code": self._first_value(item, "Location", "header_location_code"),
             "post_period": self._first_value(item, "PostPeriod", "post_period"),
-            "receipt_nbr": self._first_value(item, "ReceiptNbr", "receipt_nbr"),
+            "receipt_nbr": self._first_value(item, "ReceiptNbr", "ReferenceNbr", "POReceiptNbr", "receipt_nbr"),
             "status": self._first_value(item, "Status", "status"),
             "total_qty": self._first_value(item, "TotalQty", "total_qty"),
             "receipt_type": self._first_value(item, "Type", "receipt_type"),
@@ -180,7 +180,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
             "header_location_code": self._first_value(item, "Location", "header_location_code"),
             "post_period": self._first_value(item, "PostPeriod", "post_period"),
-            "receipt_nbr": self._first_value(item, "ReceiptNbr", "receipt_nbr"),
+            "receipt_nbr": self._first_value(item, "ReceiptNbr", "ReferenceNbr", "TransferOrderNbr", "receipt_nbr"),
             "status": self._first_value(item, "Status", "status"),
             "total_qty": self._first_value(item, "TotalQty", "total_qty"),
             "receipt_type": self._first_value(item, "Type", "receipt_type"),
@@ -348,11 +348,8 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 staging_ids.extend(created_staging.ids)
                 staging_lines += len(staging_vals)
 
-        staging_records = Staging.browse(staging_ids)
-        if staging_records:
-            staging_records._do_import()
-            imported = len(staging_records.filtered(lambda line: line.import_state in ("imported", "updated")))
-            errors = len(staging_records.filtered(lambda line: line.import_state == "error"))
+        # Webhook hanya menyiapkan staging. Import Manufacturing dijalankan
+        # dari tombol Import This agar sama dengan alur staging manual.
 
         return {
             "transaction_type": "kit_assembly",
@@ -516,7 +513,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "location_code": self._first_value(item, "Location", "location_code"),
             "post_period": self._first_value(item, "PostPeriod", "post_period"),
             "reference_nbr": self._first_value(item, "ReferenceNbr", "reference_nbr"),
-            "shipment_nbr": self._first_value(item, "ShipmentNbr", "shipment_nbr"),
+            "shipment_nbr": self._first_value(item, "ShipmentNbr", "TransferShipmentNbr", "ReferenceNbr", "shipment_nbr"),
             "status": self._first_value(item, "Status", "status"),
             "total_qty": self._first_value(item, "TotalQty", "total_qty"),
             "transfer_nbr": self._first_value(item, "TransferNbr", "transfer_nbr"),
@@ -694,7 +691,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "note": self._first_value(item, "NoteHeader", "note") or self._note_value(item),
             "building_code": self._first_value(item, "BuildingID", "building_code"),
-            "shipment_nbr": self._first_value(item, "ShipmentNbr", "shipment_nbr"),
+            "shipment_nbr": self._first_value(item, "ShipmentNbr", "TransferShipmentNbr", "ReferenceNbr", "shipment_nbr"),
             "partner_code": self._first_value(item, "CustomerID", "partner_code"),
             "customer_name": self._first_value(item, "CustomerName", "customer_name"),
             "description": self._first_value(item, "Description", "description"),
@@ -1077,8 +1074,8 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         return {
             "po_receipt": {
                 "label": "PO Receipt",
-                "records_keys": ("PurchaseReceiptGIDetails",),
-                "document_keys": ("ReceiptNbr", "receipt_nbr"),
+                "records_keys": ("Inserted",),
+                "document_keys": ("ReceiptNbr", "ReferenceNbr", "POReceiptNbr", "receipt_nbr"),
                 "document_field": "receipt_nbr",
                 "header_model": "acumatica.receipt.line",
                 "product_model": "acumatica.receipt.product.line",
@@ -1087,8 +1084,8 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "po_return": {
                 "label": "PO Return",
-                "records_keys": ("PurchaseReceiptReturnGIDetails",),
-                "document_keys": ("ReceiptNbr", "receipt_nbr"),
+                "records_keys": ("Inserted",),
+                "document_keys": ("ReceiptNbr", "ReferenceNbr", "POReceiptNbr", "receipt_nbr"),
                 "document_field": "receipt_nbr",
                 "header_model": "acumatica.issue.po.return.line",
                 "product_model": "acumatica.issue.po.return.product",
@@ -1097,7 +1094,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "inventory_receipt": {
                 "label": "Inventory Receipt",
-                "records_keys": ("InventoryReceiptGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "header_model": "acumatica.inventory.recieved.line",
@@ -1107,8 +1104,8 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "so_transfer": {
                 "label": "SO Transfer",
-                "records_keys": ("SOTRGIDetails",),
-                "document_keys": ("ReceiptNbr", "receipt_nbr"),
+                "records_keys": ("Inserted",),
+                "document_keys": ("ReceiptNbr", "ReferenceNbr", "TransferOrderNbr", "receipt_nbr"),
                 "document_field": "receipt_nbr",
                 "header_model": "acumatica.transfer.line",
                 "product_model": "acumatica.transfer.product.line",
@@ -1117,8 +1114,8 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "transfer_shipment": {
                 "label": "Transfer Shipment",
-                "records_keys": ("ShipmentTransferGIDetails",),
-                "document_keys": ("ShipmentNbr", "shipment_nbr"),
+                "records_keys": ("Inserted",),
+                "document_keys": ("ShipmentNbr", "TransferShipmentNbr", "ReferenceNbr", "shipment_nbr"),
                 "document_field": "shipment_nbr",
                 "header_model": "acumatica.transfer.shipment.line",
                 "product_model": "acumatica.transfer.shipment.line.product",
@@ -1128,7 +1125,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "inventory_issue": {
                 "label": "Inventory Issue",
-                "records_keys": ("InventoryIssueGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "header_model": "acumatica.inventory.issue.line",
@@ -1138,7 +1135,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "so_shipment": {
                 "label": "SO Shipment",
-                "records_keys": ("ShipmentGIDetails",),
+                "records_keys": ("Inserted",),
                 "detail_keys": ("ShipmentGIDetails", "Details", "details"),
                 "document_keys": ("ShipmentNbr", "adt_ShipmentNbr"),
                 "document_field": "adt_ShipmentNbr",
@@ -1150,7 +1147,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "so_shipment_consignment": {
                 "label": "SO Shipment Consignment",
-                "records_keys": ("ShipmentGIDetails",),
+                "records_keys": ("Inserted",),
                 "detail_keys": ("ShipmentGIDetails", "Details", "details"),
                 "document_keys": ("ShipmentNbr", "adt_ShipmentNbr"),
                 "document_field": "adt_ShipmentNbr",
@@ -1162,12 +1159,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "so_shipment_completed": {
                 "label": "SO Shipment Completed (Log Only)",
-                "records_keys": ("ShipmentCompletedGIDetails",),
+                "records_keys": ("Inserted",),
                 "processor": self._process_so_shipment_completed_webhook,
             },
             "vendor_return": {
                 "label": "Vendor Return",
-                "records_keys": ("VendorReturnGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.vendor.return.direct.transfer.staging",
@@ -1178,7 +1175,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "vendor_return_document": {
                 "label": "Vendor Return Document",
-                "records_keys": ("VendorReturnDocumentGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.direct.transfer.staging",
@@ -1189,7 +1186,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "transfer_one_step": {
                 "label": "Transfer Intra Warehouse Out (1 Step)",
-                "records_keys": ("TransferPinjamanGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "header_model": "acumatica.transfer.one.step.line",
@@ -1200,7 +1197,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "transfer_two_step": {
                 "label": "Transfer Intra Warehouse Out (2 Step)",
-                "records_keys": ("TransferPinjamanGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "header_model": "acumatica.transfer.two.step.line",
@@ -1211,7 +1208,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "credit_memo_consignment": {
                 "label": "Credit Memo Consignment",
-                "records_keys": ("CreditMemoConsignmentGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.credit.memo.consignment.staging",
@@ -1222,7 +1219,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "invoice_credit_memo_consignment": {
                 "label": "Invoice Credit Memo Consignment",
-                "records_keys": ("InvoiceCreditMemoConsignmentGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.credit.memo.consignment.staging",
@@ -1233,7 +1230,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "invoice_consignment": {
                 "label": "Invoice Consignment",
-                "records_keys": ("InvoiceConsignmentGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.invoice.consignment.staging",
@@ -1243,7 +1240,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "inventory_receipt_transfer_wh_in": {
                 "label": "Inventory Receipt : Transfer In",
-                "records_keys": ("InventoryReceiptGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.inventory.receipt.transfer.wh.in.staging",
@@ -1254,7 +1251,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "kit_assembly": {
                 "label": "Kit Assembly",
-                "records_keys": ("KitAssemblyGIDetails",),
+                "records_keys": ("Inserted",),
                 "detail_keys": ("StockComponents", "stock_components", "Components", "components", "Details", "details"),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
@@ -1262,7 +1259,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             },
             "shipment_return": {
                 "label": "Shipment Return",
-                "records_keys": ("ShipmentReturnGIDetails",),
+                "records_keys": ("Inserted",),
                 "document_keys": ("ShipmentNbr", "shipment_nbr"),
                 "document_field": "shipment_nbr",
                 "header_model": "acumatica.shipment.line",
@@ -1434,8 +1431,15 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         headers = self._env()[config["header_model"]].sudo().browse(header_ids)
         if headers:
             headers._do_import()
-            imported = len(headers.filtered(lambda header: header.import_state in ("imported", "updated")))
-            errors = len(headers.filtered(lambda header: header.import_state == "error"))
+            Header = self._env()[config["header_model"]].sudo()
+            imported = Header.search_count([
+                ("id", "in", header_ids),
+                ("import_state", "in", ("imported", "updated")),
+            ])
+            errors = Header.search_count([
+                ("id", "in", header_ids),
+                ("import_state", "=", "error"),
+            ])
 
         return {
             "transaction_type": config_key,
