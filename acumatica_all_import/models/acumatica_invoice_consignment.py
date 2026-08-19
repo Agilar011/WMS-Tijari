@@ -399,16 +399,18 @@ class AcumaticaInvoiceConsignment(models.Model):
 
         # PERULANGAN UTAMA PER DOKUMEN STAGING
         for first in self:
+            first_id = first.id
+            first_reference = first.adt_ReferenceNbr
         
             # KOREKSI 1: Gunakan 'continue' (BUKAN return) agar dokumen lain tetap diproses
-            if first.adt_ReferenceNbr not in picking_to_create:
-                print(f"Receipt {first.adt_ReferenceNbr} dilewati karena statusnya masuk ke list update/skip.")
+            if first_reference not in picking_to_create:
+                print(f"Receipt {first_reference} dilewati karena statusnya masuk ke list update/skip.")
                 continue
 
             try:
                 # 2. BUNGKUS DENGAN SAVEPOINT: Jika error, rollback hanya terjadi pada dokumen aktif ini
                 with self.env.cr.savepoint():
-                    print(f"Processing receipt {first.adt_ReferenceNbr}")
+                    print(f"Processing receipt {first_reference}")
                     vendor = self._find_vendor(first)
                     if not vendor:
                         print(f"Vendor not found: {first.adt_CustomerName}")
@@ -470,12 +472,12 @@ class AcumaticaInvoiceConsignment(models.Model):
                         ('receipt_line_id', '=', first.id)
                     ])
 
-                    print(f"Processing {len(to_create_move)} lines for receipt {first.adt_ReferenceNbr}")
+                    print(f"Processing {len(to_create_move)} lines for receipt {first_reference}")
 
                     # Inisialisasi list kosong sebelum loop lines dimulai
                     moves_to_create = []
 
-                    print(f"Processing {len(to_create_move)} lines for receipt {first.adt_ReferenceNbr}")
+                    print(f"Processing {len(to_create_move)} lines for receipt {first_reference}")
 
                     # PERULANGAN LINES
                     for line in to_create_move:
@@ -547,13 +549,14 @@ class AcumaticaInvoiceConsignment(models.Model):
             except Exception as e:
                 # KOREKSI 2: Penanganan komplit jika dokumen ini gagal (Otomatis skip ke index loop selanjutnya)
                 error += 1
-                self.env.cr.rollback()  # Bersihkan state transaksi database yang gagal
                 
-                first.write({
-                    'import_state': 'error',
-                    'import_message': str(e),
-                })
-                print(f"[ERROR IMPORT] Dokumen {first.adt_ReferenceNbr} Gagal: {str(e)}")
+                staging = self.env['acumatica.invoice.consignment.staging'].browse(first_id).exists()
+                if staging:
+                    staging.write({
+                        'import_state': 'error',
+                        'import_message': str(e),
+                    })
+                print(f"[ERROR IMPORT] Dokumen {first_reference} Gagal: {str(e)}")
 
         print(f"[SUMMARY SINKRONISASI] Imported: {imported}, Updated: {updated}, Error: {error}")
         return imported, updated, error

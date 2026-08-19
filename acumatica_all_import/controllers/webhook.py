@@ -165,8 +165,15 @@ class AcumaticaWebhookController(http.Controller):
         lines = self._env()[model_name].sudo().browse(line_ids)
         if lines:
             lines._do_import()
-            imported = len(lines.filtered(lambda line: line.import_state in ("imported", "updated", "skipped")))
-            errors += len(lines.filtered(lambda line: line.import_state == "error"))
+            Line = self._env()[model_name].sudo()
+            imported = Line.search_count([
+                ("id", "in", line_ids),
+                ("import_state", "in", ("imported", "updated", "skipped")),
+            ])
+            errors += Line.search_count([
+                ("id", "in", line_ids),
+                ("import_state", "=", "error"),
+            ])
 
         return {
             "created": created,

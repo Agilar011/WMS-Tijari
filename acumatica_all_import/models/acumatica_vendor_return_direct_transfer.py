@@ -233,6 +233,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
             # Karena model bertipe multi-recordset, ambil baris header pertamanya secara aman
             first = receipt_lines[0]
+            first_id = first.id
             origin = first.adt_ReferenceNbr or False
 
             # Ambil seluruh baris data item (Lines) yang berelasi dengan header ini
@@ -298,6 +299,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             'transaction_type': 'internal',
                         })
 
+                    transfer_service.set_order_ready(order)
                     # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
                     first.write({
                         'import_state': action_state,
@@ -313,15 +315,17 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
             except Exception as e:
                 # 2. STRATEGI PENANGANAN JIKA DOKUMEN ERROR:
-                # Batalkan transaksi database (Picking dihapus total dari SQL memory)
+                # Savepoint di atas sudah membatalkan dokumen Odoo yang gagal.
+                # Jangan rollback cursor utama karena record staging masih harus ditulis error.
                 error += 1
-                self.env.cr.rollback()
 
                 # Tulis pesan kegagalan ke UI Odoo agar user tahu detail masalahnya
-                first.write({
-                    'import_state': 'error',
-                    'import_message': str(e),
-                })
+                staging = self.env['acumatica.vendor.return.direct.transfer.staging'].browse(first_id).exists()
+                if staging:
+                    staging.write({
+                        'import_state': 'error',
+                        'import_message': str(e),
+                    })
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
                 
     def _find_warehouse_by_code(self, code):

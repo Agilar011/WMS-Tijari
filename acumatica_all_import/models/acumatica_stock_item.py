@@ -486,6 +486,7 @@ class AcumaticaStockItemLine(models.Model):
 
         # Proses data per chunk untuk menghindari memory error jika datanya sangat besar
         for chunk in split_every(BATCH_SIZE, self):
+            chunk_ids = [line.id for line in chunk]
             try:
                 
                 create_vals = []
@@ -755,8 +756,7 @@ class AcumaticaStockItemLine(models.Model):
 
                 _logger.exception("IMPORT ERROR: %s", str(e))
 
-                for line in chunk:
-
+                for line_id in chunk_ids:
                     self.env.cr.execute("""
                         UPDATE acumatica_stock_item_line
                         SET import_state = 'error',
@@ -764,7 +764,7 @@ class AcumaticaStockItemLine(models.Model):
                         WHERE id = %s
                     """, (
                         str(e)[:200],
-                        line.id
+                        line_id
                     ))
 
                 self.env.cr.commit()

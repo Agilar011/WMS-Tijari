@@ -3,7 +3,7 @@ from collections import defaultdict
 from dateutil import parser as dateutil_parser
 import requests
 
-from odoo import fields, models, api
+from odoo import _, fields, models, api
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -202,6 +202,12 @@ class AcumaticaInventoryIssueLine(models.Model):
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
     customer_id = fields.Char(string='Customer ID')
 
+    odoo_scrap_id = fields.Many2one(
+            'stock.scrap',
+            string='Stock Scrap di Odoo',
+            readonly=True,
+        )
+    
     # ---------------------------------------------------------
     # BUTTONS
     # ---------------------------------------------------------
@@ -378,44 +384,47 @@ class AcumaticaInventoryIssueLine(models.Model):
                     # raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
 
                 if is_disposal:
-                    order, action_state = self._prepare_disposal_internal_transfer(
-                        first,
-                        source_location,
-                        dest_location,
-                    )
-                    to_create_move = self.env['acumatica.inventory.issue.product'].search([('receipt_line_id', '=', first.id)])
+                    order, action_state = self._generate_disposal_scrap(first, dest_location)
+                    # order, action_state = self._prepare_disposal_internal_transfer(
+                    #     first,
+                    #     source_location,
+                    #     dest_location,
+                    # )
+                    # to_create_move = self.env['acumatica.inventory.issue.product'].search([('receipt_line_id', '=', first.id)])
 
-                    for line in to_create_move:
-                        print("Processed Internal Transfer Move")
+                    # for line in to_create_move:
+                    #     print("Processed Internal Transfer Move")
 
-                        product = self._find_product(line)
-                        if not product:
-                            raise UserError(
-                                f'Product tidak ditemukan untuk InventoryID: {line.inventory_id or "-"}'
-                            )
+                    #     product = self._find_product(line)
+                    #     if not product:
+                    #         raise UserError(
+                    #             f'Product tidak ditemukan untuk InventoryID: {line.inventory_id or "-"}'
+                    #         )
 
-                        uom = self._find_uom(line, product)
-                        qty = self._parse_int(line.product_uom_qty)
-                        move_vals = {
-                            'name': line.line_description or product.display_name,
-                            'product_id': product.id,
-                            'product_uom_qty': qty,
-                            'product_uom': uom.id if uom else product.uom_id.id,
-                            'location_id': source_location.id,
-                            'location_dest_id': dest_location.id,
-                            'internal_transfer_order_id': order.id,
-                            'description_picking': line.line_description or False,
-                            'transaction_type': 'internal',
-                            'adt_type': first.trans_type or False,
-                        }
-                        move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
-                        Move.create(move_vals)
+                    #     uom = self._find_uom(line, product)
+                    #     qty = self._parse_int(line.product_uom_qty)
+                    #     move_vals = {
+                    #         'name': line.line_description or product.display_name,
+                    #         'product_id': product.id,
+                    #         'product_uom_qty': qty,
+                    #         'product_uom': uom.id if uom else product.uom_id.id,
+                    #         'location_id': source_location.id,
+                    #         'location_dest_id': dest_location.id,
+                    #         'internal_transfer_order_id': order.id,
+                    #         'description_picking': line.line_description or False,
+                    #         'transaction_type': 'internal',
+                    #         'adt_type': first.trans_type or False,
+                    #     }
+                    #     move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
+                    #     Move.create(move_vals)
 
+                    # self.env['acumatica.internal.transfer.service'].set_order_ready(order)
                     first.write({
                         'import_state': action_state,
                         'import_message': f'{action_state.title()}: {order.name}',
                         'odoo_picking_id': False,
-                        'odoo_internal_transfer_order_id': order.id,
+                        'odoo_internal_transfer_order_id': False,
+                        'odoo_scrap_id': order.id
                     })
 
                     self.env.cr.execute('RELEASE SAVEPOINT import_issue_line')
@@ -556,7 +565,116 @@ class AcumaticaInventoryIssueLine(models.Model):
             }
         }
 
+    def _generate_disposal_scrap(self, first, source_location):
+        Scrap = self.env["stock.scrap"]
+        ScrapLocation = self.env["stock.location"]
 
+        scrap_exist = Scrap.search([('origin', '=', first.reference_nbr)])
+        if scrap_exist:
+            return scrap_exist, 'updated'
+
+        warehouse = self._find_warehouse(first)
+
+        # if not warehouse:
+        #     raise UserError(
+        #         f"Warehouse tidak ditemukan untuk code: "
+        #         f"{first.warehouse_code or '-'}"
+        #     )
+
+        # source_location = warehouse.lot_stock_id
+
+        if not source_location:
+            raise UserError(
+                f"Stock location tidak ditemukan untuk "
+            )
+
+        scrap_location = ScrapLocation.search([
+            ("scrap_location", "=", True),
+            ("company_id", "in", [False, warehouse.company_id.id]),
+        ], limit=1)
+
+        if not scrap_location:
+            raise UserError(
+                f"Scrap Location tidak ditemukan untuk "
+                f"{warehouse.display_name}."
+            )
+
+        components = self.env[
+            "acumatica.inventory.issue.product"
+        ].search([
+            ("receipt_line_id", "=", first.id),
+        ])
+
+        if not components:
+            raise UserError(
+                f"Tidak ada product untuk disposal "
+                f"{first.reference_nbr}."
+            )
+
+        scrap_lines = []
+
+        for line in components:
+            product = self._find_product(line)
+
+            if not product:
+                raise UserError(
+                    f"Product tidak ditemukan untuk InventoryID: "
+                    f"{line.inventory_id or '-'}"
+                )
+
+            uom = self._find_uom(line, product)
+            qty = self._parse_int(line.product_uom_qty)
+
+            scrap_lines.append({
+                "product_id": product,
+                "product_uom_id": uom or product.uom_id,
+                "demand_qty": qty,
+                "location_id": source_location,
+                "name": (
+                    line.line_description
+                    or product.display_name
+                ),
+                "receipt_move_id": False,
+            })
+
+        scrap = Scrap.create({
+            "origin": first.reference_nbr,
+            "company_id": warehouse.company_id.id,
+            "location_id": source_location.id,
+            "scrap_location_id": scrap_location.id,
+
+            # Header / dummy
+            "product_id": scrap_lines[0]["product_id"].id,
+            "product_uom_id": scrap_lines[0]["product_uom_id"].id,
+            "scrap_qty": scrap_lines[0]["demand_qty"],
+        })
+
+        scrap.scrap_line_ids = [
+            (
+                0,
+                0,
+                {
+                    "product_id": line["product_id"].id,
+                    "product_uom_id": line["product_uom_id"].id,
+                    "demand_qty": line["demand_qty"],
+                    "location_id": line["location_id"].id,
+                    "name": line["name"],
+                    "receipt_move_id": False,
+                },
+            )
+            for line in scrap_lines
+        ]
+
+        # scrap._reset_lot_confirmation()
+        scrap._create_scrap_moves()
+
+        if scrap.name == _("New"):
+            scrap.name = (
+                self.env["ir.sequence"].next_by_code("stock.scrap")
+                or _("New")
+            )
+
+        return scrap, 'imported'
     # ---------------------------------------------------------
     # HEADER
     # ---------------------------------------------------------

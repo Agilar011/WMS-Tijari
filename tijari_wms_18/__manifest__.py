@@ -23,6 +23,7 @@
     'data': [
         'security/ir.model.access.csv',
         'data/document_only_picking_type_data.xml',
+        'data/ir.sequence.xml',
         'views/assets.xml',
         'views/hide_menu.xml',
         'views/internal_transfer_order_views.xml',
@@ -33,6 +34,7 @@
         'views/stock_location_action.xml',
         'views/stock_location_menu.xml',
         'views/stock_location_views.xml',
+        'views/stock_warehouse_views.xml',
         'views/stock_move_line_views.xml',
         'views/stock_move_scan_wizard_views.xml',
         'views/stock_move_views.xml',
@@ -45,6 +47,7 @@
         'views/stock_report_inherit_inventory.xml',
         'views/stock_report_velocity_views.xml',
         'views/stock_scrap.xml',
+        'views/mrp_production_views.xml',
         'views/templates.xml',
         'views/wms_operations_action.xml',
         'views/wms_operations_menu.xml',

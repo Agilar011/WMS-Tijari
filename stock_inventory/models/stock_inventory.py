@@ -352,7 +352,10 @@ class InventoryAdjustmentsGroup(models.Model):
         )
         self.action_submit_approval()
         self.state = "in_progress"
-        return
+        return {
+            "type": "ir.actions.client",
+            "tag": "reload",
+        }
 
     def action_state_to_wait_approval(self):
         self.ensure_one()
@@ -362,9 +365,27 @@ class InventoryAdjustmentsGroup(models.Model):
     def action_state_to_done(self):
         self.ensure_one()
         self._check_inventory_adjustments_is_set()
+
         stock_quant_ids = self.stock_quant_ids.filtered(lambda q: q.inventory_quantity and q.inventory_diff_quantity != 0)
         for quant in stock_quant_ids:
+            # if (
+            #     quant.product_id.tracking == "lot"
+            #     and not quant.lot_id
+            # ):
+            #     lot_name = self.env["ir.sequence"].next_by_code(
+            #         "stock.lot.adjustment"
+            #     )
+
+            #     lot = self.env["stock.lot"].create({
+            #         "name": lot_name,
+            #         "product_id": quant.product_id.id,
+            #         "company_id": quant.company_id.id,
+            #     })
+
+            #     quant.lot_id = lot.id
+
             quant.action_apply_inventory()
+
         self.state = "done"
         self.stock_quant_ids.filtered(
             lambda q: q.current_inventory_id.id == self.id
@@ -376,7 +397,10 @@ class InventoryAdjustmentsGroup(models.Model):
                 "current_inventory_id": False,
             }
         )
-        return
+        return {
+                    "type": "ir.actions.client",
+                    "tag": "reload",
+                }
 
     def action_auto_state_to_done(self):
         self.ensure_one()
@@ -386,19 +410,30 @@ class InventoryAdjustmentsGroup(models.Model):
 
     def action_state_to_draft(self):
         self.ensure_one()
-        self.state = "draft"
-        self.stock_quant_ids.filtered(
+
+        quants = self.stock_quant_ids.filtered(
             lambda q: q.current_inventory_id.id == self.id
-        ).update(
-            {
+        )
+
+        for quant in quants:
+            quant.inventory_quantity = quant.quantity
+
+            quant.write({
                 "to_do": False,
                 "user_id": False,
                 "inventory_date": False,
                 "current_inventory_id": False,
-            }
-        )
-        self.stock_quant_ids = None
-        return
+            })
+
+        self.write({
+            "state": "draft",
+            "stock_quant_ids": False,
+        })
+
+        return {
+            "type": "ir.actions.client",
+            "tag": "reload",
+        }
 
     def action_state_to_cancel(self):
         self.ensure_one()

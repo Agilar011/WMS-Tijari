@@ -271,110 +271,259 @@ class AcumaticaKitAssembly(models.Model):
 
     def _do_import(self):
         print("Starting import process...")
-        Manufacturing = self.env['mrp.production']
-        PickingType = self.env['stock.picking.type']
-        Bom = self.env['mrp.bom']
-        BomLine = self.env['mrp.bom.line']
-        Warehouse = self.env['stock.location.acumatica']
-        mapping_location = self.env['stock.location.acumatica']
-        header_reference = self.env['acumatica.kit.assembly']
-        component_reference = self.env['acumatica.kit.assembly.component']
-        stock_picking = self.env['stock.picking']
-        Move = self.env['stock.move']
-        looping_count = 0
-        
+
+        Manufacturing = self.env["mrp.production"]
+        PickingType = self.env["stock.picking.type"]
+        Warehouse = self.env["stock.location.acumatica"]
+        HeaderReference = self.env["acumatica.kit.assembly"]
+        ComponentReference = self.env["acumatica.kit.assembly.component"]
+        Product = self.env["product.product"]
+
         imported = 0
         updated = 0
         error = 0
 
-        # proses per reference number
-        for reference_nbr in self.mapped('reference_nbr'):
+        # MO terakhir yang berhasil diproses
+        last_manufacturing = Manufacturing
+
+        for reference_nbr in self.mapped("reference_nbr"):
             try:
-                vals = {}
-                header = header_reference.search([('name', '=', reference_nbr)], limit=1)
-                print(f"Header Value : {header.name}")
+                # ---------------------------------------------------------
+                # Setiap reference punya savepoint sendiri.
+                # Kalau gagal, hanya reference ini yang di-rollback.
+                # ---------------------------------------------------------
+                with self.env.cr.savepoint():
 
-                warehouse = Warehouse.search([('code', '=', header.warehouse)], limit=1)
-                if not warehouse:
-                    print(f"Warehouse tidak ditemukan untuk: {header.warehouse}")
-                    error += 1
-                    continue
+                    # -----------------------------------------------------
+                    # HEADER
+                    # -----------------------------------------------------
+                    header = HeaderReference.search(
+                        [("name", "=", reference_nbr)],
+                        limit=1,
+                    )
 
-                processed_product = self.env['product.product'].search([
-                    ('default_code', '=', header.inventory_id),
-                ], limit=1)
-                if not processed_product:
-                    print(f"Processed product not found for: {header.inventory_id}")
-                    error += 1
-                    continue
+                    if not header:
+                        raise ValueError(
+                            f"Header tidak ditemukan: {reference_nbr}"
+                        )
 
-                picking_type = PickingType.search([
-                    ('name', '=', 'Manufacturing'),
-                    ('warehouse_id', '=', warehouse.odoo_location_id.warehouse_id.id),
-                ], limit=1)
+                    print(f"Header Value: {header.name}")
 
-                if not picking_type:
-                    print("Manufacturing Picking Type tidak ditemukan.")
-                    error += 1
-                    continue
+                    # -----------------------------------------------------
+                    # WAREHOUSE
+                    # -----------------------------------------------------
+                    warehouse = Warehouse.search(
+                        [("code", "=", header.warehouse)],
+                        limit=1,
+                    )
 
-                vals = {
-                    'name': reference_nbr,
-                    'product_id': processed_product.id,
-                    'product_qty': header.quantity,
-                    'product_uom_id': processed_product.product_tmpl_id.uom_id.id,
-                    'date_start': header.requested_on,
-                    'user_id': self.env.uid,
-                    'picking_type_id': picking_type.id,
-                    'location_src_id': picking_type.default_location_src_id.id,
-                    'location_dest_id': picking_type.default_location_dest_id.id,
-                    'company_id': warehouse.odoo_location_id.warehouse_id.company_id.id,
-                }
+                    if not warehouse:
+                        raise ValueError(
+                            f"Warehouse tidak ditemukan: {header.warehouse}"
+                        )
 
-                manufacturing_check = Manufacturing.search(
-                    [('origin', '=', header.name)],
-                    limit=1,
-                )
+                    warehouse_record = warehouse.odoo_location_id.warehouse_id
 
-                if not manufacturing_check:
-                    manufacturing = Manufacturing.create(vals)
-                    imported += 1
-                else:
-                    manufacturing = manufacturing_check
-                    updated += 1
+                    if not warehouse_record:
+                        raise ValueError(
+                            f"Warehouse Odoo tidak ditemukan untuk: "
+                            f"{header.warehouse}"
+                        )
 
-                component = component_reference.search([
-                    ('assembly_id', '=', header.id)
-                ])
+                    # -----------------------------------------------------
+                    # FINISHED PRODUCT
+                    # -----------------------------------------------------
+                    finished_product = Product.search(
+                        [("default_code", "=", header.inventory_id)],
+                        limit=1,
+                    )
 
-                for item in component:
-                    processed_product = self.env['product.product'].search([
-                        ('default_code', '=', item.stock_inventory_id),
-                    ], limit=1)
+                    if not finished_product:
+                        raise ValueError(
+                            f"Finished product tidak ditemukan: "
+                            f"{header.inventory_id}"
+                        )
 
-                    if not processed_product:
-                        error += 1
-                        continue
+                    # -----------------------------------------------------
+                    # PICKING TYPE
+                    # -----------------------------------------------------
+                    picking_type = PickingType.search(
+                        [
+                            ("name", "=", "Manufacturing"),
+                            ("warehouse_id", "=", warehouse_record.id),
+                        ],
+                        limit=1,
+                    )
 
-                    move_vals = {
-                        'product_id': processed_product.id,
-                        'product_uom_qty': item.line_quantity,
-                        'product_uom': processed_product.product_tmpl_id.uom_id.id,
-                        'location_id': picking_type.default_location_src_id.id,
-                        'raw_material_production_id': manufacturing.id,
-                    }
+                    if not picking_type:
+                        raise ValueError(
+                            "Manufacturing Picking Type tidak ditemukan "
+                            f"untuk warehouse: {warehouse_record.display_name}"
+                        )
 
-                    if not manufacturing_check:
-                        Move.create(move_vals)
+                    # -----------------------------------------------------
+                    # FIND EXISTING MO
+                    # -----------------------------------------------------
+                    manufacturing = Manufacturing.search(
+                        [("origin", "=", header.name)],
+                        limit=1,
+                    )
+
+                    # -----------------------------------------------------
+                    # CREATE / UPDATE MO
+                    # -----------------------------------------------------
+                    if manufacturing:
+                        updated += 1
+                        print(
+                            f"MO sudah ada: "
+                            f"{manufacturing.display_name}"
+                        )
+
+                    else:
+                        manufacturing = Manufacturing.create({
+                            "origin": reference_nbr,
+                            "product_id": finished_product.id,
+                            "product_qty": header.quantity,
+                            "product_uom_id": finished_product.uom_id.id,
+                            "date_start": header.requested_on,
+                            "user_id": self.env.uid,
+                            "picking_type_id": picking_type.id,
+                            "warehouse_id": warehouse_record.id,
+                            "location_src_id": (
+                                picking_type.default_location_src_id.id
+                            ),
+                            "location_dest_id": (
+                                picking_type.default_location_dest_id.id
+                            ),
+                            "company_id": warehouse_record.company_id.id,
+                        })
+
+                        imported += 1
+
+                        print(
+                            f"MO berhasil dibuat: "
+                            f"{manufacturing.display_name}"
+                        )
+
+                    last_manufacturing = manufacturing
+
+                    # -----------------------------------------------------
+                    # COMPONENTS
+                    # -----------------------------------------------------
+                    components = ComponentReference.search([
+                        ("assembly_id", "=", header.id),
+                    ])
+
+                    raw_moves = []
+
+                    for component in components:
+
+                        component_product = Product.search(
+                            [
+                                (
+                                    "default_code",
+                                    "=",
+                                    component.stock_inventory_id,
+                                )
+                            ],
+                            limit=1,
+                        )
+
+                        if not component_product:
+                            raise ValueError(
+                                "Component product tidak ditemukan: "
+                                f"{component.stock_inventory_id}"
+                            )
+
+                        raw_moves.append(
+                            (
+                                0,
+                                0,
+                                {
+                                    "product_id": component_product.id,
+                                    'product_uom_qty': component.line_quantity,
+                                    'product_uom': component_product.product_tmpl_id.uom_id.id,
+
+                                    "location_id": picking_type.default_location_src_id.id,
+                                    "location_dest_id": picking_type.default_location_dest_id.id,
+
+                                    "picking_type_id": picking_type.id,
+                                    "warehouse_id": manufacturing.warehouse_id.id,
+
+                                    "raw_material_production_id": manufacturing.id,
+                                },
+                            )
+                        )
+
+                    # -----------------------------------------------------
+                    # RAW MATERIAL MOVES
+                    # -----------------------------------------------------
+                    # Hanya tambahkan raw moves untuk MO baru.
+                    if raw_moves and not manufacturing.exists():
+                        raise ValueError(
+                            "Manufacturing Order sudah tidak tersedia."
+                        )
+
+                    if raw_moves and not updated:
+                        manufacturing.write({
+                            "move_raw_ids": raw_moves,
+                        })
+
+                        print(
+                            f"Raw moves berhasil dibuat: "
+                            f"{len(raw_moves)}"
+                        )
+
+                    # _logger.warning("""
+                    #     ========== RAW MOVE AFTER CREATE ==========
+                    #     MO              : %s (%s)
+                    #     MO WAREHOUSE    : %s (%s)
+                    #     """,
+                    #         manufacturing.name,
+                    #         manufacturing.id,
+                    #         manufacturing.warehouse_id.display_name,
+                    #         manufacturing.warehouse_id.id,
+                    # )
+
+                    # for move in manufacturing.move_raw_ids:
+                    #     _logger.warning("""
+                    # RAW MOVE
+                    #     ID              : %s
+                    #     PRODUCT         : %s
+                    #     WAREHOUSE       : %s (%s)
+                    #     PICKING TYPE    : %s (%s)
+                    #     SOURCE          : %s (%s)
+                    #     DESTINATION     : %s (%s)
+                    #     RAW MO          : %s
+                    # """,
+                    #         move.id,
+                    #         move.product_id.display_name,
+                    #         move.warehouse_id.display_name,
+                    #         move.warehouse_id.id,
+                    #         move.picking_type_id.display_name,
+                    #         move.picking_type_id.id,
+                    #         move.location_id.display_name,
+                    #         move.location_id.id,
+                    #         move.location_dest_id.display_name,
+                    #         move.location_dest_id.id,
+                    #         move.raw_material_production_id.id,
+                    #     )
 
             except Exception as e:
                 error += 1
-                print(f"Error processing {reference_nbr}: {e}")
 
-        total = len(self.mapped('reference_nbr'))
+                print(
+                    f"ERROR processing {reference_nbr}: "
+                    f"{type(e).__name__}: {e}"
+                )
+
+        # -------------------------------------------------------------
+        # RESULT
+        # -------------------------------------------------------------
+        total = len(self.mapped("reference_nbr"))
 
         msg = (
-            f"Import Kit Assembly selesai.\n\n"
+            "Import Kit Assembly selesai.\n\n"
             f"Total Reference Number : {total}\n"
             f"Manufacturing Order dibuat : {imported}\n"
             f"Manufacturing Order sudah ada : {updated}\n"
@@ -382,22 +531,26 @@ class AcumaticaKitAssembly(models.Model):
         )
 
         self.write({
-            'import_message': msg,
-            'mrp_production_id': manufacturing.id,
-            'import_state': 'imported',
+            "import_message": msg,
+            "mrp_production_id": (
+                last_manufacturing.id
+                if last_manufacturing and last_manufacturing.exists()
+                else False
+            ),
+            "import_state": "imported",
         })
 
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Kit Assembly',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": "Import Kit Assembly",
+                "message": msg,
+                "type": "success" if error == 0 else "warning",
+                "sticky": True,
+            },
         }
-
+    
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({
@@ -721,13 +874,13 @@ class AcumaticaKitAssemblyLine(models.Model):
                 'name' : reference_nbr,
                 'product_id' : processed_product.id,
                 'product_qty' : header.quantity,
-                'product_uom_id' : processed_product.product_tmpl_id.xuom_id.id,
-                'scheduled_date': header.requested_on,
+                'product_uom_id' : processed_product.product_tmpl_id.uom_id.id,
+                # 'scheduled_date': header.requested_on,
                 'user_id': self.env.uid,
                 'picking_type_id': picking_type.id,
-                'location_src_id': picking_type.default_location_id_src_id.id,
-                'location_dest_id': picking_type.default_location_id_dest_id.id,
-                'source' : reference_nbr,
+                'location_src_id': picking_type.default_location_src_id.id,
+                'location_dest_id': picking_type.default_location_dest_id.id,
+                # 'source' : reference_nbr,
                 'company_id' : warehouse.company_id.id,
             }
             manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)])
@@ -762,12 +915,12 @@ class AcumaticaKitAssemblyLine(models.Model):
                     'product_id' : component.product_id.id,
                     'product_uom_qty' : item.line_quantity,
                     'product_uom_id' : component.uom_id.id,
-                    'location_id' : picking_type.default_location_id_src_id.id,
+                    'location_id' : picking_type.default_location_src_id.id,
                     'raw_material_production_id' : manufacturing.id,
                 }
 
-                if not manufacturing_check:
-                    move = Move.create(vals)
+                # if not manufacturing_check:
+                #     move = Move.create(vals)
                 vals = {}
             
 

@@ -69,19 +69,27 @@
                             <field name="last_modified_datetime"/>
                             <field name="external_id"/>
                         </group>
-                        <!-- <group string="Detail Component"> -->
-                            <!-- <field name="line_nbr"/> -->
-                            <!-- <field name="line_inventory_id"/> -->
-                            <!-- <field name="line_component_qty"/> -->
-                            <!-- <field name="line_quantity"/> -->
-                            <!-- <field name="line_uom"/> -->
-                            <!-- <field name="line_location_id"/> -->
-                            <!-- <field name="line_reason_code"/> -->
-                            <!-- <field name="stock_inventory_id"/> -->
-                            <!-- <field name="line_external_id"/> -->
-                            <!-- <field name="line_note"/> -->
-                        <!-- </group> -->
                     </group>
+                    <notebook>
+                        <page string="Components">
+                            <field name="component_ids" readonly="1">
+                                <list string="Components" create="0" edit="0" delete="0">
+                                    <field name="line_nbr"/>
+                                    <field name="stock_inventory_id"/>
+                                    <field name="line_inventory_id"/>
+                                    <field name="line_component_qty"/>
+                                    <field name="line_quantity"/>
+                                    <field name="line_uom"/>
+                                    <field name="line_location_id"/>
+                                    <field name="line_reason_code"/>
+                                    <field name="product_id"/>
+                                    <field name="line_external_id" optional="hide"/>
+                                    <field name="line_note" optional="hide"/>
+                                    <field name="import_message" optional="hide"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
                     <group>
                         <field name="import_message" readonly="1"/>
                         <field name="mrp_production_id" readonly="1"/>

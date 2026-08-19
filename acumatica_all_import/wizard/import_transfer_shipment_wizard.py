@@ -309,6 +309,8 @@ class ImportTransferShipmentWizard(models.TransientModel):
         )
         if document_only_type:
             return document_only_type
+        if header.get('document_only'):
+            return None
 
         location = Location.search([
             ('code', '=', warehouse_code),

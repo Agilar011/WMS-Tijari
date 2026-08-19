@@ -283,8 +283,8 @@ class AcumaticaTransferLine(models.Model):
     vendor_code = fields.Char(string='VendorID', readonly=True)
     partner_ref = fields.Char(string='Vendor Ref', readonly=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
-    warehouse_code = fields.Char(string='Warehouse', readonly=True)
-    warehouse_dest_code = fields.Char(string='Warehouse Dest', readonly=True)
+    warehouse_code = fields.Char(string='Warehouse')
+    warehouse_dest_code = fields.Char(string='Warehouse Dest')
     header_location_code = fields.Char(string='Header Location', readonly=True)
     location_dest_code = fields.Char(string='Location', readonly=True)
     status = fields.Char(string='Status', readonly=True)
@@ -632,6 +632,10 @@ class AcumaticaTransferLine(models.Model):
                 line_payloads=error_line_payloads,
             )
 
+        TransferService.set_order_ready(
+            order,
+            auto_validate_transfer_in_delivery=True,
+        )
         receipt.write({
             'import_state': action_state,
             'import_message': f'{action_state.title()}: {order.name if order else False}',

@@ -415,7 +415,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             or False
         )
         source_wh = shipment._find_warehouse_by_code(source_warehouse_code)
-        dest_wh = shipment._find_warehouse_by_code(shipment.warehouse_dest_code)
+        dest_wh = False
         picking_type = False
         if shipment.document_only:
             picking_type = shipment.picking_type_id
@@ -426,14 +426,12 @@ class AcumaticaTransferShipmentLine(models.Model):
             )
             if document_only_type:
                 picking_type = document_only_type
+                if shipment.picking_type_id != document_only_type:
+                    shipment.picking_type_id = document_only_type
 
         if not source_wh:
             error_messages.append(
                 f'Warehouse with location code {source_warehouse_code or "-"} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
-            )
-        if shipment.warehouse_dest_code and not dest_wh:
-            error_messages.append(
-                f'Destination warehouse with location code {shipment.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
         if shipment.document_only and not picking_type:
             error_messages.append(
@@ -446,18 +444,21 @@ class AcumaticaTransferShipmentLine(models.Model):
             or (picking_type.default_location_src_id if picking_type else False)
             or (source_wh.lot_stock_id if source_wh else False)
         )
-        dest_location = (
-            shipment._find_acumatica_location(shipment.warehouse_dest_code)
-            or (dest_wh.lot_stock_id if dest_wh else False)
-        )
+        transfer_service = self.env['acumatica.internal.transfer.service']
+        dest_location = False
+        if shipment.document_only and not error_messages:
+            transfer_info = transfer_service.classify_transfer_out_to_virtual(
+                source_warehouse_code,
+                shipment.warehouse_dest_code,
+                'WarehouseID',
+                'ToWarehouseID',
+            )
+            src_location = transfer_info['source_location']
+            dest_location = transfer_info['destination_location']
 
         if not src_location:
             error_messages.append(
                 f'Source location for code {source_warehouse_code or shipment.header_location_code or "-"} was not found in the WMS | WMS Dependency : MAPPING LOCATION.'
-            )
-        if not dest_location:
-            error_messages.append(
-                f'Destination location for code {shipment.warehouse_dest_code or "-"} was not found in the WMS | WMS Dependency : MAPPING LOCATION.'
             )
         if shipment.document_only and dest_location and dest_location.usage == 'customer':
             error_messages.append(
@@ -472,7 +473,6 @@ class AcumaticaTransferShipmentLine(models.Model):
             )
 
         if not shipment.document_only:
-            transfer_service = self.env['acumatica.internal.transfer.service']
             transfer_info = transfer_service.classify_transfer_out_to_virtual(
                 source_warehouse_code,
                 shipment.warehouse_dest_code,
@@ -566,6 +566,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                     line_payloads=all_line_payloads,
                 )
 
+            transfer_service.set_order_ready(order)
             shipment.write({
                 'import_state': action_state,
                 'import_message': f'{action_state.title()}: {order.name if order else False}',
