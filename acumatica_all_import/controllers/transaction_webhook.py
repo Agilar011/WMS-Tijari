@@ -23,6 +23,15 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         except (TypeError, ValueError):
             return value
 
+    def _date_value(self, item, *keys):
+        value = self._first_value(item, *keys)
+        if not value:
+            return False
+        try:
+            return fields.Date.to_string(dateutil_parser.parse(value).date())
+        except (TypeError, ValueError):
+            return value
+
     def _search_warehouse(self, warehouse_code):
         if not warehouse_code:
             return self._env()["stock.warehouse"].sudo().browse()
@@ -224,7 +233,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "quantity": self._float_value(item, "Qty", "Quantity", "quantity"),
             "reason_code": self._first_value(item, "ReasonCode", "reason_code"),
             "reference_nbr": self._first_value(item, "ReferenceNbr", "reference_nbr"),
-            "requested_on": self._first_value(item, "RequestedOn", "requested_on"),
+            "requested_on": self._date_value(item, "RequestedOn", "requested_on"),
             "revision": self._first_value(item, "Revision", "revision"),
             "status": self._first_value(item, "Status", "status"),
             "type": self._first_value(item, "Type", "type"),
