@@ -126,6 +126,9 @@ class WMSStockScrap(models.Model):
                 is_scrap=True
             )._action_done()
 
+    def action_mark_as_to_do(self):
+        self.state = "ready"
+
     def action_check_availability(self):
         self.ensure_one()
 
@@ -148,10 +151,10 @@ class WMSStockScrap(models.Model):
 
         self.last_availability_check = fields.Datetime.now()
 
-        if self.availability_state == "available":
-            self.state = "ready"
-        else:
-            self.state = "draft"
+        # if self.availability_state == "available":
+        #     self.state = "ready"
+        # else:
+        #     self.state = "draft"
 
         return True
 
@@ -183,8 +186,6 @@ class WMSStockScrap(models.Model):
         return vals
     
     def _check_line_availability(self, line):
-        move = line.move_id
-
 
         available_qty = self.env["stock.quant"]._get_available_quantity(
             line.product_id,
@@ -199,6 +200,9 @@ class WMSStockScrap(models.Model):
             precision_rounding=line.product_uom_id.rounding,
         ) >= 0:
             line.availability_state = "available"
+
+            self._generate_wms_scrap_move_lines(line)
+
         else:
             line.availability_state = "insufficient"
 
@@ -207,7 +211,7 @@ class WMSStockScrap(models.Model):
         for line in self.scrap_line_ids:
             scrap_move = self.env["wms.scrap.move"].create({
                 "scrap_id": self.id,
-                "receipt_move_id": line.receipt_move_id.id,
+                "receipt_move_id": line.receipt_move_id.id if line.receipt_move_id else False,
                 "product_id": line.product_id.id,
                 "demand_qty": line.demand_qty,
                 "product_uom": line.receipt_move_id.product_uom.id
@@ -215,15 +219,93 @@ class WMSStockScrap(models.Model):
 
             line.scrap_move_id = scrap_move.id
 
-            for move_line in line.receipt_move_id.move_line_ids:
-                self.env["wms.scrap.move.line"].create({
-                    "scrap_move_id": scrap_move.id,
-                    "lot_id": move_line.lot_id.id,
-                    "location_id": move_line.location_dest_id.id,
-                    "product_uom_id": move_line.product_uom_id.id,
-                    "quantity": move_line.quantity,
-                })
-            
+            if line.receipt_move_id:
+                for move_line in line.receipt_move_id.move_line_ids:
+                    self.env["wms.scrap.move.line"].create({
+                        "scrap_move_id": scrap_move.id,
+                        "lot_id": move_line.lot_id.id,
+                        "location_id": move_line.location_dest_id.id,
+                        "product_uom_id": move_line.product_uom_id.id,
+                        "quantity": move_line.quantity,
+                    })
+            # else:
+            #     self.env["wms.scrap.move.line"].create({
+            #         "move_id": scrap_move.id,
+            #         "location_id": line.location_id.id,
+            #         "quantity": line.demand_qty,
+            #         "product_uom_id": line.product_uom_id.id,
+            #     })
+
+    def _generate_wms_scrap_move_lines(self, scrap_line):
+        self.ensure_one()
+
+        # wms_move = self.wms_scrap_move_ids.filtered(
+        #     lambda move:
+        #         move.product_id == scrap_line.product_id
+        #         and move.location_id == scrap_line.location_id
+        # )[:1]
+
+        wms_move = scrap_line.scrap_move_id
+
+        if not wms_move:
+            return
+
+        # Hapus detail lama supaya tidak duplicate
+        wms_move.move_line_ids.unlink()
+
+        Quant = self.env["stock.quant"]
+
+        # Ambil quant yang:
+        # - produknya sama
+        # - lokasinya sama
+        # - punya lot
+        # - punya stock
+        #
+        # order ASC = FIFO berdasarkan lot/quant
+        quants = Quant.search(
+            [
+                ("product_id", "=", scrap_line.product_id.id),
+                ("location_id", "=", scrap_line.location_id.id),
+                ("lot_id", "!=", False),
+                ("quantity", ">", 0),
+            ],
+            order="in_date asc, id asc",
+        )
+
+        remaining_qty = scrap_line.demand_qty
+
+        for quant in quants:
+            if float_compare(
+                remaining_qty,
+                0,
+                precision_rounding=scrap_line.product_uom_id.rounding,
+            ) <= 0:
+                break
+
+            available_qty = quant.quantity
+
+            if float_compare(
+                available_qty,
+                0,
+                precision_rounding=scrap_line.product_uom_id.rounding,
+            ) <= 0:
+                continue
+
+            allocated_qty = min(
+                available_qty,
+                remaining_qty,
+            )
+
+            self.env["wms.scrap.move.line"].create({
+                "scrap_move_id": wms_move.id,
+                "lot_id": quant.lot_id.id,
+                "location_id": quant.location_id.id,
+                "quantity": allocated_qty,
+                "product_uom_id": scrap_line.product_uom_id.id,
+            })
+
+            remaining_qty -= allocated_qty
+
     def _check_all_lot_match(self):
         scrap_move_lines = self.scrap_line_ids.mapped('scrap_move_id').mapped('move_line_ids')
         unmatch_lots = scrap_move_lines.filtered(
@@ -355,7 +437,6 @@ class WMSScrapMove(models.Model):
     receipt_move_id = fields.Many2one(
         "stock.move",
         string="Receipt Move",
-        required=True,
         readonly=True,
     )
 
