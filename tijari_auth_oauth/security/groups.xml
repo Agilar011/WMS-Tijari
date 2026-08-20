@@ -2,7 +2,7 @@
 <odoo>
 
     <record id="module_category_tijari_auth" model="ir.module.category">
-        <field name="name">Tijari Authentication</field>
+        <field name="name">WMS Authentication</field>
         <field name="sequence">100</field>
     </record>
 
