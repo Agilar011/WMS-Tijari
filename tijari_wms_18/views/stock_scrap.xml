@@ -135,12 +135,12 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
             <xpath expr="//header" position="inside">
-                <!-- <button
+                <button
                     name="action_generate_scrap"
                     string="Generate Scrap"
                     type="object"
                     class="oe_highlight"
-                    invisible="not show_generate_scrap"/> -->
+                    invisible="1"/>
             </xpath>
         </field>
     </record>
