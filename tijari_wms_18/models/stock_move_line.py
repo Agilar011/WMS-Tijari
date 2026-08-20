@@ -1150,20 +1150,22 @@ class StockMoveLine(models.Model):
     def _update_move_picked(self):
         for move in self.mapped('move_id'):
 
-            # Matching hanya berlaku untuk stock move yang
-            # merupakan bagian dari picking.
-            # if not move.picking_id:
-            #     continue
-
             # Return picking tidak melalui proses matching WMS.
             if move.picking_id.return_id:
                 move.picked = True
                 continue
-            
+
+            # Finished product dari Manufacturing Order
+            # tidak menggunakan proses matching.
+            if move.production_id:
+                continue
+
+            # Transfer biasa dan raw material manufacturing
+            # harus lolos matching.
             move.picked = bool(
                 move.move_line_ids
                 and all(
-                    line.matching == 'match'
+                    line.matching == "match"
                     for line in move.move_line_ids
                 )
             )
