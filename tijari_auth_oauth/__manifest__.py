@@ -23,7 +23,9 @@ Features:
         "base",
         "auth_oauth",
     ],
-    "data": [],
+    "data": [
+        "security/groups.xml"
+    ],
     "installable": True,
     "application": False,
     "auto_install": False,
