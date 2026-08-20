@@ -111,6 +111,9 @@ class ResUsers(models.Model):
             email,
         )
 
+        guest_group = self.env.ref(
+            "tijari_auth_oauth.group_guest"
+        )
         user = self.create({
             "name": validation.get("name") or email,
             "login": email,
@@ -118,6 +121,7 @@ class ResUsers(models.Model):
             "oauth_provider_id": provider,
             "oauth_uid": oauth_uid,
             "oauth_access_token": params.get("access_token"),
+            "groups_id": [(6, 0, [guest_group.id])],
         })
 
         _logger.info(
