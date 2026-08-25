@@ -227,6 +227,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                         'import_message': f'Sukses diproses ke Odoo ({picking.name})',
                         'odoo_picking_id': picking.id,
                     })
+                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'direct_transfer')
 
                     if is_new_picking:
                         imported += 1
@@ -235,14 +236,31 @@ class AcumaticaDirectTransferStaging(models.Model):
 
             except Exception as e:
                 # 2. STRATEGI PENANGANAN JIKA DOKUMEN ERROR:
-                # Batalkan transaksi database (Picking dihapus total dari SQL memory)
+                # Savepoint di atas membatalkan picking/move dokumen yang gagal.
                 error += 1
-                self.env.cr.rollback()
-
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    first,
+                    [str(e)],
+                    api_acumatica='direct_transfer',
+                    operation_type='internal',
+                    origin=reference_nbr,
+                    location=first.adt_FromWarehouseID or False,
+                    location_dest=first.adt_ToWarehouseID or False,
+                    scheduled_date=first.adt_Date,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.adt_InventoryID or False,
+                        'product_name': line.adt_Description or False,
+                        'qty': self._parse_float(line.adt_Quantity),
+                        'uom': line.adt_UOM or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in to_create_move_lines],
+                )
                 # Tulis pesan kegagalan ke UI Odoo agar user tahu detail masalahnya
                 first.write({
                     'import_state': 'error',
                     'import_message': str(e),
+                    'odoo_picking_id': False,
                 })
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
                 

@@ -384,11 +384,35 @@ class AcumaticaInventoryStockLine(models.Model):
                     'odoo_location_id': location.id,
                     'odoo_on_hand': new_qty,
                 })
+                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(
+                    f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
+                    'inventory_stock',
+                )
             except Exception as e:
                 _logger.exception('Error import Inventory Stock line %s', line.id)
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    line,
+                    [str(e)],
+                    api_acumatica='inventory_stock',
+                    operation_type='inventory',
+                    origin=f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
+                    location=line.warehouse_code or False,
+                    total_qty=line.on_hand_acumatica,
+                    actual_qty=line.available,
+                    payload={'line': line.read()[0] if line.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.inventory_id or False,
+                        'product_name': line.description or False,
+                        'qty': line.on_hand_acumatica,
+                        'uom': False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    }],
+                )
                 line.write({
                     'import_state': 'error',
                     'import_message': str(e)[:200],
+                    'odoo_product_id': False,
+                    'odoo_location_id': False,
                 })
                 error += 1
 

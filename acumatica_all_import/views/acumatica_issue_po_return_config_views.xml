@@ -58,8 +58,15 @@
     </record>
 
     <record id="action_acumatica_issue_po_return_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Receipt</field>
-        <field name="res_model">acumatica.issue.po.return.config</field>
+        <field name="name">Konfigurasi Acumatica PO Return</field>
+        <field name="res_model">acumatica.config</field>
         <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'issue_po_return')]</field>
+        <field name="context">{
+            'default_config_type': 'issue_po_return',
+            'default_endpoint_name': 'PurchaseReceiptGI',
+            'default_odata_expand': 'PurchaseReceiptGIDetails',
+            'default_is_default': True,
+        }</field>
     </record>
 </odoo>

@@ -566,12 +566,17 @@ class ImportInventoryIssueTokoPegangDOWizard(models.TransientModel):
 
         print(f"Location: {location}")
 
-        if location:
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'outgoing'),                
-                ('is_default_api', '=', True)
-            ])
+        if location and location.odoo_building_id:
+            warehouse = location.odoo_building_id
+            type = warehouse.pick_type_id or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('operation_category', '=', 'pick'),
+            ], limit=1) or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('name', 'ilike', 'Pick'),
+            ], limit=1)
 
         return type
 

@@ -307,6 +307,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         'odoo_picking_id': False,
                         'odoo_internal_transfer_order_id': order.id,
                     })
+                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'vendor_return')
 
                     if action_state == 'imported':
                         imported += 1
@@ -318,6 +319,25 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # Savepoint di atas sudah membatalkan dokumen Odoo yang gagal.
                 # Jangan rollback cursor utama karena record staging masih harus ditulis error.
                 error += 1
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    first,
+                    [str(e)],
+                    api_acumatica='vendor_return',
+                    operation_type='internal',
+                    origin=reference_nbr,
+                    location=first.adt_FromWarehouseID or False,
+                    location_dest=first.adt_ToWarehouseID or False,
+                    scheduled_date=first.adt_Date,
+                    total_qty=first.adt_TotalQty,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.adt_InventoryID or False,
+                        'product_name': line.adt_Description or False,
+                        'qty': self._parse_float(line.adt_Quantity),
+                        'uom': line.adt_UOM or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in to_create_move_lines],
+                )
 
                 # Tulis pesan kegagalan ke UI Odoo agar user tahu detail masalahnya
                 staging = self.env['acumatica.vendor.return.direct.transfer.staging'].browse(first_id).exists()
@@ -325,6 +345,8 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     staging.write({
                         'import_state': 'error',
                         'import_message': str(e),
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': False,
                     })
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
                 

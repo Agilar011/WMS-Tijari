@@ -359,6 +359,7 @@ class AcumaticaIssueLine(models.Model):
                 continue
             first = issue_lines[0]
             try:
+                self.env.cr.execute('SAVEPOINT import_issue_change_item_doc')
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
@@ -461,9 +462,36 @@ class AcumaticaIssueLine(models.Model):
 
                 if issue_lines.filtered('document_only'):
                     picking.action_validate_document_only_import(force=True)
+                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(issue_key, 'issue_change_item')
+                self.env.cr.execute('RELEASE SAVEPOINT import_issue_change_item_doc')
             except Exception as e:
+                self.env.cr.execute('ROLLBACK TO SAVEPOINT import_issue_change_item_doc')
                 _logger.exception('Error import issue %s', issue_key)
-                issue_lines.write({'import_state': 'error', 'import_message': str(e)[:200]})
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    first,
+                    [str(e)],
+                    api_acumatica='issue_change_item',
+                    operation_type='delivery',
+                    origin=issue_key,
+                    location=first.warehouse_code or False,
+                    location_dest=dest_location.display_name if 'dest_location' in locals() and dest_location else False,
+                    scheduled_date=first.scheduled_date,
+                    total_qty=first.total_qty,
+                    actual_qty=first.actual_qty,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.inventory_id or False,
+                        'product_name': line.line_description or False,
+                        'qty': self._parse_int(line.product_uom_qty),
+                        'uom': line.uom_code or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in issue_lines],
+                )
+                issue_lines.write({
+                    'import_state': 'error',
+                    'import_message': str(e)[:200],
+                    'odoo_picking_id': False,
+                })
                 error += len(issue_lines)
 
         msg = f'Import selesai: {imported} delivery dibuat, {updated} delivery diupdate, {error} line error.'

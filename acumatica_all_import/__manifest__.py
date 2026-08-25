@@ -7,6 +7,7 @@
  'data': ['security/ir.model.access.csv',
           'data/acumatica_cron_data.xml',
           'views/acumatica_config_views.xml',
+          'views/acumatica_transaction_type_views.xml',
           'views/api_scheduler_views.xml',
           'views/acumatica_inventory_issue_config_views.xml',
           'views/acumatica_inventory_issue_line_views.xml',

@@ -1846,6 +1846,8 @@ class StockPickingAcumaticaError(models.Model):
         ('receipt', 'Receipt'),
         ('delivery', 'Delivery'),
         ('internal', 'Internal'),
+        ('manufacturing', 'Manufacturing'),
+        ('inventory', 'Inventory'),
     ], string='Operation Type')
 
     location = fields.Char(string='Source Location')
@@ -1872,6 +1874,14 @@ class StockPickingAcumaticaError(models.Model):
         ('issue_po_return', 'Issue Type PO Return'),
         ('transfer_one_step', 'Transfer Pinjaman (1 Step)'),
         ('transfer_two_step', 'Transfer Pinjaman (2 Step)'),
+        ('direct_transfer', 'Direct Transfer'),
+        ('vendor_return', 'Vendor Return'),
+        ('credit_memo_consignment', 'Credit Memo Consignment'),
+        ('invoice_consignment', 'Invoice Consignment'),
+        ('toko_pegang_do', 'Toko Pegang DO'),
+        ('inventory_receipt_transfer_wh_in', 'Inventory Receipt Transfer WH In'),
+        ('kit_assembly', 'Kit Assembly'),
+        ('inventory_stock', 'Inventory Stock'),
     ], string='API Acumatica', required=True)
 
     error_message = fields.Text(string='Error Message')

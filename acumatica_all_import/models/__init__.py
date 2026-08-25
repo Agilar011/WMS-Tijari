@@ -1,5 +1,6 @@
 # Auto-generated imports
 from . import acumatica_config
+from . import acumatica_transaction_type
 from . import acumatica_cronjob
 from . import api_scheduler
 from . import acumatica_customer_location

@@ -3,9 +3,115 @@ import json
 import logging
 from datetime import datetime
 from odoo import models, fields, api
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+
+class AcumaticaErrorTrackingMixin(models.AbstractModel):
+    _name = 'acumatica.error.tracking.mixin'
+    _description = 'Shared Acumatica Import Error Tracking'
+
+    def _safe_float(self, value):
+        try:
+            return float(value or 0.0)
+        except Exception:
+            return 0.0
+
+    def _safe_datetime(self, value):
+        if not value:
+            return False
+        if hasattr(value, 'strftime'):
+            return value
+        try:
+            return fields.Datetime.to_datetime(value)
+        except Exception:
+            return False
+
+    def _persist_error_tracking(
+        self,
+        first,
+        error_messages,
+        api_acumatica,
+        operation_type,
+        origin=None,
+        partner=None,
+        location=None,
+        location_dest=None,
+        scheduled_date=None,
+        total_qty=None,
+        actual_qty=None,
+        payload=None,
+        line_payloads=None,
+    ):
+        origin = origin or getattr(first, 'reference_nbr', False) or getattr(first, 'receipt_nbr', False) or getattr(first, 'adt_ReferenceNbr', False) or getattr(first, 'adt_ShipmentNbr', False) or getattr(first, 'name', False)
+        if not origin:
+            return False
+
+        line_payloads = line_payloads or []
+        error_messages = error_messages if isinstance(error_messages, (list, tuple)) else [error_messages]
+
+        with self.env.registry.cursor() as cr:
+            error_env = api.Environment(cr, self.env.uid, dict(self.env.context))
+            Error = error_env['stock.picking.acumatica.error'].sudo()
+            ErrorLine = error_env['stock.picking.acumatica.error.line'].sudo()
+
+            error_data = Error.search([
+                ('origin', '=', origin),
+                ('api_acumatica', '=', api_acumatica),
+            ], limit=1)
+            error_values = {
+                'partner': partner or False,
+                'operation_type': operation_type,
+                'location': location or False,
+                'location_dest': location_dest or False,
+                'scheduled_date': self._safe_datetime(scheduled_date),
+                'origin': origin,
+                'adt_total_qty': self._safe_float(total_qty),
+                'adt_actual_qty': self._safe_float(actual_qty),
+                'api_acumatica': api_acumatica,
+                'error_message': '\n'.join(str(message) for message in error_messages if message),
+                'payload': str(payload or {})[:1000],
+                'state': 'new',
+            }
+            if error_data:
+                error_data.write(error_values)
+            else:
+                error_data = Error.create(error_values)
+
+            for line_payload in line_payloads:
+                line_domain = [
+                    ('error_id', '=', error_data.id),
+                    ('inventory_id', '=', line_payload.get('inventory_id') or False),
+                    ('qty', '=', self._safe_float(line_payload.get('qty'))),
+                    ('uom', '=', line_payload.get('uom') or False),
+                ]
+                error_line = ErrorLine.search(line_domain, limit=1)
+                line_values = {
+                    'error_id': error_data.id,
+                    'inventory_id': line_payload.get('inventory_id') or False,
+                    'product_name': line_payload.get('product_name') or False,
+                    'qty': self._safe_float(line_payload.get('qty')),
+                    'uom': line_payload.get('uom') or False,
+                    'payload': str(line_payload.get('payload') or {})[:1000],
+                }
+                if error_line:
+                    error_line.write(line_values)
+                else:
+                    ErrorLine.create(line_values)
+
+            cr.commit()
+            return error_data
+
+    def _resolve_error_tracking(self, origin, api_acumatica):
+        if not origin:
+            return
+        error_data = self.env['stock.picking.acumatica.error'].search([
+            ('origin', '=', origin),
+            ('api_acumatica', '=', api_acumatica),
+        ], limit=1)
+        if error_data:
+            error_data.write({'state': 'resolved'})
 
 
 class AcumaticaConfig(models.Model):
@@ -72,27 +178,35 @@ class AcumaticaConfig(models.Model):
         default=False,
         help='Dipakai sebagai config bawaan untuk tipe import yang sama.',
     )
+    picking_type_ids = fields.Many2many(
+        'stock.picking.type',
+        'acumatica_config_stock_picking_type_rel',
+        'config_id',
+        'picking_type_id',
+        string='Stock Picking Type',
+        help='Operation type yang dipakai saat fetch data transaksi dengan konfigurasi ini.',
+    )
     config_type = fields.Selection(
         selection=[
             ('po_receipt', 'PO Receipt'),
-            ('so_transfer', 'SO Transfer'),
+            ('so_transfer', 'SO Transfer - Inter WH IN'),
             ('receipt_external', 'Receipt External'),
             ('receipt_change_item', 'Receipt Change Item'),
             ('inventory_received', 'Inventory Receipt'),
             ('toko_pegang_do', 'Toko Pegang DO'),
-            ('shipment_so', 'Shipment SO Return'),
+            ('shipment_so', 'SO Return'),
             ('so_shipment', 'SO Shipment'),
-            ('transfer_shipment', 'Transfer Shipment'),
+            ('transfer_shipment', 'SO Transfer - Inter WH OUT'),
             ('issue_change_item', 'Issue Change Item'),
             ('inventory_issue', 'Inventory Issue'),
-            ('issue_po_return', 'Issue PO Return'),
-            ('transfer_one_step', 'Transfer One Step'),
-            ('transfer_two_step', 'Transfer Two Step'),
+            ('issue_po_return', 'PO Return'),
+            ('transfer_one_step', 'Transfer 1 STEP'),
+            ('transfer_two_step', 'Transfer 2 STEP'),
             ('kit_assembly', 'Kit Assembly'),
 
             ('customer', 'Customer'),
-            ('customer_location', 'Customer Location'),
-            ('shipvia', 'Ship Via'),
+            # ('customer_location', 'Customer Location'),
+            # ('shipvia', 'Ship Via'),
             ('warehouse', 'Warehouse'),
             ('stock_item', 'Stock Item'),
             ('non_stock_item', 'Non Stock Item'),
@@ -101,8 +215,8 @@ class AcumaticaConfig(models.Model):
             ('inventory_stock', 'Inventory Stock'),
             ('invoice_consignment', 'Invoice Consignment'),
             ('inventory_issue_toko_pegang_do', 'Inventory Issue Toko Pegang DO'),
-            ('vendor_return_direct_transfer', 'Vendor Return Direct Transfer'),
-            ('vendor_return_document_direct_transfer', 'Vendor Return Document Direct Transfer'),
+            ('vendor_return_direct_transfer', 'Vendor Return Consignment'),
+            ('vendor_return_document_direct_transfer', 'Direct Transfer'),
             ('credit_memo_consignment', 'Credit Memo Consignment'),
             ('inventory_receipt_transfer_wh_in', 'Inventory Receipt : Transfer In'),
 
@@ -120,8 +234,7 @@ class AcumaticaConfig(models.Model):
             ('active', '=', True),
         ], limit=1)
         if default_config:
-            if config_type == 'kit_assembly':
-                default_config._ensure_kit_assembly_defaults()
+            default_config._ensure_v2_api_defaults()
             return default_config
 
         fallback_config = self.search([
@@ -129,8 +242,7 @@ class AcumaticaConfig(models.Model):
             ('active', '=', True),
         ], limit=1)
         if fallback_config:
-            if config_type == 'kit_assembly':
-                fallback_config._ensure_kit_assembly_defaults()
+            fallback_config._ensure_v2_api_defaults()
             return fallback_config
 
         if config_type == 'kit_assembly':
@@ -138,11 +250,90 @@ class AcumaticaConfig(models.Model):
 
         return self.browse()
 
+    def _ensure_v2_api_defaults(self):
+        v2_defaults = {
+            'transfer_one_step': {
+                'name': 'Acumatica Transfer One Step V2 - Default',
+                'endpoint_name': 'TransferOrderGI',
+                'odata_expand': 'TransferOrderGIDetails',
+                'odata_filter': False,
+                'old_endpoint_names': {'', 'TransferOrder'},
+                'old_odata_expands': {'', 'Details'},
+                'old_odata_filters': {
+                    "TransferType eq '1-Step' and (Status eq 'On Hold' or Status eq 'Balanced')",
+                    "TransferType eq '1-Step' and (Status eq 'On Hold' or Status eq 'Balanced') ",
+                },
+            },
+            'transfer_two_step': {
+                'name': 'Acumatica Transfer Two Step V2 - Default',
+                'endpoint_name': 'TransferOrderGI',
+                'odata_expand': 'TransferOrderGIDetails',
+                'odata_filter': False,
+                'old_endpoint_names': {'', 'TransferOrder'},
+                'old_odata_expands': {'', 'Details'},
+                'old_odata_filters': {
+                    "TransferType eq '1-Step' and (Status eq 'On Hold' or Status eq 'Balanced')",
+                    "TransferType eq '1-Step' and (Status eq 'On Hold' or Status eq 'Balanced') ",
+                    "TransferType eq '2-Step' and (Status eq 'On Hold' or Status eq 'Balanced')",
+                    "TransferType eq '2-Step' and (Status eq 'On Hold' or Status eq 'Balanced') ",
+                },
+            },
+            'kit_assembly': {
+                'name': 'Acumatica Kit Assembly V2 - Default',
+                'endpoint_name': 'KitAssemblyGI',
+                'odata_expand': 'KitAssemblyGIDetails',
+                'old_endpoint_names': {'', 'KitAssembly'},
+                'old_odata_expands': {'', 'StockComponents'},
+            },
+            'vendor_return_direct_transfer': {
+                'name': 'Acumatica Vendor Return Consignment V2 - Default',
+                'endpoint_name': 'VendorReturnGI',
+                'odata_expand': 'VendorReturnGIDetails',
+                'odata_filter': False,
+                'old_endpoint_names': {'', 'TransferOrder', 'TransferOrderGI'},
+                'old_odata_expands': {'', 'Details', 'TransferOrderGIDetails'},
+                'old_odata_filters': {
+                    "ReturnType eq 'Return Transfer' and (Status eq 'On Hold' or Status eq 'Balance')",
+                },
+            },
+            'vendor_return_document_direct_transfer': {
+                'name': 'Acumatica Vendor Return Document Direct Transfer V2 - Default',
+                'endpoint_name': 'VendorReturnDocumentGI',
+                'odata_expand': 'VendorReturnDocumentGIDetails',
+                'odata_filter': False,
+                'old_endpoint_names': {'', 'TransferOrder', 'TransferOrderGI'},
+                'old_odata_expands': {'', 'Details', 'TransferOrderGIDetails'},
+                'old_odata_filters': {
+                    "ReturnType eq 'Return Transfer Document' and Status eq 'Released'",
+                },
+            },
+        }
+        for record in self:
+            defaults = v2_defaults.get(record.config_type)
+            if not defaults:
+                continue
+            vals = {}
+            if record.endpoint_name in defaults['old_endpoint_names']:
+                vals['endpoint_name'] = defaults['endpoint_name']
+            if record.odata_expand in defaults['old_odata_expands']:
+                vals['odata_expand'] = defaults['odata_expand']
+            if 'odata_filter' in defaults and record.odata_filter in defaults.get('old_odata_filters', set()):
+                vals['odata_filter'] = defaults['odata_filter']
+            if record.name and 'V2' not in record.name:
+                vals['name'] = defaults['name']
+            if vals:
+                record.write(vals)
+        return self
+
     @api.model
     def _normalize_inventory_receive_type(self, value):
         if not value:
             return 'inventory_receive'
         return str(value).strip().lower().replace('-', '_').replace(' ', '_')
+
+    def _get_config_picking_type(self):
+        self.ensure_one()
+        return self.picking_type_ids[:1] if self.picking_type_ids else self.env['stock.picking.type'].browse()
 
     def _resolve_inventory_receive_picking_type(self, transfer_type=False, warehouse_code=False, document_only=False):
         self.ensure_one()
@@ -188,15 +379,15 @@ class AcumaticaConfig(models.Model):
     def _create_default_kit_assembly_config(self):
         source = self.search([('active', '=', True)], limit=1)
         vals = {
-            'name': 'Acumatica Kit Assembly - Default',
+            'name': 'Acumatica Kit Assembly V2 - Default',
             'base_url': source.base_url or 'http://staging.aditya.group/acumportal/entity',
             'api_version': source.api_version or '25.200.002',
             'username': source.username or 'wms',
             'password': source.password or 'WMSAditya@2026',
             'company_code': source.company_code or 'asgjkt',
             'config_type': 'kit_assembly',
-            'endpoint_name': 'KitAssembly',
-            'odata_expand': 'StockComponents',
+            'endpoint_name': 'KitAssemblyGI',
+            'odata_expand': 'KitAssemblyGIDetails',
             'is_default': True,
             'active': True,
             'state': 'draft',
@@ -207,9 +398,9 @@ class AcumaticaConfig(models.Model):
         for record in self.filtered(lambda config: config.config_type == 'kit_assembly'):
             vals = {}
             if not record.endpoint_name:
-                vals['endpoint_name'] = 'KitAssembly'
+                vals['endpoint_name'] = 'KitAssemblyGI'
             if not record.odata_expand:
-                vals['odata_expand'] = 'StockComponents'
+                vals['odata_expand'] = 'KitAssemblyGIDetails'
             if vals:
                 record.write(vals)
         return self
@@ -377,6 +568,137 @@ class AcumaticaConfig(models.Model):
             return datetime.fromisoformat(value.replace("Z", "+00:00"))
         except Exception:
             return False        
+
+    def _iter_transaction_type_payloads(self, payload):
+        if isinstance(payload, list):
+            for item in payload:
+                yield from self._iter_transaction_type_payloads(item)
+            return
+
+        if not isinstance(payload, dict):
+            return
+
+        yield payload
+        for value in payload.values():
+            if isinstance(value, dict):
+                nested = value.get('value')
+                if isinstance(nested, (list, dict)):
+                    yield from self._iter_transaction_type_payloads(nested)
+            elif isinstance(value, list):
+                yield from self._iter_transaction_type_payloads(value)
+
+    def _extract_transaction_type_values(self, payload):
+        source_keys = (
+            'TransType',
+            'TransactionType',
+            'TransferType',
+            'Type',
+            'ReceiptType',
+            'OrderType',
+            'SOOrderType',
+            'LineOrderType',
+            'POOrderType',
+            'LinePOOrderType',
+            'TransferOrderType',
+            'LineTransferOrderType',
+            'ReturnType',
+        )
+        values = {}
+        for item in self._iter_transaction_type_payloads(payload):
+            for key in source_keys:
+                value = self._val(item, key)
+                if not value:
+                    continue
+                normalized = str(value).strip()
+                if normalized:
+                    values[(key, normalized)] = normalized
+        return values
+
+    def fetch_transaction_type_values(self, limit=50, offset=0):
+        self.ensure_one()
+        self._ensure_v2_api_defaults()
+        if not self.endpoint_name:
+            raise UserError('Endpoint Name wajib diisi sebelum sync transaction type.')
+
+        session = self._do_login()
+        try:
+            endpoint = f"{self.api_url}/{self.endpoint_name}"
+            params = {'$top': limit, '$skip': offset}
+            if self.odata_expand:
+                params['$expand'] = self.odata_expand
+            if self.odata_select:
+                params['$select'] = self.odata_select
+            if self.odata_filter:
+                params['$filter'] = self.odata_filter
+
+            response = session.get(endpoint, params=params, timeout=60)
+            if response.status_code != 200:
+                raise UserError(
+                    f'Gagal ambil transaction type {self.name} '
+                    f'(HTTP {response.status_code}): {response.text}'
+                )
+
+            payload = response.json()
+            return self._extract_transaction_type_values(payload)
+        finally:
+            self._do_logout(session)
+            self.last_sync = fields.Datetime.now()
+
+    def action_sync_transaction_types(self):
+        TransactionType = self.env['acumatica.transaction.type']
+        synced = 0
+        checked = 0
+        messages = []
+
+        for config in self:
+            checked += 1
+            try:
+                with self.env.cr.savepoint():
+                    values = config.fetch_transaction_type_values()
+            except Exception as exc:
+                messages.append(f'{config.name}: {str(exc)}')
+                continue
+
+            if not values:
+                messages.append(f'{config.name}: tidak ada transaction type di sample response.')
+                continue
+
+            with self.env.cr.savepoint():
+                for (source_field, trans_type), name in values.items():
+                    record = TransactionType.search([
+                        ('config_id', '=', config.id),
+                        ('source_field', '=', source_field),
+                        ('trans_type', '=', trans_type),
+                    ], limit=1)
+                    vals = {
+                        'name': name,
+                        'config_id': config.id,
+                        'source_field': source_field,
+                        'trans_type': trans_type,
+                        'endpoint_name': config.endpoint_name,
+                        'last_sync': fields.Datetime.now(),
+                        'active': True,
+                    }
+                    if record:
+                        record.write(vals)
+                    else:
+                        TransactionType.create(vals)
+                    synced += 1
+
+        message = f'Sync selesai. Config dicek: {checked}, transaction type tersimpan: {synced}.'
+        if messages:
+            message = f"{message}\n" + "\n".join(messages)
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Sync Transaction Type',
+                'message': message,
+                'type': 'success' if synced else 'warning',
+                'sticky': bool(messages),
+            }
+        }
         
 
     # def fetch_kit_assembly_data(self, limit=100, offset=0):

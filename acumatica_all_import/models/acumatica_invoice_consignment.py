@@ -543,18 +543,43 @@ class AcumaticaInvoiceConsignment(models.Model):
                         'import_message': f'Sukses diproses ke {picking.name}',
                         'odoo_picking_id': picking.id,
                     })
+                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(first_reference, 'invoice_consignment')
                     
                     imported += 1
 
             except Exception as e:
                 # KOREKSI 2: Penanganan komplit jika dokumen ini gagal (Otomatis skip ke index loop selanjutnya)
                 error += 1
+                tracked_lines = self.env['acumatica.invoice.consignment.staging.line'].search([
+                    ('receipt_line_id', '=', first.id),
+                ])
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    first,
+                    [str(e)],
+                    api_acumatica='invoice_consignment',
+                    operation_type='internal',
+                    origin=first_reference,
+                    partner=first.adt_CustomerID or False,
+                    location=getattr(first, 'adt_WarehouseID', False) or first.adt_LocationID or False,
+                    location_dest=getattr(first, 'adt_ToWarehouseID', False) or False,
+                    scheduled_date=first.adt_Date,
+                    total_qty=getattr(first, 'adt_TotalQty', 0.0),
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.adt_InventoryID or False,
+                        'product_name': line.adt_TransactionDescription or False,
+                        'qty': self._parse_int(line.adt_Qty),
+                        'uom': line.adt_UOM or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in tracked_lines],
+                )
                 
                 staging = self.env['acumatica.invoice.consignment.staging'].browse(first_id).exists()
                 if staging:
                     staging.write({
                         'import_state': 'error',
                         'import_message': str(e),
+                        'odoo_picking_id': False,
                     })
                 print(f"[ERROR IMPORT] Dokumen {first_reference} Gagal: {str(e)}")
 

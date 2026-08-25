@@ -1174,6 +1174,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "vendor_return": {
                 "label": "Vendor Return",
                 "records_keys": ("Inserted",),
+                "detail_keys": ("TransferOrderGIDetails", "Details", "details"),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.vendor.return.direct.transfer.staging",
@@ -1185,6 +1186,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "vendor_return_document": {
                 "label": "Vendor Return Document",
                 "records_keys": ("Inserted",),
+                "detail_keys": ("TransferOrderGIDetails", "Details", "details"),
                 "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
                 "document_field": "adt_ReferenceNbr",
                 "header_model": "acumatica.direct.transfer.staging",
@@ -1196,6 +1198,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "transfer_one_step": {
                 "label": "Transfer Intra Warehouse Out (1 Step)",
                 "records_keys": ("Inserted",),
+                "detail_keys": ("TransferOrderGIDetails", "Details", "details"),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "header_model": "acumatica.transfer.one.step.line",
@@ -1207,6 +1210,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "transfer_two_step": {
                 "label": "Transfer Intra Warehouse Out (2 Step)",
                 "records_keys": ("Inserted",),
+                "detail_keys": ("TransferOrderGIDetails", "Details", "details"),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "header_model": "acumatica.transfer.two.step.line",
@@ -1261,7 +1265,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "kit_assembly": {
                 "label": "Kit Assembly",
                 "records_keys": ("Inserted",),
-                "detail_keys": ("StockComponents", "stock_components", "Components", "components", "Details", "details"),
+                "detail_keys": ("KitAssemblyGIDetails", "StockComponents", "stock_components", "Components", "components", "Details", "details"),
                 "document_keys": ("ReferenceNbr", "reference_nbr"),
                 "document_field": "reference_nbr",
                 "processor": self._process_kit_assembly_webhook,
@@ -1348,8 +1352,17 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _merge_header_detail(self, header, detail):
         merged = dict(header)
-        merged.pop("Details", None)
-        merged.pop("details", None)
+        for key in (
+            "Details",
+            "details",
+            "TransferOrderGIDetails",
+            "KitAssemblyGIDetails",
+            "StockComponents",
+            "stock_components",
+            "Components",
+            "components",
+        ):
+            merged.pop(key, None)
         if isinstance(detail, dict):
             for key, value in detail.items():
                 if key == "id":

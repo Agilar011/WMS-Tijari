@@ -120,10 +120,10 @@
 	                            <field name="is_initial_demand_editable" column_invisible="True"/>
 	                            <field name="display_import_lot" column_invisible="True"/>
 	                            <field name="picking_type_entire_packs" column_invisible="True"/>
-	                            <field name="product_packaging_id" groups="product.group_stock_packaging"
+	                            <field name="product_packaging_id" string="Packaging" optional="hide" groups="product.group_stock_packaging"
 	                                context="{'default_product_id': product_id}"
 	                                readonly="not product_id"/>
-	                            <field name="product_uom_qty" string="Demand" readonly="1"/>
+	                            <field name="product_uom_qty" string="Total Qty" readonly="1"/>
 	                            <field name="remaining_package_qty" string="Remaining Product" readonly="1"/>
 	                            <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
 	                                invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
@@ -144,12 +144,12 @@
 	                                domain="[('product_id','=',product_id)]"/>
 	                            <field name="adt_type" column_invisible="1"/>
 	                            <field name="owner_id" column_invisible="parent.adt_type != 'Toko Pegang DO'"/>
-	                            <field name="adt_dest_location_id"/>
-	                            <field name="quantity" string="Picked Qty" readonly="1" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-	                            <field name="confirmation_quantity" string="Stored Qty" readonly="1" optional="show"/>
+	                            <field name="adt_dest_location_id" string="Final Location"/>
+	                            <field name="quantity" string="Qty Diterima" readonly="1" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+	                            <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show"/>
 	                            <field name="product_uom" readonly="1" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
 	                            <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
-	                            <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
+	                            <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
 	                            <button name="action_print_lot_number_line"
 	                                type="object"
 	                                icon="fa-print"
@@ -188,9 +188,9 @@
                                 readonly="putaway_status == 'finished'"
                                 context="{'show_location_short_name': True}"
                                 domain="[('id', 'child_of', adt_dest_location_id)]"/>
-                            <field name="quantity" string="Picked Qty" readonly="1"/>
-                            <field name="confirmation_quantity" string="Stored Qty" readonly="putaway_status == 'finished'" force_save="1"/>
-                            <field name="product_uom_id" readonly="1" string="UoM"/>
+                            <field name="quantity" string="Qty Diterima" readonly="1"/>
+                            <field name="confirmation_quantity" string="Qty Disimpan" readonly="putaway_status == 'finished'" force_save="1"/>
+                            <field name="product_uom_id" readonly="1" string="UoM" optional="hide"/>
                             <field name="matching" column_invisible="1" force_save="1"/>
                             <field name="adt_dest_location_id" column_invisible="1"/>
                             <field name="allowed_matching_lot_ids" column_invisible="1"/>

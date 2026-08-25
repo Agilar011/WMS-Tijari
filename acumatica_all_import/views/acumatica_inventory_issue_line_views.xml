@@ -54,7 +54,8 @@
                 <field name="import_message"/>
                 <field name="odoo_internal_transfer_order_id" column_invisible="1"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>            </list>
+                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
+            </list>
         </field>
     </record>
 
@@ -67,6 +68,7 @@
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
                     <button name="action_open_picking" type="object" string="Open Odoo Document" class="btn-secondary" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                     <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <field name="import_state"/>
                 </header>
                 <sheet>
                     <group string="Header">

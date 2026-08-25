@@ -316,7 +316,7 @@ class AcumaticaReceiptLine(models.Model):
         #     ('warehouse_id', '=', warehouse.id if warehouse else False),
         #     ('code', '=', 'incoming'),
         # ], limit=1)
-        picking_type = self.picking_type_id
+        picking_type = receipt.picking_type_id
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {receipt.warehouse_code}'
