@@ -595,7 +595,7 @@ class WmsApiController(http.Controller):
 
     @http.route('/print/lot_number_move_line', type='http', auth='user')
     def PrintLotNumberLine(self, ids=None, **kw):
-
+        blank_image = create_blank_image()
         if not ids:
             return request.make_response(
                 json.dumps({'error': 'ids tidak ditemukan'}),
@@ -673,7 +673,7 @@ class WmsApiController(http.Controller):
                 json.dumps({'error': 'id tidak ditemukan'}),
                 [('Content-Type', 'application/json')]
             )
-
+        blank_image = create_blank_image()
         stok = request.env['stock.quant.package'].sudo().browse(int(id))
         package_level = request.env['stock.package_level'].sudo().search([
             ('package_id', '=', stok.id)
@@ -695,6 +695,7 @@ class WmsApiController(http.Controller):
             'warehouse_name': picking.picking_type_id.name or '',
             'warehouse_id': picking.picking_type_id.warehouse_id.name or '',
             'scheduled_date': format_tanggal_indo(picking.scheduled_date) if picking else "",
+            'qrcode': (stok.qr_code_image.decode('utf-8') if stok.qr_code_image else blank_image),
             'detail': [],
         }
 

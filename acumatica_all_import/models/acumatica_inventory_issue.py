@@ -569,20 +569,8 @@ class AcumaticaInventoryIssueLine(models.Model):
         Scrap = self.env["stock.scrap"]
         ScrapLocation = self.env["stock.location"]
 
-        scrap_exist = Scrap.search([('origin', '=', first.reference_nbr)])
-        if scrap_exist:
-            return scrap_exist, 'updated'
-
         warehouse = self._find_warehouse(first)
-
-        # if not warehouse:
-        #     raise UserError(
-        #         f"Warehouse tidak ditemukan untuk code: "
-        #         f"{first.warehouse_code or '-'}"
-        #     )
-
-        # source_location = warehouse.lot_stock_id
-
+        
         if not source_location:
             raise UserError(
                 f"Stock location tidak ditemukan untuk "
@@ -592,7 +580,7 @@ class AcumaticaInventoryIssueLine(models.Model):
             ("scrap_location", "=", True),
             ("company_id", "in", [False, warehouse.company_id.id]),
         ], limit=1)
-
+        
         if not scrap_location:
             raise UserError(
                 f"Scrap Location tidak ditemukan untuk "
@@ -600,7 +588,7 @@ class AcumaticaInventoryIssueLine(models.Model):
             )
 
         components = self.env[
-            "acumatica.inventory.issue.product"
+                    "acumatica.inventory.issue.product"
         ].search([
             ("receipt_line_id", "=", first.id),
         ])
@@ -611,8 +599,13 @@ class AcumaticaInventoryIssueLine(models.Model):
                 f"{first.reference_nbr}."
             )
 
-        scrap_lines = []
+        # =========================================================
+        # CHECK EXISTING SCRAP
+        # =========================================================
+        imported_status = ""
+        scrap = Scrap.search([('origin', '=', first.reference_nbr)])
 
+        scrap_lines = []
         for line in components:
             product = self._find_product(line)
 
@@ -636,19 +629,37 @@ class AcumaticaInventoryIssueLine(models.Model):
                 ),
                 "receipt_move_id": False,
             })
+        if not scrap:
+            scrap = Scrap.create({
+                "origin": first.reference_nbr,
+                "company_id": warehouse.company_id.id,
+                "location_id": source_location.id,
+                "scrap_location_id": scrap_location.id,
 
-        scrap = Scrap.create({
-            "origin": first.reference_nbr,
-            "company_id": warehouse.company_id.id,
-            "location_id": source_location.id,
-            "scrap_location_id": scrap_location.id,
+                # Header / dummy
+                "product_id": scrap_lines[0]["product_id"].id,
+                "product_uom_id": scrap_lines[0]["product_uom_id"].id,
+                "scrap_qty": scrap_lines[0]["demand_qty"],
+            })  
 
-            # Header / dummy
-            "product_id": scrap_lines[0]["product_id"].id,
-            "product_uom_id": scrap_lines[0]["product_uom_id"].id,
-            "scrap_qty": scrap_lines[0]["demand_qty"],
-        })
+            imported_status = "imported"
+        else:
+            if scrap.state != "draft":
+                raise UserError(
+                    f"Scrap {scrap.name} for "
+                    f"{first.reference_nbr} is already processed "
+                    f"and the status is {scrap.state}."
+                )
+            
+            # Scrap masih draft → rebuild
+            scrap.scrap_line_ids.mapped("scrap_move_id").unlink()
+            scrap.scrap_line_ids.unlink()
 
+            imported_status = "updated"
+
+        # =========================================================
+        # PREPARE SCRAP LINES
+        # =========================================================
         scrap.scrap_line_ids = [
             (
                 0,
@@ -665,16 +676,22 @@ class AcumaticaInventoryIssueLine(models.Model):
             for line in scrap_lines
         ]
 
-        # scrap._reset_lot_confirmation()
+        # =========================================================
+        # CREATE WMS SCRAP MOVES
+        # =========================================================
         scrap._create_scrap_moves()
 
+        # =========================================================
+        # SCRAP NAME
+        # =========================================================
         if scrap.name == _("New"):
             scrap.name = (
                 self.env["ir.sequence"].next_by_code("stock.scrap")
                 or _("New")
             )
 
-        return scrap, 'imported'
+        return scrap, imported_status
+
     # ---------------------------------------------------------
     # HEADER
     # ---------------------------------------------------------
