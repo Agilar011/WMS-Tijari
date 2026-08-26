@@ -11,7 +11,7 @@
                 <field name="wms_state"
                     widget="statusbar"
                     statusbar_visible="draft,assigned,waiting_response,done"
-                    invisible="picking_type_name not in ['Delivery Orders']"    
+                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']"    
                 />
             </xpath>
 
@@ -25,7 +25,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="picking_type_name in ['Delivery Orders']"/>
+                    invisible="adt_type in ['Sales Order Shipment']"/>
 
             </xpath>            
 
@@ -35,7 +35,7 @@
                         type="object"
                         class="oe_highlight"
                         groups="stock.group_stock_user"
-                        invisible="picking_type_name in ['Delivery Orders'] or state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel')"
+                        invisible="state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel')"
                         data-hotkey="v"/>
             </xpath>
 
@@ -45,34 +45,34 @@
                 string="Validate"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name not in ['Delivery Orders'] or wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel', 'return_shipment')"/>
+                invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel', 'return_shipment')"/>
 
                 
                 <button name="action_fetch_actual_qty"
                 string="Get Full Shipment Data"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name not in ['Delivery Orders'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+                invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
 
                 <button name="action_fetch_partial_shipment"
                 string="Get Partial Shipment Data"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name not in ['Delivery Orders'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+                invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
 
                 <button
                     name="action_confirm_shipment"
                     type="object"
                     string="Confirm Shipment"
                     class="btn-primary"
-                    invisible="picking_type_name not in ['Delivery Orders'] or wms_state != 'waiting_response'"/>
+                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state != 'waiting_response'"/>
 
                 <button
                     name="action_mark_as_done"
                     type="object"
                     string="Set to Done"
                     class="btn-primary"
-                    invisible="picking_type_name not in ['Delivery Orders'] or wms_state != 'return_shipment'"/>
+                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state != 'return_shipment'"/>
 
                 <button name="action_print_warehouse_receipt"
                     string="Print Receipt"
