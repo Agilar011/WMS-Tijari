@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <function model="res.groups" name="_tijari_ensure_picker_group_xmlid"/>
+    <function model="res.groups" name="_tijari_ensure_putaway_group_xmlid"/>
+    <function model="res.groups" name="_tijari_ensure_packer_group_xmlid"/>
+
     <record id="view_users_form_inherit_acumatica" model="ir.ui.view">
         <field name="name">res.users.form.inherit.acumatica</field>
         <field name="model">res.users</field>

@@ -1014,6 +1014,12 @@ class StockMoveLine(models.Model):
                     vals['matching_loc_dest_id'] = location.id
 
             line.write(vals)
+            if picking_type_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
+                matching = line._get_matching_status()
+                line.write({
+                    'matching': matching,
+                    'second_matching': 'Match' if matching == 'match' else 'Not Match',
+                })
 
             matching_labels = dict(line._fields['matching'].selection)
             status_labels = dict(line._fields['putaway_status'].selection)
@@ -1050,6 +1056,7 @@ class StockMoveLine(models.Model):
                     line.matching_loc_dest_id.id,
                     line.matching_loc_dest_id.display_name,
                 ] if line.matching_loc_dest_id else False
+                result['second_matching'] = line.second_matching
 
         return result
 
