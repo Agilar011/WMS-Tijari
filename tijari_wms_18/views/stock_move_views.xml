@@ -177,8 +177,8 @@
                         <field name="company_id" column_invisible="1" force_save="1"/>
                         <field name="picking_id" column_invisible="1" force_save="1"/>
                         <field name="move_id" column_invisible="1" force_save="1"/>
-                        <field name="location_id" column_invisible="1" force_save="1" context="{'show_location_short_name': True}"/>
-                        <field name="location_dest_id" column_invisible="1" force_save="1" context="{'show_location_short_name': True}"/>
+                        <field name="location_id" column_invisible="1" force_save="1" context="{'show_location_short_name': True}" widget="location_short_many2one"/>
+                        <field name="location_dest_id" column_invisible="1" force_save="1" context="{'show_location_short_name': True}" widget="location_short_many2one"/>
                         <field name="product_uom_category_id" column_invisible="1"/>
                         <field name="tracking" column_invisible="1"/>
                         <field name="state" column_invisible="1"/>

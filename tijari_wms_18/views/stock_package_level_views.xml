@@ -33,4 +33,22 @@
         </field>
     </record>
 
+    <record id="tijari_stock_package_level_view_form_inherit" model="ir.ui.view">
+        <field name="name">tijari.stock.package.level.view.form.inherit</field>
+        <field name="model">stock.package_level</field>
+        <field name="inherit_id" ref="stock.package_level_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr='//form' position='inside'>
+                <footer>
+                    <button
+                        name="action_mark_finished"
+                        type="object"
+                        string="Confirm"
+                        class="btn-primary"
+                    />
+                </footer>
+            </xpath>
+        </field>
+    </record>
+
 </odoo>

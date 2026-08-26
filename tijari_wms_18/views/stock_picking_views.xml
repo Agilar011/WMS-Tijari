@@ -217,6 +217,7 @@
                                 placeholder="Scan a QR code or select a package..."
                                 domain="[('id', 'in', available_package_ids)]"
                                 options="{'no_create': True, 'no_open': True}"/>
+                            <field name="filtered_package_level_id" invisible="1"/>
                         </group>
                     </group>
 
@@ -570,6 +571,10 @@
             <xpath expr="//button[@name='unpack']" position="after">
                 <button name="action_print_packing_list" string="Print" type="object" class="btn-primary"/>
             </xpath>
+            <xpath expr="//field[@name='package_type_id']" position="before">
+                <field name="package_cat" />
+                <field name="is_empty" invisible='1' />
+            </xpath>
             <!-- <xpath expr="//field[@name='pack_date']" position="after">
                 <field name="scheduled_date"/>
                 <field name="origin"/>
@@ -624,6 +629,18 @@
         <field name="inherit_id" ref="stock.view_quant_package_tree"/>
         <field name="arch" type="xml">
 
+            <xpath expr="//list" position="inside">
+                <header>
+                    <button
+                        name="%(action_generate_package_wizard)d"
+                        string="Generate"
+                        type="action"
+                        class="btn-primary"
+                        display="always"
+                    />
+                </header>
+            </xpath>
+
             <xpath expr="//field[@name='company_id']" position="after">
                 <button
                     name="action_print_packing_list"
@@ -635,4 +652,24 @@
         </field>
     </record>
 
+    <record id="view_quant_package_kanban_inherit" model="ir.ui.view">
+        <field name="name">stock.quant.package.kanban.inherit</field>
+        <field name="model">stock.quant.package</field>
+        <field name="inherit_id" ref="stock.view_quant_package_kanban"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//kanban" position="inside">
+                <header>
+                    <button
+                        name="%(action_generate_package_wizard)d"
+                        string="Generate"
+                        type="action"
+                        class="btn-primary"
+                        display="always"
+                    />
+                </header>
+            </xpath>
+
+        </field>
+    </record>
 </odoo>

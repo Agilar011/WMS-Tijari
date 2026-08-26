@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import fields, models
+from odoo import _, api, fields, models
 import base64
 import os
 from PIL import Image
@@ -15,7 +15,43 @@ class StockQuantPackage(models.Model):
     scheduled_date = fields.Date(string='scheduled_date')
     picking_id = fields.Many2one("stock.picking", string="Picking", index=True, store=True, copy=False)
     qr_code_image = fields.Binary(string='Sign')
+    package_cat = fields.Selection([
+        ('box', 'Box'),
+        ('palet', 'Palet'),
+    ], string='Package Category', default="box", required=True)
+    is_empty = fields.Boolean('is_empty', compute="compute_is_empty", store=True)
 
+    @api.depends('quant_ids')
+    def compute_is_empty(self):
+        for line in self:
+            line.is_empty = False if line.quant_ids else True
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            package_cat = vals.get('package_cat')
+
+            if package_cat and not vals.get('name'):
+                sequence_code = {
+                    'box': 'stock.quant.package.box',
+                    'palet': 'stock.quant.package.palet',
+                }
+
+                vals['name'] = self.env[
+                    'ir.sequence'
+                ].next_by_code(sequence_code[package_cat])
+
+        return super().create(vals_list)
+
+    def action_open_generate_package_wizard(self):
+        return {
+            'name': 'Generate Package',
+            'type': 'ir.actions.act_window',
+            'res_model': 'generate.package.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+        }
+    
     # def action_print_packing_list(self):
     #     action = {}
     #     action['type'] = 'ir.actions.act_url'
