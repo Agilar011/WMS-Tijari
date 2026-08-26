@@ -221,6 +221,9 @@ function applyMoveLineScanResult(action, result) {
         setBadgeCell(row, "matching", result.matching_label || result.matching, result.matching);
         updateScanButtons(row, result.matching === "match");
     }
+    if (Object.prototype.hasOwnProperty.call(result, "second_matching")) {
+        setBadgeCell(row, "second_matching", result.second_matching, result.second_matching);
+    }
 
     if (Object.prototype.hasOwnProperty.call(result, "matching_lot_id")) {
         setCellText(row, "matching_lot_id", result.matching_lot_id?.[1] || "");

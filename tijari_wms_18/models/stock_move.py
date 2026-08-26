@@ -78,8 +78,6 @@ class StockMove(models.Model):
     picking_type_name = fields.Char(
         string="Operation Type",
         compute="_compute_get_picking_type_name",
-        store=True
-        
     )
 
     @api.depends(
@@ -92,7 +90,6 @@ class StockMove(models.Model):
                 rec.picking_type_name = rec.picking_id.picking_type_id.name
             if rec.raw_material_production_id:
                 rec.picking_type_name = rec.raw_material_production_id.picking_type_id.name
-
 
     transaction_type = fields.Selection([
         ('inbound', 'Inbound'),
@@ -550,7 +547,7 @@ class StockMove(models.Model):
 
     def action_open_move_lines(self):
         self.ensure_one()
-        return self.action_show_details()
+        return self.action_open_move_pick()
 
     def action_open_note_wizard(self):
         self.ensure_one()
