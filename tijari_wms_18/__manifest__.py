@@ -22,9 +22,11 @@
         'tijari_auth_oauth',
     ],
     'data': [
+        'security/groups.xml',
         'security/ir.model.access.csv',
         'data/document_only_picking_type_data.xml',
         'data/ir.sequence.xml',
+        'wizard/generate_package_wizard_views.xml',
         'views/assets.xml',
         'views/hide_menu.xml',
         'views/internal_transfer_order_views.xml',
@@ -69,8 +71,11 @@
             'tijari_wms_18/static/src/xml/auto_input_code.xml',
             'tijari_wms_18/static/src/xml/action_generate_selected_lot.xml',
             'tijari_wms_18/static/src/xml/move_line_scan_button.xml',
+            'tijari_wms_18/static/src/views/fields/location_short_many2one/location_short_many2one.js',
+            'tijari_wms_18/static/src/views/fields/location_short_many2one/location_short_many2one.xml'
         ]
     },
+    
     'installable': True,
     'auto_install': False,
     'application': True,

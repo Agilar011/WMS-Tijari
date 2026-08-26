@@ -17,3 +17,5 @@ access_stock_scrap_user,stock.scrap,model_stock_scrap,base.group_user,1,1,1,1
 access_stock_scrap_line_user,stock.scrap.line,model_stock_scrap_line,base.group_user,1,1,1,1
 access_wms_scrap_move_user,wms.scrap.move,model_wms_scrap_move,base.group_user,1,1,1,1
 access_wms_scrap_move_line_user,wms.scrap.move.line,model_wms_scrap_move_line,base.group_user,1,1,1,1
+
+access_generate_package_wizard_user,generate_package.wizard,model_generate_package_wizard,base.group_user,1,1,1,1

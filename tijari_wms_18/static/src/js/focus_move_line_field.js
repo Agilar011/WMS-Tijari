@@ -789,6 +789,8 @@ class PackageScanButton extends Component {
     setup() {
         this.orm = useService("orm");
         this.notification = useService("notification");
+        this.action = useService("action");
+
     }
 
     async onClick(ev) {
@@ -808,12 +810,28 @@ class PackageScanButton extends Component {
             return;
         }
 
-        await this.orm.call(
+        const result = await this.orm.call(
             resModel,
             "action_apply_scanned_package",
             [[resId], scannedCode]
         );
+
         await this.props.record.load();
+
+        if (result.package_level_id) {
+            await this.action.doAction({
+                type: "ir.actions.act_window",
+                res_model: "stock.package_level",
+                res_id: result.package_level_id,
+                views: [[false, "form"]],
+                target: "new",
+            },
+            {
+                onClose: async () => {
+                    await this.props.record.load();
+                },
+            });
+        }
     }
 }
 

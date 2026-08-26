@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<odoo>
+
+    <record id="generate_package_wizard_view_form" model="ir.ui.view">
+        <field name="name">generate.package.wizard.view.form</field>
+        <field name="model">generate.package.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Generate Package">
+                <group>
+                    <field name="package_cat"/>
+
+                    <field name="quantity"/>
+                </group>
+                <footer>
+                    <button
+                        name="action_generate"
+                        string="Generate"
+                        type="object"
+                        class="btn-primary"
+                    />
+                    <button
+                        string="Cancel"
+                        special="cancel"
+                    />
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_generate_package_wizard" model="ir.actions.act_window">
+        <field name="name">Generate Package</field>
+        <field name="res_model">generate.package.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

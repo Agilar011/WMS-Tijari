@@ -27,6 +27,7 @@
                     name="location_id" 
                     domain="[('id', 'in', available_location_ids)]" 
                     context="{'show_location_short_name': True}" 
+                    widget="location_short_many2one"
                     string="Pick From" 
                     column_invisible="parent.picking_type_name not in ['Pack','Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Manufacturing']" 
                     force_save="1"/>
@@ -43,9 +44,18 @@
                 <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="parent.picking_type_name in ['Pack', 'Pick', 'Pick Internal', 'Pack Internal', 'Receipts', 'Receipt Internal', 'Pick Components', 'Internal Transfers', 'Manufacturing']"/>
             </xpath>
 
-            <!-- <xpath expr="//field[@name='result_package_id']" position="replace">
-                <attribute name="optional">hide</attribute>
-            </xpath> -->
+            <xpath expr="//field[@name='result_package_id'][not(@column_invisible)]" position="attributes">
+                <attribute name="domain">
+                    (company_id and [('company_id', 'in', [company_id] + [False])] or [('company_id', '=', False)]) + [
+                        '|',
+                        ('location_id', '=', False),
+                        ('location_id', '=', location_dest_id),
+                        ('id', '!=', package_id),
+                        ('package_cat', '=', 'box'),
+                        ('is_empty', '=', True)
+                    ]
+                </attribute>
+            </xpath>
             
            <xpath expr="//field[last()]" position="after">
 
@@ -126,7 +136,7 @@
 
             <xpath expr="//field[@name='location_dest_id']" position="replace">
 
-                <field name="location_dest_id" column_invisible="1" force_save="1" context="{'show_location_short_name': True}"/>
+                <field name="location_dest_id" widget="location_short_many2one" column_invisible="1" force_save="1" context="{'show_location_short_name': True}"/>
                 <field name="adt_dest_location_id" optional="show" column_invisible="parent.picking_code != 'incoming'" />
                 <field name="allowed_matching_lot_ids" column_invisible="1"/>
                 <field name="matching_lot_id" column_invisible="1" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>

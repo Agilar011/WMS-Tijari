@@ -111,6 +111,28 @@ class StockPicking(models.Model):
         "stock.quant.package",
         string="Package Number",
     )
+
+    filtered_package_level_id = fields.Many2one(
+        'stock.package_level',
+        string='Filtered Package Level',
+        readonly=True
+    )
+
+    @api.onchange('scanned_package_id')
+    def _onchange_scanned_package_id(self):
+        for picking in self:
+            picking.filtered_package_level_id = False
+
+            if not picking.scanned_package_id:
+                continue
+
+            package_level = picking.package_level_ids.filtered(
+                lambda p: p.package_id == picking.scanned_package_id
+            )[:1]
+
+            if package_level:
+                picking.filtered_package_level_id = package_level
+
     scan_package_button = fields.Boolean(string="Scan Package")
 
     filtered_package_level_ids = fields.One2many(
@@ -903,7 +925,9 @@ class StockPicking(models.Model):
 
     def action_apply_scanned_package(self, scanned_code):
         self.ensure_one()
+
         scanned_code = (scanned_code or '').strip()
+
         package = self.available_package_ids.filtered(
             lambda available_package: available_package.name == scanned_code
         )[:1]
@@ -913,10 +937,18 @@ class StockPicking(models.Model):
                 "Package tidak ditemukan untuk kode scan: %s" % scanned_code
             )
 
-        self.write({"scanned_package_id": package.id})
+        package_level = self.package_level_ids.filtered(
+            lambda package_level: package_level.package_id == package
+        )[:1]
+
+        self.write({
+            "scanned_package_id": package.id,
+            "filtered_package_level_id": package_level.id or False,
+        })
 
         return {
             "package_id": package.id,
+            "package_level_id": package_level.id or False,
             "display_name": package.display_name,
         }
     
