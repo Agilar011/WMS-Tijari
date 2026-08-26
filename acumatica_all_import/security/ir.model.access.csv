@@ -138,3 +138,6 @@ access_acumatica_inventory_receipt_transfer_wh_in_staging_line_user,acumatica.in
 access_loginext_staging_data_user,loginext.staging.data,model_loginext_staging_data,base.group_user,1,1,1,1
 access_loginext_staging_crate_user,loginext.staging.crate,model_loginext_staging_crate,base.group_user,1,1,1,1
 access_loginext_staging_item_user,loginext.staging.item,model_loginext_staging_item,base.group_user,1,1,1,1
+
+
+acumatica_error_master_user,acumatica.error.master.user,model_acumatica_error_master,base.group_user,1,1,1,1

@@ -1191,6 +1191,8 @@ class StockPicking(models.Model):
             if picking.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
                 picking._check_validate_requirements()
                 picking._check_pick_quantity_vs_demand()
+            if picking.picking_type_id.name in ('Pack'):
+                picking._check_pick_quantity_vs_demand()
             if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
                 picking._check_putaway_status_requirements()
                 picking._check_picker_status_requirements()

@@ -3,7 +3,7 @@
  'summary': 'Satu addon untuk semua import Acumatica dengan unified wizard dan batch import',
  'category': 'Inventory/Inventory',
  'author': 'Tijari / OpenAI Custom Merge',
- 'depends': ['base', 'contacts', 'product', 'purchase', 'stock', 'uom', 'tijari_wms_18'],
+ 'depends': ['base', 'mail', 'contacts', 'product', 'purchase', 'stock', 'uom', 'tijari_wms_18'],
  'data': ['security/ir.model.access.csv',
           'data/acumatica_cron_data.xml',
           'views/acumatica_config_views.xml',
@@ -35,6 +35,7 @@
           'views/acumatica_transfer_shipment_line_views.xml',
           'views/acumatica_transfer_two_step_config_views.xml',
           'views/acumatica_transfer_two_step_line_views.xml',
+          'views/acumatica_error_master_views.xml',
           'data/acumatica_config_data.xml',
           'data/inventory_receipt_transfer_in_dummy_data.xml',
           'data/sotr_staging_dummy_data.xml',
@@ -58,6 +59,11 @@
           'views/acumatica_all_import_wizard_views.xml',
           'views/acumatica_all_import_menu.xml',
           ],
+ 'assets': {
+        'web.assets_backend': [
+            'acumatica_all_import/static/src/scss/chatter.scss',
+        ],
+    },
  'installable': True,
  'application': True,
  'auto_install': False,

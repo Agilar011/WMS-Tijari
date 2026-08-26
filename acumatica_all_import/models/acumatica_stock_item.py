@@ -1,6 +1,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
+from markupsafe import Markup, escape
 import logging
 import json
 
@@ -23,6 +24,7 @@ class AcumaticaStockItemLine(models.Model):
       LastModifiedDateTime → adt_acumatica_write_date (Mandatory, to be)
     """
     _name        = 'acumatica.stock.item.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Stock Item dari Acumatica (Staging)'
     _order       = 'row_number asc'
 
@@ -48,6 +50,7 @@ class AcumaticaStockItemLine(models.Model):
 
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_product_id  = fields.Many2one('product.template', string='Product di Odoo', readonly=True)
+    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     config_id = fields.Many2one(
         'acumatica.config',
@@ -429,7 +432,122 @@ class AcumaticaStockItemLine(models.Model):
     #     }
 
 
+    def _handle_acumatica_error(self, err_msg=False):
+        AcumaticaError = self.env['acumatica.error.master']
+        acumatica_err_id = self.acumatica_err_id
+        if not err_msg:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'solved'
+                return
+            return
 
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'StockItem-{self.id}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': err_msg
+            })
+            self.acumatica_err_id = acumatica_err_id
+            
+        acumatica_err_id.error_msg = err_msg
+        acumatica_err_id.import_state = state
+
+    def _get_changed_fields(self, record, vals):
+        changed_fields = []
+
+        for field_name, new_value in vals.items():
+            field = record._fields.get(field_name)
+
+            if not field:
+                continue
+
+            old_value = record[field_name]
+
+            # Normalisasi nilai
+            old_value = old_value or False
+            new_value = new_value or False
+
+            if old_value != new_value:
+                changed_fields.append({
+                    'field_name': field_name,
+                    'field_label': field.string,
+                    'old_value': old_value,
+                    'new_value': new_value,
+                })
+
+        return changed_fields
+    
+    def _log_import_result(
+        self,
+        state,
+        message,
+        record=False,
+        changed_fields=None,
+    ):
+        titles = {
+            'imported': '✅ Import Berhasil',
+            'updated': '🔄 Data Diperbarui',
+            'error': '❌ Import Gagal',
+        }
+
+        body = Markup("""
+            <p>
+                <strong>{}</strong>
+            </p>
+            <p>{}</p>
+        """).format(
+            titles.get(state, 'Import Log'),
+            message,
+        )
+
+        if changed_fields:
+            body += Markup("""
+                <p><strong>Perubahan:</strong></p>
+                <ul>
+            """)
+
+            for change in changed_fields:
+                old_value = change['old_value'] or '-'
+                new_value = change['new_value'] or '-'
+
+                body += Markup("""
+                    <li>
+                        <strong>{}</strong>:
+                        {} → {}
+                    </li>
+                """).format(
+                    escape(change['field_label']),
+                    escape(str(old_value)),
+                    escape(str(new_value)),
+                )
+
+            body += Markup("</ul>")
+
+        if record:
+            body += Markup("""
+                <p>
+                    Record Odoo:
+                    <a href="#"
+                    data-oe-model="{}"
+                    data-oe-id="{}">
+                        {}
+                    </a>
+                </p>
+            """).format(
+                escape(record._name),
+                record.id,
+                escape(record.display_name),
+            )
+
+        self.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
+    
     def _do_import(self):
 
         from odoo.tools import split_every
@@ -504,12 +622,21 @@ class AcumaticaStockItemLine(models.Model):
                         # Cek kalo description (name) kosong, langsung tandai error dan skip proses import untuk line ini
                         if not line.description:
 
+                            err_msg = 'Description kosong'
                             staging_error.append((
                                 'error',
-                                'Description kosong',
+                                err_msg,
                                 line.id
                             ))
 
+                            line._handle_acumatica_error(err_msg)
+
+                            line._log_import_result(
+                                'error',
+                                f'Gagal mengimpor data: {err_msg}',
+                                False,
+                                False
+                            )
                             error += 1
                             continue
 
@@ -525,41 +652,40 @@ class AcumaticaStockItemLine(models.Model):
                         # =====================================
                         # CREATE
                         # =====================================
+                        vals = {
+                            'name': line.description,
+                            'adt_product_type': 'stock_item',
+                            'is_storable': True,
+                            'tracking' : 'lot',
+                            'default_code': line.inventory_id or False,
+                            'type': self.ITEM_TYPE_MAP.get(
+                                (line.item_type or '').lower(),
+                                'consu'
+                            ),
+                            'categ_id': 1,
+                            'uom_id': uom_id,
+                            'uom_po_id': uom_id,
+                            'adt_external_id': line.external_id or False,
+                            'adt_item_class': line.item_class or False,
+                            'adt_item_status': self.STATUS_MAP.get(
+                                line.item_status or '',
+                                False
+                            ),
+                            'adt_valuation_method': self.VALUATION_MAP.get(
+                                line.valuation_method or '',
+                                False
+                            ),
+                            'adt_acumatica_write_date':
+                                self._parse_dt(
+                                    line.last_modified_datetime
+                                ),
 
+                            # helper temporary
+                            '_line_id': line.id,
+                        }
+                        
                         # Buat data baru jika tidak ditemukan existing product dengan external_id yang sama.
                         if not existing:
-
-                            vals = {
-                                'name': line.description,
-                                'adt_product_type': 'stock_item',
-                                'is_storable': True,
-                                'tracking' : 'lot',
-                                'default_code': line.inventory_id or False,
-                                'type': self.ITEM_TYPE_MAP.get(
-                                    (line.item_type or '').lower(),
-                                    'consu'
-                                ),
-                                'categ_id': 1,
-                                'uom_id': uom_id,
-                                'uom_po_id': uom_id,
-                                'adt_external_id': line.external_id or False,
-                                'adt_item_class': line.item_class or False,
-                                'adt_item_status': self.STATUS_MAP.get(
-                                    line.item_status or '',
-                                    False
-                                ),
-                                'adt_valuation_method': self.VALUATION_MAP.get(
-                                    line.valuation_method or '',
-                                    False
-                                ),
-                                'adt_acumatica_write_date':
-                                    self._parse_dt(
-                                        line.last_modified_datetime
-                                    ),
-
-                                # helper temporary
-                                '_line_id': line.id,
-                            }
 
                             # Tambahkan data baru ke list create_vals untuk nanti di-bulk create dengan ORM
                             create_vals.append(vals)
@@ -633,16 +759,39 @@ class AcumaticaStockItemLine(models.Model):
                                 existing['id'],
                                 line.id
                             ))
+
+                            existing = Product.browse(existing['id'])
+                            changed_fields = line._get_changed_fields(
+                                existing,
+                                vals,
+                            )
+
+                            line._log_import_result(
+                                'updated',
+                                f'Data {existing.display_name} berhasil diperbarui.',
+                                existing,
+                                changed_fields,
+                            )
+
                             updated += 1
 
                     except Exception as e:
 
+                        err_msg = str(e)[:200]
                         staging_error.append((
                             'error',
-                            str(e)[:200],
+                            err_msg,
                             line.id
                         ))
 
+                        line._handle_acumatica_error(err_msg)
+
+                        line._log_import_result(
+                            'error',
+                            f'Gagal mengimpor data: {err_msg}',
+                            False,
+                            False
+                        )
                         error += 1
 
                 # =============================================
@@ -670,6 +819,17 @@ class AcumaticaStockItemLine(models.Model):
                             product.id,
                             line_map[product.default_code]
                         ))
+
+                        acu_product = self.browse(line_map[product.default_code])
+
+                        acu_product._handle_acumatica_error()
+                        acu_product._log_import_result(
+                            'imported',
+                            f'Data {product.display_name} berhasil dibuat.',
+                            product,
+                            False
+                        )
+
                         # Tambahkan data SKU baru ke list sku_insert_params untuk nanti di-bulk insert dengan SQL
                         sku_insert_params.append((
                             product.id,
@@ -757,15 +917,25 @@ class AcumaticaStockItemLine(models.Model):
                 _logger.exception("IMPORT ERROR: %s", str(e))
 
                 for line_id in chunk_ids:
+                    err_msg = str(e)[:200]
                     self.env.cr.execute("""
                         UPDATE acumatica_stock_item_line
                         SET import_state = 'error',
                             import_message = %s
                         WHERE id = %s
                     """, (
-                        str(e)[:200],
+                        err_msg,
                         line_id
                     ))
+
+                    acu_product = self.browse(line_id)
+                    acu_product._handle_acumatica_error(err_msg)
+                    acu_product._log_import_result(
+                        'error',
+                        f'Gagal mengimpor data: {err_msg}',
+                        False,
+                        False
+                    )
 
                 self.env.cr.commit()
 
@@ -798,3 +968,4 @@ class AcumaticaStockItemLine(models.Model):
             'res_id':    self.odoo_product_id.id,
             'view_mode': 'form',
         }
+    

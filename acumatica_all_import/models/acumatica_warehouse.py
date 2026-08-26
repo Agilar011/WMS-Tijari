@@ -1,6 +1,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
+from markupsafe import Markup, escape
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ class AcumaticaWarehouseLine(models.Model):
       ShippingLocationID    → adt_shipping_location_id  (Mandatory, to be)
     """
     _name = 'acumatica.warehouse.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Warehouse dari Acumatica (Staging Header)'
     _order = 'row_number asc'
  
@@ -49,6 +51,7 @@ class AcumaticaWarehouseLine(models.Model):
 
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_warehouse_id = fields.Many2one('stock.warehouse', string='Warehouse di Odoo', readonly=True, ondelete='set null')
+    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     config_id = fields.Many2one(
         'acumatica.config',
@@ -194,6 +197,29 @@ class AcumaticaWarehouseLine(models.Model):
 
         return wh_building or False
 
+    def _handle_acumatica_error(self, err_msg=False):
+        AcumaticaError = self.env['acumatica.error.master']
+        acumatica_err_id = self.acumatica_err_id
+        if not err_msg:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'solved'
+                return
+            return
+
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'Warehouse-{self.id}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': err_msg
+            })
+            self.acumatica_err_id = acumatica_err_id
+
+        acumatica_err_id.import_state = state
+        acumatica_err_id.error_msg = err_msg
+    
     def _do_import(self):
         """
         Import warehouse header ke stock.warehouse,
@@ -209,10 +235,21 @@ class AcumaticaWarehouseLine(models.Model):
         for line in self:
             try:
                 if not line.warehouse_id or not line.description:
+
+                    err_msg = 'WarehouseID atau Description kosong'
                     line.write({
                         'import_state': 'error',
-                        'import_message': 'WarehouseID atau Description kosong',
+                        'import_message': err_msg,
                     })
+
+                    line._handle_acumatica_error(err_msg)
+
+                    line._log_import_result(
+                        'error',
+                        f'Gagal mengimpor data: {err_msg}',
+                        False,
+                        False
+                    )
                     error += 1
                     continue
 
@@ -228,13 +265,27 @@ class AcumaticaWarehouseLine(models.Model):
 
                 existing = self._find_existing_location(line)
                 if existing:
+
+
                     warehouse_odoo = self._search_warehouse(line.building_id)
                     if line.building_id and line.warehouse_id and warehouse_odoo:
                         vals.update({
                             'is_error': False,
                             'error_message': None
                         })
+                        changed_fields = line._get_changed_fields(
+                            existing,
+                            vals,
+                        )
+
                         existing.write(vals)
+
+                        line._log_import_result(
+                            'updated',
+                            f'Data {existing.display_name} berhasil diperbarui.',
+                            existing,
+                            changed_fields,
+                        )
 
                     line.write({
                         'import_state':    'updated',
@@ -248,23 +299,45 @@ class AcumaticaWarehouseLine(models.Model):
                     wh_builidng = self.env['stock.warehouse'].browse()
                     warehouse_odoo = self._search_warehouse(line.building_id)
                     if not location_code:
+
+                        err_msg = "WarehouseID kosong, tidak bisa create location"
                         line.write({
                             'import_state': 'error',
-                            'import_message': 'WarehouseID kosong, tidak bisa create location',
+                            'import_message': err_msg,
                         })
+
+                        line._handle_acumatica_error(err_msg)
+
+                        line._log_import_result(
+                            'error',
+                            f'Gagal mengimpor data: {err_msg}',
+                            False,
+                            False
+                        )
                         error += 1
                         vals['is_error'] = True
-                        error_list.append('WarehouseID kosong')
+                        error_list.append(err_msg)
                     if not line.building_id:
                         building_code = ''
                         if not building_code:
+
+                            err_msg = "BuildingID kosong"
                             line.write({
                                 'import_state': 'error',
-                                'import_message': 'BuildingID kosong',
+                                'import_message': err_msg,
                             })
+
+                            line._handle_acumatica_error(err_msg)
+
+                            line._log_import_result(
+                                'error',
+                                f'Gagal mengimpor data: {err_msg}',
+                                False,
+                                False
+                            )
                             error += 1
                             vals['is_error'] = True
-                            error_list.append('BuildingID kosong')
+                            error_list.append(err_msg)
 
                     new_location = self.env['stock.location.acumatica'].create(vals)
                     if error_list:
@@ -288,14 +361,34 @@ class AcumaticaWarehouseLine(models.Model):
                         'import_message':  f'Dibuat: {new_location.name} (code: {new_location.code})',
                         'odoo_warehouse_id': wh_builidng.id if wh_builidng else None,
                     })
+
+                    line._handle_acumatica_error()
+
+                    line._log_import_result(
+                        'imported',
+                        f'Data {new_location.name} (code: {new_location.code}) berhasil dibuat.',
+                        new_location,
+                        False
+                    )
                     imported += 1
 
             except Exception as e:
                 _logger.error("Error import Warehouse %s: %s", line.warehouse_id, str(e))
+
+                err_msg = str(e)[:200]
                 line.write({
                     'import_state':   'error',
-                    'import_message': str(e)[:200],
+                    'import_message': err_msg,
                 })
+
+                line._handle_acumatica_error(err_msg)
+
+                line._log_import_result(
+                    'error',
+                    f'Gagal mengimpor data: {err_msg}',
+                    False,
+                    False
+                )
                 error += 1
                 raise
 
@@ -337,3 +430,97 @@ class AcumaticaWarehouseLine(models.Model):
             'res_id': self.odoo_warehouse_id.id,
             'view_mode': 'form',
         }
+
+    def _get_changed_fields(self, record, vals):
+        changed_fields = []
+
+        for field_name, new_value in vals.items():
+            field = record._fields.get(field_name)
+
+            if not field:
+                continue
+
+            old_value = record[field_name]
+
+            # Normalisasi nilai
+            old_value = old_value or False
+            new_value = new_value or False
+
+            if old_value != new_value:
+                changed_fields.append({
+                    'field_name': field_name,
+                    'field_label': field.string,
+                    'old_value': old_value,
+                    'new_value': new_value,
+                })
+
+        return changed_fields
+        
+    def _log_import_result(
+        self,
+        state,
+        message,
+        record=False,
+        changed_fields=None,
+    ):
+        titles = {
+            'imported': '✅ Import Berhasil',
+            'updated': '🔄 Data Diperbarui',
+            'error': '❌ Import Gagal',
+        }
+
+        body = Markup("""
+            <p>
+                <strong>{}</strong>
+            </p>
+            <p>{}</p>
+        """).format(
+            titles.get(state, 'Import Log'),
+            message,
+        )
+
+        if changed_fields:
+            body += Markup("""
+                <p><strong>Perubahan:</strong></p>
+                <ul>
+            """)
+
+            for change in changed_fields:
+                old_value = change['old_value'] or '-'
+                new_value = change['new_value'] or '-'
+
+                body += Markup("""
+                    <li>
+                        <strong>{}</strong>:
+                        {} → {}
+                    </li>
+                """).format(
+                    escape(change['field_label']),
+                    escape(str(old_value)),
+                    escape(str(new_value)),
+                )
+
+            body += Markup("</ul>")
+
+        if record:
+            body += Markup("""
+                <p>
+                    Record Location Acumatica:
+                    <a href="#"
+                    data-oe-model="{}"
+                    data-oe-id="{}">
+                        {} code ({})
+                    </a>
+                </p>
+            """).format(
+                escape(record._name),
+                record.id,
+                escape(record.display_name),
+                escape(record.code),
+            )
+
+        self.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
