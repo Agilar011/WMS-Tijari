@@ -62,8 +62,15 @@
     </record>
 
     <record id="action_acumatica_inventory_issue_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Inventory Issue</field>
-        <field name="res_model">acumatica.inventory.issue.config</field>
+        <field name="name">Konfigurasi Acumatica Inventory Issue</field>
+        <field name="res_model">acumatica.config</field>
         <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'inventory_issue')]</field>
+        <field name="context">{
+            'default_config_type': 'inventory_issue',
+            'default_endpoint_name': 'InventoryIssueGI',
+            'default_odata_expand': 'InventoryIssueGIDetails',
+            'default_is_default': True,
+        }</field>
     </record>
 </odoo>

@@ -6,8 +6,6 @@ access_acumatica_transfer_config_user,acumatica.transfer.config,model_acumatica_
 access_acumatica_transfer_config,access.acumatica.transfer.config,model_acumatica_transfer_config,base.group_user,1,1,1,1
 access_acumatica_transfer_line_user,acumatica.transfer.line,model_acumatica_transfer_line,base.group_user,1,1,1,1
 access_import_transfer_wizard_user,import.transfer.wizard,model_import_transfer_wizard,base.group_user,1,1,1,1
-access_acumatica_transfer_one_step_config_manager,acumatica.transfer.one.step.config manager,model_acumatica_transfer_one_step_config,base.group_system,1,1,1,1
-access_acumatica_transfer_one_step_config_user,acumatica.transfer.one.step.config user,model_acumatica_transfer_one_step_config,base.group_user,1,0,0,0
 access_acumatica_transfer_one_step_line_manager,acumatica.transfer.one.step.line manager,model_acumatica_transfer_one_step_line,base.group_system,1,1,1,1
 access_acumatica_transfer_one_step_line_user,acumatica.transfer.one.step.line user,model_acumatica_transfer_one_step_line,base.group_user,1,1,1,1
 access_import_transfer_one_step_wizard_user,import.transfer.one.step.wizard user,model_import_transfer_one_step_wizard,base.group_user,1,1,1,1
@@ -68,6 +66,7 @@ access_acumatica_kit_assembly_line_user,acumatica.kit.assembly.line,model_acumat
 access_import_kit_assembly_wizard_user,import.kit.assembly.wizard,model_import_kit_assembly_wizard,base.group_user,1,1,1,1
 access_acumatica_webhook_log_user,acumatica.webhook.log,model_acumatica_webhook_log,base.group_user,1,1,1,1
 access_acumatica_config_user,acumatica.config,model_acumatica_config,base.group_user,1,1,1,1
+access_acumatica_transaction_type_user,acumatica.transaction.type,model_acumatica_transaction_type,base.group_user,1,1,1,1
 access_acumatica_customer_line_user,acumatica.customer.line,model_acumatica_customer_line,base.group_user,1,1,1,1
 access_import_customer_wizard_user,import.customer.wizard,model_import_customer_wizard,base.group_user,1,1,1,1
 access_acumatica_customer_location_line_user,acumatica.customer.location.line,model_acumatica_customer_location_line,base.group_user,1,1,1,1

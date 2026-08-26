@@ -200,11 +200,20 @@ class ImportKitAssemblyWizard(models.TransientModel):
         staging_header = self.env['acumatica.kit.assembly']
         staging_line = self.env['acumatica.kit.assembly.component']
         try:
-            endpoint = f"{self.config_id.api_url}/KitAssembly"
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             # print(f"Fetching Kit Assembly data from {endpoint} with limit={limit} and offset={offset}...")
-            params = {'$top': limit, '$skip': offset, '$expand': 'StockComponents',  '$filter': "Warehouse eq 'WH33-FG'"}
+            params = {
+                '$top': limit,
+                '$skip': offset,
+                '$expand': self.config_id.odata_expand
+            }
+            body = {
+                "BuildingID": {
+                    "value": ""
+                }
+            }
 
-            response = session.get(endpoint, params=params, timeout=60)
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 raise UserError(
                     f'Gagal ambil data Kit Assembly '
@@ -249,7 +258,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 assembly = self.env['acumatica.kit.assembly'].create(header)  # Simpan header ke staging untuk referensi, bisa dihapus jika tidak perlu
                 print(f"Created staging header record with ID {assembly.id} for ReferenceNbr {header['reference_nbr']}")
 
-                stock_components = item.get('StockComponents') or []
+                stock_components = (item.get('KitAssemblyGIDetails'))
                 if isinstance(stock_components, dict):
                     stock_components = stock_components.get('value', []) or []
                 if not isinstance(stock_components, list):

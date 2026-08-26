@@ -225,6 +225,7 @@ class AcumaticaTransferOneStepLine(models.Model):
             first = receipt_lines[0]
 
             try:
+                self.env.cr.execute('SAVEPOINT import_transfer_one_step_doc')
                 origin = first.reference_nbr or False
                 existing_order = InternalTransferOrder.search([
                     ('external_ref', '=', origin),
@@ -265,6 +266,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                         'import_message': transfer_info['message'],
                     })
                     skipped += len(receipt_lines)
+                    self.env.cr.execute('RELEASE SAVEPOINT import_transfer_one_step_doc')
                     continue
 
                 if order:
@@ -341,12 +343,39 @@ class AcumaticaTransferOneStepLine(models.Model):
                     'odoo_picking_id': False,
                     'odoo_internal_transfer_order_id': order.id,
                 })
+                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(origin, 'transfer_one_step')
+                self.env.cr.execute('RELEASE SAVEPOINT import_transfer_one_step_doc')
 
             except Exception as e:
+                self.env.cr.execute('ROLLBACK TO SAVEPOINT import_transfer_one_step_doc')
                 _logger.exception('Error import transfer one step %s', reference_nbr)
+                tracked_lines = self.env['acumatica.transfer.one.step.product'].search([
+                    ('header_id', '=', first.id),
+                ])
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    first,
+                    [str(e)],
+                    api_acumatica='transfer_one_step',
+                    operation_type='internal',
+                    origin=reference_nbr,
+                    location=first.from_warehouse_code or False,
+                    location_dest=first.to_warehouse_code or False,
+                    scheduled_date=first.scheduled_date,
+                    total_qty=first.total_qty,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.inventory_id or False,
+                        'product_name': line.line_description or False,
+                        'qty': self._parse_float(line.quantity),
+                        'uom': line.uom_code or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in tracked_lines],
+                )
                 receipt_lines.write({
                     'import_state': 'error',
                     'import_message': str(e)[:200],
+                    'odoo_picking_id': False,
+                    'odoo_internal_transfer_order_id': False,
                 })
                 error += len(receipt_lines)
 
@@ -407,6 +436,7 @@ class AcumaticaTransferOneStepProduct(models.Model):
     
     # Nomor Baris & Identitas Produk
     acumatica_header_id = fields.Char(string="Header ID")
+    reference_nbr = fields.Char(string="Reference Number", index=True)
 
     line_nbr = fields.Integer(string='Line Number')
     inventory_id = fields.Char(string='Product / Inventory')

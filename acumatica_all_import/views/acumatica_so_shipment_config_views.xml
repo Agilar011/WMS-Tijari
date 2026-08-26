@@ -70,8 +70,15 @@
     </record>
 
     <record id="action_acumatica_so_shipment_config" model="ir.actions.act_window">
-        <field name="name">API Config</field>
-        <field name="res_model">acumatica.so.shipment.config</field>
+        <field name="name">Konfigurasi Acumatica SO Shipment</field>
+        <field name="res_model">acumatica.config</field>
         <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'so_shipment')]</field>
+        <field name="context">{
+            'default_config_type': 'so_shipment',
+            'default_endpoint_name': 'ShipmentGI',
+            'default_odata_expand': 'ShipmentGIDetails',
+            'default_is_default': True,
+        }</field>
     </record>
 </odoo>

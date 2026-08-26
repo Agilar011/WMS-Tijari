@@ -344,8 +344,10 @@ class AcumaticaInventoryReceiptTransferWhInStaging(models.Model):
             first = receipt_lines[0]
             print(f"first: {first}")
             try:
+                self.env.cr.execute('SAVEPOINT import_inventory_receipt_transfer_wh_in_doc')
                 # picking_type = False
                 # vendor = self._find_vendor(first)
+                warehouse_code = first.adt_Warehouse or False
                 if first.adt_Warehouse:
                     warehouse = self._find_warehouse(first.adt_Warehouse)
 
@@ -539,7 +541,7 @@ class AcumaticaInventoryReceiptTransferWhInStaging(models.Model):
 
                     except Exception as line_e:
                         _logger.exception("Error import line %s", line.id)
-                        raise UserError('Checkpoint')
+                        raise UserError(str(line_e))
                         first.write({
                             'import_state': 'error',
                             'import_message': str(line_e)[:200],
@@ -549,12 +551,39 @@ class AcumaticaInventoryReceiptTransferWhInStaging(models.Model):
 
                 if first.adt_DocumentOnly:
                     picking.action_validate_document_only_import(force=True)
+                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'inventory_receipt_transfer_wh_in')
+                self.env.cr.execute('RELEASE SAVEPOINT import_inventory_receipt_transfer_wh_in_doc')
 
             except Exception as e:
+                self.env.cr.execute('ROLLBACK TO SAVEPOINT import_inventory_receipt_transfer_wh_in_doc')
                 _logger.exception("Error import receipt %s", reference_nbr)
+                tracked_lines = self.env['acumatica.inventory.receipt.transfer.wh.in.staging.line'].search([
+                    ('header_id', '=', first.id),
+                ])
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    first,
+                    [str(e)],
+                    api_acumatica='inventory_receipt_transfer_wh_in',
+                    operation_type='receipt',
+                    origin=reference_nbr,
+                    partner=first.adt_Customer or False,
+                    location=first.adt_Warehouse or first.adt_Location or False,
+                    location_dest=warehouse_code if 'warehouse_code' in locals() else False,
+                    scheduled_date=first.adt_Date,
+                    total_qty=first.adt_TotalQty,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.adt_InventoryID or False,
+                        'product_name': line.adt_Description or False,
+                        'qty': self._parse_float(line.adt_Quantity),
+                        'uom': line.adt_UOM or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in tracked_lines],
+                )
                 receipt_lines.write({
                     'import_state': 'error',
                     'import_message': str(e)[:200],
+                    'odoo_picking_id': False,
                 })
                 error += len(receipt_lines)
 

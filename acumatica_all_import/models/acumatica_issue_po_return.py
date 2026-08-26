@@ -458,6 +458,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
 
             # WAJIB: Ambil sub-transaksi database tingkat dokumen agar tidak menghentikan loop massal jika terjadi error
             with self.env.cr.savepoint():
+                self.env.cr.execute('SAVEPOINT import_issue_po_return_doc')
                 try:
                     vendor = self._find_vendor(first)
                     warehouse = self._find_warehouse(first)
@@ -583,19 +584,42 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         'import_message': f'Berhasil diproses menjadi Picking Odoo: {picking.name}',
                         'odoo_picking_id': picking.id,
                     })
+                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(receipt_nbr, 'issue_po_return')
+                    self.env.cr.execute('RELEASE SAVEPOINT import_issue_po_return_doc')
 
                 except Exception as e:
-                    # =====================================================
-                    # PERBAIKAN FATAL: JANGAN MEMANGGIL cr.rollback() atau cr.commit() DI SINI!
-                    # =====================================================
-                    # Cukup tulis status log error ke baris staging ini.
-                    # Blok `with self.env.cr.savepoint():` di atas otomatis membatalkan pembuatan picking/move yang rusak.
+                    self.env.cr.execute('ROLLBACK TO SAVEPOINT import_issue_po_return_doc')
                     import_message = f'!!! ERROR ON IMPORT PROCESS: {str(e)}'
                     print(f"Error pada dokumen receipt {receipt_nbr}: {str(e)}")
+                    tracked_lines = self.env['acumatica.issue.po.return.product'].search([
+                        ('receipt_line_id', 'in', receipt_lines.ids),
+                    ])
+                    self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                        first,
+                        [str(e)],
+                        api_acumatica='issue_po_return',
+                        operation_type='receipt',
+                        origin=receipt_nbr,
+                        partner=first.vendor_code or False,
+                        location=first.warehouse_code or False,
+                        location_dest=first.warehouse_dest_code or False,
+                        scheduled_date=first.scheduled_date,
+                        total_qty=first.total_qty,
+                        actual_qty=first.actual_qty,
+                        payload={'header': first.read()[0] if first.exists() else {}},
+                        line_payloads=[{
+                            'inventory_id': line.inventory_id or False,
+                            'product_name': line.line_description or False,
+                            'qty': self._parse_int(line.product_uom_qty),
+                            'uom': line.uom_code or False,
+                            'payload': line.read()[0] if line.exists() else {},
+                        } for line in tracked_lines],
+                    )
                     
                     receipt_lines.write({
                         'import_state': 'error',
-                        'import_message': import_message
+                        'import_message': import_message,
+                        'odoo_picking_id': False,
                     })
                     
                     # Teruskan loop ke dokumen receipt berikutnya

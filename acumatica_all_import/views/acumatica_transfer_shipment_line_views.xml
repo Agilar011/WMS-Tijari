@@ -15,7 +15,7 @@
         <field name="name">acumatica.transfer.shipment.line.search</field>
         <field name="model">acumatica.transfer.shipment.line</field>
         <field name="arch" type="xml">
-            <search string="Cari Data Transfer - Inter Warehouse : OUT">
+            <search string="Cari Data SO Transfer - Inter WH OUT">
                 <field name="shipment_nbr"/>
                 <field name="document_only"/>
                 <!-- <field name="order_number"/> -->
@@ -37,7 +37,7 @@
         <field name="name">acumatica.transfer.shipment.line.list</field>
         <field name="model">acumatica.transfer.shipment.line</field>
         <field name="arch" type="xml">
-            <list string="Data Transfer - Inter Warehouse : OUT" multi_edit="1">
+            <list string="Data SO Transfer - Inter WH OUT" multi_edit="1">
                 <field name="selected"/>
                 <field name="shipment_nbr"/>
                 <field name="shipment_type"/>
@@ -60,7 +60,7 @@
         <field name="name">acumatica.transfer.shipment.line.form</field>
         <field name="model">acumatica.transfer.shipment.line</field>
         <field name="arch" type="xml">
-            <form string="Data Transfer - Inter Warehouse : OUT">
+            <form string="Data SO Transfer - Inter WH OUT">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
                     <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
@@ -126,7 +126,7 @@
     </record>
 
     <record id="action_acumatica_transfer_shipment_line" model="ir.actions.act_window">
-        <field name="name">Data Transfer - Inter Warehouse : OUT</field>
+        <field name="name">Data SO Transfer - Inter WH OUT</field>
         <field name="res_model">acumatica.transfer.shipment.line</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_transfer_shipment_line_search"/>

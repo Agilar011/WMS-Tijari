@@ -187,7 +187,7 @@ class AcumaticaInventoryIssueLine(models.Model):
         ('imported', 'Sudah Diimport'),
         ('updated', 'Diupdate'),
         ('error', 'Error'),
-    ], default='pending', readonly=True)
+    ], default='pending')
     import_message = fields.Char(string='Keterangan', readonly=True)
     odoo_picking_id = fields.Many2one('stock.picking', string='Delivery Order di Odoo', readonly=True)
     odoo_internal_transfer_order_id = fields.Many2one(
@@ -321,7 +321,6 @@ class AcumaticaInventoryIssueLine(models.Model):
         self.ensure_one()
         return self._do_import()
 
-
     def _do_import(self):
         print('Starting import for Inventory Issue with reference_nbr in:', self.mapped('reference_nbr'))
         Picking = self.env['stock.picking']
@@ -432,7 +431,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     imported += 1 if action_state == 'imported' else 0
                     updated += 1 if action_state == 'updated' else 0
                     continue
-                    
+
                 vals = {
                     'origin': first.reference_nbr,
                     'picking_type_id': picking_type.id,
@@ -452,7 +451,10 @@ class AcumaticaInventoryIssueLine(models.Model):
                     'transaction_type' : 'outbound'
                 }
                 
-                picking = Picking.search([('origin', '=', first.reference_nbr)], limit=1)
+                picking = Picking.search([
+                    ('origin', '=', first.reference_nbr),
+                    ('picking_type_id', '=', picking_type.id),
+                ], limit=1)
                 
                 if picking:
                     if picking.state in ('done', 'cancel'):
@@ -489,6 +491,11 @@ class AcumaticaInventoryIssueLine(models.Model):
                         owner_id = customer.id if customer else False
 
                     product = self._find_product(line)
+                    if not product:
+                        raise UserError(
+                            f'Product tidak ditemukan untuk InventoryID: '
+                            f'{line.inventory_id or "-"}'
+                        )
                     uom = self._find_uom(line, product)
                     qty = self._parse_int(line.product_uom_qty)
                     print(f"Qty value before: {line.product_uom_qty} and after: {qty}")
@@ -548,7 +555,38 @@ class AcumaticaInventoryIssueLine(models.Model):
                 _logger.exception('Error import issue %s', issue_key)
                 
                 # Tulis pesan error ke object line (lalu commit status errornya agar tersimpan)
-                issue_lines.write({'import_state': 'error', 'import_message': str(e)[:200]})
+                product_lines = self.env['acumatica.inventory.issue.product'].search([
+                    ('receipt_line_id', 'in', issue_lines.ids),
+                ])
+                line_payloads = [{
+                    'inventory_id': line.inventory_id or False,
+                    'product_name': line.line_description or False,
+                    'qty': self._parse_int(line.product_uom_qty),
+                    'uom': line.uom_code or False,
+                    'payload': line.read()[0] if line.exists() else {},
+                } for line in product_lines]
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    first,
+                    [str(e)],
+                    api_acumatica='inventory_issue',
+                    operation_type='delivery',
+                    origin=first.reference_nbr or issue_key,
+                    partner=first.customer_id or False,
+                    location=first.warehouse_code or False,
+                    location_dest=dest_location.display_name if 'dest_location' in locals() and dest_location else False,
+                    scheduled_date=first.scheduled_date,
+                    total_qty=first.total_qty,
+                    actual_qty=first.actual_qty,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=line_payloads,
+                )
+                issue_lines.write({
+                    'import_state': 'error',
+                    'import_message': str(e)[:200],
+                    'odoo_picking_id': False,
+                    'odoo_internal_transfer_order_id': False,
+                    'odoo_scrap_id': False,
+                })
                 self.env.cr.commit() 
                 
                 error += len(issue_lines)

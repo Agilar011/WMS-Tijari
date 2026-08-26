@@ -63,8 +63,15 @@
     </record>
 
     <record id="action_acumatica_transfer_config" model="ir.actions.act_window">
-        <field name="name">API Configuration</field>
-        <field name="res_model">acumatica.transfer.config</field>
+        <field name="name">Konfigurasi Acumatica SO Transfer - Inter WH IN</field>
+        <field name="res_model">acumatica.config</field>
         <field name="view_mode">list,form</field>
+        <field name="domain">[('config_type', '=', 'so_transfer')]</field>
+        <field name="context">{
+            'default_config_type': 'so_transfer',
+            'default_endpoint_name': 'PurchaseReceiptGI',
+            'default_odata_expand': 'PurchaseReceiptGIDetails',
+            'default_is_default': True,
+        }</field>
     </record>
 </odoo>

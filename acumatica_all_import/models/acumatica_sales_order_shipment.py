@@ -159,9 +159,33 @@ class AcumaticaShipmentGIStaging(models.Model):
         ])
 
         for staging_rec in not_pending_shipment:
+            message = f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
+            lines = shipment_line.search([('gi_id', '=', staging_rec.id)])
+            self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                staging_rec,
+                [message],
+                api_acumatica='so_shipment',
+                operation_type='delivery',
+                origin=staging_rec.adt_ShipmentNbr,
+                partner=staging_rec.adt_CustomerID or False,
+                location=staging_rec.adt_WarehouseID or staging_rec.adt_LocationID or False,
+                location_dest=staging_rec.adt_ToWarehouseID or False,
+                scheduled_date=staging_rec.adt_ShipDate,
+                total_qty=staging_rec.adt_ShipmentQty or staging_rec.total_qty,
+                payload={'header': staging_rec.read()[0] if staging_rec.exists() else {}},
+                line_payloads=[{
+                    'inventory_id': line.adt_LineInventoryID or False,
+                    'product_name': line.adt_LineDescription or False,
+                    'qty': self._parse_int(line.adt_ShipmentQty),
+                    'uom': line.adt_LineUOM or False,
+                    'payload': line.read()[0] if line.exists() else {},
+                } for line in lines],
+            )
             staging_rec.write({
                 'import_state': 'error',
-                'import_message': f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
+                'import_message': message,
+                'odoo_picking_id': False,
+                'odoo_internal_transfer_order_id': False,
             })
 
         # =====================================================
@@ -176,9 +200,11 @@ class AcumaticaShipmentGIStaging(models.Model):
         for shipment in valid_shipments:
             # Ambil sub-transaksi database tingkat dokumen
             with self.env.cr.savepoint():
+                self.env.cr.execute('SAVEPOINT import_so_shipment_doc')
                 try:
                     if (shipment.adt_OrderType or '').strip().upper() == 'CO':
                         self._import_consignment_internal_transfer(shipment, shipment_line)
+                        self.env.cr.execute('RELEASE SAVEPOINT import_so_shipment_doc')
                         continue
 
                     warehouse = self._find_warehouse(shipment.adt_WarehouseID)
@@ -323,17 +349,40 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'import_message': f'Berhasil diproses menjadi Picking Odoo: {picking.name}',
                         'odoo_picking_id': picking.id
                     })
+                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(shipment.adt_ShipmentNbr, 'so_shipment')
+                    self.env.cr.execute('RELEASE SAVEPOINT import_so_shipment_doc')
 
                 except Exception as e:
-                    # JANGAN panggil cr.rollback() atau cr.commit() di sini!
-                    # Cukup cetak log dan tandai data staging induk sebagai error.
-                    # Blok `with self.env.cr.savepoint():` akan otomatis membatalkan Picking/Move yang gagal.
+                    self.env.cr.execute('ROLLBACK TO SAVEPOINT import_so_shipment_doc')
                     _logger.error(f"Error importing shipment {shipment.adt_ShipmentNbr}: {str(e)}")
+                    tracked_lines = shipment_line.search([('gi_id', '=', shipment.id)])
+                    self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                        shipment,
+                        [str(e)],
+                        api_acumatica='so_shipment',
+                        operation_type='delivery',
+                        origin=shipment.adt_ShipmentNbr,
+                        partner=shipment.adt_CustomerID or False,
+                        location=shipment.adt_WarehouseID or shipment.adt_LocationID or False,
+                        location_dest=shipment.adt_ToWarehouseID or False,
+                        scheduled_date=shipment.adt_ShipDate,
+                        total_qty=shipment.adt_ShipmentQty or shipment.total_qty,
+                        payload={'header': shipment.read()[0] if shipment.exists() else {}},
+                        line_payloads=[{
+                            'inventory_id': line.adt_LineInventoryID or False,
+                            'product_name': line.adt_LineDescription or False,
+                            'qty': self._parse_int(line.adt_ShipmentQty),
+                            'uom': line.adt_LineUOM or False,
+                            'payload': line.read()[0] if line.exists() else {},
+                        } for line in tracked_lines],
+                    )
                     
                     # Odoo memperbolehkan modifikasi record saat ini di dalam savepoint yang gagal
                     shipment.write({
                         'import_state': 'error',
-                        'import_message': f'!!! ERROR DETECTED ON IMPORT PROCESS: {str(e)}'
+                        'import_message': f'!!! ERROR DETECTED ON IMPORT PROCESS: {str(e)}',
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': False,
                     })
                     
                     # Paksa loop untuk melanjutkan dokumen berikutnya tanpa menghentikan sistem
@@ -560,6 +609,7 @@ class AcumaticaShipmentGIStaging(models.Model):
             'odoo_picking_id': False,
             'odoo_internal_transfer_order_id': order.id,
         })
+        self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(shipment.adt_ShipmentNbr, 'so_shipment')
         return order
 
 # =====================================================================================================================================================================

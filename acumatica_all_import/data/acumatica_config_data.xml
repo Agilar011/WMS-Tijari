@@ -192,45 +192,45 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_transfer_one_step_default" model="acumatica.config">
-            <field name="name">Acumatica Transfer One Step - Default</field>
+            <field name="name">Acumatica Transfer One Step V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">transfer_one_step</field>
-            <field name="endpoint_name">TransferOrder</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">TransferType eq '1-Step' and (Status eq 'On Hold' or Status eq 'Balanced')</field>
+            <field name="endpoint_name">TransferOrderGI</field>
+            <field name="odata_expand">TransferOrderGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_transfer_two_step_default" model="acumatica.config">
-            <field name="name">Acumatica Transfer Two Step - Default</field>
+            <field name="name">Acumatica Transfer Two Step V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">transfer_two_step</field>
-            <field name="endpoint_name">TransferOrder</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">TransferType eq '1-Step' and (Status eq 'On Hold' or Status eq 'Balanced') </field>
+            <field name="endpoint_name">TransferOrderGI</field>
+            <field name="odata_expand">TransferOrderGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_kit_assembly_default" model="acumatica.config">
-            <field name="name">Acumatica Kit Assembly - Default</field>
+            <field name="name">Acumatica Kit Assembly V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">kit_assembly</field>
-            <field name="endpoint_name">KitAssembly</field>
-            <field name="odata_expand">StockComponents</field>
+            <field name="endpoint_name">KitAssemblyGI</field>
+            <field name="odata_expand">KitAssemblyGIDetails</field>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
@@ -266,31 +266,31 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_vendor_return_direct_transfer_default" model="acumatica.config">
-            <field name="name">Acumatica Vendor Return Direct Transfer - Default</field>
+            <field name="name">Acumatica Vendor Return Consignment V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">vendor_return_direct_transfer</field>
-            <field name="endpoint_name">TransferOrder</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">ReturnType eq 'Return Transfer' and (Status eq 'On Hold' or Status eq 'Balance')</field>
+            <field name="endpoint_name">VendorReturnGI</field>
+            <field name="odata_expand">VendorReturnGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_vendor_return_document_direct_transfer_default" model="acumatica.config">
-            <field name="name">Acumatica Vendor Return Document Direct Transfer - Default</field>
+            <field name="name">Acumatica Vendor Return Document Direct Transfer V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">vendor_return_document_direct_transfer</field>
-            <field name="endpoint_name">TransferOrder</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">ReturnType eq 'Return Transfer Document' and Status eq 'Released'</field>
+            <field name="endpoint_name">VendorReturnDocumentGI</field>
+            <field name="odata_expand">VendorReturnDocumentGIDetails</field>
+            <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>

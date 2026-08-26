@@ -198,6 +198,10 @@ class ImportShipmentWizard(models.TransientModel):
         return []
 
     def _search_picking_type(self, building_code):
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type
+
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         Warehouse = self.env['stock.warehouse']

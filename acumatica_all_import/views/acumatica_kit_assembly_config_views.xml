@@ -6,8 +6,8 @@
         <field name="domain">[('config_type', '=', 'kit_assembly')]</field>
         <field name="context">{
             'default_config_type': 'kit_assembly',
-            'default_endpoint_name': 'KitAssembly',
-            'default_odata_expand': 'StockComponents',
+            'default_endpoint_name': 'KitAssemblyGI',
+            'default_odata_expand': 'KitAssemblyGIDetails',
             'default_is_default': True,
         }</field>
     </record>

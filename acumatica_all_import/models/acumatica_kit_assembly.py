@@ -287,6 +287,7 @@ class AcumaticaKitAssembly(models.Model):
         last_manufacturing = Manufacturing
 
         for reference_nbr in self.mapped("reference_nbr"):
+            records = self.filtered(lambda line: line.reference_nbr == reference_nbr)
             try:
                 # ---------------------------------------------------------
                 # Setiap reference punya savepoint sendiri.
@@ -368,6 +369,7 @@ class AcumaticaKitAssembly(models.Model):
                         [("origin", "=", header.name)],
                         limit=1,
                     )
+                    created_manufacturing = False
 
                     # -----------------------------------------------------
                     # CREATE / UPDATE MO
@@ -397,6 +399,7 @@ class AcumaticaKitAssembly(models.Model):
                             ),
                             "company_id": warehouse_record.company_id.id,
                         })
+                        created_manufacturing = True
 
                         imported += 1
 
@@ -464,7 +467,7 @@ class AcumaticaKitAssembly(models.Model):
                             "Manufacturing Order sudah tidak tersedia."
                         )
 
-                    if raw_moves and not updated:
+                    if raw_moves and created_manufacturing:
                         manufacturing.write({
                             "move_raw_ids": raw_moves,
                         })
@@ -473,6 +476,17 @@ class AcumaticaKitAssembly(models.Model):
                             f"Raw moves berhasil dibuat: "
                             f"{len(raw_moves)}"
                         )
+
+                    records.write({
+                        "import_message": (
+                            f"Imported: {manufacturing.display_name}"
+                            if manufacturing
+                            else "Imported"
+                        ),
+                        "mrp_production_id": manufacturing.id if manufacturing else False,
+                        "import_state": "imported",
+                    })
+                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'kit_assembly')
 
                     # _logger.warning("""
                     #     ========== RAW MOVE AFTER CREATE ==========
@@ -516,6 +530,32 @@ class AcumaticaKitAssembly(models.Model):
                     f"ERROR processing {reference_nbr}: "
                     f"{type(e).__name__}: {e}"
                 )
+                records.write({
+                    "import_message": f"{type(e).__name__}: {e}",
+                    "mrp_production_id": False,
+                    "import_state": "error",
+                })
+                header_payload = header.read()[0] if 'header' in locals() and header and header.exists() else {}
+                component_records = components if 'components' in locals() else self.env['acumatica.kit.assembly.component']
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    records[:1] or self,
+                    [f"{type(e).__name__}: {e}"],
+                    api_acumatica='kit_assembly',
+                    operation_type='manufacturing',
+                    origin=reference_nbr,
+                    location=header.warehouse if 'header' in locals() and header else False,
+                    location_dest=header.location if 'header' in locals() and header else False,
+                    scheduled_date=header.requested_on if 'header' in locals() and header else False,
+                    total_qty=header.quantity if 'header' in locals() and header else 0.0,
+                    payload={'header': header_payload},
+                    line_payloads=[{
+                        'inventory_id': component.stock_inventory_id or False,
+                        'product_name': component.line_inventory_id or False,
+                        'qty': component.line_quantity,
+                        'uom': component.line_uom or False,
+                        'payload': component.read()[0] if component.exists() else {},
+                    } for component in component_records],
+                )
 
         # -------------------------------------------------------------
         # RESULT
@@ -529,16 +569,6 @@ class AcumaticaKitAssembly(models.Model):
             f"Manufacturing Order sudah ada : {updated}\n"
             f"Error : {error}"
         )
-
-        self.write({
-            "import_message": msg,
-            "mrp_production_id": (
-                last_manufacturing.id
-                if last_manufacturing and last_manufacturing.exists()
-                else False
-            ),
-            "import_state": "imported",
-        })
 
         return {
             "type": "ir.actions.client",
@@ -850,78 +880,100 @@ class AcumaticaKitAssemblyLine(models.Model):
 
         # proses per reference number
         for reference_nbr in self.mapped('reference_nbr'):
-            # print(f"Processing ReferenceNbr: {reference_nbr}")
-            vals = {}
-            header = header_reference.search([('name', '=', reference_nbr)])
-            print(f"Header Value : {header.name} ")
+            records = self.filtered(lambda line: line.reference_nbr == reference_nbr)
+            header = header_reference.search([('name', '=', reference_nbr)], limit=1)
+            component_lines = component_reference
+            try:
+                with self.env.cr.savepoint():
+                    if not header:
+                        raise UserError(f"Header tidak ditemukan: {reference_nbr}")
 
-            warehouse = Warehouse.search([('code', '=', header.warehouse)], limit=1)
-            if not warehouse:
-                print(f"Warehouse tidak ditemukan untuk: {header.warehouse}")
+                    warehouse = Warehouse.search([('code', '=', header.warehouse)], limit=1)
+                    if not warehouse:
+                        raise UserError(f"Warehouse tidak ditemukan untuk: {header.warehouse or '-'}")
 
-            processed_product = self.env['product.product'].search([
-                    ('default_code', '=', header.inventory_id),
-                ], limit=1)
-            if not processed_product:
-                print(f"Processed product not found for: {header.inventory_id}")
+                    processed_product = self.env['product.product'].search([
+                        ('default_code', '=', header.inventory_id),
+                    ], limit=1)
+                    if not processed_product:
+                        raise UserError(
+                            f"Finished product tidak ditemukan untuk InventoryID: "
+                            f"{header.inventory_id or '-'}"
+                        )
 
-            picking_type = PickingType.search([
-                ('name', '=', 'Manufacturing'),
-                ('warehouse_id', '=', warehouse.id),
-            ], limit=1)
+                    picking_type = PickingType.search([
+                        ('name', '=', 'Manufacturing'),
+                        ('warehouse_id', '=', warehouse.id),
+                    ], limit=1)
+                    if not picking_type:
+                        raise UserError(
+                            f"Manufacturing Picking Type tidak ditemukan untuk warehouse: "
+                            f"{warehouse.display_name}"
+                        )
 
-            vals = {
-                'name' : reference_nbr,
-                'product_id' : processed_product.id,
-                'product_qty' : header.quantity,
-                'product_uom_id' : processed_product.product_tmpl_id.uom_id.id,
-                # 'scheduled_date': header.requested_on,
-                'user_id': self.env.uid,
-                'picking_type_id': picking_type.id,
-                'location_src_id': picking_type.default_location_src_id.id,
-                'location_dest_id': picking_type.default_location_dest_id.id,
-                # 'source' : reference_nbr,
-                'company_id' : warehouse.company_id.id,
-            }
-            manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)])
-            if not manufacturing_check:
-                manufacturing = Manufacturing.create(vals)
-                print(f"Created manufacture: {manufacturing}")
+                    component_lines = component_reference.search([('assembly_id', '=', header.id)])
+                    for item in component_lines:
+                        component_product = self.env['product.product'].search([
+                            ('default_code', '=', item.stock_inventory_id),
+                        ], limit=1)
+                        if not component_product:
+                            raise UserError(
+                                f"Component product tidak ditemukan untuk InventoryID: "
+                                f"{item.stock_inventory_id or '-'}"
+                            )
 
+                    vals = {
+                        'origin': reference_nbr,
+                        'product_id': processed_product.id,
+                        'product_qty': header.quantity,
+                        'product_uom_id': processed_product.uom_id.id,
+                        'user_id': self.env.uid,
+                        'picking_type_id': picking_type.id,
+                        'location_src_id': picking_type.default_location_src_id.id,
+                        'location_dest_id': picking_type.default_location_dest_id.id,
+                        'company_id': warehouse.company_id.id,
+                    }
+                    manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)], limit=1)
+                    if manufacturing_check:
+                        manufacturing = manufacturing_check
+                        updated += 1
+                    else:
+                        manufacturing = Manufacturing.create(vals)
+                        imported += 1
 
-
-            # boms = self.env['mrp.bom'].search([('code', '=', reference_nbr)], limit=1)
-
-            # if boms:
-            #     Bom = boms
-            # if not boms:
-            #     Bom = Bom.create(vals)
-
-            # print(Bom)
-            vals = {}
-
-            component = component_reference.search([('assembly_id', '=', header.id)])
-            print(component)
-
-            for item in component:
-                component = self.env['product.template'].search(
-                    [('default_code', '=', item.stock_inventory_id)],
-                    limit=1
+                    records.write({
+                        'import_state': 'imported' if not manufacturing_check else 'updated',
+                        'import_message': f'{manufacturing.display_name}',
+                        'odoo_product_id': processed_product.product_tmpl_id.id,
+                    })
+                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'kit_assembly')
+            except Exception as e:
+                error += len(records) or 1
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    records[:1] or self,
+                    [str(e)],
+                    api_acumatica='kit_assembly',
+                    operation_type='manufacturing',
+                    origin=reference_nbr,
+                    location=header.warehouse if header else False,
+                    location_dest=header.location if header else False,
+                    scheduled_date=header.requested_on if header else False,
+                    total_qty=header.quantity if header else 0.0,
+                    payload={'header': header.read()[0] if header and header.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.stock_inventory_id or line.inventory_id or False,
+                        'product_name': line.line_inventory_id or line.description or False,
+                        'qty': line.line_quantity or line.quantity,
+                        'uom': line.line_uom or line.uom or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in (component_lines if component_lines else records)],
                 )
-                print(component)
-                
-
-                vals = {
-                    'product_id' : component.product_id.id,
-                    'product_uom_qty' : item.line_quantity,
-                    'product_uom_id' : component.uom_id.id,
-                    'location_id' : picking_type.default_location_src_id.id,
-                    'raw_material_production_id' : manufacturing.id,
-                }
-
-                # if not manufacturing_check:
-                #     move = Move.create(vals)
-                vals = {}
+                records.write({
+                    'import_state': 'error',
+                    'import_message': str(e)[:200],
+                    'odoo_product_id': False,
+                    'odoo_bom_id': False,
+                })
             
 
         # picking_type = PickingType.search([

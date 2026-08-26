@@ -676,6 +676,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         warehouse_code = warehouse_code or self._coalesce_val(header, 'Warehouse', 'WarehouseID', 'LineWarehouseID')
+        trans_type = (self._val(header, 'TransType') or '').strip().casefold()
+
         # print(type(warehouse_code))
         type = False
 
@@ -693,14 +695,28 @@ class ImportInventoryIssueWizard(models.TransientModel):
             ('code', '=', warehouse_code)
         ], limit=1)
 
-        picking_code = 'internal'
-        if (self._val(header, 'TransType') or '').strip().casefold() == 'toko pegang do':
-            picking_code = 'outgoing'
+        if trans_type == 'toko pegang do' and location and location.odoo_building_id:
+            warehouse = location.odoo_building_id
+            type = warehouse.pick_type_id or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('operation_category', '=', 'pick'),
+            ], limit=1) or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('name', 'ilike', 'Pick'),
+            ], limit=1)
+            if type:
+                return type, warehouse_code
+
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type, warehouse_code
 
         if location and location.odoo_building_id:
             type = PickingType.search([
                 ('warehouse_id', '=', location.odoo_building_id.id),
-                ('code', '=', picking_code),
+                ('code', '=', 'internal'),
                 ('is_default_api', '=', True)
             ], limit=1)
 

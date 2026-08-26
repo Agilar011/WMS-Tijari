@@ -18,7 +18,7 @@ class AcumaticaTransferTwoStepConfig(models.Model):
     username = fields.Char(string='Username', required=True, default='wms')
     password = fields.Char(string='Password', required=True)
     company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
-    endpoint_name = fields.Char(string='Endpoint Name', required=True, default='TransferOrder')
+    endpoint_name = fields.Char(string='Endpoint Name', required=True, default='TransferOrderGI')
     active = fields.Boolean(default=True)
     last_sync = fields.Datetime(string='Terakhir Sync', readonly=True)
     state = fields.Selection([
@@ -28,7 +28,7 @@ class AcumaticaTransferTwoStepConfig(models.Model):
     ], string='Status', default='draft', readonly=True)
     odata_expand = fields.Char(
         string='OData Expand',
-        default='Details',
+        default='TransferOrderGIDetails',
         help='Contoh: Details atau Details,OtherChild'
     )
     odata_select = fields.Char(
@@ -357,6 +357,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
             print(f"first: {first}")
 
             try:
+                self.env.cr.execute('SAVEPOINT import_transfer_two_step_doc')
                 transfer_service = self.env['acumatica.internal.transfer.service']
                 transfer_info = transfer_service.classify_transfer_out_to_virtual(
                     first.from_warehouse_code,
@@ -372,6 +373,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         'odoo_internal_transfer_order_id': False,
                     })
                     updated += len(receipt_lines)
+                    self.env.cr.execute('RELEASE SAVEPOINT import_transfer_two_step_doc')
                     continue
 
                 order, action_state = transfer_service.prepare_order(
@@ -412,10 +414,12 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     'odoo_picking_id': False,
                     'odoo_internal_transfer_order_id': order.id,
                 })
+                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(first.reference_nbr, 'transfer_two_step')
                 if action_state == 'imported':
                     imported += 1
                 else:
                     updated += 1
+                self.env.cr.execute('RELEASE SAVEPOINT import_transfer_two_step_doc')
                 continue
 
                 # vendor = self._find_vendor(first)
@@ -603,7 +607,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
                     except Exception as line_e:
                         _logger.exception("Error import line %s", line.id)
-                        raise UserError('Checkpoint')
+                        raise UserError(str(line_e))
                         first.write({
                             'import_state': 'error',
                             'import_message': str(line_e)[:200],
@@ -615,10 +619,35 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     picking.action_validate_document_only_import(force=True)
 
             except Exception as e:
+                self.env.cr.execute('ROLLBACK TO SAVEPOINT import_transfer_two_step_doc')
                 _logger.exception("Error import receipt %s", reference_nbr)
+                tracked_lines = self.env['acumatica.transfer.two.step.line.product'].search([
+                    ('header_id', '=', first.id),
+                ])
+                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    first,
+                    [str(e)],
+                    api_acumatica='transfer_two_step',
+                    operation_type='internal',
+                    origin=reference_nbr,
+                    location=first.from_warehouse_code or False,
+                    location_dest=first.to_warehouse_code or False,
+                    scheduled_date=first.scheduled_date,
+                    total_qty=first.total_qty,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.adt_InventoryID or False,
+                        'product_name': line.adt_Description or False,
+                        'qty': self._parse_float(line.adt_Quantity),
+                        'uom': line.adt_UOM or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in tracked_lines],
+                )
                 receipt_lines.write({
                     'import_state': 'error',
                     'import_message': str(e)[:200],
+                    'odoo_picking_id': False,
+                    'odoo_internal_transfer_order_id': False,
                 })
                 error += len(receipt_lines)
 
@@ -676,6 +705,7 @@ class AcumaticaTransferTwoStepLineProduct(models.Model):
     )
 
     acumatica_header_id = fields.Char(string="Acumatica Header ID")
+    reference_nbr = fields.Char(string="Reference Number", index=True)
     adt_rowNumber = fields.Char(string="Acumatica rowNumber")
     adt_note = fields.Char(string="Acumatica note")
     adt_Description = fields.Char(string="Acumatica Description")

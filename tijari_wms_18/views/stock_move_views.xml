@@ -40,6 +40,21 @@
                 </span>
             </xpath>
 
+            <xpath expr="//form/group/group/label[@for='product_uom_qty']" position="attributes">
+                <attribute name="string">Total Qty</attribute>
+            </xpath>
+
+            <xpath expr="//form/group/group/div[@class='o_row']/span/field[@name='product_uom']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//form/group/group/div[@class='o_row']" position="after">
+                <label for="quantity" string="Qty Disimpan"/>
+                <div class="o_row">
+                    <field name="quantity" readonly="1" nolabel="1"/>
+                </div>
+            </xpath>
+
             <xpath expr="//widget[@name='generate_serials']" position="replace">
                 <widget class="btn btn-link btn-group" name="generate_serials" invisible="1"/>
             </xpath>                        
@@ -72,8 +87,8 @@
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
                     <field name="adt_type" column_invisible="1"/>
                     <field name="owner_id" column_invisible="parent.adt_type != 'Toko Pegang DO'"/>
-                    <field name="adt_dest_location_id"/>
-                    <field name="difference_quantity" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
+                    <field name="adt_dest_location_id" string="Final Location"/>
+                    <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
@@ -86,10 +101,18 @@
                         invisible="picking_type_name not in ['Receipts', 'Receipt Internal'] or state == 'draft'"/>
             </xpath>
 
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='product_packaging_id']" position="attributes">
+                <attribute name="column_invisible">True</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='product_uom_qty']" position="attributes">
+                <attribute name="string">Total Qty</attribute>
+            </xpath>
+
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='quantity']" position="replace">
-                <field name="quantity" string="Picked Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                 <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                <field name="confirmation_quantity" string="Stored Qty" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
+                <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
             </xpath>
 
         </field>

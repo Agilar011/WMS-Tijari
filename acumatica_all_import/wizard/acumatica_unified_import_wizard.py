@@ -100,21 +100,21 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'transfer_one_step': {
-            'label': 'Transfer - Intra Warehouse : OUT',
+            'label': 'Transfer 1 STEP',
             'wizard_model': 'import.transfer.one.step.wizard',
             'config_field': 'transfer_one_step_config_id',
             'line_model': 'acumatica.transfer.one.step.line',
-            'result_name': 'Hasil Import Transfer - Intra Warehouse : OUT',
-            'staging_name': 'Data Transfer - Intra Warehouse : OUT dari Acumatica',
+            'result_name': 'Hasil Import Transfer 1 STEP',
+            'staging_name': 'Data Transfer 1 STEP dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'transfer_two_step': {
-            'label': 'Transfer - 2 Step : OUT',
+            'label': 'Transfer 2 STEP',
             'wizard_model': 'import.transfer.two.step.wizard',
             'config_field': 'transfer_two_step_config_id',
             'line_model': 'acumatica.transfer.two.step.line',
-            'result_name': 'Hasil Import Transfer - 2 Step : OUT',
-            'staging_name': 'Data Transfer - 2 Step : OUT dari Acumatica',
+            'result_name': 'Hasil Import Transfer 2 STEP',
+            'staging_name': 'Data Transfer 2 STEP dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'receipt_external': {
@@ -125,12 +125,12 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Receipt External (Change Item & Inventory Receive) dari Acumatica',
         },
         'inventory_received': {
-            'label': 'Receipt : Inventory Receipt',
+            'label': 'Inventory Receipt',
             'wizard_model': 'import.inventory.recieved.wizard',
             'config_field': 'inventory_received_config_id',
             'line_model': 'acumatica.inventory.recieved.line',
-            'result_name': 'Hasil Import Receipt : Inventory Receipt',
-            'staging_name': 'Data Receipt : Inventory Receipt dari Acumatica',
+            'result_name': 'Hasil Import Inventory Receipt',
+            'staging_name': 'Data Inventory Receipt dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'toko_pegang_do': {
@@ -142,12 +142,12 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'inventory_issue': {
-            'label': 'Issue : Inventory Issue',
+            'label': 'Inventory Issue',
             'wizard_model': 'import.inventory.issue.wizard',
             'config_field': 'inventory_issue_config_id',
             'line_model': 'acumatica.inventory.issue.line',
-            'result_name': 'Hasil Import Issue : Inventory Issue',
-            'staging_name': 'Data Issue : Inventory Issue dari Acumatica',
+            'result_name': 'Hasil Import Inventory Issue',
+            'staging_name': 'Data Inventory Issue dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'receipt_change_item': {
@@ -187,30 +187,30 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['shipment_nbr', 'last_modified_from', 'odata_filter'],
         },
         'so_transfer': {
-            'label': 'Transfer - Inter Warehouse : IN',
+            'label': 'SO Transfer - Inter WH IN',
             'wizard_model': 'import.transfer.wizard',
             'config_field': 'transfer_config_id',
             'line_model': 'acumatica.transfer.line',
-            'result_name': 'Hasil Import Transfer - Inter Warehouse : IN',
-            'staging_name': 'Data Transfer - Inter Warehouse : IN dari Acumatica',
+            'result_name': 'Hasil Import SO Transfer - Inter WH IN',
+            'staging_name': 'Data SO Transfer - Inter WH IN dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'transfer_shipment': {
-            'label': 'Transfer - Inter Warehouse : OUT',
+            'label': 'SO Transfer - Inter WH OUT',
             'wizard_model': 'import.transfer.shipment.wizard',
             'config_field': 'transfer_shipment_config_id',
             'line_model': 'acumatica.transfer.shipment.line',
-            'result_name': 'Hasil Import Transfer - Inter Warehouse : OUT',
-            'staging_name': 'Data Transfer - Inter Warehouse : OUT dari Acumatica',
+            'result_name': 'Hasil Import SO Transfer - Inter WH OUT',
+            'staging_name': 'Data SO Transfer - Inter WH OUT dari Acumatica',
             'extra_fields': ['shipment_nbr', 'last_modified_from', 'odata_filter'],
         },
         'kit_assembly': {
-            'label': 'Manufacturing Order',
+            'label': 'Kit Assembly',
             'wizard_model': 'import.kit.assembly.wizard',
             'config_field': 'kit_assembly_config_id',
             'line_model': 'acumatica.kit.assembly',
-            'result_name': 'Hasil Import Manufacturing Order',
-            'staging_name': 'Data Manufacturing Order dari Acumatica',
+            'result_name': 'Hasil Import Kit Assembly',
+            'staging_name': 'Data Kit Assembly dari Acumatica',
             'extra_fields': [],
         },
         'inventory_stock': {
@@ -241,7 +241,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         },
         
         'vendor_return_direct_transfer': {
-            'label': 'Vendor Return Direct Transfer',
+            'label': 'Vendor Return Consignment',
             'wizard_model': 'import.vendor.return.direct.transfer.wizard',
             'line_model': 'acumatica.vendor.return.direct.transfer.staging',
             'result_name': 'Hasil Import Direct Transfer',
@@ -249,7 +249,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
         },
         'vendor_return_document_direct_transfer': {
-            'label': 'Vendor Return Document Direct Transfer',
+            'label': 'Direct Transfer',
             'wizard_model': 'import.direct.transfer.wizard',
             'line_model': 'acumatica.direct.transfer.staging',
             'result_name': 'Hasil Import Direct Transfer',
@@ -277,8 +277,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
     MASTER_DATA_TYPES = [
         'customer',
-        'customer_location',
-        'shipvia',
         'warehouse',
         'stock_item',
         'non_stock_item',
@@ -382,7 +380,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     import_category = fields.Selection([
         ('transaction', 'Master Transaction'),
         ('master', 'Master Data'),
-    ], string='Import Category', required=True, default='transaction')
+    ], string='Data Category', required=True, default='transaction')
 
     import_type = fields.Selection(
         selection=_get_import_type_selection,

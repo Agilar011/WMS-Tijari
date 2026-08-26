@@ -495,6 +495,10 @@ class ImportReceiptWizard(models.TransientModel):
     # HELPERS
     # ---------------------------------------------------------    
     def _search_picking_type(self, header):
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type
+
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         warehouse_code = (

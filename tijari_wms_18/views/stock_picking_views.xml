@@ -188,10 +188,10 @@
                             <field name="is_initial_demand_editable" column_invisible="True"/>
                             <field name="display_import_lot" column_invisible="True"/>
                             <field name="picking_type_entire_packs" column_invisible="True"/>
-                            <field name="product_packaging_id" groups="product.group_stock_packaging"
+                            <field name="product_packaging_id" string="Packaging" optional="hide" groups="product.group_stock_packaging"
                                 context="{'default_product_id': product_id}"
                                 readonly="not product_id"/>
-                            <field name="product_uom_qty" string="Demand" readonly="not is_initial_demand_editable"/>
+                            <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
                             <field name="remaining_package_qty" string="Remaining Product" readonly="1"/>
                             <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
                                 invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
@@ -203,7 +203,7 @@
                             <field name="product_qty" readonly="1" column_invisible="True"/>
                             <!-- <field name="temp_float" string="Confirmed Quantity"/> -->
                             <field name="so_confirmation_quantity" string="Confirmed Quantity" column_invisible="parent.picking_type_name not in ['Delivery Orders', 'Transfer Internal']"/>
-                            <field name="quantity" string="Picked Qty" optional="hide" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                            <field name="quantity" string="Qty Diterima" optional="hide" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                             <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
                             <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
                             <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
@@ -260,14 +260,14 @@
 
             <xpath expr="//field[@name='picking_type_id']"
                 position="after">
-                <field name="adt_type" string="Transaction Type" />
+                <field name="adt_type" string="Tipe Transaksi" />
 
             </xpath>
 
             <xpath expr="//field[@name='location_id'][@groups='stock.group_stock_multi_locations']"
                 position="replace">
                 <field name="internal_transfer_adt_dest_location_id"
-                    string="Mapped Location"
+                    string="Final Location"
                     domain="[('is_location_mapping', '=', True)]"
                     invisible="picking_type_name != 'Internal Transfers'"/>
                 <field name="location_id"
@@ -289,6 +289,7 @@
 
                 <!-- Default domain -->
                 <field name="location_dest_id"
+                    string="Gudang Tujuan"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
                     invisible="(picking_type_code == 'internal' and operation_category == 'put') or picking_type_name == 'Internal Transfers'"
@@ -296,6 +297,7 @@
 
                 <!-- Custom domain -->
                 <field name="location_dest_id"
+                    string="Gudang Tujuan"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
                     invisible="picking_type_code != 'internal' or operation_category != 'put' or picking_type_name == 'Internal Transfers'"
@@ -304,6 +306,7 @@
 
                 <!-- Internal Transfer header domain -->
                 <field name="location_dest_id"
+                    string="Gudang Tujuan"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
                     invisible="picking_type_name != 'Internal Transfers'"
@@ -315,11 +318,19 @@
             <xpath expr="//field[@name='origin']" position="after">
                 <!-- <field name="adt_type" readonly="1"/> -->
                 <field name="adt_is_document_only" invisible="1"/>
-                <field name="adt_total_qty"/>
-                <field name="adt_actual_qty"/>
+                <field name="adt_total_qty" string="Total Qty"/>
+                <field name="adt_actual_qty" string="Total Penerimaan"/>
                 <field name="status_ba"/>
-                <field name="adt_dest_location_id" invisible="adt_type == 'Receipt' or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
+                <field name="adt_dest_location_id" string="Final Location" invisible="adt_type == 'Receipt' or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
                 <field name="all_moves_picked" invisible="1"/>
+            </xpath>
+
+            <xpath expr="//label[@for='partner_id'][@invisible=&quot;picking_type_code != 'incoming'&quot;]" position="attributes">
+                <attribute name="string">Supplier / Customer</attribute>
+            </xpath>
+
+            <xpath expr="//group//field[@name='origin']" position="attributes">
+                <attribute name="string">No. Dokumen</attribute>
             </xpath>
 
         </field>
@@ -350,25 +361,25 @@
                         <button name="do_unreserve" type="object" string="Unreserve"/>
                         <button name="action_assign" type="object" string="Check Availability"/>
                     </header>
+                    <field name="adt_type" string="Tipe Transaksi"/>
+                    <field name="origin" string="No. Dokumen" readonly="state in ['cancel', 'done']"/>
                     <field name="name" decoration-bf="1"/>
                     <field name="location_id" optional="hide"
                         options="{'no_create': True}"
                         groups="stock.group_stock_multi_locations"
                         readonly="state == 'done'"/>
                     <field name="company_id" optional="hide" groups="base.group_multi_company"/>
-                    <field name="adt_type" string="Transaction Type"/>
                     <field name="adt_is_document_only" optional="hide"/>
-                    <field name="origin" readonly="state in ['cancel', 'done']"/>
-                    <field name="partner_id" readonly="state in ['cancel', 'done']"/>
+                    <field name="partner_id" readonly="state in ['cancel', 'done']" string="Supplier/Customer"/>
                     <field name="scheduled_date" widget="remaining_days"
-                        readonly="state in ['cancel', 'done']"/>
+                        readonly="state in ['cancel', 'done']" optional="hide"/>
                     <field name="state" widget="badge"
                         decoration-danger="state == 'cancel'"
                         decoration-info="state == 'assigned'"
                         decoration-muted="state == 'draft'"
                         decoration-success="state == 'done'"
                         decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"/>
-                    <field name="batch_id" string="Batch"/>
+                    <field name="batch_id" string="Batch" optional="hide"/>
                 </list>
             </xpath>
         </field>
@@ -391,10 +402,10 @@
                         groups="stock.group_stock_multi_locations"
                         readonly="state == 'done'"/>
                     <field name="company_id" optional="hide" groups="base.group_multi_company"/>
-                    <field name="adt_type" string="Transaction Type"/>
+                    <field name="adt_type" string="Tipe Transaksi"/>
                     <field name="adt_is_document_only" optional="hide"/>
-                    <field name="origin" readonly="state in ['cancel', 'done']"/>
-                    <field name="partner_id" readonly="state in ['cancel', 'done']"/>
+                    <field name="origin" string="No. Dokumen" readonly="state in ['cancel', 'done']"/>
+                    <field name="partner_id" string="Supplier / Customer" readonly="state in ['cancel', 'done']"/>
                     <field name="scheduled_date" widget="remaining_days"
                         readonly="state in ['cancel', 'done']"/>
                     <field name="state" widget="badge"
