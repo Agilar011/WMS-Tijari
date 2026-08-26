@@ -6,6 +6,7 @@ import requests
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 from odoo.tools import float_compare, float_is_zero
+from markupsafe import Markup, escape
 
 _logger = logging.getLogger(__name__)
 
@@ -131,6 +132,7 @@ class AcumaticaInventoryStockConfig(models.Model):
 
 class AcumaticaInventoryStockLine(models.Model):
     _name = 'acumatica.inventory.stock.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Inventory Stock dari Acumatica'
     _order = 'warehouse_code asc, inventory_id asc, id asc'
 
@@ -174,6 +176,7 @@ class AcumaticaInventoryStockLine(models.Model):
     ], string='Match Status', compute='_compute_stock_snapshot', store=False)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_stock_snapshot', store=False)
+    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     @api.depends('inventory_id', 'warehouse_code', 'on_hand_acumatica')
     def _compute_stock_snapshot(self):
@@ -321,6 +324,122 @@ class AcumaticaInventoryStockLine(models.Model):
                 'adt_inventory_stock_sync_date': fields.Datetime.now(),
             })
 
+    def _handle_acumatica_error(self, err_msg=False):
+        AcumaticaError = self.env['acumatica.error.master']
+        acumatica_err_id = self.acumatica_err_id
+        if not err_msg:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'solved'
+                return
+            return
+
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'StockOnventory-{self.id}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': err_msg
+            })
+            self.acumatica_err_id = acumatica_err_id
+            
+        acumatica_err_id.error_msg = err_msg
+        acumatica_err_id.import_state = state
+
+    def _get_changed_fields(self, record, vals):
+        changed_fields = []
+
+        for field_name, new_value in vals.items():
+            field = record._fields.get(field_name)
+
+            if not field:
+                continue
+
+            old_value = record[field_name]
+
+            # Normalisasi nilai
+            old_value = old_value or False
+            new_value = new_value or False
+
+            if old_value != new_value:
+                changed_fields.append({
+                    'field_name': field_name,
+                    'field_label': field.string,
+                    'old_value': old_value,
+                    'new_value': new_value,
+                })
+
+        return changed_fields
+    
+    def _log_import_result(
+        self,
+        state,
+        message,
+        record=False,
+        changed_fields=None,
+    ):
+        titles = {
+            'imported': '✅ Import Berhasil',
+            'updated': '🔄 Data Diperbarui',
+            'error': '❌ Import Gagal',
+        }
+
+        body = Markup("""
+            <p>
+                <strong>{}</strong>
+            </p>
+            <p>{}</p>
+        """).format(
+            titles.get(state, 'Import Log'),
+            message,
+        )
+
+        if changed_fields:
+            body += Markup("""
+                <p><strong>Perubahan:</strong></p>
+                <ul>
+            """)
+
+            for change in changed_fields:
+                old_value = change['old_value'] or '-'
+                new_value = change['new_value'] or '-'
+
+                body += Markup("""
+                    <li>
+                        <strong>{}</strong>:
+                        {} → {}
+                    </li>
+                """).format(
+                    escape(change['field_label']),
+                    escape(str(old_value)),
+                    escape(str(new_value)),
+                )
+
+            body += Markup("</ul>")
+
+        if record:
+            body += Markup("""
+                <p>
+                    Record Odoo:
+                    <a href="#"
+                    data-oe-model="{}"
+                    data-oe-id="{}">
+                        {}
+                    </a>
+                </p>
+            """).format(
+                escape(record._name),
+                record.id,
+                escape(record.display_name),
+            )
+
+        self.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
+    
     def _do_import(self):
         Quant = self.env['stock.quant'].sudo()
         imported = 0
@@ -356,6 +475,11 @@ class AcumaticaInventoryStockLine(models.Model):
                         f"Updated: {product.display_name} @ {location.display_name} | "
                         f"old={current_qty} new={target_qty}"
                     )
+                    line.message_post(
+                        body=f"Updated: {product.display_name} @ {location.display_name} | \n old={current_qty} new={target_qty}",
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_note',
+                    )
                     updated += 1
                 else:
                     action_state = 'imported'
@@ -363,6 +487,13 @@ class AcumaticaInventoryStockLine(models.Model):
                         f"Already match: {product.display_name} @ {location.display_name} | "
                         f"old={current_qty} new={target_qty}"
                     )
+                    line.message_post(
+                        body=f"Already match: {product.display_name} @ {location.display_name} | \n old={current_qty} new={target_qty}",
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_note',
+                    )
+                    if line.acumatica_err_id:
+                        line.acumatica_err_id.import_state = 'resolved'
                     imported += 1
 
                 new_qty = Quant._get_available_quantity(product, location, strict=False)
@@ -414,6 +545,7 @@ class AcumaticaInventoryStockLine(models.Model):
                     'odoo_product_id': False,
                     'odoo_location_id': False,
                 })
+
                 error += 1
 
         return {

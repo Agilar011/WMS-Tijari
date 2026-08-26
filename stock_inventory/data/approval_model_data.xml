@@ -1,0 +1,6 @@
+<odoo>
+    <record id="approval_model_stock_inventory" model="approval.model">
+        <field name="name">Stock Inventory</field>
+        <field name="model_id" ref="model_stock_inventory"/>
+    </record>
+</odoo>

@@ -149,6 +149,9 @@
                         </group>
                     </group>
                 </sheet>
+                <div class="oe_chatter">
+                    <chatter/>
+                </div>
             </form>
         </field>
     </record>

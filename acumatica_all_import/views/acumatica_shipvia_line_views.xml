@@ -127,6 +127,9 @@ op                            <field name="phone" string="Phone"/>
                         <field name="config_id"/>
                     </group>
                 </sheet>
+                <div class="oe_chatter">
+                    <chatter/>
+                </div>
             </form>
         </field>
     </record>

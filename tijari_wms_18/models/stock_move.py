@@ -427,10 +427,26 @@ class StockMove(models.Model):
                     _logger.info("source_location_id: %s", item.source_location_id.name if item.source_location_id else False)
                     _logger.info("unfiltered_dest: %s", item.unfiltered_dest)
 
+    def _search_picking_for_assignation(self):
+        """Always create a new picking instead of reusing an existing one."""
+        self.ensure_one()
+        return self.env['stock.picking']
+
+
     def _get_new_picking_values(self):
         vals = super()._get_new_picking_values()
 
         print("_get_new_picking_values")
+
+        origin_picking = (
+            self.move_orig_ids
+            .mapped('picking_id')
+            .filtered(lambda p: p.origin)
+        )[:1]
+
+        if origin_picking:
+            vals['origin'] = origin_picking.origin
+
         for item in self:
             print("move:", item)
             print("move adt_type:", item.adt_type)
@@ -592,7 +608,12 @@ class StockMove(models.Model):
         res = super().create(vals)
         for line in res:
             if not line.adt_dest_location_id:
-                line.adt_dest_location_id = line.picking_id.adt_dest_location_id or line.picking_id.picking_type_id.default_location_dest_id
+                if line.picking_id.adt_dest_location_id:
+                    line.adt_dest_location_id = line.picking_id.adt_dest_location_id
+                elif line.picking_id.picking_type_name in ['Pick']:
+                    line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_src_id
+                else:
+                    line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_dest_id
         res.mapped('picking_id')._sync_adt_quantities_from_moves()
 
         return res
