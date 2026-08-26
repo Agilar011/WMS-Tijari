@@ -1,5 +1,6 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
+from markupsafe import Markup, escape
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -13,6 +14,7 @@ class AcumaticaUomLine(models.Model):
       - Description → uom.uom (nama satuan)
     """
     _name = 'acumatica.uom.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data UoM dari Acumatica (Staging)'
     _order = 'row_number asc, unit_id asc'
 
@@ -34,6 +36,7 @@ class AcumaticaUomLine(models.Model):
     odoo_uom_id = fields.Many2one('uom.uom', string='UoM di Odoo', readonly=True)
     odoo_categ_id = fields.Many2one('uom.category', string='Kategori di Odoo', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
+    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
@@ -43,6 +46,7 @@ class AcumaticaUomLine(models.Model):
         ondelete='cascade',
     )
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+
 
     def _clean_uom_value(self, value):
         return (value or '').strip()
@@ -81,6 +85,29 @@ class AcumaticaUomLine(models.Model):
         self.ensure_one()
         return self._do_import()
 
+    def _handle_acumatica_error(self, err_msg=False):
+        AcumaticaError = self.env['acumatica.error.master']
+        acumatica_err_id = self.acumatica_err_id
+        if not err_msg:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'solved'
+                return
+            return
+
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'UoM-{self.id}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': err_msg
+            })
+            self.acumatica_err_id = acumatica_err_id
+
+        acumatica_err_id.import_state = state
+        acumatica_err_id.error_msg = err_msg
+
     def _do_import(self):
         """
         Logika import:
@@ -93,10 +120,22 @@ class AcumaticaUomLine(models.Model):
             try:
                 uom_name = line._clean_uom_value(line.description or line.unit_id)
                 if not uom_name:
+
+                    err_msg = 'Description kosong, tidak bisa jadi nama UoM'
                     line.write({
                         'import_state':   'error',
-                        'import_message': 'Description kosong, tidak bisa jadi nama UoM',
+                        'import_message': err_msg,
                     })
+
+                    line._handle_acumatica_error(err_msg)
+
+                    line._log_import_result(
+                        'error',
+                        f'Gagal mengimpor data: {err_msg}',
+                        False,
+                        False
+                    )
+
                     error += 1
                     continue
 
@@ -118,6 +157,7 @@ class AcumaticaUomLine(models.Model):
                         'odoo_uom_id':    existing.id,
                         'odoo_categ_id':  existing.category_id.id,
                     })
+
                     skipped += 1
                 else:
                     # Cek apakah kategori sudah punya reference unit
@@ -141,14 +181,36 @@ class AcumaticaUomLine(models.Model):
                         'odoo_uom_id':    new_uom.id,
                         'odoo_categ_id':  uom_categ.id,
                     })
+
+                    line._handle_acumatica_error()
+
+                    line._log_import_result(
+                        'imported',
+                        f'Data {new_uom.display_name} berhasil dibuat.',
+                        new_uom,
+                        False
+                    )
+                    
                     imported += 1
 
             except Exception as e:
                 _logger.error("Error import UoM line %s / %s: %s", line.unit_id, line.description, str(e))
+
+                err_msg = str(e)[:200]
                 line.write({
                     'import_state':   'error',
-                    'import_message': str(e)[:200],
+                    'import_message': err_msg,
                 })
+
+                line._handle_acumatica_error(err_msg)
+
+                line._log_import_result(
+                    'error',
+                    f'Gagal mengimpor data: {err_msg}',
+                    False,
+                    False
+                )
+
                 error += 1
 
         # Notifikasi hasil
@@ -170,3 +232,71 @@ class AcumaticaUomLine(models.Model):
             'import_state': 'pending',
             'import_message': False,
         })
+
+    def _log_import_result(
+        self,
+        state,
+        message,
+        record=False,
+        changed_fields=None,
+    ):
+        titles = {
+            'imported': '✅ Import Berhasil',
+            'updated': '🔄 Data Diperbarui',
+            'error': '❌ Import Gagal',
+        }
+
+        body = Markup("""
+            <p>
+                <strong>{}</strong>
+            </p>
+            <p>{}</p>
+        """).format(
+            titles.get(state, 'Import Log'),
+            message,
+        )
+
+        if changed_fields:
+            body += Markup("""
+                <p><strong>Perubahan:</strong></p>
+                <ul>
+            """)
+
+            for change in changed_fields:
+                old_value = change['old_value'] or '-'
+                new_value = change['new_value'] or '-'
+
+                body += Markup("""
+                    <li>
+                        <strong>{}</strong>:
+                        {} → {}
+                    </li>
+                """).format(
+                    escape(change['field_label']),
+                    escape(str(old_value)),
+                    escape(str(new_value)),
+                )
+
+            body += Markup("</ul>")
+
+        if record:
+            body += Markup("""
+                <p>
+                    Record Odoo:
+                    <a href="#"
+                    data-oe-model="{}"
+                    data-oe-id="{}">
+                        {}
+                    </a>
+                </p>
+            """).format(
+                escape(record._name),
+                record.id,
+                escape(record.display_name),
+            )
+
+        self.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )

@@ -3,6 +3,7 @@ from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
 import logging
 from odoo.tools import split_every
+from markupsafe import Markup, escape
 
 _logger = logging.getLogger(__name__)
 
@@ -131,8 +132,11 @@ class AcumaticaCustomerLocationLine(models.Model):
     Setelah fetch, data diimport ke acumatica.customer.location.
     """
     _name        = 'acumatica.customer.location.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Customer Location dari Acumatica (Staging)'
     _order       = 'row_number asc'
+
+    name = fields.Char('name', default="/")
 
     # ── Data mentah dari Acumatica ────────────────────
     row_number             = fields.Integer(string='No',           readonly=True)
@@ -181,7 +185,7 @@ class AcumaticaCustomerLocationLine(models.Model):
         ('imported', 'Sudah Diimport'),
         ('updated',  'Diupdate'),
         ('error',    'Error'),
-    ], string='Status', default='pending', readonly=True)
+    ], string='Status', default='pending', readonly=True, tracking=True)
 
     import_message   = fields.Char(string='Keterangan', readonly=True)
     odoo_location_id = fields.Many2one(
@@ -201,7 +205,8 @@ class AcumaticaCustomerLocationLine(models.Model):
         ondelete='cascade',
     )
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
-
+    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
+    
     # ── Helpers ──────────────────────────────────────
     @staticmethod
     def _parse_dt(dt_str):
@@ -250,115 +255,6 @@ class AcumaticaCustomerLocationLine(models.Model):
         if not lines:
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
-
-    # def _do_import(self):
-    #     imported = updated = error = 0
-
-    #     STATUS_MAP = {'Active': 'Active', 'Inactive': 'Inactive'}
-
-    #     for line in self:
-    #         try:
-    #             if not line.customer:
-    #                 line.write({
-    #                     'import_state':   'error',
-    #                     'import_message': 'Customer kosong',
-    #                 })
-    #                 error += 1
-    #                 continue
-
-    #             # ── Resolve FK ───────────────────────────────
-    #             partner  = self._resolve_partner(line.customer)
-    #             warehouse = self._resolve_warehouse(line.warehouse)
-
-    #             if not partner:
-    #                 line.write({
-    #                     'import_state':   'error',
-    #                     'import_message': f'Customer "{line.customer}" tidak ditemukan di Odoo. Import Customer dulu.',
-    #                 })
-    #                 error += 1
-    #                 continue
-    #             country_id = self.env['res.country'].search([('code', '=', line.country_code)], limit=1).id if line.country_code else False
-    #             vals = {
-    #                 # Identitas
-    #                 'adt_external_id':  line.external_id or False,
-    #                 'name':             line.location_id_acumatica or False,
-    #                 'type':             'other',
-    #                 'company_type':     'person',
-    #                 'is_company':       False,
-
-    #                 'adt_note':                  line.note or False,
-    #                 # 'adt_is_active':             line.is_active,
-    #                 'adt_address_override':      line.address_override,
-    #                 'adt_created_datetime':      self._parse_dt(line.created_datetime),
-    #                 'parent_id':                 partner.id,
-    #                 'adt_default':               line.is_default,
-    #                 'adt_entity_usage_type':            line.usage_type or False,
-    #                 'adt_ext_ref_nbr':        line.ext_ref_number or False,
-    #                 'adt_fedex_ground_collect': line.fed_ex_ground_collect,
-    #                 'adt_fob_point':             line.fob_point or False,
-    #                 'adt_shipping_branch':       line.shipping_branch or False,
-    #                 'adt_insurance':             line.insurance,
-    #                 'adt_acumatica_write_date':  self._parse_dt(line.last_modified_datetime),
-    #                 'adt_lead_time_days':        line.lead_time_days or 0,
-
-    #                 'adt_note_id':               line.note_id or False,
-    #                 'adt_order_priority':        line.order_priority or 0,
-    #                 'adt_shipping_zone_id':         line.shipping_zone or False,
-    #                 'adt_ship_via':              line.ship_via or False,
-    #                 'adt_status':                STATUS_MAP.get(line.status or '', False),
-    #                 'adt_tax_exemption_number':  line.tax_exemption_number or False,
-    #                 'adt_tax_registration_id':   line.tax_registration_id or False,
-    #                 'vat':                       line.tax_registration_id or False,  # untuk mempermudah pencarian di res.partner
-    #                 'adt_warehouse_id':          warehouse.id if warehouse else False,
-
-    #                 # Address
-    #                 'street':          line.address_line1 or False,
-    #                 'street2':         line.address_line2 or False,
-    #                 'city':            line.city or False,
-    #                 'zip':             line.postal_code or False,
-    #                 'country_id':      country_id,
-    #             }
-
-    #             existing = self._find_existing_location(line)
-
-    #             if existing:
-    #                 existing.write(vals)
-    #                 line.write({
-    #                     'import_state':    'updated',
-    #                     'import_message':  f'Diupdate: {existing.name}',
-    #                     'odoo_partner_id': existing.id,
-    #                 })
-    #                 updated += 1
-    #             else:
-    #                 new_loc = self.env['res.partner'].create(vals)
-    #                 line.write({
-    #                     'import_state':    'imported',
-    #                     'import_message':  f'Dibuat: {new_loc.name}',
-    #                     'odoo_partner_id': new_loc.id,
-    #                 })
-    #                 imported += 1
-
-    #         except Exception as e:
-    #             _logger.error("Error import CustomerLocation %s-%s: %s",
-    #                           line.customer, line.location_id_acumatica, str(e))
-    #             line.write({
-    #                 'import_state':   'error',
-    #                 'import_message': str(e)[:200],
-    #             })
-    #             error += 1
-
-    #     msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
-    #     return {
-    #         'type': 'ir.actions.client',
-    #         'tag':  'display_notification',
-    #         'params': {
-    #             'title':   'Import Customer Location',
-    #             'message': msg,
-    #             'type':    'success' if error == 0 else 'warning',
-    #             'sticky':  True,
-    #         },
-    #     }
-
 
     def _do_import(self):
         BATCH_SIZE = 1000
@@ -460,7 +356,6 @@ class AcumaticaCustomerLocationLine(models.Model):
         # =====================================================
         # PROCESS CHUNK
         # =====================================================
-
         for chunk in split_every(BATCH_SIZE, self):
 
             try:
@@ -480,18 +375,27 @@ class AcumaticaCustomerLocationLine(models.Model):
                 for line in chunk:
 
                     try:
-
                         # =====================================
                         # VALIDATION
                         # =====================================
 
                         if not line.customer:
 
+                            err_msg = 'Customer kosong'
                             staging_error.append((
                                 'error',
-                                'Customer kosong',
-                                line.id
+                                err_msg,
+                                line.id,
                             ))
+
+                            line._handle_acumatica_error(err_msg)
+
+                            line._log_import_result(
+                                'error',
+                                f'Gagal mengimpor data: {err_msg}',
+                                False,
+                                False
+                            )
 
                             error += 1
                             continue
@@ -502,11 +406,21 @@ class AcumaticaCustomerLocationLine(models.Model):
 
                         if not partner_id:
 
+                            err_msg = f'Customer "{line.customer}" tidak ditemukan'
                             staging_error.append((
                                 'error',
-                                f'Customer "{line.customer}" tidak ditemukan',
+                                err_msg,
                                 line.id
                             ))
+
+                            line._handle_acumatica_error(err_msg)
+
+                            line._log_import_result(
+                                'error',
+                                f'Gagal mengimpor data: {err_msg}',
+                                False,
+                                False
+                            )
 
                             error += 1
                             continue
@@ -634,15 +548,38 @@ class AcumaticaCustomerLocationLine(models.Model):
                                 line.id
                             ))
 
+                            existing = Partner.browse(existing_id)
+                            changed_fields = line._get_changed_fields(
+                                existing,
+                                vals,
+                            )
+
+                            line._log_import_result(
+                                'updated',
+                                f'Data {existing.display_name} berhasil diperbarui.',
+                                existing,
+                                changed_fields,
+                            )
+
                             updated += 1
 
                     except Exception as e:
 
+                        err_msg = str(e)[:200]
                         staging_error.append((
                             'error',
-                            str(e)[:200],
+                            err_msg,
                             line.id
                         ))
+
+                        line._handle_acumatica_error(err_msg)
+
+                        line._log_import_result(
+                            'error',
+                            f'Gagal mengimpor data: {err_msg}',
+                            False,
+                            False
+                        )
 
                         error += 1
 
@@ -678,6 +615,16 @@ class AcumaticaCustomerLocationLine(models.Model):
                             loc.id,
                             line_map[loc.adt_external_id]
                         ))
+
+                        adt_custloc_id = self.browse(line_map[loc.adt_external_id])
+
+                        adt_custloc_id._handle_acumatica_error()
+                        adt_custloc_id._log_import_result(
+                            'imported',
+                            f'Data {loc.display_name} berhasil dibuat.',
+                            loc,
+                            False
+                        )
 
                         imported += 1
 
@@ -765,16 +712,25 @@ class AcumaticaCustomerLocationLine(models.Model):
                 )
 
                 for line in chunk:
-
+                    err_msg = str(e)[:200]
                     self.env.cr.execute("""
                         UPDATE acumatica_customer_location_line
                         SET import_state = 'error',
                             import_message = %s
                         WHERE id = %s
                     """, (
-                        str(e)[:200],
+                        err_msg,
                         line.id
                     ))
+
+                    line._handle_acumatica_error(err_msg)
+
+                    line._log_import_result(
+                        'error',
+                        f'Gagal mengimpor data: {err_msg}',
+                        False,
+                        False,
+                    )
 
                 self.env.cr.commit()
 
@@ -808,6 +764,29 @@ class AcumaticaCustomerLocationLine(models.Model):
             },
         }
 
+    def _handle_acumatica_error(self, err_msg=False):
+        AcumaticaError = self.env['acumatica.error.master']
+        acumatica_err_id = self.acumatica_err_id
+        if not err_msg:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'solved'
+                return
+            return
+
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'CustomerLocation-{self.id}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': err_msg
+            })
+            self.acumatica_err_id = acumatica_err_id
+
+        acumatica_err_id.import_state = state
+        acumatica_err_id.error_msg = err_msg
+
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({
             'import_state':   'pending',
@@ -824,3 +803,96 @@ class AcumaticaCustomerLocationLine(models.Model):
             'res_id':    self.odoo_partner_id.id,
             'view_mode': 'form',
         }
+
+    def _get_changed_fields(self, record, vals):
+        changed_fields = []
+
+        for field_name, new_value in vals.items():
+            field = record._fields.get(field_name)
+
+            if not field:
+                continue
+
+            old_value = record[field_name]
+
+            # Normalisasi nilai
+            old_value = old_value or False
+            new_value = new_value or False
+
+            if old_value != new_value:
+                changed_fields.append({
+                    'field_name': field_name,
+                    'field_label': field.string,
+                    'old_value': old_value,
+                    'new_value': new_value,
+                })
+
+        return changed_fields
+        
+    def _log_import_result(
+        self,
+        state,
+        message,
+        record=False,
+        changed_fields=None,
+    ):
+        titles = {
+            'imported': '✅ Import Berhasil',
+            'updated': '🔄 Data Diperbarui',
+            'error': '❌ Import Gagal',
+        }
+
+        body = Markup("""
+            <p>
+                <strong>{}</strong>
+            </p>
+            <p>{}</p>
+        """).format(
+            titles.get(state, 'Import Log'),
+            message,
+        )
+
+        if changed_fields:
+            body += Markup("""
+                <p><strong>Perubahan:</strong></p>
+                <ul>
+            """)
+
+            for change in changed_fields:
+                old_value = change['old_value'] or '-'
+                new_value = change['new_value'] or '-'
+
+                body += Markup("""
+                    <li>
+                        <strong>{}</strong>:
+                        {} → {}
+                    </li>
+                """).format(
+                    escape(change['field_label']),
+                    escape(str(old_value)),
+                    escape(str(new_value)),
+                )
+
+            body += Markup("</ul>")
+
+        if record:
+            body += Markup("""
+                <p>
+                    Record Odoo:
+                    <a href="#"
+                    data-oe-model="{}"
+                    data-oe-id="{}">
+                        {}
+                    </a>
+                </p>
+            """).format(
+                escape(record._name),
+                record.id,
+                escape(record.display_name),
+            )
+
+        self.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )

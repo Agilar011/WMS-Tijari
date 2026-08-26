@@ -1,6 +1,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
+from markupsafe import Markup, escape
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ class AcumaticaShipViaLine(models.Model):
           Phone                 → phone
     """
     _name        = 'acumatica.shipvia.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data ShipVia dari Acumatica (Staging)'
     _order       = 'row_number asc'
 
@@ -48,6 +50,7 @@ class AcumaticaShipViaLine(models.Model):
 
     import_message  = fields.Char(string='Keterangan',       readonly=True)
     odoo_partner_id = fields.Many2one('res.partner', string='Partner di Odoo', readonly=True)
+    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
@@ -89,6 +92,122 @@ class AcumaticaShipViaLine(models.Model):
             raise UserError('Tidak ada baris yang dipilih untuk diimport.')
         return lines._do_import()
 
+    def _handle_acumatica_error(self, err_msg=False):
+        AcumaticaError = self.env['acumatica.error.master']
+        acumatica_err_id = self.acumatica_err_id
+        if not err_msg:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'solved'
+                return
+            return
+
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'Shipvia-{self.id}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': err_msg
+            })
+            self.acumatica_err_id = acumatica_err_id
+            
+        acumatica_err_id.error_msg = err_msg
+        acumatica_err_id.import_state = state
+
+    def _get_changed_fields(self, record, vals):
+        changed_fields = []
+
+        for field_name, new_value in vals.items():
+            field = record._fields.get(field_name)
+
+            if not field:
+                continue
+
+            old_value = record[field_name]
+
+            # Normalisasi nilai
+            old_value = old_value or False
+            new_value = new_value or False
+
+            if old_value != new_value:
+                changed_fields.append({
+                    'field_name': field_name,
+                    'field_label': field.string,
+                    'old_value': old_value,
+                    'new_value': new_value,
+                })
+
+        return changed_fields
+    
+    def _log_import_result(
+        self,
+        state,
+        message,
+        record=False,
+        changed_fields=None,
+    ):
+        titles = {
+            'imported': '✅ Import Berhasil',
+            'updated': '🔄 Data Diperbarui',
+            'error': '❌ Import Gagal',
+        }
+
+        body = Markup("""
+            <p>
+                <strong>{}</strong>
+            </p>
+            <p>{}</p>
+        """).format(
+            titles.get(state, 'Import Log'),
+            message,
+        )
+
+        if changed_fields:
+            body += Markup("""
+                <p><strong>Perubahan:</strong></p>
+                <ul>
+            """)
+
+            for change in changed_fields:
+                old_value = change['old_value'] or '-'
+                new_value = change['new_value'] or '-'
+
+                body += Markup("""
+                    <li>
+                        <strong>{}</strong>:
+                        {} → {}
+                    </li>
+                """).format(
+                    escape(change['field_label']),
+                    escape(str(old_value)),
+                    escape(str(new_value)),
+                )
+
+            body += Markup("</ul>")
+
+        if record:
+            body += Markup("""
+                <p>
+                    Record Odoo:
+                    <a href="#"
+                    data-oe-model="{}"
+                    data-oe-id="{}">
+                        {}
+                    </a>
+                </p>
+            """).format(
+                escape(record._name),
+                record.id,
+                escape(record.display_name),
+            )
+
+        self.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
+    
     def _do_import(self):
         """
         Import/update data ShipVia ke res.partner Odoo.
@@ -107,10 +226,21 @@ class AcumaticaShipViaLine(models.Model):
         for line in self:
             try:
                 if not line.description:
+
+                    err_msg = 'Name kosong'
                     line.write({
                         'import_state':   'error',
-                        'import_message': 'Name kosong',
+                        'import_message': err_msg,
                     })
+
+                    line._handle_acumatica_error(err_msg)
+                    line._log_import_result(
+                        'error',
+                        f'Gagal mengimpor data: {err_msg}',
+                        False,
+                        False
+                    )
+
                     error += 1
                     continue
 
@@ -133,12 +263,25 @@ class AcumaticaShipViaLine(models.Model):
                 existing = self._find_existing_shipvia(line)
 
                 if existing:
+                    changed_fields = line._get_changed_fields(
+                        existing,
+                        vals,
+                    )
+
                     existing.write(vals)
                     line.write({
                         'import_state':    'updated',
                         'import_message':  f'Diupdate: {existing.name} (ID: {existing.id})',
                         'odoo_partner_id': existing.id,
                     })
+
+                    line._log_import_result(
+                        'updated',
+                        f'Data {existing.display_name} berhasil diperbarui.',
+                        existing,
+                        changed_fields,
+                    )
+                    
                     updated += 1
                 else:
                     new_partner = self.env['res.partner'].create(vals)
@@ -147,14 +290,32 @@ class AcumaticaShipViaLine(models.Model):
                         'import_message':  f'Dibuat: {new_partner.name} (ID: {new_partner.id})',
                         'odoo_partner_id': new_partner.id,
                     })
+                    line._handle_acumatica_error()
+                    line._log_import_result(
+                        'imported',
+                        f'Data {new_partner.display_name} berhasil dibuat.',
+                        new_partner,
+                        False
+                    )
+
                     imported += 1
 
             except Exception as e:
                 _logger.error("Error import ShipVia line %s: %s", line.carrier_id, str(e))
+
+                err_msg = str(e)[:200]
                 line.write({
                     'import_state':   'error',
-                    'import_message': str(e)[:200],
+                    'import_message': err_msg,
                 })
+                line._handle_acumatica_error(err_msg)
+                line._log_import_result(
+                    'error',
+                    f'Gagal mengimpor data: {err_msg}',
+                    False,
+                    False,
+                )
+
                 error += 1
 
         msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'

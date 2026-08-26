@@ -9,7 +9,7 @@
     "data": [
         "security/ir.model.access.csv",
         "data/ir.sequence.xml",
-        "data/approval_model_data.xml",
+        # "data/approval_model_data.xml",
 
         "views/approval_type_views.xml",
     ],
