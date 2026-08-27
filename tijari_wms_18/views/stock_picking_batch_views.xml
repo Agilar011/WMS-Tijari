@@ -61,6 +61,7 @@
                                 string="Store To"
                                 readonly="putaway_status == 'finished'"
                                 context="{'show_location_short_name': True}"
+                                widget="location_short_many2one"
                                 domain="[('id', 'child_of', adt_dest_location_id)]"/>
                             <field name="quantity" string="Qty Diterima" readonly="1"/>
                             <field name="confirmation_quantity" string="Qty Disimpan" readonly="putaway_status == 'finished'" force_save="1"/>
