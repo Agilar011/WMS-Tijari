@@ -22,7 +22,7 @@
         'tijari_auth_oauth',
     ],
     'data': [
-        'security/groups.xml',
+        # 'security/groups.xml',
         'security/ir.model.access.csv',
         'data/document_only_picking_type_data.xml',
         'data/ir.sequence.xml',
