@@ -1087,6 +1087,10 @@ class StockMoveLine(models.Model):
         self.write({'picker_status': 'finished'})
         return True
 
+    def action_mark_picker_unfinished(self):
+        self.write({'picker_status': 'unfinished'})
+        return True
+
 
     @api.onchange('location_putaway_id')
     def _onchange_location_putaway_id(self):
@@ -1165,6 +1169,17 @@ class StockMoveLine(models.Model):
             # Finished product dari Manufacturing Order
             # tidak menggunakan proses matching.
             if move.production_id:
+                continue
+
+            if move.picking_id.picking_type_id.name in ("Receipts", "Receipt Internal"):
+                move.picked = bool(
+                    move.move_line_ids
+                    and all(
+                        line.picker_status == "finished"
+                        and line.putaway_status == "finished"
+                        for line in move.move_line_ids
+                    )
+                )
                 continue
 
             # Transfer biasa dan raw material manufacturing

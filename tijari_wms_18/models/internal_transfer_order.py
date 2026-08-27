@@ -1029,32 +1029,25 @@ class StockPicking(models.Model):
                         'location_dest_id': move.location_dest_id.id,
                     })
 
-                zero_lines = move_lines[:-1]
-                if zero_lines:
-                    zero_lines.with_context(skip_matching_sync=True).write({
-                        quantity_field: 0.0,
-                        'confirmation_quantity': 0.0,
+                done_lines = move_lines.filtered(lambda line: line[quantity_field] > 0)
+                if not done_lines:
+                    done_lines = move_lines[-1]
+                    done_lines.write({quantity_field: quantity})
+
+                for done_line in done_lines:
+                    done_line_vals = {
+                        'confirmation_quantity': done_line[quantity_field],
+                        'location_dest_id': move.location_dest_id.id,
+                        'location_putaway_id': move.location_dest_id.id,
+                        'matching_loc_dest_id': move.location_dest_id.id,
                         'matching': 'match',
                         'putaway_status': 'finished',
                         'picker_status': 'finished',
                         'picked': True,
-                    })
-
-                done_line = move_lines[-1]
-                done_line_vals = {
-                    quantity_field: quantity,
-                    'confirmation_quantity': quantity,
-                    'location_dest_id': move.location_dest_id.id,
-                    'location_putaway_id': move.location_dest_id.id,
-                    'matching_loc_dest_id': move.location_dest_id.id,
-                    'matching': 'match',
-                    'putaway_status': 'finished',
-                    'picker_status': 'finished',
-                    'picked': True,
-                }
-                if done_line.lot_id:
-                    done_line_vals['matching_lot_id'] = done_line.lot_id.id
-                done_line.with_context(skip_matching_sync=True).write(done_line_vals)
+                    }
+                    if done_line.lot_id:
+                        done_line_vals['matching_lot_id'] = done_line.lot_id.id
+                    done_line.with_context(skip_matching_sync=True).write(done_line_vals)
                 move.picked = True
 
     def _set_internal_transfer_auto_done_quantities(self):
@@ -1080,32 +1073,25 @@ class StockPicking(models.Model):
                         'location_dest_id': move.location_dest_id.id,
                     })
 
-                zero_lines = move_lines[:-1]
-                if zero_lines:
-                    zero_lines.with_context(skip_matching_sync=True).write({
-                        quantity_field: 0.0,
-                        'confirmation_quantity': 0.0,
+                done_lines = move_lines.filtered(lambda line: line[quantity_field] > 0)
+                if not done_lines:
+                    done_lines = move_lines[-1]
+                    done_lines.write({quantity_field: quantity})
+
+                for done_line in done_lines:
+                    line_vals = {
+                        'confirmation_quantity': done_line[quantity_field],
+                        'location_dest_id': move.location_dest_id.id,
+                        'location_putaway_id': move.location_dest_id.id,
+                        'matching_loc_dest_id': move.location_dest_id.id,
                         'matching': 'match',
                         'putaway_status': 'finished',
                         'picker_status': 'finished',
                         'picked': True,
-                    })
-
-                done_line = move_lines[-1]
-                line_vals = {
-                    quantity_field: quantity,
-                    'confirmation_quantity': quantity,
-                    'location_dest_id': move.location_dest_id.id,
-                    'location_putaway_id': move.location_dest_id.id,
-                    'matching_loc_dest_id': move.location_dest_id.id,
-                    'matching': 'match',
-                    'putaway_status': 'finished',
-                    'picker_status': 'finished',
-                    'picked': True,
-                }
-                if done_line.lot_id:
-                    line_vals['matching_lot_id'] = done_line.lot_id.id
-                done_line.with_context(skip_matching_sync=True).write(line_vals)
+                    }
+                    if done_line.lot_id:
+                        line_vals['matching_lot_id'] = done_line.lot_id.id
+                    done_line.with_context(skip_matching_sync=True).write(line_vals)
                 move.picked = True
 
     def _process_internal_transfer_auto_validation_action(self, action):

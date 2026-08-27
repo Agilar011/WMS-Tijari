@@ -457,22 +457,20 @@ class StockPicking(models.Model):
                 #     'quantity': quantity,
                 # })
                 if move_lines:
-                    if len(move_lines) > 1:
-                        move_lines[:-1].write({
-                            quantity_field: 0.0,
-                            'picked': False,
-                        })
-                    line_vals = {
-                        quantity_field: quantity,
-                        'picked': True,
-                    }
-                    if (
-                        move.product_id.tracking != 'none'
-                        and not move_lines[-1].lot_id
-                        and not move_lines[-1].lot_name
-                    ):
-                        line_vals['lot_name'] = picking.origin or picking.name or 'DOCUMENT ONLY'
-                    move_lines[-1].write(line_vals)
+                    done_lines = move_lines.filtered(lambda line: line[quantity_field] > 0)
+                    if not done_lines:
+                        done_lines = move_lines[-1]
+                        done_lines.write({quantity_field: quantity})
+
+                    for line in done_lines:
+                        line_vals = {'picked': True}
+                        if (
+                            move.product_id.tracking != 'none'
+                            and not line.lot_id
+                            and not line.lot_name
+                        ):
+                            line_vals['lot_name'] = picking.origin or picking.name or 'DOCUMENT ONLY'
+                        line.write(line_vals)
                 else:
                     move_line_vals = {
                         'picking_id': picking.id,
