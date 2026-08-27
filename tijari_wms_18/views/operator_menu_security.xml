@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="stock.stock_picking_type_menu" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="stock.menu_stock_warehouse_mgmt" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="stock.menu_stock_inventory_control" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="stock.menu_warehouse_report" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="stock.menu_stock_config_settings" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="custom_master_menu" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="custom_logs_menu" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="wms_operations_menu" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="wms_operations_menu_inbound" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="wms_operations_menu_outbound" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('stock.group_stock_manager')])]"/>
+    </record>
+
+    <record id="wms_operations_menu_internal" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('stock.group_stock_manager')])]"/>
+    </record>
+
+</odoo>

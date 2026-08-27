@@ -162,7 +162,7 @@ class AcumaticaIssuePoReturnConfig(models.Model):
                     'total_qty': self._val(item, 'TotalQty'),
                     'receipt_type': self._val(item, 'Type'),
                     'vendor_code': self._val(item, 'VendorID'),
-                    'partner_ref': self._val(item, 'VendorRef'),
+                    'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
                     'warehouse_code': self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
                 }
                 print(f" Get data : {header['receipt_nbr']}, Type: {header['receipt_type']}, Status: {header['status']}")           
@@ -333,7 +333,8 @@ class AcumaticaIssuePoReturnLine(models.Model):
         Partner = self.env['res.partner']
         vendor = False
         if line.vendor_code:
-            vendor = Partner.search([('ref', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
+            # vendor = Partner.search([('ref', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
+            vendor = Partner.search([('company_registry', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
             if not vendor:
                 vendor = Partner.search([('name', '=', line.vendor_code), ('is_company', '=', True)], limit=1)
         return vendor
@@ -461,13 +462,17 @@ class AcumaticaIssuePoReturnLine(models.Model):
                 self.env.cr.execute('SAVEPOINT import_issue_po_return_doc')
                 try:
                     vendor = self._find_vendor(first)
+                    if not vendor:
+                        raise UserError(
+                            f'Vendor tidak ditemukan untuk VendorID: {first.vendor_code or first.partner_ref or "-"}'
+                        )
                     warehouse = self._find_warehouse(first)
                     if not warehouse:
                         raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
                     picking_type = first.picking_type_id
                     if not picking_type:
-                        raise UserError('Picking type outgoing tidak ditemukan.')
+                        raise UserError('Picking type Pick tidak ditemukan.')
 
                     dest_location = self._find_location_dest(first, warehouse)
                     if not dest_location:
@@ -509,6 +514,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         'adt_type': first.receipt_type or False,
                         'adt_warehouse_code': first.warehouse_code or False,
                         'adt_external_id': first.external_id or False,
+                        'api_acumatica': 'issue_po_return',
                     }
                     print(f"Processing receipt {origin}, Vendor: {first.vendor_code}, Picking Type: {picking_type.name}")
 

@@ -102,6 +102,33 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             api_acumatica=api_acumatica,
         )
 
+    def _search_outbound_pick_picking_type(self, warehouse_code, document_only=False, api_acumatica=False):
+        PickingType = self._env()["stock.picking.type"].sudo()
+        target_picking_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica=api_acumatica,
+            document_only=document_only,
+            warehouse_code=warehouse_code,
+        )
+        if target_picking_type:
+            return target_picking_type
+
+        if not warehouse_code:
+            return PickingType.browse()
+
+        warehouse = self._search_warehouse(warehouse_code)
+        if not warehouse:
+            return PickingType.browse()
+
+        return warehouse.pick_type_id or PickingType.search([
+            ("warehouse_id", "=", warehouse.id),
+            ("code", "=", "internal"),
+            ("operation_category", "=", "pick"),
+        ], limit=1) or PickingType.search([
+            ("warehouse_id", "=", warehouse.id),
+            ("code", "=", "internal"),
+            ("name", "ilike", "Pick"),
+        ], limit=1)
+
     def _receipt_header_vals(self, item, row_number):
         building_code = self._first_value(item, "BuildingID", "building_code")
         document_only = self._bool_value(item, "DocumentOnly", "document_only")
@@ -764,13 +791,16 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         }
 
     def _inventory_issue_header_vals(self, item, row_number):
-        warehouse_code = self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_code")
+        warehouse_code = self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "LineWarehouseID", "warehouse_code")
         document_only = self._bool_value(item, "DocumentOnly", "document_only")
-        picking_type = self._search_outgoing_picking_type(
-            warehouse_code,
-            document_only=document_only,
-            api_acumatica="inventory_issue",
-        )
+        trans_type = self._first_value(item, "TransType", "trans_type")
+        picking_type = self._env()["stock.picking.type"].sudo().browse()
+        if (trans_type or "").strip().casefold() != "disposal":
+            picking_type = self._search_outbound_pick_picking_type(
+                warehouse_code,
+                document_only=document_only,
+                api_acumatica="inventory_issue",
+            )
         return {
             "external_id": item.get("id") or item.get("external_id") or "",
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
@@ -785,7 +815,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "total_qty": self._first_value(item, "TotalQty", "total_qty"),
             "post_period": self._first_value(item, "PostPeriod", "post_period"),
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
-            "trans_type": self._first_value(item, "TransType", "trans_type"),
+            "trans_type": trans_type,
             "note": self._first_value(item, "NoteHeader", "note") or self._note_value(item),
             "line_nbr": self._first_value(item, "LineNumber", "LineNbr", "line_nbr"),
             "line_description": self._first_value(item, "LineInventoryName", "LineDescription", "line_description"),
@@ -816,7 +846,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "location_code": self._first_value(item, "LineLocation", "Location", "location_code"),
             "product_uom_qty": self._first_value(item, "LineQuantity", "Quantity", "product_uom_qty"),
             "uom_code": self._first_value(item, "LineUOM", "UOM", "uom_code"),
-            "warehouse_code": self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "warehouse_code"),
+            "warehouse_code": self._first_value(item, "LineWarehouse", "Warehouse", "WarehouseID", "LineWarehouseID", "warehouse_code"),
             "customer_id": self._first_value(item, "CustomerID", "customer_id"),
         }
 

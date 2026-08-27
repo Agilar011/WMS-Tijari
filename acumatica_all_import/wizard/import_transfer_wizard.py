@@ -184,7 +184,12 @@ class ImportTransferWizard(models.TransientModel):
                         'receipt_type': self._val(item, 'Type'),
                         'vendor_code': self._val(item, 'VendorID'),
                         'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
-                        'warehouse_code': shipment_warehouse.get('source_warehouse') or self._val(item, 'WarehouseID'),
+                        'warehouse_code': (
+                            shipment_warehouse.get('source_warehouse')
+                            or self._val(item, 'FromWarehouseID')
+                            or self._val(item, 'WarehouseID')
+                            or self._val(item, 'LineFromWarehouseID')
+                        ),
                         'warehouse_dest_code': shipment_warehouse.get('dest_warehouse') or self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
                         'picking_type_id': type.id if type else None,
 
