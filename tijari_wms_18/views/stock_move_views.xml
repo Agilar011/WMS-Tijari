@@ -138,7 +138,7 @@
                 <field name="adt_type" invisible="1"/>
                 <field name="owner_id" invisible="1"/>
                 <field name="picking_type_name" invisible="1"/>
-                <div class="grid-container" groups="!tijari_wms_18.group_picker,!tijari_wms_18.group_packer">
+                <div class="grid-container">
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                         
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: top; gap: 5px; width: 100%;">
