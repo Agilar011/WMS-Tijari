@@ -122,8 +122,12 @@ class ImportInventoryIssueWizard(models.TransientModel):
                     # print(f"Detail: {details}")
                     # print('='*100)
 
-                # warehouse_code = self._coalesce_val(item, 'Warehouse', 'LineWarehouseID')
-                warehouse_code = self._val(item, 'LineWarehouse')
+                warehouse_code = self._coalesce_val(item, 'LineWarehouse', 'Warehouse', 'WarehouseID', 'LineWarehouseID')
+                if not warehouse_code:
+                    for detail in details:
+                        warehouse_code = self._coalesce_val(detail, 'LineWarehouse', 'Warehouse', 'WarehouseID', 'LineWarehouseID')
+                        if warehouse_code:
+                            break
                 print(f"warehouse Code from API: {warehouse_code}")
                 header_id = ref or item.get('id', '')
 
@@ -259,7 +263,11 @@ class ImportInventoryIssueWizard(models.TransientModel):
     # ---------------------------------------------------------
 
     def _build_inventory_issue_header(self, row_number, item, header_id, warehouse_code):
-        type, fallback_warehouse_code = self._search_picking_type(item, warehouse_code=warehouse_code)
+        is_disposal = (self._val(item, 'TransType') or '').strip().casefold() == 'disposal'
+        type = False
+        fallback_warehouse_code = warehouse_code
+        if not is_disposal:
+            type, fallback_warehouse_code = self._search_picking_type(item, warehouse_code=warehouse_code)
         warehouse_code = warehouse_code or fallback_warehouse_code
         if type:
             type = type.id
@@ -675,8 +683,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
     def _search_picking_type(self, header, warehouse_code=None):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        warehouse_code = warehouse_code or self._coalesce_val(header, 'Warehouse', 'WarehouseID', 'LineWarehouseID')
-        trans_type = (self._val(header, 'TransType') or '').strip().casefold()
+        warehouse_code = warehouse_code or self._coalesce_val(header, 'LineWarehouse', 'Warehouse', 'WarehouseID', 'LineWarehouseID')
 
         # print(type(warehouse_code))
         type = False
@@ -695,7 +702,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
             ('code', '=', warehouse_code)
         ], limit=1)
 
-        if trans_type == 'toko pegang do' and location and location.odoo_building_id:
+        if location and location.odoo_building_id:
             warehouse = location.odoo_building_id
             type = warehouse.pick_type_id or PickingType.search([
                 ('warehouse_id', '=', warehouse.id),

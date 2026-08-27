@@ -22,6 +22,7 @@ from . import product_product
 from . import stock_location
 from . import res_partner
 from . import res_users
+from . import ir_ui_menu
 from . import loginext_model
 
 from . import mrp_production

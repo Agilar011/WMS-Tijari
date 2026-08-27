@@ -1,22 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <record id="group_picker" model="res.groups">
-        <field name="name">Picker</field>
-        <field name="category_id"
-               ref="base.module_category_inventory_inventory"/>
-    </record>
-
-    <record id="group_packer" model="res.groups">
-        <field name="name">Packer</field>
-        <field name="category_id"
-               ref="base.module_category_inventory_inventory"/>
-    </record>
-
-    <record id="group_putaway" model="res.groups">
-        <field name="name">Putaway</field>
-        <field name="category_id"
-               ref="base.module_category_inventory_inventory"/>
-    </record>
+    <function model="res.groups" name="_tijari_ensure_operator_group_xmlid"/>
 
 </odoo>

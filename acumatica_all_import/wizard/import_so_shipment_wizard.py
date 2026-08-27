@@ -685,6 +685,7 @@ class ImportSOShipmentWizard(models.TransientModel):
 
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
+        Warehouse = self.env['stock.warehouse']
 
         document_only_type = PickingType.resolve_document_only_picking_type(
             api_acumatica='so_shipment',
@@ -696,27 +697,36 @@ class ImportSOShipmentWizard(models.TransientModel):
 
         location = Location.search([
             ('code', '=', header)
-        ])
+        ], limit=1)
+        warehouse = location.odoo_building_id if location else False
+        if not warehouse and header:
+            warehouse = Warehouse.search([('code', '=', header)], limit=1)
+        type = False
 
         if code == 'CO':
-            if location:
+            if warehouse:
                 # print(f"Building id: {location.odoo_building_id.id}")
                 type = PickingType.search([
-                    ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                    ('warehouse_id', '=', warehouse.id),
                     ('code', '=', 'internal'),
                     ('is_default_api', '=', True)
-                ])
+                ], limit=1)
                 # print(f"Type: {type}")
 
         else:
-            if location:
-                # print(f"Building id: {location.odoo_building_id.id}")
+            type = warehouse.pick_type_id if warehouse else False
+            if not type and warehouse:
                 type = PickingType.search([
-                    ('warehouse_id', '=', location.odoo_building_id.id if location else False),
+                    ('warehouse_id', '=', warehouse.id),
                     ('code', '=', 'internal'),
-                    ('is_default_api', '=', True)
-                ])
-                # print(f"Type: {type}")
+                    ('operation_category', '=', 'pick'),
+                ], limit=1)
+            if not type and warehouse:
+                type = PickingType.search([
+                    ('warehouse_id', '=', warehouse.id),
+                    ('code', '=', 'internal'),
+                    ('name', 'ilike', 'Pick'),
+                ], limit=1)
 
         
 

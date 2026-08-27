@@ -54,6 +54,7 @@
         'views/templates.xml',
         'views/wms_operations_action.xml',
         'views/wms_operations_menu.xml',
+        'views/operator_menu_security.xml',
     ],
     'assets': {
         'web.assets_frontend': [

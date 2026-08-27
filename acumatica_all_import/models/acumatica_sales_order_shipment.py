@@ -261,10 +261,10 @@ class AcumaticaShipmentGIStaging(models.Model):
                         print(f"--> SUCCESS UNLINK OLD LINES FOR PICKING ID: {picking.id}")
                     else:
                         picking = Picking.create(updated_vals)
-                        exist_post_data = self.env['loginext.staging.data'].search([('odoo_shipment_number', '=', picking.origin)], limit=1)
-                        if not exist_post_data:
-                            create_tms_state = True
-                            created_loginext_header = self._build_loginext_header(shipment.adt_ShipmentNbr, ship_date, shipment_location_id,shipment_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking.origin)
+                        # exist_post_data = self.env['loginext.staging.data'].search([('odoo_shipment_number', '=', picking.origin)], limit=1)
+                        # if not exist_post_data:
+                        #     create_tms_state = True
+                        #     created_loginext_header = self._build_loginext_header(shipment.adt_ShipmentNbr, ship_date, shipment_location_id,shipment_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking.origin)
 
                         print(f"SUCCESS CREATING NEW PICKING ID: {picking.id}")
 
@@ -538,21 +538,21 @@ class AcumaticaShipmentGIStaging(models.Model):
         exist_post_data = self.env['loginext.staging.data'].search([
             ('odoo_shipment_number', '=', shipment.adt_ShipmentNbr),
         ], limit=1)
-        if not exist_post_data:
-            create_tms_state = True
-            created_loginext_header = self._build_loginext_header(
-                shipment.adt_ShipmentNbr,
-                ship_date,
-                shipment_location_id,
-                shipment_weight,
-                shipment_volume,
-                partner,
-                shipment_city,
-                shipment_country,
-                shipment_postal_code,
-                shipment_street,
-                shipment.adt_ShipmentNbr,
-            )
+        # if not exist_post_data:
+        #     create_tms_state = True
+        #     created_loginext_header = self._build_loginext_header(
+        #         shipment.adt_ShipmentNbr,
+        #         ship_date,
+        #         shipment_location_id,
+        #         shipment_weight,
+        #         shipment_volume,
+        #         partner,
+        #         shipment_city,
+        #         shipment_country,
+        #         shipment_postal_code,
+        #         shipment_street,
+        #         shipment.adt_ShipmentNbr,
+        #     )
 
         move_count = 0
         for item in move_items:

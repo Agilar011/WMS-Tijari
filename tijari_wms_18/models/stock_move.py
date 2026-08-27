@@ -86,9 +86,10 @@ class StockMove(models.Model):
     )
     def _compute_get_picking_type_name(self):
         for rec in self:
+            rec.picking_type_name = False
             if rec.picking_id:
                 rec.picking_type_name = rec.picking_id.picking_type_id.name
-            if rec.raw_material_production_id:
+            elif rec.raw_material_production_id:
                 rec.picking_type_name = rec.raw_material_production_id.picking_type_id.name
 
     transaction_type = fields.Selection([

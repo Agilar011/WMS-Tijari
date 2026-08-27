@@ -166,7 +166,7 @@ class ImportVendorWizard(models.TransientModel):
             ('last_modified_datetime', '!=', item['last_modified_datetime']),
         ])
         if existing:
-            item['state'] = 'pending'
+            item['import_state'] = 'pending'
             existing.write(item)
 
     def fetch_vendor_data(self, limit=50, skip=0, odata_filter=False):

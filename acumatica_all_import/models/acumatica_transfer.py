@@ -532,6 +532,23 @@ class AcumaticaTransferLine(models.Model):
 
         source_location = transfer_info['source_location']
         destination_location = transfer_info['destination_location']
+        missing_location_messages = []
+        if not source_location:
+            missing_location_messages.append(
+                'FromWarehouseID kosong atau tidak dapat ditentukan untuk Transfer Receipt %s.'
+                % (origin or receipt.id)
+            )
+        if not destination_location:
+            missing_location_messages.append(
+                'ToWarehouseID mapping tidak ditemukan untuk Transfer Receipt %s: %s.'
+                % (origin or receipt.id, destination_code or '-')
+            )
+        if missing_location_messages:
+            raise ReceiptImportError(
+                '\n'.join(missing_location_messages),
+                payload={'header': header_payload},
+            )
+
         order, action_state = TransferService.prepare_order(
             origin,
             source_location,

@@ -495,10 +495,6 @@ class ImportReceiptWizard(models.TransientModel):
     # HELPERS
     # ---------------------------------------------------------    
     def _search_picking_type(self, header):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
-            return config_picking_type
-
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         warehouse_code = (
@@ -507,7 +503,6 @@ class ImportReceiptWizard(models.TransientModel):
             or self._val(header, 'LineWarehouseID')
         )
         # details = header.get('Details') or []
-        type = False
         document_only = header.get('document_only')
         if document_only is None:
             document_only = self._bool_val(header, 'DocumentOnly')
@@ -519,6 +514,8 @@ class ImportReceiptWizard(models.TransientModel):
         )
         if document_only_type:
             return document_only_type
+
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
 
         if not warehouse_code:
             # Normalkan struktur jika details berupa bungkus dictionary OData (mengandung key 'value')
@@ -532,14 +529,21 @@ class ImportReceiptWizard(models.TransientModel):
 
         print(f"Location: {location}")
 
-        if location:
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),                
-                ('is_default_api', '=', True)
-            ])
+        if location and location.odoo_building_id:
+            warehouse = location.odoo_building_id
+            pick_type = warehouse.pick_type_id or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('operation_category', '=', 'pick'),
+            ], limit=1) or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('name', 'ilike', 'Pick'),
+            ], limit=1)
+            if pick_type:
+                return pick_type
 
-        return type
+        return config_picking_type or PickingType.browse()
 
     def _normalize_rows(self, payload):
         print("="*80)

@@ -5,6 +5,7 @@
         <field name="name">Purchase Receipts</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'incoming'),
             ('adt_type', '=', 'Receipt'),
@@ -16,6 +17,7 @@
         <field name="name">Sales Order Receipts</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'internal'),
             ('adt_type', '=', 'Transfer Receipt'),
@@ -27,6 +29,7 @@
         <field name="name">Receipts Type Change Item</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'incoming'),
             ('adt_type', '=', 'Change Item'),
@@ -38,6 +41,7 @@
         <field name="name">Inventory Receive</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'incoming'),
             ('adt_type', '=', 'Inventory Receive'),
@@ -49,6 +53,7 @@
         <field name="name">Shipment SO Return</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'incoming'),
             ('adt_type', '=', 'Shipment'),
@@ -60,6 +65,7 @@
         <field name="name">Sale Orders Shipment</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'outgoing'),
             ('adt_type', '=', 'Shipment'),
@@ -71,8 +77,8 @@
         <field name="name">Issue Type Change Item</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
-            ('picking_type_id.code', '=', 'outgoing'),
             ('adt_type', '=', 'Change Item'),
         ('adt_is_document_only', '=', False),
         ]</field>
@@ -82,8 +88,8 @@
         <field name="name">Inventory Issue</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
-            ('picking_type_id.code', '=', 'outgoing'),
             ('adt_type', '=', 'Issue'),
         ('adt_is_document_only', '=', False),
         ]</field>
@@ -93,10 +99,12 @@
         <field name="name">Issue Type PO Return</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
-            ('picking_type_id.code', '=', 'outgoing'),
-            ('adt_type', '=', 'Return'),
-        ('adt_is_document_only', '=', False),
+            ('adt_is_document_only', '=', False),
+            '|',
+                ('api_acumatica', '=', 'issue_po_return'),
+                ('adt_type', '=', 'Return'),
         ]</field>
     </record>
 
@@ -104,6 +112,7 @@
         <field name="name">Transfer Shipment</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'outgoing'),
             ('adt_type', '=', 'Transfer'),
@@ -115,6 +124,7 @@
         <field name="name">Transfer Pinjaman (1 Step)</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'internal'),
             ('adt_type', '=', 'Step 1'),
@@ -126,6 +136,7 @@
         <field name="name">Transfer Pinjaman (2 Step)</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'internal'),
             ('adt_type', '=', 'Step 2'),
@@ -137,6 +148,7 @@
         <field name="name">Kit Assembly</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'mrp_operation'),
         ('adt_is_document_only', '=', False),
@@ -147,6 +159,7 @@
         <field name="name">Document Only Transfers</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[('adt_is_document_only', '=', True)]</field>
     </record>
 </odoo>
