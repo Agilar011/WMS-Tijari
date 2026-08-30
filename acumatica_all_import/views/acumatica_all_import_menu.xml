@@ -25,6 +25,7 @@
         parent="menu_acumatica_all_import_staging_root"
         sequence="20"/>
     <menuitem id="menu_acumatica_all_import_staging_so_shipment" name="SO Shipment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_so_shipment_line" sequence="10"/>
+    <menuitem id="menu_acumatica_all_import_staging_shipment_completed" name="Shipment Completed" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_shipment_completed_staging" sequence="11"/>
     <menuitem id="menu_acumatica_all_import_staging_transfer_shipment" name="SO Transfer - Inter WH OUT" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_shipment_line" sequence="20"/>
     <!-- <menuitem id="menu_acumatica_all_import_staging_issue_change_item" name="Issue : Change Item" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_line" sequence="30"/> -->
     <menuitem id="menu_acumatica_all_import_staging_inventory_issue" name="Inventory Issue" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inventory_issue_line" sequence="40"/>
@@ -91,6 +92,7 @@
         parent="menu_acumatica_all_import_config_root"
         sequence="20"/>
     <menuitem id="menu_acumatica_all_import_config_so_shipment" name="SO Shipment" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_so_shipment_config" sequence="10"/>
+    <menuitem id="menu_acumatica_all_import_config_shipment_completed" name="Shipment Completed" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_shipment_completed_config" sequence="11"/>
     <menuitem id="menu_acumatica_all_import_config_transfer_shipment" name="SO Transfer - Inter WH OUT" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_transfer_shipment_config" sequence="20"/>
     <menuitem id="menu_acumatica_all_import_config_issue_change_item" name="Issue : Change Item" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_issue_config" sequence="30"/>
     <menuitem id="menu_acumatica_all_import_config_inventory_issue" name="Inventory Issue" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_inventory_issue_config" sequence="40"/>
