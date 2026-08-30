@@ -87,10 +87,13 @@ class StockMove(models.Model):
     def _compute_get_picking_type_name(self):
         for rec in self:
             rec.picking_type_name = False
+
             if rec.picking_id:
                 rec.picking_type_name = rec.picking_id.picking_type_id.name
             elif rec.raw_material_production_id:
-                rec.picking_type_name = rec.raw_material_production_id.picking_type_id.name
+                rec.picking_type_name = (
+                    rec.raw_material_production_id.picking_type_id.name
+                )
 
     transaction_type = fields.Selection([
         ('inbound', 'Inbound'),
@@ -298,6 +301,9 @@ class StockMove(models.Model):
             if move.picking_type_name in ['Receipts', 'Receipt Internal']:
                 total_confirmation_quantity = move.confirmation_quantity
                 difference = move.product_uom_qty - total_confirmation_quantity
+            elif move.picking_type_name in ['Pick', 'Pick Internal', 'Pick Components']:
+                total_confirmation_quantity = move.confirmation_quantity
+                difference = move.quantity - total_confirmation_quantity
             else:
                 difference = move.product_uom_qty - move.quantity
             move.difference_quantity = difference if difference > 0 else 0.0

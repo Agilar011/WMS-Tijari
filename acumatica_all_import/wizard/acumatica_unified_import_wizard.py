@@ -186,6 +186,19 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data SO Shipment dari Acumatica',
             'extra_fields': ['shipment_nbr', 'last_modified_from', 'odata_filter'],
         },
+        'shipment_completed': {
+            'label': 'Shipment Completed',
+            'wizard_model': 'import.shipment.completed.wizard',
+            'line_model': 'acumatica.shipment.completed.staging',
+            'result_name': 'Hasil Import Shipment Completed',
+            'staging_name': 'Data Shipment Completed Acumatica',
+            'extra_fields': [
+                'warehouse_value',
+                'start_date',
+                'end_date',
+                'shipment_nbr'
+            ],
+        },
         'so_transfer': {
             'label': 'SO Transfer - Inter WH IN',
             'wizard_model': 'import.transfer.wizard',
@@ -295,6 +308,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'shipment_so',
         'kit_assembly',
         'so_shipment',
+        'shipment_completed',
         'transfer_shipment',
         # 'issue_change_item',
         'inventory_issue',
@@ -499,7 +513,16 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'batch_size': self.batch_size,
             'fetch_skip': self.fetch_skip,
         }
-        if self.import_type in ('po_receipt', 'so_transfer', 'shipment_so', 'so_shipment', 'inventory_received', 'toko_pegang_do', 'transfer_shipment'):
+        if self.import_type in (
+            'po_receipt', 
+            'so_transfer', 
+            'shipment_so', 
+            'so_shipment', 
+            'shipment_completed',
+            'inventory_received', 
+            'toko_pegang_do', 
+            'transfer_shipment',
+        ):
             vals['wh33_filter'] = self.wh33_filter
             vals['start_date'] = self.start_date
             vals['end_date'] = self.end_date     
