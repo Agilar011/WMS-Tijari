@@ -61,11 +61,6 @@
           'views/acumatica_all_import_wizard_views.xml',
           'views/acumatica_all_import_menu.xml',
           ],
- 'assets': {
-        'web.assets_backend': [
-            'acumatica_all_import/static/src/scss/chatter.scss',
-        ],
-    },
  'installable': True,
  'application': True,
  'auto_install': False,
