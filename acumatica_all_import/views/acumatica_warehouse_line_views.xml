@@ -50,6 +50,7 @@
         <field name="arch" type="xml">
             <list string="Data Warehouse &amp; Location" multi_edit="1">
                 <field name="warehouse_id" string="WarehouseID"/>
+                <field name="building_id" string="BuildingID"/>
                 <field name="description"    string="Description → name"/>
                 <field name="active"         string="Active"         widget="boolean"
                        optional="show"/>
@@ -102,44 +103,45 @@
                 </header>
                 <sheet>
                     <!-- ── Field Sudah Ada di Odoo ── -->
-                    <group string="✅ Field Standar Odoo">
+                    <group string="Data Warehouse &amp; Location">
                         <group>
-                            <field name="warehouse_id"  string="WarehouseID → stock.warehouse.code"/>
-                            <field name="description"   string="Description → stock.warehouse.name"/>
+                            <field name="warehouse_id"  string="WarehouseID.warehouse.code"/>
+                            <field name="building_id"   string="BuildingID.warehouse.building"/>
                         </group>
                         <group>
+                            <field name="description"   string="Description.warehouse.name"/>
                             <field name="active"        string="Active"/>
                         </group>
                     </group>
 
                     <!-- ── Field to be ── -->
-                    <group string="🆕 Field to be (adt_*)">
+                    <group string="Optional Data">
                         <group>
-                            <field name="drop_ship_location_id"  string="DropShipLocationID → adt_drop_ship_location_id"/>
-                            <field name="receiving_location_id"  string="ReceivingLocationID → adt_receiving_location_id"/>
-                            <field name="rma_location_id"        string="RMALocationID → adt_rma_location_id"/>
-                            <field name="shipping_location_id"   string="ShippingLocationID → adt_shipping_location_id"/>
+                            <field name="drop_ship_location_id"  string="DropShipLocationID"/>
+                            <field name="receiving_location_id"  string="ReceivingLocationID"/>
+                            <field name="rma_location_id"        string="RMALocationID"/>
+                            <field name="shipping_location_id"   string="ShippingLocationID"/>
                         </group>
                         <group>
-                            <field name="last_modified_dt"       string="LastModifiedDateTime → adt_last_modified_dt"/>
-                            <field name="external_id"            string="UUID → adt_external_id"/>
+                            <field name="last_modified_dt"       string="LastModifiedDateTime"/>
+                            <field name="external_id"            string="UUID"/>
                             <field name="sync_date"/>
                             <field name="config_id"/>
                         </group>
                     </group>
 
-                    <group string="📝 Note → adt_note">
+                    <group string="Note">
                         <field name="note" nolabel="1"/>
                     </group>
 
                     <!-- ── Hasil Import ── -->
-                    <group string="🔗 Hasil di Odoo">
+                    <group string="Hasil di Odoo">
                         <field name="odoo_warehouse_id"/>
                         <field name="import_message"/>
                     </group>
 
                     <!-- ── Detail Locations ── -->
-                    <notebook>
+                    <!-- <notebook>
                         <page string="📍 Locations" name="locations">
                             <list string="Locations" editable="bottom">
                                 <field name="row_number"    string="No"/>
@@ -160,7 +162,7 @@
                                         invisible="not odoo_warehouse_id"/>
                             </list>
                         </page>
-                    </notebook>
+                    </notebook> -->
                 </sheet>
                 <div class="oe_chatter">
                     <chatter/>
