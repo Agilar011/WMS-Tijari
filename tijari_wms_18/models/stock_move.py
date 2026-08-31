@@ -715,7 +715,10 @@ class StockMoveScanWizard(models.TransientModel):
             if not wizard.scan_code:
                 continue
 
-            product = wizard._find_product_by_scan_code(wizard.scan_code.strip())
+            scan_code = wizard.scan_code.strip()
+            product = wizard._find_product_by_scan_code(scan_code)
+            if not product:
+                product = wizard._find_product_by_lot_scan_code(scan_code)
 
             if not product:
                 continue
@@ -736,3 +739,18 @@ class StockMoveScanWizard(models.TransientModel):
             ('barcode', '=', scan_code),
             ('default_code', '=', scan_code),
         ], limit=1)
+
+    def _find_product_by_lot_scan_code(self, scan_code):
+        self.ensure_one()
+        StockLot = self.env['stock.lot']
+
+        lots = StockLot.search([('name', '=', scan_code)])
+        move_lines = self.picking_id.move_line_ids.filtered(
+            lambda line: (
+                (lots and line.lot_id in lots)
+                or (line.lot_name and line.lot_name == scan_code)
+            )
+        )
+        products = move_lines.product_id
+
+        return products[:1] if len(products) == 1 else self.env['product.product']

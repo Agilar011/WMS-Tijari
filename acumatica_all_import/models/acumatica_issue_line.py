@@ -409,6 +409,7 @@ class AcumaticaIssueLine(models.Model):
                     picking.write(vals)
                     action_state = 'updated'
                     updated += 1
+                    self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=issue_key)
                 else:
                     picking = Picking.create(vals)
                     action_state = 'imported'
@@ -462,12 +463,12 @@ class AcumaticaIssueLine(models.Model):
 
                 if issue_lines.filtered('document_only'):
                     picking.action_validate_document_only_import(force=True)
-                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(issue_key, 'issue_change_item')
+                self.env['acumatica.error.transaction']._handle_acumatica_error(issue_key, 'issue_change_item')
                 self.env.cr.execute('RELEASE SAVEPOINT import_issue_change_item_doc')
             except Exception as e:
                 self.env.cr.execute('ROLLBACK TO SAVEPOINT import_issue_change_item_doc')
                 _logger.exception('Error import issue %s', issue_key)
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
                     api_acumatica='issue_change_item',

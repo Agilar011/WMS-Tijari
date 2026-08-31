@@ -24,6 +24,9 @@
                 <field name="trans_type"/>
                 <field name="document_only"/>
                 <field name="from_warehouse_code"/>
+                <field name="from_warehouse_name"/>
+                <field name="to_warehouse_code"/>
+                <field name="to_warehouse_name"/>
                 <field name="total_qty"/>
 
                 <field name="import_state" widget="badge"
@@ -74,15 +77,20 @@
                             <field name="reference_nbr"/>
                             <field name="scheduled_date"/>
                             <field name="description"/>
+                            <field name="external_ref"/>
                             <field name="from_warehouse_code"/>
+                            <field name="from_warehouse_name"/>
                             <field name="to_warehouse_code"/>
+                            <field name="to_warehouse_name"/>
                             <field name="status"/>
+                            <field name="return_type"/>
                             <field name="transfer_type"/>
                             <field name="trans_type"/>
                             <field name="total_qty"/>
                             <field name="is_hold"/>
                             <field name="post_period"/>
                             <field name="acumatica_write_date"/>
+                            <field name="note_header_id"/>
                             <field name="note"/>
                         </group>
                     </group>
@@ -91,10 +99,18 @@
                             <!-- Field relasi One2many ditaruh di sini secara aman -->
                             <field name="line_ids" readonly="1">
                                 <list>
+                                    <field name="line_nbr"/>
                                     <field name="inventory_id"/>
                                     <field name="line_description"/>
                                     <field name="from_location_code"/>
+                                    <field name="to_location_code"/>
                                     <field name="quantity"/>
+                                    <field name="uom_code"/>
+                                    <field name="so_order_nbr"/>
+                                    <field name="so_order_type"/>
+                                    <field name="so_shipment_nbr"/>
+                                    <field name="line_note_id"/>
+                                    <field name="line_note"/>
                                 </list>
                             </field>
                         </page>

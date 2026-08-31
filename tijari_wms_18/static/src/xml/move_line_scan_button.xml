@@ -19,6 +19,16 @@
         </button>
     </t>
 
+    <t t-name="tijari.ProductByLotScanButton" owl="1">
+        <button t-on-click="onClick"
+                type="button"
+                class="btn btn-primary oe_inline"
+                title="Scan Product By Lot">
+            <i class="fa fa-barcode me-1"/>
+            Scan Product By Lot
+        </button>
+    </t>
+
     <t t-name="tijari.PackageScanButton" owl="1">
         <button t-on-click="onClick"
                 type="button"

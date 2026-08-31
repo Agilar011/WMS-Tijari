@@ -771,7 +771,7 @@ class AcumaticaInventoryIssueTokoPegangDO(models.Model):
                         'import_message': f'Sukses diproses ke {picking.name}',
                         'odoo_picking_id': picking.id,
                     })
-                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(first.adt_ReferenceNbr, 'toko_pegang_do')
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(first.adt_ReferenceNbr, 'toko_pegang_do')
                     
                     imported += 1
 
@@ -781,7 +781,7 @@ class AcumaticaInventoryIssueTokoPegangDO(models.Model):
                 tracked_lines = self.env['acumatica.inventory.issue.toko.pegang.do.staging.line'].search([
                     ('receipt_line_id', '=', first.id),
                 ])
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
                     api_acumatica='toko_pegang_do',

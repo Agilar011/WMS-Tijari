@@ -61,6 +61,18 @@
         ]</field>
     </record>
 
+    <record id="action_wms_operations_so_consignment_receipts" model="ir.actions.act_window">
+        <field name="name">Manage SO Consignment</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+        <field name="domain">[
+            ('picking_type_id.name', '=', 'Receipt Internal'),
+            ('adt_type', '=', 'Shipment Consignment'),
+            ('adt_is_document_only', '=', False),
+        ]</field>
+    </record>
+
     <record id="action_wms_operations_sale_orders_shipment" model="ir.actions.act_window">
         <field name="name">Sale Orders Shipment</field>
         <field name="res_model">stock.picking</field>

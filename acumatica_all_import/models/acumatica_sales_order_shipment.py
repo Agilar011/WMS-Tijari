@@ -161,7 +161,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         for staging_rec in not_pending_shipment:
             message = f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
             lines = shipment_line.search([('gi_id', '=', staging_rec.id)])
-            self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+            self.env['acumatica.error.transaction']._handle_acumatica_error(
                 staging_rec,
                 [message],
                 api_acumatica='so_shipment',
@@ -349,14 +349,14 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'import_message': f'Berhasil diproses menjadi Picking Odoo: {picking.name}',
                         'odoo_picking_id': picking.id
                     })
-                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(shipment.adt_ShipmentNbr, 'so_shipment')
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(shipment.adt_ShipmentNbr, 'so_shipment')
                     self.env.cr.execute('RELEASE SAVEPOINT import_so_shipment_doc')
 
                 except Exception as e:
                     self.env.cr.execute('ROLLBACK TO SAVEPOINT import_so_shipment_doc')
                     _logger.error(f"Error importing shipment {shipment.adt_ShipmentNbr}: {str(e)}")
                     tracked_lines = shipment_line.search([('gi_id', '=', shipment.id)])
-                    self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(
                         shipment,
                         [str(e)],
                         api_acumatica='so_shipment',
@@ -514,6 +514,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'state': 'draft',
             })
             action_state = 'updated'
+            self.env['acumatica.error.transaction']._handle_acumatica_update(shipment, origin=shipment.adt_ShipmentNbr or False)
         else:
             order = InternalTransferOrder.create({
                 'external_ref': shipment.adt_ShipmentNbr,
@@ -609,7 +610,7 @@ class AcumaticaShipmentGIStaging(models.Model):
             'odoo_picking_id': False,
             'odoo_internal_transfer_order_id': order.id,
         })
-        self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(shipment.adt_ShipmentNbr, 'so_shipment')
+        self.env['acumatica.error.transaction']._handle_acumatica_error(shipment.adt_ShipmentNbr, 'so_shipment')
         return order
 
 # =====================================================================================================================================================================
@@ -1841,6 +1842,7 @@ class AcumaticaShipmentConfig(models.Model):
                 })
 
                 existing.write(shipment_vals)
+                self.env['acumatica.error.transaction']._handle_acumatica_update(existing, origin=existing.adt_ShipmentNbr or False)
                 shipment_rec = existing
                 print(f"Shipment Updated: {existing.id} with row number {existing.rownumber}")
             

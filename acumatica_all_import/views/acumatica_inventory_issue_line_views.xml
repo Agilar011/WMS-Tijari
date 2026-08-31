@@ -38,10 +38,13 @@
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="reference_nbr"/>
                 <field name="trans_type"/>
+                <field name="doc_type"/>
                 <field name="document_only"/>
-                <!-- <field name="vendor_code"/> -->
+                <field name="building_code"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
+                <field name="line_nbr"/>
+                <field name="inventory_id"/>
                 <!-- <field name="inventory_id"/> -->
                 <!-- <field name="transaction_description"/> -->
                 <!-- <field name="product_uom_qty"/> -->
@@ -73,20 +76,30 @@
                 <sheet>
                     <group string="Header">
                         <group>
+                            <field name="external_id" readonly="1"/>
+                            <field name="row_number" readonly="1"/>
                             <field name="reference_nbr" readonly="1"/>
                             <field name="picking_type_id"/>
                             <field name="scheduled_date" readonly="1"/>
                             <field name="status" readonly="1"/>
                             <field name="customer_id"/>
+                            <field name="customer_name" readonly="1"/>
                             <field name="trans_type" readonly="1"/>
+                            <field name="doc_type" readonly="1"/>
                             <field name="actual_qty" readonly="1"/>
                             <field name="total_qty" readonly="1"/>
+                            <field name="warehouse_code" readonly="1"/>
+                            <field name="building_code" readonly="1"/>
                         </group>
                         <group>
                             <field name="description" readonly="1"/>
                             <field name="external_ref" readonly="1"/>
+                            <field name="change_item_ref_nbr" readonly="1"/>
+                            <field name="header_location_code" readonly="1"/>
                             <field name="post_period" readonly="1"/>
                             <field name="acumatica_write_date" readonly="1"/>
+                            <field name="branch_warehouse" readonly="1"/>
+                            <field name="note_header_id" readonly="1"/>
                             <field name="note" readonly="1"/>
                         </group>
                     </group>
@@ -94,11 +107,17 @@
                         <page name="Details" string="Details">
                             <field name="product_line_ids">
                                 <list>
+                                    <field name="line_nbr"/>
                                     <field name="inventory_id"/>
                                     <field name="line_description"/>
+                                    <field name="location_code"/>
+                                    <field name="line_location_name"/>
                                     <field name="warehouse_code"/>
-                                    <field name="customer_id"/>
+                                    <field name="line_warehouse_name"/>
                                     <field name="product_uom_qty"/>
+                                    <field name="uom_code"/>
+                                    <field name="line_note_id"/>
+                                    <field name="line_note"/>
                                 </list>
                             </field>
                         </page>

@@ -40,9 +40,9 @@ class AcumaticaCustomerLine(models.Model):
     external_id = fields.Char(string='UUID Acumatica', readonly=True)
 
     # Mandatory fields
-    customer_id = fields.Char(string='CustomerID', readonly=True)
+    customer_id = fields.Char(string='CustomerID')
     b_account_id = fields.Char(string='BAccountID', readonly=True)
-    customer_name = fields.Char(string='CustomerName', readonly=True)
+    customer_name = fields.Char(string='CustomerName')
     status = fields.Char(string='Status', readonly=True)
     warehouse_id = fields.Char(string='WarehouseID', readonly=True)
     shipping_zone_id = fields.Char(string='ShippingZoneID', readonly=True)
@@ -51,7 +51,7 @@ class AcumaticaCustomerLine(models.Model):
     # Optional fields
     customer_class = fields.Char(string='CustomerClass', readonly=True)
     tax_registration_id  = fields.Char(string='TaxRegistrationID', readonly=True)
-    last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime')
     note_id = fields.Char(string='NoteID', readonly=True)
     note = fields.Text(string='Note', readonly=True)
     location_name = fields.Char(string='LocationName', readonly=True)

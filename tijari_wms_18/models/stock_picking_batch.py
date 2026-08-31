@@ -14,6 +14,10 @@ class StockPickingBatch(models.Model):
         compute='_compute_allowed_putaway_move_line_ids',
     )
     scan_product_button = fields.Boolean(string='Scan Product')
+    scan_product_by_lot_button = fields.Boolean(
+        string='Scan Product By Lot',
+        compute='_compute_scan_product_by_lot_button',
+    )
     putaway_product_id = fields.Many2one(
         'product.product',
         string='Product Name',
@@ -34,6 +38,10 @@ class StockPickingBatch(models.Model):
         related='picking_type_id.name',
         store=False,
     )
+
+    def _compute_scan_product_by_lot_button(self):
+        for batch in self:
+            batch.scan_product_by_lot_button = True
 
     def _get_putaway_base_move_lines(self):
         self.ensure_one()
@@ -256,6 +264,29 @@ class StockPickingBatch(models.Model):
             ('default_code', '=', scan_code),
         ], limit=1)
 
+    def _find_putaway_product_by_lot_scan_code(self, scan_code):
+        self.ensure_one()
+        StockLot = self.env['stock.lot']
+
+        lots = StockLot.search([('name', '=', scan_code)])
+        move_lines = self._get_putaway_base_move_lines().filtered(
+            lambda line: (
+                (lots and line.lot_id in lots)
+                or (line.lot_name and line.lot_name == scan_code)
+            )
+        )
+
+        if not move_lines:
+            if lots:
+                raise ValidationError(_('Lot hasil scan tidak ada di dokumen ini.'))
+            raise ValidationError(_('Lot tidak ditemukan untuk kode scan: %s') % scan_code)
+
+        products = move_lines.product_id
+        if len(products) > 1:
+            raise ValidationError(_('Lot hasil scan mengarah ke lebih dari satu product.'))
+
+        return products[:1]
+
     def action_apply_scanned_product(self, scanned_code):
         self.ensure_one()
         scanned_code = (scanned_code or '').strip()
@@ -265,6 +296,18 @@ class StockPickingBatch(models.Model):
             raise ValidationError(
                 'Product tidak ditemukan untuk kode scan: %s' % scanned_code
             )
+
+        self.write({'putaway_product_id': product.id})
+
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+        }
+
+    def action_apply_scanned_product_by_lot(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        product = self._find_putaway_product_by_lot_scan_code(scanned_code)
 
         self.write({'putaway_product_id': product.id})
 

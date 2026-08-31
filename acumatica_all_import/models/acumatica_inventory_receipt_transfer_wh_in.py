@@ -444,6 +444,7 @@ class AcumaticaInventoryReceiptTransferWhInStaging(models.Model):
                             'import_message': f'Update picking : {picking.name}',
                             'odoo_picking_id': picking.id,
                         })
+                        self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=reference_nbr)
 
                         picking.write(vals)
                         imported += 1
@@ -551,7 +552,7 @@ class AcumaticaInventoryReceiptTransferWhInStaging(models.Model):
 
                 if first.adt_DocumentOnly:
                     picking.action_validate_document_only_import(force=True)
-                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'inventory_receipt_transfer_wh_in')
+                self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'inventory_receipt_transfer_wh_in')
                 self.env.cr.execute('RELEASE SAVEPOINT import_inventory_receipt_transfer_wh_in_doc')
 
             except Exception as e:
@@ -560,7 +561,7 @@ class AcumaticaInventoryReceiptTransferWhInStaging(models.Model):
                 tracked_lines = self.env['acumatica.inventory.receipt.transfer.wh.in.staging.line'].search([
                     ('header_id', '=', first.id),
                 ])
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
                     api_acumatica='inventory_receipt_transfer_wh_in',

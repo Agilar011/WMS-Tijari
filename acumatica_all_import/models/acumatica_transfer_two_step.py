@@ -179,9 +179,13 @@ class AcumaticaTransferTwoStepLine(models.Model):
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
     to_warehouse_code = fields.Char(string='To Warehouse', readonly=True)
+    to_warehouse_name = fields.Char(string='To Warehouse Name', readonly=True)
     description = fields.Char(string='Description', readonly=True)
+    external_ref = fields.Char(string='External Ref', readonly=True)
     from_warehouse_code = fields.Char(string='From Warehouse', readonly=True)
+    from_warehouse_name = fields.Char(string='From Warehouse Name', readonly=True)
     status = fields.Char(string='Status', readonly=True)
+    return_type = fields.Char(string='Return Type', readonly=True)
     transfer_type = fields.Char(string='Transfer Type', readonly=True)
     trans_type = fields.Char(string='Trans Type', readonly=True)
     total_qty = fields.Char(string='Total Qty', readonly=True)
@@ -189,6 +193,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
     post_period = fields.Char(string='Post Period', readonly=True)
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
+    note_header_id = fields.Char(string='Note Header ID', readonly=True)
     document_only = fields.Boolean(string='Document Only', readonly=True)
 
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
@@ -372,6 +377,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         'odoo_picking_id': False,
                         'odoo_internal_transfer_order_id': False,
                     })
+                    self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=first.reference_nbr or False)
                     updated += len(receipt_lines)
                     self.env.cr.execute('RELEASE SAVEPOINT import_transfer_two_step_doc')
                     continue
@@ -414,7 +420,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     'odoo_picking_id': False,
                     'odoo_internal_transfer_order_id': order.id,
                 })
-                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(first.reference_nbr, 'transfer_two_step')
+                self.env['acumatica.error.transaction']._handle_acumatica_error(first.reference_nbr, 'transfer_two_step')
                 if action_state == 'imported':
                     imported += 1
                 else:
@@ -503,6 +509,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         })
 
                         picking.write(vals)
+                        self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=first.reference_nbr or False)
                         imported += 1
 
                 else:
@@ -624,7 +631,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 tracked_lines = self.env['acumatica.transfer.two.step.line.product'].search([
                     ('header_id', '=', first.id),
                 ])
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
                     api_acumatica='transfer_two_step',
@@ -713,6 +720,7 @@ class AcumaticaTransferTwoStepLineProduct(models.Model):
     adt_InventoryID = fields.Char(string="Acumatica InventoryID")
     adt_LineNumber = fields.Char(string="Acumatica LineNumber")
     adt_NoteID = fields.Char(string="Acumatica NoteID")
+    adt_LineNoteID = fields.Char(string="Acumatica LineNoteID")
     adt_Quantity = fields.Char(string="Acumatica Quantity")
     adt_SOOrderNbr = fields.Char(string="Acumatica SOOrderNbr")
     adt_SOOrderType = fields.Char(string="Acumatica SOOrderType")

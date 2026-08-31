@@ -24,8 +24,14 @@ Features:
         "auth_oauth",
     ],
     "data": [
-        "security/groups.xml"
+        "security/groups.xml",
+        "views/login_password_toggle_templates.xml",
     ],
+    "assets": {
+        "web.assets_frontend": [
+            "tijari_auth_oauth/static/src/js/password_visibility_toggle.js",
+        ],
+    },
     "installable": True,
     "application": False,
     "auto_install": False,
