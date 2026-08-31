@@ -90,6 +90,7 @@ class AcumaticaConfig(models.Model):
             ('toko_pegang_do', 'Toko Pegang DO'),
             ('shipment_so', 'SO Return'),
             ('so_shipment', 'SO Shipment'),
+            ('shipment_completed', 'Shipment Completed'),
             ('transfer_shipment', 'SO Transfer - Inter WH OUT'),
             ('issue_change_item', 'Issue Change Item'),
             ('inventory_issue', 'Inventory Issue'),

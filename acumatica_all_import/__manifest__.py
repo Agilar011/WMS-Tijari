@@ -26,6 +26,8 @@
           'views/acumatica_shipment_line_views.xml',
           'views/acumatica_so_shipment_config_views.xml',
           'views/acumatica_so_shipment_line_views.xml',
+          'views/acumatica_shipment_completed_config_views.xml',
+          'views/acumatica_shipment_completed_views.xml',
           'views/acumatica_uom_import_views.xml',
           'views/acumatica_transfer_config_views.xml',
           'views/acumatica_transfer_line_views.xml',
@@ -60,11 +62,6 @@
           'views/acumatica_all_import_wizard_views.xml',
           'views/acumatica_all_import_menu.xml',
           ],
- 'assets': {
-        'web.assets_backend': [
-            'acumatica_all_import/static/src/scss/chatter.scss',
-        ],
-    },
  'installable': True,
  'application': True,
  'auto_install': False,

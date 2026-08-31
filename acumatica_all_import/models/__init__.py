@@ -20,6 +20,7 @@ from . import acumatica_inventory_stock
 from . import acumatica_internal_transfer_service
 # Merged models
 from . import acumatica_sales_order_shipment
+from . import acumatica_shipment_completed
 from . import acumatica_inventory_issue
 from . import acumatica_issue_po_return
 from . import acumatica_transfer_one_step

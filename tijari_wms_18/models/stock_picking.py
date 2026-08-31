@@ -1465,6 +1465,7 @@ class StockPicking(models.Model):
             if picking.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
                 picking._check_validate_requirements()
                 picking._check_pick_quantity_vs_demand()
+                picking._check_pick_confirmation_quantity()
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
             if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
@@ -1499,33 +1500,21 @@ class StockPicking(models.Model):
         document_only_pickings._adt_preserve_document_only_destination()
 
         for rec in self:
-            # _logger.info("=" * 80)
-            # _logger.info("Picking : %s", rec.name)
-            # _logger.info("State   : %s", rec.state)
-            # _logger.info("Origin  : %s", rec.origin)
-            # _logger.info("Return  : %s", rec.return_id.name if rec.return_id else "-")
-            # _logger.info("Move IDs: %s", rec.move_ids.ids)
 
-            # for move in rec.move_ids:
-            #     _logger.info(
-            #         "Move %-20s | State=%s | Qty=%s",
-            #         move.product_id.display_name,
-            #         move.state,
-            #         move.quantity,
-            #     )
+            if rec.picking_type_name in (
+                'Pick',
+                'Pick Internal',
+                'Pick Components',
+            ):
+                for move in rec.move_ids:
+                    confirmation_qty = move.confirmation_quantity
 
-            #     for ml in move.move_line_ids:
-            #         _logger.info(
-            #             "    ML |  Done=%s | Lot=%s | Src=%s | Dest=%s",
-            #             ml.quantity,
-            #             ml.lot_id.name,
-            #             ml.location_id.display_name,
-            #             ml.location_dest_id.display_name,
-            #         )
+                    for dest_move in move.move_dest_ids:
+                        dest_move.write({
+                            # 'product_uom_qty': confirmation_qty,
+                            'quantity': confirmation_qty
+                        })
 
-            # _logger.info("=" * 80)
-
-            # raise UserError('STOP')
             is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
             if is_document_only:
                 continue
@@ -1640,6 +1629,29 @@ class StockPicking(models.Model):
                     has_discrepancy = True
 
             picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
+
+    def _check_pick_confirmation_quantity(self):
+        for picking in self:
+
+            for line in picking.move_line_ids:
+                if line.confirmation_quantity <= 0:
+                    raise UserError(_(
+                        "Qty Diambil tidak boleh 0.\n\n"
+                        "Product: %s"
+                    ) % line.product_id.display_name)
+
+                if line.confirmation_quantity > line.quantity:
+                    raise UserError(_(
+                        "Qty Diambil tidak boleh lebih besar "
+                        "dari Qty Diterima.\n\n"
+                        "Product: %s\n"
+                        "Qty Diterima: %s\n"
+                        "Qty Diambil: %s"
+                    ) % (
+                        line.product_id.display_name,
+                        line.quantity,
+                        line.confirmation_quantity,
+                    ))
     
     def _check_putaway_quantity_vs_demand(self):
         for picking in self:

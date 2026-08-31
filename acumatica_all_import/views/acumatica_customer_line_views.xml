@@ -114,6 +114,11 @@
                     <field name="import_state" widget="statusbar"
                            statusbar_visible="pending,imported,updated,skipped,error"/>
                 </header>
+                <style>
+                    div.o-mail-ChatterContainer.o-mail-Form-chatter div.o-mail-Message-richBody.overflow-x-auto {
+                        overflow: visible !important;
+                    }
+                </style>
                 <sheet>
                     <group string="Field Acumatica">
                         <group>

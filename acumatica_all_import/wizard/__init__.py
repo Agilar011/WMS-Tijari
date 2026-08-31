@@ -10,6 +10,7 @@ from . import import_receipt_change_item_wizard
 from . import import_receipt_wizard
 from . import import_shipment_wizard
 from . import import_so_shipment_wizard
+from . import import_shipment_completed_wizard
 from . import import_transfer_one_step_wizard
 from . import import_transfer_shipment_wizard
 from . import import_transfer_two_step_wizard

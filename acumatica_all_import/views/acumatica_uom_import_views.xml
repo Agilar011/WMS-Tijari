@@ -89,6 +89,11 @@
                     <field name="import_state" widget="statusbar"
                            statusbar_visible="pending,imported,skipped,error"/>
                 </header>
+                <style>
+                    div.o-mail-ChatterContainer.o-mail-Form-chatter div.o-mail-Message-richBody.overflow-x-auto {
+                        overflow: visible !important;
+                    }
+                </style>
                 <sheet>
                     <group string="Data dari Acumatica">
                         <field name="unit_id" string="UnitID"/>

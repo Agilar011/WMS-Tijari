@@ -68,6 +68,11 @@
         <field name="model">acumatica.customer.location</field>
         <field name="arch" type="xml">
             <form string="Customer Location">
+                <style>
+                    div.o-mail-ChatterContainer.o-mail-Form-chatter div.o-mail-Message-richBody.overflow-x-auto {
+                        overflow: visible !important;
+                    }
+                </style>
                 <sheet>
                     <div class="oe_title">
                         <h1><field name="display_name_full" readonly="1"/></h1>

@@ -101,6 +101,11 @@
                     <field name="import_state" widget="statusbar"
                            statusbar_visible="pending,imported,updated,error"/>
                 </header>
+                <style>
+                    div.o-mail-ChatterContainer.o-mail-Form-chatter div.o-mail-Message-richBody.overflow-x-auto {
+                        overflow: visible !important;
+                    }
+                </style>
                 <sheet>
                     <!-- Mandatory Fields -->
                     <group string="Field Acumatica">
