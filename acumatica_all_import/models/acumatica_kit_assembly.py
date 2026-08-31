@@ -199,6 +199,9 @@ class AcumaticaKitAssembly(models.Model):
     last_modified_datetime = fields.Datetime()
 
     location = fields.Char()
+    building_id = fields.Char(string='Building ID')
+    note_header = fields.Text(string='Header Note')
+    note_header_id = fields.Char(string='Note Header ID')
 
     post_period = fields.Char()
 
@@ -486,7 +489,7 @@ class AcumaticaKitAssembly(models.Model):
                         "mrp_production_id": manufacturing.id if manufacturing else False,
                         "import_state": "imported",
                     })
-                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'kit_assembly')
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'kit_assembly')
 
                     # _logger.warning("""
                     #     ========== RAW MOVE AFTER CREATE ==========
@@ -537,7 +540,7 @@ class AcumaticaKitAssembly(models.Model):
                 })
                 header_payload = header.read()[0] if 'header' in locals() and header and header.exists() else {}
                 component_records = components if 'components' in locals() else self.env['acumatica.kit.assembly.component']
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     records[:1] or self,
                     [f"{type(e).__name__}: {e}"],
                     api_acumatica='kit_assembly',
@@ -618,6 +621,7 @@ class AcumaticaKitAssemblyComponent(models.Model):
     line_nbr = fields.Integer()
 
     line_note = fields.Text()
+    line_note_id = fields.Char(string='Line Note ID')
 
     line_inventory_id = fields.Char()
 
@@ -700,6 +704,8 @@ class AcumaticaKitAssemblyLine(models.Model):
     description = fields.Char(string='Description', readonly=True)
     last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
     location = fields.Char(string='Location', readonly=True)
+    note_header = fields.Char(string='Header Note', readonly=True)
+    note_header_id = fields.Char(string='Note Header ID', readonly=True)
     post_period = fields.Char(string='PostPeriod', readonly=True)
     quantity = fields.Char(string='Qty', readonly=True)
     reason_code = fields.Char(string='ReasonCode', readonly=True)
@@ -713,6 +719,7 @@ class AcumaticaKitAssemblyLine(models.Model):
 
     line_external_id = fields.Char(string='Line UUID', readonly=True)
     line_note = fields.Char(string='Line Note', readonly=True)
+    line_note_id = fields.Char(string='Line Note ID', readonly=True)
     line_inventory_id = fields.Char(string='Line InventoryID', readonly=True)
     line_component_qty = fields.Char(string='Line Component Qty', readonly=True)
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
@@ -946,10 +953,10 @@ class AcumaticaKitAssemblyLine(models.Model):
                         'import_message': f'{manufacturing.display_name}',
                         'odoo_product_id': processed_product.product_tmpl_id.id,
                     })
-                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'kit_assembly')
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'kit_assembly')
             except Exception as e:
                 error += len(records) or 1
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     records[:1] or self,
                     [str(e)],
                     api_acumatica='kit_assembly',

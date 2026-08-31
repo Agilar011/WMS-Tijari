@@ -168,8 +168,10 @@ class ImportTransferWizard(models.TransientModel):
                     result.append({
                         'external_id': item.get('id', '') or '',
                         'row_number': row_number,
-                        'note': item.get('HeaderNote', {}).get('value', '') or '',
+                        'note': item.get('NoteHeader', {}).get('value', '') or item.get('HeaderNote', {}).get('value', '') or '',
+                        'note_header_id': self._val(item, 'NoteHeaderID'),
                         'branch_warehouse': self._val(item, 'Branch'),
+                        'building_code': building_code,
                         'actual_qty': self._val(item, 'ControlQty'),
                         'scheduled_date': self._val(item, 'Date'),
                         'is_hold': self._val(item, 'Hold'),
@@ -183,6 +185,7 @@ class ImportTransferWizard(models.TransientModel):
                         'total_qty': self._val(item, 'TotalQty'),
                         'receipt_type': self._val(item, 'Type'),
                         'vendor_code': self._val(item, 'VendorID'),
+                        'vendor_name': self._val(item, 'VendorName'),
                         'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
                         'warehouse_code': (
                             shipment_warehouse.get('source_warehouse')
@@ -190,16 +193,24 @@ class ImportTransferWizard(models.TransientModel):
                             or self._val(item, 'WarehouseID')
                             or self._val(item, 'LineFromWarehouseID')
                         ),
-                        'warehouse_dest_code': shipment_warehouse.get('dest_warehouse') or self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
+                        'warehouse_dest_code': (
+                            shipment_warehouse.get('dest_warehouse')
+                            or self._val(item, 'ToWarehouseID')
+                            or self._val(item, 'Warehouse')
+                            or self._val(item, 'LineWarehouseID')
+                        ),
+                        'transfer_shipment_number': transfer_shipment_nbr,
                         'picking_type_id': type.id if type else None,
 
-                        })
+                    })
 
                 detail_result.append({
-                    # 'header_external_id': item.get('id', '') or '',
+                    'header_external_id': item.get('id', '') or '',
                     'line_external_id': item.get('id', '') or '',
                     'receipt_nbr': self._val(item, 'ReceiptNbr'),
                     'line_note': item.get('LineNote', {}).get('value', '') or '',
+                    'line_note_id': self._val(item, 'LineNoteID'),
+                    'line_branch': self._val(item, 'LineBranch'),
                     'description': self._val(item, 'LineDescription'),
                     'inventory_id': self._val(item, 'LineInventoryID'),
                     'line_nbr': self._val(item, 'LineNbr'),
@@ -207,9 +218,14 @@ class ImportTransferWizard(models.TransientModel):
                     'location_dest_code': self._val(item, 'LineLocation'),
                     'open_qty': self._val(item, 'LineOpenQty'),
                     'order_qty': self._val(item, 'LineOrderedQty'),
+                    'po_line_number': self._val(item, 'LinePOLineNbr'),
+                    'po_number': self._val(item, 'LinePOOrderNbr'),
+                    'po_type': self._val(item, 'LinePOOrderType'),
+                    'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
                     'product_uom_qty': self._val(item, 'LineReceiptQty'),
+                    'transfer_shipment_number': transfer_shipment_nbr,
                     'uom_code': self._val(item, 'LineUOM'),
-                    'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+                    'warehouse_dest_code': self._val(item, 'ToWarehouseID') or self._val(item, 'LineWarehouseID'),
                 })
 
             _logger.info('Berhasil ambil %s rows Transfer Receipt dari Acumatica', len(result))

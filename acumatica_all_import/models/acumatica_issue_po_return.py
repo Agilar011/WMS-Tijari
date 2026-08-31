@@ -530,6 +530,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         picking.write(vals)
                         action_state = 'updated'
                         updated += 1
+                        self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=receipt_nbr)
                         
                         # OPTIMAL: Unlink/Hapus baris lama terlebih dahulu jika melakukan update agar data tidak menumpuk double
                         picking.move_ids.unlink()
@@ -590,7 +591,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         'import_message': f'Berhasil diproses menjadi Picking Odoo: {picking.name}',
                         'odoo_picking_id': picking.id,
                     })
-                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(receipt_nbr, 'issue_po_return')
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(receipt_nbr, 'issue_po_return')
                     self.env.cr.execute('RELEASE SAVEPOINT import_issue_po_return_doc')
 
                 except Exception as e:
@@ -600,7 +601,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     tracked_lines = self.env['acumatica.issue.po.return.product'].search([
                         ('receipt_line_id', 'in', receipt_lines.ids),
                     ])
-                    self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(
                         first,
                         [str(e)],
                         api_acumatica='issue_po_return',

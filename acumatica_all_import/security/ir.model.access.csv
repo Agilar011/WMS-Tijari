@@ -144,3 +144,4 @@ access_loginext_staging_item_user,loginext.staging.item,model_loginext_staging_i
 
 
 acumatica_error_master_user,acumatica.error.master.user,model_acumatica_error_master,base.group_user,1,1,1,1
+acumatica_error_transaction_user,acumatica.error.transaction.user,model_acumatica_error_transaction,base.group_user,1,1,1,1

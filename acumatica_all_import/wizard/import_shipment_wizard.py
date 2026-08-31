@@ -269,9 +269,11 @@ class ImportShipmentWizard(models.TransientModel):
                         'external_id': item.get('id', '') or '',
                         'row_number': row_number,
                         'note': item.get('NoteHeader', {}).get('value', '') or '',
+                        'note_header_id': self._val(item, 'NoteHeaderID'),
                         'building_code': building_code,
                         'actual_qty': self._val(item, 'ControlQty'),
                         'partner_code': self._val(item, 'CustomerID'),
+                        'partner_name': self._val(item, 'CustomerName'),
                         'description': self._val(item, 'Description'),
                         'fob_point': self._val(item, 'FOBPoint'),
                         'fob_point_description': self._val(item, 'FOBPointDescription'),
@@ -279,6 +281,8 @@ class ImportShipmentWizard(models.TransientModel):
 
                         'header_location_code': self._val(item, 'LocationID'),
                         'header_location_name': self._val(item, 'LocationName'),
+                        'header_location_code_2': self._val(item, 'LocationID_2'),
+                        'header_location_name_2': self._val(item, 'LocationName_2'),
                         'operation': self._val(item, 'Operation'),
                         'package_count': self._val(item, 'PackageCount'),
                         'package_weight': self._val(item, 'PackageWeight'),
@@ -300,7 +304,10 @@ class ImportShipmentWizard(models.TransientModel):
                     })
 
                 detail_result.append({
+                    'header_external_id': item.get('id', '') or '',
+                    'line_external_id': item.get('id', '') or '',
                     'note': item.get('LineNote', {}).get('value', '') or '',
+                    'line_note_id': self._val(item, 'LineNoteID'),
                     'shipment_nbr': self._val(item, 'ShipmentNbr'),
                     'description': self._val(item, 'LineDescription'),
                     'is_free_item': self._val(item, 'LineFreeItem'),
@@ -313,6 +320,7 @@ class ImportShipmentWizard(models.TransientModel):
                     'shipped_weight': self._val(item, 'LineShippedWeight'),
                     'uom_code': self._val(item, 'LineUOM'),
                     'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+                    'warehouse_dest_name': self._val(item, 'LineWarehouseName'),
                 })
 
 
@@ -490,7 +498,6 @@ class ImportShipmentWizard(models.TransientModel):
             record = item['record']
             vals = item['vals']
 
-
             record.write(vals)
 
     def _create_shipment_lines(self, data):
@@ -569,4 +576,17 @@ class ImportShipmentWizard(models.TransientModel):
             ext_id = vals.get('shipment_nbr')
             vals['shipment_line_id'] = shipment_map.get(ext_id)
             if vals['shipment_line_id']:
-                product_line.browse(vals['shipment_line_id']).write(vals)
+                domain = [('shipment_line_id', '=', vals['shipment_line_id'])]
+                if vals.get('line_external_id'):
+                    domain.append(('line_external_id', '=', vals['line_external_id']))
+                else:
+                    domain.extend([
+                        ('line_nbr', '=', vals.get('line_nbr') or ''),
+                        ('inventory_id', '=', vals.get('inventory_id') or ''),
+                        ('order_number', '=', vals.get('order_number') or ''),
+                    ])
+                existing_line = product_line.search(domain, limit=1)
+                if existing_line:
+                    existing_line.write(vals)
+                else:
+                    product_line.create(vals)

@@ -29,7 +29,6 @@
         <field name="res_model">acumatica.error.master</field>
         <field name="view_mode">list</field>
         <field name="domain">[
-            ('import_state','=','error')
         ]</field>
     </record>
 

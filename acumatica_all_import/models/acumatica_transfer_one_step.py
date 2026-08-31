@@ -27,9 +27,13 @@ class AcumaticaTransferOneStepLine(models.Model):
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
     to_warehouse_code = fields.Char(string='To Warehouse', readonly=True)
+    to_warehouse_name = fields.Char(string='To Warehouse Name', readonly=True)
     description = fields.Char(string='Description', readonly=True)
+    external_ref = fields.Char(string='External Ref', readonly=True)
     from_warehouse_code = fields.Char(string='From Warehouse', readonly=True)
+    from_warehouse_name = fields.Char(string='From Warehouse Name', readonly=True)
     status = fields.Char(string='Status', readonly=True)
+    return_type = fields.Char(string='Return Type', readonly=True)
     transfer_type = fields.Char(string='Transfer Type', readonly=True)
     trans_type = fields.Char(string='Trans Type', readonly=True)
     total_qty = fields.Char(string='Total Qty', readonly=True)
@@ -37,6 +41,7 @@ class AcumaticaTransferOneStepLine(models.Model):
     post_period = fields.Char(string='Post Period', readonly=True)
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
+    note_header_id = fields.Char(string='Note Header ID', readonly=True)
     document_only = fields.Boolean(string='Document Only', readonly=True)
 
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
@@ -244,6 +249,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                     order = existing_order
                     action_state = 'updated'
                     updated += 1
+                    self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=reference_nbr)
                 else:
                     order = False
                     action_state = 'imported'
@@ -265,6 +271,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                         'import_state': 'updated',
                         'import_message': transfer_info['message'],
                     })
+                    self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=reference_nbr)
                     skipped += len(receipt_lines)
                     self.env.cr.execute('RELEASE SAVEPOINT import_transfer_one_step_doc')
                     continue
@@ -343,7 +350,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                     'odoo_picking_id': False,
                     'odoo_internal_transfer_order_id': order.id,
                 })
-                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(origin, 'transfer_one_step')
+                self.env['acumatica.error.transaction']._handle_acumatica_error(origin, 'transfer_one_step')
                 self.env.cr.execute('RELEASE SAVEPOINT import_transfer_one_step_doc')
 
             except Exception as e:
@@ -352,7 +359,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                 tracked_lines = self.env['acumatica.transfer.one.step.product'].search([
                     ('header_id', '=', first.id),
                 ])
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
                     api_acumatica='transfer_one_step',
@@ -444,10 +451,14 @@ class AcumaticaTransferOneStepProduct(models.Model):
     # Deskripsi & Catatan
     line_description = fields.Char(string='Description')
     line_note = fields.Text(string='Line Note')
+    line_note_id = fields.Char(string='Line Note ID')
     
     # Lokasi Asal & Tujuan
     from_location_code = fields.Char(string='From Location')
     to_location_code = fields.Char(string='To Location')
+    so_order_nbr = fields.Char(string='SO Order Number')
+    so_order_type = fields.Char(string='SO Order Type')
+    so_shipment_nbr = fields.Char(string='SO Shipment Number')
     
     # Kuantitas & Satuan
     quantity = fields.Float(string='Quantity')

@@ -177,72 +177,14 @@ class AcumaticaReceiptExternalLine(models.Model):
         self.ensure_one()
         return self._do_import()
 
-    def _persist_error_tracking(self, first, error_messages, line_payloads=None, payload=None):
-        origin = first.reference_nbr or False
-        if not origin:
-            return False
-
-        line_payloads = line_payloads or []
-        payload_text = payload if payload is not None else {}
-
-        with self.env.registry.cursor() as cr:
-            error_env = api.Environment(cr, self.env.uid, dict(self.env.context))
-            Error = error_env['stock.picking.acumatica.error'].sudo()
-            ErrorLine = error_env['stock.picking.acumatica.error.line'].sudo()
-
-            error_data = Error.search([('origin', '=', origin)], limit=1)
-            type = 'receipt_change_item' if first.transfer_type == 'Change Item' else 'inventory_received'
-            error_values = {
-                'operation_type': 'receipt',
-                'location': first.warehouse_code or False,
-                'location_dest': first.warehouse_dest_code or False,
-                'scheduled_date': first._parse_dt(first.scheduled_date),
-                'origin': origin,
-                'adt_total_qty': first._parse_float(first.total_qty),
-                'adt_actual_qty': first._parse_float(first.actual_qty),
-                'api_acumatica': type,
-                'error_message': '\n'.join(error_messages),
-                'payload': str(payload_text)[:1000],
-                'state': 'new',
-            }
-
-            if error_data:
-                error_data.write(error_values)
-            else:
-                error_data = Error.create(error_values)
-
-            for line_payload in line_payloads:
-                line_domain = [
-                    ('error_id', '=', error_data.id),
-                    ('inventory_id', '=', line_payload.get('inventory_id') or False),
-                    ('qty', '=', line_payload.get('qty') or False),
-                    ('uom', '=', line_payload.get('uom') or False),
-                ]
-                error_line = ErrorLine.search(line_domain, limit=1)
-                line_values = {
-                    'error_id': error_data.id,
-                    'inventory_id': line_payload.get('inventory_id') or False,
-                    'product_name': line_payload.get('product_name') or False,
-                    'qty': line_payload.get('qty') or False,
-                    'uom': line_payload.get('uom') or False,
-                    'payload': str(line_payload.get('payload') or {})[:1000],
-                }
-                if error_line:
-                    error_line.write(line_values)
-                else:
-                    ErrorLine.create(line_values)
-
-            cr.commit()
-            return error_data
-
-    def _resolve_error_tracking(self, first):
-        origin = first.reference_nbr or False
-        if not origin:
-            return
-
-        error_data = self.env['stock.picking.acumatica.error'].search([('origin', '=', origin)], limit=1)
-        if error_data:
-            error_data.write({'state': 'resolved'})
+    def _handle_acumatica_error(self, first, error_messages=False, line_payloads=None, payload=None):
+        return self.env['acumatica.error.transaction']._handle_acumatica_error(
+            first,
+            error_messages,
+            origin=first.reference_nbr or False,
+            payload=payload,
+            line_payloads=line_payloads,
+        )
 
     def _import_single_receive(self, receive):
         receive.ensure_one()
@@ -330,9 +272,10 @@ class AcumaticaReceiptExternalLine(models.Model):
                 raise InventoryImportError(
                     f'receive {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
-                )
+            )
             picking.write(picking_vals)
             action_state = 'updated'
+            self.env['acumatica.error.transaction']._handle_acumatica_update(receive, origin=origin)
         else:
             picking = Picking.create(picking_vals)
             action_state = 'imported'
@@ -442,7 +385,7 @@ class AcumaticaReceiptExternalLine(models.Model):
             'import_message': f'{action_state.title()}: {picking.name if picking else False}',
             'odoo_picking_id': picking.id if picking else False,
         })
-        self._resolve_error_tracking(receive)
+        self._handle_acumatica_error(receive)
         return action_state
 
     def _do_import(self):
@@ -479,7 +422,7 @@ class AcumaticaReceiptExternalLine(models.Model):
                     error_message = str(exc)
 
                 try:
-                    self._persist_error_tracking(
+                    self._handle_acumatica_error(
                         receive,
                         [error_message],
                         line_payloads=all_line_payloads,

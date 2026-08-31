@@ -158,7 +158,9 @@ class AcumaticaInventoryIssueLine(models.Model):
 
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
+    building_code = fields.Char(string='Building Code', readonly=True)
     description = fields.Char(string='Header Description', readonly=True)
+    doc_type = fields.Char(string='Doc Type', readonly=True)
     external_ref = fields.Char(string='External Ref', readonly=True)
     document_only = fields.Boolean(string='Document Only', readonly=True)
     status = fields.Char(string='Status', readonly=True)
@@ -170,6 +172,10 @@ class AcumaticaInventoryIssueLine(models.Model):
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
     trans_type = fields.Char(string='Trans Type', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
+    note_header_id = fields.Char(string='Note Header ID', readonly=True)
+    change_item_ref_nbr = fields.Char(string='Change Item Ref Number', readonly=True)
+    header_location_code = fields.Char(string='Header Location', readonly=True)
+    customer_name = fields.Char(string='Customer Name', readonly=True)
 
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
     line_description = fields.Char(string='Description', readonly=True)
@@ -462,6 +468,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     picking.write(vals)
                     action_state = 'updated'
                     updated += 1
+                    self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=first.reference_nbr or False)
                     print(f"Update Picking: {picking}")
                 else:
                     picking = Picking.create(vals)
@@ -565,7 +572,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     'uom': line.uom_code or False,
                     'payload': line.read()[0] if line.exists() else {},
                 } for line in product_lines]
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
                     api_acumatica='inventory_issue',
@@ -838,9 +845,12 @@ class AcumaticaInventoryIssueProduct(models.Model):
     inventory_id = fields.Char(string='UUID Product', readonly=True)
     line_nbr = fields.Char(string='Product line number', readonly=True)
     location_code = fields.Char(string='Product Location', readonly=True)
+    line_location_name = fields.Char(string='Line Location Name', readonly=True)
     product_uom_qty = fields.Char(string='UOM Quantity', readonly=True)
     line_trans_type = fields.Char(string='Product Trans Type', readonly=True)
     uom_code = fields.Char(string='UOM', readonly=True)
     warehouse_code = fields.Char(string='Product Warehouse', readonly=True)
+    line_warehouse_name = fields.Char(string='Line Warehouse Name', readonly=True)
     header_external_id = fields.Char(string='UUID Header', readonly=True)
     customer_id = fields.Char(string='Customer ID', readonly=True)
+    line_note_id = fields.Char(string='Line Note ID', readonly=True)

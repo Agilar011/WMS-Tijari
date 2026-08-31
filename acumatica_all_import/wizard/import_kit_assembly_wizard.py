@@ -137,6 +137,9 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 'description': item.get('description') or '',
                 'last_modified_datetime': item.get('last_modified_datetime') or '',
                 'location': item.get('location') or '',
+                'BuildingID': item.get('building_id') or item.get('BuildingID') or '',
+                'note_header': item.get('note_header') or '',
+                'note_header_id': item.get('note_header_id') or '',
                 'post_period': item.get('post_period') or '',
                 'quantity': item.get('quantity') or '',
                 'reason_code': item.get('reason_code') or '',
@@ -151,6 +154,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 # Line fields
                 'line_external_id': item.get('line_external_id') or '',
                 'line_note': item.get('line_note') or '',
+                'line_note_id': item.get('line_note_id') or '',
                 'line_inventory_id': item.get('line_inventory_id') or '',
                 'line_component_qty': item.get('line_component_qty') or '',
                 'line_nbr': item.get('line_nbr') or '',
@@ -236,6 +240,9 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     'inventory_id': self._val(item, 'InventoryID'),
                     'last_modified_datetime': last_modified_datetime,
                     'location': self._val(item, 'Location'),
+                    'building_id': self._val(item, 'BuildingID'),
+                    'note_header': self._val(item, 'NoteHeader'),
+                    'note_header_id': self._val(item, 'NoteHeaderID'),
                     'post_period': self._val(item, 'PostPeriod'),
                     'quantity': self._val(item, 'Qty'),
                     'reason_code': self._val(item, 'ReasonCode'),
@@ -264,6 +271,9 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 if not isinstance(stock_components, list):
                     stock_components = []
 
+                if not stock_components and self._val(item, 'LineStockInventoryID'):
+                    stock_components = [item]
+
                 if not stock_components:
                     # print("-- (No Components Available)") # Info jika component kosong
                     result.append(dict(header, line_nbr='0'))
@@ -278,15 +288,16 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     # Buat dictionary component data untuk mempermudah perulangan print
                     component_data = {
                         'line_external_id': component.get('id', '') or '',
-                        'line_note': component.get('note', {}).get('value', '') or '',
-                        'line_inventory_id': self._val(component, 'InventoryID'),
+                        'line_note': self._val(component, 'LineNote') or component.get('note', {}).get('value', '') or '',
+                        'line_note_id': self._val(component, 'LineNoteID'),
+                        'line_inventory_id': self._val(component, 'LineInventoryID') or self._val(component, 'InventoryID'),
                         'line_component_qty': self._val(component, 'ComponentQty'),
                         'line_nbr': str(line_nbr),
-                        'line_location_id': self._val(component, 'LocationID'),
-                        'line_quantity': self._val(component, 'Qty'),
+                        'line_location_id': self._val(component, 'LineLocationID') or self._val(component, 'LocationID'),
+                        'line_quantity': self._val(component, 'LineQty') or self._val(component, 'Qty'),
                         'line_reason_code': self._val(component, 'ReasonCode'),
-                        'stock_inventory_id': self._val(component, 'StockInventoryID'),
-                        'line_uom': self._val(component, 'UOM'),
+                        'stock_inventory_id': self._val(component, 'LineStockInventoryID') or self._val(component, 'StockInventoryID'),
+                        'line_uom': self._val(component, 'LineUOM') or self._val(component, 'UOM'),
                         'assembly_id': assembly.id,  # Simpan component dengan relasi ke header yang sudah dibuat, bisa dihapus jika tidak perlu
                     }
                     

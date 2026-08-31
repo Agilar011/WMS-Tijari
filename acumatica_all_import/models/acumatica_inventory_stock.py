@@ -471,6 +471,10 @@ class AcumaticaInventoryStockLine(models.Model):
                 if not float_is_zero(delta, precision_rounding=precision):
                     Quant._update_available_quantity(product, location, delta)
                     action_state = 'updated'
+                    self.env['acumatica.error.transaction']._handle_acumatica_update(
+                        line,
+                        origin=f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
+                    )
                     message = (
                         f"Updated: {product.display_name} @ {location.display_name} | "
                         f"old={current_qty} new={target_qty}"
@@ -515,13 +519,13 @@ class AcumaticaInventoryStockLine(models.Model):
                     'odoo_location_id': location.id,
                     'odoo_on_hand': new_qty,
                 })
-                self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
                     'inventory_stock',
                 )
             except Exception as e:
                 _logger.exception('Error import Inventory Stock line %s', line.id)
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     line,
                     [str(e)],
                     api_acumatica='inventory_stock',

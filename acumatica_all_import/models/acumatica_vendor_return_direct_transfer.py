@@ -43,15 +43,18 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_DocumentOnly = fields.Boolean(string="Document Only")
     adt_ExternalRef = fields.Char(string="External Ref")
     adt_FromWarehouseID = fields.Char(string="From Warehouse ID")
+    adt_FromWarehouseName = fields.Char(string="From Warehouse Name")
     adt_Hold = fields.Boolean(string="Hold Status")
     adt_LastModifiedDateTime = fields.Char(string="Last Modified Date Time")
     adt_NoteID = fields.Char(string="Note ID Header")
+    adt_NoteHeaderID = fields.Char(string="Note Header ID")
     adt_PostPeriod = fields.Char(string="Post Period")
     adt_ReferenceNbr = fields.Char(string="Reference Number", index=True)
     adt_ReturnType = fields.Char(string="Return Type")
     adt_Status = fields.Char(string="Acumatica Status")
     adt_TotalQty = fields.Float(string="Total Quantity")
     adt_ToWarehouseID = fields.Char(string="To Warehouse ID")
+    adt_ToWarehouseName = fields.Char(string="To Warehouse Name")
     adt_TransferType = fields.Char(string="Transfer Type")
     adt_TransType = fields.Char(string="Transaction Type")
 
@@ -307,7 +310,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         'odoo_picking_id': False,
                         'odoo_internal_transfer_order_id': order.id,
                     })
-                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'vendor_return')
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'vendor_return')
 
                     if action_state == 'imported':
                         imported += 1
@@ -319,7 +322,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # Savepoint di atas sudah membatalkan dokumen Odoo yang gagal.
                 # Jangan rollback cursor utama karena record staging masih harus ditulis error.
                 error += 1
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
                     api_acumatica='vendor_return',
@@ -442,6 +445,7 @@ class AcumaticaVendorReturnDirectTransferStagingLine(models.Model):
     adt_InventoryID = fields.Char(string="Inventory ID", index=True)
     adt_LineNumber = fields.Integer(string="Line Number")
     adt_NoteID = fields.Char(string="Note ID Line")
+    adt_LineNoteID = fields.Char(string="Line Note ID")
     adt_Quantity = fields.Float(string="Quantity")
     adt_SOOrderNbr = fields.Char(string="SO Order Number")
     adt_SOOrderType = fields.Char(string="SO Order Type")

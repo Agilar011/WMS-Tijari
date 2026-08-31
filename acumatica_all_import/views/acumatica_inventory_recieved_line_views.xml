@@ -19,8 +19,12 @@
             <list string="Data Receipt : Inventory Receipt">
                 <field name="reference_nbr"/>
                 <field name="transfer_type"/>
+                <field name="doc_type"/>
                 <field name="document_only"/>
                 <field name="customer_code"/>
+                <field name="vendor_code"/>
+                <field name="vendor_name"/>
+                <field name="building_code"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
                 <field name="status"/>
@@ -50,22 +54,31 @@
                 <sheet>
                     <group string="Header">
                         <group>
+                            <field name="external_id"/>
+                            <field name="row_number"/>
                             <field name="reference_nbr"/>
                             <field name="picking_type_id"/>
                             <field name="scheduled_date"/>
                             <field name="description"/>
+                            <field name="doc_type"/>
                             <field name="actual_qty"/>
                             <field name="acumatica_write_date"/>
                             <field name="post_period"/>
                             <field name="status"/>
                             <field name="total_qty"/>
                             <field name="warehouse_code"/>
+                            <field name="warehouse_dest_code"/>
                         </group>
                         <group>
                             <field name="branch_warehouse"/>
+                            <field name="building_code"/>
                             <field name="transfer_type"/>
+                            <field name="note_header_id"/>
                             <field name="note"/>
                             <field name="customer_code"/>
+                            <field name="vendor_code"/>
+                            <field name="vendor_name"/>
+                            <field name="external_ref"/>
                             <field name="shipment_nbr"/>
                             <field name="transfer_nbr"/>
                             <field name="location_code"/>
@@ -76,10 +89,19 @@
                         <page name="Details" string="Details">
                             <field name="product_line_ids">
                                 <list>
+                                    <field name="line_external_id"/>
+                                    <field name="line_nbr"/>
+                                    <field name="branch_warehouse"/>
                                     <field name="inventory_id"/>
                                     <field name="line_description"/>
+                                    <field name="location_code"/>
+                                    <field name="line_location_name"/>
                                     <field name="warehouse_dest_code"/>
+                                    <field name="line_warehouse_name"/>
                                     <field name="product_uom_qty"/>
+                                    <field name="uom_code"/>
+                                    <field name="line_note_id"/>
+                                    <field name="line_note"/>
                                 </list>
                             </field>
                         </page>

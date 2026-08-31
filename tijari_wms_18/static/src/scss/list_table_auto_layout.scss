@@ -7,3 +7,92 @@
     line-height: 1.5 !important;
     padding: 6px 12px !important;
 }
+
+.o_wms_picker_kanban,
+.o_wms_putaway_kanban {
+    .o_kanban_renderer {
+        gap: 8px;
+    }
+
+    .o_wms_operation_card {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+        padding: 12px;
+    }
+
+    .o_wms_operation_product {
+        font-weight: 600;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+    }
+
+    .o_wms_operation_quantities {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .o_wms_operation_quantities > div {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .o_wms_operation_label,
+    .o_wms_operation_uom {
+        color: #667085;
+        font-size: 12px;
+    }
+
+    .o_wms_operation_actions {
+        align-items: center;
+        display: flex;
+        gap: 8px;
+        justify-content: space-between;
+    }
+
+    .o_wms_operation_action {
+        align-self: flex-start;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .o_group:has([name="scan_product_button"], [name="scan_picker_product_button"]) {
+        display: flex !important;
+        flex-wrap: wrap;
+        column-gap: 8px;
+        flex-direction: row !important;
+    }
+
+    .o_group:has([name="scan_product_button"], [name="scan_picker_product_button"]) > .o_wrap_field {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    .o_group:has([name="scan_product_button"], [name="scan_picker_product_button"]) > .o_wrap_field:has(
+        [name="scan_product_button"],
+        [name="scan_product_by_lot_button"],
+        [name="scan_picker_product_button"],
+        [name="scan_picker_product_by_lot_button"]
+    ) {
+        flex: 1 1 calc(50% - 4px);
+        max-width: calc(50% - 4px);
+    }
+
+    .o_group:has([name="scan_product_button"], [name="scan_picker_product_button"]) > .o_wrap_field:has(
+        [name="scan_product_button"],
+        [name="scan_product_by_lot_button"],
+        [name="scan_picker_product_button"],
+        [name="scan_picker_product_by_lot_button"]
+    ) .o_field_widget,
+    .o_group:has([name="scan_product_button"], [name="scan_picker_product_button"]) > .o_wrap_field:has(
+        [name="scan_product_button"],
+        [name="scan_product_by_lot_button"],
+        [name="scan_picker_product_button"],
+        [name="scan_picker_product_by_lot_button"]
+    ) button {
+        width: 100%;
+    }
+}

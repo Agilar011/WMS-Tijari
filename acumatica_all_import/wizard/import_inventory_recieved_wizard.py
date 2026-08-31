@@ -157,15 +157,18 @@ class ImportInventoryRecievedWizard(models.TransientModel):
     def _build_inventory_receipt_header(self, row_number, item, header_id, warehouse_code, warehouse_dest_code=False):
         transfer_type = self._val(item, 'TransType')
         header = {
-            'external_id': header_id,
+            'external_id': self._val(item, 'id'),
             'row_number': item.get('rowNumber') or row_number,
             'note': self._val(item, 'NoteHeader'),
+            'note_header_id': self._val(item, 'NoteHeaderID'),
             'branch_warehouse': self._val(item, 'Branch'),
+            'building_code': self._val(item, 'BuildingID'),
             'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
             'actual_qty': self._val(item, 'ControlQty'),
             'customer_code': self._val(item, 'CustomerID'),
             'scheduled_date': self._val(item, 'Date'),
             'description': self._val(item, 'Description'),
+            'doc_type': self._val(item, 'DocType'),
             'document_only': self._bool_val(item, 'DocumentOnly'),
             'external_ref': self._val(item, 'ExternalRef'),
             'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
@@ -177,6 +180,8 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             'total_qty': str(self._val(item, 'TotalQty')),
             'transfer_nbr': self._val(item, 'TransferNbr'),
             'transfer_type': transfer_type,
+            'vendor_code': self._val(item, 'VendorID'),
+            'vendor_name': self._val(item, 'VendorName'),
             'warehouse_code': warehouse_code,
             'warehouse_dest_code': warehouse_dest_code or warehouse_code,
         }
@@ -188,15 +193,18 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         return {
             'header_external_id': header_id,
             'line_external_id': detail.get('id', '') or '',
-            'line_nbr': str(self._val(detail, 'LineNbr')),
+            'line_nbr': str(self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr')),
             'line_note': self._val(detail, 'LineNote'),
+            'line_note_id': self._val(detail, 'LineNoteID'),
             'branch_warehouse': self._val(detail, 'LineBranch'),
             'line_description': self._val(detail, 'LineInventoryName'),
             'inventory_id': self._val(detail, 'LineInventoryID'),
             'location_code': self._val(detail, 'LineLocation'),
+            'line_location_name': self._val(detail, 'LineLocationName'),
             'product_uom_qty': str(self._val(detail, 'LineQuantity')),
             'uom_code': self._val(detail, 'LineUOM'),
             'warehouse_dest_code': warehouse_code,
+            'line_warehouse_name': self._val(detail, 'LineWarehouseName'),
         }
 
     def fetch_inventory_recieved_data(self):

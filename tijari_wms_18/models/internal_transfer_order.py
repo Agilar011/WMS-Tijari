@@ -944,6 +944,19 @@ class StockPicking(models.Model):
         index=True,
     )
 
+    def _get_receipt_done_line_dest_location(self, done_line, move):
+        scanned_location = self.env['stock.location']
+        if done_line.confirmation_location_code:
+            scanned_location = done_line._find_loc_by_scan_code(
+                done_line.confirmation_location_code
+            )
+        return (
+            scanned_location
+            or done_line.location_putaway_id
+            or done_line.location_dest_id
+            or move.location_dest_id
+        )
+
     def _is_transfer_in_inter_warehouse_delivery_without_lot(self):
         self.ensure_one()
         order = self.internal_transfer_order_id
@@ -1009,7 +1022,8 @@ class StockPicking(models.Model):
         MoveLine = self.env['stock.move.line']
         quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
         receipt_pickings = self.filtered(
-            lambda item: item.picking_type_id.name in ('Receipts', 'Receipt Internal')
+            lambda item: item.internal_transfer_order_id
+            and item.picking_type_id.name in ('Receipts', 'Receipt Internal')
             and item.state not in ('done', 'cancel')
         )
         for picking in receipt_pickings:
@@ -1035,16 +1049,20 @@ class StockPicking(models.Model):
                     done_lines.write({quantity_field: quantity})
 
                 for done_line in done_lines:
+                    final_dest_location = self._get_receipt_done_line_dest_location(done_line, move)
                     done_line_vals = {
                         'confirmation_quantity': done_line[quantity_field],
-                        'location_dest_id': move.location_dest_id.id,
-                        'location_putaway_id': move.location_dest_id.id,
-                        'matching_loc_dest_id': move.location_dest_id.id,
                         'matching': 'match',
                         'putaway_status': 'finished',
                         'picker_status': 'finished',
                         'picked': True,
                     }
+                    if final_dest_location:
+                        done_line_vals.update({
+                            'location_dest_id': final_dest_location.id,
+                            'location_putaway_id': final_dest_location.id,
+                            'matching_loc_dest_id': final_dest_location.id,
+                        })
                     if done_line.lot_id:
                         done_line_vals['matching_lot_id'] = done_line.lot_id.id
                     done_line.with_context(skip_matching_sync=True).write(done_line_vals)
@@ -1079,16 +1097,20 @@ class StockPicking(models.Model):
                     done_lines.write({quantity_field: quantity})
 
                 for done_line in done_lines:
+                    final_dest_location = self._get_receipt_done_line_dest_location(done_line, move)
                     line_vals = {
                         'confirmation_quantity': done_line[quantity_field],
-                        'location_dest_id': move.location_dest_id.id,
-                        'location_putaway_id': move.location_dest_id.id,
-                        'matching_loc_dest_id': move.location_dest_id.id,
                         'matching': 'match',
                         'putaway_status': 'finished',
                         'picker_status': 'finished',
                         'picked': True,
                     }
+                    if final_dest_location:
+                        line_vals.update({
+                            'location_dest_id': final_dest_location.id,
+                            'location_putaway_id': final_dest_location.id,
+                            'matching_loc_dest_id': final_dest_location.id,
+                        })
                     if done_line.lot_id:
                         line_vals['matching_lot_id'] = done_line.lot_id.id
                     done_line.with_context(skip_matching_sync=True).write(line_vals)
@@ -1165,7 +1187,7 @@ class StockPicking(models.Model):
             and picking.state not in ('done', 'cancel')
         )
         # internal_transfer_pickings.action_assign()
-        self._set_receipt_done_quantities()
+        internal_transfer_pickings._set_receipt_done_quantities()
 
         missing_lot_lines = internal_transfer_pickings.move_line_ids.filtered(
             lambda line: line.product_id.tracking != 'none'

@@ -25,6 +25,9 @@
                 <field name="document_only"/>
                 <!-- <field name="scheduled_date"/> -->
                 <field name="from_warehouse_code"/>
+                <field name="from_warehouse_name"/>
+                <field name="to_warehouse_code"/>
+                <field name="to_warehouse_name"/>
                 <field name="total_qty"/>
                 <!-- <field name="inventory_id"/> -->
                 <!-- <field name="quantity"/> -->
@@ -94,15 +97,20 @@
                             <field name="reference_nbr"/>
                             <field name="scheduled_date"/>
                             <field name="description"/>
+                            <field name="external_ref"/>
                             <field name="from_warehouse_code"/>
+                            <field name="from_warehouse_name"/>
                             <field name="to_warehouse_code"/>
+                            <field name="to_warehouse_name"/>
                             <field name="status"/>
+                            <field name="return_type"/>
                             <field name="transfer_type"/>
                             <field name="trans_type"/>
                             <field name="total_qty"/>
                             <field name="is_hold"/>
                             <field name="post_period"/>
                             <field name="acumatica_write_date"/>
+                            <field name="note_header_id"/>
                             <field name="note"/>
                         </group>
                     </group>
@@ -111,10 +119,18 @@
                             <!-- Field relasi One2many ditaruh di sini secara aman -->
                             <field name="line_ids" readonly="1">
                                 <list>
+                                    <field name="adt_LineNumber"/>
                                     <field name="adt_InventoryID"/>
                                     <field name="adt_Description"/>
                                     <field name="adt_FromLocationID"/>
+                                    <field name="adt_ToLocationID"/>
                                     <field name="adt_Quantity"/>
+                                    <field name="adt_UOM"/>
+                                    <field name="adt_SOOrderNbr"/>
+                                    <field name="adt_SOOrderType"/>
+                                    <field name="adt_SOShipmentNbr"/>
+                                    <field name="adt_LineNoteID"/>
+                                    <field name="adt_note"/>
                                 </list>
                             </field>
                         </page>

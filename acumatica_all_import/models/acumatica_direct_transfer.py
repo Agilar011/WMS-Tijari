@@ -152,6 +152,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                             raise UserError(f"Dokumen {origin} sudah divalidasi di Odoo (State: {picking.state}), update digagalkan.")
                         picking.write(vals)
                         action_state = 'updated'
+                        self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=origin)
                     else:
                         picking = Picking.create(vals)
                         is_new_picking = True
@@ -227,7 +228,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                         'import_message': f'Sukses diproses ke Odoo ({picking.name})',
                         'odoo_picking_id': picking.id,
                     })
-                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'direct_transfer')
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'direct_transfer')
 
                     if is_new_picking:
                         imported += 1
@@ -238,7 +239,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                 # 2. STRATEGI PENANGANAN JIKA DOKUMEN ERROR:
                 # Savepoint di atas membatalkan picking/move dokumen yang gagal.
                 error += 1
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
                     api_acumatica='direct_transfer',

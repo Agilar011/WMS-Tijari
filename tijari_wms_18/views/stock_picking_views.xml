@@ -1,6 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+     <record id="stock_picking_kanban_show_origin_without_activity" model="ir.ui.view">
+        <field name="name">stock.picking.kanban.show.origin.without.activity</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.stock_picking_kanban"/>
+        <field name="arch" type="xml">
+            <xpath expr="//kanban/field[@name='picking_type_id']" position="after">
+                <field name="origin"/>
+                <field name="user_ids"/>
+            </xpath>
+            <xpath expr="//templates/t[@t-name='card']//field[@name='name']" position="replace">
+                <field name="origin" class="fw-bold fs-5 ms-1"/>
+            </xpath>
+            <xpath expr="//templates/t[@t-name='card']//field[@name='user_id']" position="replace">
+                <field name="user_ids" widget="many2many_avatar_user" readonly="state in ['cancel', 'done']" class="ms-1"/>
+            </xpath>
+            <xpath expr="//templates/t[@t-name='card']//field[@name='activity_ids'][@widget='kanban_activity']" position="replace"/>
+        </field>
+    </record>
+
      <record id="view_picking_form_inherit_acumatica_header" model="ir.ui.view">
         <field name="name">stock.picking.form.acumatica.header</field>
         <field name="model">stock.picking</field>
@@ -98,6 +117,10 @@
                             decoration-danger="shipment_information == 'canceled'"/>
 
                 </group>
+            </xpath>
+
+            <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']" position="replace">
+                <field name="user_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done']"/>
             </xpath>
 
             <xpath expr="//notebook/page[@name='operations']" position="after">
@@ -335,6 +358,10 @@
                 <attribute name="string">No. Dokumen</attribute>
             </xpath>
 
+            <xpath expr="//group//field[@name='origin']" position="replace">
+                <field name="name" readonly="1" string="Seri Dokumen"/>
+            </xpath>
+
         </field>
     </record>
 
@@ -388,8 +415,7 @@
                         <button name="action_assign" type="object" string="Check Availability"/>
                     </header>
                     <field name="adt_type" string="Tipe Transaksi"/>
-                    <field name="origin" string="No. Dokumen" readonly="state in ['cancel', 'done']"/>
-                    <field name="name" decoration-bf="1"/>
+                    <field name="origin" string="No. Dokumen" decoration-bf="1" readonly="state in ['cancel', 'done']"/>
                     <field name="location_id" optional="hide"
                         options="{'no_create': True}"
                         groups="stock.group_stock_multi_locations"
@@ -397,6 +423,7 @@
                     <field name="company_id" optional="hide" groups="base.group_multi_company"/>
                     <field name="adt_is_document_only" optional="hide"/>
                     <field name="partner_id" readonly="state in ['cancel', 'done']" string="Supplier/Customer"/>
+                    <field name="adt_total_qty" string="Total Qty"/>
                     <field name="scheduled_date" widget="remaining_days"
                         readonly="state in ['cancel', 'done']" optional="hide"/>
                     <field name="state" widget="badge"
@@ -405,6 +432,7 @@
                         decoration-muted="state == 'draft'"
                         decoration-success="state == 'done'"
                         decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"/>
+                    <field name="user_ids" widget="many2many_avatar_user" optional="show"/>
                     <field name="batch_id" string="Batch" optional="hide"/>
                 </list>
             </xpath>
@@ -422,7 +450,7 @@
                 <list string="Transactions" default_order="internal_transfer_sequence, batch_sequence">
                     <field name="internal_transfer_sequence" column_invisible="1"/>
                     <field name="batch_sequence" widget="handle"/>
-                    <field name="name" decoration-bf="1"/>
+                    <field name="origin" string="No. Dokumen" decoration-bf="1" readonly="state in ['cancel', 'done']"/>
                     <field name="location_id" optional="hide"
                         options="{'no_create': True}"
                         groups="stock.group_stock_multi_locations"
@@ -430,7 +458,6 @@
                     <field name="company_id" optional="hide" groups="base.group_multi_company"/>
                     <field name="adt_type" string="Tipe Transaksi"/>
                     <field name="adt_is_document_only" optional="hide"/>
-                    <field name="origin" string="No. Dokumen" readonly="state in ['cancel', 'done']"/>
                     <field name="partner_id" string="Supplier / Customer" readonly="state in ['cancel', 'done']"/>
                     <field name="scheduled_date" widget="remaining_days"
                         readonly="state in ['cancel', 'done']"/>
@@ -442,6 +469,18 @@
                         decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"/>
                     <field name="batch_id" string="Batch"/>
                 </list>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_form_origin_title" model="ir.ui.view">
+        <field name="name">stock.picking.form.origin.title</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="priority" eval="1300"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[contains(@class, 'oe_title')]//field[@name='name']" position="replace">
+                <field name="origin" placeholder="No. Dokumen" invisible="not id"/>
             </xpath>
         </field>
     </record>

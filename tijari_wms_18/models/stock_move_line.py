@@ -86,6 +86,11 @@ class StockMoveLine(models.Model):
     allocation_Quantity = fields.Float(string='Allocation Quantity')
     allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
     allocation_UOM = fields.Char(string='Allocation UOM')
+    product_uom_qty = fields.Float(
+        string='Demand',
+        related='move_id.product_uom_qty',
+        readonly=True,
+    )
     confirmation_quantity = fields.Float(string='Confirmation Qty')
 
     picking_code = fields.Selection(
@@ -753,7 +758,7 @@ class StockMoveLine(models.Model):
 
                 # 2. Ambil TANGGAL MASUK (Format: MMDDYY)
                 # Odoo menyimpan waktu dalam UTC, kita ambil tanggal hari ini
-                tanggal_masuk = fields.Date.today().strftime('%m%d%y')
+                tanggal_masuk = fields.Date.today().strftime('%m%y')
                 print(f">>> Tanggal Masuk: {tanggal_masuk}") # Cek di terminal Odoo
 
                 # 3. Ambil KODE WAREHOUSE Tujuan
@@ -770,7 +775,8 @@ class StockMoveLine(models.Model):
                 # Mencari lot dengan awalan yang sama untuk menghitung urutan
                 kode_product = line.product_id.default_code or f"PROD{line.product_id.id}"
                 source_document = line.picking_id.origin or f"PICK{line.picking_id.id}"
-                prefix = f"{source_document}-{tanggal_masuk}-{kode_product}"
+                # prefix = f"{source_document}-{tanggal_masuk}-{kode_product}"
+                prefix = f"{tanggal_masuk}-{kode_product}"
 
                 # lot_count = self.env['stock.lot'].search_count([
                 #     ('name', '=like', f"{prefix}%"),

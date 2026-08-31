@@ -281,10 +281,15 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'external_id': header_id or item.get('id', '') or '',
             'row_number': row_number,
             'note': self._val(item, 'NoteHeader'),
+            'note_header_id': self._val(item, 'NoteHeaderID'),
+            'building_code': self._val(item, 'BuildingID'),
+            'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
             'actual_qty': self._val(item, 'ControlQty'),
             'total_qty': str(self._val(item, 'TotalQty')),
             'scheduled_date': self._val(item, 'Date'),
             'description': self._val(item, 'Description'),
+            'doc_type': self._val(item, 'DocType'),
+            'header_location_code': self._val(item, 'Location'),
             'post_period': str(self._val(item, 'PostPeriod')),
             'reference_nbr': self._val(item, 'ReferenceNbr'),
             'status': self._val(item, 'Status'),
@@ -297,6 +302,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'actual_amount': self._val(item, 'ControlAmount'),
             'total_amount': self._val(item, 'TotalAmount'),
             'customer_id': self._val(item, 'CustomerID'),
+            'customer_name': self._val(item, 'CustomerName'),
         }
 
 
@@ -405,16 +411,19 @@ class ImportInventoryIssueWizard(models.TransientModel):
         return {
             'header_external_id': header_id,
             'line_external_id': detail.get('id', '') or '',
-            'line_nbr': str(self._val(detail, 'LineNbr')),
+            'line_nbr': str(self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr')),
             'line_note': self._val(detail, 'LineNote'),
+            'line_note_id': self._val(detail, 'LineNoteID'),
             'branch_warehouse': self._val(detail, 'LineBranch'),
             'line_description': self._val(detail, 'LineInventoryName'),
             'inventory_id': self._val(detail, 'LineInventoryID'),
             'location_code': self._val(detail, 'LineLocation'),
+            'line_location_name': self._val(detail, 'LineLocationName'),
             'product_uom_qty': str(self._val(detail, 'LineQuantity')),
             'line_trans_type': self._val(detail, 'LineTranType'),
             'uom_code': self._val(detail, 'LineUOM'),
             'warehouse_code': self._val(detail, 'LineWarehouse') or warehouse_code,
+            'line_warehouse_name': self._val(detail, 'LineWarehouseName'),
             'customer_id': self._val(detail, 'CustomerID'),
         }
         

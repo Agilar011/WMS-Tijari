@@ -36,6 +36,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_id = fields.Char(string="Acumatica ID")
     adt_rowNumber = fields.Char(string="Acumatica Row Number")
     adt_note = fields.Char(string="Acumatica Note")
+    adt_BuildingID = fields.Char(string="Acumatica BuildingID")
     adt_ConsignmentType = fields.Char(string="Acumatica ConsignmentType")
     adt_CreatedDateTime = fields.Char(string="Acumatica CreatedDateTime")
     adt_CustomerID = fields.Char(string="Acumatica CustomerID")
@@ -45,12 +46,19 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_Description = fields.Char(string="Acumatica Description")
     adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly", readonly=True)
     adt_DueDate = fields.Char(string="Acumatica DueDate")
+    adt_ExternalRef = fields.Char(string="Acumatica ExternalRef")
     adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime")
     adt_LocationID = fields.Char(string="Acumatica LocationID")
     adt_LocationName = fields.Char(string="Acumatica LocationName")
+    adt_NoteHeaderID = fields.Char(string="Acumatica NoteHeaderID")
     adt_OrigRefNbr = fields.Char(string="Acumatica OrigRefNbr")
+    adt_PostPeriod = fields.Char(string="Acumatica PostPeriod")
     adt_ReferenceNbr = fields.Char(string="Acumatica ReferenceNbr")
     adt_Status = fields.Char(string="Acumatica Status")
+    adt_TotalQty = fields.Float(string="Acumatica TotalQty")
+    adt_TransferType = fields.Char(string="Acumatica TransferType")
+    adt_FromWarehouseID = fields.Char(string="Acumatica FromWarehouseID")
+    adt_ToWarehouseID = fields.Char(string="Acumatica ToWarehouseID")
     adt_Type = fields.Char(string="Acumatica Type")
 
     total_qty = fields.Float(
@@ -178,6 +186,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             raise UserError(f"Dokumen {origin} sudah divalidasi di Odoo (State: {picking.state}), update digagalkan.")
                         picking.write(vals)
                         action_state = 'updated'
+                        self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=origin)
                     else:
                         picking = Picking.create(vals)
                         is_new_picking = True
@@ -250,7 +259,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         'import_message': f'Sukses diproses ke Odoo ({picking.name})',
                         'odoo_picking_id': picking.id,
                     })
-                    self.env['acumatica.error.tracking.mixin']._resolve_error_tracking(reference_nbr, 'credit_memo_consignment')
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'credit_memo_consignment')
 
                     # Ubah juga status sub-tabel staging lines-nya agar sinkron di UI
                     # to_create_move_lines.write({
@@ -267,7 +276,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # 2. STRATEGI PENANGANAN JIKA DOKUMEN ERROR:
                 # Savepoint di atas membatalkan picking/move dokumen yang gagal.
                 error += 1
-                self.env['acumatica.error.tracking.mixin']._persist_error_tracking(
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
                     api_acumatica='credit_memo_consignment',
@@ -376,6 +385,7 @@ class AcumaticaVendorReturnDirectTransferStagingLine(models.Model):
     adt_note = fields.Char(string="Acumatica Note")
     adt_Branch = fields.Char(string="Acumatica Branch")
     adt_InventoryID = fields.Char(string="Acumatica InventoryID")
+    adt_LineNoteID = fields.Char(string="Acumatica LineNoteID")
     adt_Qty = fields.Char(string="Acumatica Qty")
     adt_TransactionDescription = fields.Char(string="Acumatica TransactionDescription")
     adt_UOM = fields.Char(string="Acumatica UOM")

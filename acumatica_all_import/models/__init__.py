@@ -44,3 +44,4 @@ from . import acumatica_webhook_key_config
 from . import acumatica_webhook_log
 
 from . import acumatica_error_master
+from . import acumatica_error_transaction

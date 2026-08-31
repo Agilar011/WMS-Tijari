@@ -168,7 +168,8 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
 
                             'adt_id' : self._val(item, 'id'),
                             'adt_rowNumber' : self._val(item, 'rowNumber'),
-                            'adt_note' : self._val(item, 'note'),
+                            'adt_note' : self._val(item, 'NoteHeader') or self._val(item, 'note'),
+                            'adt_BuildingID' : self._val(item, 'BuildingID'),
                             'adt_ConsignmentType' : self._val(item, 'ConsignmentType'),
                             'adt_CreatedDateTime' : self._val(item, 'CreatedDateTime'),
                             'adt_CustomerID' : self._val(item, 'CustomerID'),
@@ -176,11 +177,14 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                             'adt_CustomerOrder' : self._val(item, 'CustomerOrder'),
                             'adt_Date' : self._val(item, 'Date'),
                             'adt_Description' : self._val(item, 'Description'),
-                            'adt_DueDate' : item.get('DueDate', ''),
+                            'adt_ExternalRef' : self._val(item, 'ExternalRef'),
+                            'adt_DueDate' : self._val(item, 'DueDate'),
                             'adt_LastModifiedDateTime' : self._val(item, 'LastModifiedDateTime'),
                             'adt_LocationID' : self._val(item, 'LocationID'),
                             'adt_LocationName' : self._val(item, 'LocationName'),
+                            'adt_NoteHeaderID' : self._val(item, 'NoteHeaderID'),
                             'adt_OrigRefNbr' : self._val(item, 'OrigRefNbr'),
+                            'adt_PostPeriod' : self._val(item, 'PostPeriod'),
                             'adt_ReferenceNbr' : self._val(item, 'ReferenceNbr'),
                             'adt_Status' : self._val(item, 'Status'),
                             'adt_Type' : self._val(item, 'Type'),                                       
@@ -212,6 +216,8 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                         # print(f"Header: {header}")
                         result.append(header)
 
+                        if not details and self._val(item, 'LineInventoryID'):
+                            details = [item]
                         if not details:
                             raise UserError('Data Detail tidak ditemukan')
 
@@ -221,13 +227,14 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                                 'receipt_line_id' : created_header.id,
                                 'adt_id' : detail.get('id', ''),
                                 'adt_rowNumber' :  self._val(detail, 'rowNumber'), 
-                                'adt_note' :  self._val(detail, 'note'), 
-                                'adt_Branch' :  self._val(detail, 'Branch'), 
-                                'adt_InventoryID' :  self._val(detail, 'InventoryID'), 
-                                'adt_Qty' :  self._val(detail, 'Qty'), 
-                                'adt_TransactionDescription' :  self._val(detail, 'TransactionDescription'), 
-                                'adt_UOM' :  self._val(detail, 'UOM'), 
-                                'adt_Warehouse' :  self._val(detail, 'Warehouse'), 
+                                'adt_note' :  self._val(detail, 'LineNote') or self._val(detail, 'note'),
+                                'adt_Branch' :  self._val(detail, 'LineBranch') or self._val(detail, 'Branch'),
+                                'adt_InventoryID' :  self._val(detail, 'LineInventoryID') or self._val(detail, 'InventoryID'),
+                                'adt_LineNoteID' : self._val(detail, 'LineNoteID'),
+                                'adt_Qty' :  self._val(detail, 'LineQty') or self._val(detail, 'Qty'),
+                                'adt_TransactionDescription' :  self._val(detail, 'LineTransactionDescription') or self._val(detail, 'TransactionDescription'),
+                                'adt_UOM' :  self._val(detail, 'LineUOM') or self._val(detail, 'UOM'),
+                                'adt_Warehouse' :  self._val(detail, 'LineWarehouse') or self._val(detail, 'LineWarehouseID') or self._val(detail, 'Warehouse'),
                             }
 
                             detail_result.append(vals)
@@ -404,14 +411,23 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                 'adt_id': vals.get('external_id'),
                 'adt_rowNumber': vals.get('row_number'),
                 'adt_note': vals.get('note'),
+                'adt_BuildingID': vals.get('building_id'),
+                'adt_ConsignmentType': vals.get('consignment_type'),
+                'adt_CustomerID': vals.get('customer_id'),
+                'adt_CustomerName': vals.get('customer_name'),
+                'adt_CustomerOrder': vals.get('customer_order'),
                 'adt_Date': vals.get('scheduled_date'),
                 'adt_Description': vals.get('description'),
                 'adt_ExternalRef': vals.get('external_ref'),
                 'adt_LastModifiedDateTime': vals.get('acumatica_write_date'),
+                'adt_LocationID': vals.get('location_id'),
+                'adt_LocationName': vals.get('location_name'),
+                'adt_NoteHeaderID': vals.get('note_header_id'),
                 
                 # KOREKSI: Sesuaikan nama field dengan model python staging header (Menggunakan adt_Location)
                 # 'adt_Location': vals.get('location_code'), 
                 
+                'adt_OrigRefNbr': vals.get('orig_ref_nbr'),
                 'adt_PostPeriod': vals.get('post_period'),
                 'adt_ReferenceNbr': vals.get('reference_nbr'),
                 'adt_Status': vals.get('status'),
@@ -479,31 +495,28 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
             'receipt_line_id', 
             'adt_id', 
             'adt_rowNumber', 
-            'adt_LineNumber', 
             'adt_note', 
-            'adt_Description', 
-            'adt_FromLocationID', 
-            'adt_ToLocationID', 
+            'adt_Branch',
             'adt_InventoryID', 
-            'adt_SOOrderNbr', 
-            'adt_SOShipmentNbr', 
+            'adt_LineNoteID',
+            'adt_TransactionDescription',
             'adt_UOM', 
-            'adt_Quantity'
+            'adt_Qty',
+            'adt_Warehouse',
         ]
 
         # Pemetaan nama key lama (API) ke nama field baru (Tabel Staging)
         field_mapping = {
             'row_number': 'adt_rowNumber',
-            'line_nbr': 'adt_LineNumber',
             'note': 'adt_note',
-            'description': 'adt_Description',
-            'from_location_code': 'adt_FromLocationID',
-            'to_location_code': 'adt_ToLocationID',
+            'branch': 'adt_Branch',
             'inventory_id': 'adt_InventoryID',
-            'so_order_nbr': 'adt_SOOrderNbr',
-            'so_shipment_nbr': 'adt_SOShipmentNbr',
+            'line_note_id': 'adt_LineNoteID',
+            'transaction_description': 'adt_TransactionDescription',
             'uom_code': 'adt_UOM',
-            'product_uom_qty': 'adt_Quantity',
+            'product_uom_qty': 'adt_Qty',
+            'quantity': 'adt_Qty',
+            'warehouse_code': 'adt_Warehouse',
         }
 
         cleaned_data = []
