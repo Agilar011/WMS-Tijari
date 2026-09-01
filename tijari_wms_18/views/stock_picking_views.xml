@@ -58,7 +58,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="adt_type in ['Sales Order Shipment']"/>
+                    invisible="adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders']"/>
 
             </xpath>            
 
@@ -68,7 +68,7 @@
                         type="object"
                         class="oe_highlight"
                         groups="stock.group_stock_user"
-                        invisible="state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel')"
+                        invisible="state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel') or adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders']"
                         data-hotkey="v"/>
             </xpath>
 
@@ -80,25 +80,30 @@
                 class="btn-primary"
                 invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel', 'return_shipment')"/>
 
-                
-                <button name="action_fetch_actual_qty"
+                <button name="action_get_shipment_completed_staging"
+                    string="Confirm Shipment Data"
+                    type="object"
+                    class="btn-primary"
+                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+
+                <!-- <button name="action_fetch_actual_qty"
                 string="Get Full Shipment Data"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+                invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/> -->
 
-                <button name="action_fetch_partial_shipment"
+                <!-- <button name="action_fetch_partial_shipment"
                 string="Get Partial Shipment Data"
                 type="object"
                 class="btn-primary"
-                invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+                invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/> -->
 
-                <button
+                <!-- <button
                     name="action_confirm_shipment"
                     type="object"
                     string="Confirm Shipment"
                     class="btn-primary"
-                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state != 'waiting_response'"/>
+                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state != 'waiting_response'"/> -->
 
                 <button
                     name="action_mark_as_done"
@@ -188,7 +193,8 @@
                                 context="{'default_product_id': product_id}"
                                 readonly="not product_id"/>
                             <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
-                            <field name="remaining_package_qty" string="Remaining Product" readonly="1"/>
+                            <field name="remaining_package_qty" string="Remaining Product" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders']"/>
+                            <field name="remaining_package_qty" string="Unpack Qty" readonly="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']" />
                             <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
                                 invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
                             <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
@@ -502,9 +508,8 @@
                             <field name="allowed_picker_product_ids" invisible="1"/>
                             <field name="picker_product_id" context="{'tijari_stock_picking_product_code_only': True}" domain="[('id', 'in', allowed_picker_product_ids)]"/>
                         </group>
-                        <field name="picker_move_ids" 
+                        <field name="filtered_move_ids" 
                             mode="list,kanban"
-                            widget="picker_move_one2many"
                             context="{
                                 'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
                             }"
@@ -513,7 +518,7 @@
                                 <field name="company_id" column_invisible="True"/>
                                 <field name="picking_id" column_invisible="True"/>
                                 <field name="name" column_invisible="True"/>
-                                <field name="state" readonly="0" column_invisible="False"/>
+                                <field name="state" readonly="0" column_invisible="True"/>
                                 <field name="picking_type_id" column_invisible="True"/>
                                 <field name="move_line_ids" column_invisible="True"/>
                                 <field name="location_id" column_invisible="True"/>
@@ -559,17 +564,25 @@
                                 <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
                                 <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
                                 <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
-                                <field name="adt_dest_location_id" string="Final Location"/>
+                                <field name="adt_dest_location_id" string="Final Location" column_invisible="True"/>
                                 <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
                                 <field name="lot_ids" widget="many2many_tags"
                                     readonly="has_tracking != 'serial'"
                                     column_invisible="parent.state == 'draft'"
                                     groups="stock.group_production_lot"
                                     invisible="not show_details_visible or has_tracking == 'none'"
-                                    optional="hide"
+                                    optional="show"
                                     options="{'create': [('parent.use_create_lots', '=', True)]}"
                                     context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
                                     domain="[('product_id','=',product_id)]"
+                                    string="LOT Number"
+                                />
+                                <button
+                                    name="action_open_move_pick"
+                                    type="object"
+                                    title="Open Move"
+                                    icon="fa-list"
+                                    class="btn-link"
                                 />
                             </list>
                         </field>
@@ -714,7 +727,8 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='unpack']" position="after">
-                <button name="action_print_packing_list" string="Print" type="object" class="btn-primary"/>
+                <button name="action_print_packing_list" type="object" class="btn-primary" icon="fa-print" title="Print Package List"/>
+                <button name="action_print_packing_package" string="Print Package" type="object" class="btn-primary"/>
             </xpath>
             <xpath expr="//field[@name='package_type_id']" position="before">
                 <field name="package_cat" />

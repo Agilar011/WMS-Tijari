@@ -193,7 +193,7 @@ class ImportShipmentCompletedWizard(models.TransientModel):
                 endpoint,
                 params=params,
                 json={},
-                timeout=300,
+                timeout=800,
             )
 
             if response.status_code != 200:
@@ -213,11 +213,11 @@ class ImportShipmentCompletedWizard(models.TransientModel):
             )
 
             # fetch_limit
-            if self.fetch_skip:
-                rows = rows[self.fetch_skip:]
+            # if self.fetch_skip:
+            #     rows = rows[self.fetch_skip:]
 
-            if self.fetch_limit:
-                rows = rows[:self.fetch_limit]
+            # if self.fetch_limit:
+            #     rows = rows[:self.fetch_limit]
 
             return rows
 
@@ -245,22 +245,13 @@ class ImportShipmentCompletedWizard(models.TransientModel):
     # =========================================================
 
     def create_staging_data(self, api_data):
-        """
-        Upsert Shipment Completed ke staging.
-
-        Data lama:
-            UPDATE header
-            DELETE line lama
-            CREATE line baru
-
-        Data baru:
-            CREATE header + lines
-        """
-
         self.ensure_one()
 
         Staging = self.env[
             'acumatica.shipment.completed.staging'
+        ]
+        Line = self.env[
+            'acumatica.shipment.completed.staging.line'
         ]
 
         total = 0
@@ -268,84 +259,74 @@ class ImportShipmentCompletedWizard(models.TransientModel):
         total_existing = 0
 
         # =====================================================
-        # PREPARE ACUMATICA IDS
+        # GROUP BY SHIPMENT NBR
         # =====================================================
 
-        acumatica_ids = [
-            item.get('id')
-            for item in api_data
-            if item.get('id')
-        ]
+        shipments = {}
 
-        existing_records = Staging.search([
-            ('config_id', '=', self.config_id.id),
-            ('acumatica_id', 'in', acumatica_ids),
-        ])
+        for item in api_data:
+            shipment_nbr = self._val(item, 'ShipmentNbr')
 
-        existing_map = {
-            record.acumatica_id: record
-            for record in existing_records
-        }
+            if not shipment_nbr:
+                _logger.warning(
+                    'Shipment Completed dilewati karena '
+                    'tidak memiliki ShipmentNbr.'
+                )
+                continue
+
+            shipments.setdefault(shipment_nbr, []).append(item)
 
         # =====================================================
         # PROCESS EACH SHIPMENT
         # =====================================================
 
-        for item in api_data:
-
-            acumatica_id = item.get('id')
-
-            if not acumatica_id:
-                _logger.warning(
-                    'Shipment Completed dilewati karena tidak memiliki ID.'
-                )
-                continue
+        for shipment_nbr, items in shipments.items():
 
             total += 1
 
-            header_vals = self._prepare_header_vals(item)
+            # Ambil row pertama sebagai sumber HEADER
+            header_item = items[0]
 
-            line_vals = self._prepare_line_vals(item)
+            header_vals = self._prepare_header_vals(header_item)
 
-            existing = existing_map.get(acumatica_id)
+            # Semua row menjadi LINE
+            line_vals = [
+                self._prepare_line_vals(item)
+                for item in items
+            ]
 
             try:
-
                 with self.env.cr.savepoint():
 
-                    # =========================================
-                    # UPDATE EXISTING
-                    # =========================================
+                    existing = Staging.search([
+                        ('config_id', '=', self.config_id.id),
+                        ('shipment_nbr', '=', shipment_nbr),
+                    ], limit=1)
 
                     if existing:
 
+                        # UPDATE HEADER
                         existing.write(header_vals)
 
+                        # REPLACE LINES
                         existing.line_ids.unlink()
 
-                        for line in line_vals:
-                            line['staging_id'] = existing.id
-
-                            self.env[
-                                'acumatica.shipment.completed.staging.line'
-                            ].create(line)
+                        for vals in line_vals:
+                            vals['staging_id'] = existing.id
+                            Line.create(vals)
 
                         total_existing += 1
 
                         _logger.info(
                             'Shipment Completed UPDATED: %s',
-                            existing.shipment_nbr,
+                            shipment_nbr,
                         )
-
-                    # =========================================
-                    # CREATE NEW
-                    # =========================================
 
                     else:
 
                         header_vals['line_ids'] = [
-                            (0, 0, line)
-                            for line in line_vals
+                            (0, 0, vals)
+                            for vals in line_vals
                         ]
 
                         Staging.create(header_vals)
@@ -354,16 +335,14 @@ class ImportShipmentCompletedWizard(models.TransientModel):
 
                         _logger.info(
                             'Shipment Completed CREATED: %s',
-                            self._val(item, 'ShipmentNbr'),
+                            shipment_nbr,
                         )
 
             except Exception as error:
-
                 _logger.exception(
                     'Error saving Shipment Completed %s',
-                    acumatica_id,
+                    shipment_nbr,
                 )
-
                 continue
 
         return {
@@ -371,7 +350,6 @@ class ImportShipmentCompletedWizard(models.TransientModel):
             'new': total_new,
             'existing': total_existing,
         }
-
     # =========================================================
     # PREPARE HEADER
     # =========================================================
@@ -389,6 +367,7 @@ class ImportShipmentCompletedWizard(models.TransientModel):
             # Shipment
             'order_type': self._val(item, 'OrderType'),
             'shipment_nbr': self._val(item, 'ShipmentNbr'),
+            'inventory_nbr': self._val(item, 'InvtRefNbr'),
             'ship_date': self._parse_datetime(
                 self._val(item, 'ShipDate')
             ),
@@ -485,67 +464,43 @@ class ImportShipmentCompletedWizard(models.TransientModel):
 
     def _prepare_line_vals(self, item):
 
-        result = []
+        return {
+            'acumatica_id': item.get('id'),
+            'row_number': item.get('rowNumber'),
+            'note': self._val(item, 'note'),
 
-        details = item.get('Details') or []
-
-        for detail in details:
-
-            result.append({
-
-                # Acumatica Identifier
-                'acumatica_id': detail.get('id'),
-                'row_number': detail.get('rowNumber'),
-                'note': self._val(
-                    detail,
-                    'note'
-                ),
-
-                # Line
-                'line_nbr': self._int_val(
-                    detail,
-                    'LineNbr'
-                ),
-                'line_inventory_id': self._val(
-                    detail,
-                    'LineInventoryID'
-                ),
-                'line_description': self._val(
-                    detail,
-                    'LineDescription'
-                ),
-                'line_free_item': self._bool_val(
-                    detail,
-                    'LineFreeItem'
-                ),
-                'line_quantity': self._float_val(
-                    detail,
-                    'LineQuantity'
-                ),
-                'line_uom': self._val(
-                    detail,
-                    'LineUOM'
-                ),
-                'location_id': self._val(
-                    detail,
-                    'LineLocation'
-                ),
-                'location_name': self._val(
-                    detail,
-                    'LocationName'
-                ),
-                'line_note': self._val(
-                    detail,
-                    'LineNote'
-                ),
-                'line_note_id': self._val(
-                    detail,
-                    'LineNoteID'
-                ),
-            })
-
-        return result
-
+            'line_nbr': self._int_val(
+                item, 'LineNbr'
+            ),
+            'line_inventory_id': self._val(
+                item, 'LineInventoryID'
+            ),
+            'line_description': self._val(
+                item, 'LineDescription'
+            ),
+            'line_free_item': self._bool_val(
+                item, 'LineFreeItem'
+            ),
+            'line_quantity': self._float_val(
+                item, 'LineQuantity'
+            ),
+            'line_uom': self._val(
+                item, 'LineUOM'
+            ),
+            'location_id': self._val(
+                item, 'LineLocation'
+            ),
+            'location_name': self._val(
+                item, 'LocationName'
+            ),
+            'line_note': self._val(
+                item, 'LineNote'
+            ),
+            'line_note_id': self._val(
+                item, 'LineNoteID'
+            ),
+        }
+    
     # =========================================================
     # ACTION VIEW STAGING
     # =========================================================
@@ -685,9 +640,9 @@ class ImportShipmentCompletedWizard(models.TransientModel):
             if isinstance(payload.get('rows'), list):
                 return payload.get('rows')
 
-            if isinstance(payload.get('ShipmentCompleted'), list):
+            if isinstance(payload.get('ShipmentCompletedGIDetails'), list):
                 return payload.get(
-                    'ShipmentCompleted'
+                    'ShipmentCompletedGIDetails'
                 )
 
         return []

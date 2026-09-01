@@ -59,6 +59,29 @@ class StockQuantPackage(models.Model):
     #     action['target'] = 'new'
     #     return action
 
+    def action_print_packing_package(self):
+        self.ensure_one()
+
+        if not self.name:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Peringatan',
+                    'message': 'Package Name belum tersedia.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        self.create_qrcode_name()
+
+        return {
+            'type': 'ir.actions.act_url',
+            'url': '/print/packing_package?id=%s' % self.id,
+            'target': 'new',
+        }
+        
     def action_print_packing_list(self):
         self.ensure_one()
 
