@@ -18,7 +18,7 @@
             sequence="11"/>
 
   <menuitem id="menpu_scan_stock_picking_by_origin"
-            name="Search Document By No Document"
+            name="Search Document"
             parent="stock.menu_stock_root"
             sequence="12"
             action="action_scan_stock_picking_by_origin"

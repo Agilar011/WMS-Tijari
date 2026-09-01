@@ -13,14 +13,8 @@
                 <field name="adt_total_qty"/>
             </xpath>
             <xpath expr="//templates/t[@t-name='card']//field[@name='name']" position="replace">
-                <div class="min-w-0 flex-grow-1 ms-1">
-                    <field name="origin" class="fw-bold fs-5"/>
-                    <div class="text-muted small text-truncate">
-                        <field name="partner_id"/>
-                    </div>
-                </div>
+                <field name="origin" class="fw-bold fs-5 ms-1"/>
             </xpath>
-            <xpath expr="//templates/t[@t-name='card']//footer//field[@name='partner_id']" position="replace"/>
             <xpath expr="//templates/t[@t-name='card']//field[@name='picking_properties']" position="after">
                 <div class="mt-1 ms-1 text-muted small">
                     <div t-if="record.adt_type.raw_value">
@@ -127,16 +121,12 @@
 
             </xpath>
 
-            <xpath expr="//field[@name='picking_type_id'][1]" position="after">
-                <group>
-
-                    <field name="shipment_information" 
+            <xpath expr="//field[@name='date_done']" position="after">
+                <field name="shipment_information"
                     invisible="picking_type_name not in ['Delivery Orders']"
-                            decoration-success="shipment_information == 'full_shipment'"
-                            decoration-warning="shipment_information == 'partial'"
-                            decoration-danger="shipment_information == 'canceled'"/>
-
-                </group>
+                    decoration-success="shipment_information == 'full_shipment'"
+                    decoration-warning="shipment_information == 'partial'"
+                    decoration-danger="shipment_information == 'canceled'"/>
             </xpath>
 
             <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']" position="replace">
