@@ -329,6 +329,11 @@ class StockMoveLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        for vals in vals_list:
+            _logger.warning(
+                "SML CREATE DEBUG: %s",
+                vals,
+            )
         move_lines = super().create(vals_list)
         move_lines.mapped('picking_id')._sync_adt_quantities_from_moves()
         # if not move_lines.parent_location_id:
@@ -341,6 +346,11 @@ class StockMoveLine(models.Model):
         
 
     def write(self, vals):
+        _logger.warning(
+            "SML WRITE DEBUG | ids=%s | vals=%s",
+            self.ids,
+            vals,
+        )
         pickings = self.mapped('picking_id')
         res = super().write(vals)
         pickings |= self.mapped('picking_id')
@@ -482,17 +492,30 @@ class StockMoveLine(models.Model):
                 
     @api.onchange('quant_id')
     def _onchange_move_line_ids(self):
-        print('def _onchange_move_line_ids(self)')
         for line in self:
-            if line.quant_id:
-                print(f">>> Onchange move_line_ids: quant_id changed for line {line.id}, new quant_id: {line.quant_id.id}, lot_id: {line.quant_id.lot_id.name if line.quant_id.lot_id else 'N/A'}") # Cek di terminal Odoo
-                # line.lot_id = line.quant_id.lot_id.name if line.quant_id.lot_id else line.lot_name
-                line.lot_name = line.quant_id.lot_id.name if line.quant_id.lot_id else line.lot_name
-                print(f">>> changed lot_name: {line.lot_name}") # Cek di terminal Odoo
-            if not line.lot_name and line.lot_id:
-                print(f">>> Onchange move_line_ids: setting lot_name for line {line.id} based on lot_id {line.lot_id.name}") # Cek di terminal Odoo
-                line.lot_name = line.lot_id.name
+            if not line.quant_id:
+                continue
 
+            quant = line.quant_id
+
+            # print(
+            #     f">>> Quant selected: {quant.id} | "
+            #     f"lot={quant.lot_id.name if quant.lot_id else 'N/A'} | "
+            #     f"package={quant.package_id.name if quant.package_id else 'N/A'} | "
+            #     f"location={quant.location_id.display_name}"
+            # )
+
+            line.location_id = quant.location_id
+            # line.lot_id = quant.lot_id
+            line.package_id = quant.package_id
+            line.result_package_id = quant.package_id
+            line.owner_id = quant.owner_id
+
+            line.lot_name = (
+                quant.lot_id.name
+                if quant.lot_id
+                else line.lot_name
+            )
             
     @api.onchange('auto_input_code')
     def _compute_auto_input_code(self):
@@ -650,7 +673,7 @@ class StockMoveLine(models.Model):
         # Sync Quant
         # ------------------------------------------------------
 
-        self.quant_id = False
+        # self.quant_id = False
 
         if self.lot_id and self.location_id:
 
@@ -1347,3 +1370,17 @@ class StockMoveLine(models.Model):
             #     line.matching = 'match'
             #     sml = self.env['stock.move.line'].browse(line._origin.id)
             #     sml.write({'matching': 'match'})
+    
+    def _copy_quant_info(self, vals):
+        quant = self.env['stock.quant'].browse(vals.get('quant_id', 0))
+
+        line_data = {
+            'product_id': quant.product_id.id,
+            'lot_id': quant.lot_id.id,
+            'package_id': quant.package_id.id,
+            'result_package_id': quant.package_id.id,
+            'location_id': quant.location_id.id,
+            'owner_id': quant.owner_id.id,
+        }
+
+        return line_data

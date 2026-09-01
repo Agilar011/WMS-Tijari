@@ -68,7 +68,7 @@
                         type="object"
                         class="oe_highlight"
                         groups="stock.group_stock_user"
-                        invisible="state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel')"
+                        invisible="state in ('draft', 'waiting', 'confirmed', 'waiting_response', 'done', 'cancel') or adt_type in ['Sales Order Shipment']"
                         data-hotkey="v"/>
             </xpath>
 

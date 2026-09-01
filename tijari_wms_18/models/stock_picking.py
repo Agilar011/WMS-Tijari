@@ -1615,7 +1615,7 @@ class StockPicking(models.Model):
 
                     for dest_move in move.move_dest_ids:
                         dest_move.write({
-                            # 'product_uom_qty': confirmation_qty,
+                            'product_uom_qty': confirmation_qty,
                             'quantity': confirmation_qty
                         })
 
