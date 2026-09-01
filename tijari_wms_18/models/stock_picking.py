@@ -147,6 +147,12 @@ class StockPicking(models.Model):
         readonly=True,
     )
 
+    filtered_move_ids = fields.One2many(
+        comodel_name="stock.move",
+        string="Filtered Stock Moves",
+        compute='_compute_filtered_move_ids',
+    )
+
     def _compute_scan_product_by_lot_button(self):
         for picking in self:
             picking.scan_product_by_lot_button = True
@@ -605,6 +611,13 @@ class StockPicking(models.Model):
     def _compute_picker_values(self):
         for picking in self:
             picking.picker_move_ids = picking._get_picker_moves()
+
+    @api.depends(
+        'picker_product_id',
+    )
+    def _compute_filtered_move_ids(self):
+        for picking in self:
+            picking.filtered_move_ids = picking._get_picker_moves()
 
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):

@@ -16,6 +16,7 @@
                 <field name="shipment_nbr"/>
                 <field name="ship_date"/>
 
+                <field name="inventory_nbr" />
                 <field name="order_type"/>
                 <field name="shipment_type"/>
                 <field name="status"/>
@@ -112,6 +113,7 @@
 
                         <group string="Shipment">
                             <field name="shipment_nbr"/>
+                            <field name="inventory_nbr" />
                             <field name="order_type"/>
                             <field name="shipment_type"/>
                             <field name="status"/>
