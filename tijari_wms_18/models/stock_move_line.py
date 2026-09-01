@@ -36,6 +36,11 @@ class StockMoveLine(models.Model):
         help='Scanned / input lot code for confirmation.',
         store=True
     )
+    confirmation_package_code = fields.Char(
+        string='Confirmation Package Code',
+        help='Scanned / input package code for destination package.',
+        store=True,
+    )
     # matching = fields.Selection([
     #     ('match', 'Match'),
     #     ('not_match', 'Not Match')
@@ -990,8 +995,10 @@ class StockMoveLine(models.Model):
         allowed_fields = {
             'confirmation_lot_code',
             'confirmation_location_code',
+            'confirmation_package_code',
             'matching_lot_id',
             'matching_loc_dest_id',
+            'result_package_id',
         }
         if field_name not in allowed_fields:
             raise ValidationError(_("Field scan tidak valid."))
@@ -1018,6 +1025,22 @@ class StockMoveLine(models.Model):
                     vals['location_dest_id'] = location.id
                 else:
                     vals['matching_loc_dest_id'] = location.id
+            elif field_name in ('confirmation_package_code', 'result_package_id'):
+                package = line._find_package_by_scan_code(scanned_code)
+                if not package:
+                    raise ValidationError(
+                        _("Barcode package %s tidak terdaftar.") % scanned_code
+                    )
+                if package.package_cat != 'box':
+                    raise ValidationError(
+                        _("Package %s harus dalam bentuk box.") % package.display_name
+                    )
+                if not package.is_empty:
+                    raise ValidationError(
+                        _("Package %s telah digunakan.") % package.display_name
+                    )
+                vals['confirmation_package_code'] = scanned_code
+                vals['result_package_id'] = package.id
 
             line.write(vals)
             if picking_type_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
@@ -1063,6 +1086,13 @@ class StockMoveLine(models.Model):
                     line.matching_loc_dest_id.display_name,
                 ] if line.matching_loc_dest_id else False
                 result['second_matching'] = line.second_matching
+
+            if field_name in ('confirmation_package_code', 'result_package_id'):
+                result['confirmation_package_code'] = line.confirmation_package_code
+                result['result_package_id'] = [
+                    line.result_package_id.id,
+                    line.result_package_id.display_name,
+                ] if line.result_package_id else False
 
         return result
 
@@ -1152,6 +1182,25 @@ class StockMoveLine(models.Model):
                 return loc
 
         return Loc.browse()
+
+    def _find_package_by_scan_code(self, package_code):
+        Package = self.env['stock.quant.package']
+        package_code = (package_code or '').strip()
+        if not package_code:
+            return Package.browse()
+
+        domain_base = []
+        if self.company_id:
+            domain_base = [('company_id', 'in', [self.company_id.id, False])] + domain_base
+
+        for field_name in ('name', 'barcode'):
+            if field_name not in Package._fields:
+                continue
+            package = Package.search(domain_base + [(field_name, '=', package_code)], limit=1)
+            if package:
+                return package
+
+        return Package.browse()
 
     # @api.onchange('matching_lot_id', 'matching_loc_dest_id')
     # def _onchange_update_matching_status(self):

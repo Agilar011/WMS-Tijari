@@ -148,6 +148,16 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             details = details.get('value', []) or []
         return details if isinstance(details, list) else []
 
+    def _header_match_keys(self, vals):
+        return {
+            value
+            for value in (
+                vals.get('external_id'),
+                vals.get('reference_nbr'),
+            )
+            if value
+        }
+
     def _is_transfer_in_type(self, value):
         return str(value or '').strip().lower().replace('-', '_').replace(' ', '_') in (
             'transfer_in',
@@ -225,7 +235,9 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             detail_result = []
             headers_seen = set()
 
-            data = raw_data.get("InventoryReceiptGIDetails", [])
+            data = self._normalize_rows(raw_data)
+            if not data and isinstance(raw_data, dict):
+                data = self._normalize_rows(raw_data.get("InventoryReceiptGIDetails", []))
             for row_number, item in enumerate(data, start=1):
                 ref = self._val(item, 'ReferenceNbr')
                 details = self._extract_details(item, self.config_id.odata_expand or 'InventoryReceiptGIDetails')
@@ -360,27 +372,24 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         return self.env['acumatica.inventory.recieved.line'].create(data)
 
     def filter_product_line(self, data, update, create):
-        # buat set dari semua external_id di update
         update_ids = {
-            item.get('vals', {}).get('external_id')
+            match_key
             for item in update
-            if item.get('vals', {}).get('external_id')
+            for match_key in self._header_match_keys(item.get('vals', {}))
         }
 
-        # filter data yang header_external_id ada di update_ids
         update_final = [
             line 
             for line in data 
             if line['header_external_id'] in update_ids
         ]
 
-        # buat set dari semua external_id di create
         create_ids = {
-            crt['external_id'] 
+            match_key
             for crt in create
+            for match_key in self._header_match_keys(crt)
         }
 
-        # filter data yang header_external_id ada di create_ids
         create_final = [line for line in data if line['header_external_id'] in create_ids]
 
         return update_final, create_final
@@ -404,32 +413,51 @@ class ImportInventoryRecievedWizard(models.TransientModel):
 
     def _create_inventory_lines_product(self, data, inventory):
         inventory_map = {
-            rec['external_id']: rec.id
+            match_key: rec.id
             for rec in inventory
+            for match_key in self._header_match_keys({
+                'external_id': rec.external_id,
+                'reference_nbr': rec.reference_nbr,
+            })
         }
 
+        vals_list = []
         for vals in data:
+            vals = dict(vals)
             vals['inventory_line_id'] = inventory_map.get(
                 vals['header_external_id']
             )
+            if vals['inventory_line_id']:
+                vals_list.append(vals)
 
-        self.env['acumatica.inventory.recieved.product.line'].create(data)
+        if vals_list:
+            self.env['acumatica.inventory.recieved.product.line'].create(vals_list)
 
     def _update_inventory_lines_product(self, data, inventory):
         inventory_map = {
-            rec['vals']['external_id']: rec['record']['id']
-            for rec in inventory
-            if rec.get('vals')
-            and rec.get('record')
+            match_key: item['record'].id
+            for item in inventory
+            if item.get('vals') and item.get('record')
+            for match_key in self._header_match_keys(item['vals'])
         }
 
-        product_line = self.env['acumatica.inventory.recieved.product.line']
+        vals_list = []
+        inventory_line_ids = set()
 
         for vals in data:
+            vals = dict(vals)
             ext_id = vals.get('header_external_id')
             vals['inventory_line_id'] = inventory_map.get(ext_id)
             if vals['inventory_line_id']:
-                product_line.browse(vals['inventory_line_id']).write(vals)
+                inventory_line_ids.add(vals['inventory_line_id'])
+                vals_list.append(vals)
+
+        if vals_list:
+            product_line = self.env['acumatica.inventory.recieved.product.line']
+            product_line.search([
+                ('inventory_line_id', 'in', list(inventory_line_ids)),
+            ]).unlink()
+            product_line.create(vals_list)
 
 
     def action_view_staging(self):
