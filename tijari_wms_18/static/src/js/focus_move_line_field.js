@@ -744,7 +744,7 @@ async function scanQrToPickingOrigin(env, action) {
     const params = action.params || {};
 
     try {
-        const scannedCode = await scanQrFromCamera(params.title || "Search Document By QR Code");
+        const scannedCode = await scanQrFromCamera(params.title || "Search Document");
         const result = await env.services.orm.call(
             "stock.picking",
             "action_open_by_scanned_origin",

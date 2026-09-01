@@ -8,9 +8,9 @@
   </record>
 
   <record id="action_scan_stock_picking_by_origin" model="ir.actions.client">
-      <field name="name">Search Document By No Document</field>
+      <field name="name">Search Document</field>
       <field name="tag">adt_scan_qr_to_picking_origin</field>
-      <field name="params" eval="{'title': 'Search Document By QR Code'}"/>
+      <field name="params" eval="{'title': 'Search Document'}"/>
   </record>
 
   <record id="action_stock_picking_my_worklist" model="ir.actions.act_window">
