@@ -24,13 +24,25 @@
             action="action_scan_stock_picking_by_origin"
             groups="tijari_wms_18.group_operator,stock.group_stock_manager"/>
 
-  <menuitem id="menu_stock_picking_my_worklist"
-            name="My Worklist"
+  <menuitem id="menu_stock_picking_worklist"
+            name="Worklist"
             parent="stock.menu_stock_root"
             sequence="0"
+            groups="tijari_wms_18.group_operator,stock.group_stock_manager"/>
+
+  <menuitem id="menu_stock_picking_my_worklist"
+            name="My Worklist"
+            parent="menu_stock_picking_worklist"
+            sequence="10"
             action="action_stock_picking_my_worklist"
             groups="tijari_wms_18.group_operator,stock.group_stock_manager"/>
 
+  <menuitem id="menu_stock_picking_my_worklist_overview"
+            name="Overview"
+            parent="menu_stock_picking_worklist"
+            sequence="20"
+            action="stock.stock_picking_type_action"
+            groups="tijari_wms_18.group_operator,stock.group_stock_manager"/>
 
   <!-- INBOUND HEADERS -->
   <menuitem id="wms_operations_menu_inbound"

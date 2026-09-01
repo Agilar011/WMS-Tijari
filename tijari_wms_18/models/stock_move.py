@@ -63,6 +63,11 @@ class StockMove(models.Model):
         string='No. Transaksi',
         readonly=True,
     )
+    product_default_code = fields.Char(
+        related='product_id.default_code',
+        string='Product Code',
+        readonly=True,
+    )
 
     qr_code_image = fields.Binary(string='Sign')
 

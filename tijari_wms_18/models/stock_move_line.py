@@ -1009,6 +1009,20 @@ class StockMoveLine(models.Model):
             },
         }
 
+    def action_open_putaway_wizard(self):
+        self.ensure_one()
+        wizard = self.env['putaway.move.line.wizard'].create(
+            self._prepare_putaway_move_line_wizard_values()
+        )
+        return {
+            'name': _('Putaway'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'putaway.move.line.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
     @api.onchange('matching')
     def _onchange_matching(self):
         for line in self:
@@ -1384,3 +1398,30 @@ class StockMoveLine(models.Model):
         }
 
         return line_data
+
+    def action_open_putaway_move_line_wizard(self):
+        self.ensure_one()
+        wizard = self.env['putaway.move.line.wizard'].create(
+            self._prepare_putaway_move_line_wizard_values()
+        )
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Putaway Move Line',
+            'res_model': 'putaway.move.line.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def _prepare_putaway_move_line_wizard_values(self):
+        self.ensure_one()
+        return {
+            'move_line_id': self.id,
+            'location_putaway_id': self.location_putaway_id.id,
+            'original_location_putaway_id': self.location_putaway_id.id,
+            'confirmation_location_code': self.confirmation_location_code,
+            'original_confirmation_location_code': self.confirmation_location_code,
+            'quantity': self.quantity,
+            'confirmation_quantity': self.confirmation_quantity,
+        }
