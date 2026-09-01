@@ -739,3 +739,56 @@ class WmsApiController(http.Controller):
             resp = {'msg': msg, 'request_content': str(request_content)}
             resp = json.dumps(resp)
             return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/packing_package', type='http', auth='user')
+    def PrintPackingPackage(self, id=None, **kw):
+        if not id:
+            return request.make_response(
+                json.dumps({'error': 'id tidak ditemukan'}),
+                [('Content-Type', 'application/json')]
+            )
+        blank_image = create_blank_image()
+        stok = request.env['stock.quant.package'].sudo().browse(int(id))
+        
+
+        data = {
+            'name': stok.name or "",
+            'package_type': stok.package_cat or "",
+            'date': format_tanggal_indo(stok.pack_date),
+            'qrcode': (stok.qr_code_image.decode('utf-8') if stok.qr_code_image else blank_image),
+        }
+
+    
+
+        data = json.dumps(data)
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/Lot_package',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "PACKING_LIST.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
