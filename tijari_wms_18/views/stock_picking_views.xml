@@ -194,7 +194,7 @@
                                 readonly="not product_id"/>
                             <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
                             <field name="remaining_package_qty" string="Remaining Product" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders']"/>
-                            <field name="remaining_package_qty" string="Unpack Qty" readonly="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']" />
+                            <field name="unpack_quantity" force_save="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']" />
                             <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
                                 invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
                             <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
