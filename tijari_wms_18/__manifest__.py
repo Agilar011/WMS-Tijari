@@ -72,8 +72,10 @@
             'tijari_wms_18/static/src/xml/auto_input_code.xml',
             'tijari_wms_18/static/src/xml/action_generate_selected_lot.xml',
             'tijari_wms_18/static/src/xml/move_line_scan_button.xml',
+            'tijari_wms_18/static/src/views/picking_form/picker_move_one2many.js',
             'tijari_wms_18/static/src/views/fields/location_short_many2one/location_short_many2one.js',
-            'tijari_wms_18/static/src/views/fields/location_short_many2one/location_short_many2one.xml'
+            'tijari_wms_18/static/src/views/fields/location_short_many2one/location_short_many2one.xml',
+            'tijari_wms_18/static/src/scss/scan_button_align_center.scss',
         ]
     },
     
