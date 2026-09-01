@@ -60,4 +60,22 @@
         </field>
     </record>
 
+    <record id="view_product_product_kanban_hide_price" model="ir.ui.view">
+        <field name="name">product.product.kanban.hide.price</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_kanban_view"/>
+        <field name="arch" type="xml">
+          <xpath expr="//span[field[@name='lst_price']]" position="replace"/>
+        </field>
+    </record>
+
+    <record id="view_product_product_catalog_kanban_hide_price" model="ir.ui.view">
+        <field name="name">product.product.catalog.kanban.hide.price</field>
+        <field name="model">product.product</field>
+        <field name="inherit_id" ref="product.product_view_kanban_catalog"/>
+        <field name="arch" type="xml">
+          <xpath expr="//div[@name='o_kanban_price']" position="replace"/>
+        </field>
+    </record>
+
 </odoo>

@@ -41,8 +41,11 @@ const MOVE_LINE_SCAN_RELATION_FIELDS = [
     "result_package_id",
 ];
 const MOVE_LINE_RECORD_UPDATE_FIELDS = [
+    "confirmation_location_code",
     "matching_lot_id",
     "matching_loc_dest_id",
+    "location_dest_id",
+    "location_putaway_id",
     "confirmation_package_code",
     "result_package_id",
 ];
@@ -800,7 +803,7 @@ class MoveLineScanButton extends Component {
 
         try {
             const result = await this.orm.call(
-                "stock.move.line",
+                this.props.record.resModel,
                 "action_apply_scanned_field",
                 [[moveLineId], this.fieldName, scannedCode]
             );
@@ -829,6 +832,13 @@ class MoveLineScanLocationButton extends MoveLineScanButton {
     static iconClass = "fa fa-map-marker";
 }
 
+class MoveLineScanLocationTextButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanTextButton";
+    static scanFieldName = "confirmation_location_code";
+    static scanTitle = "Scan Location QR Code";
+    static iconClass = "fa fa-map-marker";
+}
+
 class MoveLineScanPackageButton extends MoveLineScanButton {
     static template = "tijari.MoveLineScanButton";
     static scanFieldName = "result_package_id";
@@ -849,11 +859,31 @@ class ProductScanButton extends Component {
         return "action_apply_scanned_product";
     }
 
+    get applyByLotMethodName() {
+        return "action_apply_scanned_product_by_lot";
+    }
+
     get scanTitle() {
         return "Scan Product QR Code";
     }
 
+    get scanByLotTitle() {
+        return "Scan Lot QR Code";
+    }
+
     async onClick(ev) {
+        await this.scanWithMethod(ev, this.applyMethodName, this.scanTitle);
+    }
+
+    async onProductClick(ev) {
+        await this.scanWithMethod(ev, this.applyMethodName, this.scanTitle);
+    }
+
+    async onProductByLotClick(ev) {
+        await this.scanWithMethod(ev, this.applyByLotMethodName, this.scanByLotTitle);
+    }
+
+    async scanWithMethod(ev, methodName, title) {
         ev.preventDefault();
         ev.stopPropagation();
 
@@ -867,8 +897,8 @@ class ProductScanButton extends Component {
             notification: this.notification,
             resModel,
             resId,
-            methodName: this.applyMethodName,
-            title: this.scanTitle,
+            methodName,
+            title,
         });
         if (!applyResult.ok) {
             return;
@@ -881,6 +911,10 @@ class ProductScanButton extends Component {
 class PickerProductScanButton extends ProductScanButton {
     get applyMethodName() {
         return "action_apply_scanned_picker_product";
+    }
+
+    get applyByLotMethodName() {
+        return "action_apply_scanned_picker_product_by_lot";
     }
 }
 
@@ -968,6 +1002,9 @@ registry.category("fields").add("adt_scan_lot_button", {
 });
 registry.category("fields").add("adt_scan_location_button", {
     component: MoveLineScanLocationButton,
+});
+registry.category("fields").add("adt_scan_location_text_button", {
+    component: MoveLineScanLocationTextButton,
 });
 registry.category("fields").add("adt_scan_result_package_button", {
     component: MoveLineScanPackageButton,

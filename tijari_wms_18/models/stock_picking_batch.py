@@ -123,6 +123,7 @@ class StockPickingBatch(models.Model):
 
     @api.depends(
         'putaway_product_id',
+        'putaway_lot_id',
         'move_ids',
         'move_ids.move_line_ids',
         'move_ids.move_line_ids.product_id',
@@ -137,6 +138,7 @@ class StockPickingBatch(models.Model):
 
     @api.depends(
         'putaway_product_id',
+        'putaway_lot_id',
         'move_ids',
         'move_ids.move_line_ids',
         'move_ids.move_line_ids.product_id',
@@ -150,6 +152,7 @@ class StockPickingBatch(models.Model):
 
     @api.depends(
         'putaway_product_id',
+        'putaway_lot_id',
         'move_ids',
         'move_ids.move_line_ids',
         'move_ids.move_line_ids.product_id',
@@ -177,6 +180,8 @@ class StockPickingBatch(models.Model):
     def _onchange_putaway_lot_id(self):
         for batch in self:
             if not batch.putaway_lot_id:
+                batch.putaway_product_id = False
+                batch.putaway_move_line_ids = batch._get_putaway_move_lines()
                 continue
             move_lines = batch._get_putaway_base_move_lines().filtered(
                 lambda line: (

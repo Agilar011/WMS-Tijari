@@ -9,14 +9,38 @@
         </button>
     </t>
 
-    <t t-name="tijari.ProductScanButton" owl="1">
+    <t t-name="tijari.MoveLineScanTextButton" owl="1">
         <button t-on-click="onClick"
                 type="button"
-                class="btn btn-primary oe_inline"
-                title="Scan Product">
-            <i class="fa fa-barcode me-1"/>
-            Scan Product
+                class="btn btn-secondary btn-sm oe_inline"
+                t-att-title="title">
+            Scan Location
         </button>
+    </t>
+
+    <t t-name="tijari.ProductScanButton" owl="1">
+        <div class="btn-group o_wms_scan_dropdown">
+            <button type="button"
+                    class="btn btn-primary dropdown-toggle"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                    title="Scan">
+                <i class="fa fa-barcode me-1"/>
+                Scan
+            </button>
+            <div class="dropdown-menu">
+                <button t-on-click="onProductClick"
+                        type="button"
+                        class="dropdown-item">
+                    Scan Product
+                </button>
+                <button t-on-click="onProductByLotClick"
+                        type="button"
+                        class="dropdown-item">
+                    Scan Product By Lot
+                </button>
+            </div>
+        </div>
     </t>
 
     <t t-name="tijari.ProductByLotScanButton" owl="1">

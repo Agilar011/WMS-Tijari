@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<odoo>
+    <record id="putaway_move_line_wizard_view_form" model="ir.ui.view">
+        <field name="name">putaway.move.line.wizard.view.form</field>
+        <field name="model">putaway.move.line.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Putaway">
+                <group>
+                    <field
+                        name="confirmation_location_code"
+                        widget="adt_scan_location_text_button"
+                        string=" "
+                        readonly="1"
+                        invisible="putaway_status == 'finished'"
+                    />
+                    <field name="move_line_id" invisible="1"/>
+                    <field name="adt_dest_location_id" invisible="1"/>
+                    <field name="putaway_status" invisible="1"/>
+                    <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
+
+                    <field name="original_location_putaway_id" invisible="1"/>
+                    <field name="original_confirmation_location_code" invisible="1"/>
+                    <field name="location_putaway_id" context="{'show_location_short_name': True}" readonly="putaway_status == 'finished'" string="Store To"/>
+                    <field name="quantity" string="Qty Diterima"/>
+                    <field
+                        name="confirmation_quantity"
+                        string="Qty Disimpan"
+                        readonly="putaway_status == 'finished'"
+                    />
+                </group>
+                <footer>
+                    <button
+                        name="action_save_and_finish"
+                        string="Save &amp; Confirm"
+                        type="object"
+                        class="btn-primary"
+                        invisible="putaway_status == 'finished'"
+                    />
+                    <button string="Cancel" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+</odoo>

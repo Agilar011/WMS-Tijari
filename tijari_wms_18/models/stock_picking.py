@@ -510,6 +510,7 @@ class StockPicking(models.Model):
 
     @api.depends(
         'putaway_product_id',
+        'putaway_lot_id',
         'move_line_ids',
         'move_line_ids.product_id',
         'move_line_ids.lot_id',
@@ -545,6 +546,7 @@ class StockPicking(models.Model):
 
     @api.depends(
         'picker_product_id',
+        'picker_lot_id',
         'move_ids_without_package',
         'move_ids_without_package.product_uom_qty',
         'move_ids_without_package.quantity',
@@ -565,6 +567,7 @@ class StockPicking(models.Model):
 
     @api.depends(
         'putaway_product_id',
+        'putaway_lot_id',
         'move_line_ids',
         'move_line_ids.product_id',
         'move_line_ids.lot_id',
@@ -598,6 +601,7 @@ class StockPicking(models.Model):
 
     @api.depends(
         'picker_product_id',
+        'picker_lot_id',
         'move_ids_without_package',
         'move_ids_without_package.product_id',
         'move_ids_without_package.state',
@@ -621,6 +625,8 @@ class StockPicking(models.Model):
     def _onchange_putaway_lot_id(self):
         for picking in self:
             if not picking.putaway_lot_id:
+                picking.putaway_product_id = False
+                picking.putaway_move_line_ids = picking._get_putaway_move_lines()
                 continue
             move_lines = picking._get_putaway_base_move_lines().filtered(
                 lambda line: (
@@ -643,6 +649,8 @@ class StockPicking(models.Model):
     def _onchange_picker_lot_id(self):
         for picking in self:
             if not picking.picker_lot_id:
+                picking.picker_product_id = False
+                picking.picker_move_ids = picking._get_picker_moves()
                 continue
             moves = picking._get_picker_base_moves().filtered(
                 lambda move: (

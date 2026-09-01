@@ -8,6 +8,13 @@
     padding: 6px 12px !important;
 }
 
+.o_wms_scan_dropdown {
+    .dropdown-toggle,
+    .dropdown-menu {
+        min-width: 160px;
+    }
+}
+
 .o_wms_picker_kanban,
 .o_wms_putaway_kanban {
     .o_kanban_renderer {

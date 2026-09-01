@@ -27,3 +27,5 @@ access_wms_scrap_move_line_manager,wms.scrap.move.line.manager,model_wms_scrap_m
 
 access_generate_package_wizard_operator,generate.package.wizard.operator,model_generate_package_wizard,tijari_wms_18.group_operator,1,1,1,1
 access_generate_package_wizard_manager,generate.package.wizard.manager,model_generate_package_wizard,stock.group_stock_manager,1,1,1,1
+access_putaway_move_line_wizard_operator,putaway.move.line.wizard.operator,model_putaway_move_line_wizard,tijari_wms_18.group_operator,1,1,1,1
+access_putaway_move_line_wizard_manager,putaway.move.line.wizard.manager,model_putaway_move_line_wizard,stock.group_stock_manager,1,1,1,1

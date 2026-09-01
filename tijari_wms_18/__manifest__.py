@@ -27,6 +27,7 @@
         'data/document_only_picking_type_data.xml',
         'data/ir.sequence.xml',
         'wizard/generate_package_wizard_views.xml',
+        'wizard/putaway_move_line_wizard_views.xml',
         'views/assets.xml',
         'views/hide_menu.xml',
         'views/internal_transfer_order_views.xml',
