@@ -20,7 +20,6 @@
         <field name="code">stock.quant.package.box</field>
         <field name="prefix">BOX</field>
         <field name="padding">7</field>
-        <field name="number_next">1</field>
         <field name="number_increment">1</field>
     </record>
 
@@ -30,7 +29,6 @@
         <field name="code">stock.quant.package.palet</field>
         <field name="prefix">PALET</field>
         <field name="padding">7</field>
-        <field name="number_next">1</field>
         <field name="number_increment">1</field>
     </record>
 

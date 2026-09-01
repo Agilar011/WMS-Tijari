@@ -6,6 +6,7 @@ import { patch } from "@web/core/utils/patch";
 import { SMLX2ManyField } from "@stock/fields/stock_move_line_x2_many_field";
 
 patch(SMLX2ManyField.prototype, {
+    
     async onAdd({ context, editable } = {}) {
         if (!this.props.record.data.show_quant) {
             return super.onAdd(...arguments);
@@ -52,4 +53,6 @@ patch(SMLX2ManyField.prototype, {
 
         return this.selectCreate({ domain, context, title });
     },
+    
+
 });
