@@ -47,6 +47,8 @@ class AcumaticaShipmentCompletedStaging(models.Model):
         index=True,
     )
 
+    inventory_nbr = fields.Char('Inventory Number')
+
     ship_date = fields.Datetime(
         string='Shipment Date',
     )
@@ -195,7 +197,7 @@ class AcumaticaShipmentCompletedStaging(models.Model):
     _sql_constraints = [
         (
             'shipment_completed_unique',
-            'unique(acumatica_id, config_id)',
+            'unique(shipment_nbr, config_id)',
             'Data Shipment Completed dari Acumatica sudah ada!'
         ),
     ]
