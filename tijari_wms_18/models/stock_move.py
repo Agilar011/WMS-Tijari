@@ -121,6 +121,12 @@ class StockMove(models.Model):
         store=True,
         string="Remaining Package Qty",
     )
+
+    unpack_quantity = fields.Float(
+        'Unpack Qty',
+        readonly=True
+    )
+
     difference_quantity = fields.Float(
         string='Difference Qty',
         compute='_compute_difference_quantity',

@@ -1614,11 +1614,7 @@ class StockPicking(models.Model):
 
         for rec in self:
 
-            if rec.picking_type_name in (
-                'Pick',
-                'Pick Internal',
-                'Pick Components',
-            ):
+            if "Pick" in rec.picking_type_name:
                 for move in rec.move_ids:
                     confirmation_qty = move.confirmation_quantity
 
@@ -1627,6 +1623,20 @@ class StockPicking(models.Model):
                             'product_uom_qty': confirmation_qty,
                             'quantity': confirmation_qty
                         })
+
+            elif 'Pack' in rec.picking_type_name:
+                for move in rec.move_ids:
+                    packaged_qty = sum(
+                        ml.quantity
+                        for ml in move.move_line_ids
+                        if ml.package_id
+                    )
+
+                    for dest_move in move.move_dest_ids:
+                        dest_move.write({
+                            "unpack_quantity": move.quantity - packaged_qty
+                        })
+                        
 
             is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
             if is_document_only:
