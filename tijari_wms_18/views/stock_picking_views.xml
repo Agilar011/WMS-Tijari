@@ -718,7 +718,8 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='unpack']" position="after">
-                <button name="action_print_packing_list" string="Print" type="object" class="btn-primary"/>
+                <button name="action_print_packing_list" type="object" class="btn-primary" icon="fa-print" title="Print Package List"/>
+                <button name="action_print_packing_package" string="Print Package" type="object" class="btn-primary"/>
             </xpath>
             <xpath expr="//field[@name='package_type_id']" position="before">
                 <field name="package_cat" />
