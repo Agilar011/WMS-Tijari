@@ -6,6 +6,7 @@ from PIL import Image
 import qrcode
 import io
 from odoo.exceptions import UserError, ValidationError
+from odoo.tools.float_utils import float_is_zero
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -144,13 +145,54 @@ class StockMove(models.Model):
     def action_mark_check_finished(self):
         if self.so_confirmation_quantity == 0:
             raise ValidationError(_("Confirmation Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
-        # self._check_so_confirmation_quantity()
+        
+        comparison = self._validate_before_mark_finished()
+        if comparison > 0:
+            raise UserError("Confirmed Qty tidak boleh melebihi Remaining Package Qty")
+
+        if comparison < 0:
+            diff = self.remaining_package_qty - self.so_confirmation_quantity
+            move_line = self.move_line_ids.filtered(
+                lambda x: not x.result_package_id and x.quantity == self.remaining_package_qty
+            )
+
+            rounding = self.product_uom.rounding if self.product_uom else 0.01
+            for line in move_line:
+                comparison = float_compare(
+                    line.quantity,
+                    diff,
+                    precision_rounding=rounding,
+                )
+                if comparison > 0:
+                    line.quantity -= diff
+                    break
+
         self.write({'status_check': 'finished'})
         return True
 
     def action_mark_check_unfinished(self):
         self.write({'status_check': 'unfinished'})
         return True
+
+    def _validate_before_mark_finished(self):
+        confirmation_quantity = self.so_confirmation_quantity
+        remaining_package_qty = self.remaining_package_qty
+
+        rounding = self.product_uom.rounding if self.product_uom else 0.01
+        comparison = float_compare(
+            confirmation_quantity,
+            remaining_package_qty,
+            precision_rounding=rounding,
+        )
+
+        if float_is_zero(
+            confirmation_quantity,
+            precision_rounding=rounding,
+        ):
+            raise UserError(f"Product {self.product_id.display_name} confirmation quantity can not be zero")
+
+        return comparison
+            
 
     def _update_reserved_quantity_vals(
         self,

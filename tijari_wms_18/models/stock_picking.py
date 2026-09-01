@@ -13,6 +13,7 @@ from odoo import models, api, fields, _
 from odoo.exceptions import ValidationError, UserError
 from odoo.tools import float_compare
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
+from odoo.tools.float_utils import float_is_zero
 
 _logger = logging.getLogger(__name__)
 
@@ -1706,6 +1707,7 @@ class StockPicking(models.Model):
         for picking in self:
             has_discrepancy = False
             for move in picking.move_ids.filtered(lambda item: item.state != 'cancel'):
+                diff_qty = move.difference_quantity
                 demand_qty = move.product_uom_qty
                 picked_qty = move.quantity
                 rounding = move.product_uom.rounding if move.product_uom else 0.01
@@ -1729,7 +1731,11 @@ class StockPicking(models.Model):
                             demand_qty,
                         )
                     )
-                if comparison < 0:
+                
+                if not float_is_zero(
+                    diff_qty,
+                    precision_rounding=rounding,
+                ):
                     has_discrepancy = True
 
             picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
@@ -1933,6 +1939,63 @@ class StockPicking(models.Model):
             raise UserError(_(
                 "Failed to login to Acumatica.\n\n%s"
             ) % (error_message or str(exc)))
+
+    def action_get_shipment_completed_staging(self):
+        self.ensure_one()
+
+        ShipmentCompleted = self.env['acumatica.shipment.completed.staging']
+        shipment_nbr = self.origin
+
+        staging_data = ShipmentCompleted.search([('shipment_nbr','=',shipment_nbr)], limit=1)
+        staging_data_line = staging_data.line_ids
+
+        all_match = True
+        for move in self.move_ids:
+            staging_lines_for_product = staging_data_line.filtered(
+                lambda line:
+                    line.line_inventory_id == move.product_id.default_code
+            )
+
+            staging_qty = sum(
+                staging_lines_for_product.mapped('line_quantity')
+            )
+
+            if not staging_qty:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Gagal Melakukan Update',
+                        'message': f'Quantity {move.product_id.display_name} yang diupdate tidak memiliki quantity',
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+
+            if staging_qty < move.quantity:
+                all_match = False
+            
+            elif staging_qty > move.quantity:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Gagal Melakukan Update',
+                        'message': f'Quantity {move.product_id.display_name} yang diupdate tidak boleh melebihi quatity barang yang dikirim',
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+            
+            move.shipped_qty = staging_qty
+
+        self.shipment_information = (
+            "full_shipment"
+            if all_match
+            else "partial"
+        )
+
+        self.action_confirm_shipment()   
 
     def action_fetch_actual_qty(self):
         self.ensure_one()
