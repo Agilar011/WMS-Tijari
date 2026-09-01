@@ -82,7 +82,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': [],
         },
         'po_receipt': {
-            'label': 'PO Receipt',
+            'label': 'Purchase Order',
             'wizard_model': 'import.receipt.wizard',
             'config_field': 'receipt_config_id',
             'line_model': 'acumatica.receipt.line',
@@ -91,7 +91,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['receipt_nbr', 'last_modified_from', 'odata_filter'],
         },
         'issue_po_return': {
-            'label': 'PO Return',
+            'label': 'Vendor Return',
             'wizard_model': 'import.issue.po.return.wizard',
             'config_field': 'issue_po_return_config_id',
             'line_model': 'acumatica.issue.po.return.line',
@@ -100,7 +100,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'transfer_one_step': {
-            'label': 'Transfer 1 STEP',
+            'label': 'Transfer 1 Step',
             'wizard_model': 'import.transfer.one.step.wizard',
             'config_field': 'transfer_one_step_config_id',
             'line_model': 'acumatica.transfer.one.step.line',
@@ -109,7 +109,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'transfer_two_step': {
-            'label': 'Transfer 2 STEP',
+            'label': 'Transfer 2 Step',
             'wizard_model': 'import.transfer.two.step.wizard',
             'config_field': 'transfer_two_step_config_id',
             'line_model': 'acumatica.transfer.two.step.line',
@@ -187,7 +187,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['shipment_nbr', 'last_modified_from', 'odata_filter'],
         },
         'shipment_completed': {
-            'label': 'Shipment Completed',
+            'label': 'Update SO completed',
             'wizard_model': 'import.shipment.completed.wizard',
             'line_model': 'acumatica.shipment.completed.staging',
             'result_name': 'Hasil Import Shipment Completed',
@@ -200,7 +200,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             ],
         },
         'so_transfer': {
-            'label': 'SO Transfer - Inter WH IN',
+            'label': 'Transfer (In/SOTR)',
             'wizard_model': 'import.transfer.wizard',
             'config_field': 'transfer_config_id',
             'line_model': 'acumatica.transfer.line',
@@ -209,7 +209,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'transfer_shipment': {
-            'label': 'SO Transfer - Inter WH OUT',
+            'label': 'Transfer (Out/shipment)',
             'wizard_model': 'import.transfer.shipment.wizard',
             'config_field': 'transfer_shipment_config_id',
             'line_model': 'acumatica.transfer.shipment.line',
@@ -300,26 +300,26 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
     TRANSACTION_TYPES = [
         'po_receipt',
-        'so_transfer',
-        # 'receipt_change_item',
-        # 'receipt_external',
         'inventory_received',
-        # 'toko_pegang_do',
         'shipment_so',
-        'kit_assembly',
         'so_shipment',
-        'shipment_completed',
-        'transfer_shipment',
-        # 'issue_change_item',
         'inventory_issue',
         'issue_po_return',
+        'so_transfer',
+        'transfer_shipment',
         'transfer_one_step',
         'transfer_two_step',
         'invoice_consignment',
-        # 'inventory_issue_toko_pegang_do',
-        'vendor_return_direct_transfer',
-        'vendor_return_document_direct_transfer',
         'credit_memo_consignment',
+        'shipment_completed',
+        'kit_assembly',
+        # 'receipt_change_item',
+        # 'receipt_external',
+        # 'toko_pegang_do',
+        # 'issue_change_item',
+        # 'inventory_issue_toko_pegang_do',
+        # 'vendor_return_direct_transfer',
+        # 'vendor_return_document_direct_transfer',
         # 'inventory_receipt_transfer_wh_in'
     ]
 

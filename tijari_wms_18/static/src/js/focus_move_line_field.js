@@ -31,16 +31,20 @@ const CAMERA_RETRYABLE_ERROR_NAMES = [
 const MOVE_LINE_SCAN_TEXT_FIELDS = [
     "confirmation_lot_code",
     "confirmation_location_code",
+    "confirmation_package_code",
 ];
 const MOVE_LINE_SCAN_RELATION_FIELDS = [
     "matching_lot_id",
     "matching_loc_dest_id",
     "location_dest_id",
     "location_putaway_id",
+    "result_package_id",
 ];
 const MOVE_LINE_RECORD_UPDATE_FIELDS = [
     "matching_lot_id",
     "matching_loc_dest_id",
+    "confirmation_package_code",
+    "result_package_id",
 ];
 
 let zxingBrowserLoadPromise = null;
@@ -825,6 +829,13 @@ class MoveLineScanLocationButton extends MoveLineScanButton {
     static iconClass = "fa fa-map-marker";
 }
 
+class MoveLineScanPackageButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanButton";
+    static scanFieldName = "result_package_id";
+    static scanTitle = "Scan Package QR Code";
+    static iconClass = "fa fa-barcode";
+}
+
 class ProductScanButton extends Component {
     static props = { ...standardFieldProps };
     static template = "tijari.ProductScanButton";
@@ -957,6 +968,9 @@ registry.category("fields").add("adt_scan_lot_button", {
 });
 registry.category("fields").add("adt_scan_location_button", {
     component: MoveLineScanLocationButton,
+});
+registry.category("fields").add("adt_scan_result_package_button", {
+    component: MoveLineScanPackageButton,
 });
 registry.category("fields").add("adt_scan_product_button", {
     component: ProductScanButton,

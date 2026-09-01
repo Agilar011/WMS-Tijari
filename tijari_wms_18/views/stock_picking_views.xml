@@ -9,9 +9,29 @@
             <xpath expr="//kanban/field[@name='picking_type_id']" position="after">
                 <field name="origin"/>
                 <field name="user_ids"/>
+                <field name="adt_type"/>
+                <field name="adt_total_qty"/>
             </xpath>
             <xpath expr="//templates/t[@t-name='card']//field[@name='name']" position="replace">
-                <field name="origin" class="fw-bold fs-5 ms-1"/>
+                <div class="min-w-0 flex-grow-1 ms-1">
+                    <field name="origin" class="fw-bold fs-5"/>
+                    <div class="text-muted small text-truncate">
+                        <field name="partner_id"/>
+                    </div>
+                </div>
+            </xpath>
+            <xpath expr="//templates/t[@t-name='card']//footer//field[@name='partner_id']" position="replace"/>
+            <xpath expr="//templates/t[@t-name='card']//field[@name='picking_properties']" position="after">
+                <div class="mt-1 ms-1 text-muted small">
+                    <div t-if="record.adt_type.raw_value">
+                        <span class="fw-semibold">Type: </span>
+                        <field name="adt_type"/>
+                    </div>
+                    <div>
+                        <span class="fw-semibold">Total Qty: </span>
+                        <field name="adt_total_qty"/>
+                    </div>
+                </div>
             </xpath>
             <xpath expr="//templates/t[@t-name='card']//field[@name='user_id']" position="replace">
                 <field name="user_ids" widget="many2many_avatar_user" readonly="state in ['cancel', 'done']" class="ms-1"/>
@@ -107,7 +127,7 @@
 
             </xpath>
 
-            <xpath expr="//group[field[@name='origin']]" position="after">
+            <xpath expr="//field[@name='picking_type_id'][1]" position="after">
                 <group>
 
                     <field name="shipment_information" 

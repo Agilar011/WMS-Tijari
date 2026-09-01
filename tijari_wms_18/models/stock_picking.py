@@ -85,11 +85,15 @@ class StockPicking(models.Model):
     )
     putaway_product_id = fields.Many2one(
         'product.product', string="Product Name")
+    allowed_putaway_lot_ids = fields.Many2many(
+        'stock.lot',
+        compute='_compute_allowed_putaway_lot_ids',
+    )
     putaway_lot_id = fields.Many2one(
         comodel_name="stock.lot",
         string="LOT Number",
-        compute='_compute_putaway_values',
-        readonly=True,
+        readonly=False,
+        domain="[('id', 'in', allowed_putaway_lot_ids)]",
     )
     putaway_move_line_ids = fields.Many2many(
         comodel_name="stock.move.line",
@@ -126,7 +130,7 @@ class StockPicking(models.Model):
         'stock.lot',
         string="LOT Number",
         domain="[('id', 'in', allowed_picker_lot_ids)]",
-        readonly=True,
+        readonly=False,
     )
     picker_progress_status = fields.Selection(
         [
@@ -408,8 +412,44 @@ class StockPicking(models.Model):
             move_lines = move_lines.filtered(
                 lambda line: line.product_id == self.putaway_product_id and line.quantity > 0
             )
+        if self.putaway_lot_id:
+            move_lines = move_lines.filtered(
+                lambda line: line.lot_id == self.putaway_lot_id or line.lot_name == self.putaway_lot_id.name
+            )
 
         return move_lines
+
+    def _get_putaway_move_lines_for_product(self, product):
+        self.ensure_one()
+
+        move_lines = self._get_putaway_base_move_lines()
+        if product:
+            move_lines = move_lines.filtered(
+                lambda line: line.product_id == product and line.quantity > 0
+            )
+        return move_lines
+
+    def _get_lots_from_move_lines(self, move_lines, products=False):
+        lots = move_lines.lot_id
+        lot_names = move_lines.filtered(
+            lambda line: line.lot_name and not line.lot_id
+        ).mapped('lot_name')
+        if lot_names:
+            domain = [('name', 'in', lot_names)]
+            if products:
+                domain.append(('product_id', 'in', products.ids))
+            lots |= self.env['stock.lot'].search(domain)
+        return lots
+
+    def _get_putaway_lots(self):
+        self.ensure_one()
+
+        move_lines = self._get_putaway_base_move_lines()
+        if self.putaway_product_id:
+            move_lines = move_lines.filtered(
+                lambda line: line.product_id == self.putaway_product_id
+            )
+        return self._get_lots_from_move_lines(move_lines, move_lines.product_id)
 
     def _get_picker_base_moves(self):
         self.ensure_one()
@@ -443,10 +483,11 @@ class StockPicking(models.Model):
             lambda line: line.lot_name and not line.lot_id
         ).mapped('lot_name')
         if lot_names:
-            lots |= self.env['stock.lot'].search([
-                ('name', 'in', lot_names),
-                ('product_id', '=', self.picker_product_id.id),
-            ])
+            domain = [('name', 'in', lot_names)]
+            products = moves.product_id
+            if products:
+                domain.append(('product_id', 'in', products.ids))
+            lots |= self.env['stock.lot'].search(domain)
 
         return lots
 
@@ -468,6 +509,19 @@ class StockPicking(models.Model):
             picking.allowed_putaway_product_ids = picking._get_putaway_base_move_lines().product_id
 
     @api.depends(
+        'putaway_product_id',
+        'move_line_ids',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+        'move_line_ids.quantity',
+        'move_line_ids.picker_status',
+    )
+    def _compute_allowed_putaway_lot_ids(self):
+        for picking in self:
+            picking.allowed_putaway_lot_ids = picking._get_putaway_lots()
+
+    @api.depends(
         'move_ids_without_package',
         'move_ids_without_package.product_id',
         'move_ids_without_package.state',
@@ -487,7 +541,7 @@ class StockPicking(models.Model):
     )
     def _compute_allowed_picker_lot_ids(self):
         for picking in self:
-            picking.allowed_picker_lot_ids = picking._get_picker_lots() if picking.picker_product_id else False
+            picking.allowed_picker_lot_ids = picking._get_picker_lots()
 
     @api.depends(
         'picker_product_id',
@@ -520,11 +574,6 @@ class StockPicking(models.Model):
         for picking in self:
             move_lines = picking._get_putaway_move_lines()
             picking.putaway_move_line_ids = move_lines
-            picking.putaway_lot_id = (
-                move_lines.mapped('lot_id')[:1]
-                if picking.putaway_product_id
-                else False
-            )
 
     @api.depends(
         'putaway_product_id',
@@ -560,7 +609,7 @@ class StockPicking(models.Model):
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):
         for picking in self:
-            move_lines = picking._get_putaway_move_lines()
+            move_lines = picking._get_putaway_move_lines_for_product(picking.putaway_product_id)
             picking.putaway_move_line_ids = move_lines
             picking.putaway_lot_id = (
                 move_lines.mapped('lot_id')[:1]
@@ -568,11 +617,44 @@ class StockPicking(models.Model):
                 else False
             )
 
+    @api.onchange('putaway_lot_id')
+    def _onchange_putaway_lot_id(self):
+        for picking in self:
+            if not picking.putaway_lot_id:
+                continue
+            move_lines = picking._get_putaway_base_move_lines().filtered(
+                lambda line: (
+                    line.lot_id == picking.putaway_lot_id
+                    or line.lot_name == picking.putaway_lot_id.name
+                )
+            )
+            products = move_lines.product_id
+            if products:
+                picking.putaway_product_id = products[:1]
+            picking.putaway_move_line_ids = picking._get_putaway_move_lines()
+
     @api.onchange('picker_product_id')
     def _onchange_picker_product_id(self):
         for picking in self:
             picking.picker_move_ids = picking._get_picker_moves()
             picking.picker_lot_id = picking._get_picker_lots()[:1] if picking.picker_product_id else False
+
+    @api.onchange('picker_lot_id')
+    def _onchange_picker_lot_id(self):
+        for picking in self:
+            if not picking.picker_lot_id:
+                continue
+            moves = picking._get_picker_base_moves().filtered(
+                lambda move: (
+                    picking.picker_lot_id in move.lot_ids
+                    or picking.picker_lot_id in move.move_line_ids.lot_id
+                    or picking.picker_lot_id.name in move.move_line_ids.mapped('lot_name')
+                )
+            )
+            products = moves.product_id
+            if products:
+                picking.picker_product_id = products[:1]
+            picking.picker_move_ids = picking._get_picker_moves()
 
     def _set_document_only_done_quantities(self):
         MoveLine = self.env['stock.move.line'].sudo()
@@ -1067,7 +1149,7 @@ class StockPicking(models.Model):
         if len(products) > 1:
             raise ValidationError(_("Lot hasil scan mengarah ke lebih dari satu product."))
 
-        return products[:1]
+        return products[:1], move_lines, lots[:1]
 
     def _find_picker_product_by_lot_scan_code(self, scan_code):
         self.ensure_one()
@@ -1105,7 +1187,11 @@ class StockPicking(models.Model):
         if not product:
             raise ValidationError("Product tidak ditemukan untuk kode scan: %s" % scanned_code)
 
-        self.write({'putaway_product_id': product.id})
+        move_lines = self._get_putaway_move_lines_for_product(product)
+        self.write({
+            'putaway_product_id': product.id,
+            'putaway_lot_id': move_lines.mapped('lot_id')[:1].id,
+        })
 
         return {
             'product_id': product.id,
@@ -1115,13 +1201,18 @@ class StockPicking(models.Model):
     def action_apply_scanned_product_by_lot(self, scanned_code):
         self.ensure_one()
         scanned_code = (scanned_code or '').strip()
-        product = self._find_putaway_product_by_lot_scan_code(scanned_code)
+        product, move_lines, lot = self._find_putaway_product_by_lot_scan_code(scanned_code)
 
-        self.write({'putaway_product_id': product.id})
+        self.write({
+            'putaway_product_id': product.id,
+            'putaway_lot_id': lot.id,
+        })
 
         return {
             'product_id': product.id,
             'display_name': product.display_name,
+            'lot_id': lot.id,
+            'move_line_ids': move_lines.ids,
         }
 
     def action_apply_scanned_picker_product_by_lot(self, scanned_code):

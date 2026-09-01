@@ -58,6 +58,29 @@
     }
 }
 
+.o_wms_my_worklist_kanban {
+    .o_wms_worklist_card {
+        min-width: 0;
+    }
+
+    .o_wms_worklist_meta {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .o_wms_worklist_meta > div {
+        min-width: 0;
+    }
+
+    .o_wms_worklist_label {
+        color: #667085;
+        display: block;
+        font-size: 12px;
+        line-height: 1.2;
+    }
+}
+
 @media (max-width: 575.98px) {
     .o_group:has([name="scan_product_button"], [name="scan_picker_product_button"]) {
         display: flex !important;

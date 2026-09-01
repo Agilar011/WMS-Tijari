@@ -52,8 +52,9 @@
                         <field name="picking_type_name" invisible="1"/>
                         <field name="allowed_putaway_product_ids" invisible="1"/>
                         <field name="allowed_putaway_move_line_ids" invisible="1"/>
+                        <field name="allowed_putaway_lot_ids" invisible="1"/>
                         <field name="putaway_product_id" domain="[('id', 'in', allowed_putaway_product_ids)]"/>
-                        <field name="putaway_lot_id" readonly="1"/>
+                        <field name="putaway_lot_id" domain="[('id', 'in', allowed_putaway_lot_ids)]"/>
                     </group>
 
                     <field name="putaway_move_line_ids" domain="[('id', 'in', allowed_putaway_move_line_ids)]" groups="!tijari_wms_18.group_operator">
