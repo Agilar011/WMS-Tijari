@@ -141,7 +141,18 @@
             </xpath>
 
             <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']" position="replace">
-                <field name="user_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done']"/>
+                
+            </xpath>
+
+            <xpath expr="//page[@name='extra']" position="inside">
+                <group>
+                    <group name="responsible_info" string="Responsible Information">
+                        <field name="pick_responsible_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done']"/>
+                        <field name="pack_responsible_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done']"/>
+                        <field name="do_responsible_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done']"/>
+                        <field name="user_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done']"/>
+                    </group>
+                </group>
             </xpath>
 
             <xpath expr="//notebook/page[@name='operations']" position="after">
