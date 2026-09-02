@@ -51,4 +51,22 @@
         </field>
     </record>
 
+    <record id="stock_picking_form_package_level_list_only" model="ir.ui.view">
+        <field name="name">stock.picking.form.package.level.list.only</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="priority" eval="2100"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='operations']//field[@name='package_level_ids']" position="attributes">
+                <attribute name="mode">list</attribute>
+                <attribute name="context">{
+                    'default_location_id': location_id,
+                    'default_location_dest_id': location_dest_id,
+                    'default_company_id': company_id,
+                    'tree_view_ref': 'stock.package_level_tree_view_picking'
+                }</attribute>
+            </xpath>
+        </field>
+    </record>
+
 </odoo>

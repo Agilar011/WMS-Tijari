@@ -23,6 +23,29 @@ class ImportStockItemWizard(models.TransientModel):
     total_new      = fields.Integer(string='Item Baru', readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
 
+    @staticmethod
+    def _val(item, key):
+        value = item.get(key, {})
+        if isinstance(value, dict):
+            return value.get("value", "") or ""
+        return value or ""
+
+    def _extract_barcode(self, item):
+        cross_references = item.get("CrossReferences") or []
+        if isinstance(cross_references, dict):
+            cross_references = cross_references.get("value", []) or []
+        if not isinstance(cross_references, list):
+            return ""
+
+        for cross_reference in cross_references:
+            if not isinstance(cross_reference, dict):
+                continue
+            alternate_type = self._val(cross_reference, "AlternateType")
+            if (alternate_type or "").strip().lower() != "barcode":
+                continue
+            return self._val(cross_reference, "AlternateID")
+        return ""
+
     def action_fetch_data(self):
         self.ensure_one()
         if not self.config_id:
@@ -177,7 +200,8 @@ class ImportStockItemWizard(models.TransientModel):
             )
             params = {
                 "$top": limit,
-                "$skip": real_skip
+                "$skip": real_skip,
+                "$expand": "CrossReferences",
             }
 
             _logger.info(
@@ -222,15 +246,6 @@ class ImportStockItemWizard(models.TransientModel):
                     )
                     all_results = []
 
-                    def val(item, key):
-
-                        v = item.get(key, {})
-
-                        if isinstance(v, dict):
-                            return v.get("value", "") or ""
-
-                        return ""
-
                     item_no = 0
 
                     for item in raw_data:
@@ -240,14 +255,15 @@ class ImportStockItemWizard(models.TransientModel):
                         parsed_vals = {
                             'external_id': item.get("id", "") or "",
                             'row_number': item.get("rowNumber", 0),
-                            'inventory_id': val(item, "InventoryID"),
-                            'description': val(item, "Description"),
-                            'item_type': val(item, "ItemType"),
-                            'item_class': val(item, "ItemClass"),
-                            'item_status': val(item, "ItemStatus"),
-                            'base_uom': val(item, "BaseUOM"),
-                            'valuation_method': val(item, "ValuationMethod"),
-                            'last_modified_datetime': val(item, "LastModifiedDateTime"),
+                            'inventory_id': self._val(item, "InventoryID"),
+                            'description': self._val(item, "Description"),
+                            'item_type': self._val(item, "ItemType"),
+                            'item_class': self._val(item, "ItemClass"),
+                            'item_status': self._val(item, "ItemStatus"),
+                            'base_uom': self._val(item, "BaseUOM"),
+                            'valuation_method': self._val(item, "ValuationMethod"),
+                            'last_modified_datetime': self._val(item, "LastModifiedDateTime"),
+                            'barcode': self._extract_barcode(item),
                         }
 
                         all_results.append(parsed_vals)
@@ -285,6 +301,7 @@ class ImportStockItemWizard(models.TransientModel):
                             item_type,
                             item_class,
                             item_status,
+                            barcode,
                             base_uom,
                             valuation_method,
                             last_modified_datetime,
@@ -297,6 +314,7 @@ class ImportStockItemWizard(models.TransientModel):
                             %s, %s, %s, %s,
                             %s, %s, %s, %s,
                             %s, %s, %s, %s,
+                            %s,
                             %s, %s, %s
                         )
                     """
@@ -341,6 +359,7 @@ class ImportStockItemWizard(models.TransientModel):
                             item['item_type'],
                             item['item_class'],
                             item['item_status'],
+                            item['barcode'],
                             item['base_uom'],
                             item['valuation_method'],
                             item['last_modified_datetime'],

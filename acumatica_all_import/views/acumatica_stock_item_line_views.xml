@@ -20,6 +20,7 @@
         <field name="arch" type="xml">
             <search string="Cari Stock Item">
                 <field name="inventory_id" string="InventoryID"/>
+                <field name="barcode"      string="Barcode"/>
                 <field name="description"  string="Description"/>
                 <field name="item_class"   string="ItemClass"/>
                 <field name="item_status"  string="ItemStatus"/>
@@ -60,6 +61,7 @@
         <field name="arch" type="xml">
             <list string="Data Stock Item dari Acumatica" multi_edit="1">
                 <field name="inventory_id"  string="InventoryID"/>
+                <field name="barcode"       string="Barcode" optional="show"/>
                 <field name="description"   string="Description"/>
                 <field name="item_type"     string="ItemType"     optional="show"/>
                 <field name="item_class"    string="ItemClass"    optional="show"/>
@@ -120,6 +122,7 @@
                     <group string="Field Mandatory">
                         <group>
                             <field name="inventory_id"  string="InventoryID"/>
+                            <field name="barcode"       string="Barcode"/>
                             <field name="description"   string="Description"/>
                             <field name="item_type"     string="ItemType"/>
                             <field name="item_status"   string="ItemStatus"/>
