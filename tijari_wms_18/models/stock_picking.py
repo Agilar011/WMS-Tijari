@@ -72,6 +72,46 @@ class StockPicking(models.Model):
         string="Responsible Users",
         domain=[("share", "=", False)],
     )
+
+    pick_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_pick_responsible_rel",
+        column1="picking_id",
+        column2="user_id",
+        string="Penanggungjawab Pick",
+    )
+
+    pack_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_pack_responsible_rel",
+        column1="picking_id",
+        column2="user_id",
+        string="Penanggungjawab Pack",
+    )
+
+    do_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_do_responsible_rel",
+        column1="picking_id",
+        column2="user_id",
+        string="Penanggungjawab Delivery Order",
+    )
+
+    @api.onchange(
+        "pick_responsible_ids",
+        "pack_responsible_ids",
+        "do_responsible_ids",
+    )
+    def _onchange_responsible_ids(self):
+        for picking in self:
+            responsible_users = (
+                picking.pick_responsible_ids
+                | picking.pack_responsible_ids
+                | picking.do_responsible_ids
+            )
+
+            picking.user_ids = [(6, 0, responsible_users.ids)]
+
     all_moves_picked = fields.Boolean(
         compute='_compute_all_moves_picked',
     )
@@ -1626,15 +1666,15 @@ class StockPicking(models.Model):
 
             elif 'Pack' in rec.picking_type_name:
                 for move in rec.move_ids:
-                    packaged_qty = sum(
-                        ml.quantity
-                        for ml in move.move_line_ids
-                        if ml.package_id
-                    )
-
                     for dest_move in move.move_dest_ids:
+                        packaged_qty = sum(
+                            ml.quantity
+                            for ml in dest_move.move_line_ids
+                            if ml.package_id
+                        )
+                        
                         dest_move.write({
-                            "unpack_quantity": move.quantity - packaged_qty
+                            "unpack_quantity": dest_move.quantity - packaged_qty
                         })
                         
 

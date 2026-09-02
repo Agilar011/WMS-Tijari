@@ -17,4 +17,18 @@ class WMSStockPackageLevel(models.Model):
     def action_mark_unfinished(self):
         self.write({'status': 'unfinished'})
         return True
+
+    def action_show_package_details(self):
+        self.ensure_one()
+        view = self.env.ref('stock.package_level_form_edit_view')
+
+        return {
+            'name': _('Package Content'),
+            'type': 'ir.actions.act_window',
+            'view_mode': 'form',
+            'res_model': 'stock.package_level',
+            'views': [(False, 'form')],
+            'target': 'new',
+            'res_id': self.id,
+        }
     
