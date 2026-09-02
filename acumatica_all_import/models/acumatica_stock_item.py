@@ -15,6 +15,7 @@ class AcumaticaStockItemLine(models.Model):
 
     Mapping:
       InventoryID          → default_code              (Mandatory)
+      CrossReferences      → barcode                   (Optional, AlternateType=barcode)
       Description          → name                      (Mandatory)
       ItemType             → type                      (Mandatory)
       ItemClass            → adt_item_class             (Mandatory, to be)
@@ -33,6 +34,7 @@ class AcumaticaStockItemLine(models.Model):
     external_id            = fields.Char(string='UUID Acumatica')
     inventory_id           = fields.Char(string='InventoryID')
     description            = fields.Char(string='Description')
+    barcode                = fields.Char(string='Barcode')
     item_type              = fields.Char(string='ItemType')
     item_class             = fields.Char(string='ItemClass')
     item_status            = fields.Char(string='ItemStatus')
@@ -126,13 +128,14 @@ class AcumaticaStockItemLine(models.Model):
 
     def _create_product_and_sku_history(self, line):
         query_product = """
-            INSERT INTO product_template (name, categ_id, default_code, type, uom_id, uom_po_id, adt_external_id, adt_item_class, adt_item_status, adt_valuation_method, adt_acumatica_write_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+            INSERT INTO product_template (name, categ_id, default_code, barcode, type, uom_id, uom_po_id, adt_external_id, adt_item_class, adt_item_status, adt_valuation_method, adt_acumatica_write_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """
         params_product = (
             json.dumps({"en_US": line.description}),
             1,  # Default category (Uncategorized)
             line.inventory_id or False,
+            line.barcode or None,
             self.ITEM_TYPE_MAP.get((line.item_type or '').lower(), 'consu'),
             self._resolve_uom(line.base_uom).id if line.base_uom else None,
             self._resolve_uom(line.base_uom).id if line.base_uom else None,
@@ -176,6 +179,7 @@ class AcumaticaStockItemLine(models.Model):
             UPDATE product_template
             SET name = %s,
                 type = %s,
+                barcode = COALESCE(%s, barcode),
                 uom_id = %s,
                 uom_po_id = %s,
                 adt_external_id = %s,
@@ -189,6 +193,7 @@ class AcumaticaStockItemLine(models.Model):
             json.dumps({"en_US": line.description}),
             # line.inventory_id,
             self.ITEM_TYPE_MAP.get((line.item_type or '').lower(), 'consu'),
+            line.barcode or None,
             self._resolve_uom(line.base_uom).id if line.base_uom else None,
             self._resolve_uom(line.base_uom).id if line.base_uom else None,
             line.external_id,
@@ -658,6 +663,7 @@ class AcumaticaStockItemLine(models.Model):
                             'is_storable': True,
                             'tracking' : 'lot',
                             'default_code': line.inventory_id or False,
+                            'barcode': line.barcode or False,
                             'type': self.ITEM_TYPE_MAP.get(
                                 (line.item_type or '').lower(),
                                 'consu'
@@ -705,6 +711,7 @@ class AcumaticaStockItemLine(models.Model):
                                     (line.item_type or '').lower(),
                                     'consu'
                                 ),
+                                line.barcode or None,
                                 uom_id,
                                 uom_id,
                                 line.item_class or False,
@@ -850,6 +857,7 @@ class AcumaticaStockItemLine(models.Model):
                         UPDATE product_template
                         SET name = %s,
                             type = %s,
+                            barcode = COALESCE(%s, barcode),
                             uom_id = %s,
                             uom_po_id = %s,
                             adt_item_class = %s,

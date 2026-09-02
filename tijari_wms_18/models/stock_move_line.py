@@ -804,7 +804,7 @@ class StockMoveLine(models.Model):
                 kode_product = line.product_id.default_code or f"PROD{line.product_id.id}"
                 source_document = line.picking_id.origin or f"PICK{line.picking_id.id}"
                 # prefix = f"{source_document}-{tanggal_masuk}-{kode_product}"
-                prefix = f"{tanggal_masuk}-{kode_product}"
+                prefix = f"{kode_product}-{tanggal_masuk}-{source_document}"
 
                 # lot_count = self.env['stock.lot'].search_count([
                 #     ('name', '=like', f"{prefix}%"),
