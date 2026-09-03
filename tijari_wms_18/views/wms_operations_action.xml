@@ -4,7 +4,7 @@
     <record id="action_wms_operations_purchase_receipts" model="ir.actions.act_window">
         <field name="name">Purchase Receipts</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'incoming'),
@@ -16,7 +16,7 @@
     <record id="action_wms_operations_sotr_receipts" model="ir.actions.act_window">
         <field name="name">Sales Order Receipts</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'internal'),
@@ -28,7 +28,7 @@
     <record id="action_wms_operations_receipts_type_change" model="ir.actions.act_window">
         <field name="name">Receipts Type Change Item</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'incoming'),
@@ -40,7 +40,7 @@
     <record id="action_wms_operations_inventory_receive" model="ir.actions.act_window">
         <field name="name">Inventory Receive</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'incoming'),
@@ -52,7 +52,7 @@
     <record id="action_wms_operations_shipment_so_return" model="ir.actions.act_window">
         <field name="name">Shipment SO Return</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'incoming'),
@@ -64,7 +64,7 @@
     <record id="action_wms_operations_so_consignment_receipts" model="ir.actions.act_window">
         <field name="name">Manage SO Consignment</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.name', '=', 'Receipt Internal'),
@@ -76,7 +76,7 @@
     <record id="action_wms_operations_sale_orders_shipment" model="ir.actions.act_window">
         <field name="name">Sale Orders Shipment</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'outgoing'),
@@ -88,7 +88,7 @@
     <record id="action_wms_operations_issue_type_change_items" model="ir.actions.act_window">
         <field name="name">Issue Type Change Item</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('adt_type', '=', 'Change Item'),
@@ -99,7 +99,7 @@
     <record id="action_wms_operations_inventory_issue" model="ir.actions.act_window">
         <field name="name">Inventory Issue</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('adt_type', '=', 'Issue'),
@@ -110,7 +110,7 @@
     <record id="action_wms_operations_po_return" model="ir.actions.act_window">
         <field name="name">Issue Type PO Return</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('adt_is_document_only', '=', False),
@@ -123,7 +123,7 @@
     <record id="action_wms_operations_transfer_shipment" model="ir.actions.act_window">
         <field name="name">Transfer Shipment</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'outgoing'),
@@ -135,7 +135,7 @@
     <record id="action_wms_operations_transfer_pinjaman_1_step" model="ir.actions.act_window">
         <field name="name">Transfer Pinjaman (1 Step)</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'internal'),
@@ -147,7 +147,7 @@
     <record id="action_wms_operations_transfer_pinjaman_2_step" model="ir.actions.act_window">
         <field name="name">Transfer Pinjaman (2 Step)</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'internal'),
@@ -159,7 +159,7 @@
     <record id="action_wms_kit_assembly" model="ir.actions.act_window">
         <field name="name">Kit Assembly</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'mrp_operation'),
@@ -170,7 +170,7 @@
     <record id="action_wms_operations_document_only" model="ir.actions.act_window">
         <field name="name">Document Only Transfers</field>
         <field name="res_model">stock.picking</field>
-        <field name="view_mode">list,form</field>
+        <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[('adt_is_document_only', '=', True)]</field>
     </record>
