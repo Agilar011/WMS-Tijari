@@ -1,7 +1,7 @@
 
 {
     'name': 'WMS from Tijari',
-    'version': '18.0.0.0.0',
+    'version': '18.0.0.1.0',
     'summary': 'WMS',
     'description': 'WMS',
     'category': 'Tools',
@@ -31,6 +31,7 @@
         'views/assets.xml',
         'views/hide_menu.xml',
         'views/internal_transfer_order_views.xml',
+        'views/internal_transfer_order_kanban_views.xml',
         'views/master_menu_view.xml',
         'views/product_template.xml',
         'views/res_partner.xml',
@@ -54,6 +55,7 @@
         'views/mrp_production_views.xml',
         'views/templates.xml',
         'views/wms_operations_action.xml',
+        'views/action_mobile_view_mode.xml',
         'views/wms_operations_menu.xml',
         'views/operator_menu_security.xml',
     ],
