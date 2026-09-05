@@ -8,8 +8,6 @@ class AcumaticaErrorMaster(models.Model):
     name = fields.Char('Name')
     data_type = fields.Selection([
         ('acumatica.customer.line', 'Customer'),
-        ('acumatica.customer.location.line', 'Customer Location'),
-        ('shipvia', 'Shipping Carrier'),
         ('warehouse', 'Warehouse & Location'),
         ('stock_item', 'Stock Item'),
         ('non_stock_item', 'Non-Stock Item'),
@@ -19,10 +17,10 @@ class AcumaticaErrorMaster(models.Model):
     ], string='Tipe Data')
     data_id = fields.Integer('Data ID')
     import_state = fields.Selection([
-        ('pending',  'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated',  'Diupdate'),
-        ('skipped',  'Dilewati (Sudah Ada)'),
+        ('staged',  'Staged'),
+        ('created', 'Created'),
+        ('updated',  'Updated'),
+        ('rejected',  'Rejected'),
         ('error',    'Error'),
         ('solved',   'Solved'),
     ], string='Status')
@@ -42,5 +40,3 @@ class AcumaticaErrorMaster(models.Model):
             'view_mode': 'form',
             'target': 'current',
         }
-        
-    

@@ -17,12 +17,12 @@
             parent="stock.menu_stock_root" 
             sequence="11"/>
 
-  <menuitem id="menpu_scan_stock_picking_by_origin"
+  <!-- <menuitem id="menpu_scan_stock_picking_by_origin"
             name="Search Document"
             parent="stock.menu_stock_root"
             sequence="12"
             action="action_scan_stock_picking_by_origin"
-            groups="tijari_wms_18.group_operator,stock.group_stock_manager"/>
+            groups="tijari_wms_18.group_operator,stock.group_stock_manager"/> -->
 
   <menuitem id="menu_stock_picking_worklist"
             name="Worklist"

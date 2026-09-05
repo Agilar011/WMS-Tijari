@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="spreadsheet_dashboard_group_api_data_hub" model="spreadsheet.dashboard.group">
+        <field name="name">API Data Hub</field>
+        <field name="sequence">35</field>
+    </record>
+
+    <record id="spreadsheet_dashboard_api_data_hub" model="spreadsheet.dashboard">
+        <field name="name">API Data Hub</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_dashboard.json"/>
+        <field name="main_data_model_ids" eval="[(4, ref('stock.model_stock_picking'))]"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_api_data_hub"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="sequence">310</field>
+        <!-- Opened only from the API Data Hub menu, not from the global Dashboards catalog. -->
+        <field name="is_published">False</field>
+    </record>
+
+    <record id="spreadsheet_dashboard_api_transactions" model="spreadsheet.dashboard">
+        <field name="name">Transactions</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_transactions_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_api_data_hub"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">False</field>
+    </record>
+
+    <record id="spreadsheet_dashboard_stock_picking_operations" model="spreadsheet.dashboard">
+        <field name="name">Warehouse Operations</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/stock_picking_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_api_data_hub"/>
+        <field name="main_data_model_ids" eval="[(4, ref('stock.model_stock_picking')), (4, ref('stock.model_stock_scrap')), (4, ref('stock.model_stock_quant'))]"/>
+        <field name="group_ids" eval="[Command.link(ref('tijari_wms_18.group_operator')), Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">False</field>
+        <field name="sequence">320</field>
+    </record>
+    <record id="spreadsheet_dashboard_api_product" model="spreadsheet.dashboard">
+        <field name="name">Product and Master Data</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_product_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_api_data_hub"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">False</field>
+    </record>
+    <record id="spreadsheet_dashboard_api_webhook" model="spreadsheet.dashboard">
+        <field name="name">Webhook Activity</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_webhook_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_api_data_hub"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">False</field>
+    </record>
+    <record id="spreadsheet_dashboard_api_scheduler" model="spreadsheet.dashboard">
+        <field name="name">Scheduler Activity</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_scheduler_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_api_data_hub"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">False</field>
+    </record>
+
+    <!-- Inventory copy of the API Data Hub dashboards. The spreadsheet
+         payloads stay identical; only the dashboard group and entry point
+         are different. -->
+    <record id="spreadsheet_dashboard_group_inventory_operations" model="spreadsheet.dashboard.group">
+        <field name="name">Inventory Operations</field>
+        <field name="sequence">33</field>
+    </record>
+
+    <record id="spreadsheet_dashboard_inventory_api_data_hub" model="spreadsheet.dashboard">
+        <field name="name">API Data Hub</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_inventory_operations"/>
+        <field name="main_data_model_ids" eval="[(4, ref('stock.model_stock_picking'))]"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">True</field>
+        <field name="sequence">1</field>
+    </record>
+    <record id="spreadsheet_dashboard_inventory_transactions" model="spreadsheet.dashboard">
+        <field name="name">Transactions</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_transactions_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_inventory_operations"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">True</field>
+        <field name="sequence">2</field>
+    </record>
+    <record id="spreadsheet_dashboard_inventory_product_master" model="spreadsheet.dashboard">
+        <field name="name">Product and Master Data</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_product_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_inventory_operations"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">True</field>
+        <field name="sequence">3</field>
+    </record>
+    <record id="spreadsheet_dashboard_inventory_webhook" model="spreadsheet.dashboard">
+        <field name="name">Webhook Activity</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_webhook_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_inventory_operations"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">True</field>
+        <field name="sequence">4</field>
+    </record>
+    <record id="spreadsheet_dashboard_inventory_scheduler" model="spreadsheet.dashboard">
+        <field name="name">Scheduler Activity</field>
+        <field name="spreadsheet_binary_data" type="base64" file="tijari_wms_18/data/api_data_hub_scheduler_dashboard.json"/>
+        <field name="dashboard_group_id" ref="tijari_wms_18.spreadsheet_dashboard_group_inventory_operations"/>
+        <field name="group_ids" eval="[Command.link(ref('stock.group_stock_manager'))]"/>
+        <field name="is_published">True</field>
+        <field name="sequence">5</field>
+    </record>
+
+    <record id="action_inventory_spreadsheet_dashboard" model="ir.actions.client">
+        <field name="name">Inventory Dashboard</field>
+        <field name="tag">action_spreadsheet_dashboard</field>
+        <field name="params" eval="{'dashboard_id': ref('tijari_wms_18.spreadsheet_dashboard_inventory_api_data_hub'), 'inventory_dashboard_only': True}"/>
+    </record>
+
+    <menuitem id="menu_inventory_spreadsheet_dashboard"
+              name="Dashboard"
+              parent="stock.menu_stock_root"
+              action="action_inventory_spreadsheet_dashboard"
+              sequence="1"
+              groups="stock.group_stock_manager"
+              active="False"/>
+</odoo>

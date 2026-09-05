@@ -70,14 +70,15 @@ class AcumaticaNonStockItemLine(models.Model):
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
-        ('pending',  'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated',  'Diupdate'),
-        ('error',    'Error'),
-    ], string='Status', default='pending', readonly=True)
+        ('staged',  'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
+        ('error', 'Error'),
+    ], string='Status', default='staged', readonly=True)
 
-    import_message  = fields.Char(string='Keterangan',          readonly=True)
-    odoo_product_id = fields.Many2one('product.template', string='Product di Odoo', readonly=True)
+    import_message  = fields.Char(string='Generation Message',          readonly=True)
+    odoo_product_id = fields.Many2one('product.template', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
@@ -138,13 +139,17 @@ class AcumaticaNonStockItemLine(models.Model):
     # ─── Import Actions ──────────────────────────────
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def _handle_acumatica_error(self, err_msg=False):
         AcumaticaError = self.env['acumatica.error.master']
@@ -202,7 +207,7 @@ class AcumaticaNonStockItemLine(models.Model):
         changed_fields=None,
     ):
         titles = {
-            'imported': '✅ Import Berhasil',
+            'created': '✅ Import Berhasil',
             'updated': '🔄 Data Diperbarui',
             'error': '❌ Import Gagal',
         }
@@ -263,7 +268,7 @@ class AcumaticaNonStockItemLine(models.Model):
         )
     
     def _do_import(self):
-        imported = updated = error = 0
+        created = updated = error = 0
 
         for line in self:
             try:
@@ -328,7 +333,7 @@ class AcumaticaNonStockItemLine(models.Model):
 
                     line.write({
                         'import_state':    'updated',
-                        'import_message':  f'Diupdate: {existing.name} (ID: {existing.id})',
+                        'import_message':  f'Updated: {existing.name} (ID: {existing.id})',
                         'odoo_product_id': existing.id,
                     })
 
@@ -346,7 +351,7 @@ class AcumaticaNonStockItemLine(models.Model):
                     new_product = self.env['product.template'].create(vals)
 
                     line.write({
-                        'import_state':    'imported',
+                        'import_state':    'created',
                         'import_message':  f'Dibuat: {new_product.name} (ID: {new_product.id})',
                         'odoo_product_id': new_product.id,
                     })
@@ -354,12 +359,12 @@ class AcumaticaNonStockItemLine(models.Model):
                     line._handle_acumatica_error()
 
                     line._log_import_result(
-                        'imported',
+                        'created',
                         f'Data {new_product.display_name} berhasil dibuat.',
                         new_product,
                         False
                     )
-                    imported += 1
+                    created += 1
                     # for item in new_product:
 
 
@@ -382,7 +387,7 @@ class AcumaticaNonStockItemLine(models.Model):
                 )
                 error += 1
 
-        msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
+        msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
         return {
             'type': 'ir.actions.client',
             'tag':  'display_notification',
@@ -396,7 +401,7 @@ class AcumaticaNonStockItemLine(models.Model):
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({
-            'import_state':   'pending',
+            'import_state':   'staged',
             'import_message': False,
         })
 

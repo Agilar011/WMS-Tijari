@@ -149,7 +149,7 @@ class ImportReceiptWizard(models.TransientModel):
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
+            params = {}
             filters = []
 
             if self.config_id.odata_expand:
@@ -299,7 +299,7 @@ class ImportReceiptWizard(models.TransientModel):
             #     vals = dict(item)
             #     vals.update({
             #         'config_id': self.config_id.id,
-            #         'import_state': 'pending',
+            #         'import_state': 'staged',
             #         'import_message': msg,
             #         'selected': True,
             #         'sync_date': fields.Datetime.now(),
@@ -335,7 +335,7 @@ class ImportReceiptWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{receipt_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -516,7 +516,7 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.receipt.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

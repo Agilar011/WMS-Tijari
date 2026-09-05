@@ -615,6 +615,200 @@ class StockMove(models.Model):
             'target': 'new',
         }
 
+    # Putaway flow scoped to the current stock move. The existing picking and
+    # batch Putaway flows continue to use their stock.move.line collections.
+    putaway_scan_product_button = fields.Boolean(string='Scan Product')
+    putaway_product_id = fields.Many2one(
+        'product.product',
+        string='Putaway Product',
+        domain="[('id', 'in', allowed_putaway_product_ids)]",
+    )
+    location_putaway_id = fields.Many2one(
+        'stock.location',
+        string='Putaway Location',
+        compute='_compute_location_putaway_id',
+        inverse='_inverse_location_putaway_id',
+        domain="[('id', 'child_of', adt_dest_location_id)]",
+        context="{'show_location_short_name': True}",
+    )
+    allowed_putaway_product_ids = fields.Many2many(
+        'product.product',
+        string='Allowed Putaway Products',
+        compute='_compute_allowed_putaway_product_ids',
+    )
+    putaway_move_line_ids = fields.One2many(
+        'stock.move.line',
+        'move_id',
+        string='Putaway Move Lines',
+        domain=[
+            '&', '&', '&',
+            ('picker_status', '=', 'finished'),
+            ('quantity', '>', 0),
+            ('state', '!=', 'cancel'),
+            '|',
+            ('lot_id', '!=', False),
+            ('lot_name', '!=', False),
+        ],
+    )
+    putaway_progress_status = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished'),
+        ],
+        string='Putaway Status',
+        compute='_compute_putaway_progress_status',
+    )
+
+    def _get_putaway_base_move_lines(self):
+        self.ensure_one()
+        return self.move_line_ids.filtered(
+            lambda line: (
+                (line.lot_id or line.lot_name)
+                and line.quantity > 0
+                and line.picker_status == 'finished'
+                and line.state != 'cancel'
+            )
+        )
+
+    def _get_putaway_move_lines(self):
+        self.ensure_one()
+        lines = self._get_putaway_base_move_lines()
+        if self.putaway_product_id:
+            lines = lines.filtered(
+                lambda line: line.product_id == self.putaway_product_id
+            )
+        return lines
+
+    @api.depends(
+        'move_line_ids',
+        'move_line_ids.location_putaway_id',
+        'move_line_ids.quantity',
+        'move_line_ids.picker_status',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+    )
+    def _compute_location_putaway_id(self):
+        for move in self:
+            locations = move._get_putaway_base_move_lines().mapped('location_putaway_id')
+            move.location_putaway_id = locations[:1] if len(locations) == 1 else False
+
+    def _inverse_location_putaway_id(self):
+        for move in self:
+            if move.location_putaway_id:
+                move._get_putaway_base_move_lines().write({
+                    'location_putaway_id': move.location_putaway_id.id,
+                    'location_dest_id': move.location_putaway_id.id,
+                })
+
+    @api.depends(
+        'move_line_ids',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+        'move_line_ids.quantity',
+        'move_line_ids.picker_status',
+        'move_line_ids.state',
+    )
+    def _compute_allowed_putaway_product_ids(self):
+        for move in self:
+            move.allowed_putaway_product_ids = move._get_putaway_base_move_lines().product_id
+
+    @api.depends(
+        'move_line_ids',
+        'move_line_ids.quantity',
+        'move_line_ids.confirmation_quantity',
+        'move_line_ids.putaway_status',
+        'move_line_ids.picker_status',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+    )
+    def _compute_putaway_progress_status(self):
+        for move in self:
+            lines = move._get_putaway_move_lines()
+            move.putaway_progress_status = (
+                'finished' if lines and all(line.putaway_status == 'finished' for line in lines)
+                else 'unfinished'
+            )
+
+    @api.onchange('putaway_product_id')
+    def _onchange_putaway_product_id(self):
+        for move in self:
+            if move.putaway_product_id and move.putaway_product_id not in move.allowed_putaway_product_ids:
+                move.putaway_product_id = False
+
+    def action_apply_scanned_product(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        product = self.env['product.product'].search([
+            '|',
+            ('barcode', '=', scanned_code),
+            ('default_code', '=', scanned_code),
+        ], limit=1)
+        if not product:
+            raise ValidationError(_('Product tidak ditemukan untuk kode scan: %s') % scanned_code)
+
+        if product not in self.allowed_putaway_product_ids:
+            raise ValidationError(_('Product hasil scan tidak ada di Putaway move ini.'))
+
+        self.putaway_product_id = product
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+        }
+
+    def action_mark_putaway_finished(self):
+        self.ensure_one()
+        lines = self._get_putaway_base_move_lines()
+        if not lines:
+            raise ValidationError(_('Tidak ada Putaway line yang siap diselesaikan.'))
+
+        if self.location_putaway_id:
+            lines.write({
+                'location_putaway_id': self.location_putaway_id.id,
+                'location_dest_id': self.location_putaway_id.id,
+            })
+
+        for line in lines:
+            line.action_mark_putaway_finished()
+
+        return True
+
+    def action_open_move_putaway(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Putaway'),
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_putaway_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_add_picker_line(self):
+        self.ensure_one()
+
+        move_line = self.env['stock.move.line'].create(
+            self._prepare_move_line_vals(quantity=0)
+        )
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Picker Details'),
+            'res_model': 'stock.move.line',
+            'res_id': move_line.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.wizard_picker_view_mobile'
+            ).id,
+            'context': {
+                'picker_new_line': True,
+            },
+            'target': 'new',
+        }
+
     def action_open_move_lines(self):
         self.ensure_one()
         return self.action_open_move_pick()

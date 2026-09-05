@@ -20,11 +20,11 @@
             <search string="Cari UoM">
                 <field name="unit_id" string="UnitID (Kategori)"/>
                 <field name="description" string="Description (Nama UoM)"/>
-                <filter string="Belum Diimport" name="pending"
-                        domain="[('import_state','=','pending')]"/>
-                <filter string="Sudah Diimport" name="imported"
-                        domain="[('import_state','=','imported')]"/>
-                <filter string="Dilewati" name="skipped"
+                <filter string="Staged" name="staged"
+                        domain="[('import_state','=','staged')]"/>
+                <filter string="Created" name="created"
+                        domain="[('import_state','=','created')]"/>
+                <filter string="Rejected" name="skipped"
                         domain="[('import_state','=','skipped')]"/>
                 <filter string="Error" name="error"
                         domain="[('import_state','=','error')]"/>
@@ -53,19 +53,19 @@
                 <field name="description" string="Description"/>
                 <field name="external_id" string="UUID Acumatica" optional="hide"/>
                 <field name="import_state" string="Status" widget="badge"
-                       decoration-success="import_state == 'imported'"
+                       decoration-success="import_state == 'created'"
                        decoration-warning="import_state == 'skipped'"
                        decoration-danger="import_state == 'error'"
-                       decoration-info="import_state == 'pending'"/>
-                <field name="odoo_categ_id" string="Kategori di Odoo" optional="show"/>
-                <field name="odoo_uom_id" string="UoM di Odoo" optional="show"/>
-                <field name="import_message" string="Keterangan" optional="show"/>
+                       decoration-info="import_state == 'staged'"/>
+                <field name="odoo_categ_id" string="Document Reference" optional="show"/>
+                <field name="odoo_uom_id" string="Document Reference" optional="show"/>
+                <field name="import_message" string="Generation Message" optional="show"/>
                 <field name="sync_date" string="Tgl Sync" optional="show"/>
                 <button name="action_import_this"
                         string="Import"
                         type="object"
                         icon="fa-download"
-                        invisible="import_state != 'pending'"/>
+                        invisible="import_state != 'staged'"/>
             </list>
         </field>
     </record>
@@ -81,13 +81,13 @@
                             string="Import ke Odoo"
                             type="object"
                             class="btn-primary"
-                            invisible="import_state != 'pending'"/>
+                            invisible="import_state != 'staged'"/>
                     <button name="action_reset_pending"
                             string="Reset ke Pending"
                             type="object"
-                            invisible="import_state == 'pending'"/>
+                            invisible="import_state == 'staged'"/>
                     <field name="import_state" widget="statusbar"
-                           statusbar_visible="pending,imported,skipped,error"/>
+                           statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <style>
                     div.o-mail-ChatterContainer.o-mail-Form-chatter div.o-mail-Message-richBody.overflow-x-auto {
@@ -122,7 +122,7 @@
         <field name="res_model">acumatica.uom.line</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_uom_line_search"/>
-        <field name="context">{'search_default_pending': 1}</field>
+        <field name="context">{'search_default_staged': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Belum ada data. Gunakan menu "Import UoM" untuk menarik data dari Acumatica.

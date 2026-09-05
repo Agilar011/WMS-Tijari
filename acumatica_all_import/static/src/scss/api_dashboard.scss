@@ -1,0 +1,35 @@
+.o_api_dashboard_vertical {
+    .o_api_dashboard_chart {
+        min-height: 180px !important;
+        padding-top: 16px;
+        box-sizing: border-box;
+        overflow: visible;
+    }
+
+    .o_kanban_renderer {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 16px;
+    }
+
+    .o_kanban_record {
+        width: 100% !important;
+        max-width: none !important;
+        flex: 0 0 auto !important;
+        margin: 0 !important;
+    }
+
+    .o_kanban_card {
+        width: 100%;
+    }
+
+    .o_api_dashboard_section_label {
+        color: #495057;
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        padding: 18px 4px 2px;
+        border-bottom: 2px solid #875a9c;
+    }
+}

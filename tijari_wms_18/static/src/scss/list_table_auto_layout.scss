@@ -16,7 +16,9 @@
 }
 
 .o_wms_picker_kanban,
-.o_wms_putaway_kanban {
+.o_wms_putaway_kanban,
+.o_wms_move_pick_kanban,
+.o_wms_putaway_move_kanban {
     .o_kanban_renderer {
         gap: 8px;
     }
@@ -62,6 +64,34 @@
 
     .o_wms_operation_action {
         align-self: flex-start;
+    }
+}
+
+.o_wms_move_pick_kanban {
+    .o_wms_move_pick_quantities {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .o_wms_operation_actions {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        margin-top: 4px;
+    }
+}
+
+.o_wms_putaway_move_kanban {
+    .o_wms_move_pick_quantities {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .o_wms_operation_actions {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        margin-top: 4px;
     }
 }
 

@@ -96,7 +96,7 @@
                         title="Note"/>
                     <button name="action_open_move_pick"
                         type="object"
-                        string="Pick Details"
+                        string="Open Pick"
                         class="btn-primary"
                         title="Open Picker"
                         invisible="1"/>
@@ -141,6 +141,7 @@
                 <field name="adt_type" invisible="1"/>
                 <field name="owner_id" invisible="1"/>
                 <field name="picking_type_name" invisible="1"/>
+                <field name="adt_dest_location_id" invisible="1"/>
                 <div class="grid-container">
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                         
@@ -172,6 +173,12 @@
 
                     </div>
                 </div>
+                <button name="action_add_picker_line"
+                    type="object"
+                    string="Add Line"
+                    class="btn-secondary"
+                    groups="tijari_wms_18.group_operator"
+                    invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"/>
                 <field name="move_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
@@ -284,10 +291,102 @@
                         'active_picking_id': picking_id,
                         'copy_previous_picker_location': True
                     }"
-                    mode="list"
+                    mode="list, kanban"
+                    add-label="Add Line"
                     groups="tijari_wms_18.group_operator"
                     invisible="'Receipt' not in (picking_type_name or '')">
-                    <list editable="bottom" delete="0">
+                    <kanban class="o_wms_move_pick_kanban" create="0" delete="1" can_open="0">
+                        <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
+                        <field name="location_id"/>
+                        <field name="lot_id"/>
+                        <field name="quantity"/>
+                        <field name="confirmation_quantity"/>
+                        <field name="product_uom_id"/>
+                        <field name="picking_type_name"/>
+                        <field name="state"/>
+                        <field name="picker_status"/>
+                        <field name="matching"/>
+                        <templates>
+                            <t t-name="card">
+                                <div class="o_wms_operation_card">
+                                    <div class="o_wms_operation_product">
+                                        <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                    </div>
+                                    <div class="text-muted" invisible="not lot_id">
+                                        <strong>Lot/Serial Number: </strong>
+                                        <field name="lot_id"/>
+                                    </div>
+                                    <div class="o_wms_move_pick_quantities">
+                                        <div>
+                                            <strong>Qty In Pack: </strong>
+                                            <field name="quantity"/>
+                                            <field name="product_uom_id" class="ms-1"/>
+                                        </div>
+                                        <div invisible="'Pick' not in (picking_type_name or '')">
+                                            <strong>Qty Diambil: </strong>
+                                            <field name="confirmation_quantity"/>
+                                            <field name="product_uom_id" class="ms-1"/>
+                                        </div>
+                                    </div>
+                                    <div class="o_wms_operation_actions">
+                                        <button name="action_open_picker_details"
+                                            type="object"
+                                            class="btn btn-primary btn-sm"
+                                            string="Pick Details">
+                                        </button>
+                                        <button name="action_mark_picker_unfinished"
+                                            type="object"
+                                            class="btn btn-danger btn-sm o_wms_auto_save_before_action"
+                                            string="Rollback"
+                                            invisible="picker_status == 'unfinished'">
+                                        </button>
+                                        <button name="action_delete_picker_line"
+                                            type="object"
+                                            class="btn btn-secondary btn-sm"
+                                            string="Hapus Line"
+                                            confirm="Hapus line ini?"
+                                            invisible="state in ['done', 'cancel']">
+                                        </button>
+                                        <field name="picker_status"
+                                            decoration-success="picker_status == 'finished'"
+                                            decoration-danger="picker_status == 'unfinished'"
+                                            widget="badge"/>
+                                    </div>
+
+                                    <!-- <div class="o_wms_operation_actions">
+                                        <button name="action_open_picker_details"
+                                            type="object"
+                                            string="Pick Details"
+                                            class="btn btn-primary btn-sm o_wms_operation_action"
+                                            invisible="state == 'cancel'"/>
+                                        <button name="action_mark_picker_finished"
+                                            type="object"
+                                            icon="fa-check"
+                                            class="btn btn-success btn-sm o_wms_auto_save_before_action"
+                                            title="Finish Picker"
+                                            invisible="picker_status == 'finished'"/>
+                                        <button name="action_mark_picker_unfinished"
+                                            type="object"
+                                            icon="fa-undo"
+                                            class="btn btn-danger btn-sm"
+                                            title="Undo Picker"
+                                            invisible="picker_status == 'unfinished'"/>
+                                        <field name="picker_status"
+                                            decoration-success="picker_status == 'finished'"
+                                            decoration-danger="picker_status == 'unfinished'"
+                                            widget="badge"/>
+                                        <field name="matching"
+                                            decoration-success="matching == 'match'"
+                                            decoration-danger="matching == 'not_match'"
+                                            widget="badge"
+                                            invisible="'Pick' not in (picking_type_name or '')"/>
+                                    </div> -->
+                                </div>
+                            </t>
+                        </templates>
+                    </kanban>
+
+                    <list editable="bottom" create="0" delete="0">
                         <field name="company_id" column_invisible="1" force_save="1"/>
                         <field name="picking_id" column_invisible="1" force_save="1"/>
                         <field name="move_id" column_invisible="1" force_save="1"/>
@@ -358,7 +457,8 @@
                                 string="Scan Location"
                                 readonly="1"
                                 invisible="matching == 'match'"/>
-                        <field name="quantity" string="Quantity"/>
+                        <field name="quantity" string="Quantity" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Saran Qty" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="Unit of Measure"/>
                         <field name="matching_lot_id" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]" optional="hide"/>
@@ -468,5 +568,187 @@
         </field>
     </record>
 
+    <record id="stock_move_putaway_view" model="ir.ui.view">
+        <field name="name">stock.move.putaway</field>
+        <field name="model">stock.move</field>
+        <field name="arch" type="xml">
+            <form string="Putaway">
+                <field name="picking_type_name" invisible="1"/>
+                <field name="allowed_putaway_product_ids" invisible="1"/>
+                <group>
+                    <group>
+                        <field name="product_id" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+                    </group>
+                    <group>
+                        <label for="product_uom_qty" string="Total Qty"/>
+                        <field name="product_uom_qty" readonly="1" nolabel="1"/>
+                    </group>
+                </group>
+                <group>
+                    <field name="putaway_progress_status" string="Status"
+                        decoration-success="putaway_progress_status == 'finished'"
+                        decoration-danger="putaway_progress_status == 'unfinished'"
+                        widget="badge"/>
+                </group>
+                <field name="putaway_move_line_ids" mode="list,kanban">
+                    <list editable="bottom" create="0" delete="0">
+                        <field name="product_id" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+                        <field name="adt_dest_location_id" column_invisible="1"/>
+                        <field name="location_dest_id" column_invisible="1"/>
+                        <field name="location_putaway_id"
+                            string="Store To"
+                            context="{'show_location_short_name': True}"
+                            domain="[('id', 'child_of', adt_dest_location_id)]"/>
+                        <field name="quantity" readonly="1" string="Qty Diterima"/>
+                        <field name="confirmation_quantity" string="Qty Disimpan" readonly="putaway_status == 'finished'" force_save="1"/>
+                        <field name="product_uom_id" readonly="1" string="UoM"/>
+                        <field name="putaway_status" string="Status"
+                            decoration-success="putaway_status == 'finished'"
+                            decoration-danger="putaway_status == 'unfinished'"
+                            widget="badge"/>
+                        <field name="confirmation_location_code" widget="adt_scan_location_button" string=" " readonly="1" invisible="putaway_status == 'finished'"/>
+                        <button name="action_mark_putaway_finished"
+                            type="object"
+                            icon="fa-check"
+                            title="Mark Putaway Finished"
+                            class="btn-success"
+                            invisible="putaway_status == 'finished'"/>
+                    </list>
+                    <kanban class="o_wms_putaway_kanban" create="0" edit="0" delete="0" can_open="0">
+                        <field name="product_id" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+                        <field name="lot_id"/>
+                        <field name="quantity"/>
+                        <field name="confirmation_quantity"/>
+                        <field name="product_uom_id"/>
+                        <field name="putaway_status"/>
+                        <field name="state"/>
+                        <templates>
+                            <t t-name="card">
+                                <div class="o_wms_operation_card">
+                                    <div class="o_wms_operation_product">
+                                        <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                    </div>
+                                    <div class="text-muted" invisible="not lot_id">
+                                        <strong>Lot/Serial Number: </strong>
+                                        <field name="lot_id"/>
+                                    </div>
+                                    <div class="o_wms_move_pick_quantities">
+                                        <div>
+                                            <strong>Qty Diterima: </strong>
+                                            <field name="quantity"/>
+                                            <field name="product_uom_id" class="ms-1"/>
+                                        </div>
+                                        <div>
+                                            <strong>Qty Disimpan: </strong>
+                                            <field name="confirmation_quantity"/>
+                                            <field name="product_uom_id" class="ms-1"/>
+                                        </div>
+                                    </div>
+                                    <div class="o_wms_operation_actions">
+                                        <button name="action_open_putaway_move_line_wizard"
+                                            type="object"
+                                            class="btn btn-primary btn-sm"
+                                            string="Open Putaway"/>
+                                        <button name="action_mark_putaway_unfinished"
+                                            type="object"
+                                            class="btn btn-danger btn-sm"
+                                            string="Rollback"
+                                            invisible="putaway_status == 'unfinished'"/>
+                                        <field name="putaway_status"
+                                            decoration-success="putaway_status == 'finished'"
+                                            decoration-danger="putaway_status == 'unfinished'"
+                                            widget="badge"/>
+                                    </div>
+                                </div>
+                            </t>
+                        </templates>
+                    </kanban>
+                </field>
+            </form>
+        </field>
+    </record>
+
+    <record id="wizard_picker_view_mobile" model="ir.ui.view">
+        <field name="name">stock.move.line.picker.mobile</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id"/>
+        <field name="arch" type="xml">
+            <form string="Picker Details">
+                <group>
+                    <field name="adt_dest_location_id" invisible="1"/>
+                    <field name="picker_status" invisible="1"/>
+                    <field name="product_id" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+
+                    <field
+                        name="confirmation_quantity"
+                        string="Qty Disimpan"
+                        readonly="picker_status == 'finished'"
+                    />
+                </group>
+                <footer>
+                    <button
+                        name="action_save_picker_details"
+                        string="Save &amp; Confirm"
+                        type="object"
+                        class="btn-primary"
+                        invisible="picker_status == 'finished'"
+                    />
+                    <button
+                        name="action_cancel_picker_details"
+                        string="Cancel"
+                        type="object"
+                        class="btn-secondary"
+                    />
+                </footer>
+            </form>
+
+        </field>
+    </record>
+
+    <record id="putaway_move_line_wizard_view_form" model="ir.ui.view">
+        <field name="name">putaway.move.line.wizard.view.form</field>
+        <field name="model">putaway.move.line.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Putaway">
+                <group>
+                    <field
+                        name="confirmation_location_code"
+                        widget="adt_scan_location_text_button"
+                        string=" "
+                        readonly="1"
+                        invisible="putaway_status == 'finished'"
+                    />
+                    <field name="adt_dest_location_id" invisible="1"/>
+                    <field name="putaway_status" invisible="1"/>
+                    <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
+
+                    <field name="location_putaway_id" context="{'show_location_short_name': True}" readonly="putaway_status == 'finished'" string="Store To"/>
+                    <field name="quantity" string="Qty Diterima"/>
+                    <field
+                        name="confirmation_quantity"
+                        string="Qty Disimpan"
+                        readonly="putaway_status == 'finished'"
+                    />
+                </group>
+                <footer>
+                    <button
+                        name="action_save_and_finish"
+                        string="Save &amp; Confirm"
+                        type="object"
+                        class="btn-primary"
+                        invisible="putaway_status == 'finished'"
+                    />
+                    <button
+                        name="action_rollback"
+                        string="Rollback"
+                        type="object"
+                        class="btn-danger"
+                        invisible="putaway_status != 'finished'"
+                    />
+                    <button string="Cancel" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
 
 </odoo>

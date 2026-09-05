@@ -104,7 +104,7 @@ class ImportShipmentWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.shipment.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -429,7 +429,7 @@ class ImportShipmentWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{shipment_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,

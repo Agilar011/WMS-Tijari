@@ -274,7 +274,7 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             order.write(vals)
             return order, 'updated'
 
-        return InternalTransferOrder.create(vals), 'imported'
+        return InternalTransferOrder.create(vals), 'created'
 
     def create_order_move(self, order, product, qty, uom=False, name=False, description=False, extra_vals=False):
         Move = self.env['stock.move']

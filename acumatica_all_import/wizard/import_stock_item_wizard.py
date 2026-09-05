@@ -164,7 +164,7 @@ class ImportStockItemWizard(models.TransientModel):
             ('last_modified_datetime', '!=', item['last_modified_datetime']),
         ])
         if existing:
-            item['import_state'] = 'pending'
+            item['import_state'] = 'staged'
             existing.write(item)
 
     def fetch_stock_item_data(self, limit=50, offset=0, skip=0):
@@ -347,7 +347,7 @@ class ImportStockItemWizard(models.TransientModel):
                             existing_product = product_by_inventory.get((item['external_id']))
 
                         msg = 'Data sudah ada' if existing_product else ''
-                        state = 'pending'
+                        state = 'staged'
 
 
                         params_list.append((
@@ -447,7 +447,7 @@ class ImportStockItemWizard(models.TransientModel):
 
         domain = [
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ]
 
         total = Line.search_count(domain)
@@ -506,7 +506,7 @@ class ImportStockItemWizard(models.TransientModel):
 
         lines = self.env['acumatica.stock.item.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ], limit=BATCH_SIZE)
 
         if not lines:
@@ -515,7 +515,7 @@ class ImportStockItemWizard(models.TransientModel):
         _logger.info("Menemukan %s record pending untuk diimport.", len(lines))
         total_before = self.env['acumatica.stock.item.line'].search_count([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ])
 
         count_to_import = round(total_before / BATCH_SIZE)
@@ -529,7 +529,7 @@ class ImportStockItemWizard(models.TransientModel):
 
         total_after = self.env['acumatica.stock.item.line'].search_count([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ])
 
         _logger.info(

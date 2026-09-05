@@ -64,7 +64,7 @@ class ImportTransferTwoStepWizard(models.TransientModel):
                 **item,
                 'odoo_internal_transfer_order_id': existing_transfer[0]['id'] if existing_transfer else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{reference_nbr}: Sudah ada → akan diupdate' if existing_transfer else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -404,7 +404,7 @@ class ImportTransferTwoStepWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.transfer.two.step.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

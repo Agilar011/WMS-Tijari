@@ -9,239 +9,9 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
-class AcumaticaIssuePoReturnConfig(models.Model):
-    _name = 'acumatica.issue.po.return.config'
-    _description = 'Konfigurasi Koneksi Acumatica - PO Return Import'
-    _rec_name = 'name'
-
-    name = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
-    base_url = fields.Char(string='Base URL', required=True, default='http://staging.aditya.group/acumportal/entity')
-    api_version = fields.Char(string='API Version', required=True, default='25.200.002')
-    username = fields.Char(string='Username', required=True, default='wms')
-    password = fields.Char(string='Password', required=True)
-    company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
-    endpoint_name = fields.Char(string='Endpoint Name', required=True, default='PurchaseReceipt')
-    active = fields.Boolean(default=True)
-    last_sync = fields.Datetime(string='Terakhir Sync', readonly=True)
-    state = fields.Selection([
-        ('draft', 'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error', 'Error'),
-    ], string='Status', default='draft', readonly=True)
-    odata_expand = fields.Char(
-        string='OData Expand',
-        default='Details',
-        help='Contoh: Details atau Details,OtherChild'
-    )
-    odata_select = fields.Char(
-        string='OData Select',
-        help='Optional: pilih field tertentu'
-    )
-    odata_filter = fields.Char(
-        string='OData Filter',
-        default="Type eq 'Return'"
-    )
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            if session:
-                self._do_logout(session)
-                self.state = 'connected'
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Koneksi Berhasil!',
-                        'message': f'Berhasil terhubung ke Acumatica ({self.base_url})',
-                        'type': 'success',
-                        'sticky': False,
-                    }
-                }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-    def _do_login(self):
-        self.ensure_one()
-        try:
-            session = requests.Session()
-            response = session.post(
-                self.login_url,
-                json={
-                    "name": self.username,
-                    "password": self.password,
-                    "company": self.company_code
-                },
-                headers={"Content-Type": "application/json"},
-                timeout=30,
-            )
-            if response.status_code == 204:
-                return session
-            raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
-        except requests.exceptions.ConnectionError:
-            raise UserError(f'Tidak bisa terhubung ke server: {self.base_url}')
-        except requests.exceptions.Timeout:
-            raise UserError('Koneksi timeout. Periksa URL server.')
-
-    def _do_logout(self, session):
-        try:
-            session.post(self.logout_url, timeout=10)
-        except Exception:
-            pass
-
-    def _val(self, item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    def _normalize_rows(self, payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
-
-    def fetch_receipt_data(self, limit=50, offset=0, receipt_nbr=False, last_modified_from=False, odata_filter=False):
-        self.ensure_one()
-        session = self._do_login()
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-
-            if self.odata_expand:
-                params['$expand'] = self.odata_expand
-
-            body = {
-                "BuildingID": {
-                    "value": "WH33"
-                }
-            }
-
-            response = session.put(endpoint, params=params, json=body, timeout=300)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Inventory Receipt (HTTP {response.status_code}): {response.text}')
-
-            raw_payload = response.json()
-            raw_data = raw_payload.get('PurchaseReceiptGIDetails') if isinstance(raw_payload, dict) else None
-            raw_data = raw_data or self._normalize_rows(raw_payload)
-            result = []
-
-            for row_number, item in enumerate(raw_data, start=1):
-                header = {
-                    'external_id': item.get('id', '') or '',
-                    'row_number': row_number,
-                    'note': self._val(item, 'NoteHeader') or item.get('note', {}).get('value', '') or '',
-                    'branch_warehouse': self._val(item, 'Branch'),
-                    'actual_qty': self._val(item, 'ControlQty'),
-                    'scheduled_date': self._val(item, 'Date'),
-                    'is_hold': self._val(item, 'Hold'),
-                    'inventory_ref': self._val(item, 'InventoryRefNbr'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'header_location_code': self._val(item, 'Location'),
-                    'post_period': self._val(item, 'PostPeriod'),
-                    'receipt_nbr': self._val(item, 'ReceiptNbr'),
-                    'status': self._val(item, 'Status'),
-                    'total_qty': self._val(item, 'TotalQty'),
-                    'receipt_type': self._val(item, 'Type'),
-                    'vendor_code': self._val(item, 'VendorID'),
-                    'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
-                    'warehouse_code': self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
-                }
-                print(f" Get data : {header['receipt_nbr']}, Type: {header['receipt_type']}, Status: {header['status']}")           
-
-                details = item.get('Details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-                if not details:
-                    result.append({
-                        **header,
-                        'line_external_id': item.get('id', '') or '',
-                        'line_note': self._val(item, 'LineNote'),
-                        'description': self._val(item, 'LineDescription'),
-                        'inventory_id': self._val(item, 'LineInventoryID'),
-                        'line_nbr': str(self._val(item, 'LineNbr') or 0),
-                        'line_type': self._val(item, 'LineType'),
-                        'location_dest_code': self._val(item, 'LineLocation'),
-                        'open_qty': self._val(item, 'LineOpenQty'),
-                        'order_qty': self._val(item, 'LineOrderedQty'),
-                        'po_line_number': self._val(item, 'LinePOLineNbr'),
-                        'po_number': self._val(item, 'LinePOOrderNbr'),
-                        'po_type': self._val(item, 'LinePOOrderType') or self._val(item, 'Type'),
-                        'po_receipt_line_number': self._val(item, 'LinePOReceiptLineNbr'),
-                        'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
-                        'product_uom_qty': self._val(item, 'LineReceiptQty'),
-                        'transaction_description': self._val(item, 'LineDescription'),
-                        'transfer_order_line_number': self._val(item, 'LineTransferOrderLineNbr'),
-                        'transfer_order_number': self._val(item, 'LineTransferOrderNbr'),
-                        'transfer_order_type': self._val(item, 'LineTransferOrderType'),
-                        'transfer_shipment_number': self._val(item, 'LineTransferShipmentNbr'),
-                        'uom_code': self._val(item, 'LineUOM'),
-                        'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
-                        'warehouse_code': self._val(item, 'LineWarehouseID') or header.get('warehouse_code'),
-                    })
-                    continue
-
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    description = (
-                        self._val(detail, 'LineDescription')
-                        or self._val(detail, 'Description')
-                        or self._val(detail, 'TransactionDescription')
-                    )
-                    warehouse_dest_code = (
-                        self._val(detail, 'LineWarehouseID')
-                        or self._val(detail, 'Warehouse')
-                        or header.get('warehouse_code')
-                    )
-
-                    result.append({
-                        **header,
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_note': self._val(detail, 'LineNote') or detail.get('note', {}).get('value', '') or '',
-                        'description': description,
-                        'inventory_id': self._val(detail, 'InventoryID') or self._val(detail, 'LineInventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'line_type': self._val(detail, 'LineType'),
-                        'location_dest_code': self._val(detail, 'LineLocation') or self._val(detail, 'Location'),
-                        'open_qty': self._val(detail, 'LineOpenQty') or self._val(detail, 'OpenQty'),
-                        'order_qty': self._val(detail, 'LineOrderedQty') or self._val(detail, 'OrderedQty'),
-                        'product_uom_qty': self._val(detail, 'LineReceiptQty') or self._val(detail, 'ReceiptQty'),
-                        'transaction_description': self._val(detail, 'LineDescription') or self._val(detail, 'TransactionDescription'),
-                        'uom_code': self._val(detail, 'LineUOM') or self._val(detail, 'UOM'),
-                        'warehouse_dest_code': warehouse_dest_code,
-                        'warehouse_code': warehouse_dest_code,
-                    })
-
-            _logger.info("Berhasil ambil %s rows Inventory Receipt dari Acumatica", len(result))
-            return result
-        finally:
-            self._do_logout(session)
-            self.last_sync = fields.Datetime.now()
-
-
 class AcumaticaIssuePoReturnLine(models.Model):
     _name = 'acumatica.issue.po.return.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Inventory Receipt dari Acumatica'
     _order = 'receipt_nbr asc, line_nbr asc, id asc'
     product_line_ids = fields.One2many('acumatica.issue.po.return.product', 'receipt_line_id', string='Lines')
@@ -293,13 +63,14 @@ class AcumaticaIssuePoReturnLine(models.Model):
     line_note = fields.Text(string='Line Note', readonly=True)
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -407,21 +178,25 @@ class AcumaticaIssuePoReturnLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
     
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         PickingType = self.env['stock.picking.type']
 
-        imported = 0
+        created = 0
         updated = 0
         error = 0
 
@@ -435,7 +210,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
         Move = self.env['stock.move']
         ProductModel = self.env['product.product']
 
-        imported = 0
+        created = 0
         updated = 0
 
         # =====================================================
@@ -448,7 +223,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
             # Cari seluruh record induk staging yang memiliki receipt_nbr yang sama dan berstatus pending
             receipt_lines = self.env['acumatica.issue.po.return.line'].search([
                 ('receipt_nbr', '=', receipt_nbr),
-                ('import_state', '=', 'pending')
+                ('import_state', '=', 'staged')
             ])
             
             if not receipt_lines:
@@ -536,8 +311,8 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         picking.move_ids.unlink()
                     else:
                         picking = Picking.create(vals)
-                        action_state = 'imported'
-                        imported += 1
+                        action_state = 'created'
+                        created += 1
 
                     # =====================================================
                     # 2. ITERASI PRODUK BERDASARKAN RELASI KE MODEL ANAK
@@ -585,10 +360,10 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     if receipt_lines.filtered('document_only'):
                         picking.action_validate_document_only_import(force=True)
 
-                    # Jika seluruh baris produk di atas sukses tanpa error, tandai status sebagai imported
+                    # Jika seluruh baris produk di atas sukses tanpa error, tandai status sebagai created
                     receipt_lines.write({
                         'import_state': action_state,
-                        'import_message': f'Berhasil diproses menjadi Picking Odoo: {picking.name}',
+                        'import_message': 'success',
                         'odoo_picking_id': picking.id,
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(receipt_nbr, 'issue_po_return')
@@ -624,7 +399,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     )
                     
                     receipt_lines.write({
-                        'import_state': 'error',
+                        'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
                         'import_message': import_message,
                         'odoo_picking_id': False,
                     })
@@ -633,19 +408,19 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     continue
 
 
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Inventory Receipt',
-                'message': "test",
-                'type': 'success',
-                'sticky': True,
-            }
-        }
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Inventory Receipt',
+        #         'message': f'Generate selesai: {created} created, {updated} updated, {error} error.',
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
     def action_open_picking(self):
         self.ensure_one()
@@ -659,7 +434,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
         }
 
     def action_select_all(self):
-        self.search([('import_state', '=', 'pending')]).write({'selected': True})
+        self.search([('import_state', '=', 'staged')]).write({'selected': True})
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})

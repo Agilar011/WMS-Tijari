@@ -64,7 +64,7 @@ class ImportWarehouseWizard(models.TransientModel):
             ('last_modified_dt', '!=', item['last_modified_dt'])
         ])
         if existing:
-            item['import_state'] = 'pending'
+            item['import_state'] = 'staged'
             existing.write(item)
 
     def fetch_warehouse_data(self, limit=50, offset=0):
@@ -152,7 +152,7 @@ class ImportWarehouseWizard(models.TransientModel):
                     existing_location = location_by_warehouse.get(item['warehouse_id'])
 
                 msg = 'Data sudah ada' if existing_location else ''
-                state = 'pending'
+                state = 'staged'
 
                 self.env['acumatica.warehouse.line'].create({
                     'config_id':             self.config_id.id,
@@ -280,7 +280,7 @@ class ImportWarehouseWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.warehouse.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ])
         if not lines:
             raise UserError('Tidak ada data pending yang dipilih untuk diimport.')

@@ -1,0 +1,376 @@
+{
+  "version": 22,
+  "sheets": [
+    {
+      "id": "sheet1",
+      "name": "API Data Hub",
+      "colNumber": 12,
+      "rowNumber": 52,
+      "cells": {
+        "A1": {"content": "API Data Hub Overview"},
+        "D2": {"content": "=PIVOT.VALUE(2,\"__count\")"},
+        "F2": {"content": "=PIVOT.VALUE(3,\"__count\")"},
+        "H2": {"content": "=PIVOT.VALUE(4,\"__count\")"},
+        "J2": {"content": "=PIVOT.VALUE(5,\"__count\")"},
+        "K2": {"content": "=PIVOT.VALUE(6,\"__count\")"},
+        "L2": {"content": "=PIVOT.VALUE(7,\"__count\")"},
+        "J3": {"content": "=PIVOT.VALUE(8,\"__count\")"},
+        "K3": {"content": "=PIVOT.VALUE(9,\"__count\")"},
+        "L3": {"content": "=PIVOT.VALUE(10,\"__count\")"},
+        "A3": {"content": "Transactions by Transaction Type and State"},
+        "A19": {"content": "Master Data"},
+        "A35": {"content": "Webhook Activity"},
+        "G35": {"content": "Cron / Scheduler Activity"}
+      },
+      "styles": {},
+      "figures": [
+        {
+          "id": "webhook-pending-card",
+          "x": 0,
+          "y": 0,
+          "width": 250,
+          "height": 110,
+          "tag": "chart",
+          "data": {
+            "type": "scorecard",
+            "background": "#FFF7E6",
+            "keyValue": "D2",
+            "title": {"text": "Pending Webhooks", "align": "left", "bold": true}
+          }
+        },
+        {
+          "id": "webhook-error-card",
+          "x": 270,
+          "y": 0,
+          "width": 250,
+          "height": 110,
+          "tag": "chart",
+          "data": {
+            "type": "scorecard",
+            "background": "#FDECEC",
+            "keyValue": "F2",
+            "title": {"text": "Webhook Errors", "align": "left", "bold": true}
+          }
+        },
+        {
+          "id": "scheduler-failure-card",
+          "x": 540,
+          "y": 0,
+          "width": 250,
+          "height": 110,
+          "tag": "chart",
+          "data": {
+            "type": "scorecard",
+            "background": "#FDECEC",
+            "keyValue": "H2",
+            "title": {"text": "Scheduler Failures", "align": "left", "bold": true}
+          }
+        },
+        {
+          "id": "master-customer-card",
+          "x": 560,
+          "y": 1900,
+          "width": 250,
+          "height": 95,
+          "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Customers by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.customer.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "master-vendor-card",
+          "x": 830,
+          "y": 1900,
+          "width": 250,
+          "height": 95,
+          "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Vendors by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.vendor.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "master-uom-card",
+          "x": 560,
+          "y": 2010,
+          "width": 250,
+          "height": 95,
+          "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "UoM by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.uom.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "master-warehouse-card",
+          "x": 830,
+          "y": 2010,
+          "width": 250,
+          "height": 95,
+          "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Warehouses by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.warehouse.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "master-stock-item-card",
+          "x": 560,
+          "y": 2120,
+          "width": 250,
+          "height": 95,
+          "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Stock Items by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.stock.item.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "master-non-stock-item-card",
+          "x": 830,
+          "y": 2120,
+          "width": 250,
+          "height": 95,
+          "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Non Stock Items by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.non.stock.item.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "api-state-chart",
+          "x": 0,
+          "y": 140,
+          "width": 520,
+          "height": 220,
+          "tag": "chart",
+          "data": {
+            "type": "odoo_bar",
+            "title": {"text": "PO Receipt Staging by State"},
+            "metaData": {
+              "groupBy": ["import_state"],
+              "measure": "__count",
+              "order": null,
+              "resModel": "acumatica.receipt.line",
+              "mode": "bar"
+            },
+            "searchParams": {
+              "comparison": null,
+              "context": {},
+              "domain": [],
+              "groupBy": ["import_state"],
+              "orderBy": []
+            },
+            "verticalAxisPosition": "left",
+            "stacked": false
+          }
+        },
+        {
+          "id": "sotr-staging-chart", "x": 560, "y": 140, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "SOTR Receipt Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.transfer.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "inventory-received-staging-chart", "x": 0, "y": 380, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Inventory Receive Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.inventory.recieved.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "so-return-staging-chart", "x": 560, "y": 380, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "SO Return Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.shipment.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "so-shipment-staging-chart", "x": 0, "y": 620, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "SO Shipment Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.shipment.gi.staging", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "transfer-shipment-staging-chart", "x": 560, "y": 620, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Transfer Shipment Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.transfer.shipment.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "inventory-issue-staging-chart", "x": 0, "y": 860, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Inventory Issue Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.inventory.issue.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "po-return-staging-chart", "x": 560, "y": 860, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "PO Return Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.issue.po.return.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "transfer-one-step-staging-chart", "x": 0, "y": 1100, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Transfer 1 Step Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.transfer.one.step.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "transfer-two-step-staging-chart", "x": 560, "y": 1100, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Transfer 2 Step Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.transfer.two.step.line", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "shipment-completed-staging-chart", "x": 0, "y": 1340, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Shipment Completed Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.shipment.completed.staging", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "kit-assembly-staging-chart", "x": 560, "y": 1340, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Kit Assembly Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.kit.assembly", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "invoice-consignment-staging-chart", "x": 0, "y": 1580, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Invoice Consignment Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.invoice.consignment.staging", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "credit-memo-consignment-staging-chart", "x": 560, "y": 1580, "width": 520, "height": 220, "tag": "chart",
+          "data": {"type": "odoo_bar", "title": {"text": "Credit Memo Consignment Staging by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "order": null, "resModel": "acumatica.credit.memo.consignment.staging", "mode": "bar"}, "searchParams": {"comparison": null, "context": {}, "domain": [], "groupBy": ["import_state"], "orderBy": []}, "verticalAxisPosition": "left", "stacked": false}
+        },
+        {
+          "id": "webhook-activity-chart",
+          "x": 0,
+          "y": 2260,
+          "width": 520,
+          "height": 320,
+          "tag": "chart",
+          "data": {
+            "type": "odoo_bar",
+            "title": {"text": "Webhook Activity"},
+            "metaData": {
+              "groupBy": ["state"],
+              "measure": "__count",
+              "order": null,
+              "resModel": "acumatica.webhook.log",
+              "mode": "bar"
+            },
+            "searchParams": {
+              "comparison": null,
+              "context": {},
+              "domain": [],
+              "groupBy": ["state"],
+              "orderBy": []
+            },
+            "verticalAxisPosition": "left",
+            "stacked": false
+          }
+        },
+        {
+          "id": "scheduler-activity-chart",
+          "x": 560,
+          "y": 2260,
+          "width": 520,
+          "height": 320,
+          "tag": "chart",
+          "data": {
+            "type": "odoo_bar",
+            "title": {"text": "Cron / Scheduler Activity"},
+            "metaData": {
+              "groupBy": ["status"],
+              "measure": "__count",
+              "order": null,
+              "resModel": "api.scheduler.log",
+              "mode": "bar"
+            },
+            "searchParams": {
+              "comparison": null,
+              "context": {},
+              "domain": [],
+              "groupBy": ["status"],
+              "orderBy": []
+            },
+            "verticalAxisPosition": "left",
+            "stacked": false
+          }
+        }
+      ]
+    }
+  ],
+  "styles": {},
+  "formats": {},
+  "borders": {},
+  "revisionId": "1",
+  "uniqueFigureIds": [],
+  "settings": {},
+  "pivots": {
+    "1": {
+      "type": "ODOO",
+      "domain": [["adt_type", "!=", false]],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "stock.picking",
+      "columns": [],
+      "rows": [],
+      "name": "API Transactions"
+    },
+    "2": {
+      "type": "ODOO",
+      "domain": [["state", "=", "pending"]],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "acumatica.webhook.log",
+      "columns": [],
+      "rows": [],
+      "name": "Pending Webhooks"
+    },
+    "3": {
+      "type": "ODOO",
+      "domain": [["state", "=", "error"]],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "acumatica.webhook.log",
+      "columns": [],
+      "rows": [],
+      "name": "Webhook Errors"
+    },
+    "4": {
+      "type": "ODOO",
+      "domain": [["status", "=", "failed"]],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "api.scheduler.log",
+      "columns": [],
+      "rows": [],
+      "name": "Scheduler Failures"
+    },
+    "5": {
+      "type": "ODOO",
+      "domain": [],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "acumatica.customer.line",
+      "columns": [],
+      "rows": [],
+      "name": "Customers"
+    },
+    "6": {
+      "type": "ODOO",
+      "domain": [],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "acumatica.vendor.line",
+      "columns": [],
+      "rows": [],
+      "name": "Vendors"
+    },
+    "7": {
+      "type": "ODOO",
+      "domain": [],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "acumatica.uom.line",
+      "columns": [],
+      "rows": [],
+      "name": "Units of Measure"
+    },
+    "8": {
+      "type": "ODOO",
+      "domain": [],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "acumatica.warehouse.line",
+      "columns": [],
+      "rows": [],
+      "name": "Warehouses"
+    },
+    "9": {
+      "type": "ODOO",
+      "domain": [],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "acumatica.stock.item.line",
+      "columns": [],
+      "rows": [],
+      "name": "Stock Items"
+    },
+    "10": {
+      "type": "ODOO",
+      "domain": [],
+      "context": {},
+      "measures": [{"id": "__count", "fieldName": "__count"}],
+      "model": "acumatica.non.stock.item.line",
+      "columns": [],
+      "rows": [],
+      "name": "Non Stock Items"
+    }
+  },
+  "pivotNextId": 11,
+  "customTableStyles": {},
+  "globalFilters": [],
+  "lists": {},
+  "listNextId": 1,
+  "odooVersion": 18
+}

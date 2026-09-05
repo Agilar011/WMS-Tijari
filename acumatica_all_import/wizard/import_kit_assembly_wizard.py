@@ -165,7 +165,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 'line_uom': item.get('line_uom') or '',
 
                 # Import flags
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': msg,
                 'odoo_bom_id': existing_bom.id if existing_bom else False,
                 'selected': True,
@@ -428,7 +428,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
         domain = [
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ]
 
@@ -484,7 +484,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
         domain = [
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ]
 

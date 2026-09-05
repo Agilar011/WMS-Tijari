@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="action_import_selected_shipment_completed" model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <field name="model_id" ref="model_acumatica_shipment_completed_staging"/>
+        <field name="binding_model_id" ref="model_acumatica_shipment_completed_staging"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">records.action_import_selected()</field>
+    </record>
 
     <!-- =========================================================
          STAGING SHIPMENT COMPLETED - LIST
@@ -31,9 +39,9 @@
                 <field name="shipment_weight"/>
 
                 <field name="import_state"
-                       decoration-success="import_state == 'imported'"
+                       decoration-success="import_state == 'created'"
                        decoration-info="import_state == 'updated'"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
 
                 <field name="sync_date"/>
@@ -73,9 +81,9 @@
                 <field name="shipment_weight"/>
 
                 <field name="import_state"
-                       decoration-success="import_state == 'imported'"
+                       decoration-success="import_state == 'created'"
                        decoration-info="import_state == 'updated'"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
 
                 <field name="sync_date"/>

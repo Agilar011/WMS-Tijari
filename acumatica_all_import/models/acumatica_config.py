@@ -84,10 +84,7 @@ class AcumaticaConfig(models.Model):
         selection=[
             ('po_receipt', 'PO Receipt'),
             ('so_transfer', 'SO Transfer - Inter WH IN'),
-            ('receipt_external', 'Receipt External'),
-            ('receipt_change_item', 'Receipt Change Item'),
             ('inventory_received', 'Inventory Receipt'),
-            ('toko_pegang_do', 'Toko Pegang DO'),
             ('shipment_so', 'SO Return'),
             ('so_shipment', 'SO Shipment'),
             ('shipment_completed', 'Shipment Completed'),
@@ -100,8 +97,6 @@ class AcumaticaConfig(models.Model):
             ('kit_assembly', 'Kit Assembly'),
 
             ('customer', 'Customer'),
-            # ('customer_location', 'Customer Location'),
-            # ('shipvia', 'Ship Via'),
             ('warehouse', 'Warehouse'),
             ('stock_item', 'Stock Item'),
             ('non_stock_item', 'Non Stock Item'),
@@ -109,11 +104,9 @@ class AcumaticaConfig(models.Model):
             ('vendor', 'Vendor'),
             ('inventory_stock', 'Inventory Stock'),
             ('invoice_consignment', 'Invoice Consignment'),
-            ('inventory_issue_toko_pegang_do', 'Inventory Issue Toko Pegang DO'),
             ('vendor_return_direct_transfer', 'Vendor Return Consignment'),
             ('vendor_return_document_direct_transfer', 'Direct Transfer'),
             ('credit_memo_consignment', 'Credit Memo Consignment'),
-            ('inventory_receipt_transfer_wh_in', 'Inventory Receipt : Transfer In'),
 
         ], string='Config Type', required=True, default='uom',
     )
@@ -202,12 +195,27 @@ class AcumaticaConfig(models.Model):
                     "ReturnType eq 'Return Transfer Document' and Status eq 'Released'",
                 },
             },
+            'credit_memo_consignment': {
+                'name': 'Acumatica Credit Memo Consignment V2 - Default',
+                'endpoint_name': 'CreditMemoConsignmentGI',
+                'odata_expand': False,
+                'odata_filter': False,
+                'old_endpoint_names': {'', 'Invoice', 'InvoiceGI'},
+                'old_odata_expands': {'', 'Details', 'InvoiceGIDetails', 'CreditMemoConsignmentGIDetails'},
+                'old_odata_filters': {
+                    "Type eq 'Credit Memo' and Status eq 'Open' and ConsignmentType eq 'Billing Notation'",
+                    "Type eq 'Credit Memo' and ConsignmentType eq 'Billing Notation'",
+                },
+            },
         }
         for record in self:
             defaults = v2_defaults.get(record.config_type)
             if not defaults:
                 continue
             vals = {}
+            if record.config_type == 'credit_memo_consignment':
+                vals['odata_expand'] = False
+                vals['odata_filter'] = False
             if record.endpoint_name in defaults['old_endpoint_names']:
                 vals['endpoint_name'] = defaults['endpoint_name']
             if record.odata_expand in defaults['old_odata_expands']:
@@ -236,7 +244,6 @@ class AcumaticaConfig(models.Model):
         Location = self.env['stock.location.acumatica']
         type_key = self._normalize_inventory_receive_type(transfer_type)
         domain_by_type = {
-            'toko_pegang_do': [('code', '=', 'incoming')],
             'transfer_in': [('code', '=', 'internal')],
             'change_item': [('code', '=', 'incoming')],
             'inventory_receive': [('code', '=', 'incoming')],

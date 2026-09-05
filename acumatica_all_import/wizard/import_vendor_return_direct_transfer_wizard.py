@@ -6,8 +6,6 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-# toko.pegang.do
-# toko_pegang_do
 class ImportDirectTransferWizard(models.TransientModel):
     _name = 'import.vendor.return.direct.transfer.wizard'
     _description = 'Wizard Import Inventory Recieved dari Acumatica'
@@ -275,7 +273,7 @@ class ImportDirectTransferWizard(models.TransientModel):
             'adt_ToWarehouseID': self._val(item, 'ToWarehouseID'),
             'adt_ToWarehouseName': self._val(item, 'ToWarehouseName'),
             'config_id': self.config_id.id,
-            'import_state': 'pending',
+            'import_state': 'staged',
             'selected': True,
             'sync_date': fields.Datetime.now(),
         }
@@ -367,7 +365,7 @@ class ImportDirectTransferWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{reference_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -451,7 +449,7 @@ class ImportDirectTransferWizard(models.TransientModel):
         for vals in data:
             header_vals = {
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': 'Data API Imported',
                 'sync_date': sync_date,
                 'selected': True,

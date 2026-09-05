@@ -161,7 +161,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "partner_ref": self._first_value(item, "VendorRef", "partner_ref"),
             "warehouse_code": self._first_value(item, "LineWarehouseID", "Warehouse", "warehouse_code"),
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -228,7 +228,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "partner_ref": self._first_value(item, "VendorName", "VendorRef", "partner_ref"),
             "warehouse_code": warehouse_code,
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": "Data API Imported",
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -327,7 +327,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "location_dest_code": header.location,
             "header_location_code": header.location,
             "uom_code": header.uom,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -411,10 +411,120 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         }
 
     def _process_so_shipment_completed_webhook(self, payload, config):
+        records = self._records_from_transaction_payload(payload, config)
+        if not records:
+            raise UserError(_("No Shipment Completed records found in payload."))
+
+        Config = self._env()["acumatica.config"].sudo()
+        acumatica_config = Config._get_default_config_for_type("shipment_completed")
+        if not acumatica_config:
+            raise UserError(_("No active Acumatica config found for Shipment Completed."))
+
+        Staging = self._env()["acumatica.shipment.completed.staging"].sudo()
+        Line = self._env()["acumatica.shipment.completed.staging.line"].sudo()
+        grouped = {}
+        for index, item in enumerate(records, start=1):
+            shipment_nbr = self._first_value(item, "ShipmentNbr", "shipment_nbr")
+            if shipment_nbr:
+                grouped.setdefault(shipment_nbr, []).append((index, item))
+        if not grouped:
+            raise UserError(_("No valid ShipmentNbr found in payload."))
+
+        created = updated = product_lines = 0
+        header_ids = []
+        for shipment_nbr, document_records in grouped.items():
+            first_index, first_item = document_records[0]
+            header_vals = self._shipment_completed_header_vals(first_item, first_index, acumatica_config)
+            header = Staging.search([
+                ("config_id", "=", acumatica_config.id),
+                ("shipment_nbr", "=", shipment_nbr),
+            ], limit=1)
+            if header:
+                changed = self._changed_values(header, header_vals)
+                if changed:
+                    header.write(changed)
+                header.line_ids.unlink()
+                updated += 1
+            else:
+                header = Staging.create(header_vals)
+                created += 1
+
+            line_vals = [
+                {
+                    field_name: value
+                    for field_name, value in self._shipment_completed_line_vals(item, header).items()
+                    if field_name in Line._fields
+                }
+                for _, item in document_records
+                if isinstance(item, dict)
+            ]
+            if line_vals:
+                Line.create(line_vals)
+                product_lines += len(line_vals)
+            header_ids.append(header.id)
+
         return {
-            "transaction_type": "so_shipment_completed",
-            "log_only": True,
-            "message": "Shipment Completed webhook is stored in Webhook Logs only.",
+            "transaction_type": "shipment_completed",
+            "model": "acumatica.shipment.completed.staging",
+            "created": created,
+            "updated": updated,
+            "imported": 0,
+            "errors": 0,
+            "header_ids": header_ids,
+            "product_lines": product_lines,
+        }
+
+    def _shipment_completed_header_vals(self, item, row_number, acumatica_config):
+        return {
+            "config_id": acumatica_config.id,
+            "acumatica_id": item.get("id") or item.get("acumatica_id") or "",
+            "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
+            "note": self._first_value(item, "note", "Note"),
+            "order_type": self._first_value(item, "OrderType", "order_type"),
+            "shipment_nbr": self._first_value(item, "ShipmentNbr", "shipment_nbr"),
+            "inventory_nbr": self._first_value(item, "InvtRefNbr", "inventory_nbr"),
+            "ship_date": self._datetime_value(item, "ShipDate", "ship_date"),
+            "shipment_qty": self._float_value(item, "ShipmentQty", "shipment_qty"),
+            "shipment_type": self._first_value(item, "ShipmentType", "shipment_type"),
+            "shipment_volume": self._float_value(item, "ShipmentVolume", "shipment_volume"),
+            "shipment_weight": self._float_value(item, "ShipmentWeight", "shipment_weight"),
+            "shipment_via": self._first_value(item, "ShipVia", "shipment_via"),
+            "status": self._first_value(item, "Status", "status"),
+            "customer_id": self._first_value(item, "CustomerID", "customer_id"),
+            "customer_name": self._first_value(item, "CustomerName", "customer_name"),
+            "warehouse_id": self._first_value(item, "WarehouseID", "warehouse_id"),
+            "to_warehouse_id": self._first_value(item, "ToWarehouseID", "to_warehouse_id"),
+            "address_id": self._first_value(item, "AddressID", "address_id"),
+            "address_line": self._first_value(item, "AddressLine", "address_line"),
+            "building_id": self._first_value(item, "BuildingID", "building_id"),
+            "city": self._first_value(item, "City", "city"),
+            "country": self._first_value(item, "Country", "country"),
+            "country_name": self._first_value(item, "CountryName", "country_name"),
+            "state": self._first_value(item, "State", "state"),
+            "state_name": self._first_value(item, "StateName", "state_name"),
+            "postal_code": self._first_value(item, "PostalCode", "postal_code"),
+            "import_state": "staged",
+            "import_message": False,
+            "selected": True,
+            "sync_date": fields.Datetime.now(),
+        }
+
+    def _shipment_completed_line_vals(self, item, header):
+        return {
+            "staging_id": header.id,
+            "acumatica_id": item.get("line_id") or item.get("id") or item.get("acumatica_id") or "",
+            "row_number": self._int_value(item, "line_rowNumber", "rowNumber", "row_number"),
+            "note": self._first_value(item, "LineNote", "note", "Note"),
+            "line_nbr": self._int_value(item, "LineNbr", "LineNumber", "line_nbr"),
+            "line_inventory_id": self._first_value(item, "LineInventoryID", "InventoryID", "line_inventory_id"),
+            "line_description": self._first_value(item, "LineDescription", "Description", "line_description"),
+            "line_free_item": self._bool_value(item, "LineFreeItem", "FreeItem", "line_free_item"),
+            "line_quantity": self._float_value(item, "LineQuantity", "Quantity", "line_quantity"),
+            "line_uom": self._first_value(item, "LineUOM", "UOM", "line_uom"),
+            "location_id": self._first_value(item, "LineLocation", "Location", "location_id"),
+            "location_name": self._first_value(item, "LocationName", "location_name"),
+            "line_note": self._first_value(item, "LineNote", "line_note"),
+            "line_note_id": self._first_value(item, "LineNoteID", "line_note_id"),
         }
 
     def _so_transfer_header_vals(self, item, row_number):
@@ -480,7 +590,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_TransferType": self._first_value(item, "TransferType", "adt_TransferType"),
             "adt_TransType": self._first_value(item, "TransType", "adt_TransType"),
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": "Data API Imported",
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -542,61 +652,6 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_UOM": self._first_value(item, "UOM", "LineUOM", "adt_UOM"),
         }
 
-    def _receipt_external_header_vals(self, item, row_number):
-        building_code = self._first_value(item, "BuildingID", "building_code")
-        document_only = self._bool_value(item, "DocumentOnly", "document_only")
-        picking_type = self._search_incoming_picking_type(
-            building_code,
-            document_only=document_only,
-            api_acumatica="receipt_change_item",
-        )
-        return {
-            "external_id": item.get("id") or item.get("external_id") or "",
-            "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
-            "note": self._first_value(item, "NoteHeader", "note") or self._note_value(item),
-            "branch_warehouse": self._first_value(item, "Branch", "branch_warehouse"),
-            "building_code": building_code,
-            "change_item_ref_nbr": self._first_value(item, "ChangeItemRefNbr", "change_item_ref_nbr"),
-            "actual_qty": self._first_value(item, "ControlQty", "actual_qty"),
-            "customer_code": self._first_value(item, "CustomerID", "customer_code"),
-            "scheduled_date": self._first_value(item, "Date", "scheduled_date"),
-            "description": self._first_value(item, "Description", "description"),
-            "document_only": document_only,
-            "external_ref": self._first_value(item, "ExternalRef", "external_ref"),
-            "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
-            "location_code": self._first_value(item, "Location", "location_code"),
-            "post_period": self._first_value(item, "PostPeriod", "post_period"),
-            "reference_nbr": self._first_value(item, "ReferenceNbr", "reference_nbr"),
-            "shipment_nbr": self._first_value(item, "ShipmentNbr", "TransferShipmentNbr", "ReferenceNbr", "shipment_nbr"),
-            "status": self._first_value(item, "Status", "status"),
-            "total_qty": self._first_value(item, "TotalQty", "total_qty"),
-            "transfer_nbr": self._first_value(item, "TransferNbr", "transfer_nbr"),
-            "transfer_type": self._first_value(item, "TransType", "transfer_type"),
-            "warehouse_code": self._first_value(item, "LineWarehouse", "warehouse_code"),
-            "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
-            "import_message": False,
-            "selected": True,
-            "sync_date": fields.Datetime.now(),
-        }
-
-    def _receipt_external_product_vals(self, item, receipt):
-        return {
-            "header_external_id": item.get("id") or item.get("external_id") or "",
-            "inventory_line_id": receipt.id,
-            "reference_nbr": receipt.reference_nbr,
-            "line_external_id": item.get("line_id") or item.get("line_external_id") or item.get("id") or "",
-            "line_note": self._first_value(item, "LineNote", "line_note") or self._note_value(item),
-            "branch_warehouse": self._first_value(item, "LineBranch", "Branch", "branch_warehouse"),
-            "line_description": self._first_value(item, "LineInventoryName", "LineDescription", "line_description"),
-            "inventory_id": self._first_value(item, "LineInventoryID", "InventoryID", "inventory_id"),
-            "line_nbr": self._first_value(item, "LineNbr", "line_nbr"),
-            "location_code": self._first_value(item, "LineLocation", "Location", "location_code"),
-            "product_uom_qty": self._first_value(item, "LineQuantity", "Quantity", "product_uom_qty"),
-            "uom_code": self._first_value(item, "LineUOM", "UOM", "uom_code"),
-            "warehouse_dest_code": self._first_value(item, "LineWarehouse", "Warehouse", "warehouse_dest_code"),
-        }
-
     def _shipment_return_header_vals(self, item, row_number):
         building_code = self._first_value(item, "BuildingID", "building_code")
         picking_type = self._search_incoming_picking_type(building_code)
@@ -636,7 +691,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "warehouse_name": self._first_value(item, "WarehouseName", "warehouse_name"),
             "note_header_id": self._first_value(item, "NoteHeaderID", "note_header_id"),
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -705,7 +760,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "warehouse_code": warehouse_code,
             "warehouse_dest_code": self._first_value(item, "LineWarehouse", "WarehouseID", "warehouse_dest_code"),
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -791,7 +846,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "note_header_id": self._first_value(item, "NoteHeaderID", "note_header_id"),
             "custom_json": json.dumps(custom_payload) if custom_payload is not None else "",
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -865,7 +920,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "line_note": self._first_value(item, "LineNote", "line_note"),
             "customer_name": self._first_value(item, "CustomerName", "customer_name"),
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -922,7 +977,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "transfer_type": self._first_value(item, "TransferType", "transfer_type"),
             "trans_type": self._first_value(item, "TransType", "trans_type"),
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -975,7 +1030,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _credit_memo_consignment_header_vals(self, item, row_number):
         warehouse_code = self._first_value(item, "LineWarehouse", "Warehouse", "LineWarehouseID", "adt_Warehouse")
-        picking_type = self._search_internal_picking_type(warehouse_code)
+        picking_type = self._env()["stock.picking.type"].sudo().resolve_document_only_picking_type(
+            target_operation_type="direct_delivery_order",
+            api_acumatica="credit_memo_consignment",
+            document_only=True,
+            warehouse_code=warehouse_code,
+        )
         return {
             "adt_id": item.get("id") or item.get("adt_id") or "",
             "adt_rowNumber": self._first_value(item, "rowNumber", "adt_rowNumber") or row_number,
@@ -988,7 +1048,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_CustomerOrder": self._first_value(item, "CustomerOrder", "adt_CustomerOrder"),
             "adt_Date": self._first_value(item, "Date", "adt_Date"),
             "adt_Description": self._first_value(item, "Description", "adt_Description"),
-            "adt_DocumentOnly": self._bool_value(item, "DocumentOnly", "adt_DocumentOnly"),
+            "adt_DocumentOnly": True,
             "adt_DueDate": self._first_value(item, "DueDate", "adt_DueDate"),
             "adt_ExternalRef": self._first_value(item, "ExternalRef", "adt_ExternalRef"),
             "adt_LastModifiedDateTime": self._first_value(item, "LastModifiedDateTime", "adt_LastModifiedDateTime"),
@@ -1002,7 +1062,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_TotalQty": self._float_value(item, "TotalQty", "adt_TotalQty"),
             "adt_Type": self._first_value(item, "Type", "adt_Type"),
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": "Data API Imported",
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -1025,71 +1085,27 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
 
     def _invoice_consignment_header_vals(self, item, row_number):
         vals = self._credit_memo_consignment_header_vals(item, row_number)
-        warehouse_code = self._first_value(item, "Warehouse", "adt_Warehouse")
-        picking_type = self._search_outgoing_picking_type(warehouse_code)
+        warehouse_code = self._first_value(
+            item,
+            "LineWarehouse",
+            "Warehouse",
+            "WarehouseID",
+            "adt_Warehouse",
+        )
+        document_only = self._bool_value(item, "DocumentOnly", "adt_DocumentOnly")
+        picking_type = self._search_outbound_pick_picking_type(
+            warehouse_code,
+            document_only=document_only,
+            api_acumatica="invoice_consignment",
+        )
         vals["picking_type_id"] = picking_type.id if picking_type else False
+        vals["adt_DocumentOnly"] = document_only
         return vals
 
     def _invoice_consignment_product_vals(self, item, header):
         vals = self._credit_memo_consignment_product_vals(item, header)
         vals["adt_external_id"] = header.adt_id or False
         return vals
-
-    def _receipt_transfer_in_header_vals(self, item, row_number):
-        warehouse_code = self._first_value(item, "Warehouse", "WarehouseID", "adt_Warehouse")
-        document_only = self._bool_value(item, "DocumentOnly", "adt_DocumentOnly")
-        picking_type = self._search_internal_picking_type(
-            warehouse_code,
-            document_only=document_only,
-            api_acumatica="transfer_in",
-        )
-        return {
-            "adt_id": item.get("id") or item.get("adt_id") or "",
-            "adt_rowNumber": self._first_value(item, "rowNumber", "adt_rowNumber") or row_number,
-            "adt_note": self._first_value(item, "note", "Note", "adt_note"),
-            "adt_Branch": self._first_value(item, "Branch", "adt_Branch"),
-            "adt_ChangeItemRefNbr": self._first_value(item, "ChangeItemRefNbr", "adt_ChangeItemRefNbr"),
-            "adt_ControlQty": self._first_value(item, "ControlQty", "adt_ControlQty"),
-            "adt_Customer": self._first_value(item, "Customer", "CustomerID", "adt_Customer"),
-            "adt_Date": self._first_value(item, "Date", "adt_Date"),
-            "adt_Description": self._first_value(item, "Description", "adt_Description"),
-            "adt_DocumentOnly": document_only,
-            "adt_ExternalRef": self._first_value(item, "ExternalRef", "adt_ExternalRef"),
-            "adt_LastModifiedDateTime": self._first_value(item, "LastModifiedDateTime", "adt_LastModifiedDateTime"),
-            "adt_Location": self._first_value(item, "Location", "adt_Location"),
-            "adt_NoteID": self._first_value(item, "NoteID", "adt_NoteID"),
-            "adt_PostPeriod": self._first_value(item, "PostPeriod", "adt_PostPeriod"),
-            "adt_ReferenceNbr": self._first_value(item, "ReferenceNbr", "adt_ReferenceNbr"),
-            "adt_ShipmentNbr": self._first_value(item, "ShipmentNbr", "adt_ShipmentNbr"),
-            "adt_Status": self._first_value(item, "Status", "adt_Status"),
-            "adt_TotalQty": self._first_value(item, "TotalQty", "adt_TotalQty"),
-            "adt_TransferNbr": self._first_value(item, "TransferNbr", "adt_TransferNbr"),
-            "adt_TransType": self._first_value(item, "TransType", "adt_TransType"),
-            "adt_Warehouse": warehouse_code,
-            "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
-            "import_message": False,
-            "selected": True,
-            "sync_date": fields.Datetime.now(),
-        }
-
-    def _receipt_transfer_in_product_vals(self, item, header):
-        return {
-            "header_id": header.id,
-            "adt_header_id": header.adt_id or False,
-            "adt_id": item.get("line_id") or item.get("line_external_id") or item.get("id") or "",
-            "adt_rowNumber": self._first_value(item, "line_rowNumber", "rowNumber", "adt_rowNumber"),
-            "adt_note": self._first_value(item, "LineNote", "note", "adt_note"),
-            "adt_Branch": self._first_value(item, "Branch", "adt_Branch"),
-            "adt_Description": self._first_value(item, "LineDescription", "Description", "adt_Description"),
-            "adt_InventoryID": self._first_value(item, "InventoryID", "LineInventoryID", "adt_InventoryID"),
-            "adt_LineNumber": self._first_value(item, "LineNumber", "LineNbr", "adt_LineNumber"),
-            "adt_Location": self._first_value(item, "Location", "LineLocation", "adt_Location"),
-            "adt_NoteID": self._first_value(item, "NoteID", "adt_NoteID"),
-            "adt_Quantity": self._first_value(item, "Quantity", "Qty", "LineQuantity", "adt_Quantity"),
-            "adt_UOM": self._first_value(item, "UOM", "LineUOM", "adt_UOM"),
-            "adt_Warehouse": self._first_value(item, "Warehouse", "WarehouseID", "LineWarehouseID", "adt_Warehouse"),
-        }
 
     def _so_shipment_header_vals(self, item, row_number, picking_code="outgoing"):
         warehouse_code = self._first_value(item, "WarehouseID", "Warehouse", "adt_WarehouseID")
@@ -1136,7 +1152,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_ToWarehouseID": self._first_value(item, "ToWarehouseID", "adt_ToWarehouseID"),
             "adt_WarehouseID": warehouse_code,
             "picking_type_id": picking_type.id if picking_type else False,
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -1160,7 +1176,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_ShipmentQty": self._first_value(item, "LineQuantity", "Quantity", "ShipmentQty", "ShippedQty", "adt_ShipmentQty"),
             "adt_LineUOM": self._first_value(item, "LineUOM", "UOM", "adt_LineUOM"),
             "adt_WarehouseID": self._first_value(item, "WarehouseID", "LineWarehouseID", "adt_WarehouseID"),
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -1254,7 +1270,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "product_vals": self._so_shipment_line_vals,
             },
             "so_shipment_completed": {
-                "label": "SO Shipment Completed (Log Only)",
+                "label": "SO Shipment Completed",
                 "records_keys": ("Inserted",),
                 "processor": self._process_so_shipment_completed_webhook,
             },
@@ -1338,17 +1354,6 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "header_vals": self._invoice_consignment_header_vals,
                 "product_vals": self._invoice_consignment_product_vals,
             },
-            "inventory_receipt_transfer_wh_in": {
-                "label": "Inventory Receipt : Transfer In",
-                "records_keys": ("Inserted",),
-                "document_keys": ("ReferenceNbr", "adt_ReferenceNbr"),
-                "document_field": "adt_ReferenceNbr",
-                "header_model": "acumatica.inventory.receipt.transfer.wh.in.staging",
-                "product_model": "acumatica.inventory.receipt.transfer.wh.in.staging.line",
-                "line_relation": "line_ids",
-                "header_vals": self._receipt_transfer_in_header_vals,
-                "product_vals": self._receipt_transfer_in_product_vals,
-            },
             "kit_assembly": {
                 "label": "Kit Assembly",
                 "records_keys": ("Inserted",),
@@ -1374,21 +1379,20 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         aliases = {
             "inventory_receipt": "inventory_receipt",
             "inventory_received": "inventory_receipt",
-            "receipt_transfer_in": "inventory_receipt_transfer_wh_in",
-            "inventory_receipt_transfer_in": "inventory_receipt_transfer_wh_in",
             "shipment_so_return": "shipment_return",
             "so_shipment_return": "shipment_return",
+            "shipment_so": "shipment_return",
             "shipment_completed": "so_shipment_completed",
             "so_shipment_complete": "so_shipment_completed",
             "shipment_complete": "so_shipment_completed",
             "sotr": "so_transfer",
             "inventory_issue_change_item": "inventory_issue",
             "issue_change_item": "inventory_issue",
+            "issue_po_return": "po_return",
             "vendor_return": "vendor_return",
             "vendor_return_direct": "vendor_return",
             "vendor_return_direct_transfer": "vendor_return",
             "vendor_return_document_direct_transfer": "vendor_return_document",
-            "shipment_so": "so_shipment",
             "invoicecreditmemo": "invoice_credit_memo_consignment",
             "invoicecreditmemoconsignment": "invoice_credit_memo_consignment",
             "invoicecreditmemoconsignmentgi": "invoice_credit_memo_consignment",
@@ -1396,6 +1400,17 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "invoice_credit_memo_consignment_gi": "invoice_credit_memo_consignment",
         }
         return aliases.get(key, key)
+
+    def _config_type_for_transaction_key(self, config_key):
+        aliases = {
+            "inventory_receipt": "inventory_received",
+            "shipment_return": "shipment_so",
+            "po_return": "issue_po_return",
+            "vendor_return": "vendor_return_direct_transfer",
+            "vendor_return_document": "vendor_return_document_direct_transfer",
+            "so_shipment_completed": "shipment_completed",
+        }
+        return aliases.get(config_key, config_key)
 
     def _changed_values(self, record, vals):
         changed = {}
@@ -1522,6 +1537,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         if config.get("processor"):
             return config["processor"](payload, config)
 
+        acumatica_config = self._env()["acumatica.config"].sudo()._get_default_config_for_type(
+            self._config_type_for_transaction_key(config_key)
+        )
+        if not acumatica_config:
+            raise UserError(_("No active Acumatica config found for transaction type: %s") % config_key)
+
         records = self._records_from_transaction_payload(payload, config)
         if not records:
             raise UserError(_("No transaction records found in payload."))
@@ -1546,6 +1567,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             header_vals = config["header_vals"](first_item, first_index)
             if not header_vals.get(config["document_field"]):
                 continue
+            header_vals["config_id"] = acumatica_config.id
 
             header, state = self._upsert_header(
                 config["header_model"],
@@ -1574,7 +1596,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             Header = self._env()[config["header_model"]].sudo()
             imported = Header.search_count([
                 ("id", "in", header_ids),
-                ("import_state", "in", ("imported", "updated")),
+                ("import_state", "in", ("created", "updated")),
             ])
             errors = Header.search_count([
                 ("id", "in", header_ids),

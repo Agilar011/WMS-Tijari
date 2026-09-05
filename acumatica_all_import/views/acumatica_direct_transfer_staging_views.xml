@@ -9,8 +9,8 @@
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
                 <field name="adt_DocumentOnly" string="Document Only"/>
                 <field name="import_state"/>
-                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
-                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Staged" name="staged" domain="[('import_state','=','staged')]"/>
+                <filter string="Generated" name="generated" domain="[('import_state','in',('created','updated'))]"/>
                 <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
             </search>
         </field>
@@ -31,8 +31,8 @@
                 <field name="adt_FromWarehouseID" string="Warehouse"/>
                 <field name="adt_TotalQty" string="Total Quantity"/>
                 <field name="import_state" widget="badge"
-                       decoration-success="import_state in ('imported','updated')"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-success="import_state in ('created','updated')"
+                       decoration-warning="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
@@ -49,9 +49,9 @@
         <field name="arch" type="xml">
             <form string="Detail Data Direct Transfer Staging">
                 <header>
-                    <button name="action_import_this" string="Import" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <button name="action_import_this" string="Import" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
                     <!-- Diperbaiki: Ditambahkan statusbar_visible agar memunculkan titik status -->
-                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,error"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>
                     <group>
@@ -121,7 +121,7 @@
 
     <!-- 5. Server Action -->
     <record id="action_import_selected_direct_transfer" model="ir.actions.server">
-        <field name="name">Process Selected Import</field>
+        <field name="name">Generate Data</field>
         <!-- Diperbaiki: Menggunakan titik diganti underscore untuk referensi model internal Odoo -->
         <field name="model_id" ref="model_acumatica_direct_transfer_staging"/>
         <field name="binding_model_id" ref="model_acumatica_direct_transfer_staging"/>

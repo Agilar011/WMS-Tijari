@@ -12,10 +12,7 @@ class AcumaticaErrorTransaction(models.Model):
         ('acumatica.inventory.recieved.line', 'Inventory Receive'),
         ('acumatica.transfer.line', 'SOTR Receipt'),
         ('acumatica.shipment.line', 'Shipment SO Return'),
-        ('acumatica.receipt.external.line', 'Receipt External'),
         ('acumatica.transfer.shipment.line', 'Transfer Shipment'),
-        ('acumatica.toko.pegang.do.line', 'Toko Pegang DO'),
-        ('acumatica.receipt.change.item.line', 'Receipt Type Change Item'),
         ('acumatica.transfer.one.step.line', 'Transfer Pinjaman (1 Step)'),
         ('acumatica.transfer.two.step.line', 'Transfer Pinjaman (2 Step)'),
         ('acumatica.direct.transfer.staging', 'Direct Transfer'),
@@ -25,19 +22,18 @@ class AcumaticaErrorTransaction(models.Model):
         ('acumatica.inventory.issue.line', 'Inventory Issue'),
         ('acumatica.issue.line', 'Issue Type Change Item'),
         ('acumatica.issue.po.return.line', 'Issue Type PO Return'),
-        ('acumatica.inventory.issue.toko.pegang.do.staging', 'Toko Pegang DO'),
-        ('acumatica.inventory.receipt.transfer.wh.in.staging', 'Inventory Receipt Transfer WH In'),
         ('acumatica.kit.assembly', 'Kit Assembly'),
         ('acumatica.inventory.stock.line', 'Inventory Stock'),
         ('acumatica.shipment.gi.staging', 'Shipment GI'),
+        ('acumatica.shipment.completed.staging', 'Shipment Completed'),
         ('acumatica.sales.order.shipment.staging', 'Sales Order Shipment'),
     ], string='Tipe Data')
     data_id = fields.Integer('Data ID')
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
-        ('skipped', 'Dilewati (Sudah Ada)'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
         ('solved', 'Solved'),
     ], string='Status')
@@ -114,8 +110,7 @@ class AcumaticaErrorTransaction(models.Model):
         error_data = self.search([
             ('data_type', '=', first._name),
             ('data_id', '=', first.id),
-            ('import_state', '=', 'error'),
-        ], limit=1)
+        ], order='id', limit=1)
         values = {
             'name': name,
             'data_type': first._name,
@@ -148,8 +143,7 @@ class AcumaticaErrorTransaction(models.Model):
         update_data = self.search([
             ('data_type', '=', first._name),
             ('data_id', '=', first.id),
-            ('import_state', '=', 'updated'),
-        ], limit=1)
+        ], order='id', limit=1)
         values = {
             'name': name,
             'data_type': first._name,
@@ -162,6 +156,31 @@ class AcumaticaErrorTransaction(models.Model):
         else:
             update_data = self.create(values)
         return update_data
+
+    def _handle_acumatica_created(self, records):
+        """Create one Created/Updated log per staging record, without duplicates."""
+        for record in records:
+            if 'import_state' not in record._fields or record.import_state not in ('created', 'updated'):
+                continue
+            name = self._get_transaction_name(record)
+            log = self.search([
+                ('data_type', '=', record._name),
+                ('data_id', '=', record.id),
+            ], order='id', limit=1)
+            values = {
+                'name': name,
+                'data_type': record._name,
+                'data_id': record.id,
+                'import_state': record.import_state,
+                'error_msg': f'{record.import_state.title()}: {name} in {fields.Datetime.now()}',
+            }
+            if log:
+                log.write(values)
+            else:
+                log = self.create(values)
+            if 'acumatica_err_id' in record._fields:
+                record.acumatica_err_id = log
+        return True
 
     def action_open_record(self):
         self.ensure_one()
