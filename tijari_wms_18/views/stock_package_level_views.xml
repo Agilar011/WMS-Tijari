@@ -1,6 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <record id="stock_package_level_view_kanban" model="ir.ui.view">
+        <field name="name">stock.package_level.view.kanban</field>
+        <field name="model">stock.package_level</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile">
+                <field name="package_id" invisible="1"/>
+                <field name="status" invisible="1"/>
+                <field name="state" invisible='1' />
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <field name="package_id" readonly="1" force_save="1" class="fw-bold fs-6"/>
+                            
+                            <field 
+                                name="status"
+                                widget="badge"
+                                decoration-success="status == 'finished'"
+                                decoration-danger="status == 'unfinished'" 
+                            />
+                        </div>
+
+                        <div class="d-flex gap-2 mt-2">
+                            <button name="action_mark_unfinished"
+                                type="object"
+                                string="Rollback"
+                                class="btn-danger o_wms_auto_save_before_action"
+                                invisible="status == 'unfinished' or state in ('done', 'cancel')"/>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
     <record id="view_package_level_tree_inherit_wms" model="ir.ui.view">
         <field name="name">stock.package.level.tree.inherit.wms</field>
         <field name="model">stock.package_level</field>
@@ -38,6 +72,38 @@
         <field name="model">stock.package_level</field>
         <field name="inherit_id" ref="stock.package_level_form_view"/>
         <field name="arch" type="xml">
+
+            <xpath expr="//header" position="attributes">
+                <attribute name="class">tijari-package-invisible</attribute>
+            </xpath>
+
+            <xpath expr="//form/group[1]/group[1]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='move_line_ids']" position="before">
+                <group class="tijari-package-invisible">
+                    <field name="package_id"/>
+                    <field name="location_id" options="{'no_create': True}" invisible="picking_type_code == 'incoming'" groups="stock.group_stock_multi_locations"/>
+                    <field name="location_dest_id" options="{'no_create': True}" invisible="picking_type_code == 'outgoing'" groups="stock.group_stock_multi_locations"/>
+                    <field name="is_done"/>
+                    <field name="company_id" groups="base.group_multi_company"/>
+                </group>
+                <group class="tijari-package-mobile">
+                    <field name="package_cat" />
+                    <field name="package_id"/>
+                </group>
+            </xpath>
+            
+
+            <xpath expr="//field[@name='move_line_ids']/list/field[@name='lot_id']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='move_line_ids']/list/field[@name='owner_id']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
+
             <xpath expr='//form' position='inside'>
                 <footer>
                     <button
@@ -45,7 +111,19 @@
                         type="object"
                         string="Confirm"
                         class="btn-primary"
+                        invisible="status == 'finished'"
                     />
+
+                    <button 
+                        name="action_mark_unfinished"
+                        type="object"
+                        string="Rollback"
+                        class="btn-danger"
+                        invisible="status != 'finished'"/>
+                    
+                    <button string="Close"
+                            special="cancel"
+                            class="btn-secondary"/>
                 </footer>
             </xpath>
         </field>

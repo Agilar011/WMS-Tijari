@@ -10,6 +10,11 @@ class WMSStockPackageLevel(models.Model):
         ('unfinished', 'Unfinished'),
     ], string='Status', default='unfinished')
 
+    package_cat = fields.Selection([
+            ('box', 'Box'),
+            ('palet', 'Palet'),
+        ], string='Package Category', related='package_id.package_cat')
+
     def action_mark_finished(self):
         self.write({'status': 'finished'})
         return True
