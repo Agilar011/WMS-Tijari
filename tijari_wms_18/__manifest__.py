@@ -85,6 +85,7 @@
             'tijari_wms_18/static/src/views/fields/location_short_many2one/location_short_many2one.js',
             'tijari_wms_18/static/src/views/fields/location_short_many2one/location_short_many2one.xml',
             'tijari_wms_18/static/src/scss/scan_button_align_center.scss',
+            'tijari_wms_18/static/src/scss/scan_move_delivery.scss',
         ]
     },
     

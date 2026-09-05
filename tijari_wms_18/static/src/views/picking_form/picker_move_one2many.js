@@ -32,6 +32,11 @@ export class PickerMoveX2ManyField extends StockMoveX2ManyField {
                 record,
                 context: this.props.context,
                 mode: "edit",
+                onClose: async () => {
+                    if (!record.isNew) {
+                        await record.load();
+                    }
+                },
             });
         }
     }
