@@ -121,6 +121,12 @@ class StockMove(models.Model):
         store=True,
         string="Remaining Package Qty",
     )
+
+    unpack_quantity = fields.Float(
+        'Unpack Qty',
+        readonly=True
+    )
+
     difference_quantity = fields.Float(
         string='Difference Qty',
         compute='_compute_difference_quantity',
@@ -511,6 +517,21 @@ class StockMove(models.Model):
             vals['transaction_type'] = item.transaction_type
 
             print("vals after:", vals)
+
+        # Carry pick/pack/do responsible + user_ids forward from the
+        # predecessor transfer(s) onto this brand-new transfer, so users
+        # don't have to re-enter them once the next transfer is created
+        # (mirrors what StockPicking._propagate_responsible_to_next_transfers
+        # does for transfers that already exist).
+        predecessor_pickings = self.move_orig_ids.picking_id
+        if predecessor_pickings:
+            carry_over_fields = self.env['stock.picking']._get_responsible_carry_over_fields()
+            for field_name in carry_over_fields:
+                if field_name in vals:
+                    continue
+                source_ids = predecessor_pickings.mapped(field_name)
+                if source_ids:
+                    vals[field_name] = [(6, 0, source_ids.ids)]
 
         return vals
 

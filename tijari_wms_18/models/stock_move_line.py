@@ -329,11 +329,6 @@ class StockMoveLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        for vals in vals_list:
-            _logger.warning(
-                "SML CREATE DEBUG: %s",
-                vals,
-            )
         move_lines = super().create(vals_list)
         move_lines.mapped('picking_id')._sync_adt_quantities_from_moves()
         # if not move_lines.parent_location_id:
@@ -346,11 +341,6 @@ class StockMoveLine(models.Model):
         
 
     def write(self, vals):
-        _logger.warning(
-            "SML WRITE DEBUG | ids=%s | vals=%s",
-            self.ids,
-            vals,
-        )
         pickings = self.mapped('picking_id')
         res = super().write(vals)
         pickings |= self.mapped('picking_id')
