@@ -1,0 +1,13 @@
+{
+  "version": 22,
+  "sheets": [{"id": "sheet1", "name": "Product and Master Data", "colNumber": 12, "rowNumber": 32,
+    "cells": {"A1": {"content": "API Hub Product and Master Data"}}, "styles": {}, "figures": [
+      {"id": "customer", "x": 0, "y": 40, "width": 520, "height": 240, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Customers by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "resModel": "acumatica.customer.line", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["import_state"], "context": {}, "orderBy": []}}},
+      {"id": "vendor", "x": 560, "y": 40, "width": 520, "height": 240, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Vendors by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "resModel": "acumatica.vendor.line", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["import_state"], "context": {}, "orderBy": []}}},
+      {"id": "uom", "x": 0, "y": 320, "width": 520, "height": 240, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "UoM by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "resModel": "acumatica.uom.line", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["import_state"], "context": {}, "orderBy": []}}},
+      {"id": "warehouse", "x": 560, "y": 320, "width": 520, "height": 240, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Warehouses by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "resModel": "acumatica.warehouse.line", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["import_state"], "context": {}, "orderBy": []}}},
+      {"id": "stock-item", "x": 0, "y": 600, "width": 520, "height": 240, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Stock Items by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "resModel": "acumatica.stock.item.line", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["import_state"], "context": {}, "orderBy": []}}},
+      {"id": "non-stock-item", "x": 560, "y": 600, "width": 520, "height": 240, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Non Stock Items by State"}, "metaData": {"groupBy": ["import_state"], "measure": "__count", "resModel": "acumatica.non.stock.item.line", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["import_state"], "context": {}, "orderBy": []}}}
+  ]}],
+  "styles": {}, "formats": {}, "borders": {}, "revisionId": "1", "uniqueFigureIds": [], "settings": {}, "pivots": {}, "pivotNextId": 1, "customTableStyles": {}, "globalFilters": [], "lists": {}, "listNextId": 1, "odooVersion": 18
+}

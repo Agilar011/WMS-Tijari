@@ -11,6 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaShipmentCompletedStaging(models.Model):
     _name = 'acumatica.shipment.completed.staging'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Staging Shipment Completed dari Acumatica'
     _rec_name = 'shipment_nbr'
     _order = 'id desc'
@@ -164,19 +165,20 @@ class AcumaticaShipmentCompletedStaging(models.Model):
     )
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diproses'),
-        ('imported', 'Data Baru'),
-        ('updated', 'Data Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
     ],
         string='Status',
-        default='pending',
+        default='staged',
         readonly=True,
         index=True,
     )
 
     import_message = fields.Text(
-        string='Keterangan',
+        string='Generation Message',
         readonly=True,
     )
 

@@ -590,7 +590,7 @@ class ImportSOShipmentWizard(models.TransientModel):
         print(self.config_id.id)
         lines = self.env['acumatica.shipment.gi.staging'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

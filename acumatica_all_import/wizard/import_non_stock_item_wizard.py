@@ -146,7 +146,7 @@ class ImportNonStockItemWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.non.stock.item.line'].search([
             ('config_id',    '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected',     '=', True),
         ])
         if not lines:
@@ -170,7 +170,7 @@ class ImportNonStockItemWizard(models.TransientModel):
             ('last_modified_datetime', '!=', item['last_modified_datetime']),
         ])
         if existing:
-            item['import_state'] = 'pending'
+            item['import_state'] = 'staged'
             existing.write(item)
 
     def fetch_non_stock_item_data(self, limit=50, offset=0):
@@ -311,7 +311,7 @@ class ImportNonStockItemWizard(models.TransientModel):
                     existing_product = product_by_inventory.get((item['external_id']))
 
                 msg = 'Data sudah ada' if existing_product else ''
-                state = 'pending'
+                state = 'staged'
 
                 params_list.append((
                     self.config_id.id,

@@ -162,7 +162,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id': exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{reference_nbr}: Sudah ada -> akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -560,8 +560,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Data Receipt Type Change Item dari Acumatica',
-            'res_model': 'acumatica.receipt.change.item.line',
+            'name': 'Data Inventory Issue dari Acumatica',
+            'res_model': 'acumatica.inventory.issue.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
             'context': {'default_config_id': self.config_id.id},
@@ -569,9 +569,9 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
     def action_import_all_pending(self):
         self.ensure_one()
-        lines = self.env['acumatica.receipt.change.item.line'].search([
+        lines = self.env['acumatica.inventory.issue.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -580,8 +580,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
         self.state = 'done'
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Hasil Import Receipt Type Change Item',
-            'res_model': 'acumatica.receipt.change.item.line',
+            'name': 'Hasil Import Inventory Issue',
+            'res_model': 'acumatica.inventory.issue.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
         }
@@ -637,7 +637,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
     #         vals = dict(item)
     #         vals.update({
     #             'config_id': self.config_id.id,
-    #             'import_state': 'pending',
+    #             'import_state': 'staged',
     #             'import_message': msg,
     #             'selected': True,
     #             'sync_date': fields.Datetime.now(),
@@ -674,7 +674,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.inventory.issue.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

@@ -58,15 +58,15 @@ class AcumaticaCustomerLine(models.Model):
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
-        ('pending',  'Staged'),
-        ('imported', 'Created'),
+        ('staged',  'Staged'),
+        ('created', 'Created'),
         ('updated',  'Updated'),
-        ('skipped',  'Dilewati (Sudah Ada)'),
+        ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='pending', readonly=True, tracking=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
 
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_partner_id = fields.Many2one('res.partner', string='Partner di Odoo', readonly=True)
+    import_message = fields.Char(string='Generation Message', readonly=True)
+    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference', readonly=True)
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
@@ -118,14 +118,18 @@ class AcumaticaCustomerLine(models.Model):
 
     # ─── Import Actions ──────────────────────────────
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _do_import(self):
         print('MULAI IMPORT CUSTOMER')
@@ -134,7 +138,7 @@ class AcumaticaCustomerLine(models.Model):
         - Field standar Odoo: langsung diisi
         - Field "to be": diisi ke field custom di res.partner
         """
-        imported = updated = skipped = error = 0
+        created = updated = skipped = error = 0
         total = len(self)
 
         _logger.info("START IMPORT CUSTOMER; TOTAL_LINES=%s", total)
@@ -209,7 +213,7 @@ class AcumaticaCustomerLine(models.Model):
                     existing.write(vals)
                     line.write({
                         'import_state':   'updated',
-                        'import_message': f'Diupdate: {existing.name} (ID: {existing.id})',
+                        'import_message': f'Updated: {existing.name} (ID: {existing.id})',
                         'odoo_partner_id': existing.id,
                     })
 
@@ -225,7 +229,7 @@ class AcumaticaCustomerLine(models.Model):
 
                     new_partner = self.env['res.partner'].create(vals)
                     line.write({
-                        'import_state':   'imported',
+                        'import_state':   'created',
                         'import_message': f'Dibuat: {new_partner.name} (ID: {new_partner.id})',
                         'odoo_partner_id': new_partner.id,
                     })
@@ -233,12 +237,12 @@ class AcumaticaCustomerLine(models.Model):
                     line._handle_acumatica_error()
 
                     line._log_import_result(
-                        'imported',
+                        'created',
                         f'Data {new_partner.display_name} berhasil dibuat.',
                         new_partner,
                         False
                     )
-                    imported += 1
+                    created += 1
 
                 print(f'PROCESSED LINE {line.row_number}: {line.customer_name} → {line.import_message}')
             except Exception as e:
@@ -261,11 +265,11 @@ class AcumaticaCustomerLine(models.Model):
 
                 error += 1
 
-        msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {skipped} dilewati, {error} error.'
+        msg = f'Import selesai: {created} dibuat, {updated} diupdate, {skipped} dilewati, {error} error.'
         _logger.info(
             "FINISH IMPORT CUSTOMER; TOTAL_LINES=%s, CREATED=%s, UPDATED=%s, SKIPPED=%s, ERROR=%s",
             total,
-            imported,
+            created,
             updated,
             skipped,
             error,
@@ -306,8 +310,8 @@ class AcumaticaCustomerLine(models.Model):
 
     # ─── Misc Actions ─────────────────────────────────
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state in ('skipped', 'error')).write({
-            'import_state':   'pending',
+        self.filtered(lambda l: l.import_state in ('rejected', 'error')).write({
+            'import_state':   'staged',
             'import_message': False,
         })
 
@@ -378,7 +382,7 @@ class AcumaticaCustomerLine(models.Model):
         changed_fields=None,
     ):
         titles = {
-            'imported': '✅ Import Berhasil',
+            'created': '✅ Import Berhasil',
             'updated': '🔄 Data Diperbarui',
             'error': '❌ Import Gagal',
         }

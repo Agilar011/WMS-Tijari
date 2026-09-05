@@ -52,6 +52,7 @@ class AcumaticaReceiptProductLine(models.Model):
 
 class AcumaticaReceiptLine(models.Model):
     _name = 'acumatica.receipt.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data PO Receipt dari Acumatica'
     _order = 'receipt_nbr asc, line_nbr asc, id asc'
 
@@ -108,13 +109,14 @@ class AcumaticaReceiptLine(models.Model):
     acumatica_err_id = fields.Many2one('acumatica.error.transaction', string='Error ID')
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -191,7 +193,7 @@ class AcumaticaReceiptLine(models.Model):
         acumatica_err_id = self.acumatica_err_id
         if not error_messages:
             if acumatica_err_id:
-                acumatica_err_id.import_state = 'solved'
+                acumatica_err_id.import_state = 'created'
                 return
             return
 
@@ -215,8 +217,7 @@ class AcumaticaReceiptLine(models.Model):
         acumatica_update_id = AcumaticaError.search([
             ('data_type', '=', self._name),
             ('data_id', '=', self.id),
-            ('import_state', '=', 'updated')
-        ], limit=1)
+        ], order='id', limit=1)
         if not acumatica_update_id:
             acumatica_update_id = AcumaticaError.create({
                 'name': f'{first.receipt_nbr or False}',
@@ -238,17 +239,21 @@ class AcumaticaReceiptLine(models.Model):
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: (
-                l.import_state in ['pending', 'error'] 
-                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+                l.import_state in ['staged', 'error']
+                or (l.import_state in ['created', 'updated'] and not l.odoo_picking_id)
             )
         )
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _import_single_receipt(self, receipt):
         receipt.ensure_one()
@@ -262,7 +267,7 @@ class AcumaticaReceiptLine(models.Model):
         error_messages = []
         all_line_payloads = []
         picking = receipt.odoo_picking_id
-        action_state = 'pending'
+        action_state = 'staged'
 
         for receipt_line in receipt.product_line_ids:
             all_line_payloads.append({
@@ -353,7 +358,7 @@ class AcumaticaReceiptLine(models.Model):
             self._handle_acumatica_error(
                 receipt
             )
-            action_state = 'imported'
+            action_state = 'created'
 
         for receipt_line in receipt.product_line_ids:
             move_vals = {}
@@ -473,14 +478,14 @@ class AcumaticaReceiptLine(models.Model):
 
         receipt.write({
             'import_state': action_state,
-            'import_message': f'{action_state.title()}: {picking.name if picking else False}',
+            'import_message': 'success',
             'odoo_picking_id': picking.id if picking else False,
         })
         # picking.action_confirm()
         return action_state
 
     def _do_import(self):
-        imported = 0
+        created = 0
         updated = 0
         error = 0
 
@@ -497,8 +502,8 @@ class AcumaticaReceiptLine(models.Model):
             try:
                 with self.env.cr.savepoint():
                     action_state = self._import_single_receipt(receipt)
-                if action_state == 'imported':
-                    imported += 1
+                if action_state == 'created':
+                    created += 1
                 elif action_state == 'updated':
                     updated += 1
             except Exception as exc:
@@ -524,26 +529,26 @@ class AcumaticaReceiptLine(models.Model):
                     )
 
                 receipt.write({
-                    'import_state': 'error',
+                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
                     'import_message': error_message[:1000],
                 })
                 error += 1
-                return
+                continue
 
-        # msg = f'Import done: {imported} receipt created, {updated} receipt updated, {error} receipt error.'
-        # return {
-        #     'type': 'ir.actions.client',
-        #     'tag': 'display_notification',
-        #     'params': {
-        #         'title': 'Import Inventory Receipt',
-        #         'message': msg,
-        #         'type': 'success' if error == 0 else 'warning',
-        #         'sticky': True,
-        #     }
-        # }
+        msg = f'Generate done: {created} receipt created, {updated} receipt updated, {error} receipt error.'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Generate Inventory Receipt',
+                'message': msg,
+                'type': 'success' if error == 0 else 'danger',
+                'sticky': True,
+            }
+        }
 
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
     def action_open_picking(self):
         self.ensure_one()

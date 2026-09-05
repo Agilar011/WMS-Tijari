@@ -40,7 +40,7 @@ class AcumaticaCronJob(models.Model):
     def _get_import_counts(self, model_name, line_ids, skipped_states=False):
         Line = self.env[model_name]
         domain = [('id', 'in', line_ids)]
-        imported_count = Line.search_count(domain + [('import_state', '=', 'imported')])
+        imported_count = Line.search_count(domain + [('import_state', '=', 'created')])
         updated_count = Line.search_count(domain + [('import_state', '=', 'updated')])
         error_count = Line.search_count(domain + [('import_state', '=', 'error')])
         skipped_count = 0
@@ -52,25 +52,18 @@ class AcumaticaCronJob(models.Model):
         return [
             ('po_receipt', 'PO Receipt', 'import.receipt.wizard', 'acumatica.receipt.line', 'put'),
             ('so_transfer', 'SO Transfer - Inter WH IN', 'import.transfer.wizard', 'acumatica.transfer.line', 'get'),
-            ('receipt_change_item', 'Receipt : Change Item', 'import.receipt.change.item.wizard', 'acumatica.receipt.change.item.line', 'get'),
-            ('receipt_external', 'Receipt External', 'import.receipt.external.wizard', 'acumatica.receipt.external.line', 'put'),
             ('inventory_received', 'Receipt : Inventory Receipt', 'import.inventory.recieved.wizard', 'acumatica.inventory.recieved.line', 'get'),
-            ('toko_pegang_do', 'Receipt : Toko Pegang DO', 'import.toko.pegang.do.wizard', 'acumatica.toko.pegang.do.line', 'get'),
             ('shipment_so', 'SO Return', 'import.shipment.wizard', 'acumatica.shipment.line', 'put'),
-            ('so_shipment', 'SO Shipment', 'import.so.shipment.wizard', 'acumatica.so.shipment.line', 'put'),
+            ('so_shipment', 'SO Shipment', 'import.so.shipment.wizard', 'acumatica.shipment.gi.staging', 'put'),
             ('transfer_shipment', 'SO Transfer - Inter WH OUT', 'import.transfer.shipment.wizard', 'acumatica.transfer.shipment.line', 'get'),
-            ('issue_change_item', 'Issue : Change Item', 'import.issue.wizard', 'acumatica.issue.line', 'get'),
             ('inventory_issue', 'Issue : Inventory Issue', 'import.inventory.issue.wizard', 'acumatica.inventory.issue.line', 'get'),
             ('issue_po_return', 'PO Return', 'import.issue.po.return.wizard', 'acumatica.issue.po.return.line', 'get'),
             ('transfer_one_step', 'Transfer 1 STEP', 'import.transfer.one.step.wizard', 'acumatica.transfer.one.step.line', 'get'),
             ('transfer_two_step', 'Transfer 2 STEP', 'import.transfer.two.step.wizard', 'acumatica.transfer.two.step.line', 'get'),
-            ('kit_assembly', 'Manufacturing Order', 'import.kit.assembly.wizard', 'acumatica.kit.assembly.line', 'get'),
+            ('shipment_completed', 'Update SO completed', 'import.shipment.completed.wizard', 'acumatica.shipment.completed.staging', 'put'),
+            ('kit_assembly', 'Manufacturing Order', 'import.kit.assembly.wizard', 'acumatica.kit.assembly', 'get'),
             ('invoice_consignment', 'Invoice Consignment', 'import.invoice.consignment.wizard', 'acumatica.invoice.consignment.staging', 'get'),
-            ('inventory_issue_toko_pegang_do', 'Inventory Issue Toko Pegang DO', 'import.inventory.issue.toko.pegang.do.wizard', 'acumatica.inventory.issue.toko.pegang.do.staging', 'get'),
-            ('vendor_return_direct_transfer', 'Vendor Return Consignment', 'import.vendor.return.direct.transfer.wizard', 'acumatica.vendor.return.direct.transfer.staging', 'get'),
-            ('vendor_return_document_direct_transfer', 'Vendor Return Document Direct Transfer', 'import.direct.transfer.wizard', 'acumatica.direct.transfer.staging', 'get'),
-            ('credit_memo_consignment', 'Credit Memo Consignment', 'import.credit.memo.consignment.wizard', 'acumatica.credit.memo.consignment.staging', 'get'),
-            ('inventory_receipt_transfer_wh_in', 'Inventory Receipt : Transfer In', 'import.inventory.receipt.transfer.wh.in.wizard', 'acumatica.inventory.receipt.transfer.wh.in.staging', 'get'),
+            ('credit_memo_consignment', 'Credit Memo Consignment', 'import.credit.memo.consignment.wizard', 'acumatica.credit.memo.consignment.staging', 'put'),
         ]
 
     def _get_transaction_date_filter_values(self, days=30):
@@ -107,7 +100,7 @@ class AcumaticaCronJob(models.Model):
 
     def _get_importable_lines(self, model_name, config):
         Line = self.env[model_name]
-        domain = [('import_state', '=', 'pending')]
+        domain = [('import_state', '=', 'staged')]
         config_field = Line._fields.get('config_id')
         if config_field and getattr(config_field, 'comodel_name', False) == 'acumatica.config':
             domain.append(('config_id', '=', config.id))
@@ -149,13 +142,17 @@ class AcumaticaCronJob(models.Model):
             _logger.info("Cron import %s finished: no pending staging lines.", label)
             return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
 
+        if not hasattr(lines, '_do_import'):
+            _logger.info("Cron import %s finished: staging fetch only; model has no _do_import.", label)
+            return self._cron_result(data_retrieved=data_retrieved)
+
         _logger.info("Cron import %s starting _do_import; PENDING_LINES=%s", label, pending_count)
         lines._do_import()
 
         imported_count, updated_count, error_count, skipped_count = self._get_import_counts(
             line_model,
             lines.ids,
-            skipped_states=['skipped'],
+            skipped_states=['rejected'],
         )
         records_created = imported_count + updated_count
         records_skipped = skipped_count + max(data_retrieved - records_created - error_count - skipped_count, 0)
@@ -200,7 +197,7 @@ class AcumaticaCronJob(models.Model):
 
         lines = self.env['acumatica.customer.line'].search([
             ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ])
         pending_count = len(lines)
         if not lines:
@@ -213,7 +210,7 @@ class AcumaticaCronJob(models.Model):
         Line = self.env['acumatica.customer.line']
         imported_count = Line.search_count([
             ('id', 'in', lines.ids),
-            ('import_state', '=', 'imported'),
+            ('import_state', '=', 'created'),
         ])
         updated_count = Line.search_count([
             ('id', 'in', lines.ids),
@@ -230,74 +227,6 @@ class AcumaticaCronJob(models.Model):
 
         _logger.info(
             "Cron import Customer finished _do_import; PENDING_BEFORE=%s, IMPORTED=%s, UPDATED=%s, ERROR=%s, WITH_ODOO_PARTNER=%s",
-            pending_count,
-            imported_count,
-            updated_count,
-            error_count,
-            linked_partner_count,
-        )
-        records_created = imported_count + updated_count
-        return self._cron_result(
-            data_retrieved=data_retrieved,
-            records_created=records_created,
-            records_errors=error_count,
-            records_skipped=max(data_retrieved - records_created - error_count, 0),
-        )
-
-    def _run_customer_location_import_job(self, batch_size=1000, fetch_skip=0):
-        """Fetch Customer Location data from Acumatica and import pending staging lines."""
-        config = self._get_default_config_for_type('customer_location')
-        if not config:
-            _logger.warning("Cron import Customer Location skipped: no active customer_location config found.")
-            return self._cron_result(success=False, records_errors=1, message='No active customer_location config found.')
-
-        wizard = self.env['import.customer.location.wizard'].create({
-            'config_id': config.id,
-            'batch_size': batch_size,
-            'fetch_skip': fetch_skip,
-        })
-
-        try:
-            wizard.fetch_all_customer_location_data(batch_size=batch_size)
-        except UserError as exc:
-            if 'Tidak ada data dari API' in str(exc):
-                _logger.info("Cron import Customer Location finished: no data returned from Acumatica.")
-                return self._cron_result()
-            raise
-        data_retrieved = wizard.total_fetched or 0
-
-        lines = self.env['acumatica.customer.location.line'].search([
-            ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
-        ])
-        pending_count = len(lines)
-        if not lines:
-            _logger.info("Cron import Customer Location finished: no pending staging lines.")
-            return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
-
-        _logger.info("Cron import Customer Location starting _do_import; PENDING_LINES=%s", pending_count)
-        lines._do_import()
-
-        Line = self.env['acumatica.customer.location.line']
-        imported_count = Line.search_count([
-            ('id', 'in', lines.ids),
-            ('import_state', '=', 'imported'),
-        ])
-        updated_count = Line.search_count([
-            ('id', 'in', lines.ids),
-            ('import_state', '=', 'updated'),
-        ])
-        error_count = Line.search_count([
-            ('id', 'in', lines.ids),
-            ('import_state', '=', 'error'),
-        ])
-        linked_partner_count = Line.search_count([
-            ('id', 'in', lines.ids),
-            ('odoo_partner_id', '!=', False),
-        ])
-
-        _logger.info(
-            "Cron import Customer Location finished _do_import; PENDING_BEFORE=%s, IMPORTED=%s, UPDATED=%s, ERROR=%s, WITH_ODOO_PARTNER=%s",
             pending_count,
             imported_count,
             updated_count,
@@ -336,7 +265,7 @@ class AcumaticaCronJob(models.Model):
 
         lines = self.env['acumatica.vendor.line'].search([
             ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ])
         pending_count = len(lines)
         if not lines:
@@ -349,7 +278,7 @@ class AcumaticaCronJob(models.Model):
         Line = self.env['acumatica.vendor.line']
         imported_count = Line.search_count([
             ('id', 'in', lines.ids),
-            ('import_state', '=', 'imported'),
+            ('import_state', '=', 'created'),
         ])
         updated_count = Line.search_count([
             ('id', 'in', lines.ids),
@@ -404,7 +333,7 @@ class AcumaticaCronJob(models.Model):
 
         lines = self.env['acumatica.stock.item.line'].search([
             ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ])
         pending_count = len(lines)
         if not lines:
@@ -417,7 +346,7 @@ class AcumaticaCronJob(models.Model):
         Line = self.env['acumatica.stock.item.line']
         imported_count = Line.search_count([
             ('id', 'in', lines.ids),
-            ('import_state', '=', 'imported'),
+            ('import_state', '=', 'created'),
         ])
         updated_count = Line.search_count([
             ('id', 'in', lines.ids),
@@ -472,7 +401,7 @@ class AcumaticaCronJob(models.Model):
 
         lines = self.env['acumatica.non.stock.item.line'].search([
             ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         pending_count = len(lines)
@@ -486,7 +415,7 @@ class AcumaticaCronJob(models.Model):
         Line = self.env['acumatica.non.stock.item.line']
         imported_count = Line.search_count([
             ('id', 'in', lines.ids),
-            ('import_state', '=', 'imported'),
+            ('import_state', '=', 'created'),
         ])
         updated_count = Line.search_count([
             ('id', 'in', lines.ids),
@@ -541,7 +470,7 @@ class AcumaticaCronJob(models.Model):
 
         lines = self.env['acumatica.uom.line'].search([
             ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         pending_count = len(lines)
@@ -555,7 +484,7 @@ class AcumaticaCronJob(models.Model):
         imported_count, updated_count, error_count, skipped_count = self._get_import_counts(
             'acumatica.uom.line',
             lines.ids,
-            skipped_states=['skipped'],
+            skipped_states=['rejected'],
         )
         records_created = imported_count + updated_count
         records_skipped = skipped_count + max(data_retrieved - records_created - error_count - skipped_count, 0)
@@ -598,7 +527,7 @@ class AcumaticaCronJob(models.Model):
 
         lines = self.env['acumatica.warehouse.line'].search([
             ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ])
         pending_count = len(lines)
         if not lines:
@@ -645,7 +574,7 @@ class AcumaticaCronJob(models.Model):
 
         lines = self.env['acumatica.receipt.line'].search([
             ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         pending_count = len(lines)
@@ -659,7 +588,7 @@ class AcumaticaCronJob(models.Model):
         Line = self.env['acumatica.receipt.line']
         imported_count = Line.search_count([
             ('id', 'in', lines.ids),
-            ('import_state', '=', 'imported'),
+            ('import_state', '=', 'created'),
         ])
         updated_count = Line.search_count([
             ('id', 'in', lines.ids),
@@ -714,7 +643,7 @@ class AcumaticaCronJob(models.Model):
 
         lines = self.env['acumatica.shipment.line'].search([
             ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         pending_count = len(lines)
@@ -737,101 +666,6 @@ class AcumaticaCronJob(models.Model):
             records_skipped=skipped_count + max(data_retrieved - records_created - error_count - skipped_count, 0),
         )
 
-    def _run_receipt_external_import_job(self, batch_size=1000, fetch_skip=0):
-        """Fetch Receipt External data from Acumatica and import pending staging lines."""
-        config = self._get_default_config_for_type('receipt_external')
-        if not config:
-            _logger.warning("Cron import Receipt External skipped: no active receipt_external config found.")
-            return self._cron_result(success=False, records_errors=1, message='No active receipt_external config found.')
-
-        wizard = self.env['import.receipt.external.wizard'].create({
-            'config_id': config.id,
-            'batch_size': batch_size,
-            'fetch_limit': batch_size,
-            'fetch_skip': fetch_skip,
-        })
-
-        try:
-            wizard.action_fetch_data()
-        except UserError as exc:
-            if 'Tidak ada data' in str(exc):
-                _logger.info("Cron import Receipt External finished: no data returned from Acumatica.")
-                return self._cron_result()
-            raise
-        data_retrieved = wizard.total_fetched or 0
-
-        lines = self.env['acumatica.receipt.external.line'].search([
-            ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
-            ('selected', '=', True),
-        ])
-        pending_count = len(lines)
-        if not lines:
-            _logger.info("Cron import Receipt External finished: no pending staging lines.")
-            return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
-
-        _logger.info("Cron import Receipt External starting _do_import; PENDING_LINES=%s", pending_count)
-        lines._do_import()
-
-        imported_count, updated_count, error_count, skipped_count = self._get_import_counts(
-            'acumatica.receipt.external.line',
-            lines.ids,
-        )
-        records_created = imported_count + updated_count
-        return self._cron_result(
-            data_retrieved=data_retrieved,
-            records_created=records_created,
-            records_errors=error_count,
-            records_skipped=skipped_count + max(data_retrieved - records_created - error_count - skipped_count, 0),
-        )
-
-    def _run_toko_pegang_do_import_job(self, batch_size=1000, fetch_skip=0):
-        """Fetch Toko Pegang DO data from Acumatica and import pending staging lines."""
-        config = self._get_default_config_for_type('toko_pegang_do')
-        if not config:
-            _logger.warning("Cron import Toko Pegang DO skipped: no active toko_pegang_do config found.")
-            return self._cron_result(success=False, records_errors=1, message='No active toko_pegang_do config found.')
-
-        wizard = self.env['import.toko.pegang.do.wizard'].create({
-            'config_id': config.id,
-            'batch_size': batch_size,
-            'fetch_skip': fetch_skip,
-        })
-
-        try:
-            wizard.fetch_all_toko_pegang_do_data(batch_size=batch_size)
-        except UserError as exc:
-            if 'Tidak ada data' in str(exc):
-                _logger.info("Cron import Toko Pegang DO finished: no data returned from Acumatica.")
-                return self._cron_result()
-            raise
-        data_retrieved = wizard.total_fetched or 0
-
-        lines = self.env['acumatica.toko.pegang.do.line'].search([
-            ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
-            ('selected', '=', True),
-        ])
-        pending_count = len(lines)
-        if not lines:
-            _logger.info("Cron import Toko Pegang DO finished: no pending staging lines.")
-            return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
-
-        _logger.info("Cron import Toko Pegang DO starting _do_import; PENDING_LINES=%s", pending_count)
-        lines._do_import()
-
-        imported_count, updated_count, error_count, skipped_count = self._get_import_counts(
-            'acumatica.toko.pegang.do.line',
-            lines.ids,
-        )
-        records_created = imported_count + updated_count
-        return self._cron_result(
-            data_retrieved=data_retrieved,
-            records_created=records_created,
-            records_errors=error_count,
-            records_skipped=skipped_count + max(data_retrieved - records_created - error_count - skipped_count, 0),
-        )
-
     @api.model
     def _cron_import_master_data(self, batch_size=1000, fetch_skip=0):
         """Run Master Data imports in dependency order."""
@@ -842,7 +676,6 @@ class AcumaticaCronJob(models.Model):
         )
         results = {
             'customer': self._run_import_step('customer', self._run_customer_import_job, batch_size, fetch_skip),
-            # 'customer_location': self._run_import_step('customer_location', self._run_customer_location_import_job, batch_size, fetch_skip),
             'vendor': self._run_import_step('vendor', self._run_vendor_import_job, batch_size, fetch_skip),
             'uom': self._run_import_step('uom', self._run_uom_import_job, batch_size, fetch_skip),
             'warehouse': self._run_import_step('warehouse', self._run_warehouse_import_job, batch_size, fetch_skip),

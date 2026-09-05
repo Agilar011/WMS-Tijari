@@ -65,6 +65,7 @@ class StockPickingType(models.Model):
             'po_return': 'direct_delivery_order',
             'transfer_one_step': 'direct_delivery_order',
             'transfer_two_step': 'direct_delivery_order',
+            'credit_memo_consignment': 'direct_delivery_order',
         }
 
     @api.model

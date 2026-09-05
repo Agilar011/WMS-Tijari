@@ -63,24 +63,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Non-Stock Item dari Acumatica',
             'extra_fields': [],
         },
-        'customer_location': {
-            'label': 'Customer Location',
-            'wizard_model': 'import.customer.location.wizard',
-            'config_field': 'customer_location_config_id',
-            'line_model': 'acumatica.customer.location.line',
-            'result_name': 'Hasil Import Customer Location',
-            'staging_name': 'Data Customer Location dari Acumatica',
-            'extra_fields': [],
-        },
-        'shipvia': {
-            'label': 'Shipping Carrier',
-            'wizard_model': 'import.shipvia.wizard',
-            'config_field': 'shipvia_config_id',
-            'line_model': 'acumatica.shipvia.line',
-            'result_name': 'Hasil Import Shipping Carrier',
-            'staging_name': 'Data Shipping Carrier dari Acumatica',
-            'extra_fields': [],
-        },
         'po_receipt': {
             'label': 'Purchase Order',
             'wizard_model': 'import.receipt.wizard',
@@ -117,13 +99,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Transfer 2 STEP dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
-        'receipt_external': {
-            'label': 'Receipt External (Change Item & Inventory Receive)',
-            'wizard_model': 'import.receipt.external.wizard',
-            'line_model': 'acumatica.receipt.external.line',
-            'result_name': 'Hasil Import Receipt External (Change Item & Inventory Receive)',
-            'staging_name': 'Data Receipt External (Change Item & Inventory Receive) dari Acumatica',
-        },
         'inventory_received': {
             'label': 'Inventory Receipt',
             'wizard_model': 'import.inventory.recieved.wizard',
@@ -133,14 +108,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Inventory Receipt dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
-        'toko_pegang_do': {
-            'label': 'Receipt : Toko Pegang DO',
-            'wizard_model': 'import.toko.pegang.do.wizard',
-            'line_model': 'acumatica.toko.pegang.do.line',
-            'result_name': 'Hasil Import Receipt : Toko Pegang DO',
-            'staging_name': 'Data Receipt : Toko Pegang DO dari Acumatica',
-            'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
-        },
         'inventory_issue': {
             'label': 'Inventory Issue',
             'wizard_model': 'import.inventory.issue.wizard',
@@ -148,15 +115,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'line_model': 'acumatica.inventory.issue.line',
             'result_name': 'Hasil Import Inventory Issue',
             'staging_name': 'Data Inventory Issue dari Acumatica',
-            'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
-        },
-        'receipt_change_item': {
-            'label': 'Receipt : Change Item',
-            'wizard_model': 'import.receipt.change.item.wizard',
-            'config_field': 'receipt_change_item_config_id',
-            'line_model': 'acumatica.receipt.change.item.line',
-            'result_name': 'Hasil Import Receipt : Change Item',
-            'staging_name': 'Data Receipt : Change Item dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
         'issue_change_item': {
@@ -244,15 +202,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Detail Invoice Consignment dari Acumatica',
             'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
         },
-        'inventory_issue_toko_pegang_do': {
-            'label': 'Inventory Issue Toko Pegang DO',
-            'wizard_model': 'import.inventory.issue.toko.pegang.do.wizard',
-            'line_model': 'acumatica.inventory.issue.toko.pegang.do.staging',
-            'result_name': 'Hasil Import Inventory Issue Toko Pegang DO',
-            'staging_name': 'Data Inventory Issue Toko Pegang DO dari Acumatica',
-            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
-        },
-        
         'vendor_return_direct_transfer': {
             'label': 'Vendor Return Consignment',
             'wizard_model': 'import.vendor.return.direct.transfer.wizard',
@@ -262,7 +211,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
         },
         'vendor_return_document_direct_transfer': {
-            'label': 'Direct Transfer',
+            'label': 'Vendor Return Consignment Document',
             'wizard_model': 'import.direct.transfer.wizard',
             'line_model': 'acumatica.direct.transfer.staging',
             'result_name': 'Hasil Import Direct Transfer',
@@ -277,15 +226,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Credit Memo Consignment Acumatica',
             'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
         },
-        'inventory_receipt_transfer_wh_in': {
-            'label': 'Inventory Receipt : Transfer In',
-            'wizard_model': 'import.inventory.receipt.transfer.wh.in.wizard',
-            'line_model': 'acumatica.inventory.receipt.transfer.wh.in.staging',
-            'result_name': 'Hasil Import Inventory Receipt : Transfer WH IN',
-            'staging_name': 'Data Inventory Receipt : Transfer WH IN',
-            'extra_fields': ['warehouse_value', 'inventory_id_value', 'odata_expand', 'odata_top'],
-        },
-        
     }
 
     MASTER_DATA_TYPES = [
@@ -313,14 +253,9 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'credit_memo_consignment',
         'shipment_completed',
         'kit_assembly',
-        # 'receipt_change_item',
-        # 'receipt_external',
-        # 'toko_pegang_do',
         # 'issue_change_item',
-        # 'inventory_issue_toko_pegang_do',
-        # 'vendor_return_direct_transfer',
-        # 'vendor_return_document_direct_transfer',
-        # 'inventory_receipt_transfer_wh_in'
+        'vendor_return_direct_transfer',
+        'vendor_return_document_direct_transfer',
     ]
 
     def _get_import_type_selection(self):
@@ -439,28 +374,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     end_date = fields.Date(string='End Date Filter', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
     # OLD: one config field per import type.
-    # uom_config_id = fields.Many2one('acumatica.config', string='UoM Configuration', domain=[('active', '=', True)])
-    # customer_config_id = fields.Many2one('acumatica.customer.config', string='Customer Configuration', domain=[('active', '=', True)])
-    # vendor_config_id = fields.Many2one('acumatica.vendor.config', string='Vendor Configuration', domain=[('active', '=', True)])
-    # warehouse_config_id = fields.Many2one('acumatica.warehouse.config', string='Warehouse Configuration', domain=[('active', '=', True)])
-    # stock_item_config_id = fields.Many2one('acumatica.stock.item.config', string='Stock Item Configuration', domain=[('active', '=', True)])
-    # non_stock_item_config_id = fields.Many2one('acumatica.non.stock.item.config', string='Non-Stock Item Configuration', domain=[('active', '=', True)])
-    # customer_location_config_id = fields.Many2one('acumatica.customer.location.config', string='Customer Location Configuration', domain=[('active', '=', True)])
-    # shipvia_config_id = fields.Many2one('acumatica.shipvia.config', string='ShipVia Configuration', domain=[('active', '=', True)])
-    # receipt_config_id = fields.Many2one('acumatica.receipt.config', string='Receipt Configuration', domain=[('active', '=', True)])
-    # issue_po_return_config_id = fields.Many2one('acumatica.issue.po.return.config', string='Issue PO Return Configuration', domain=[('active', '=', True)])
-    # transfer_one_step_config_id = fields.Many2one('acumatica.transfer.one.step.config', string='Transfer One Step Configuration', domain=[('active', '=', True)])
-    # transfer_two_step_config_id = fields.Many2one('acumatica.transfer.two.step.config', string='Transfer Two Step Configuration', domain=[('active', '=', True)])
-    # inventory_received_config_id = fields.Many2one('acumatica.inventory.recieved.config', string='Inventory Received Configuration', domain=[('active', '=', True)])
-    # inventory_issue_config_id = fields.Many2one('acumatica.inventory.issue.config', string='Inventory Issue Configuration', domain=[('active', '=', True)])
-    # receipt_change_item_config_id = fields.Many2one('acumatica.receipt.change.item.config', string='Receipt Change Item Configuration', domain=[('active', '=', True)])
-    # issue_config_id = fields.Many2one('acumatica.issue.config', string='Issue Change Item Configuration', domain=[('active', '=', True)])
-    # shipment_config_id = fields.Many2one('acumatica.shipment.config', string='Shipment SO Configuration', domain=[('active', '=', True)])
-    # so_shipment_config_id = fields.Many2one('acumatica.so.shipment.config', string='SO Shipment Configuration', domain=[('active', '=', True)])
-    # transfer_config_id = fields.Many2one('acumatica.transfer.config', string='SO Transfer Configuration', domain=[('active', '=', True)])
-    # transfer_shipment_config_id = fields.Many2one('acumatica.transfer.shipment.config', string='Transfer Shipment Configuration', domain=[('active', '=', True)])
-    # kit_assembly_config_id = fields.Many2one('acumatica.kit.assembly.config', string='Kit Assembly Configuration', domain=[('active', '=', True)])
-    # inventory_stock_config_id = fields.Many2one('acumatica.inventory.stock.config', string='Inventory Stock Configuration', domain=[('active', '=', True)])
     config_id = fields.Many2one(
         'acumatica.config',
         string='API Configuration',
@@ -520,7 +433,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'so_shipment', 
             'shipment_completed',
             'inventory_received', 
-            'toko_pegang_do', 
             'transfer_shipment',
         ):
             vals['wh33_filter'] = self.wh33_filter
@@ -536,13 +448,13 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
     def _get_pending_lines(self, info, config):
         return self.env[info['line_model']].search([
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ], order='id')
     
     def _get_pending_domain(self, config):
         return [
             ('config_id', '=', config.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ]
 
 
@@ -608,7 +520,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
                 'total_pending': len(pending_lines),
                 'total_imported': 0,
                 'batch_count': 0,
-                'last_message': _('Fetch complete. %s data is already in staging, %s data has been retrieved, and %s data in staging is ready to be imported.') % (total_data, total_fetched, len(pending_lines)),
+                'last_message': _('Fetch complete. %s data is already in staging, %s data has been retrieved, and %s staged data is ready to be generated.') % (total_data, total_fetched, len(pending_lines)),
             })
             return self._reopen()
 
@@ -640,7 +552,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
         total_pending_before = Line.search_count(pending_domain)
         if not total_pending_before:
-            raise UserError(_('Tidak ada data pending di staging yang dapat diimport.'))
+            raise UserError(_('Tidak ada data staged di staging yang dapat digenerate.'))
 
         processed = 0
         batch_count = 0
@@ -677,7 +589,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'total_imported': processed,
             'batch_count': batch_count,
             'last_message': _(
-                'Import batch selesai. %s data diproses dalam %s batch. Sisa pending: %s.'
+                'Generate batch selesai. %s data diproses dalam %s batch. Sisa staged: %s.'
             ) % (processed, batch_count, remaining_count),
         })
 
@@ -708,7 +620,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'total_pending': len(pending_lines),
             'total_imported': 0,
             'batch_count': 0,
-            'last_message': _('Fetch selesai. %s line staging dibuat, %s line pending terpilih siap diimport.') % (total_fetched, len(pending_lines)),
+            'last_message': _('Fetch selesai. %s line staging dibuat, %s line staged siap digenerate.') % (total_fetched, len(pending_lines)),
         })
 
 

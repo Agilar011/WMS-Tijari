@@ -1,0 +1,7 @@
+{
+  "version": 22,
+  "sheets": [{"id": "sheet1", "name": "Scheduler Activity", "colNumber": 12, "rowNumber": 20, "cells": {"A1": {"content": "Cron and Scheduler Activity"}}, "styles": {}, "figures": [
+    {"id": "scheduler-status", "x": 0, "y": 40, "width": 1080, "height": 420, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Scheduler Logs by Status"}, "metaData": {"groupBy": ["status"], "measure": "__count", "resModel": "api.scheduler.log", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["status"], "context": {}, "orderBy": []}}}
+  ]}],
+  "styles": {}, "formats": {}, "borders": {}, "revisionId": "1", "uniqueFigureIds": [], "settings": {}, "pivots": {}, "pivotNextId": 1, "customTableStyles": {}, "globalFilters": [], "lists": {}, "listNextId": 1, "odooVersion": 18
+}

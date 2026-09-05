@@ -180,6 +180,11 @@ class StockPicking(models.Model):
         compute='_compute_putaway_values',
         readonly=False,
     )
+    putaway_move_ids = fields.Many2many(
+        comodel_name="stock.move",
+        string="Putaway Stock Moves",
+        compute='_compute_putaway_move_ids',
+    )
     putaway_progress_status = fields.Selection(
         [
             ('finished', 'Finished'),
@@ -453,6 +458,7 @@ class StockPicking(models.Model):
             ('acumatica.transfer.two.step.line', 'reference_nbr', 'document_only'),
             ('acumatica.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
             ('acumatica.vendor.return.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
+            ('acumatica.credit.memo.consignment.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
             ('acumatica.receipt.external.line', 'reference_nbr', 'document_only'),
             ('acumatica.toko.pegang.do.line', 'reference_nbr', 'document_only'),
         ]
@@ -749,6 +755,22 @@ class StockPicking(models.Model):
         for picking in self:
             move_lines = picking._get_putaway_move_lines()
             picking.putaway_move_line_ids = move_lines
+
+    @api.depends(
+        'putaway_product_id',
+        'putaway_lot_id',
+        'move_line_ids',
+        'move_line_ids.move_id',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+        'move_line_ids.quantity',
+        'move_line_ids.picker_status',
+        'move_line_ids.state',
+    )
+    def _compute_putaway_move_ids(self):
+        for picking in self:
+            picking.putaway_move_ids = picking._get_putaway_move_lines().mapped('move_id')
 
     @api.depends(
         'putaway_product_id',
@@ -1224,6 +1246,7 @@ class StockPicking(models.Model):
                 'default_template_id': template.id if template else False,
                 'default_composition_mode': 'comment',
                 'default_attachment_ids': [(6, 0, [attachment_new.id])],
+                'tijari_hasil_picking_email': True,
             },
         }
 
@@ -1293,7 +1316,7 @@ class StockPicking(models.Model):
         if not origin:
             raise ValidationError(_("Origin hasil scan kosong."))
 
-        pickings = self.search([('origin', '=', origin)], order='id desc')
+        pickings = self.search([('origin', '=', origin)], order='id desc', limit=1)
         if not pickings:
             raise ValidationError(_("Stock Picking tidak ditemukan untuk nomor dokumen: %s") % origin)
 

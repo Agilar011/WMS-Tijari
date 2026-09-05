@@ -16,7 +16,7 @@
                     decoration-info="import_state == 'updated'"
                     decoration-warning="import_state == 'skipped'"
                     decoration-danger="import_state == 'error'"
-                    decoration-muted="import_state == 'pending'"
+                    decoration-muted="import_state == 'staged'"
                 />
                 <field name="error_msg"/>
                 <button string="Open" name="action_open_record" type="object" class="oe_highlight"/>

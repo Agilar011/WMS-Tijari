@@ -166,7 +166,7 @@ class ImportVendorWizard(models.TransientModel):
             ('last_modified_datetime', '!=', item['last_modified_datetime']),
         ])
         if existing:
-            item['import_state'] = 'pending'
+            item['import_state'] = 'staged'
             existing.write(item)
 
     def fetch_vendor_data(self, limit=50, skip=0, odata_filter=False):
@@ -313,7 +313,7 @@ class ImportVendorWizard(models.TransientModel):
                     existing_partner = partner_by_vendor.get(item['vendor_id'])
 
                 msg = 'Data sudah ada' if existing_partner else ''
-                state = 'pending'
+                state = 'staged'
 
                 params_list.append((
                     self.config_id.id,
@@ -359,7 +359,7 @@ class ImportVendorWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.vendor.line'].search([
             ('config_id',    '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected',     '=', True),
         ])
         if not lines:

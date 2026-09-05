@@ -776,7 +776,7 @@ class StockMoveLine(models.Model):
 
                 # 2. Ambil TANGGAL MASUK (Format: MMDDYY)
                 # Odoo menyimpan waktu dalam UTC, kita ambil tanggal hari ini
-                tanggal_masuk = fields.Date.today().strftime('%m%y')
+                tanggal_masuk = fields.Date.today().strftime('%m%d%y')
                 print(f">>> Tanggal Masuk: {tanggal_masuk}") # Cek di terminal Odoo
 
                 # 3. Ambil KODE WAREHOUSE Tujuan
@@ -1150,9 +1150,88 @@ class StockMoveLine(models.Model):
         self.write({'picker_status': 'finished'})
         return True
 
+    def action_save_picker_details(self):
+        self.ensure_one()
+
+        if not self.lot_id:
+            raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
+        if self.quantity == 0:
+            raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+
+        self.write({'picker_status': 'finished'})
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Stock Move'),
+            'res_model': 'stock.move',
+            'res_id': self.move_id.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_cancel_picker_details(self):
+        self.ensure_one()
+
+        if self.env.context.get('picker_new_line'):
+            move = self.move_id
+            self.unlink()
+        else:
+            move = self.move_id
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Stock Move'),
+            'res_model': 'stock.move',
+            'res_id': move.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_view'
+            ).id,
+            'target': 'new',
+        }
+
     def action_mark_picker_unfinished(self):
         self.write({'picker_status': 'unfinished'})
         return True
+
+    def action_delete_picker_line(self):
+        self.ensure_one()
+
+        move = self.move_id
+        if self.state == 'done' or move.state in ('done', 'cancel'):
+            raise ValidationError(_("Line yang sudah Done atau Cancelled tidak boleh dihapus."))
+
+        self.unlink()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Stock Move'),
+            'res_model': 'stock.move',
+            'res_id': move.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_open_picker_details(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Picker Details'),
+            'res_model': 'stock.move.line',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.wizard_picker_view_mobile'
+            ).id,
+            'target': 'new',
+        }
 
 
     @api.onchange('location_putaway_id')

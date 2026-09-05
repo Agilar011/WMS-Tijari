@@ -202,7 +202,7 @@ class ImportReceiptWizard(models.TransientModel):
             lines_to_create = {
                 **header_item,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': "Data API Imported",
                 'selected': True,
                 'sync_date': sync_data,
@@ -611,7 +611,7 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.issue.po.return.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -642,7 +642,7 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.issue.po.return.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -701,7 +701,7 @@ class ImportReceiptWizard(models.TransientModel):
     #         vals = dict(item)
     #         vals.update({
     #             'config_id': self.config_id.id,
-    #             'import_state': 'pending',
+    #             'import_state': 'staged',
     #             'import_message': msg,
     #             'selected': True,
     #             'sync_date': fields.Datetime.now(),
@@ -738,7 +738,7 @@ class ImportReceiptWizard(models.TransientModel):
     #     self.ensure_one()
     #     lines = self.env['acumatica.issue.po.return.line'].search([
     #         ('config_id', '=', self.config_id.id),
-    #         ('import_state', '=', 'pending'),
+    #         ('import_state', '=', 'staged'),
     #         ('selected', '=', True),
     #     ])
     #     if not lines:
@@ -1011,7 +1011,7 @@ class ImportReceiptWizard(models.TransientModel):
     #     # proses per receipt number
     #     for receipt_nbr in self.mapped('receipt_nbr'):
     #         receipt_lines = self.filtered(
-    #             lambda l: l.receipt_nbr == receipt_nbr and l.import_state == 'pending'
+    #             lambda l: l.receipt_nbr == receipt_nbr and l.import_state == 'staged'
     #         )
     #         if not receipt_lines:
     #             continue

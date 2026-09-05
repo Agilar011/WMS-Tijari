@@ -20,15 +20,18 @@
         'product',
         'stock_inventory',
         'tijari_auth_oauth',
+        'spreadsheet_dashboard',
     ],
     'data': [
         'security/groups.xml',
         'security/ir.model.access.csv',
         'data/document_only_picking_type_data.xml',
         'data/ir.sequence.xml',
+        'data/api_data_hub_dashboard.xml',
         'wizard/generate_package_wizard_views.xml',
         'wizard/putaway_move_line_wizard_views.xml',
         'views/assets.xml',
+        'views/mail_compose_message_views.xml',
         'views/hide_menu.xml',
         'views/internal_transfer_order_views.xml',
         'views/internal_transfer_order_kanban_views.xml',
@@ -60,6 +63,9 @@
         'views/operator_menu_security.xml',
     ],
     'assets': {
+        'spreadsheet.o_spreadsheet': [
+            'tijari_wms_18/static/src/js/api_data_hub_dashboard.js',
+        ],
         'web.assets_frontend': [
         ],
         'web.assets_backend': [

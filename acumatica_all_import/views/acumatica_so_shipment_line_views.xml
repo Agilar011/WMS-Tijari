@@ -19,8 +19,8 @@
                 <!-- <field name="inventory_id"/> -->
                 <field name="import_state"/>
 
-                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
-                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Staged" name="staged" domain="[('import_state','=','staged')]"/>
+                <filter string="Done" name="done" domain="[('import_state','in',('created','updated'))]"/>
                 <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
 
                 <group expand="0" string="Group By">
@@ -46,8 +46,8 @@
                 <field name="adt_WarehouseID"/>
                 <field name="total_qty"/>
                 <field name="import_state" widget="badge"
-                       decoration-success="import_state in ('imported','updated')"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
+                       decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
@@ -61,9 +61,9 @@
         <field name="arch" type="xml">
             <form string="Data SO Shipment">
                 <header>
-                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged'"/>
                     <button name="action_open_picking" type="object" string="Open Receipt" class="btn-secondary" invisible="not odoo_picking_id"/>
-                    <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <button name="action_reset_pending" type="object" string="Reset Staged" class="btn-secondary" invisible="import_state != 'error'"/>
                 </header>
                 <sheet>
                     <!-- Field indikator tersembunyi agar tidak memicu error pada tombol header -->

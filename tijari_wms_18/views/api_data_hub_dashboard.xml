@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Native Odoo dashboard/report for transactions created from API Data Hub. -->
+    <record id="view_api_data_hub_dashboard_search" model="ir.ui.view">
+        <field name="name">stock.picking.api.data.hub.dashboard.search</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <search string="API Data Hub Dashboard">
+                <field name="adt_type" string="Transaction Type"/>
+                <field name="origin" string="Reference"/>
+                <field name="picking_type_id" string="Operation Type"/>
+                <field name="scheduled_date" string="Scheduled Date"/>
+                <field name="state" string="Odoo Status"/>
+                <field name="sync_state" string="Sync State"/>
+                <field name="shipment_information" string="Shipment Information"/>
+
+                <filter name="filter_api_data_hub" string="API Data Hub"
+                        domain="[('adt_type', '!=', False)]"/>
+                <filter name="filter_open" string="Open"
+                        domain="[('state', 'not in', ['done', 'cancel'])]"/>
+                <filter name="filter_done" string="Done"
+                        domain="[('state', '=', 'done')]"/>
+                <filter name="filter_not_ready" string="Not Ready"
+                        domain="[('sync_state', '=', 'not_ready')]"/>
+                <filter name="filter_partial_discrepancy" string="Partial &amp; Discrepancy"
+                        domain="[('shipment_information', '=', 'partial')]"/>
+
+                <group string="Group By">
+                    <filter name="group_transaction_type" string="Transaction Type"
+                            context="{'group_by': 'adt_type'}"/>
+                    <filter name="group_operation_type" string="Operation Type"
+                            context="{'group_by': 'picking_type_id'}"/>
+                    <filter name="group_odoo_status" string="Odoo Status"
+                            context="{'group_by': 'state'}"/>
+                    <filter name="group_sync_state" string="Sync State"
+                            context="{'group_by': 'sync_state'}"/>
+                    <filter name="group_shipment_information" string="Shipment Information"
+                            context="{'group_by': 'shipment_information'}"/>
+                    <filter name="group_scheduled_month" string="Scheduled Month"
+                            context="{'group_by': 'scheduled_date:month'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_api_data_hub_dashboard_graph" model="ir.ui.view">
+        <field name="name">stock.picking.api.data.hub.dashboard.graph</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <graph string="API Data Hub Accumulation" type="bar" stacked="1">
+                <field name="adt_type" type="row"/>
+                <field name="adt_total_qty" type="measure"/>
+                <field name="adt_actual_qty" type="measure"/>
+                <field name="shipment_information" type="row"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="view_api_data_hub_dashboard_pivot" model="ir.ui.view">
+        <field name="name">stock.picking.api.data.hub.dashboard.pivot</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <pivot string="API Data Hub Accumulation" display_quantity="1">
+                <field name="adt_type" type="row"/>
+                <field name="state" type="col"/>
+                <field name="adt_total_qty" type="measure"/>
+                <field name="adt_actual_qty" type="measure"/>
+                <field name="shipment_information" type="row"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_api_data_hub_dashboard_list" model="ir.ui.view">
+        <field name="name">stock.picking.api.data.hub.dashboard.list</field>
+        <field name="model">stock.picking</field>
+        <field name="arch" type="xml">
+            <list string="API Data Hub Transactions" create="0" edit="0" delete="0">
+                <field name="scheduled_date"/>
+                <field name="adt_type"/>
+                <field name="origin"/>
+                <field name="picking_type_id"/>
+                <field name="adt_total_qty" sum="Total API Qty"/>
+                <field name="adt_actual_qty" sum="Total Actual Qty"/>
+                <field name="shipment_information" widget="badge"
+                       decoration-warning="shipment_information == 'partial'"
+                       decoration-success="shipment_information == 'full_shipment'"/>
+                <field name="sync_state" widget="badge"
+                       decoration-success="sync_state == 'ready'"
+                       decoration-warning="sync_state == 'not_ready'"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'done'"
+                       decoration-danger="state == 'cancel'"
+                       decoration-warning="state not in ['done', 'cancel']"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_api_data_hub_dashboard" model="ir.actions.act_window">
+        <field name="name">API Data Hub Dashboard</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">graph,pivot,list,form</field>
+        <field name="domain">[('adt_type', '!=', False)]</field>
+        <field name="context">{
+            'search_default_filter_api_data_hub': 1,
+            'search_default_group_transaction_type': 1,
+        }</field>
+        <field name="search_view_id" ref="view_api_data_hub_dashboard_search"/>
+    </record>
+
+    <record id="action_api_data_hub_dashboard_graph_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">graph</field>
+        <field name="view_id" ref="view_api_data_hub_dashboard_graph"/>
+        <field name="act_window_id" ref="action_api_data_hub_dashboard"/>
+    </record>
+
+    <record id="action_api_data_hub_dashboard_pivot_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">pivot</field>
+        <field name="view_id" ref="view_api_data_hub_dashboard_pivot"/>
+        <field name="act_window_id" ref="action_api_data_hub_dashboard"/>
+    </record>
+
+    <record id="action_api_data_hub_dashboard_list_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="3"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_api_data_hub_dashboard_list"/>
+        <field name="act_window_id" ref="action_api_data_hub_dashboard"/>
+    </record>
+
+    <menuitem id="menu_api_data_hub_dashboard"
+              name="API Data Hub Dashboard"
+              parent="stock.menu_stock_root"
+              action="action_api_data_hub_dashboard"
+              sequence="12"
+              groups="stock.group_stock_manager"/>
+
+</odoo>

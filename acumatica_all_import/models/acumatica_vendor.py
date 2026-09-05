@@ -49,15 +49,15 @@ class AcumaticaVendorLine(models.Model):
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
-        ('pending',  'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated',  'Diupdate'),
-        ('skipped',  'Dilewati'),
+        ('staged',  'Staged'),
+        ('created', 'Created'),
+        ('updated',  'Updated'),
+        ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='pending', readonly=True)
+    ], string='Status', default='staged', readonly=True)
 
-    import_message  = fields.Char(string='Keterangan',       readonly=True)
-    odoo_partner_id = fields.Many2one('res.partner', string='Partner di Odoo', readonly=True)
+    import_message  = fields.Char(string='Generation Message',       readonly=True)
+    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference', readonly=True)
     selected        = fields.Boolean(string='Pilih',          default=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
@@ -97,13 +97,17 @@ class AcumaticaVendorLine(models.Model):
     # ─── Import Actions ──────────────────────────────
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def _handle_acumatica_error(self, err_msg=False):
         AcumaticaError = self.env['acumatica.error.master']
@@ -144,7 +148,7 @@ class AcumaticaVendorLine(models.Model):
           Status       → adt_state
           VendorClass  → adt_class
         """
-        imported = updated = error = 0
+        created = updated = error = 0
 
         STATUS_MAP = {
             'active':   'Active',
@@ -210,7 +214,7 @@ class AcumaticaVendorLine(models.Model):
                     existing.write(vals)
                     line.write({
                         'import_state':    'updated',
-                        'import_message':  f'Diupdate: {existing.name} (ID: {existing.id})',
+                        'import_message':  f'Updated: {existing.name} (ID: {existing.id})',
                         'odoo_partner_id': existing.id,
                     })
 
@@ -225,7 +229,7 @@ class AcumaticaVendorLine(models.Model):
                 else:
                     new_partner = self.env['res.partner'].create(vals)
                     line.write({
-                        'import_state':    'imported',
+                        'import_state':    'created',
                         'import_message':  f'Dibuat: {new_partner.name} (ID: {new_partner.id})',
                         'odoo_partner_id': new_partner.id,
                     })
@@ -233,12 +237,12 @@ class AcumaticaVendorLine(models.Model):
                     line._handle_acumatica_error()
 
                     line._log_import_result(
-                        'imported',
+                        'created',
                         f'Data {new_partner.display_name} berhasil dibuat.',
                         new_partner,
                         False
                     )
-                    imported += 1
+                    created += 1
 
             except Exception as e:
                 _logger.error("Error import Vendor line %s: %s", line.vendor_id, str(e))
@@ -259,7 +263,7 @@ class AcumaticaVendorLine(models.Model):
                 )
                 error += 1
 
-        msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
+        msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
         return {
             'type': 'ir.actions.client',
             'tag':  'display_notification',
@@ -273,8 +277,8 @@ class AcumaticaVendorLine(models.Model):
 
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state in ('error', 'skipped')).write({
-            'import_state':   'pending',
+        self.filtered(lambda l: l.import_state in ('error', 'rejected')).write({
+            'import_state':   'staged',
             'import_message': False,
         })
 
@@ -322,7 +326,7 @@ class AcumaticaVendorLine(models.Model):
         changed_fields=None,
     ):
         titles = {
-            'imported': '✅ Import Berhasil',
+            'created': '✅ Import Berhasil',
             'updated': '🔄 Data Diperbarui',
             'error': '❌ Import Gagal',
         }

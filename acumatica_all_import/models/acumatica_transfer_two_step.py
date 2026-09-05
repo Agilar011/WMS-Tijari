@@ -7,162 +7,9 @@ import requests
 
 _logger = logging.getLogger(__name__)
 
-class AcumaticaTransferTwoStepConfig(models.Model):
-    _name = 'acumatica.transfer.two.step.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Inventory Receipt Import'
-    _rec_name = 'name'
-
-    name = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
-    base_url = fields.Char(string='Base URL', required=True, default='http://staging.aditya.group/acumportal/entity')
-    api_version = fields.Char(string='API Version', required=True, default='25.200.002')
-    username = fields.Char(string='Username', required=True, default='wms')
-    password = fields.Char(string='Password', required=True)
-    company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
-    endpoint_name = fields.Char(string='Endpoint Name', required=True, default='TransferOrderGI')
-    active = fields.Boolean(default=True)
-    last_sync = fields.Datetime(string='Terakhir Sync', readonly=True)
-    state = fields.Selection([
-        ('draft', 'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error', 'Error'),
-    ], string='Status', default='draft', readonly=True)
-    odata_expand = fields.Char(
-        string='OData Expand',
-        default='TransferOrderGIDetails',
-        help='Contoh: Details atau Details,OtherChild'
-    )
-    odata_select = fields.Char(
-        string='OData Select',
-        help='Optional: pilih field tertentu'
-    )
-    odata_filter = fields.Char(
-        string='OData Filter',
-        default="TransferType eq '2-Step' and (Status eq 'On Hold' or Status eq 'Balanced')"
-    )
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            if session:
-                self._do_logout(session)
-                self.state = 'connected'
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Koneksi Berhasil!',
-                        'message': f'Berhasil terhubung ke Acumatica ({self.base_url})',
-                        'type': 'success',
-                        'sticky': False,
-                    }
-                }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-    def _do_login(self):
-        self.ensure_one()
-
-        last_error = None
-
-        for attempt in range(1, 4):
-            try:
-                session = requests.Session()
-                response = session.post(
-                    self.login_url,
-                    json={
-                        "name": self.username,
-                        "password": self.password,
-                        "company": self.company_code
-                    },
-                    headers={"Content-Type": "application/json"},
-                    timeout=30,
-                )
-
-                if response.status_code == 204:
-                    return session
-
-                raise UserError(
-                    f'Login gagal (HTTP {response.status_code}): {response.text}'
-                )
-
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout) as e:
-                last_error = e
-
-                if attempt < 3:
-                    time.sleep(30)
-
-        if isinstance(last_error, requests.exceptions.ConnectionError):
-            raise UserError(
-                f'Tidak bisa terhubung ke server: {self.base_url} (sudah dicoba 3 kali)'
-            )
-
-        if isinstance(last_error, requests.exceptions.Timeout):
-            raise UserError(
-                'Koneksi timeout setelah 3 kali percobaan. Periksa URL server.'
-            )
-
-        raise UserError('Login gagal setelah 3 kali percobaan.')
-
-
-    def _do_logout(self, session):
-        for attempt in range(1, 4):
-            try:
-                response = session.post(
-                    self.logout_url,
-                    timeout=10
-                )
-
-                # opsional: validasi status code
-                if response.status_code in (200, 204):
-                    return
-
-                if attempt < 3:
-                    time.sleep(30)
-
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout):
-                if attempt < 3:
-                    time.sleep(30)
-
-            except Exception:
-                # tetap diam seperti kode asli
-                return
-
-    def _val(self, item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    def _normalize_rows(self, payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
-
-
-
 class AcumaticaTransferTwoStepLine(models.Model):
     _name = 'acumatica.transfer.two.step.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Transfer Order dari Acumatica'
     _order = 'reference_nbr asc, line_nbr asc, id asc'
 
@@ -206,13 +53,14 @@ class AcumaticaTransferTwoStepLine(models.Model):
     uom_code = fields.Char(string='UOM', readonly=True)
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order',
@@ -329,21 +177,25 @@ class AcumaticaTransferTwoStepLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
     
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         PickingType = self.env['stock.picking.type']
 
-        imported = 0
+        created = 0
         updated = 0
         error = 0
 
@@ -353,7 +205,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
     
         for reference_nbr in self.mapped('reference_nbr'):
             receipt_lines = self.filtered(
-                lambda l: l.reference_nbr == reference_nbr and l.import_state == 'pending'
+                lambda l: l.reference_nbr == reference_nbr and l.import_state == 'staged'
             )
             if not receipt_lines:
                 continue
@@ -373,7 +225,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 if transfer_info['status'] == 'skip':
                     receipt_lines.write({
                         'import_state': 'updated',
-                        'import_message': transfer_info['message'],
+                        'import_message': 'success',
                         'odoo_picking_id': False,
                         'odoo_internal_transfer_order_id': False,
                     })
@@ -416,13 +268,13 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 transfer_service.set_order_ready(order)
                 receipt_lines.write({
                     'import_state': action_state,
-                    'import_message': f'{action_state.title()}: {order.name}',
+                    'import_message': 'success',
                     'odoo_picking_id': False,
                     'odoo_internal_transfer_order_id': order.id,
                 })
                 self.env['acumatica.error.transaction']._handle_acumatica_error(first.reference_nbr, 'transfer_two_step')
-                if action_state == 'imported':
-                    imported += 1
+                if action_state == 'created':
+                    created += 1
                 else:
                     updated += 1
                 self.env.cr.execute('RELEASE SAVEPOINT import_transfer_two_step_doc')
@@ -510,14 +362,14 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
                         picking.write(vals)
                         self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=first.reference_nbr or False)
-                        imported += 1
+                        created += 1
 
                 else:
                     picking = Picking.create(vals)
                     print(f"Picking : {picking} Created")
                     # raise UserError("Checkpoint")
-                    action_state = 'imported'
-                    imported += 1
+                    action_state = 'created'
+                    created += 1
 
                 if action_state == 'error':
                     break
@@ -608,7 +460,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
                         first.write({
                             'import_state': action_state,
-                            'import_message': f'{action_state.title()}: {picking.name}',
+                            'import_message': 'success',
                             'odoo_picking_id': picking.id,
                         })
 
@@ -616,7 +468,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         _logger.exception("Error import line %s", line.id)
                         raise UserError(str(line_e))
                         first.write({
-                            'import_state': 'error',
+                            'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
                             'import_message': str(line_e)[:200],
                             'odoo_picking_id': picking.id if picking else False,
                         })
@@ -651,28 +503,28 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     } for line in tracked_lines],
                 )
                 receipt_lines.write({
-                    'import_state': 'error',
+                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
                     'import_message': str(e)[:200],
                     'odoo_picking_id': False,
                     'odoo_internal_transfer_order_id': False,
                 })
                 error += len(receipt_lines)
 
-        msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
+        msg = f'Import selesai: {created} receipt dibuat, {updated} receipt diupdate, {error} line error.'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': 'Import Inventory Receipt',
                 'message': msg,
-                'type': 'success' if error == 0 else 'warning',
+                'type': 'success' if error == 0 else 'danger',
                 'sticky': True,
             }
         }
 
 
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
     def action_open_picking(self):
         self.ensure_one()
@@ -693,7 +545,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
         }
 
     def action_select_all(self):
-        self.search([('import_state', '=', 'pending')]).write({'selected': True})
+        self.search([('import_state', '=', 'staged')]).write({'selected': True})
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})
@@ -729,13 +581,14 @@ class AcumaticaTransferTwoStepLineProduct(models.Model):
     adt_UOM = fields.Char(string="Acumatica UOM")
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')

@@ -187,7 +187,7 @@ class ImportUomWizard(models.TransientModel):
                     'external_id': item['external_id'],
                     'unit_id': item['unit_id'],
                     'description': item['description'],
-                    'import_state': 'pending',
+                    'import_state': 'staged',
                     'import_message': f'Sudah ada → akan diupdate: {existing.unit_id}' if existing else '',
                     'selected': True,
                     'sync_date': fields.Datetime.now(),
@@ -211,7 +211,7 @@ class ImportUomWizard(models.TransientModel):
             'domain': [('config_id', '=', self.config_id.id)],
             'context': {
                 'default_config_id': self.config_id.id,
-                'search_default_pending': 1,
+                'search_default_staged': 1,
             },
         }
 
@@ -220,7 +220,7 @@ class ImportUomWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.uom.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

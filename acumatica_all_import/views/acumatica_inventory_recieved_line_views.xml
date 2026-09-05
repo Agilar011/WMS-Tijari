@@ -29,8 +29,8 @@
                 <field name="total_qty"/>
                 <field name="status"/>
                 <field name="import_state" widget="badge"
-                       decoration-success="import_state in ('imported','updated')"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
+                       decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
@@ -47,9 +47,9 @@
         <field name="arch" type="xml">
             <form string="Data Receipt : Inventory Receipt">
                 <header>
-                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state not in ['pending', 'error']"/>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state not in ['staged', 'error']"/>
                     <button name="action_open_picking" type="object" string="Open Picking"/>
-                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,updated,error"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>
                     <group string="Header">

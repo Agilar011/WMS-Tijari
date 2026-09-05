@@ -1,0 +1,64 @@
+{
+  "version": 22,
+  "sheets": [{
+    "id": "sheet1",
+    "name": "Warehouse Operations",
+    "colNumber": 12,
+    "rowNumber": 120,
+    "cells": {
+      "A1": {"content": "Warehouse Operations Dashboard"},
+      "A3": {"content": "OPERATION BY STATUS"},
+      "A20": {"content": "DELAYED OPERATION"},
+      "A37": {"content": "OPERATION SCHEDULE"},
+      "A54": {"content": "OPERATION PROGRESS"},
+      "A71": {"content": "PARTIAL & DISCREPANCY"},
+      "A88": {"content": "INVENTORY ADJUSTMENT"},
+      "A105": {"content": "SCRAP MONITORING"}
+      ,"D2": {"content": "=PIVOT.VALUE(1,\"__count\")"}
+      ,"D19": {"content": "=PIVOT.VALUE(2,\"__count\")"}
+      ,"D36": {"content": "=PIVOT.VALUE(3,\"__count\")"}
+      ,"D53": {"content": "=PIVOT.VALUE(4,\"__count\")"}
+      ,"D70": {"content": "=PIVOT.VALUE(5,\"__count\")"}
+      ,"D87": {"content": "=PIVOT.VALUE(6,\"__count\")"}
+      ,"D104": {"content": "=PIVOT.VALUE(7,\"__count\")"}
+    },
+    "styles": {},
+    "figures": [
+      {"id": "operation-status-card", "x": 0, "y": 40, "width": 250, "height": 110, "tag": "chart", "data": {"type": "scorecard", "background": "#EAF6FA", "keyValue": "D2", "title": {"text": "Operation by Status", "align": "left", "bold": true}}},
+      {"id": "operation-status", "x": 270, "y": 40, "width": 810, "height": 220, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Status"}, "metaData": {"groupBy": ["state"], "measure": "__count", "resModel": "stock.picking", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["state"], "context": {}, "orderBy": []}, "stacked": false}},
+      {"id": "delayed-operation-card", "x": 0, "y": 320, "width": 250, "height": 110, "tag": "chart", "data": {"type": "scorecard", "background": "#FFF7E6", "keyValue": "D19", "title": {"text": "Delayed Operation", "align": "left", "bold": true}}},
+      {"id": "delayed-operation", "x": 270, "y": 320, "width": 810, "height": 220, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Delayed by Status"}, "metaData": {"groupBy": ["state"], "measure": "__count", "resModel": "stock.picking", "mode": "bar"}, "searchParams": {"domain": [["state", "not in", ["done", "cancel"]]], "groupBy": ["state"], "context": {}, "orderBy": []}, "stacked": false}},
+      {"id": "operation-schedule-card", "x": 0, "y": 600, "width": 250, "height": 110, "tag": "chart", "data": {"type": "scorecard", "background": "#EAF6FA", "keyValue": "D36", "title": {"text": "Operation Schedule", "align": "left", "bold": true}}},
+      {"id": "operation-schedule", "x": 270, "y": 600, "width": 810, "height": 220, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Schedule by Day"}, "metaData": {"groupBy": ["scheduled_date:day"], "measure": "__count", "resModel": "stock.picking", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["scheduled_date:day"], "context": {}, "orderBy": []}, "stacked": false}},
+      {"id": "operation-progress-card", "x": 0, "y": 880, "width": 250, "height": 110, "tag": "chart", "data": {"type": "scorecard", "background": "#EAF6FA", "keyValue": "D53", "title": {"text": "Operation Progress", "align": "left", "bold": true}}},
+      {"id": "operation-progress", "x": 270, "y": 880, "width": 810, "height": 220, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Progress by Operation"}, "metaData": {"groupBy": ["picking_type_id"], "measure": "adt_total_qty", "resModel": "stock.picking", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["picking_type_id"], "context": {}, "orderBy": []}, "stacked": false}},
+      {"id": "partial-discrepancy-card", "x": 0, "y": 1160, "width": 250, "height": 110, "tag": "chart", "data": {"type": "scorecard", "background": "#FDECEC", "keyValue": "D70", "title": {"text": "Partial & Discrepancy", "align": "left", "bold": true}}},
+      {"id": "partial-discrepancy", "x": 270, "y": 1160, "width": 810, "height": 220, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Partial by Operation Type"}, "metaData": {"groupBy": ["picking_type_id"], "measure": "__count", "resModel": "stock.picking", "mode": "bar"}, "searchParams": {"domain": [["shipment_information", "=", "partial"]], "groupBy": ["picking_type_id"], "context": {}, "orderBy": []}, "stacked": false}},
+      {"id": "inventory-adjustment-card", "x": 0, "y": 1440, "width": 250, "height": 110, "tag": "chart", "data": {"type": "scorecard", "background": "#FFF7E6", "keyValue": "D87", "title": {"text": "Inventory Adjustment", "align": "left", "bold": true}}},
+      {"id": "inventory-adjustment", "x": 270, "y": 1440, "width": 810, "height": 220, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Adjustment by Location"}, "metaData": {"groupBy": ["location_id"], "measure": "inventory_quantity", "resModel": "stock.quant", "mode": "bar"}, "searchParams": {"domain": [["inventory_quantity_set", "=", true]], "groupBy": ["location_id"], "context": {}, "orderBy": []}, "stacked": false}},
+      {"id": "scrap-monitoring-card", "x": 0, "y": 1720, "width": 250, "height": 110, "tag": "chart", "data": {"type": "scorecard", "background": "#FDECEC", "keyValue": "D104", "title": {"text": "Scrap Monitoring", "align": "left", "bold": true}}},
+      {"id": "scrap-monitoring", "x": 270, "y": 1720, "width": 810, "height": 220, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Scrap by Status"}, "metaData": {"groupBy": ["state"], "measure": "scrap_qty", "resModel": "stock.scrap", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["state"], "context": {}, "orderBy": []}, "stacked": false}}
+    ]
+  }],
+  "styles": {},
+  "formats": {},
+  "borders": {},
+  "revisionId": "1",
+  "uniqueFigureIds": [],
+  "settings": {},
+  "pivots": {
+    "1": {"type": "ODOO", "domain": [], "context": {}, "measures": [{"id": "__count", "fieldName": "__count"}], "model": "stock.picking", "columns": [], "rows": [], "name": "Operations"},
+    "2": {"type": "ODOO", "domain": [["state", "not in", ["done", "cancel"]]], "context": {}, "measures": [{"id": "__count", "fieldName": "__count"}], "model": "stock.picking", "columns": [], "rows": [], "name": "Delayed Operations"},
+    "3": {"type": "ODOO", "domain": [], "context": {}, "measures": [{"id": "__count", "fieldName": "__count"}], "model": "stock.picking", "columns": [], "rows": [], "name": "Schedule"},
+    "4": {"type": "ODOO", "domain": [], "context": {}, "measures": [{"id": "__count", "fieldName": "__count"}], "model": "stock.picking", "columns": [], "rows": [], "name": "Progress"},
+    "5": {"type": "ODOO", "domain": [["shipment_information", "=", "partial"]], "context": {}, "measures": [{"id": "__count", "fieldName": "__count"}], "model": "stock.picking", "columns": [], "rows": [], "name": "Partial and Discrepancy"},
+    "6": {"type": "ODOO", "domain": [["inventory_quantity_set", "=", true]], "context": {}, "measures": [{"id": "inventory_quantity", "fieldName": "inventory_quantity"}], "model": "stock.quant", "columns": [], "rows": [], "name": "Inventory Adjustment"},
+    "7": {"type": "ODOO", "domain": [], "context": {}, "measures": [{"id": "scrap_qty", "fieldName": "scrap_qty"}], "model": "stock.scrap", "columns": [], "rows": [], "name": "Scrap Monitoring"}
+  },
+  "pivotNextId": 1,
+  "customTableStyles": {},
+  "globalFilters": [],
+  "lists": {},
+  "listNextId": 1,
+  "odooVersion": 18
+}

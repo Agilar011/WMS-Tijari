@@ -30,15 +30,15 @@
                 <field name="total_qty"/>
 
                 <field name="import_state" widget="badge"
-                    decoration-success="import_state in ('imported','updated')"
-                    decoration-warning="import_state == 'pending'"
+                    decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
+                    decoration-muted="import_state == 'staged'"
                     decoration-danger="import_state == 'error'"/>
 
                 <button name="action_import_this"
                         string="Import"
                         type="object"
                         icon="fa-upload"
-                        invisible="import_state != 'pending'"/>
+                        invisible="import_state != 'staged'"/>
 
                 <button name="action_open_picking"
                         string="Open Transfer"
@@ -59,7 +59,7 @@
                             string="Import Baris Ini"
                             type="object"
                             class="btn-primary"
-                            invisible="import_state != 'pending'"/>
+                            invisible="import_state != 'staged'"/>
 
                     <button name="action_open_picking"
                             string="Buka Transfer"
@@ -68,7 +68,7 @@
 
                     <field name="import_state"
                         widget="statusbar"
-                        statusbar_visible="pending,imported,updated,error"/>
+                        statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
 
                 <sheet>

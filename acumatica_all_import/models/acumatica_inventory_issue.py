@@ -9,138 +9,9 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
-class AcumaticaInventoryIssueConfig(models.Model):
-    _name = 'acumatica.inventory.issue.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Inventory Issue'
-    _rec_name = 'name'
-
-    name = fields.Char(required=True, default='Acumatica Inventory Issue')
-    base_url = fields.Char(required=True, help='Contoh: http://server/acumportal/entity')
-    api_version = fields.Char(required=True, default='25.200.002')
-    username = fields.Char(required=True)
-    password = fields.Char(required=True)
-    company_code = fields.Char(required=True)
-    endpoint_name = fields.Char(required=True, default='Shipment')
-    active = fields.Boolean(default=True)
-    last_sync = fields.Datetime(readonly=True)
-    state = fields.Selection([
-        ('draft', 'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error', 'Error'),
-    ], default='draft', readonly=True)
-
-    odata_expand = fields.Char(default='Details')
-    odata_select = fields.Char()
-    odata_filter = fields.Char()
-
-    # ---------------------------------------------------------
-    # BUTTONS
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # MAIN PROCESS
-    # ---------------------------------------------------------
-
-    def _do_login(self):
-        self.ensure_one()
-        session = requests.Session()
-        response = session.post(
-            self.login_url,
-            json={
-                'name': self.username,
-                'password': self.password,
-                'company': self.company_code,
-            },
-            headers={'Content-Type': 'application/json'},
-            timeout=30,
-        )
-        if response.status_code == 204:
-            return session
-        raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
-
-    def _do_logout(self, session):
-        try:
-            session.post(self.logout_url, timeout=10)
-        except Exception:
-            pass
-
-
-
-
-    # ---------------------------------------------------------
-    # HEADER
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # DETAIL
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # API MAPPING
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # API
-    # ---------------------------------------------------------
-
-    # ---------------------------------------------------------
-    # HELPERS
-    # ---------------------------------------------------------
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            self._do_logout(session)
-            self.state = 'connected'
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Koneksi Berhasil',
-                    'message': f'Berhasil terhubung ke {self.base_url}',
-                    'type': 'success',
-                    'sticky': False,
-                }
-            }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
-
-
 class AcumaticaInventoryIssueLine(models.Model):
     _name = 'acumatica.inventory.issue.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Inventory Inventory Issue dari Acumatica'
     _order = 'reference_nbr asc, line_nbr asc, id asc'
 
@@ -189,13 +60,14 @@ class AcumaticaInventoryIssueLine(models.Model):
     line_note = fields.Text(string='Line Note', readonly=True)
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='pending')
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Delivery Order di Odoo', readonly=True)
+    ], default='staged', tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order di Odoo',
@@ -325,19 +197,21 @@ class AcumaticaInventoryIssueLine(models.Model):
     def action_import_this(self):
         """Memicu proses impor khusus untuk 1 record aktif"""
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _do_import(self):
         print('Starting import for Inventory Issue with reference_nbr in:', self.mapped('reference_nbr'))
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
         
-        imported = updated = error = 0
+        created = updated = error = 0
         
         # Mengelompokkan lines berdasarkan reference_nbr untuk menghindari filtered() berulang
         lines_by_reference = defaultdict(lambda: self.env[self._name])
         for line in self:
-            if line.reference_nbr and line.import_state == 'pending':
+            if line.reference_nbr and line.import_state == 'staged':
                 lines_by_reference[line.reference_nbr] |= line
 
         for issue_key, issue_lines in lines_by_reference.items():
@@ -426,7 +300,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     # self.env['acumatica.internal.transfer.service'].set_order_ready(order)
                     first.write({
                         'import_state': action_state,
-                        'import_message': f'{action_state.title()}: {order.name}',
+                        'import_message': 'success',
                         'odoo_picking_id': False,
                         'odoo_internal_transfer_order_id': False,
                         'odoo_scrap_id': order.id
@@ -434,7 +308,7 @@ class AcumaticaInventoryIssueLine(models.Model):
 
                     self.env.cr.execute('RELEASE SAVEPOINT import_issue_line')
                     self.env.cr.commit()
-                    imported += 1 if action_state == 'imported' else 0
+                    created += 1 if action_state == 'created' else 0
                     updated += 1 if action_state == 'updated' else 0
                     continue
 
@@ -472,8 +346,8 @@ class AcumaticaInventoryIssueLine(models.Model):
                     print(f"Update Picking: {picking}")
                 else:
                     picking = Picking.create(vals)
-                    action_state = 'imported'
-                    imported += 1
+                    action_state = 'created'
+                    created += 1
                     print(f"Create Picking: {picking}")
 
                 to_create_move = self.env['acumatica.inventory.issue.product'].search([('receipt_line_id', '=', first.id)])
@@ -523,7 +397,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                         })
                         first.write({
                             'import_state': action_state,
-                            'import_message': f'{action_state.title()}: {picking.name} (move updated)',
+                            'import_message': 'success',
                             'odoo_picking_id': picking.id,
                             'odoo_internal_transfer_order_id': False,
                         })
@@ -543,7 +417,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                         })
                         first.write({
                             'import_state': action_state,
-                            'import_message': f'{action_state.title()}: {picking.name}',
+                            'import_message': 'success',
                             'odoo_picking_id': picking.id,
                             'odoo_internal_transfer_order_id': False,
                         })
@@ -588,7 +462,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     line_payloads=line_payloads,
                 )
                 issue_lines.write({
-                    'import_state': 'error',
+                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
                     'import_message': str(e)[:200],
                     'odoo_picking_id': False,
                     'odoo_internal_transfer_order_id': False,
@@ -598,14 +472,14 @@ class AcumaticaInventoryIssueLine(models.Model):
                 
                 error += len(issue_lines)
                 
-        msg = f'Import selesai: {imported} dokumen dibuat, {updated} dokumen diupdate, {error} line error.'
+        msg = f'Import selesai: {created} dokumen dibuat, {updated} dokumen diupdate, {error} line error.'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': 'Import Delivery Order',
                 'message': msg,
-                'type': 'success' if error == 0 else 'warning',
+                'type': 'success' if error == 0 else 'danger',
                 'sticky': True,
             }
         }
@@ -687,7 +561,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                 "scrap_qty": scrap_lines[0]["demand_qty"],
             })  
 
-            imported_status = "imported"
+            imported_status = "created"
         else:
             if scrap.state != "draft":
                 raise UserError(
@@ -790,19 +664,23 @@ class AcumaticaInventoryIssueLine(models.Model):
 # Unknown
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         print('Starting import for Inventory Issue with reference_nbr in:', self.mapped('reference_nbr'))
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
 
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
     def action_open_picking(self):
         self.ensure_one()

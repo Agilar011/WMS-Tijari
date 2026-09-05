@@ -24,5 +24,6 @@ from . import res_partner
 from . import res_users
 from . import ir_ui_menu
 from . import loginext_model
+from . import mail_compose_message
 
 from . import mrp_production

@@ -9,7 +9,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     _order = 'id desc'
 
     # --- Relasi Odoo ---
-    config_id = fields.Many2one('acumatica.direct.transfer.config', string="Konfigurasi API")
+    config_id = fields.Many2one('acumatica.config', string="Konfigurasi API")
     picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
     odoo_picking_id = fields.Many2one('stock.picking', string="Odoo Stock Picking")
     odoo_internal_transfer_order_id = fields.Many2one(
@@ -25,12 +25,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
     # --- Status Sinkronisasi Intern ---
     import_state = fields.Selection([
-        ('pending', 'Pending'),
-        ('imported', 'Imported'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
         ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error')
-    ], string="Status Impor", default='pending', index=True)
-    import_message = fields.Text(string="Pesan Impor/Error")
+    ], string="Status", default='staged', index=True)
+    import_message = fields.Text(string="Generation Message")
     sync_date = fields.Datetime(string="Tanggal Ambil Data")
     selected = fields.Boolean(string="Pilih", default=True)
 
@@ -206,15 +207,19 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
     def action_import_selected(self):
         """Memicu proses impor massal untuk record yang dicentang user"""
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         """Memicu proses impor khusus untuk 1 record aktif"""
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _do_import(self):
         """Fungsi utama eksekusi pembuatan dokumen Internal Transfer Order."""
@@ -227,7 +232,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         for reference_nbr in self.mapped('adt_ReferenceNbr'):
             receipt_lines = self.filtered(
                 lambda l: l.adt_ReferenceNbr == reference_nbr and (
-                    l.import_state in ['pending', 'error']
+                    l.import_state in ['staged', 'error']
                     or not l.odoo_internal_transfer_order_id
                 )
             )
@@ -312,7 +317,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'vendor_return')
 
-                    if action_state == 'imported':
+                    if action_state == 'created':
                         imported += 1
                     else:
                         updated += 1

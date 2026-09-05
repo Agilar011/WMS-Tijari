@@ -12,6 +12,16 @@
                 <field name="adt_type"/>
                 <field name="adt_total_qty"/>
             </xpath>
+            <xpath expr="//kanban/templates" position="before">
+                <header>
+                    <button name="%(action_scan_stock_picking_by_origin)d"
+                        type="action"
+                        string="Search Document"
+                        class="btn-primary"
+                        display="always"
+                        invisible="not context.get('tijari_my_worklist')"/>
+                </header>
+            </xpath>
             <xpath expr="//templates/t[@t-name='card']//field[@name='name']" position="replace">
                 <div class="ms-1 flex-grow-1 min-width-0">
                     <div class="text-muted text-truncate">
@@ -37,6 +47,22 @@
                 <field name="user_ids" widget="many2many_avatar_user" readonly="state in ['cancel', 'done']" class="ms-1"/>
             </xpath>
             <xpath expr="//templates/t[@t-name='card']//field[@name='activity_ids'][@widget='kanban_activity']" position="replace"/>
+        </field>
+    </record>
+
+    <record id="stock_picking_list_my_worklist_search_document_button" model="ir.ui.view">
+        <field name="name">stock.picking.list.my.worklist.search.document.button</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.vpicktree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/header" position="inside">
+                <button name="%(action_scan_stock_picking_by_origin)d"
+                    type="action"
+                    string="Search Document"
+                    class="btn-primary"
+                    display="always"
+                    invisible="not context.get('tijari_my_worklist')"/>
+            </xpath>
         </field>
     </record>
 
@@ -723,6 +749,15 @@
                                     title="Open Move"
                                     icon="fa-list"
                                     class="btn-link"
+                                />
+                                <button
+                                    name="action_open_move_putaway"
+                                    type="object"
+                                    string="Open Putaway"
+                                    title="Open Putaway"
+                                    icon="fa-archive"
+                                    class="btn-link"
+                                    invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"
                                 />
                             </list>
                             <kanban class="o_kanban_mobile">

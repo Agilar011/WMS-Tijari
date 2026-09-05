@@ -26,15 +26,15 @@ class AcumaticaUomLine(models.Model):
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
-        ('pending',  'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('skipped',  'Dilewati (Sudah Ada)'),
+        ('staged',  'Staged'),
+        ('created', 'Created'),
+        ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='pending', readonly=True)
+    ], string='Status', default='staged', readonly=True)
 
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_uom_id = fields.Many2one('uom.uom', string='UoM di Odoo', readonly=True)
-    odoo_categ_id = fields.Many2one('uom.category', string='Kategori di Odoo', readonly=True)
+    import_message = fields.Char(string='Generation Message', readonly=True)
+    odoo_uom_id = fields.Many2one('uom.uom', string='Document Reference', readonly=True)
+    odoo_categ_id = fields.Many2one('uom.category', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
@@ -75,15 +75,19 @@ class AcumaticaUomLine(models.Model):
 
     # ─── Action: Import baris yang dipilih ───────────
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         """Import 1 baris saja (dari tombol di list)"""
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _handle_acumatica_error(self, err_msg=False):
         AcumaticaError = self.env['acumatica.error.master']
@@ -114,7 +118,7 @@ class AcumaticaUomLine(models.Model):
           - UnitID     → cari/buat uom.category
           - Description → cari/buat uom.uom di dalam kategori tersebut
         """
-        imported = skipped = error = 0
+        created = skipped = error = 0
 
         for line in self:
             try:
@@ -152,7 +156,7 @@ class AcumaticaUomLine(models.Model):
 
                 if existing:
                     line.write({
-                        'import_state':   'skipped',
+                        'import_state':   'rejected',
                         'import_message': f'Sudah ada: {existing.name} (kategori: {existing.category_id.name})',
                         'odoo_uom_id':    existing.id,
                         'odoo_categ_id':  existing.category_id.id,
@@ -176,7 +180,7 @@ class AcumaticaUomLine(models.Model):
                         'active':      True,
                     })
                     line.write({
-                        'import_state':   'imported',
+                        'import_state':   'created',
                         'import_message': f'Dibuat: {new_uom.name} → kategori: {uom_categ.name}',
                         'odoo_uom_id':    new_uom.id,
                         'odoo_categ_id':  uom_categ.id,
@@ -185,13 +189,13 @@ class AcumaticaUomLine(models.Model):
                     line._handle_acumatica_error()
 
                     line._log_import_result(
-                        'imported',
+                        'created',
                         f'Data {new_uom.display_name} berhasil dibuat.',
                         new_uom,
                         False
                     )
                     
-                    imported += 1
+                    created += 1
 
             except Exception as e:
                 _logger.error("Error import UoM line %s / %s: %s", line.unit_id, line.description, str(e))
@@ -214,7 +218,7 @@ class AcumaticaUomLine(models.Model):
                 error += 1
 
         # Notifikasi hasil
-        msg = f'Import selesai: {imported} berhasil, {skipped} dilewati, {error} error.'
+        msg = f'Import selesai: {created} berhasil, {skipped} dilewati, {error} error.'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -228,8 +232,8 @@ class AcumaticaUomLine(models.Model):
 
     # ─── Action: Reset status ─────────────────────────
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state in ('skipped', 'error')).write({
-            'import_state': 'pending',
+        self.filtered(lambda l: l.import_state in ('rejected', 'error')).write({
+            'import_state': 'staged',
             'import_message': False,
         })
 
@@ -241,7 +245,7 @@ class AcumaticaUomLine(models.Model):
         changed_fields=None,
     ):
         titles = {
-            'imported': '✅ Import Berhasil',
+            'created': '✅ Import Berhasil',
             'updated': '🔄 Data Diperbarui',
             'error': '❌ Import Gagal',
         }

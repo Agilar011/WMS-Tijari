@@ -240,7 +240,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
             vals = dict(item)
             vals.update({
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': msg,
                 'selected': True,
                 'sync_date': fields.Datetime.now(),
@@ -348,7 +348,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.transfer.shipment.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

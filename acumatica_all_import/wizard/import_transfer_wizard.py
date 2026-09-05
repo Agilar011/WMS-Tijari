@@ -284,7 +284,7 @@ class ImportTransferWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{receipt_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -452,7 +452,7 @@ class ImportTransferWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.transfer.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

@@ -1,9 +1,229 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <menuitem id="menu_acumatica_all_import_root" web_icon="acumatica_all_import,static/description/icon.png" name="API Data Hub" action="action_acumatica_config" sequence="83" groups="stock.group_stock_manager"/>
+    <record id="action_acumatica_api_data_hub_dashboard" model="ir.actions.client">
+        <field name="name">Dashboard</field>
+        <field name="tag">action_spreadsheet_dashboard</field>
+        <field name="params" eval="{'dashboard_id': ref('tijari_wms_18.spreadsheet_dashboard_api_data_hub'), 'api_data_hub_only': True}"/>
+    </record>
+    <record id="action_acumatica_api_data_hub_kanban" model="ir.actions.act_window">
+        <field name="name">Dashboard</field>
+        <field name="res_model">api.data.hub.dashboard.card</field>
+        <field name="view_mode">kanban</field>
+        <field name="domain">[('active', '=', True), ('dashboard_scope', '=', 'api')]</field>
+    </record>
+    <record id="action_acumatica_api_transactions_kanban" model="ir.actions.act_window">
+        <field name="name">Transactions</field>
+        <field name="res_model">api.data.hub.dashboard.card</field>
+        <field name="view_mode">kanban</field>
+        <field name="domain">[('card_type', '=', 'transactions'), ('active', '=', True), ('dashboard_visible', '=', False)]</field>
+    </record>
+    <record id="action_acumatica_api_master_kanban" model="ir.actions.act_window">
+        <field name="name">Product / Master Data</field>
+        <field name="res_model">api.data.hub.dashboard.card</field>
+        <field name="view_mode">kanban</field>
+        <field name="domain">[('card_type', '=', 'master'), ('active', '=', True)]</field>
+    </record>
+    <record id="action_acumatica_api_webhook_kanban" model="ir.actions.act_window">
+        <field name="name">Webhook Activity</field>
+        <field name="res_model">api.data.hub.dashboard.card</field>
+        <field name="view_mode">kanban</field>
+        <field name="domain">[('card_type', '=', 'webhook')]</field>
+    </record>
+    <record id="action_acumatica_api_scheduler_kanban" model="ir.actions.act_window">
+        <field name="name">Scheduler Activity</field>
+        <field name="res_model">api.data.hub.dashboard.card</field>
+        <field name="view_mode">kanban</field>
+        <field name="domain">[('card_type', '=', 'scheduler')]</field>
+    </record>
+    <menuitem id="menu_acumatica_api_data_hub_dashboard"
+        name="Dashboard"
+        parent="menu_acumatica_all_import_root"
+        action="action_acumatica_api_data_hub_kanban"
+        sequence="1"
+        groups="stock.group_stock_manager"/>
+
+    <record id="action_inventory_api_data_hub_kanban" model="ir.actions.act_window">
+        <field name="name">Inventory Dashboard</field>
+        <field name="res_model">api.data.hub.dashboard.card</field>
+        <field name="view_mode">kanban</field>
+        <field name="domain">[('active', '=', True), ('dashboard_scope', '=', 'inventory')]</field>
+    </record>
+    <menuitem id="menu_inventory_api_data_hub_kanban"
+        name="Dashboard"
+        parent="stock.menu_stock_root"
+        action="action_inventory_api_data_hub_kanban"
+        sequence="1"
+        groups="stock.group_stock_manager"/>
+
+    <record id="action_acumatica_api_transactions_dashboard" model="ir.actions.client">
+        <field name="name">Transactions</field>
+        <field name="tag">action_spreadsheet_dashboard</field>
+        <field name="params" eval="{'dashboard_id': ref('tijari_wms_18.spreadsheet_dashboard_api_transactions')}"/>
+    </record>
+    <menuitem id="menu_acumatica_api_transactions_dashboard" name="Transactions" parent="menu_acumatica_all_import_root" action="action_acumatica_api_transactions_kanban" sequence="2" groups="stock.group_stock_manager" active="False"/>
+    <record id="action_acumatica_api_product_dashboard" model="ir.actions.client">
+        <field name="name">Product and Master Data</field>
+        <field name="tag">action_spreadsheet_dashboard</field>
+        <field name="params" eval="{'dashboard_id': ref('tijari_wms_18.spreadsheet_dashboard_api_product')}"/>
+    </record>
+    <menuitem id="menu_acumatica_api_product_dashboard" name="Product / Master Data" parent="menu_acumatica_all_import_root" action="action_acumatica_api_master_kanban" sequence="3" groups="stock.group_stock_manager" active="False"/>
+    <record id="action_acumatica_api_webhook_dashboard" model="ir.actions.client">
+        <field name="name">Webhook Activity</field>
+        <field name="tag">action_spreadsheet_dashboard</field>
+        <field name="params" eval="{'dashboard_id': ref('tijari_wms_18.spreadsheet_dashboard_api_webhook')}"/>
+    </record>
+    <menuitem id="menu_acumatica_api_webhook_dashboard" name="Webhook Activity" parent="menu_acumatica_all_import_root" action="action_acumatica_api_webhook_kanban" sequence="4" groups="stock.group_stock_manager" active="False"/>
+    <record id="action_acumatica_api_scheduler_dashboard" model="ir.actions.client">
+        <field name="name">Scheduler Activity</field>
+        <field name="tag">action_spreadsheet_dashboard</field>
+        <field name="params" eval="{'dashboard_id': ref('tijari_wms_18.spreadsheet_dashboard_api_scheduler')}"/>
+    </record>
+    <menuitem id="menu_acumatica_api_scheduler_dashboard" name="Scheduler Activity" parent="menu_acumatica_all_import_root" action="action_acumatica_api_scheduler_kanban" sequence="5" groups="stock.group_stock_manager" active="False"/>
     <menuitem id="menu_acumatica_all_import_unified" name="Import Data" parent="menu_acumatica_all_import_root" action="action_acumatica_unified_import_wizard" sequence="10"/>
     <menuitem id="menu_acumatica_api_scheduler" name="API Scheduler" parent="menu_acumatica_all_import_root" action="action_api_scheduler_job" sequence="15"/>
     <menuitem id="menu_acumatica_webhook_log" name="Webhook Logs" parent="menu_acumatica_all_import_root" action="action_acumatica_webhook_log" sequence="20"/>
+    <menuitem id="menu_acumatica_webhook_key_config" name="Webhook API Key" parent="menu_acumatica_all_import_root" action="action_acumatica_webhook_key_config" sequence="25" groups="base.group_system"/>
+
+    <record id="view_api_data_hub_dashboard_card_kanban" model="ir.ui.view">
+        <field name="name">api.data.hub.dashboard.card.kanban</field>
+        <field name="model">api.data.hub.dashboard.card</field>
+        <field name="arch" type="xml">
+            <kanban create="0" edit="0" delete="0" class="o_kanban_dashboard o_api_dashboard_vertical">
+                <field name="card_type"/>
+                <field name="dashboard_scope"/>
+                <field name="total"/>
+                <field name="staged"/>
+                <field name="created"/>
+                <field name="updated"/>
+                <field name="rejected"/>
+                <field name="errors"/>
+                <field name="today"/>
+                <field name="yesterday"/>
+                <field name="last_7_days"/>
+                <field name="success"/>
+                <field name="failed"/>
+                <field name="staged_bar"/>
+                <field name="created_bar"/>
+                <field name="updated_bar"/>
+                <field name="errors_bar"/>
+                <field name="today_bar"/>
+                <field name="yesterday_bar"/>
+                <field name="last_7_days_bar"/>
+                <field name="waiting"/>
+                <field name="ready"/>
+                <field name="in_progress"/>
+                <field name="done_count"/>
+                <field name="cancelled"/>
+                <field name="cancelled_bar"/>
+                <field name="overdue"/>
+                <field name="scheduled_today"/>
+                <field name="upcoming"/>
+                <field name="demand_qty"/>
+                <field name="processed_qty"/>
+                <field name="remaining_qty"/>
+                <field name="completion_percent"/>
+                <field name="expected_qty"/>
+                <field name="sent_qty"/>
+                <field name="received_qty"/>
+                <field name="counted_qty"/>
+                <field name="discrepancy_qty"/>
+                <field name="partial_count"/>
+                <field name="adjustment_count"/>
+                <field name="adjustment_variance"/>
+                <field name="scrap_draft"/>
+                <field name="scrap_ready"/>
+                <field name="scrap_done"/>
+                <field name="scrap_qty"/>
+                <field name="scrap_reason_count"/>
+                <field name="section_title"/>
+                <field name="section_start"/>
+                <templates>
+                    <t t-name="card">
+                        <t t-if="record.section_start.raw_value">
+                            <div class="o_api_dashboard_section_label"><field name="section_title"/></div>
+                        </t>
+                        <div class="o_kanban_card p-3" style="border-left: 3px solid #875a9c; min-height: 320px;">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h3 class="mb-1" style="color: #087f8c;"><field name="name"/></h3>
+                                    <small class="text-muted" t-if="record.card_type.raw_value == 'transactions'">All API transaction staging</small>
+                                    <small class="text-muted" t-if="record.card_type.raw_value == 'master'">All API master data staging</small>
+                                    <small class="text-muted" t-if="record.card_type.raw_value == 'webhook'">Webhook activity by date</small>
+                                    <small class="text-muted" t-if="record.card_type.raw_value == 'scheduler'">Scheduler activity by date</small>
+                                </div>
+                                <button name="action_refresh" type="object" class="btn btn-primary" title="Refresh">
+                                    <span>Refresh</span>
+                                </button>
+                            </div>
+                            <div class="display-4 fw-bold mb-3"><field name="total"/></div>
+                            <t t-if="record.dashboard_scope.raw_value == 'inventory'">
+                                <small class="text-muted">Monitoring stock operations</small>
+                                <t t-if="record.card_type.raw_value == 'operation_status'">
+                                    <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mb-2 mt-2" style="height: 145px; gap: 8px;">
+                                        <div class="flex-fill text-center"><div class="bg-secondary" t-att-style="'height:' + record.staged_bar.value + 'px;'"/><small>Waiting</small><br/><strong><field name="waiting"/></strong></div>
+                                        <div class="flex-fill text-center"><div class="bg-primary" t-att-style="'height:' + record.created_bar.value + 'px;'"/><small>Ready</small><br/><strong><field name="ready"/></strong></div>
+                                        <div class="flex-fill text-center"><div class="bg-warning" t-att-style="'height:' + record.updated_bar.value + 'px;'"/><small>In Progress</small><br/><strong><field name="in_progress"/></strong></div>
+                                        <div class="flex-fill text-center"><div class="bg-success" t-att-style="'height:' + record.errors_bar.value + 'px;'"/><small>Done</small><br/><strong><field name="done_count"/></strong></div>
+                                        <div class="flex-fill text-center"><div class="bg-danger" t-att-style="'height:' + record.cancelled_bar.value + 'px;'"/><small>Cancelled</small><br/><strong><field name="cancelled"/></strong></div>
+                                    </div>
+                                </t>
+                                <t t-if="record.card_type.raw_value == 'delayed_operation'">
+                                    <div class="alert alert-warning mt-3 mb-0">Overdue and unfinished: <strong><field name="overdue"/></strong></div>
+                                    <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mt-3" style="height: 145px;"><div class="flex-fill text-center"><div class="bg-danger" t-att-style="'height:' + record.errors_bar.value + 'px;'"/><small>Overdue</small><br/><strong><field name="overdue"/></strong></div></div>
+                                </t>
+                                <t t-if="record.card_type.raw_value == 'operation_schedule'">
+                                    <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mb-2 mt-2" style="height: 145px; gap: 12px;">
+                                        <div class="flex-fill text-center"><div class="bg-danger" t-att-style="'height:' + record.yesterday_bar.value + 'px;'"/><small>Overdue</small><br/><strong><field name="overdue"/></strong></div>
+                                        <div class="flex-fill text-center"><div class="bg-primary" t-att-style="'height:' + record.today_bar.value + 'px;'"/><small>Today</small><br/><strong><field name="scheduled_today"/></strong></div>
+                                        <div class="flex-fill text-center"><div class="bg-success" t-att-style="'height:' + record.last_7_days_bar.value + 'px;'"/><small>Upcoming</small><br/><strong><field name="upcoming"/></strong></div>
+                                    </div>
+                                </t>
+                                <t t-if="record.card_type.raw_value == 'operation_progress'">
+                                    <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mb-2 mt-3" style="height: 145px; gap: 8px;"><div class="flex-fill text-center"><div class="bg-secondary" t-att-style="'height:' + record.staged_bar.value + 'px;'"/><small>Demand</small><br/><strong><field name="demand_qty"/></strong></div><div class="flex-fill text-center"><div class="bg-success" t-att-style="'height:' + record.created_bar.value + 'px;'"/><small>Processed</small><br/><strong><field name="processed_qty"/></strong></div><div class="flex-fill text-center"><div class="bg-warning" t-att-style="'height:' + record.updated_bar.value + 'px;'"/><small>Remaining</small><br/><strong><field name="remaining_qty"/></strong></div><div class="flex-fill text-center"><div class="bg-info" t-att-style="'height:' + record.errors_bar.value + 'px;'"/><small>Completion %</small><br/><strong><field name="completion_percent"/>%</strong></div></div>
+                                    <div class="row mt-3"><div class="col"><small>Demand Qty</small><br/><strong><field name="demand_qty"/></strong></div><div class="col"><small>Processed Qty</small><br/><strong><field name="processed_qty"/></strong></div><div class="col"><small>Remaining Qty</small><br/><strong><field name="remaining_qty"/></strong></div><div class="col"><small>Completion</small><br/><strong><field name="completion_percent"/>%</strong></div></div>
+                                </t>
+                                <t t-if="record.card_type.raw_value == 'partial_discrepancy'">
+                                    <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mb-2 mt-3" style="height: 145px; gap: 8px;"><div class="flex-fill text-center"><div class="bg-secondary" t-att-style="'height:' + record.staged_bar.value + 'px;'"/><small>Expected</small><br/><strong><field name="expected_qty"/></strong></div><div class="flex-fill text-center"><div class="bg-primary" t-att-style="'height:' + record.created_bar.value + 'px;'"/><small>Sent</small><br/><strong><field name="sent_qty"/></strong></div><div class="flex-fill text-center"><div class="bg-success" t-att-style="'height:' + record.updated_bar.value + 'px;'"/><small>Received</small><br/><strong><field name="received_qty"/></strong></div><div class="flex-fill text-center"><div class="bg-danger" t-att-style="'height:' + record.errors_bar.value + 'px;'"/><small>Discrepancy</small><br/><strong><field name="discrepancy_qty"/></strong></div></div>
+                                    <div class="row mt-3"><div class="col"><small>Expected</small><br/><strong><field name="expected_qty"/></strong></div><div class="col"><small>Sent</small><br/><strong><field name="sent_qty"/></strong></div><div class="col"><small>Received</small><br/><strong><field name="received_qty"/></strong></div><div class="col"><small>Counted</small><br/><strong><field name="counted_qty"/></strong></div></div><div class="border-top pt-2 mt-2 text-muted">Partial <field name="partial_count"/> · Discrepancy <field name="discrepancy_qty"/></div>
+                                </t>
+                                <t t-if="record.card_type.raw_value == 'inventory_adjustment'">
+                                    <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mb-2 mt-3" style="height: 145px; gap: 12px;"><div class="flex-fill text-center"><div class="bg-primary" t-att-style="'height:' + record.staged_bar.value + 'px;'"/><small>Adjustments</small><br/><strong><field name="adjustment_count"/></strong></div><div class="flex-fill text-center"><div class="bg-danger" t-att-style="'height:' + record.errors_bar.value + 'px;'"/><small>Variance</small><br/><strong><field name="adjustment_variance"/></strong></div></div>
+                                    <div class="row mt-3"><div class="col"><small>Adjustments</small><br/><strong><field name="adjustment_count"/></strong></div><div class="col"><small>Total Variance</small><br/><strong><field name="adjustment_variance"/></strong></div></div>
+                                </t>
+                                <t t-if="record.card_type.raw_value == 'scrap_monitoring'">
+                                    <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mb-2 mt-3" style="height: 145px; gap: 8px;"><div class="flex-fill text-center"><div class="bg-secondary" t-att-style="'height:' + record.staged_bar.value + 'px;'"/><small>Draft</small><br/><strong><field name="scrap_draft"/></strong></div><div class="flex-fill text-center"><div class="bg-warning" t-att-style="'height:' + record.created_bar.value + 'px;'"/><small>Ready</small><br/><strong><field name="scrap_ready"/></strong></div><div class="flex-fill text-center"><div class="bg-success" t-att-style="'height:' + record.errors_bar.value + 'px;'"/><small>Done</small><br/><strong><field name="scrap_done"/></strong></div><div class="flex-fill text-center"><div class="bg-danger" t-att-style="'height:' + record.updated_bar.value + 'px;'"/><small>Qty</small><br/><strong><field name="scrap_qty"/></strong></div></div>
+                                    <div class="row mt-3"><div class="col"><small>Draft</small><br/><strong><field name="scrap_draft"/></strong></div><div class="col"><small>Ready</small><br/><strong><field name="scrap_ready"/></strong></div><div class="col"><small>Done</small><br/><strong><field name="scrap_done"/></strong></div></div><div class="border-top pt-2 mt-2 text-muted">Qty <field name="scrap_qty"/> · Alasan tercatat <field name="scrap_reason_count"/></div>
+                                </t>
+                            </t>
+                            <t t-if="record.card_type.raw_value == 'transactions' or record.card_type.raw_value == 'master'">
+                                <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mb-2" style="height: 145px; gap: 8px;">
+                                    <div class="flex-fill text-center"><div class="bg-secondary" t-att-style="'height:' + record.staged_bar.value + 'px;'"></div><small>Staged</small><br/><strong><field name="staged"/></strong></div>
+                                    <div class="flex-fill text-center"><div class="bg-success" t-att-style="'height:' + record.created_bar.value + 'px;'"></div><small>Created</small><br/><strong><field name="created"/></strong></div>
+                                    <div class="flex-fill text-center"><div class="bg-info" t-att-style="'height:' + record.updated_bar.value + 'px;'"></div><small>Updated</small><br/><strong><field name="updated"/></strong></div>
+                                    <div class="flex-fill text-center"><div class="bg-danger" t-att-style="'height:' + record.errors_bar.value + 'px;'"></div><small>Error</small><br/><strong><field name="errors"/></strong></div>
+                                </div>
+                            </t>
+                            <t t-if="record.card_type.raw_value == 'webhook' or record.card_type.raw_value == 'scheduler'">
+                                <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mb-2" style="height: 145px; gap: 12px;">
+                                    <div class="flex-fill text-center"><div class="bg-primary" t-att-style="'height:' + record.today_bar.value + 'px;'"></div><small>Today</small><br/><strong><field name="today"/></strong></div>
+                                    <div class="flex-fill text-center"><div class="bg-primary opacity-75" t-att-style="'height:' + record.yesterday_bar.value + 'px;'"></div><small>Yesterday</small><br/><strong><field name="yesterday"/></strong></div>
+                                    <div class="flex-fill text-center"><div class="bg-primary opacity-50" t-att-style="'height:' + record.last_7_days_bar.value + 'px;'"></div><small>Last 7 days</small><br/><strong><field name="last_7_days"/></strong></div>
+                                </div>
+                                <div class="border-top pt-2 text-muted">Success <field name="success"/> · Failed <field name="failed"/></div>
+                            </t>
+                            <!-- The large lower area intentionally mirrors the native Accounting kanban dashboard. -->
+                            <div class="mt-2">
+                                <button name="action_refresh" type="object" class="btn btn-link p-0" title="Refresh">
+                                    <i class="fa fa-refresh"/>
+                                </button>
+                            </div>
+                        </div>
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
 
     <menuitem id="menu_acumatica_all_import_staging_root" name="Data Staging" parent="menu_acumatica_all_import_root" sequence="30"/>
     <menuitem id="menu_acumatica_all_import_staging_inbound"
@@ -12,10 +232,7 @@
         sequence="10"/>
     <menuitem id="menu_acumatica_all_import_staging_receipt" name="PO Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_line" sequence="10"/>
     <menuitem id="menu_acumatica_all_import_staging_so_transfer" name="SO Transfer - Inter WH IN" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_transfer_line" sequence="20"/>
-    <!-- <menuitem id="menu_acumatica_all_import_staging_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_change_item_line" sequence="30"/> -->
     <menuitem id="menu_acumatica_all_import_staging_inventory_received" name="Inventory Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_recieved_line" sequence="40"/>
-    <!-- <menuitem id="menu_acumatica_all_import_staging_toko_pegang_do" name="Receipt : Toko Pegang DO" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_toko_pegang_do_line" sequence="41"/> -->
-    <!-- <menuitem id="menu_acumatica_all_import_staging_inventory_external" name="Inventory External (Change Item &amp; Inventory Receive)" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_external_line" sequence="42"/> -->
     <menuitem id="menu_acumatica_all_import_staging_shipment_so" name="SO Return" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_shipment_line" sequence="50"/>
     <!-- <menuitem id="menu_acumatica_all_import_staging_inventory_stock_import" name="Inventory Stock Import" parent="menu_acumatica_all_import_staging_inbound" action="action_import_inventory_stock_wizard" sequence="61"/> -->
 
@@ -31,7 +248,6 @@
     <menuitem id="menu_acumatica_all_import_staging_inventory_issue" name="Inventory Issue" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inventory_issue_line" sequence="40"/>
     <menuitem id="menu_acumatica_all_import_staging_issue_po_return" name="PO Return" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_po_return_line" sequence="50"/>
     <menuitem id="menu_acumatica_all_import_staging_invoice_consignment" name="Invoice Consignment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_invoice_consignment" sequence="80"/>
-    <!-- <menuitem id="menu_acumatica_all_import_config_inv_issue_toko_pegang_do" name="Inventory Issue : Toko Pegang DO" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inv_issue_toko_pegang_do" sequence="90"/> -->
 
     <menuitem id="menu_acumatica_all_import_staging_internal" 
         name="Internal Transfer" 
@@ -43,7 +259,6 @@
     <menuitem id="menu_acumatica_all_import_staging_credit_memo_consignment" name="Credit Memo Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_credit_memo_consignment" sequence="40"/>
     <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer 1 STEP" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_one_step_line" sequence="50"/>
     <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer 2 STEP" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_two_step_line" sequence="60"/>
-    <!-- <menuitem id="menu_acumatica_all_inventory_receipt_transfer_wh_in" name="Inventory Receipt Transfer Wh In" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_inventory_receipt_transfer_wh_in_staging" sequence="70"/> -->
     <menuitem id="menu_acumatica_all_import_staging_kit_assembly" name="Kit Assembly" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_kit_assembly_line" sequence="80"/>
 
 
@@ -58,70 +273,9 @@
     <menuitem id="menu_acumatica_all_import_staging_warehouse" name="Warehouse" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_warehouse_line" sequence="4"/>
     <menuitem id="menu_acumatica_all_import_staging_stock_item" name="Stock Item" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_stock_item_line" sequence="5"/>
     <menuitem id="menu_acumatica_all_import_staging_non_stock_item" name="Non-Stock Item" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_non_stock_item_line" sequence="6"/>
-    <!-- <menuitem id="menu_acumatica_all_import_staging_customer_location" name="Customer Location" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_customer_location_line" sequence="7"/>
-    <menuitem id="menu_acumatica_all_import_staging_shipvia" name="ShipVia" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_shipvia_line" sequence="8"/> -->
     <menuitem id="menu_acumatica_all_import_staging_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_inventory_stock_line" sequence="9"/>
 
     <menuitem id="menu_acumatica_all_import_config_root" name="Konfigurasi API" parent="menu_acumatica_all_import_root" action="action_acumatica_config" sequence="5"/>
     <menuitem id="menu_acumatica_all_import_config" name="All Config" parent="menu_acumatica_all_import_config_root" action="action_acumatica_config" sequence="0"/>
-    <menuitem id="menu_acumatica_transaction_type" name="Transaction Types" parent="menu_acumatica_all_import_config_root" action="action_acumatica_transaction_type" sequence="1"/>
-    <menuitem id="menu_acumatica_webhook_key_config" name="Webhook API Key" parent="menu_acumatica_all_import_config_root" action="action_acumatica_webhook_api_key_history" sequence="2" groups="base.group_system"/>
-    <record id="menu_acumatica_webhook_api_key_history" model="ir.ui.menu">
-        <field name="name">Webhook API Key History</field>
-        <field name="parent_id" ref="menu_acumatica_all_import_config_root"/>
-        <field name="action" eval="'ir.actions.act_window,%d' % ref('action_acumatica_webhook_api_key_history')"/>
-        <field name="sequence">3</field>
-        <field name="groups_id" eval="[(6, 0, [ref('base.group_system')])]"/>
-        <field name="active" eval="False"/>
-    </record>
-    <menuitem id="menu_acumatica_all_import_config_inbound"
-        name="Inbound"
-        parent="menu_acumatica_all_import_config_root"
-        sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_config_receipt" name="PO Receipt" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_receipt_config" sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_config_so_transfer" name="SO Transfer - Inter WH IN" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_transfer_config" sequence="20"/>
-    <!-- <menuitem id="menu_acumatica_all_import_config_receipt_change_item" name="Receipt : Change Item" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_receipt_change_item_config" sequence="30"/> -->
-
-    <menuitem id="menu_acumatica_all_import_config_inventory_received" name="Receipt : Inventory Receipt" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_recieved_config" sequence="40"/> -->
-    <!-- <menuitem id="menu_acumatica_all_import_config_toko_pegang_do" name="Receipt : Toko Pegang DO" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_toko_pegang_do_config" sequence="41"/> -->
-    <!-- <menuitem id="menu_acumatica_all_import_config_inventory_external" name="Inventory External (Change Item &amp; Inventory Receive)" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_inventory_external_config" sequence="41"/> -->
-    <menuitem id="menu_acumatica_all_import_config_shipment_so" name="SO Return" parent="menu_acumatica_all_import_config_inbound" action="action_acumatica_shipment_config" sequence="50"/>
-
-    <menuitem id="menu_acumatica_all_import_config_outbound"
-        name="Outbound"
-        parent="menu_acumatica_all_import_config_root"
-        sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_config_so_shipment" name="SO Shipment" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_so_shipment_config" sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_config_shipment_completed" name="Shipment Completed" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_shipment_completed_config" sequence="11"/>
-    <menuitem id="menu_acumatica_all_import_config_transfer_shipment" name="SO Transfer - Inter WH OUT" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_transfer_shipment_config" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_config_issue_change_item" name="Issue : Change Item" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_issue_config" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_config_inventory_issue" name="Inventory Issue" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_inventory_issue_config" sequence="40"/>
-    <menuitem id="menu_acumatica_all_import_config_issue_po_return" name="PO Return" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_issue_po_return_config" sequence="50"/>
-    <menuitem id="menu_acumatica_all_import_config_invoice_consignment" name="Invoice Consignment" parent="menu_acumatica_all_import_config_outbound" action="action_acumatica_invoice_consignment_config" sequence="80"/>
-
-    <menuitem id="menu_acumatica_all_import_config_internal"
-        name="Internal Transfer"
-        parent="menu_acumatica_all_import_config_root"
-        sequence="25"/>
-    <menuitem id="menu_acumatica_all_import_config_direct_transfer" name="Direct Transfer" parent="menu_acumatica_all_import_config_internal" action="action_acumatica_vendor_return_document_direct_transfer_config" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_config_vendor_return_direct_transfer" name="Vendor Return Consignment" parent="menu_acumatica_all_import_config_internal" action="action_acumatica_vendor_return_direct_transfer_config" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_config_credit_memo_consignment" name="Credit Memo Consignment" parent="menu_acumatica_all_import_config_internal" action="action_acumatica_credit_memo_consignment_config" sequence="40"/>
-    <menuitem id="menu_acumatica_all_import_config_transfer_one_step" name="Transfer 1 STEP" parent="menu_acumatica_all_import_config_internal" action="action_acumatica_transfer_one_step_config" sequence="50"/>
-    <menuitem id="menu_acumatica_all_import_config_transfer_two_step" name="Transfer 2 STEP" parent="menu_acumatica_all_import_config_internal" action="action_acumatica_transfer_two_step_config" sequence="60"/>
-    <menuitem id="menu_acumatica_all_import_config_kit_assembly" name="Kit Assembly" parent="menu_acumatica_all_import_config_internal" action="action_acumatica_kit_assembly_config" sequence="80"/>
-
-
-    <menuitem id="menu_acumatica_all_import_config_master"
-        name="Master Data"
-        parent="menu_acumatica_all_import_config_root"
-        sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_config_uom" name="UoM" parent="menu_acumatica_all_import_config_master" action="action_acumatica_uom_config" sequence="1"/>
-    <menuitem id="menu_acumatica_all_import_config_customer" name="Customer" parent="menu_acumatica_all_import_config_master" action="action_acumatica_customer_config" sequence="2"/>
-    <menuitem id="menu_acumatica_all_import_config_vendor" name="Vendor" parent="menu_acumatica_all_import_config_master" action="action_acumatica_vendor_config" sequence="3"/>
-    <menuitem id="menu_acumatica_all_import_config_warehouse" name="Warehouse" parent="menu_acumatica_all_import_config_master" action="action_acumatica_warehouse_config" sequence="4"/>
-    <menuitem id="menu_acumatica_all_import_config_stock_item" name="Stock Item" parent="menu_acumatica_all_import_config_master" action="action_acumatica_stock_item_config" sequence="5"/>
-    <menuitem id="menu_acumatica_all_import_config_non_stock_item" name="Non-Stock Item" parent="menu_acumatica_all_import_config_master" action="action_acumatica_non_stock_item_config" sequence="6"/>
-    <!-- <menuitem id="menu_acumatica_all_import_config_customer_location" name="Customer Location" parent="menu_acumatica_all_import_config_master" action="action_acumatica_customer_location_config" sequence="7"/> -->
-    <menuitem id="menu_acumatica_all_import_config_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_config_master" action="action_acumatica_inventory_stock_config" sequence="8"/>
 
 </odoo>

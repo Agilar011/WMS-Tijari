@@ -1,0 +1,7 @@
+{
+  "version": 22,
+  "sheets": [{"id": "sheet1", "name": "Webhook Activity", "colNumber": 12, "rowNumber": 20, "cells": {"A1": {"content": "Webhook Activity"}}, "styles": {}, "figures": [
+    {"id": "webhook-state", "x": 0, "y": 40, "width": 1080, "height": 420, "tag": "chart", "data": {"type": "odoo_bar", "title": {"text": "Webhook Logs by State"}, "metaData": {"groupBy": ["state"], "measure": "__count", "resModel": "acumatica.webhook.log", "mode": "bar"}, "searchParams": {"domain": [], "groupBy": ["state"], "context": {}, "orderBy": []}}}
+  ]}],
+  "styles": {}, "formats": {}, "borders": {}, "revisionId": "1", "uniqueFigureIds": [], "settings": {}, "pivots": {}, "pivotNextId": 1, "customTableStyles": {}, "globalFilters": [], "lists": {}, "listNextId": 1, "odooVersion": 18
+}

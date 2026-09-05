@@ -5,11 +5,12 @@ from dateutil import parser as dateutil_parser
 
 class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     _name = 'acumatica.credit.memo.consignment.staging'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Staging Header Acumatica Credit Memo Consignment'
     _order = 'id desc'
 
     # --- Relasi Odoo ---
-    config_id = fields.Many2one('acumatica.credit.memo.consignment.config', string="Konfigurasi API")
+    config_id = fields.Many2one('acumatica.config', string="Konfigurasi API")
     picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
     odoo_picking_id = fields.Many2one('stock.picking', string="Odoo Stock Picking")
     line_ids = fields.One2many(
@@ -20,12 +21,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
     # --- Status Sinkronisasi Intern ---
     import_state = fields.Selection([
-        ('pending', 'Pending'),
-        ('imported', 'Imported'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
         ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error')
-    ], string="Status Impor", default='pending', index=True)
-    import_message = fields.Text(string="Pesan Impor/Error")
+    ], string='Status', default='staged', index=True, tracking=True)
+    import_message = fields.Text(string="Generation Message", tracking=True)
     sync_date = fields.Datetime(string="Tanggal Ambil Data")
     selected = fields.Boolean(string="Pilih", default=True)
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -92,29 +94,33 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
     def action_import_selected(self):
         """Memicu proses impor massal untuk record yang dicentang user"""
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         """Memicu proses impor khusus untuk 1 record aktif"""
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _do_import(self):
         """Fungsi utama eksekusi pembuatan dokumen Stock Picking & Stock Move"""
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
 
-        imported = 0
+        created = 0
         updated = 0
         error = 0
 
         # Ambil daftar unik reference number agar tidak memproses dokumen yang sama berulang kali
         for reference_nbr in self.mapped('adt_ReferenceNbr'):
             receipt_lines = self.filtered(
-                lambda l: l.adt_ReferenceNbr == reference_nbr and l.import_state in ['pending', 'error']
+                lambda l: l.adt_ReferenceNbr == reference_nbr and l.import_state in ['staged', 'error']
             )
             if not receipt_lines:
                 continue
@@ -134,17 +140,25 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 with self.env.cr.savepoint():
                     print(f"[Credit Memo Consignment] Processing Document: {origin}")
 
-                    # Tentukan jenis operasi picking (Operation Type)
-                    picking_type = first.picking_type_id
-                    if not picking_type:
-                        raise UserError(f"Picking type (Operation Type) belum diatur pada header staging ID {first.id}.")
-
                     staging_line = self.env['acumatica.credit.memo.consignment.staging.line'].search([('receipt_line_id', '=', first.id)], limit=1)
+                    if not staging_line:
+                        raise UserError(f"Detail line belum ada untuk header staging ID {first.id}.")
 
                     # Cari master data gudang asal (FromWarehouseID)
                     warehouse_src = self._find_warehouse_by_code(staging_line.adt_Warehouse)
                     if not warehouse_src:
                         raise UserError(f"Gudang tidak ditemukan untuk code: {staging_line.adt_Warehouse or '-'}")
+
+                    # Tentukan jenis operasi picking (Operation Type)
+                    picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
+                        target_picking_type_id=first.picking_type_id.id if first.picking_type_id and first.picking_type_id.is_document_only_api else False,
+                        target_operation_type='direct_delivery_order',
+                        api_acumatica='credit_memo_consignment',
+                        document_only=True,
+                        warehouse_code=warehouse_src.code,
+                    )
+                    if not picking_type:
+                        raise UserError(f"Picking type (Operation Type) tidak ditemukan untuk warehouse {staging_line.adt_Warehouse or '-'} pada header staging ID {first.id}.")
 
                     source_location = picking_type.default_location_src_id or warehouse_src.lot_stock_id
                     dest_location = warehouse_src.lot_stock_id
@@ -170,6 +184,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         # 'adt_branch_warehouse': first.adt_PostPeriod or False,
                         'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
                         'adt_status': first.adt_Status or False,
+                        'adt_is_document_only': True,
                         # 'adt_type': first.adt_Type or False,
                         'adt_external_id': first.adt_id or False,
                     }
@@ -190,7 +205,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     else:
                         picking = Picking.create(vals)
                         is_new_picking = True
-                        action_state = 'imported'
+                        action_state = 'created'
 
                     # ---------------------------------------------------------
                     # BULK CREATION STOCK MOVES (DETAIL LINES)
@@ -234,7 +249,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             'product_uom': product.uom_id.id,
                             'location_id': line_loc_src.id,
                             'location_dest_id': line_loc_dest.id,
-                            # 'description_picking': line.adt_Description or False,
+                            'description_picking': line.adt_TransactionDescription or False,
                             
                             # Custom tracking audit trail
                             'adt_line_external_id': line.adt_id or False,
@@ -256,7 +271,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
                     first.write({
                         'import_state': action_state,
-                        'import_message': f'Sukses diproses ke Odoo ({picking.name})',
+                        'import_message': 'success',
                         'odoo_picking_id': picking.id,
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'credit_memo_consignment')
@@ -264,11 +279,11 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     # Ubah juga status sub-tabel staging lines-nya agar sinkron di UI
                     # to_create_move_lines.write({
                     #     'import_state': action_state,
-                    #     'import_message': 'Imported successfully via bulk upload.',
+                    #     'import_message': 'Created successfully via bulk upload.',
                     # })
 
                     if is_new_picking:
-                        imported += 1
+                        created += 1
                     else:
                         updated += 1
 
@@ -290,7 +305,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     payload={'header': first.read()[0] if first.exists() else {}},
                     line_payloads=[{
                         'inventory_id': line.adt_InventoryID or False,
-                        'product_name': line.adt_Description or False,
+                        'product_name': line.adt_TransactionDescription or False,
                         'qty': self._parse_float(line.adt_Qty),
                         'uom': line.adt_UOM or False,
                         'payload': line.read()[0] if line.exists() else {},
@@ -298,11 +313,23 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 )
                 # Tulis pesan kegagalan ke UI Odoo agar user tahu detail masalahnya
                 first.write({
-                    'import_state': 'error',
+                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
                     'import_message': str(e),
                     'odoo_picking_id': False,
                 })
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
+
+        msg = f'Generate done: {created} credit memo consignment created, {updated} credit memo consignment updated, {error} credit memo consignment error.'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Generate Credit Memo Consignment',
+                'message': msg,
+                'type': 'success' if error == 0 else 'danger',
+                'sticky': True,
+            }
+        }
                 
     def _find_warehouse_by_code(self, code):
         Warehouse = self.env['stock.location.acumatica']
