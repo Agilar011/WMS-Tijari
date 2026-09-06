@@ -23,17 +23,45 @@ class WMSStockPackageLevel(models.Model):
         self.write({'status': 'unfinished'})
         return True
 
+    # def action_show_package_details(self):
+    #     self.ensure_one()
+    #     view = self.env.ref('tijari_wms_18.tijari_stock_package_level_view_form_inherit')
+
+    #     return {
+    #         'name': _('Package Content'),
+    #         'type': 'ir.actions.act_window',
+    #         'view_mode': 'form',
+    #         'res_model': 'stock.package_level',
+    #         'views': [(view.id, 'form')],
+    #         'target': 'new',
+    #         'res_id': self.id,
+    #     }
+
     def action_show_package_details(self):
         self.ensure_one()
-        view = self.env.ref('stock.package_level_form_edit_view')
+
+        wizard = self.env["package.level.detail.wizard"].create({
+            "package_level_id": self.id,
+            "status": (
+                "finished"
+                if self.status == "finished"
+                else "unfinished"
+            ),
+            "package_id": self.package_id.id,
+            "move_line_ids": [(6, 0, self.move_line_ids.ids)],
+        })
+
+        view = self.env.ref(
+            "tijari_wms_18.tijari_package_level_detail_wizard_view_form"
+        )
 
         return {
-            'name': _('Package Content'),
-            'type': 'ir.actions.act_window',
-            'view_mode': 'form',
-            'res_model': 'stock.package_level',
-            'views': [(False, 'form')],
-            'target': 'new',
-            'res_id': self.id,
+            "name": _("Package Content"),
+            "type": "ir.actions.act_window",
+            "res_model": "package.level.detail.wizard",
+            "view_mode": "form",
+            "views": [(view.id, "form")],
+            "target": "new",
+            "res_id": wizard.id,
         }
-    
+        
