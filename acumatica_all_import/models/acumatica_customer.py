@@ -122,13 +122,13 @@ class AcumaticaCustomerLine(models.Model):
         if not lines:
             raise UserError('Hanya bisa generate data dengan state Staged & Error')
         result = lines._do_import()
-        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
         return result
 
     def action_import_this(self):
         self.ensure_one()
         result = self._do_import()
-        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(self)
         return result
 
     def _do_import(self):
