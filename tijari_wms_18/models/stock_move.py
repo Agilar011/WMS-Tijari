@@ -849,6 +849,27 @@ class StockMove(models.Model):
             'target': 'new',
         }
 
+    def action_open_upack_wizard(self):
+        self.ensure_one()
+
+        wizard = self.env["move.unpack.wizard"].create({
+            "move_id": self.id,
+        })
+
+        view = self.env.ref(
+            "tijari_wms_18.move_unpack_wizard_view_form"
+        )
+
+        return {
+            "name": _("Unpacked Item Detail"),
+            "type": "ir.actions.act_window",
+            "res_model": "move.unpack.wizard",
+            "view_mode": "form",
+            "views": [(view.id, "form")],
+            "target": "new",
+            "res_id": wizard.id,
+        }        
+
     def _action_confirm(self, merge=True, merge_into=False):
         moves_no_merge = self.filtered(
             lambda m: m.picking_id

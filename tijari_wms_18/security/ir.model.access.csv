@@ -29,3 +29,12 @@ access_generate_package_wizard_operator,generate.package.wizard.operator,model_g
 access_generate_package_wizard_manager,generate.package.wizard.manager,model_generate_package_wizard,stock.group_stock_manager,1,1,1,1
 access_putaway_move_line_wizard_operator,putaway.move.line.wizard.operator,model_putaway_move_line_wizard,tijari_wms_18.group_operator,1,1,1,1
 access_putaway_move_line_wizard_manager,putaway.move.line.wizard.manager,model_putaway_move_line_wizard,stock.group_stock_manager,1,1,1,1
+
+
+access_package_level_detail_wizard_manager,package.level.detail.wizard.manager,model_package_level_detail_wizard,stock.group_stock_manager,1,1,1,1
+access_package_level_detail_wizard_operator,package.level.detail.wizard.operator,model_package_level_detail_wizard,tijari_wms_18.group_operator,1,1,1,1
+
+access_move_unpack_wizard_manager,package.level.detail.wizard.manager,model_move_unpack_wizard,stock.group_stock_manager,1,1,1,1
+access_move_unpack_wizard_operator,package.level.detail.wizard.operator,model_move_unpack_wizard,tijari_wms_18.group_operator,1,1,1,1
+
+

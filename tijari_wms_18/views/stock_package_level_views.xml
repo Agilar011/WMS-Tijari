@@ -5,7 +5,7 @@
         <field name="name">stock.package_level.view.kanban</field>
         <field name="model">stock.package_level</field>
         <field name="arch" type="xml">
-            <kanban class="o_kanban_mobile">
+            <kanban class="o_kanban_mobile" can_open="0">
                 <field name="package_id" invisible="1"/>
                 <field name="status" invisible="1"/>
                 <field name="state" invisible='1' />
@@ -22,13 +22,19 @@
                             />
                         </div>
 
+
                         <div class="d-flex gap-2 mt-2">
+                            <button name="action_show_package_details"
+                                type="object"
+                                string="Open Detail"
+                                class="btn-primary"/>
                             <button name="action_mark_unfinished"
                                 type="object"
                                 string="Rollback"
                                 class="btn-danger o_wms_auto_save_before_action"
                                 invisible="status == 'unfinished' or state in ('done', 'cancel')"/>
                         </div>
+
                     </t>
                 </templates>
             </kanban>

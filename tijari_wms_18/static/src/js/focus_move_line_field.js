@@ -1001,19 +1001,25 @@ class PackageScanButton extends Component {
 
         try {
             const { result } = applyResult;
-            if (result?.package_level_id) {
-                await this.action.doAction({
-                    type: "ir.actions.act_window",
-                    res_model: "stock.package_level",
-                    res_id: result.package_level_id,
-                    views: [[false, "form"]],
-                    target: "new",
-                },
-                {
-                    onClose: async () => {
-                        await reloadRecordSafely(this.props.record, this.notification);
+
+            if (result?.package_detail_wizard_id) {
+                await this.action.doAction(
+                    {
+                        type: "ir.actions.act_window",
+                        res_model: "package.level.detail.wizard",
+                        res_id: result.package_detail_wizard_id,
+                        views: [[false, "form"]],
+                        target: "new",
                     },
-                });
+                    {
+                        onClose: async () => {
+                            await reloadRecordSafely(
+                                this.props.record,
+                                this.notification
+                            );
+                        },
+                    }
+                );
             }
         } catch (error) {
             notifyScannerError(this.notification, error);

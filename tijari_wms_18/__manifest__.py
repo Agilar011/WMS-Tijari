@@ -30,6 +30,8 @@
         'data/api_data_hub_dashboard.xml',
         'wizard/generate_package_wizard_views.xml',
         'wizard/putaway_move_line_wizard_views.xml',
+        'wizard/package_level_wizard.xml',
+        'wizard/unpack_item_wizard.xml',
         'views/assets.xml',
         'views/mail_compose_message_views.xml',
         'views/hide_menu.xml',
