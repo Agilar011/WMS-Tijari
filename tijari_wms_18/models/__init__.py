@@ -13,6 +13,7 @@ from . import stock_scrap
 from . import stock_package_level
 from . import stock_lot
 from . import stock_quant_package
+from . import stock_inventory
 
 from . import stock_report_velocity
 from . import stock_report_aging
