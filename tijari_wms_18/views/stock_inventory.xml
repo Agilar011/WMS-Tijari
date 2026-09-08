@@ -1,0 +1,28 @@
+<odoo>
+    <record id="view_stock_inventory_form_print" model="ir.ui.view">
+        <field name="name">stock.inventory.form.print</field>
+        <field name="model">stock.inventory</field>
+        <field name="inherit_id" ref="stock_inventory.view_inventory_group_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//header" position="inside">
+                <button
+                    name="action_print_stok_opname"
+                    string="Print"
+                    type="object"
+                    class="btn-primary"
+                />
+            </xpath>
+            <xpath expr="//field[@name='approval_state']" position="after">
+                <field name="status_ba"/>
+            </xpath>
+            <xpath expr="//page[@name='approval_info']" position="after">
+                <page name="notes" string="Notes">
+                    <group>
+                        <field name="notes" nolabel="1"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>
