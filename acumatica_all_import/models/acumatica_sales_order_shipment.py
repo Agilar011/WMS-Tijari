@@ -13,34 +13,36 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaShipmentGIStaging(models.Model):
     _name = 'acumatica.shipment.gi.staging'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Acumatica Shipment GI'
     _rec_name = 'adt_ShipmentNbr'
 
     # shipment_ids = fields.One2many('acumatica.sales.order.shipment.staging','gi_id',string='Shipments')
     all_line_ids = fields.One2many('acumatica.sales.order.shipment.staging.line', 'gi_id',string='All Shipment Details')
     active = fields.Boolean(default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order',
         readonly=True,
     )
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
     odoo_shipment_status = fields.Selection([
-        ('pending', "Belum di Proses"),
+        ('staged', 'Staged'),
         ('processed', "Telah di Proses"),
-    ], string='Status Odoo', default='pending')
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    ], string='Status Odoo', default='staged')
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
     total_qty = fields.Float(string='Total Quantity',compute='_compute_total_qty',store=True,digits=(16, 2))
 
     acumatica_id = fields.Char(string="atica_id")
@@ -68,6 +70,7 @@ class AcumaticaShipmentGIStaging(models.Model):
     adt_LineUOM = fields.Char(string="LineUOM")
     adt_LocationID = fields.Char(string="LocationID")
     adt_LocationName = fields.Char(string="LocationName")
+    lastmodifieddatetime = fields.Datetime(string="Last Modified Date", readonly=True)
     adt_NoteHeader = fields.Char(string="NoteHeader")
     adt_NoteHeaderID = fields.Char(string="NoteHeaderID")
     adt_OrderType = fields.Char(string="OrderType")
@@ -159,9 +162,33 @@ class AcumaticaShipmentGIStaging(models.Model):
         ])
 
         for staging_rec in not_pending_shipment:
+            message = f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
+            lines = shipment_line.search([('gi_id', '=', staging_rec.id)])
+            self.env['acumatica.error.transaction']._handle_acumatica_error(
+                staging_rec,
+                [message],
+                api_acumatica='so_shipment',
+                operation_type='delivery',
+                origin=staging_rec.adt_ShipmentNbr,
+                partner=staging_rec.adt_CustomerID or False,
+                location=staging_rec.adt_WarehouseID or staging_rec.adt_LocationID or False,
+                location_dest=staging_rec.adt_ToWarehouseID or False,
+                scheduled_date=staging_rec.adt_ShipDate,
+                total_qty=staging_rec.adt_ShipmentQty or staging_rec.total_qty,
+                payload={'header': staging_rec.read()[0] if staging_rec.exists() else {}},
+                line_payloads=[{
+                    'inventory_id': line.adt_LineInventoryID or False,
+                    'product_name': line.adt_LineDescription or False,
+                    'qty': self._parse_int(line.adt_ShipmentQty),
+                    'uom': line.adt_LineUOM or False,
+                    'payload': line.read()[0] if line.exists() else {},
+                } for line in lines],
+            )
             staging_rec.write({
-                'import_state': 'error',
-                'import_message': f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
+                'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                'import_message': message,
+                'odoo_picking_id': False,
+                'odoo_internal_transfer_order_id': False,
             })
 
         # =====================================================
@@ -176,9 +203,11 @@ class AcumaticaShipmentGIStaging(models.Model):
         for shipment in valid_shipments:
             # Ambil sub-transaksi database tingkat dokumen
             with self.env.cr.savepoint():
+                self.env.cr.execute('SAVEPOINT import_so_shipment_doc')
                 try:
                     if (shipment.adt_OrderType or '').strip().upper() == 'CO':
                         self._import_consignment_internal_transfer(shipment, shipment_line)
+                        self.env.cr.execute('RELEASE SAVEPOINT import_so_shipment_doc')
                         continue
 
                     warehouse = self._find_warehouse(shipment.adt_WarehouseID)
@@ -216,7 +245,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                     shipment_volume = shipment.adt_ShipmentVolume
                     shipment_city = shipment.adt_City
 
-                    shipment_country = self._find_loginext_country(shipment.adt_CountryName)
+                    # shipment_country = self._find_loginext_country(shipment.adt_CountryName)
                     shipment_postal_code = shipment.adt_PostalCode
                     shipment_street = shipment.adt_AddressLine
 
@@ -235,10 +264,11 @@ class AcumaticaShipmentGIStaging(models.Model):
                         print(f"--> SUCCESS UNLINK OLD LINES FOR PICKING ID: {picking.id}")
                     else:
                         picking = Picking.create(updated_vals)
-                        exist_post_data = self.env['loginext.staging.data'].search([('odoo_shipment_number', '=', picking.origin)], limit=1)
-                        if not exist_post_data:
-                            create_tms_state = True
-                            created_loginext_header = self._build_loginext_header(shipment.adt_ShipmentNbr, ship_date, shipment_location_id,shipment_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking.origin)
+                        # exist_post_data = self.env['loginext.staging.data'].search([('odoo_shipment_number', '=', picking.origin)], limit=1)
+                        # if not exist_post_data:
+                        #     create_tms_state = True
+
+                            # created_loginext_header = self._build_loginext_header(shipment.adt_ShipmentNbr, ship_date, shipment_location_id,shipment_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking.origin)
 
                         print(f"SUCCESS CREATING NEW PICKING ID: {picking.id}")
 
@@ -253,8 +283,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                         product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
                         if not product:
                             raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
-                        
-                        # Finding stock location for 
+
+                        # Finding stock location for
                         product_location = self._find_warehouse_product(shipment.adt_WarehouseID)
                         if product_location:
                             print(f" Product: {product.product_tmpl_id.name} asignt to get from: {product_location} AKA {shipment.adt_WarehouseID}")
@@ -307,35 +337,58 @@ class AcumaticaShipmentGIStaging(models.Model):
 
                         item_qty = float(item.adt_ShipmentQty or 0.0)
 
-                        if create_tms_state == True:
-                            self._build_loginext_item(product, shipment.adt_OrderType, created_loginext_header.id, move_count, shipment.adt_ShipmentWeight, item_qty)
+                    #     if create_tms_state == True:
+                    #         self._build_loginext_item(product, shipment.adt_OrderType, created_loginext_header.id, move_count, shipment.adt_ShipmentWeight, item_qty)
 
 
-                    if create_tms_state == True:
-                        created_loginext_header.loginext_number_of_items = move_count
+                    # if create_tms_state == True:
+                    #     created_loginext_header.loginext_number_of_items = move_count
 
                     if shipment.adt_DocumentOnly:
                         picking.action_validate_document_only_import(force=True)
 
                     # Tandai sukses jika semua proses di atas berhasil tanpa memicu exception
                     shipment.write({
-                        'import_state': 'imported',
-                        'import_message': f'Berhasil diproses menjadi Picking Odoo: {picking.name}',
+                        'import_state': 'created',
+                        'import_message': 'success',
                         'odoo_picking_id': picking.id
                     })
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(shipment.adt_ShipmentNbr, 'so_shipment')
+                    self.env.cr.execute('RELEASE SAVEPOINT import_so_shipment_doc')
 
                 except Exception as e:
-                    # JANGAN panggil cr.rollback() atau cr.commit() di sini!
-                    # Cukup cetak log dan tandai data staging induk sebagai error.
-                    # Blok `with self.env.cr.savepoint():` akan otomatis membatalkan Picking/Move yang gagal.
+                    self.env.cr.execute('ROLLBACK TO SAVEPOINT import_so_shipment_doc')
                     _logger.error(f"Error importing shipment {shipment.adt_ShipmentNbr}: {str(e)}")
-                    
+                    tracked_lines = shipment_line.search([('gi_id', '=', shipment.id)])
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(
+                        shipment,
+                        [str(e)],
+                        api_acumatica='so_shipment',
+                        operation_type='delivery',
+                        origin=shipment.adt_ShipmentNbr,
+                        partner=shipment.adt_CustomerID or False,
+                        location=shipment.adt_WarehouseID or shipment.adt_LocationID or False,
+                        location_dest=shipment.adt_ToWarehouseID or False,
+                        scheduled_date=shipment.adt_ShipDate,
+                        total_qty=shipment.adt_ShipmentQty or shipment.total_qty,
+                        payload={'header': shipment.read()[0] if shipment.exists() else {}},
+                        line_payloads=[{
+                            'inventory_id': line.adt_LineInventoryID or False,
+                            'product_name': line.adt_LineDescription or False,
+                            'qty': self._parse_int(line.adt_ShipmentQty),
+                            'uom': line.adt_LineUOM or False,
+                            'payload': line.read()[0] if line.exists() else {},
+                        } for line in tracked_lines],
+                    )
+
                     # Odoo memperbolehkan modifikasi record saat ini di dalam savepoint yang gagal
                     shipment.write({
-                        'import_state': 'error',
-                        'import_message': f'!!! ERROR DETECTED ON IMPORT PROCESS: {str(e)}'
+                        'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                        'import_message': f'!!! ERROR DETECTED ON IMPORT PROCESS: {str(e)}',
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': False,
                     })
-                    
+
                     # Paksa loop untuk melanjutkan dokumen berikutnya tanpa menghentikan sistem
                     continue
 
@@ -435,7 +488,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         shipment_weight = shipment.adt_ShipmentWeight
         shipment_volume = shipment.adt_ShipmentVolume
         shipment_city = shipment.adt_City
-        shipment_country = self._find_loginext_country(shipment.adt_CountryName)
+        # shipment_country = self._find_loginext_country(shipment.adt_CountryName)
         shipment_postal_code = shipment.adt_PostalCode
         shipment_street = shipment.adt_AddressLine
 
@@ -465,6 +518,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'state': 'draft',
             })
             action_state = 'updated'
+            self.env['acumatica.error.transaction']._handle_acumatica_update(shipment, origin=shipment.adt_ShipmentNbr or False)
         else:
             order = InternalTransferOrder.create({
                 'external_ref': shipment.adt_ShipmentNbr,
@@ -478,32 +532,33 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'validation_policy': 'validate_all',
                 'note': shipment.adt_note or shipment.adt_NoteHeader or False,
             })
-            action_state = 'imported'
+            action_state = 'created'
 
         move_items = shipment_line.search([('gi_id', '=', shipment.id)])
         if not move_items:
             raise UserError(f"Shipment {shipment.adt_ShipmentNbr} tidak punya detail line.")
 
-        created_loginext_header = False
+        # created_loginext_header = False
         create_tms_state = False
-        exist_post_data = self.env['loginext.staging.data'].search([
-            ('odoo_shipment_number', '=', shipment.adt_ShipmentNbr),
-        ], limit=1)
-        if not exist_post_data:
-            create_tms_state = True
-            created_loginext_header = self._build_loginext_header(
-                shipment.adt_ShipmentNbr,
-                ship_date,
-                shipment_location_id,
-                shipment_weight,
-                shipment_volume,
-                partner,
-                shipment_city,
-                shipment_country,
-                shipment_postal_code,
-                shipment_street,
-                shipment.adt_ShipmentNbr,
-            )
+
+        # exist_post_data = self.env['loginext.staging.data'].search([
+        #     ('odoo_shipment_number', '=', shipment.adt_ShipmentNbr),
+        # ], limit=1)
+        # if not exist_post_data:
+        #     create_tms_state = True
+        #     created_loginext_header = self._build_loginext_header(
+        #         shipment.adt_ShipmentNbr,
+        #         ship_date,
+        #         shipment_location_id,
+        #         shipment_weight,
+        #         shipment_volume,
+        #         partner,
+        #         shipment_city,
+        #         shipment_country,
+        #         shipment_postal_code,
+        #         shipment_street,
+        #         shipment.adt_ShipmentNbr,
+        #     )
 
         move_count = 0
         for item in move_items:
@@ -540,32 +595,33 @@ class AcumaticaShipmentGIStaging(models.Model):
             move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
             Move.create(move_vals)
 
-            if create_tms_state:
-                self._build_loginext_item(
-                    product,
-                    shipment.adt_OrderType,
-                    created_loginext_header.id,
-                    move_count,
-                    shipment.adt_ShipmentWeight,
-                    qty,
-                )
+        #     if create_tms_state:
+        #         self._build_loginext_item(
+        #             product,
+        #             shipment.adt_OrderType,
+        #             created_loginext_header.id,
+        #             move_count,
+        #             shipment.adt_ShipmentWeight,
+        #             qty,
+        #         )
 
-        if create_tms_state:
-            created_loginext_header.loginext_number_of_items = move_count
+        # if create_tms_state:
+        #     created_loginext_header.loginext_number_of_items = move_count
 
         order.action_ready()
         shipment.write({
             'import_state': action_state,
-            'import_message': f"{action_state.title()}: {order.name}",
+            'import_message': 'success',
             'odoo_picking_id': False,
             'odoo_internal_transfer_order_id': order.id,
         })
+        self.env['acumatica.error.transaction']._handle_acumatica_error(shipment.adt_ShipmentNbr, 'so_shipment')
         return order
 
 # =====================================================================================================================================================================
     # Service Function
 # =====================================================================================================================================================================
-    
+
     def _find_responsible(self):
         user = self.env['res.users'].search([('name', '=', 'System User')], limit=1)
 
@@ -576,7 +632,7 @@ class AcumaticaShipmentGIStaging(models.Model):
             })
 
         return user
-    
+
     def _find_product(self, line):
         print('Starting search product')
 
@@ -594,8 +650,8 @@ class AcumaticaShipmentGIStaging(models.Model):
 
             product = Product.search([
                 ('default_code', '=', line.adt_LineInventoryID)
-            ], limit=1)        
-            
+            ], limit=1)
+
         else:
             print(
                 # f"PRODUCT NOT FOUND | "Proses picking dibatalkan karena ada produk yang bermasalah
@@ -603,7 +659,7 @@ class AcumaticaShipmentGIStaging(models.Model):
             )
 
             return False
-        
+
         return {
             'product': product,
         }
@@ -653,17 +709,17 @@ class AcumaticaShipmentGIStaging(models.Model):
         #     FROM stock_warehouse
         #     WHERE code = %s
         # """, (code,))
-        
+
         # # 2. Ambil hasilnya dan simpan ke dalam variabel (Hanya panggil fetchall SEKALI)
         # sql_result = self.env.cr.fetchall()
         # print(sql_result)
         # # raise UserError('checkpoint')
-        
+
         # warehouse = False
         # # 3. Jika SQL menemukan data, ambil ID dari elemen pertama
         # if sql_result:
         #     warehouse_id = sql_result[0][0] # Mengambil angka 176 dari [(176, 'WH33-FG')]
-            
+
         #     # 4. Cari menggunakan ORM berdasarkan ID yang didapat dari SQL
         #     # Tambahkan context active_test=False untuk berjaga-jaga jika record di-archived
         #     warehouse = Warehouse.sudo().with_context(active_test=False).search([('id', '=', warehouse_id)], limit=1)
@@ -702,17 +758,17 @@ class AcumaticaShipmentGIStaging(models.Model):
             uom = product.uom_id
         return uom
 
-    def _find_loginext_country(self, code):
-        Country = self.env['loginext.master.country']
+    # def _find_loginext_country(self, code):
+    #     Country = self.env['loginext.master.country']
 
-        country_code = Country.search([('country', '=', code)], limit=1)
-        if country_code:
-            final_code = country_code.code
+    #     country_code = Country.search([('country', '=', code)], limit=1)
+    #     if country_code:
+    #         final_code = country_code.code
 
-        else:
-            final_code = "IDN"
-            
-        return final_code
+    #     else:
+    #         final_code = "IDN"
+
+    #     return final_code
 
 # Helper Function
 
@@ -747,26 +803,30 @@ class AcumaticaShipmentGIStaging(models.Model):
             return int(value or 0)
         except Exception:
             return 0.0
-        
+
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: (
-                l.import_state in ['pending', 'error']
+                l.import_state in ['staged', 'error']
                 or (
-                    l.import_state in ['imported', 'updated']
+                    l.import_state in ['created', 'updated']
                     and not l.odoo_picking_id
                     and not l.odoo_internal_transfer_order_id
                 )
             )
         )
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
-        
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
+
     def action_import_this(self):
         self.ensure_one()
         print(self)
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def action_open_picking(self):
         self.ensure_one()
@@ -787,107 +847,107 @@ class AcumaticaShipmentGIStaging(models.Model):
         }
 
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
-    def _find_loginext_wh(self, shipment_location_id):
-        Warehouse = self.env['stock.location.acumatica']
-        warehouse = False
-        code = shipment_location_id
-        print(code)
-        if code:
-            warehouse = Warehouse.search([('code', '=', code)], limit=1)
-            # if warehouse:
-            #     if not warehouse.loginext_branch:
-            #         warehouse = False
-            #     else:
-            #         warehouse = warehouse.loginext_branch
+    # def _find_loginext_wh(self, shipment_location_id):
+    #     Warehouse = self.env['stock.location.acumatica']
+    #     warehouse = False
+    #     code = shipment_location_id
+    #     print(code)
+    #     if code:
+    #         warehouse = Warehouse.search([('code', '=', code)], limit=1)
+    #         # if warehouse:
+    #         #     if not warehouse.loginext_branch:
+    #         #         warehouse = False
+    #         #     else:
+    #         #         warehouse = warehouse.loginext_branch
 
-        return warehouse
+    #     return warehouse
 
 
-    def _build_loginext_header(self, adt_ShipmentNbr, ship_date, shipment_location_id, ship_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking):
-        loginext_wh = self._find_loginext_wh(shipment_location_id)
+    # def _build_loginext_header(self, adt_ShipmentNbr, ship_date, shipment_location_id, ship_weight, shipment_volume, partner, shipment_city, shipment_country, shipment_postal_code, shipment_street, picking):
+    #     loginext_wh = self._find_loginext_wh(shipment_location_id)
 
-        loginext_order_no = f"testing-dev-{adt_ShipmentNbr}"
-        _logger.info("loginext_order_no         : %s", loginext_order_no)
-        _logger.info("ship_date                 : %s", ship_date)
-        _logger.info("loginext_wh               : %s", loginext_wh)
-        _logger.info("loginext_wh.loginext_branch : %s", loginext_wh.loginext_branch if loginext_wh else False)
-        _logger.info("ship_weight              : %s", ship_weight)
-        _logger.info("shipment_volume          : %s", shipment_volume)
-        _logger.info("partner                  : %s", partner)
-        _logger.info("partner.name             : %s", partner.name if partner else False)
-        _logger.info("partner.id               : %s", partner.id if partner else False)
-        _logger.info("shipment_street          : %s", shipment_street)
-        _logger.info("shipment_city            : %s", shipment_city)
-        _logger.info("shipment_country         : %s", shipment_country)
-        _logger.info("shipment_postal_code     : %s", shipment_postal_code)
-        _logger.info("loginext_state.code      : %s", loginext_wh.loginext_state.code if loginext_wh and loginext_wh.loginext_state else False)
-        _logger.info("picking                  : %s", picking)        
-        updated_vals = {
-            'loginext_order_no' : loginext_order_no if loginext_order_no else '',
-            'loginext_shipment_order_dt' : ship_date if ship_date else '',
-            'loginext_shipment_order_type_cd' : "DELIVER",
-            'loginext_order_state' : "FORWARD"  if "FORWARD"  else '',
-            'loginext_distribution_center' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
-            'loginext_return_branch' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
-            'loginext_package_weight' : ship_weight if ship_weight else '',
-            'loginext_package_volume' : shipment_volume if shipment_volume else '',
-            'loginext_preparation_time' : '30',
-            'loginext_payment_type' : "Prepaid",
-            'loginext_package_value' : ship_weight if ship_weight else '',
-            'loginext_partial_delivery_allowed_fl' : "Y",
-            'loginext_return_allowed_fl' : "Y",
-            'loginext_cancellation_allowed_fl' : "Y",
-            'loginext_deliver_service_time' : '30',
-            'loginext_deliver_start_time_window' : ship_date if ship_date else '',
-            'loginext_deliver_end_time_window' : ship_date if ship_date else '',
-            'loginext_delivery_type' : "DRIVER",
-            'loginext_deliver_branch' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
-            'loginext_deliver_account_code' : partner.name if partner.name else '',
-            'loginext_deliver_account_name' : partner.id if partner.id else '',
-            'loginext_deliver_apartment' : shipment_street if shipment_street else '',
-            'loginext_deliver_street_name' : shipment_street if shipment_street else '',
-            'loginext_deliver_locality' : shipment_city if shipment_city else '',
-            'loginext_deliver_city' : shipment_city if shipment_city else '',
-            'loginext_deliver_state' : loginext_wh.loginext_state.code if loginext_wh.loginext_state.code else '',
-            'loginext_deliver_country' : shipment_country if shipment_country else '',
-            'loginext_deliver_pin_code' : shipment_postal_code if shipment_postal_code else '',
-            'loginext_deliver_address_timezone' : "Asia/Jakarta",
-            'loginext_deliver_notes' : f'"Delivered" atau "ShipVia"',
-            'odoo_shipment_number' : picking if picking else '',
+    #     loginext_order_no = f"testing-dev-{adt_ShipmentNbr}"
+    #     _logger.info("loginext_order_no         : %s", loginext_order_no)
+    #     _logger.info("ship_date                 : %s", ship_date)
+    #     _logger.info("loginext_wh               : %s", loginext_wh)
+    #     _logger.info("loginext_wh.loginext_branch : %s", loginext_wh.loginext_branch if loginext_wh else False)
+    #     _logger.info("ship_weight              : %s", ship_weight)
+    #     _logger.info("shipment_volume          : %s", shipment_volume)
+    #     _logger.info("partner                  : %s", partner)
+    #     _logger.info("partner.name             : %s", partner.name if partner else False)
+    #     _logger.info("partner.id               : %s", partner.id if partner else False)
+    #     _logger.info("shipment_street          : %s", shipment_street)
+    #     _logger.info("shipment_city            : %s", shipment_city)
+    #     _logger.info("shipment_country         : %s", shipment_country)
+    #     _logger.info("shipment_postal_code     : %s", shipment_postal_code)
+    #     _logger.info("loginext_state.code      : %s", loginext_wh.loginext_state.code if loginext_wh and loginext_wh.loginext_state else False)
+    #     _logger.info("picking                  : %s", picking)
+    #     updated_vals = {
+    #         'loginext_order_no' : loginext_order_no if loginext_order_no else '',
+    #         'loginext_shipment_order_dt' : ship_date if ship_date else '',
+    #         'loginext_shipment_order_type_cd' : "DELIVER",
+    #         'loginext_order_state' : "FORWARD"  if "FORWARD"  else '',
+    #         'loginext_distribution_center' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
+    #         'loginext_return_branch' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
+    #         'loginext_package_weight' : ship_weight if ship_weight else '',
+    #         'loginext_package_volume' : shipment_volume if shipment_volume else '',
+    #         'loginext_preparation_time' : '30',
+    #         'loginext_payment_type' : "Prepaid",
+    #         'loginext_package_value' : ship_weight if ship_weight else '',
+    #         'loginext_partial_delivery_allowed_fl' : "Y",
+    #         'loginext_return_allowed_fl' : "Y",
+    #         'loginext_cancellation_allowed_fl' : "Y",
+    #         'loginext_deliver_service_time' : '30',
+    #         'loginext_deliver_start_time_window' : ship_date if ship_date else '',
+    #         'loginext_deliver_end_time_window' : ship_date if ship_date else '',
+    #         'loginext_delivery_type' : "DRIVER",
+    #         'loginext_deliver_branch' : loginext_wh.loginext_branch if loginext_wh.loginext_branch else '',
+    #         'loginext_deliver_account_code' : partner.name if partner.name else '',
+    #         'loginext_deliver_account_name' : partner.id if partner.id else '',
+    #         'loginext_deliver_apartment' : shipment_street if shipment_street else '',
+    #         'loginext_deliver_street_name' : shipment_street if shipment_street else '',
+    #         'loginext_deliver_locality' : shipment_city if shipment_city else '',
+    #         'loginext_deliver_city' : shipment_city if shipment_city else '',
+    #         'loginext_deliver_state' : loginext_wh.loginext_state.code if loginext_wh.loginext_state.code else '',
+    #         'loginext_deliver_country' : shipment_country if shipment_country else '',
+    #         'loginext_deliver_pin_code' : shipment_postal_code if shipment_postal_code else '',
+    #         'loginext_deliver_address_timezone' : "Asia/Jakarta",
+    #         'loginext_deliver_notes' : f'"Delivered" atau "ShipVia"',
+    #         'odoo_shipment_number' : picking if picking else '',
 
-        }
+    #     }
 
-        created_loginext_header = self.env['loginext.staging.data'].create(updated_vals)
-        _logger.info("TMS Header Created: %s", created_loginext_header)        
+    #     created_loginext_header = self.env['loginext.staging.data'].create(updated_vals)
+    #     _logger.info("TMS Header Created: %s", created_loginext_header)
 
-        return created_loginext_header
+    #     return created_loginext_header
 
-    def _build_loginext_item(self, product, shipment_type, header, move_count, shipment_weight, item_qty):
+    # def _build_loginext_item(self, product, shipment_type, header, move_count, shipment_weight, item_qty):
 
-        crate_vals = {
-            'loginext_crate_cd' : f"{product.default_code}|{move_count}",
-            'loginext_crate_name' : product.name,
-            'loginext_crate_type' : shipment_type,
-            'loginext_crate_weight' : shipment_weight,
-            'staging_id' : header
-        }
+    #     crate_vals = {
+    #         'loginext_crate_cd' : f"{product.default_code}|{move_count}",
+    #         'loginext_crate_name' : product.name,
+    #         'loginext_crate_type' : shipment_type,
+    #         'loginext_crate_weight' : shipment_weight,
+    #         'staging_id' : header
+    #     }
 
-        crate = self.env['loginext.staging.crate'].create(crate_vals)
-        _logger.info("TMS Crate Created: %s", crate)        
+    #     crate = self.env['loginext.staging.crate'].create(crate_vals)
+    #     _logger.info("TMS Crate Created: %s", crate)
 
-        item_vals = {
-            'loginext_item_cd' : f"{product.default_code}",
-            'loginext_item_name' : product.name,
-            'loginext_item_type' : shipment_type,
-            'loginext_item_weight' : shipment_weight,
-            'loginext_item_quantity' : item_qty,
-            'staging_id' : header,
-            'crate_id' : crate.id
-        }
-        items = self.env['loginext.staging.item'].create(item_vals)
-        _logger.info("TMS Item Created: %s", items)        
+    #     item_vals = {
+    #         'loginext_item_cd' : f"{product.default_code}",
+    #         'loginext_item_name' : product.name,
+    #         'loginext_item_type' : shipment_type,
+    #         'loginext_item_weight' : shipment_weight,
+    #         'loginext_item_quantity' : item_qty,
+    #         'staging_id' : header,
+    #         'crate_id' : crate.id
+    #     }
+    #     items = self.env['loginext.staging.item'].create(item_vals)
+    #     _logger.info("TMS Item Created: %s", items)
 
 
 
@@ -901,7 +961,7 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
 
     acumatica_id = fields.Char()
     rownumber = fields.Integer()
-    noteid = fields.Char()    
+    noteid = fields.Char()
     warehousename = fields.Char()
 
     shiptoaddressoverride = fields.Boolean()
@@ -935,28 +995,29 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
     warehouseid = fields.Char(string='Warehouse ID', readonly=True)
     locationname = fields.Char(string='Location Name', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
 
 # =====================================================================================================================================================================
     # Service Function
 # =====================================================================================================================================================================
-    
+
     def _find_responsible(self):
         user = self.env['res.users'].search([('name', '=', 'System User')], limit=1)
 
@@ -967,7 +1028,7 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
             })
 
         return user
-    
+
     def _find_product(self, line, source_location):
         print('Starting search product')
 
@@ -985,8 +1046,8 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
 
             product = Product.search([
                 ('default_code', '=', line.inventoryid)
-            ], limit=1)        
-            
+            ], limit=1)
+
         else:
             print(
                 # f"PRODUCT NOT FOUND | "Proses picking dibatalkan karena ada produk yang bermasalah
@@ -994,7 +1055,7 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
             )
 
             return False
-        
+
         if source_location:
             location = Location.search([
                 ('id', '=', source_location)
@@ -1121,22 +1182,26 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
             return int(value or 0)
         except Exception:
             return 0.0
-        
+
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: (
-                l.import_state in ['pending', 'error'] 
-                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+                l.import_state in ['staged', 'error']
+                or (l.import_state in ['created', 'updated'] and not l.odoo_picking_id)
             )
         )
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
-        
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
+
     def action_import_this(self):
         self.ensure_one()
         print(self)
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def action_open_picking(self):
         self.ensure_one()
@@ -1150,7 +1215,7 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
         }
 
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
 
 class AcumaticaSalesOrderShipmentStagingLine(models.Model):
@@ -1163,7 +1228,7 @@ class AcumaticaSalesOrderShipmentStagingLine(models.Model):
         ondelete='cascade'
     )
 
-    noteid = fields.Char()    
+    noteid = fields.Char()
 
     acumatica_id = fields.Char(string="acumatica_id")
     adt_rowNumber = fields.Char(string="rowNumber")
@@ -1176,15 +1241,16 @@ class AcumaticaSalesOrderShipmentStagingLine(models.Model):
     adt_WarehouseID = fields.Char(string="WarehouseID")
 
     selected = fields.Boolean(string='Pilih', default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -1211,15 +1277,16 @@ class AcumaticaSalesOrderShipmentStagingAllocation(models.Model):
     splitlinenbr = fields.Integer(string='Split Line Number', readonly=True)
     uom = fields.Char(string='UOM', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -1251,15 +1318,16 @@ class AcumaticaSalesOrderShipmentShipToAddressStaging(models.Model):
     postalcode = fields.Char(string='Postal Code', readonly=True)
     state = fields.Char(string='State', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -1267,609 +1335,6 @@ class AcumaticaSalesOrderShipmentShipToAddressStaging(models.Model):
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
-
-
-class AcumaticaShipmentConfig(models.Model):
-    _name = 'acumatica.so.shipment.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Shipment Receipt'
-    _rec_name = 'name'
-
-    name = fields.Char(required=True, default='Acumatica Shipment Receipt')
-    base_url = fields.Char(required=True, help='Contoh: http://server/acumportal/entity')
-    api_version = fields.Char(required=True, default='25.200.002')
-    username = fields.Char(required=True)
-    password = fields.Char(required=True)
-    company_code = fields.Char(required=True)
-    shipment_gi_endpoint = fields.Char(required=True, default="ShipmentGI")
-    shipment_gi_expand = fields.Char(required=True, default="ShipmentGIDetails")
-    endpoint_name = fields.Char(required=True, default='Shipment')
-    active = fields.Boolean(default=True)
-    last_sync = fields.Datetime(readonly=True)
-    state = fields.Selection([
-        ('draft', 'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error', 'Error'),
-    ], default='draft', readonly=True)
-
-    odata_expand = fields.Char(default='Details')
-    odata_select = fields.Char()
-    odata_filter = fields.Char(default="Type eq 'Shipment' and Operation eq 'Receipt'")
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            self._do_logout(session)
-            self.state = 'connected'
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Koneksi Berhasil',
-                    'message': f'Berhasil terhubung ke {self.base_url}',
-                    'type': 'success',
-                    'sticky': False,
-                }
-            }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-    def _do_login(self):
-        self.ensure_one()
-
-        last_error = None
-
-        for attempt in range(3):
-            try:
-                session = requests.Session()
-
-                response = session.post(
-                    self.login_url,
-                    json={
-                        'name': self.username,
-                        'password': self.password,
-                        'company': self.company_code,
-                    },
-                    headers={'Content-Type': 'application/json'},
-                    timeout=30,
-                )
-
-                if response.status_code == 204:
-                    return session
-
-                last_error = (
-                    f'Login gagal (HTTP {response.status_code}): '
-                    f'{response.text}'
-                )
-
-            except Exception as e:
-                last_error = str(e)
-
-            # sleep 3 detik sebelum retry berikutnya
-            if attempt < 2:
-                time.sleep(3)
-
-        raise UserError(
-            f'Login gagal setelah 3 kali percobaan. Detail: {last_error}'
-        )
-
-    def _do_logout(self, session):
-        self.ensure_one()
-
-        last_error = None
-
-        for attempt in range(3):
-            try:
-                response = session.post(
-                    self.logout_url,
-                    timeout=10,
-                )
-
-                if response.ok:
-                    return
-
-                last_error = (
-                    f'Logout gagal (HTTP {response.status_code}): '
-                    f'{response.text}'
-                )
-
-            except requests.exceptions.RequestException as e:
-                last_error = str(e)
-
-            if attempt < 2:
-                time.sleep(3)
-
-        # biasanya logout tidak perlu menggagalkan proses utama
-        _logger.warning(
-            "Logout gagal setelah 3 percobaan: %s",
-            last_error,
-        )
-
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
-
-    def _bool_val(self, item, key):
-        return self._bool_value(item.get(key, {}))
-
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
-
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
-
-
-    def fetch_shipment_gi_data(self):
-
-        print("fetching shipment GI data")
-        # self.env['acumatica.shipment.gi.staging'].search([]).unlink()
-
-
-        self.ensure_one()
-        session = self._do_login()
-
-        try:
-            endpoint = f"{self.api_url}/{self.shipment_gi_endpoint}"
-
-            params = {}
-            if self.shipment_gi_expand:
-                params["$expand"] = self.shipment_gi_expand
-
-            session.headers.update({
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            })
-
-            response = session.put(
-                endpoint,
-                params=params,
-                json={},
-                timeout=300
-            )
-
-
-            if response.status_code != 200:
-                raise UserError(
-                    f"Gagal ambil data Shipment GI "
-                    f"(HTTP {response.status_code}): {response.text}"
-                )
-
-            api_data = response.json()
-
-            details = api_data.get("ShipmentGIDetails", [])
-
-
-            shipment_gi_data = []
-            shipment_numbers = []
-
-            for item in details:
-                ship_date = self._val(item, "ShipDate")
-                phrase_date = dateutil_parser.parse(ship_date).replace(tzinfo=None)
-
-
-                vals = {
-                    "acumatica_id": item.get("id", ""),
-                    "row_number": item.get("rowNumber", ""),
-
-                    "address_id": self._val(item, "AddressID"),
-                    "address_line1": self._val(item, "AddressLine1"),
-                    "address_line2": self._val(item, "AddressLine2"),
-                    "address_line3": self._val(item, "AddressLine3"),
-
-                    "city": self._val(item, "City"),
-
-                    "confirmed": self._val(item, "Confirmed"),
-
-                    "country": self._val(item, "Country"),
-                    "country_name": self._val(item, "CountryName"),
-
-                    "customer": self._val(item, "Customer"),
-                    "customer_name": self._val(item, "CustomerName"),
-
-                    "document_only": self._bool_val(item, "DocumentOnly"),
-
-                    "fob_point": self._val(item, "FOBPoint"),
-                    "fob_point_description": self._val(
-                        item,
-                        "FOBPointDescription"
-                    ),
-
-                    "hold": self._val(item, "Hold"),
-
-                    "location": self._val(item, "Location"),
-                    "location_name": self._val(item, "LocationName"),
-
-                    "note_ship_via": self._val(item, "NoteShipVia"),
-
-                    "order_type": self._val(item, "OrderType"),
-
-                    "override_address": self._val(item, "OverrideAddress"),
-
-                    "postal_code": self._val(item, "PostalCode"),
-
-                    "ship_date": phrase_date,
-
-                    "shipment_nbr": self._val(item, "ShipmentNbr"),
-
-                    "shipped_quantity": self._val(item, "ShippedQuantity"),
-                    "shipped_volume": self._val(item, "ShippedVolume"),
-                    "shipped_weight": self._val(item, "ShippedWeight"),
-
-                    "ship_via": self._val(item, "ShipVia"),
-                    "ship_via_address": self._val(item, "ShipViaAddress"),
-                    "ship_via_city": self._val(item, "ShipViaCity"),
-                    "ship_via_description": self._val(
-                        item,
-                        "ShipViaDescription"
-                    ),
-                    "ship_via_phone": self._val(item, "ShipViaPhone"),
-                    "ship_via_status": self._val(item, "ShipViaStatus"),
-
-                    "site_id_description": self._val(
-                        item,
-                        "SiteIDDescription"
-                    ),
-
-                    "state": self._val(item, "State"),
-                    "state_name": self._val(item, "StateName"),
-
-                    "status": self._val(item, "Status"),
-
-                    "to_warehouse_id": self._val(item, "ToWarehouseID"),
-
-                    "shipment_type": self._val(item, "Type"),
-
-                    "warehouse_id": self._val(item, "WarehouseID"),
-                }
-
-                shipment_numbers.append(self._val(item, "ShipmentNbr"))
-
-                shipment_gi_data.append(vals)
-
-
-            return shipment_gi_data, shipment_numbers
-
-        except Exception as e:
-            _logger.exception("Shipment GI Import Error")
-            raise UserError(str(e))
-
-        finally:
-            self._do_logout(session)
-
-
-    def create_staging_data(self, shipment_gi_data, batch_data):
-        staging_shipment_gi = self.env['acumatica.shipment.gi.staging']
-        staging_so_shipment= self.env['acumatica.sales.order.shipment.staging']
-        staging_so_shipment_detail= self.env['acumatica.sales.order.shipment.staging.line']
-        staging_so_shipment_allocation= self.env['acumatica.sales.order.shipment.staging.allocation']
-        staging_so_shipment_ship_to_address= self.env['acumatica.sales.order.shipment.shiptoaddress.staging']
-
-        # ==========================================================
-        # AMBIL RECORD YANG SUDAH ADA
-        # ==========================================================
-
-        acumatica_ids = [
-            vals.get('acumatica_id')
-            for vals in shipment_gi_data
-            if vals.get('acumatica_id')
-        ]
-
-        existing_records = staging_shipment_gi.search([
-            ('acumatica_id', 'in', acumatica_ids)
-        ])
-
-        existing_map = {
-            rec.acumatica_id: rec
-            for rec in existing_records
-        }
-
-        created_count = 0
-        updated_count = 0
-
-        # ==========================================================
-        # CREATE / UPDATE SHIPMENT GI
-        # ==========================================================
-
-        for item in shipment_gi_data:
-
-            acumatica_id = item.get('acumatica_id')
-
-            vals = {
-                "acumatica_id": item.get('acumatica_id'),
-                "row_number": item.get('row_number'),
-
-                "address_id": item.get('address_id'),
-                "address_line1": item.get('address_line1'),
-                "address_line2": item.get('address_line2'),
-                "address_line3": item.get('address_line3'),
-
-                "city": item.get('city'),
-                "state": item.get('state'),
-                "state_name": item.get('state_name'),
-
-                "country": item.get('country'),
-                "country_name": item.get('country_name'),
-                "postal_code": item.get('postal_code'),
-
-                "customer": item.get('customer'),
-                "customer_name": item.get('customer_name'),
-
-                "confirmed": item.get('confirmed'),
-                "hold": item.get('hold'),
-                "document_only": item.get('document_only'),
-                "override_address": item.get('override_address'),
-
-                "fob_point": item.get('fob_point'),
-                "fob_point_description": item.get('fob_point_description'),
-
-                "location": item.get('location'),
-                "location_name": item.get('location_name'),
-
-                "note_ship_via": item.get('note_ship_via'),
-
-                "order_type": item.get('order_type'),
-
-                "ship_date": item.get('ship_date'),
-                "shipment_nbr": item.get('shipment_nbr'),
-
-                "shipped_quantity": item.get('shipped_quantity'),
-                "shipped_volume": item.get('shipped_volume'),
-                "shipped_weight": item.get('shipped_weight'),
-
-                "ship_via": item.get('ship_via'),
-                "ship_via_address": item.get('ship_via_address'),
-                "ship_via_city": item.get('ship_via_city'),
-                "ship_via_description": item.get('ship_via_description'),
-                "ship_via_phone": item.get('ship_via_phone'),
-                "ship_via_status": item.get('ship_via_status'),
-
-                "site_id_description": item.get('site_id_description'),
-
-                "status": item.get('status'),
-                "shipment_type": item.get('shipment_type'),
-
-                "to_warehouse_id": item.get('to_warehouse_id'),
-                "warehouse_id": item.get('warehouse_id'),
-
-                "note": item.get('note'),
-
-                "config_id": self.id,
-                "sync_date": fields.Datetime.now(),
-            }
-
-            existing = existing_map.get(acumatica_id)
-
-            # ======================================================
-            # UPDATE
-            # ======================================================
-
-            if existing:
-
-                vals.update({
-                    'import_message': 'Data staging diperbarui dari Acumatica',
-                })
-
-                existing.write(vals)
-
-                updated_count += 1
-
-                print(
-                    f"UPDATED | "
-                    f"ID={existing.id} | "
-                    f"Shipment={existing.shipment_nbr} | "
-                    f"Acumatica={acumatica_id}"
-                )
-
-            # ======================================================
-            # CREATE
-            # ======================================================
-
-            else:
-
-                vals.update({
-                    'import_state': 'pending',
-                    'import_message': 'Data baru dari Acumatica',
-                })
-
-                new_rec = staging_shipment_gi.create(vals)
-
-                created_count += 1
-
-                print(
-                    f"CREATED | "
-                    f"ID={new_rec.id} | "
-                    f"Shipment={new_rec.shipment_nbr} | "
-                    f"Acumatica={acumatica_id}"
-                )
-
-        # ==========================================================
-        # SUMMARY
-        # ==========================================================
-
-        print(
-            f"Sync Shipment GI selesai | "
-            f"Created={created_count} | "
-            f"Updated={updated_count}"
-        )
-
-        # ==================================================
-        # SHIPMENT HEADER
-        # ==================================================
-
-        shipment_ids = [
-            x["header"].get("acumatica_id")
-            for x in batch_data
-            if x["header"].get("acumatica_id")
-        ]
-
-        existing_shipments = staging_so_shipment.search([
-            ("acumatica_id", "in", shipment_ids)
-        ])
-
-        shipment_map = {
-            rec.acumatica_id: rec
-            for rec in existing_shipments
-        }        
-
-        gi_map = {
-            rec.shipment_nbr: rec.id
-            for rec in staging_shipment_gi.search([])
-        }
-
-        for shipment in batch_data:
-
-            shipment_vals = dict(
-                shipment["header"]
-            )
-
-            shipment_nbr = shipment_vals.get(
-                "shipmentnbr"
-            )
-
-            shipment_vals["gi_id"] = gi_map.get(
-                shipment_nbr
-            )
-
-            shipment_vals.update({
-                "config_id": self.id,
-                "sync_date": fields.Datetime.now(),
-            })
-
-            existing = shipment_map.get(acumatica_id)
-            for field, value in shipment_vals.items():
-                print(f"{field}: {value}")
-
-            # ======================================================
-            # UPDATE
-            # ======================================================
-
-            if existing:
-
-                shipment_vals.update({
-                    'import_state': 'updated',
-                    'import_message': 'Data diperbarui dari Acumatica',
-                })
-
-                existing.write(shipment_vals)
-                shipment_rec = existing
-                print(f"Shipment Updated: {existing.id} with row number {existing.rownumber}")
-            
-            else:
-                shipment_rec = staging_so_shipment.create(
-                    shipment_vals
-                )
-                print(
-                    f"Shipment Created: "
-                    f"{shipment_rec.id} "
-                    f"{shipment_rec.shipmentnbr}"
-                )
-
-
-
-            # ==================================================
-            # SHIP TO ADDRESS
-            # ==================================================
-
-            shipto_rec = False
-
-            if shipment.get("shipto_address"):
-                shipto_vals = dict(
-                    shipment["shipto_address"]
-                )
-
-                shipto_vals["shipment_id"] = shipment_rec.id
-
-                shipto_rec = staging_so_shipment_ship_to_address.create(
-                    shipto_vals
-                )
-
-            # ==================================================
-            # DETAILS
-            # ==================================================
-
-            for detail_data in shipment["details"]:
-
-                detail_vals = dict(
-                    detail_data["detail"]
-                )
-
-                detail_vals[
-                    "shipment_id"
-                ] = shipment_rec.id
-
-                detail_rec = staging_so_shipment_detail.create(
-                    detail_vals
-                )
-
-                print(
-                    f"  Detail Created: "
-                    f"{detail_rec.id}"
-                )
-
-                # ==============================================
-                # ALLOCATIONS
-                # ==============================================
-
-                for alloc in detail_data[
-                    "allocations"
-                ]:
-
-                    alloc_vals = dict(
-                        alloc
-                    )
-
-                    alloc_vals[
-                        "line_id"
-                    ] = detail_rec.id
-
-                    alloc_rec = staging_so_shipment_allocation.create(
-                        alloc_vals
-                    )
-
-                    print(
-                        f"    Allocation Created: "
-                        f"{alloc_rec.id}"
-                    )
 
 
 class AcumaticaShipmentLine(models.Model):
@@ -1935,35 +1400,40 @@ class AcumaticaShipmentLine(models.Model):
     adt_type = fields.Char(string='ADT Type', readonly=True)
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    ], default='staged', readonly=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
-    
+
 
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     # Do Import from staging
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
     def action_open_picking(self):
         self.ensure_one()
@@ -1977,7 +1447,7 @@ class AcumaticaShipmentLine(models.Model):
         }
 
     def action_select_all(self):
-        self.search([('import_state', '=', 'pending')]).write({'selected': True})
+        self.search([('import_state', '=', 'staged')]).write({'selected': True})
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})

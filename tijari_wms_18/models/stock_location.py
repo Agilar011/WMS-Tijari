@@ -4,6 +4,10 @@ import hashlib
 from odoo import api, fields, models
 from odoo.exceptions import ValidationError
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 class StockLocation(models.Model):
     _inherit = 'stock.location'
 
@@ -12,8 +16,12 @@ class StockLocation(models.Model):
     is_location_mapping = fields.Boolean(string="Parent Mapping Location")
     is_consignment = fields.Boolean(string="Consignment Location")
 
-    @api.depends('name', 'complete_name')
-    @api.depends_context('show_location_short_name')
+    @api.depends(
+        'name',
+        'complete_name',
+        'warehouse_id',
+        'warehouse_id.code',
+    ) 
     def _compute_display_name(self):
         if not self.env.context.get('show_location_short_name'):
             return super()._compute_display_name()
@@ -56,8 +64,6 @@ class StockLocationAcumatica(models.Model):
     is_error = fields.Boolean(string='Is Error')
     error_message = fields.Char(string='Error Message', readonly=True)
 
-    loginext_branch = fields.Char(string='Branch Name (Loginext)', required=True)
-    loginext_state = fields.Many2one('loginext.master.state', string='State Name (loginext)')
 
     @api.onchange('odoo_location_id')
     def _onchange_odoo_location_id(self):

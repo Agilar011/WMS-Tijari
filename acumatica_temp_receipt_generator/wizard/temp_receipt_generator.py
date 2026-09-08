@@ -319,11 +319,15 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
             if document_type:
                 return document_type
 
-        return PickingType.search([
-            ('warehouse_id', '=', warehouse.id),
-            ('code', '=', 'incoming'),
-            ('is_default_api', '=', True),
-        ], limit=1)
+        return PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse.code if warehouse else False,
+            code='incoming',
+            operation_category='receive',
+            api_acumatica='po_receipt',
+            transaction_key='po_receipt',
+            required=False,
+        )
 
     def _get_incoming_picking_type(self, warehouse):
         PickingType = self.env['stock.picking.type'].sudo()
@@ -337,11 +341,15 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
             if document_type:
                 return document_type
 
-        return PickingType.search([
-            ('warehouse_id', '=', warehouse.id),
-            ('code', '=', 'incoming'),
-            ('is_default_api', '=', True),
-        ], limit=1)
+        return PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse.code if warehouse else False,
+            code='incoming',
+            operation_category='receive',
+            api_acumatica='shipment_so',
+            transaction_key='so_return',
+            required=False,
+        )
 
     def _get_po_return_picking_type(self, warehouse, location_code):
         PickingType = self.env['stock.picking.type'].sudo()
@@ -355,11 +363,15 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
             if document_type:
                 return document_type
 
-        return PickingType.search([
-            ('warehouse_id', '=', warehouse.id),
-            ('code', '=', 'internal'),
-            ('is_default_api', '=', True),
-        ], limit=1)
+        return PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse.code if warehouse else False,
+            code='internal',
+            operation_category='internal',
+            api_acumatica='issue_po_return',
+            transaction_key='issue_po_return',
+            required=False,
+        )
 
     def _get_inventory_config(self):
         Config = self.env['acumatica.config'].sudo()
@@ -418,11 +430,15 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
             if picking_type:
                 return picking_type
 
-        return PickingType.search([
-            ('warehouse_id', '=', warehouse.id),
-            ('code', '=', 'internal' if type_key == 'transfer_in' else 'incoming'),
-            ('is_default_api', '=', True),
-        ], limit=1)
+        return PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse.code if warehouse else False,
+            code='internal' if type_key == 'transfer_in' else 'incoming',
+            operation_category='receive',
+            api_acumatica='inventory_received',
+            transaction_key=type_key,
+            required=False,
+        )
 
     def _get_inventory_issue_picking_type(self, trans_type, location_code):
         PickingType = self.env['stock.picking.type'].sudo()
@@ -445,11 +461,15 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         ], limit=1)
         warehouse = location.odoo_building_id if location and location.odoo_building_id else self._get_wh33_warehouse()
         picking_code = 'outgoing' if (trans_type or '').strip().casefold() == 'toko pegang do' else 'internal'
-        return PickingType.search([
-            ('warehouse_id', '=', warehouse.id if warehouse else False),
-            ('code', '=', picking_code),
-            ('is_default_api', '=', True),
-        ], limit=1)
+        return PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse.code if warehouse else False,
+            code=picking_code,
+            operation_category='delivery' if picking_code == 'outgoing' else 'internal',
+            api_acumatica='inventory_issue',
+            transaction_key=trans_type,
+            required=False,
+        )
 
     def _get_transfer_picking_type(self, api_acumatica, warehouse_code, document_only=False):
         PickingType = self.env['stock.picking.type'].sudo()
@@ -470,11 +490,15 @@ class AcumaticaTempReceiptGeneratorWizard(models.TransientModel):
         ], limit=1)
         warehouse = location.odoo_building_id if location and location.odoo_building_id else self._get_wh33_warehouse()
         operation_code = 'incoming' if api_acumatica == 'so_transfer' else 'internal'
-        return PickingType.search([
-            ('warehouse_id', '=', warehouse.id if warehouse else False),
-            ('code', '=', operation_code),
-            ('is_default_api', '=', True),
-        ], limit=1)
+        return PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse.code if warehouse else False,
+            code=operation_code,
+            operation_category='receive' if operation_code == 'incoming' else 'internal',
+            api_acumatica=api_acumatica,
+            transaction_key=api_acumatica,
+            required=False,
+        )
 
     def _validate_common_master_data(self):
         self.ensure_one()

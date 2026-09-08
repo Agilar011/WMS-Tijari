@@ -21,6 +21,7 @@
                 <!-- <field name="line_nbr"/> -->
                 <field name="inventory_id" optional="show"/>
                 <field name="description"/>
+                <field name="building_id" optional="show"/>
                 <field name="quantity" optional="show"/>
                 <field name="uom" optional="show"/>
                 <field name="warehouse" optional="show"/>
@@ -28,8 +29,8 @@
                 <!-- <field name="line_component_qty" optional="show"/>
                 <field name="line_uom" optional="show"/> -->
                 <field name="import_state" widget="badge"
-                       decoration-success="import_state in ('imported','updated')"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
+                       decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <field name="mrp_production_id" readonly="1"/>
@@ -45,10 +46,10 @@
         <field name="arch" type="xml">
             <form string="Data Manufacturing Order">
                 <header>
-                    <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
                     <!-- <button name="action_open_product" string="Buka Product" type="object" invisible="not odoo_product_id"/> -->
-                    <button name="action_reset_pending" string="Reset ke Pending" type="object" invisible="import_state != 'error'"/>
-                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,updated,error"/>
+                    <button name="action_reset_pending" string="Reset ke Staged" type="object" invisible="import_state != 'error'"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>
                     <group>
@@ -60,12 +61,15 @@
                             <field name="uom"/>
                             <field name="warehouse"/>
                             <field name="location"/>
+                            <field name="building_id"/>
                             <field name="status"/>
                             <field name="type"/>
                             <field name="reason_code"/>
                             <field name="post_period"/>
                             <field name="requested_on"/>
                             <field name="revision"/>
+                            <field name="note_header_id"/>
+                            <field name="note_header"/>
                             <field name="last_modified_datetime"/>
                             <field name="external_id"/>
                         </group>
@@ -82,6 +86,7 @@
                                     <field name="line_uom"/>
                                     <field name="line_location_id"/>
                                     <field name="line_reason_code"/>
+                                    <field name="line_note_id"/>
                                     <field name="product_id"/>
                                     <field name="line_external_id" optional="hide"/>
                                     <field name="line_note" optional="hide"/>
@@ -106,6 +111,6 @@
         <field name="name">Data Manufacturing Order</field>
         <field name="res_model">acumatica.kit.assembly</field>
         <field name="view_mode">list,form</field>
-        <field name="context">{'search_default_pending': 1}</field>
+        <field name="context">{'search_default_staged': 1}</field>
     </record>
 </odoo>

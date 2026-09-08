@@ -178,7 +178,7 @@ class ImportCustomerWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.customer.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
         ])
         if not lines:
             raise UserError('Tidak ada data pending yang dipilih untuk diimport.')
@@ -202,7 +202,7 @@ class ImportCustomerWizard(models.TransientModel):
             ('last_modified_datetime', '!=', item['last_modified_datetime']),
         ])
         if existing:
-            item['import_state'] = 'pending'
+            item['import_state'] = 'staged'
             existing.write(item)
 
     def fetch_customer_data(self, limit=50, skip=0, odata_filter=False):
@@ -432,7 +432,7 @@ class ImportCustomerWizard(models.TransientModel):
                             existing_partner = partner_by_customer.get(item['customer_id'])
 
                         msg = 'Data sudah ada' if existing_partner else ''
-                        state = 'pending'
+                        state = 'staged'
 
                         params_list.append((
                             self.config_id.id,

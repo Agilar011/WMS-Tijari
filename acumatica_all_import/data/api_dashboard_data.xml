@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="api_dashboard_card_transactions" model="api.data.hub.dashboard.card">
+        <field name="name">Transactions</field>
+        <field name="card_type">transactions</field>
+        <field name="dashboard_visible">True</field>
+        <field name="section_title">TRANSACTIONS</field>
+        <field name="section_start">True</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="api_dashboard_card_master" model="api.data.hub.dashboard.card">
+        <field name="name">Product / Master Data</field>
+        <field name="card_type">master</field>
+        <field name="active">False</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="api_dashboard_card_po_receipt" model="api.data.hub.dashboard.card">
+        <field name="name">PO Receipt</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.receipt.line</field><field name="sequence">11</field>
+    </record>
+    <record id="api_dashboard_card_so_transfer_in" model="api.data.hub.dashboard.card">
+        <field name="name">SO Transfer - Inter WH IN</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.transfer.line</field><field name="sequence">12</field>
+    </record>
+    <record id="api_dashboard_card_inventory_receipt" model="api.data.hub.dashboard.card">
+        <field name="name">Inventory Receipt</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.inventory.recieved.line</field><field name="sequence">13</field>
+    </record>
+    <record id="api_dashboard_card_so_return" model="api.data.hub.dashboard.card">
+        <field name="name">SO Return</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.shipment.line</field><field name="sequence">14</field>
+    </record>
+    <record id="api_dashboard_card_so_shipment" model="api.data.hub.dashboard.card">
+        <field name="name">SO Shipment</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.shipment.gi.staging</field><field name="sequence">15</field>
+    </record>
+    <record id="api_dashboard_card_shipment_completed" model="api.data.hub.dashboard.card">
+        <field name="name">Shipment Completed</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.shipment.completed.staging</field><field name="sequence">16</field>
+    </record>
+    <record id="api_dashboard_card_so_transfer_out" model="api.data.hub.dashboard.card">
+        <field name="name">SO Transfer - Inter WH OUT</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.transfer.shipment.line</field><field name="sequence">17</field>
+    </record>
+    <record id="api_dashboard_card_inventory_issue" model="api.data.hub.dashboard.card">
+        <field name="name">Inventory Issue</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.inventory.issue.line</field><field name="sequence">18</field>
+    </record>
+    <record id="api_dashboard_card_issue_change_item" model="api.data.hub.dashboard.card">
+        <field name="name">Issue / Change Item</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.issue.line</field><field name="sequence">19</field>
+    </record>
+    <record id="api_dashboard_card_po_return" model="api.data.hub.dashboard.card">
+        <field name="name">PO Return</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.issue.po.return.line</field><field name="sequence">20</field>
+    </record>
+    <record id="api_dashboard_card_direct_transfer" model="api.data.hub.dashboard.card">
+        <field name="name">Direct Transfer</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.direct.transfer.staging</field><field name="sequence">21</field>
+    </record>
+    <record id="api_dashboard_card_transfer_one_step" model="api.data.hub.dashboard.card">
+        <field name="name">Transfer 1 STEP</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.transfer.one.step.line</field><field name="sequence">22</field>
+    </record>
+    <record id="api_dashboard_card_transfer_two_step" model="api.data.hub.dashboard.card">
+        <field name="name">Transfer 2 STEP</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.transfer.two.step.line</field><field name="sequence">23</field>
+    </record>
+    <record id="api_dashboard_card_kit_assembly" model="api.data.hub.dashboard.card">
+        <field name="name">Kit Assembly</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.kit.assembly</field><field name="sequence">24</field>
+    </record>
+    <record id="api_dashboard_card_invoice_consignment" model="api.data.hub.dashboard.card">
+        <field name="name">Invoice Consignment</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.invoice.consignment.staging</field><field name="sequence">25</field>
+    </record>
+    <record id="api_dashboard_card_credit_memo_consignment" model="api.data.hub.dashboard.card">
+        <field name="name">Credit Memo Consignment</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.credit.memo.consignment.staging</field><field name="sequence">26</field>
+    </record>
+    <record id="api_dashboard_card_vendor_return" model="api.data.hub.dashboard.card">
+        <field name="name">Vendor Return Direct Transfer</field><field name="card_type">transactions</field>
+        <field name="data_model">acumatica.vendor.return.direct.transfer.staging</field><field name="sequence">27</field>
+    </record>
+    <record id="api_dashboard_card_customer" model="api.data.hub.dashboard.card">
+        <field name="name">Customer</field><field name="card_type">master</field><field name="section_title">PRODUCT / MASTER DATA</field><field name="section_start">True</field>
+        <field name="data_model">acumatica.customer.line</field><field name="sequence">101</field>
+    </record>
+    <record id="api_dashboard_card_vendor" model="api.data.hub.dashboard.card">
+        <field name="name">Vendor</field><field name="card_type">master</field>
+        <field name="data_model">acumatica.vendor.line</field><field name="sequence">102</field>
+    </record>
+    <record id="api_dashboard_card_warehouse" model="api.data.hub.dashboard.card">
+        <field name="name">Warehouse</field><field name="card_type">master</field>
+        <field name="data_model">acumatica.warehouse.line</field><field name="sequence">103</field>
+    </record>
+    <record id="api_dashboard_card_stock_item" model="api.data.hub.dashboard.card">
+        <field name="name">Stock Item</field><field name="card_type">master</field>
+        <field name="data_model">acumatica.stock.item.line</field><field name="sequence">104</field>
+    </record>
+    <record id="api_dashboard_card_non_stock_item" model="api.data.hub.dashboard.card">
+        <field name="name">Non-Stock Item</field><field name="card_type">master</field>
+        <field name="data_model">acumatica.non.stock.item.line</field><field name="sequence">105</field>
+    </record>
+    <record id="api_dashboard_card_uom" model="api.data.hub.dashboard.card">
+        <field name="name">UoM</field><field name="card_type">master</field>
+        <field name="data_model">acumatica.uom.line</field><field name="sequence">106</field>
+    </record>
+    <record id="api_dashboard_card_webhook" model="api.data.hub.dashboard.card">
+        <field name="name">Webhook Activity</field>
+        <field name="card_type">webhook</field>
+        <field name="section_title">WEBHOOK ACTIVITY</field>
+        <field name="section_start">True</field>
+        <field name="sequence">200</field>
+    </record>
+    <record id="api_dashboard_card_scheduler" model="api.data.hub.dashboard.card">
+        <field name="name">Scheduler Activity</field>
+        <field name="card_type">scheduler</field>
+        <field name="section_title">SCHEDULER ACTIVITY</field>
+        <field name="section_start">True</field>
+        <field name="sequence">210</field>
+    </record>
+
+    <record id="inventory_dashboard_card_operation_status" model="api.data.hub.dashboard.card">
+        <field name="name">Operation by Status</field><field name="card_type">operation_status</field>
+        <field name="dashboard_scope">inventory</field><field name="section_title">INVENTORY OPERATIONS</field>
+        <field name="section_start">True</field><field name="sequence">301</field>
+    </record>
+    <record id="inventory_dashboard_card_delayed_operation" model="api.data.hub.dashboard.card">
+        <field name="name">Delayed Operation</field><field name="card_type">delayed_operation</field>
+        <field name="dashboard_scope">inventory</field><field name="sequence">302</field>
+    </record>
+    <record id="inventory_dashboard_card_operation_schedule" model="api.data.hub.dashboard.card">
+        <field name="name">Operation Schedule</field><field name="card_type">operation_schedule</field>
+        <field name="dashboard_scope">inventory</field><field name="sequence">303</field>
+    </record>
+    <record id="inventory_dashboard_card_operation_progress" model="api.data.hub.dashboard.card">
+        <field name="name">Operation Progress</field><field name="card_type">operation_progress</field>
+        <field name="dashboard_scope">inventory</field><field name="sequence">304</field>
+    </record>
+    <record id="inventory_dashboard_card_partial_discrepancy" model="api.data.hub.dashboard.card">
+        <field name="name">Partial &amp; Discrepancy</field><field name="card_type">partial_discrepancy</field>
+        <field name="dashboard_scope">inventory</field><field name="sequence">305</field>
+    </record>
+    <record id="inventory_dashboard_card_inventory_adjustment" model="api.data.hub.dashboard.card">
+        <field name="name">Inventory Adjustment</field><field name="card_type">inventory_adjustment</field>
+        <field name="dashboard_scope">inventory</field><field name="sequence">306</field>
+    </record>
+    <record id="inventory_dashboard_card_scrap_monitoring" model="api.data.hub.dashboard.card">
+        <field name="name">Scrap Monitoring</field><field name="card_type">scrap_monitoring</field>
+        <field name="dashboard_scope">inventory</field><field name="sequence">307</field>
+    </record>
+</odoo>

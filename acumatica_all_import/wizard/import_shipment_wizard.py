@@ -104,7 +104,7 @@ class ImportShipmentWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.shipment.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -198,19 +198,20 @@ class ImportShipmentWizard(models.TransientModel):
         return []
 
     def _search_picking_type(self, building_code):
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type
+
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        Warehouse = self.env['stock.warehouse']
-
-        warehouse = Warehouse.search([
-            ('code', '=', building_code)
-        ])
-        if warehouse:
-            type = PickingType.search([
-                ('warehouse_id', '=', warehouse.id),
-                ('code', '=', 'incoming'),
-                ('is_default_api', '=', True)
-            ])
+        type = PickingType.resolve_picking_type(
+            building_id=building_code,
+            code='incoming',
+            operation_category='receive',
+            api_acumatica='shipment_so',
+            transaction_key='shipment_so',
+            required=False,
+        )
 
         return type if type else None
 
@@ -265,9 +266,11 @@ class ImportShipmentWizard(models.TransientModel):
                         'external_id': item.get('id', '') or '',
                         'row_number': row_number,
                         'note': item.get('NoteHeader', {}).get('value', '') or '',
+                        'note_header_id': self._val(item, 'NoteHeaderID'),
                         'building_code': building_code,
                         'actual_qty': self._val(item, 'ControlQty'),
                         'partner_code': self._val(item, 'CustomerID'),
+                        'partner_name': self._val(item, 'CustomerName'),
                         'description': self._val(item, 'Description'),
                         'fob_point': self._val(item, 'FOBPoint'),
                         'fob_point_description': self._val(item, 'FOBPointDescription'),
@@ -275,6 +278,8 @@ class ImportShipmentWizard(models.TransientModel):
 
                         'header_location_code': self._val(item, 'LocationID'),
                         'header_location_name': self._val(item, 'LocationName'),
+                        'header_location_code_2': self._val(item, 'LocationID_2'),
+                        'header_location_name_2': self._val(item, 'LocationName_2'),
                         'operation': self._val(item, 'Operation'),
                         'package_count': self._val(item, 'PackageCount'),
                         'package_weight': self._val(item, 'PackageWeight'),
@@ -296,7 +301,10 @@ class ImportShipmentWizard(models.TransientModel):
                     })
 
                 detail_result.append({
+                    'header_external_id': item.get('id', '') or '',
+                    'line_external_id': item.get('id', '') or '',
                     'note': item.get('LineNote', {}).get('value', '') or '',
+                    'line_note_id': self._val(item, 'LineNoteID'),
                     'shipment_nbr': self._val(item, 'ShipmentNbr'),
                     'description': self._val(item, 'LineDescription'),
                     'is_free_item': self._val(item, 'LineFreeItem'),
@@ -309,6 +317,7 @@ class ImportShipmentWizard(models.TransientModel):
                     'shipped_weight': self._val(item, 'LineShippedWeight'),
                     'uom_code': self._val(item, 'LineUOM'),
                     'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+                    'warehouse_dest_name': self._val(item, 'LineWarehouseName'),
                 })
 
 
@@ -417,7 +426,7 @@ class ImportShipmentWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{shipment_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -468,7 +477,7 @@ class ImportShipmentWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == vals['acumatica_write_date']:
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals['acumatica_write_date']:
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -485,7 +494,6 @@ class ImportShipmentWizard(models.TransientModel):
         for item in data:
             record = item['record']
             vals = item['vals']
-
 
             record.write(vals)
 
@@ -565,4 +573,17 @@ class ImportShipmentWizard(models.TransientModel):
             ext_id = vals.get('shipment_nbr')
             vals['shipment_line_id'] = shipment_map.get(ext_id)
             if vals['shipment_line_id']:
-                product_line.browse(vals['shipment_line_id']).write(vals)
+                domain = [('shipment_line_id', '=', vals['shipment_line_id'])]
+                if vals.get('line_external_id'):
+                    domain.append(('line_external_id', '=', vals['line_external_id']))
+                else:
+                    domain.extend([
+                        ('line_nbr', '=', vals.get('line_nbr') or ''),
+                        ('inventory_id', '=', vals.get('inventory_id') or ''),
+                        ('order_number', '=', vals.get('order_number') or ''),
+                    ])
+                existing_line = product_line.search(domain, limit=1)
+                if existing_line:
+                    existing_line.write(vals)
+                else:
+                    product_line.create(vals)

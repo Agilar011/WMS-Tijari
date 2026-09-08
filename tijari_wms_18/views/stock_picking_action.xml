@@ -7,4 +7,28 @@
       <field name="view_mode">list,form</field>
   </record>
 
+  <record id="action_scan_stock_picking_by_origin" model="ir.actions.client">
+      <field name="name">Search Document</field>
+      <field name="tag">adt_scan_qr_to_picking_origin</field>
+      <field name="params" eval="{'title': 'Search Document'}"/>
+  </record>
+
+  <record id="action_stock_picking_my_worklist" model="ir.actions.act_window">
+      <field name="name">My Worklist</field>
+      <field name="res_model">stock.picking</field>
+      <field name="view_mode">kanban,list,form</field>
+      <field name="domain">[('user_ids', 'in', [uid]), ('state', '!=', 'done')]</field>
+      <field name="context">{'group_by': 'picking_type_id', 'search_default_available': 1, 'tijari_my_worklist': 1}</field>
+      <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+  </record>
+
+  <record id="action_stock_picking_my_worklist_overview" model="ir.actions.act_window">
+      <field name="name">Overview</field>
+      <field name="res_model">stock.picking</field>
+      <field name="view_mode">kanban,form</field>
+      <field name="domain">[('user_ids', 'in', [uid]), ('state', '!=', 'done')]</field>
+      <field name="context">{'group_by': 'picking_type_id'}</field>
+      <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+  </record>
+
 </odoo>

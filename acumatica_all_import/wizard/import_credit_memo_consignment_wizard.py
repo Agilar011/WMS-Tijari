@@ -6,8 +6,6 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-# toko.pegang.do
-# toko_pegang_do
 class ImportCreditMemoConsignmentWizard(models.TransientModel):
     _name = 'import.credit.memo.consignment.wizard'
     _description = 'Wizard Import Credit Memo Consignment dari Acumatica'
@@ -46,19 +44,9 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
         if self.odata_filter:
             params.append(self.odata_filter)
 
-        for i in range(loop_count):
-            offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.fetch_data(
-                limit=self.batch_size,
-                offset=offset,
-                reference_nbr=self.reference_nbr,
-                odata_filter=params if params else None,
-            )
+        batch_data = self.fetch_data()
 
-            if not batch_data:
-                break
-
-            raw_list += batch_data
+        raw_list += batch_data
 
         self.total_fetched = raw_list
         if not raw_list:
@@ -98,63 +86,66 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
             return 0.0
 
 
-    def _search_picking_type(self, header):
+    def _search_picking_type(self, warehouse_code):
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type
+
         PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
-        type = False
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            target_operation_type='direct_delivery_order',
+            api_acumatica='credit_memo_consignment',
+            document_only=True,
+            warehouse_code=warehouse_code,
+        )
+        if document_only_type:
+            return document_only_type
 
-        print(f"Warehouse: {header}")
+        return PickingType.browse()
 
-        location = Location.search([
-            ('code', '=', header)
-        ])
-
-            
-        if location:
-            print(f"location : {location}")
-            print(f"location : {location.odoo_building_id.id}")
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),
-                ('is_default_api', '=', True)
-            ])
-
-            print(f"Type: {type}")
-
-        return type if type else None
-
-    def fetch_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
+    def fetch_data(self):
         self.ensure_one()
         Picking = self.env['stock.picking']
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
+            params = {}
             filters = []
 
+            # CreditMemoConsignmentGI returns flat rows. Its Details view uses
+            # a BQL delegate and Acumatica rejects requests that expand it.
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-            if self.config_id.odata_select:
-                params['$select'] = self.config_id.odata_select
-            if reference_nbr:
-                filters.append(f"ReferenceNbr eq '{reference_nbr}'")
-            if odata_filter:
-                filters.append(self.config_id.odata_filter)
-                filters.extend(odata_filter)
-            else:
-                if self.config_id.odata_filter:
-                    filters.append(f"({self.config_id.odata_filter})")
+            # if self.config_id.odata_select:
+            #     params['$select'] = self.config_id.odata_select
+            # if reference_nbr:
+            #     filters.append(f"ReferenceNbr eq '{reference_nbr}'")
+            # if odata_filter:
+            #     filters.append(self.config_id.odata_filter)
+            #     filters.extend(odata_filter)
+            # else:
+            #     if self.config_id.odata_filter:
+            #         filters.append(f"({self.config_id.odata_filter})")
             if filters:
                 params['$filter'] = ' and '.join(filters)
-
-            response = session.get(endpoint, params=params, timeout=60)
+            body = {
+                "BuildingID": {
+                    "value": "WH33"
+                }
+            }
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal fetch data (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
+            raw_payload = response.json()
+            flat_data = (
+                raw_payload.get('CreditMemoConsignmentGIDetails')
+                or raw_payload.get('InvoiceGIDetails')
+            ) if isinstance(raw_payload, dict) else None
+            raw_data = flat_data or self._normalize_rows(raw_payload)
             print(f"Raw Data: {raw_data}")
             result = []
-            detail_result = []
+            seen_headers = {}
 
             for row_number, item in enumerate(raw_data, start=1):
                 try:
@@ -164,7 +155,8 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
 
                             'adt_id' : self._val(item, 'id'),
                             'adt_rowNumber' : self._val(item, 'rowNumber'),
-                            'adt_note' : self._val(item, 'note'),
+                            'adt_note' : self._val(item, 'NoteHeader') or self._val(item, 'note'),
+                            'adt_BuildingID' : self._val(item, 'BuildingID'),
                             'adt_ConsignmentType' : self._val(item, 'ConsignmentType'),
                             'adt_CreatedDateTime' : self._val(item, 'CreatedDateTime'),
                             'adt_CustomerID' : self._val(item, 'CustomerID'),
@@ -172,11 +164,15 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                             'adt_CustomerOrder' : self._val(item, 'CustomerOrder'),
                             'adt_Date' : self._val(item, 'Date'),
                             'adt_Description' : self._val(item, 'Description'),
-                            'adt_DueDate' : item.get('DueDate', ''),
+                            'adt_DocumentOnly' : True,
+                            'adt_ExternalRef' : self._val(item, 'ExternalRef'),
+                            'adt_DueDate' : self._val(item, 'DueDate'),
                             'adt_LastModifiedDateTime' : self._val(item, 'LastModifiedDateTime'),
                             'adt_LocationID' : self._val(item, 'LocationID'),
                             'adt_LocationName' : self._val(item, 'LocationName'),
+                            'adt_NoteHeaderID' : self._val(item, 'NoteHeaderID'),
                             'adt_OrigRefNbr' : self._val(item, 'OrigRefNbr'),
+                            'adt_PostPeriod' : self._val(item, 'PostPeriod'),
                             'adt_ReferenceNbr' : self._val(item, 'ReferenceNbr'),
                             'adt_Status' : self._val(item, 'Status'),
                             'adt_Type' : self._val(item, 'Type'),                                       
@@ -184,46 +180,60 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
 
 
                             
+                        header_key = self._val(item, 'ReferenceNbr') or item.get('id', '') or str(row_number)
                         print(f"header : {header}")
-                        created_header = self.env['acumatica.credit.memo.consignment.staging'].create(header)
-
-                        if created_header:
+                        if header_key in seen_headers:
+                            created_header = seen_headers[header_key]
+                        else:
+                            created_header = self.env['acumatica.credit.memo.consignment.staging'].create(header)
+                            seen_headers[header_key] = created_header
+                            result.append(header)
                             sync_data = fields.Datetime.now()
-                            # Gunakan tanda kurung (), bukan sama dengan (=)
                             created_header.write({
                                 'config_id': self.config_id.id,
-                                'import_state': 'pending',
+                                'import_state': 'staged',
                                 'import_message': "Data API Imported",
                                 'selected': True,
                                 'sync_date': sync_data,
                             })
 
 
-                        details = item.get('Details') or []
+                        if flat_data is not None:
+                            details = [item]
+                        else:
+                            details = (
+                                item.get('CreditMemoConsignmentGIDetails')
+                                or item.get('InvoiceGIDetails')
+                                or item.get('Details')
+                                or []
+                            )
                         if isinstance(details, dict):
                             details = details.get('value', []) or []
                         if not isinstance(details, list):
                             details = []
                     
                         # print(f"Header: {header}")
-                        result.append(header)
 
+                        if not details and self._val(item, 'LineInventoryID'):
+                            details = [item]
                         if not details:
                             raise UserError('Data Detail tidak ditemukan')
 
+                        detail_result = []
                         for detail in details:
                             print(f"detail : {detail}")
                             vals = {
                                 'receipt_line_id' : created_header.id,
                                 'adt_id' : detail.get('id', ''),
                                 'adt_rowNumber' :  self._val(detail, 'rowNumber'), 
-                                'adt_note' :  self._val(detail, 'note'), 
-                                'adt_Branch' :  self._val(detail, 'Branch'), 
-                                'adt_InventoryID' :  self._val(detail, 'InventoryID'), 
-                                'adt_Qty' :  self._val(detail, 'Qty'), 
-                                'adt_TransactionDescription' :  self._val(detail, 'TransactionDescription'), 
-                                'adt_UOM' :  self._val(detail, 'UOM'), 
-                                'adt_Warehouse' :  self._val(detail, 'Warehouse'), 
+                                'adt_note' :  self._val(detail, 'LineNote') or self._val(detail, 'note'),
+                                'adt_Branch' :  self._val(detail, 'LineBranch') or self._val(detail, 'Branch'),
+                                'adt_InventoryID' :  self._val(detail, 'LineInventoryID') or self._val(detail, 'InventoryID'),
+                                'adt_LineNoteID' : self._val(detail, 'LineNoteID'),
+                                'adt_Qty' :  self._val(detail, 'LineQty') or self._val(detail, 'Qty'),
+                                'adt_TransactionDescription' :  self._val(detail, 'LineTransactionDescription') or self._val(detail, 'TransactionDescription'),
+                                'adt_UOM' :  self._val(detail, 'LineUOM') or self._val(detail, 'UOM'),
+                                'adt_Warehouse' :  self._val(detail, 'LineWarehouse') or self._val(detail, 'LineWarehouseID') or self._val(detail, 'Warehouse'),
                             }
 
                             detail_result.append(vals)
@@ -234,9 +244,9 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                         print(f"="*60)
                         warehouse_location = False
 
-                        for item in detail_result:
-                            print(item)
-                            created_move = self.env['acumatica.credit.memo.consignment.staging.line'].create(item)
+                        for detail_vals in detail_result:
+                            print(detail_vals)
+                            created_move = self.env['acumatica.credit.memo.consignment.staging.line'].create(detail_vals)
                             print(f"="*60)
 
                             if not warehouse_location:
@@ -308,7 +318,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{reference_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -361,7 +371,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                 continue
 
             # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda
-            if existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
+            if vals.get('acumatica_write_date') and existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -392,7 +402,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
         for vals in data:
             header_vals = {
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': 'Data API Imported',
                 'sync_date': sync_date,
                 'selected': True,
@@ -400,14 +410,23 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                 'adt_id': vals.get('external_id'),
                 'adt_rowNumber': vals.get('row_number'),
                 'adt_note': vals.get('note'),
+                'adt_BuildingID': vals.get('building_id'),
+                'adt_ConsignmentType': vals.get('consignment_type'),
+                'adt_CustomerID': vals.get('customer_id'),
+                'adt_CustomerName': vals.get('customer_name'),
+                'adt_CustomerOrder': vals.get('customer_order'),
                 'adt_Date': vals.get('scheduled_date'),
                 'adt_Description': vals.get('description'),
                 'adt_ExternalRef': vals.get('external_ref'),
                 'adt_LastModifiedDateTime': vals.get('acumatica_write_date'),
+                'adt_LocationID': vals.get('location_id'),
+                'adt_LocationName': vals.get('location_name'),
+                'adt_NoteHeaderID': vals.get('note_header_id'),
                 
                 # KOREKSI: Sesuaikan nama field dengan model python staging header (Menggunakan adt_Location)
                 # 'adt_Location': vals.get('location_code'), 
                 
+                'adt_OrigRefNbr': vals.get('orig_ref_nbr'),
                 'adt_PostPeriod': vals.get('post_period'),
                 'adt_ReferenceNbr': vals.get('reference_nbr'),
                 'adt_Status': vals.get('status'),
@@ -475,31 +494,28 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
             'receipt_line_id', 
             'adt_id', 
             'adt_rowNumber', 
-            'adt_LineNumber', 
             'adt_note', 
-            'adt_Description', 
-            'adt_FromLocationID', 
-            'adt_ToLocationID', 
+            'adt_Branch',
             'adt_InventoryID', 
-            'adt_SOOrderNbr', 
-            'adt_SOShipmentNbr', 
+            'adt_LineNoteID',
+            'adt_TransactionDescription',
             'adt_UOM', 
-            'adt_Quantity'
+            'adt_Qty',
+            'adt_Warehouse',
         ]
 
         # Pemetaan nama key lama (API) ke nama field baru (Tabel Staging)
         field_mapping = {
             'row_number': 'adt_rowNumber',
-            'line_nbr': 'adt_LineNumber',
             'note': 'adt_note',
-            'description': 'adt_Description',
-            'from_location_code': 'adt_FromLocationID',
-            'to_location_code': 'adt_ToLocationID',
+            'branch': 'adt_Branch',
             'inventory_id': 'adt_InventoryID',
-            'so_order_nbr': 'adt_SOOrderNbr',
-            'so_shipment_nbr': 'adt_SOShipmentNbr',
+            'line_note_id': 'adt_LineNoteID',
+            'transaction_description': 'adt_TransactionDescription',
             'uom_code': 'adt_UOM',
-            'product_uom_qty': 'adt_Quantity',
+            'product_uom_qty': 'adt_Qty',
+            'quantity': 'adt_Qty',
+            'warehouse_code': 'adt_Warehouse',
         }
 
         cleaned_data = []
@@ -582,7 +598,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.credit.memo.consignment.staging'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

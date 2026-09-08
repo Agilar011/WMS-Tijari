@@ -194,7 +194,6 @@ class ImportTransferShipmentWizard(models.TransientModel):
 
     def action_fetch_data(self):
         self.ensure_one()
-        self.env['acumatica.transfer.shipment.line'].search([('config_id', '=', self.config_id.id)]).unlink()
 
         import math
 
@@ -222,6 +221,12 @@ class ImportTransferShipmentWizard(models.TransientModel):
             raise UserError('Tidak ada data product yang diterima dari API Acumatica.')
 
         Picking = self.env['stock.picking']
+        Staging = self.env['acumatica.transfer.shipment.line']
+        existing_records = Staging.search([
+            ('config_id', '=', self.config_id.id),
+            ('shipment_nbr', 'in', [item.get('shipment_nbr') for item in raw_list if item.get('shipment_nbr')]),
+        ])
+        existing_map = {record.shipment_nbr: record for record in existing_records}
         existing_keys = set()
         new_keys = set()
         shipment_to_create = []
@@ -240,15 +245,28 @@ class ImportTransferShipmentWizard(models.TransientModel):
             vals = dict(item)
             vals.update({
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': msg,
                 'selected': True,
                 'sync_date': fields.Datetime.now(),
             })
 
             print(f"vals staging: {vals}")
-            # shipment_to_create.append(vals)
-            created_shipment = self.env['acumatica.transfer.shipment.line'].create(vals)
+            existing = existing_map.get(origin)
+            if (
+                existing
+                and vals.get('acumatica_write_date')
+                and existing.acumatica_write_date == vals.get('acumatica_write_date')
+            ):
+                existing_keys.add(origin)
+                continue
+
+            if existing:
+                existing.shipment_line_ids.unlink()
+                existing.write(vals)
+                created_shipment = existing
+            else:
+                created_shipment = Staging.create(vals)
             self.write({
                 'state': 'fetched',
                 'total_fetched': len(raw_list),
@@ -297,6 +315,10 @@ class ImportTransferShipmentWizard(models.TransientModel):
         }
     
     def _search_picking_type(self, header):
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type
+
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         warehouse_code = header.get('warehouse_code') or header.get('line_warehouse_code')
@@ -319,12 +341,14 @@ class ImportTransferShipmentWizard(models.TransientModel):
 
         
         if location:
-            print(f"Building id: {location.odoo_building_id.id}")
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),
-                ('is_default_api', '=', True)
-            ], limit=1)
+            type = PickingType.resolve_picking_type(
+                warehouse_code=warehouse_code,
+                code='internal',
+                operation_category='internal',
+                api_acumatica='transfer_shipment',
+                transaction_key='transfer_shipment',
+                required=False,
+            )
 
         return type if type else None
 
@@ -344,7 +368,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.transfer.shipment.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

@@ -36,6 +36,11 @@ class StockMoveLine(models.Model):
         help='Scanned / input lot code for confirmation.',
         store=True
     )
+    confirmation_package_code = fields.Char(
+        string='Confirmation Package Code',
+        help='Scanned / input package code for destination package.',
+        store=True,
+    )
     # matching = fields.Selection([
     #     ('match', 'Match'),
     #     ('not_match', 'Not Match')
@@ -86,6 +91,11 @@ class StockMoveLine(models.Model):
     allocation_Quantity = fields.Float(string='Allocation Quantity')
     allocation_SplitLineNbr = fields.Integer(string='Allocation Split Line Number')
     allocation_UOM = fields.Char(string='Allocation UOM')
+    product_uom_qty = fields.Float(
+        string='Demand',
+        related='move_id.product_uom_qty',
+        readonly=True,
+    )
     confirmation_quantity = fields.Float(string='Confirmation Qty')
 
     picking_code = fields.Selection(
@@ -472,17 +482,30 @@ class StockMoveLine(models.Model):
                 
     @api.onchange('quant_id')
     def _onchange_move_line_ids(self):
-        print('def _onchange_move_line_ids(self)')
         for line in self:
-            if line.quant_id:
-                print(f">>> Onchange move_line_ids: quant_id changed for line {line.id}, new quant_id: {line.quant_id.id}, lot_id: {line.quant_id.lot_id.name if line.quant_id.lot_id else 'N/A'}") # Cek di terminal Odoo
-                # line.lot_id = line.quant_id.lot_id.name if line.quant_id.lot_id else line.lot_name
-                line.lot_name = line.quant_id.lot_id.name if line.quant_id.lot_id else line.lot_name
-                print(f">>> changed lot_name: {line.lot_name}") # Cek di terminal Odoo
-            if not line.lot_name and line.lot_id:
-                print(f">>> Onchange move_line_ids: setting lot_name for line {line.id} based on lot_id {line.lot_id.name}") # Cek di terminal Odoo
-                line.lot_name = line.lot_id.name
+            if not line.quant_id:
+                continue
 
+            quant = line.quant_id
+
+            # print(
+            #     f">>> Quant selected: {quant.id} | "
+            #     f"lot={quant.lot_id.name if quant.lot_id else 'N/A'} | "
+            #     f"package={quant.package_id.name if quant.package_id else 'N/A'} | "
+            #     f"location={quant.location_id.display_name}"
+            # )
+
+            line.location_id = quant.location_id
+            # line.lot_id = quant.lot_id
+            line.package_id = quant.package_id
+            line.result_package_id = quant.package_id
+            line.owner_id = quant.owner_id
+
+            line.lot_name = (
+                quant.lot_id.name
+                if quant.lot_id
+                else line.lot_name
+            )
             
     @api.onchange('auto_input_code')
     def _compute_auto_input_code(self):
@@ -640,7 +663,7 @@ class StockMoveLine(models.Model):
         # Sync Quant
         # ------------------------------------------------------
 
-        self.quant_id = False
+        # self.quant_id = False
 
         if self.lot_id and self.location_id:
 
@@ -770,7 +793,8 @@ class StockMoveLine(models.Model):
                 # Mencari lot dengan awalan yang sama untuk menghitung urutan
                 kode_product = line.product_id.default_code or f"PROD{line.product_id.id}"
                 source_document = line.picking_id.origin or f"PICK{line.picking_id.id}"
-                prefix = f"{source_document}-{tanggal_masuk}-{kode_product}"
+                # prefix = f"{source_document}-{tanggal_masuk}-{kode_product}"
+                prefix = f"{kode_product}-{tanggal_masuk}-{source_document}"
 
                 # lot_count = self.env['stock.lot'].search_count([
                 #     ('name', '=like', f"{prefix}%"),
@@ -975,6 +999,20 @@ class StockMoveLine(models.Model):
             },
         }
 
+    def action_open_putaway_wizard(self):
+        self.ensure_one()
+        wizard = self.env['putaway.move.line.wizard'].create(
+            self._prepare_putaway_move_line_wizard_values()
+        )
+        return {
+            'name': _('Putaway'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'putaway.move.line.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
     @api.onchange('matching')
     def _onchange_matching(self):
         for line in self:
@@ -984,8 +1022,10 @@ class StockMoveLine(models.Model):
         allowed_fields = {
             'confirmation_lot_code',
             'confirmation_location_code',
+            'confirmation_package_code',
             'matching_lot_id',
             'matching_loc_dest_id',
+            'result_package_id',
         }
         if field_name not in allowed_fields:
             raise ValidationError(_("Field scan tidak valid."))
@@ -1012,8 +1052,30 @@ class StockMoveLine(models.Model):
                     vals['location_dest_id'] = location.id
                 else:
                     vals['matching_loc_dest_id'] = location.id
+            elif field_name in ('confirmation_package_code', 'result_package_id'):
+                package = line._find_package_by_scan_code(scanned_code)
+                if not package:
+                    raise ValidationError(
+                        _("Barcode package %s tidak terdaftar.") % scanned_code
+                    )
+                if package.package_cat != 'box':
+                    raise ValidationError(
+                        _("Package %s harus dalam bentuk box.") % package.display_name
+                    )
+                if not package.is_empty:
+                    raise ValidationError(
+                        _("Package %s telah digunakan.") % package.display_name
+                    )
+                vals['confirmation_package_code'] = scanned_code
+                vals['result_package_id'] = package.id
 
             line.write(vals)
+            if picking_type_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
+                matching = line._get_matching_status()
+                line.write({
+                    'matching': matching,
+                    'second_matching': 'Match' if matching == 'match' else 'Not Match',
+                })
 
             matching_labels = dict(line._fields['matching'].selection)
             status_labels = dict(line._fields['putaway_status'].selection)
@@ -1050,6 +1112,14 @@ class StockMoveLine(models.Model):
                     line.matching_loc_dest_id.id,
                     line.matching_loc_dest_id.display_name,
                 ] if line.matching_loc_dest_id else False
+                result['second_matching'] = line.second_matching
+
+            if field_name in ('confirmation_package_code', 'result_package_id'):
+                result['confirmation_package_code'] = line.confirmation_package_code
+                result['result_package_id'] = [
+                    line.result_package_id.id,
+                    line.result_package_id.display_name,
+                ] if line.result_package_id else False
 
         return result
 
@@ -1079,6 +1149,89 @@ class StockMoveLine(models.Model):
             raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
         self.write({'picker_status': 'finished'})
         return True
+
+    def action_save_picker_details(self):
+        self.ensure_one()
+
+        if not self.lot_id:
+            raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
+        if self.quantity == 0:
+            raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+
+        self.write({'picker_status': 'finished'})
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Stock Move'),
+            'res_model': 'stock.move',
+            'res_id': self.move_id.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_cancel_picker_details(self):
+        self.ensure_one()
+
+        if self.env.context.get('picker_new_line'):
+            move = self.move_id
+            self.unlink()
+        else:
+            move = self.move_id
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Stock Move'),
+            'res_model': 'stock.move',
+            'res_id': move.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_mark_picker_unfinished(self):
+        self.write({'picker_status': 'unfinished'})
+        return True
+
+    def action_delete_picker_line(self):
+        self.ensure_one()
+
+        move = self.move_id
+        if self.state == 'done' or move.state in ('done', 'cancel'):
+            raise ValidationError(_("Line yang sudah Done atau Cancelled tidak boleh dihapus."))
+
+        self.unlink()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Stock Move'),
+            'res_model': 'stock.move',
+            'res_id': move.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_open_picker_details(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Picker Details'),
+            'res_model': 'stock.move.line',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.wizard_picker_view_mobile'
+            ).id,
+            'target': 'new',
+        }
 
 
     @api.onchange('location_putaway_id')
@@ -1136,6 +1289,25 @@ class StockMoveLine(models.Model):
 
         return Loc.browse()
 
+    def _find_package_by_scan_code(self, package_code):
+        Package = self.env['stock.quant.package']
+        package_code = (package_code or '').strip()
+        if not package_code:
+            return Package.browse()
+
+        domain_base = []
+        if self.company_id:
+            domain_base = [('company_id', 'in', [self.company_id.id, False])] + domain_base
+
+        for field_name in ('name', 'barcode'):
+            if field_name not in Package._fields:
+                continue
+            package = Package.search(domain_base + [(field_name, '=', package_code)], limit=1)
+            if package:
+                return package
+
+        return Package.browse()
+
     # @api.onchange('matching_lot_id', 'matching_loc_dest_id')
     # def _onchange_update_matching_status(self):
     #     for line in self:
@@ -1158,6 +1330,17 @@ class StockMoveLine(models.Model):
             # Finished product dari Manufacturing Order
             # tidak menggunakan proses matching.
             if move.production_id:
+                continue
+
+            if move.picking_id.picking_type_id.name in ("Receipts", "Receipt Internal"):
+                move.picked = bool(
+                    move.move_line_ids
+                    and all(
+                        line.picker_status == "finished"
+                        and line.putaway_status == "finished"
+                        for line in move.move_line_ids
+                    )
+                )
                 continue
 
             # Transfer biasa dan raw material manufacturing
@@ -1270,3 +1453,44 @@ class StockMoveLine(models.Model):
             #     line.matching = 'match'
             #     sml = self.env['stock.move.line'].browse(line._origin.id)
             #     sml.write({'matching': 'match'})
+    
+    def _copy_quant_info(self, vals):
+        quant = self.env['stock.quant'].browse(vals.get('quant_id', 0))
+
+        line_data = {
+            'product_id': quant.product_id.id,
+            'lot_id': quant.lot_id.id,
+            'package_id': quant.package_id.id,
+            'result_package_id': quant.package_id.id,
+            'location_id': quant.location_id.id,
+            'owner_id': quant.owner_id.id,
+        }
+
+        return line_data
+
+    def action_open_putaway_move_line_wizard(self):
+        self.ensure_one()
+        wizard = self.env['putaway.move.line.wizard'].create(
+            self._prepare_putaway_move_line_wizard_values()
+        )
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Putaway Move Line',
+            'res_model': 'putaway.move.line.wizard',
+            'res_id': wizard.id,
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def _prepare_putaway_move_line_wizard_values(self):
+        self.ensure_one()
+        return {
+            'move_line_id': self.id,
+            'location_putaway_id': self.location_putaway_id.id,
+            'original_location_putaway_id': self.location_putaway_id.id,
+            'confirmation_location_code': self.confirmation_location_code,
+            'original_confirmation_location_code': self.confirmation_location_code,
+            'quantity': self.quantity,
+            'confirmation_quantity': self.confirmation_quantity,
+        }

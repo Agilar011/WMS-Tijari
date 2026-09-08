@@ -15,88 +15,9 @@ class TransferShipmentImportError(Exception):
         self.line_payloads = line_payloads or []
 
 
-class AcumaticaTransferShipmentConfig(models.Model):
-    _name = 'acumatica.transfer.shipment.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Transfer Shipment'
-    _rec_name = 'name'
-
-    name = fields.Char(required=True, default='Acumatica Transfer Shipment')
-    base_url = fields.Char(required=True, help='Contoh: http://server/acumportal/entity')
-    api_version = fields.Char(required=True, default='25.200.002')
-    username = fields.Char(required=True)
-    password = fields.Char(required=True)
-    company_code = fields.Char(required=True)
-    endpoint_name = fields.Char(required=True, default='Shipment')
-    active = fields.Boolean(default=True)
-    last_sync = fields.Datetime(readonly=True)
-    state = fields.Selection([
-        ('draft', 'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error', 'Error'),
-    ], default='draft', readonly=True)
-
-    odata_expand = fields.Char(default='Details')
-    odata_select = fields.Char()
-    odata_filter = fields.Char(default="Type eq 'Transfer' and Operation eq 'Issue'")
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            self._do_logout(session)
-            self.state = 'connected'
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Koneksi Berhasil',
-                    'message': f'Berhasil terhubung ke {self.base_url}',
-                    'type': 'success',
-                    'sticky': False,
-                }
-            }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-    def _do_login(self):
-        self.ensure_one()
-        session = requests.Session()
-        response = session.post(
-            self.login_url,
-            json={
-                'name': self.username,
-                'password': self.password,
-                'company': self.company_code,
-            },
-            headers={'Content-Type': 'application/json'},
-            timeout=30,
-        )
-        if response.status_code == 204:
-            return session
-        raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
-
-    def _do_logout(self, session):
-        try:
-            session.post(self.logout_url, timeout=10)
-        except Exception:
-            pass
-
-
 class AcumaticaTransferShipmentLine(models.Model):
     _name = 'acumatica.transfer.shipment.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Transfer Shipment dari Acumatica'
     _order = 'shipment_nbr asc, id asc'
 
@@ -106,7 +27,7 @@ class AcumaticaTransferShipmentLine(models.Model):
         string='Shipment Lines'
     )
 
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
     row_number = fields.Integer(string='No')
     external_id = fields.Char(string='UUID Header')
@@ -147,13 +68,14 @@ class AcumaticaTransferShipmentLine(models.Model):
 
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Picking di Odoo', readonly=True)
+    ], default='staged', readonly=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order',
@@ -166,7 +88,7 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
     @api.depends('shipment_nbr')
     def _compute_exists_in_odoo(self):
@@ -240,79 +162,14 @@ class AcumaticaTransferShipmentLine(models.Model):
         mapping = Location.search([('code', '=', code), ('is_active', '=', True)], limit=1)
         return mapping.odoo_location_id if mapping and mapping.odoo_location_id else False
 
-    def _persist_error_tracking(self, first, error_messages, line_payloads=None, payload=None):
-        origin = first.shipment_nbr or False
-        if not origin:
-            return False
-
-        line_payloads = line_payloads or []
-        payload_text = payload if payload is not None else {}
-
-        with self.env.registry.cursor() as cr:
-            error_env = api.Environment(cr, self.env.uid, dict(self.env.context))
-            Error = error_env['stock.picking.acumatica.error'].sudo()
-            ErrorLine = error_env['stock.picking.acumatica.error.line'].sudo()
-
-            error_data = Error.search([('origin', '=', origin)], limit=1)
-            first_product_line = first.shipment_line_ids[:1]
-            source_warehouse_code = (
-                first.warehouse_code
-                or (first_product_line.line_warehouse_code if first_product_line else False)
-                or False
-            )
-            error_values = {
-                'partner': first.partner_code or False,
-                'operation_type': 'transfer_shipment',
-                'location': source_warehouse_code,
-                'location_dest': first.warehouse_dest_code or False,
-                'scheduled_date': first._parse_dt(first.scheduled_date),
-                'origin': origin,
-                'adt_total_qty': first._parse_float(first.shipped_qty),
-                'adt_actual_qty': first._parse_float(first.actual_qty),
-                'api_acumatica': 'transfer_shipment',
-                'error_message': '\n'.join(error_messages),
-                'payload': str(payload_text)[:1000],
-                'state': 'new',
-            }
-            error_values = {key: value for key, value in error_values.items() if key in Error._fields}
-
-            if error_data:
-                error_data.write(error_values)
-            else:
-                error_data = Error.create(error_values)
-
-            for line_payload in line_payloads:
-                line_domain = [
-                    ('error_id', '=', error_data.id),
-                    ('inventory_id', '=', line_payload.get('inventory_id') or False),
-                    ('qty', '=', line_payload.get('qty') or False),
-                    ('uom', '=', line_payload.get('uom') or False),
-                ]
-                error_line = ErrorLine.search(line_domain, limit=1)
-                line_values = {
-                    'error_id': error_data.id,
-                    'inventory_id': line_payload.get('inventory_id') or False,
-                    'product_name': line_payload.get('product_name') or False,
-                    'qty': line_payload.get('qty') or False,
-                    'uom': line_payload.get('uom') or False,
-                    'payload': str(line_payload.get('payload') or {})[:1000],
-                }
-                line_values = {key: value for key, value in line_values.items() if key in ErrorLine._fields}
-                if error_line:
-                    error_line.write(line_values)
-                else:
-                    ErrorLine.create(line_values)
-
-            cr.commit()
-            return error_data
-
-    def _resolve_error_tracking(self, first):
-        origin = first.shipment_nbr or False
-        if not origin:
-            return
-        error_data = self.env['stock.picking.acumatica.error'].search([('origin', '=', origin)], limit=1)
-        if error_data:
-            error_data.write({'state': 'resolved'})
+    def _handle_acumatica_error(self, first, error_messages=False, line_payloads=None, payload=None):
+        return self.env['acumatica.error.transaction']._handle_acumatica_error(
+            first,
+            error_messages,
+            origin=first.shipment_nbr or False,
+            payload=payload,
+            line_payloads=line_payloads,
+        )
     
     def _find_location2(self, code):
         print("search product location")
@@ -353,16 +210,18 @@ class AcumaticaTransferShipmentLine(models.Model):
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: l.selected and (
-                l.import_state in ['pending', 'error']
+                l.import_state in ['staged', 'error']
                 or (
-                    l.import_state in ['imported', 'updated']
+                    l.import_state in ['created', 'updated']
                     and not l.odoo_picking_id
                 )
             )
         )
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_open_picking(self):
         self.ensure_one()
@@ -384,7 +243,9 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _import_single_transfer_shipment(self, shipment):
         shipment.ensure_one()
@@ -397,7 +258,7 @@ class AcumaticaTransferShipmentLine(models.Model):
         error_messages = []
         all_line_payloads = []
         picking = shipment.odoo_picking_id
-        action_state = 'pending'
+        action_state = 'staged'
 
         for shipment_line in shipment.shipment_line_ids:
             all_line_payloads.append({
@@ -482,10 +343,11 @@ class AcumaticaTransferShipmentLine(models.Model):
             if transfer_info['status'] == 'skip':
                 shipment.write({
                     'import_state': 'updated',
-                    'import_message': transfer_info['message'],
+                    'import_message': 'success',
                     'odoo_picking_id': False,
                     'odoo_internal_transfer_order_id': False,
                 })
+                self.env['acumatica.error.transaction']._handle_acumatica_update(shipment, origin=shipment.shipment_nbr or False)
                 return 'updated'
             src_location = transfer_info['source_location']
             dest_location = transfer_info['destination_location']
@@ -569,11 +431,11 @@ class AcumaticaTransferShipmentLine(models.Model):
             transfer_service.set_order_ready(order)
             shipment.write({
                 'import_state': action_state,
-                'import_message': f'{action_state.title()}: {order.name if order else False}',
+                'import_message': 'success',
                 'odoo_picking_id': False,
                 'odoo_internal_transfer_order_id': order.id if order else False,
             })
-            self._resolve_error_tracking(shipment)
+            self._handle_acumatica_error(shipment)
             return action_state
 
         picking_vals = {
@@ -604,9 +466,10 @@ class AcumaticaTransferShipmentLine(models.Model):
                     f'Transfer Shipment {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
                     line_payloads=all_line_payloads,
-                )
+            )
             picking.write(picking_vals)
             action_state = 'updated'
+            self.env['acumatica.error.transaction']._handle_acumatica_update(shipment, origin=origin)
         else:
             existing_picking = Picking.search([
                 ('origin', '=', origin),
@@ -622,9 +485,10 @@ class AcumaticaTransferShipmentLine(models.Model):
                 picking = existing_picking
                 picking.write(picking_vals)
                 action_state = 'updated'
+                self.env['acumatica.error.transaction']._handle_acumatica_update(shipment, origin=origin)
             else:
                 picking = Picking.create(picking_vals)
-                action_state = 'imported'
+                action_state = 'created'
 
         for shipment_line in shipment.shipment_line_ids:
             move_vals = {}
@@ -714,15 +578,15 @@ class AcumaticaTransferShipmentLine(models.Model):
 
         shipment.write({
             'import_state': action_state,
-            'import_message': f'{action_state.title()}: {picking.name if picking else False}',
+            'import_message': 'success',
             'odoo_picking_id': picking.id if picking else False,
             'odoo_internal_transfer_order_id': False,
         })
-        self._resolve_error_tracking(shipment)
+        self._handle_acumatica_error(shipment)
         return action_state
 
     def _do_import(self):
-        imported = updated = error = 0
+        created = updated = error = 0
         grouped_shipments = []
         seen_shipment_numbers = set()
         for shipment in self.sorted(lambda record: (record.shipment_nbr or '', record.id)):
@@ -736,8 +600,8 @@ class AcumaticaTransferShipmentLine(models.Model):
             try:
                 with self.env.cr.savepoint():
                     action_state = self._import_single_transfer_shipment(shipment)
-                if action_state == 'imported':
-                    imported += 1
+                if action_state == 'created':
+                    created += 1
                 elif action_state == 'updated':
                     updated += 1
             except Exception as exc:
@@ -752,7 +616,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                     error_message = str(exc)
 
                 try:
-                    self._persist_error_tracking(
+                    self._handle_acumatica_error(
                         shipment,
                         [error_message],
                         line_payloads=all_line_payloads,
@@ -765,13 +629,25 @@ class AcumaticaTransferShipmentLine(models.Model):
                     )
 
                 shipment.write({
-                    'import_state': 'error',
+                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
                     'import_message': error_message[:1000],
                 })
                 error += 1
 
+        msg = f'Generate done: {created} transfer shipment created, {updated} transfer shipment updated, {error} transfer shipment error.'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Generate Transfer Shipment',
+                'message': msg,
+                'type': 'success' if error == 0 else 'danger',
+                'sticky': True,
+            }
+        }
+
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
 class AcumaticaTransferShipmentLineProduct(models.Model):
     _name = 'acumatica.transfer.shipment.line.product'

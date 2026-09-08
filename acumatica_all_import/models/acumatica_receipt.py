@@ -22,6 +22,7 @@ class AcumaticaReceiptProductLine(models.Model):
     receipt_line_id = fields.Many2one('acumatica.receipt.line', string='Receipt', ondelete='cascade')
     receipt_nbr = fields.Char(string='Receipt Number', index=True)
     line_external_id = fields.Char(string='UUID Line Acumatica')
+    line_branch = fields.Char(string='Line Branch')
     line_nbr = fields.Char(string='Line Nbr')
     description = fields.Char(string='Description')
     transaction_description = fields.Char(string='Transaction Description')
@@ -46,10 +47,12 @@ class AcumaticaReceiptProductLine(models.Model):
     uom_code = fields.Char(string='UOM')
     warehouse_dest_code = fields.Char(string='Warehouse Dest')
     line_note = fields.Text(string='Line Note')
+    line_note_id = fields.Char(string='Line Note ID')
 
 
 class AcumaticaReceiptLine(models.Model):
     _name = 'acumatica.receipt.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data PO Receipt dari Acumatica'
     _order = 'receipt_nbr asc, line_nbr asc, id asc'
 
@@ -59,7 +62,7 @@ class AcumaticaReceiptLine(models.Model):
     building_code = fields.Char(string='Building Code')
 
     product_line_ids = fields.One2many('acumatica.receipt.product.line', 'receipt_line_id', string='Lines')
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
     receipt_nbr = fields.Char(string='Receipt Number', index=True)
     vendor_code = fields.Char(string='VendorID')
     vendor_name = fields.Char(string='Vendor Name')
@@ -77,9 +80,11 @@ class AcumaticaReceiptLine(models.Model):
     post_period = fields.Char(string='Post Period')
     acumatica_write_date = fields.Char(string='Last Modified')
     note = fields.Text(string='Header Note')
+    note_header_id = fields.Char(string='Note Header ID')
     branch_warehouse = fields.Char(string='Branch')
 
     line_nbr = fields.Char(string='Line Nbr')
+    line_branch = fields.Char(string='Line Branch')
     description = fields.Char(string='Description')
     transaction_description = fields.Char(string='Transaction Description')
     inventory_id = fields.Char(string='InventoryID')
@@ -100,15 +105,18 @@ class AcumaticaReceiptLine(models.Model):
     uom_code = fields.Char(string='UOM')
     warehouse_dest_code = fields.Char(string='Warehouse Dest')
     line_note = fields.Text(string='Line Note')
+    line_note_id = fields.Char(string='Line Note ID')
+    acumatica_err_id = fields.Many2one('acumatica.error.transaction', string='Error ID')
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    ], string='Status', default='staged', readonly=True, tracking=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -180,72 +188,44 @@ class AcumaticaReceiptLine(models.Model):
                     location = location.odoo_location_id
         return location
 
-    def _persist_error_tracking(self, first, error_messages, line_payloads=None, payload=None):
-        origin = first.receipt_nbr or False
-        if not origin:
-            return False
-
-        line_payloads = line_payloads or []
-        payload_text = payload if payload is not None else {}
-
-        with self.env.registry.cursor() as cr:
-            error_env = api.Environment(cr, self.env.uid, dict(self.env.context))
-            Error = error_env['stock.picking.acumatica.error'].sudo()
-            ErrorLine = error_env['stock.picking.acumatica.error.line'].sudo()
-
-            error_data = Error.search([('origin', '=', origin)], limit=1)
-            error_values = {
-                'partner': first.vendor_code or False,
-                'operation_type': 'receipt',
-                'location': first.warehouse_code or False,
-                'location_dest': first.warehouse_dest_code or False,
-                'scheduled_date': first._parse_dt(first.scheduled_date),
-                'origin': origin,
-                'adt_total_qty': first._parse_float(first.total_qty),
-                'adt_actual_qty': first._parse_float(first.actual_qty),
-                'api_acumatica': 'po_receipt',
-                'error_message': '\n'.join(error_messages),
-                'payload': str(payload_text)[:1000],
-                'state': 'new',
-            }
-
-            if error_data:
-                error_data.write(error_values)
-            else:
-                error_data = Error.create(error_values)
-
-            for line_payload in line_payloads:
-                line_domain = [
-                    ('error_id', '=', error_data.id),
-                    ('inventory_id', '=', line_payload.get('inventory_id') or False),
-                    ('qty', '=', line_payload.get('qty') or False),
-                    ('uom', '=', line_payload.get('uom') or False),
-                ]
-                error_line = ErrorLine.search(line_domain, limit=1)
-                line_values = {
-                    'error_id': error_data.id,
-                    'inventory_id': line_payload.get('inventory_id') or False,
-                    'product_name': line_payload.get('product_name') or False,
-                    'qty': line_payload.get('qty') or False,
-                    'uom': line_payload.get('uom') or False,
-                    'payload': str(line_payload.get('payload') or {})[:1000],
-                }
-                if error_line:
-                    error_line.write(line_values)
-                else:
-                    ErrorLine.create(line_values)
-
-            cr.commit()
-            return error_data
-
-    def _resolve_error_tracking(self, first):
-        origin = first.receipt_nbr or False
-        if not origin:
+    def _handle_acumatica_error(self, first, error_messages=False):
+        AcumaticaError = self.env['acumatica.error.transaction']
+        acumatica_err_id = self.acumatica_err_id
+        if not error_messages:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'created'
+                return
             return
 
-        error_data = self.env['stock.picking.acumatica.error'].search([('origin', '=', origin)], limit=1)
-        if error_data:
-            error_data.write({'state': 'resolved'})
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'{first.receipt_nbr or False}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': error_messages
+            })
+            self.acumatica_err_id = acumatica_err_id
+
+        acumatica_err_id.import_state = state
+        acumatica_err_id.error_msg = error_messages
+
+    def _handle_acumatica_update(self, first):
+        AcumaticaError = self.env['acumatica.error.transaction']
+        state = 'updated'
+        acumatica_update_id = AcumaticaError.search([
+            ('data_type', '=', self._name),
+            ('data_id', '=', self.id),
+        ], order='id', limit=1)
+        if not acumatica_update_id:
+            acumatica_update_id = AcumaticaError.create({
+                'name': f'{first.receipt_nbr or False}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': f'Updated: {first.receipt_nbr or False} in {fields.Datetime.now()}'
+            })
 
     def _find_uom(self, line, product=False):
         Uom = self.env['uom.uom']
@@ -259,17 +239,21 @@ class AcumaticaReceiptLine(models.Model):
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: (
-                l.import_state in ['pending', 'error'] 
-                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+                l.import_state in ['staged', 'error']
+                or (l.import_state in ['created', 'updated'] and not l.odoo_picking_id)
             )
         )
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _import_single_receipt(self, receipt):
         receipt.ensure_one()
@@ -283,7 +267,7 @@ class AcumaticaReceiptLine(models.Model):
         error_messages = []
         all_line_payloads = []
         picking = receipt.odoo_picking_id
-        action_state = 'pending'
+        action_state = 'staged'
 
         for receipt_line in receipt.product_line_ids:
             all_line_payloads.append({
@@ -316,7 +300,7 @@ class AcumaticaReceiptLine(models.Model):
         #     ('warehouse_id', '=', warehouse.id if warehouse else False),
         #     ('code', '=', 'incoming'),
         # ], limit=1)
-        picking_type = self.picking_type_id
+        picking_type = receipt.picking_type_id
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {receipt.warehouse_code}'
@@ -363,11 +347,18 @@ class AcumaticaReceiptLine(models.Model):
                     payload={'header': header_payload, 'picking_vals': picking_vals},
                     line_payloads=all_line_payloads
                 )
-            picking.write(picking_vals)
-            action_state = 'updated'
+            if picking.adt_acumatica_write_date != receipt._parse_dt(receipt.acumatica_write_date):
+                picking.write(picking_vals)
+                self._handle_acumatica_update(receipt)
+                action_state = 'updated'
+            else:
+                return
         else:
             picking = Picking.create(picking_vals)
-            action_state = 'imported'
+            self._handle_acumatica_error(
+                receipt
+            )
+            action_state = 'created'
 
         for receipt_line in receipt.product_line_ids:
             move_vals = {}
@@ -487,15 +478,14 @@ class AcumaticaReceiptLine(models.Model):
 
         receipt.write({
             'import_state': action_state,
-            'import_message': f'{action_state.title()}: {picking.name if picking else False}',
+            'import_message': 'success',
             'odoo_picking_id': picking.id if picking else False,
         })
-        self._resolve_error_tracking(receipt)
         # picking.action_confirm()
         return action_state
 
     def _do_import(self):
-        imported = 0
+        created = 0
         updated = 0
         error = 0
 
@@ -512,8 +502,8 @@ class AcumaticaReceiptLine(models.Model):
             try:
                 with self.env.cr.savepoint():
                     action_state = self._import_single_receipt(receipt)
-                if action_state == 'imported':
-                    imported += 1
+                if action_state == 'created':
+                    created += 1
                 elif action_state == 'updated':
                     updated += 1
             except Exception as exc:
@@ -528,11 +518,9 @@ class AcumaticaReceiptLine(models.Model):
                     error_message = str(exc)
 
                 try:
-                    self._persist_error_tracking(
+                    self._handle_acumatica_error(
                         receipt,
-                        [error_message],
-                        line_payloads=all_line_payloads,
-                        payload=error_payload,
+                        error_message,
                     )
                 except Exception:
                     _logger.exception(
@@ -541,26 +529,26 @@ class AcumaticaReceiptLine(models.Model):
                     )
 
                 receipt.write({
-                    'import_state': 'error',
+                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
                     'import_message': error_message[:1000],
                 })
                 error += 1
                 continue
 
-        # msg = f'Import done: {imported} receipt created, {updated} receipt updated, {error} receipt error.'
-        # return {
-        #     'type': 'ir.actions.client',
-        #     'tag': 'display_notification',
-        #     'params': {
-        #         'title': 'Import Inventory Receipt',
-        #         'message': msg,
-        #         'type': 'success' if error == 0 else 'warning',
-        #         'sticky': True,
-        #     }
-        # }
+        msg = f'Generate done: {created} receipt created, {updated} receipt updated, {error} receipt error.'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Generate Inventory Receipt',
+                'message': msg,
+                'type': 'success' if error == 0 else 'danger',
+                'sticky': True,
+            }
+        }
 
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
     def action_open_picking(self):
         self.ensure_one()

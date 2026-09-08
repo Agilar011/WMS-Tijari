@@ -202,18 +202,43 @@ class ImportReceiptWizard(models.TransientModel):
             lines_to_create = {
                 **header_item,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': "Data API Imported",
                 'selected': True,
                 'sync_date': sync_data,
             }
 
-            # 4. CREATE DATA HEADER STAGING
-            created_header = self.env['acumatica.issue.po.return.line'].create(lines_to_create)
+            receipt_nbr = lines_to_create.get('receipt_nbr')
+            Staging = self.env['acumatica.issue.po.return.line']
+            existing_headers = Staging.search([
+                ('config_id', '=', self.config_id.id),
+                ('receipt_nbr', '=', receipt_nbr),
+            ], order='id asc') if receipt_nbr else Staging.browse()
+
+            # Satu receipt hanya boleh punya satu header staging.
+            # Hapus duplikat lama yang masih staged/error; record created/updated
+            # tidak disentuh karena sudah terhubung ke picking Odoo.
+            created_header = existing_headers[:1]
+            if created_header:
+                duplicate_headers = existing_headers[1:].filtered(
+                    lambda record: record.import_state in ('staged', 'error')
+                )
+                duplicate_headers.unlink()
+                created_header.write(lines_to_create)
+                created_header.product_line_ids.unlink()
+            else:
+                created_header = Staging.create(lines_to_create)
             created_headers.append(created_header)
 
             # 5. CREATE DATA DETAIL BARANG (CHILD)
+            seen_line_keys = set()
             for move_item in to_create_move:
+                line_key = move_item.get('line_external_id') or (
+                    move_item.get('line_nbr'), move_item.get('inventory_id')
+                )
+                if line_key in seen_line_keys:
+                    continue
+                seen_line_keys.add(line_key)
                 self.env['acumatica.issue.po.return.product'].create({
                     'receipt_line_id': created_header.id,
                     'line_external_id': move_item.get('line_external_id'),
@@ -353,7 +378,7 @@ class ImportReceiptWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -503,7 +528,6 @@ class ImportReceiptWizard(models.TransientModel):
             or self._val(header, 'LineWarehouseID')
         )
         # details = header.get('Details') or []
-        type = False
         document_only = header.get('document_only')
         if document_only is None:
             document_only = self._bool_val(header, 'DocumentOnly')
@@ -515,6 +539,8 @@ class ImportReceiptWizard(models.TransientModel):
         )
         if document_only_type:
             return document_only_type
+
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
 
         if not warehouse_code:
             # Normalkan struktur jika details berupa bungkus dictionary OData (mengandung key 'value')
@@ -528,14 +554,21 @@ class ImportReceiptWizard(models.TransientModel):
 
         print(f"Location: {location}")
 
-        if location:
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),                
-                ('is_default_api', '=', True)
-            ])
+        if location and location.odoo_building_id:
+            warehouse = location.odoo_building_id
+            pick_type = warehouse.pick_type_id or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('operation_category', '=', 'pick'),
+            ], limit=1) or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('name', 'ilike', 'Pick'),
+            ], limit=1)
+            if pick_type:
+                return pick_type
 
-        return type
+        return config_picking_type or PickingType.browse()
 
     def _normalize_rows(self, payload):
         print("="*80)
@@ -603,7 +636,7 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.issue.po.return.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -634,7 +667,7 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.issue.po.return.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -693,7 +726,7 @@ class ImportReceiptWizard(models.TransientModel):
     #         vals = dict(item)
     #         vals.update({
     #             'config_id': self.config_id.id,
-    #             'import_state': 'pending',
+    #             'import_state': 'staged',
     #             'import_message': msg,
     #             'selected': True,
     #             'sync_date': fields.Datetime.now(),
@@ -730,7 +763,7 @@ class ImportReceiptWizard(models.TransientModel):
     #     self.ensure_one()
     #     lines = self.env['acumatica.issue.po.return.line'].search([
     #         ('config_id', '=', self.config_id.id),
-    #         ('import_state', '=', 'pending'),
+    #         ('import_state', '=', 'staged'),
     #         ('selected', '=', True),
     #     ])
     #     if not lines:
@@ -1003,7 +1036,7 @@ class ImportReceiptWizard(models.TransientModel):
     #     # proses per receipt number
     #     for receipt_nbr in self.mapped('receipt_nbr'):
     #         receipt_lines = self.filtered(
-    #             lambda l: l.receipt_nbr == receipt_nbr and l.import_state == 'pending'
+    #             lambda l: l.receipt_nbr == receipt_nbr and l.import_state == 'staged'
     #         )
     #         if not receipt_lines:
     #             continue

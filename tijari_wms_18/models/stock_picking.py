@@ -13,6 +13,7 @@ from odoo import models, api, fields, _
 from odoo.exceptions import ValidationError, UserError
 from odoo.tools import float_compare
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
+from odoo.tools.float_utils import float_is_zero
 
 _logger = logging.getLogger(__name__)
 
@@ -63,6 +64,92 @@ class StockPicking(models.Model):
     approved_by = fields.Char(string='Approved by')
     created_by_id = fields.Many2one("res.users", string='Created by')
     approved_by_id = fields.Many2one("res.users", string='Approved by')
+    user_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_user_rel",
+        column1="picking_id",
+        column2="user_id",
+        string="Responsible Users",
+        domain=[("share", "=", False)],
+    )
+
+    pick_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_pick_responsible_rel",
+        column1="picking_id",
+        column2="user_id",
+        string="Penanggungjawab Pick",
+    )
+
+    pack_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_pack_responsible_rel",
+        column1="picking_id",
+        column2="user_id",
+        string="Penanggungjawab Pack",
+    )
+
+    do_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_do_responsible_rel",
+        column1="picking_id",
+        column2="user_id",
+        string="Penanggungjawab Delivery Order",
+    )
+
+    @api.model
+    def _get_responsible_carry_over_fields(self):
+        """Fields that describe "who is responsible" for this transfer.
+
+        Kept in one place because two different mechanisms need the exact
+        same field list to stay in sync:
+        - the pick -> do "mirror" rule (assigning a Pick responsible also
+          assigns them as a DO responsible), and
+        - carrying these fields forward/backward across chained transfers
+          (Pick -> Pack -> Delivery Order) so users don't re-enter them.
+        """
+        return [
+            'pick_responsible_ids',
+            'pack_responsible_ids',
+            'do_responsible_ids',
+            'user_ids',
+        ]
+
+    @api.onchange(
+        "pick_responsible_ids",
+        "pack_responsible_ids",
+        "do_responsible_ids",
+    )
+    def _onchange_responsible_ids(self):
+        for picking in self:
+            # Requirement: assigning a Pick responsible also assigns them as
+            # a DO responsible (additive, never removes someone already set
+            # on do_responsible_ids that isn't in pick_responsible_ids).
+            missing_do = picking.pick_responsible_ids - picking.do_responsible_ids
+            if missing_do:
+                picking.do_responsible_ids = picking.do_responsible_ids | missing_do
+
+            responsible_users = (
+                picking.pick_responsible_ids
+                | picking.pack_responsible_ids
+                | picking.do_responsible_ids
+            )
+
+            picking.user_ids = [(6, 0, responsible_users.ids)]
+
+    can_edit_pack_responsible_ids = fields.Boolean(
+        string="Can Edit Pack Responsible",
+        compute="_compute_can_edit_pack_responsible_ids",
+        help="Technical field driving the view: only a user who is themself "
+             "listed in this transfer's Penanggungjawab Pick may edit "
+             "Penanggungjawab Pack here.",
+    )
+
+    def _compute_can_edit_pack_responsible_ids(self):
+        current_user = self.env.user
+        for picking in self:
+            picking.can_edit_pack_responsible_ids = current_user in picking.pick_responsible_ids
+
     all_moves_picked = fields.Boolean(
         compute='_compute_all_moves_picked',
     )
@@ -71,13 +158,21 @@ class StockPicking(models.Model):
         compute='_compute_allowed_putaway_product_ids',
     )
     scan_product_button = fields.Boolean(string='Scan Product')
+    scan_product_by_lot_button = fields.Boolean(
+        string='Scan Product By Lot',
+        compute='_compute_scan_product_by_lot_button',
+    )
     putaway_product_id = fields.Many2one(
         'product.product', string="Product Name")
+    allowed_putaway_lot_ids = fields.Many2many(
+        'stock.lot',
+        compute='_compute_allowed_putaway_lot_ids',
+    )
     putaway_lot_id = fields.Many2one(
         comodel_name="stock.lot",
         string="LOT Number",
-        compute='_compute_putaway_values',
-        readonly=True,
+        readonly=False,
+        domain="[('id', 'in', allowed_putaway_lot_ids)]",
     )
     putaway_move_line_ids = fields.Many2many(
         comodel_name="stock.move.line",
@@ -85,14 +180,49 @@ class StockPicking(models.Model):
         compute='_compute_putaway_values',
         readonly=False,
     )
+    putaway_move_ids = fields.Many2many(
+        comodel_name="stock.move",
+        string="Putaway Stock Moves",
+        compute='_compute_putaway_move_ids',
+    )
+    putaway_progress_status = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished'),
+        ],
+        string='Status',
+        compute='_compute_putaway_progress_status',
+    )
     allowed_picker_product_ids = fields.Many2many(
         'product.product',
         compute='_compute_allowed_picker_product_ids',
     )
     scan_picker_product_button = fields.Boolean(string='Scan Product')
+    scan_picker_product_by_lot_button = fields.Boolean(
+        string='Scan Product By Lot',
+        compute='_compute_scan_product_by_lot_button',
+    )
     picker_product_id = fields.Many2one(
         'product.product',
         string="Product Name",
+    )
+    allowed_picker_lot_ids = fields.Many2many(
+        'stock.lot',
+        compute='_compute_allowed_picker_lot_ids',
+    )
+    picker_lot_id = fields.Many2one(
+        'stock.lot',
+        string="LOT Number",
+        domain="[('id', 'in', allowed_picker_lot_ids)]",
+        readonly=False,
+    )
+    picker_progress_status = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished'),
+        ],
+        string='Status',
+        compute='_compute_picker_progress_status',
     )
     picker_move_ids = fields.Many2many(
         comodel_name="stock.move",
@@ -100,6 +230,17 @@ class StockPicking(models.Model):
         compute='_compute_picker_values',
         readonly=True,
     )
+
+    filtered_move_ids = fields.One2many(
+        comodel_name="stock.move",
+        string="Filtered Stock Moves",
+        compute='_compute_filtered_move_ids',
+    )
+
+    def _compute_scan_product_by_lot_button(self):
+        for picking in self:
+            picking.scan_product_by_lot_button = True
+            picking.scan_picker_product_by_lot_button = True
 
     available_package_ids = fields.Many2many(
         "stock.quant.package",
@@ -111,6 +252,28 @@ class StockPicking(models.Model):
         "stock.quant.package",
         string="Package Number",
     )
+
+    filtered_package_level_id = fields.Many2one(
+        'stock.package_level',
+        string='Filtered Package Level',
+        readonly=True
+    )
+
+    @api.onchange('scanned_package_id')
+    def _onchange_scanned_package_id(self):
+        for picking in self:
+            picking.filtered_package_level_id = False
+
+            if not picking.scanned_package_id:
+                continue
+
+            package_level = picking.package_level_ids.filtered(
+                lambda p: p.package_id == picking.scanned_package_id
+            )[:1]
+
+            if package_level:
+                picking.filtered_package_level_id = package_level
+
     scan_package_button = fields.Boolean(string="Scan Package")
 
     filtered_package_level_ids = fields.One2many(
@@ -157,7 +320,45 @@ class StockPicking(models.Model):
                 )
 
     def write(self, vals):
+        if (
+            'pick_responsible_ids' in vals
+            and not self.env.context.get('tijari_responsible_sync')
+            and self.env.user.has_group('tijari_wms_18.group_operator')
+        ):
+            raise UserError(_(
+                "Hanya user non-operator yang dapat mengisi/mengubah Penanggungjawab Pick."
+            ))
+
+        if (
+            'pack_responsible_ids' in vals
+            and not self.env.context.get('tijari_responsible_sync')
+        ):
+            current_user = self.env.user
+            not_allowed = self.filtered(lambda p: current_user not in p.pick_responsible_ids)
+            if not_allowed:
+                raise UserError(_(
+                    "Hanya user yang terdaftar di Penanggungjawab Pick pada transfer "
+                    "ini yang dapat mengisi/mengubah Penanggungjawab Pack. Anda belum "
+                    "terdaftar sebagai Penanggungjawab Pick pada: %s",
+                    ", ".join(not_allowed.mapped('name')),
+                ))
+
         result = super().write(vals)
+        if (
+            not self.env.context.get('skip_user_ids_sync')
+            and 'user_id' in vals
+            and 'user_ids' not in vals
+        ):
+            self._sync_user_ids_from_user_id()
+        if 'pick_responsible_ids' in vals:
+            self._sync_do_responsible_from_pick()
+        if (
+            'user_ids' not in vals
+            and {'pick_responsible_ids', 'pack_responsible_ids', 'do_responsible_ids'} & set(vals)
+        ):
+            self._sync_user_ids_from_responsible()
+        if self._get_responsible_carry_over_fields_set() & set(vals):
+            self._propagate_responsible_to_next_transfers()
         if 'adt_is_document_only' not in vals and ({'origin', 'adt_type'} & set(vals)):
             self._set_acumatica_document_only_flag()
         if not self.env.context.get('skip_document_only_picking_type_sync') and (
@@ -165,6 +366,67 @@ class StockPicking(models.Model):
         ):
             self._set_document_only_picking_type()
         return result
+
+    def _sync_user_ids_from_user_id(self):
+        for picking in self.filtered(lambda record: record.user_id and record.user_id not in record.user_ids):
+            picking.with_context(skip_user_ids_sync=True).write({
+                'user_ids': [(4, picking.user_id.id)],
+            })
+
+    @api.model
+    def _get_responsible_carry_over_fields_set(self):
+        return set(self._get_responsible_carry_over_fields())
+
+    def _sync_do_responsible_from_pick(self):
+        """Requirement: assigning Pick responsibles also assigns them as DO
+        responsibles (additive - never removes an existing DO responsible
+        that wasn't part of pick_responsible_ids)."""
+        for picking in self:
+            missing = picking.pick_responsible_ids - picking.do_responsible_ids
+            if missing:
+                picking.with_context(tijari_responsible_sync=True).write({
+                    'do_responsible_ids': [(4, user.id) for user in missing],
+                })
+
+    def _sync_user_ids_from_responsible(self):
+        """Keep user_ids as the union of pick/pack/do responsible for writes
+        that don't go through the web client (the onchange only fires there).
+        Mirrors _onchange_responsible_ids so API/automation writes end up
+        with the same result a form save would produce."""
+        for picking in self:
+            responsible_users = (
+                picking.pick_responsible_ids
+                | picking.pack_responsible_ids
+                | picking.do_responsible_ids
+            )
+            if set(responsible_users.ids) != set(picking.user_ids.ids):
+                picking.with_context(tijari_responsible_sync=True).write({
+                    'user_ids': [(6, 0, responsible_users.ids)],
+                })
+
+    def _propagate_responsible_to_next_transfers(self):
+        """Carry pick/pack/do responsible + user_ids forward onto the next
+        transfer(s) already created in the chain (e.g. Pick -> Pack -> DO),
+        so users don't have to re-enter them there.
+
+        Only fills fields that are still empty on the target picking - it
+        never overwrites values a user (or an earlier propagation) already
+        set on the downstream transfer.
+        """
+        fields_to_copy = self._get_responsible_carry_over_fields()
+        for picking in self:
+            next_transfers = picking._get_next_transfers()
+            if not next_transfers:
+                continue
+            for target in next_transfers:
+                vals = {}
+                for field_name in fields_to_copy:
+                    source_ids = picking[field_name].ids
+                    if not source_ids or target[field_name]:
+                        continue
+                    vals[field_name] = [(6, 0, source_ids)]
+                if vals:
+                    target.with_context(tijari_responsible_sync=True).write(vals)
 
     def action_detailed_operations(self):
         action = super().action_detailed_operations()
@@ -196,6 +458,7 @@ class StockPicking(models.Model):
             ('acumatica.transfer.two.step.line', 'reference_nbr', 'document_only'),
             ('acumatica.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
             ('acumatica.vendor.return.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
+            ('acumatica.credit.memo.consignment.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
             ('acumatica.receipt.external.line', 'reference_nbr', 'document_only'),
             ('acumatica.toko.pegang.do.line', 'reference_nbr', 'document_only'),
         ]
@@ -327,8 +590,44 @@ class StockPicking(models.Model):
             move_lines = move_lines.filtered(
                 lambda line: line.product_id == self.putaway_product_id and line.quantity > 0
             )
+        if self.putaway_lot_id:
+            move_lines = move_lines.filtered(
+                lambda line: line.lot_id == self.putaway_lot_id or line.lot_name == self.putaway_lot_id.name
+            )
 
         return move_lines
+
+    def _get_putaway_move_lines_for_product(self, product):
+        self.ensure_one()
+
+        move_lines = self._get_putaway_base_move_lines()
+        if product:
+            move_lines = move_lines.filtered(
+                lambda line: line.product_id == product and line.quantity > 0
+            )
+        return move_lines
+
+    def _get_lots_from_move_lines(self, move_lines, products=False):
+        lots = move_lines.lot_id
+        lot_names = move_lines.filtered(
+            lambda line: line.lot_name and not line.lot_id
+        ).mapped('lot_name')
+        if lot_names:
+            domain = [('name', 'in', lot_names)]
+            if products:
+                domain.append(('product_id', 'in', products.ids))
+            lots |= self.env['stock.lot'].search(domain)
+        return lots
+
+    def _get_putaway_lots(self):
+        self.ensure_one()
+
+        move_lines = self._get_putaway_base_move_lines()
+        if self.putaway_product_id:
+            move_lines = move_lines.filtered(
+                lambda line: line.product_id == self.putaway_product_id
+            )
+        return self._get_lots_from_move_lines(move_lines, move_lines.product_id)
 
     def _get_picker_base_moves(self):
         self.ensure_one()
@@ -352,6 +651,24 @@ class StockPicking(models.Model):
 
         return moves
 
+    def _get_picker_lots(self):
+        self.ensure_one()
+
+        moves = self._get_picker_moves()
+        lots = moves.lot_ids | moves.move_line_ids.lot_id
+
+        lot_names = moves.move_line_ids.filtered(
+            lambda line: line.lot_name and not line.lot_id
+        ).mapped('lot_name')
+        if lot_names:
+            domain = [('name', 'in', lot_names)]
+            products = moves.product_id
+            if products:
+                domain.append(('product_id', 'in', products.ids))
+            lots |= self.env['stock.lot'].search(domain)
+
+        return lots
+
     @api.depends("state")
     def _compute_wms_state(self):
         for picking in self:
@@ -370,6 +687,20 @@ class StockPicking(models.Model):
             picking.allowed_putaway_product_ids = picking._get_putaway_base_move_lines().product_id
 
     @api.depends(
+        'putaway_product_id',
+        'putaway_lot_id',
+        'move_line_ids',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+        'move_line_ids.quantity',
+        'move_line_ids.picker_status',
+    )
+    def _compute_allowed_putaway_lot_ids(self):
+        for picking in self:
+            picking.allowed_putaway_lot_ids = picking._get_putaway_lots()
+
+    @api.depends(
         'move_ids_without_package',
         'move_ids_without_package.product_id',
         'move_ids_without_package.state',
@@ -379,7 +710,42 @@ class StockPicking(models.Model):
             picking.allowed_picker_product_ids = picking._get_picker_base_moves().product_id
 
     @api.depends(
+        'picker_product_id',
+        'move_ids_without_package',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.state',
+        'move_ids_without_package.lot_ids',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+    )
+    def _compute_allowed_picker_lot_ids(self):
+        for picking in self:
+            picking.allowed_picker_lot_ids = picking._get_picker_lots()
+
+    @api.depends(
+        'picker_product_id',
+        'picker_lot_id',
+        'move_ids_without_package',
+        'move_ids_without_package.product_uom_qty',
+        'move_ids_without_package.quantity',
+        'move_ids_without_package.product_uom',
+        'move_ids_without_package.state',
+    )
+    def _compute_picker_progress_status(self):
+        for picking in self:
+            moves = picking._get_picker_moves()
+            demand_qty = sum(moves.mapped('product_uom_qty'))
+            picked_qty = sum(moves.mapped('quantity'))
+            rounding = moves[:1].product_uom.rounding if moves else 0.01
+            picking.picker_progress_status = (
+                'finished'
+                if moves and float_compare(picked_qty, demand_qty, precision_rounding=rounding) == 0
+                else 'unfinished'
+            )
+
+    @api.depends(
         'putaway_product_id',
+        'putaway_lot_id',
         'move_line_ids',
         'move_line_ids.product_id',
         'move_line_ids.lot_id',
@@ -389,14 +755,47 @@ class StockPicking(models.Model):
         for picking in self:
             move_lines = picking._get_putaway_move_lines()
             picking.putaway_move_line_ids = move_lines
-            picking.putaway_lot_id = (
-                move_lines.mapped('lot_id')[:1]
-                if picking.putaway_product_id
-                else False
+
+    @api.depends(
+        'putaway_product_id',
+        'putaway_lot_id',
+        'move_line_ids',
+        'move_line_ids.move_id',
+        'move_line_ids.product_id',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+        'move_line_ids.quantity',
+        'move_line_ids.picker_status',
+        'move_line_ids.state',
+    )
+    def _compute_putaway_move_ids(self):
+        for picking in self:
+            picking.putaway_move_ids = picking._get_putaway_move_lines().mapped('move_id')
+
+    @api.depends(
+        'putaway_product_id',
+        'move_line_ids',
+        'move_line_ids.product_id',
+        'move_line_ids.quantity',
+        'move_line_ids.confirmation_quantity',
+        'move_line_ids.picker_status',
+        'move_line_ids.product_uom_id',
+    )
+    def _compute_putaway_progress_status(self):
+        for picking in self:
+            move_lines = picking._get_putaway_move_lines()
+            picked_qty = sum(move_lines.mapped('quantity'))
+            confirmation_qty = sum(move_lines.mapped('confirmation_quantity'))
+            rounding = move_lines[:1].product_uom_id.rounding if move_lines else 0.01
+            picking.putaway_progress_status = (
+                'finished'
+                if move_lines and float_compare(confirmation_qty, picked_qty, precision_rounding=rounding) == 0
+                else 'unfinished'
             )
 
     @api.depends(
         'picker_product_id',
+        'picker_lot_id',
         'move_ids_without_package',
         'move_ids_without_package.product_id',
         'move_ids_without_package.state',
@@ -405,10 +804,17 @@ class StockPicking(models.Model):
         for picking in self:
             picking.picker_move_ids = picking._get_picker_moves()
 
+    @api.depends(
+        'picker_product_id',
+    )
+    def _compute_filtered_move_ids(self):
+        for picking in self:
+            picking.filtered_move_ids = picking._get_picker_moves()
+
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):
         for picking in self:
-            move_lines = picking._get_putaway_move_lines()
+            move_lines = picking._get_putaway_move_lines_for_product(picking.putaway_product_id)
             picking.putaway_move_line_ids = move_lines
             picking.putaway_lot_id = (
                 move_lines.mapped('lot_id')[:1]
@@ -416,9 +822,47 @@ class StockPicking(models.Model):
                 else False
             )
 
+    @api.onchange('putaway_lot_id')
+    def _onchange_putaway_lot_id(self):
+        for picking in self:
+            if not picking.putaway_lot_id:
+                picking.putaway_product_id = False
+                picking.putaway_move_line_ids = picking._get_putaway_move_lines()
+                continue
+            move_lines = picking._get_putaway_base_move_lines().filtered(
+                lambda line: (
+                    line.lot_id == picking.putaway_lot_id
+                    or line.lot_name == picking.putaway_lot_id.name
+                )
+            )
+            products = move_lines.product_id
+            if products:
+                picking.putaway_product_id = products[:1]
+            picking.putaway_move_line_ids = picking._get_putaway_move_lines()
+
     @api.onchange('picker_product_id')
     def _onchange_picker_product_id(self):
         for picking in self:
+            picking.picker_move_ids = picking._get_picker_moves()
+            picking.picker_lot_id = picking._get_picker_lots()[:1] if picking.picker_product_id else False
+
+    @api.onchange('picker_lot_id')
+    def _onchange_picker_lot_id(self):
+        for picking in self:
+            if not picking.picker_lot_id:
+                picking.picker_product_id = False
+                picking.picker_move_ids = picking._get_picker_moves()
+                continue
+            moves = picking._get_picker_base_moves().filtered(
+                lambda move: (
+                    picking.picker_lot_id in move.lot_ids
+                    or picking.picker_lot_id in move.move_line_ids.lot_id
+                    or picking.picker_lot_id.name in move.move_line_ids.mapped('lot_name')
+                )
+            )
+            products = moves.product_id
+            if products:
+                picking.picker_product_id = products[:1]
             picking.picker_move_ids = picking._get_picker_moves()
 
     def _set_document_only_done_quantities(self):
@@ -435,22 +879,20 @@ class StockPicking(models.Model):
                 #     'quantity': quantity,
                 # })
                 if move_lines:
-                    if len(move_lines) > 1:
-                        move_lines[:-1].write({
-                            quantity_field: 0.0,
-                            'picked': False,
-                        })
-                    line_vals = {
-                        quantity_field: quantity,
-                        'picked': True,
-                    }
-                    if (
-                        move.product_id.tracking != 'none'
-                        and not move_lines[-1].lot_id
-                        and not move_lines[-1].lot_name
-                    ):
-                        line_vals['lot_name'] = picking.origin or picking.name or 'DOCUMENT ONLY'
-                    move_lines[-1].write(line_vals)
+                    done_lines = move_lines.filtered(lambda line: line[quantity_field] > 0)
+                    if not done_lines:
+                        done_lines = move_lines[-1]
+                        done_lines.write({quantity_field: quantity})
+
+                    for line in done_lines:
+                        line_vals = {'picked': True}
+                        if (
+                            move.product_id.tracking != 'none'
+                            and not line.lot_id
+                            and not line.lot_name
+                        ):
+                            line_vals['lot_name'] = picking.origin or picking.name or 'DOCUMENT ONLY'
+                        line.write(line_vals)
                 else:
                     move_line_vals = {
                         'picking_id': picking.id,
@@ -539,6 +981,18 @@ class StockPicking(models.Model):
 
         # # Panggil fungsi super() dengan melewatkan vals_list yang sudah diperbarui
         pickings = super(StockPicking, self).create(vals_list)
+        for picking, vals in zip(pickings, vals_list):
+            if 'user_ids' not in vals:
+                picking._sync_user_ids_from_user_id()
+            if 'pick_responsible_ids' in vals:
+                picking._sync_do_responsible_from_pick()
+            if (
+                'user_ids' not in vals
+                and {'pick_responsible_ids', 'pack_responsible_ids', 'do_responsible_ids'} & set(vals)
+            ):
+                picking._sync_user_ids_from_responsible()
+            if self._get_responsible_carry_over_fields_set() & set(vals):
+                picking._propagate_responsible_to_next_transfers()
         pickings._set_acumatica_document_only_flag()
         pickings._set_document_only_picking_type()
         print(pickings)
@@ -792,6 +1246,7 @@ class StockPicking(models.Model):
                 'default_template_id': template.id if template else False,
                 'default_composition_mode': 'comment',
                 'default_attachment_ids': [(6, 0, [attachment_new.id])],
+                'tijari_hasil_picking_email': True,
             },
         }
 
@@ -855,6 +1310,34 @@ class StockPicking(models.Model):
             },
         }
 
+    @api.model
+    def action_open_by_scanned_origin(self, scanned_code):
+        origin = (scanned_code or '').strip()
+        if not origin:
+            raise ValidationError(_("Origin hasil scan kosong."))
+
+        pickings = self.search([('origin', '=', origin)], order='id desc', limit=1)
+        if not pickings:
+            raise ValidationError(_("Stock Picking tidak ditemukan untuk nomor dokumen: %s") % origin)
+
+        action = {
+            'type': 'ir.actions.act_window',
+            'name': _('Stock Picking: %s') % origin,
+            'res_model': 'stock.picking',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', pickings.ids)],
+            'context': {
+                'search_default_origin': origin,
+            },
+        }
+        if len(pickings) == 1:
+            action.update({
+                'view_mode': 'form',
+                'views': [(False, 'form')],
+                'res_id': pickings.id,
+            })
+        return action
+
     def _find_product_by_scan_code(self, scan_code):
         Product = self.env['product.product']
 
@@ -864,6 +1347,57 @@ class StockPicking(models.Model):
             ('default_code', '=', scan_code),
         ], limit=1)
 
+    def _find_putaway_product_by_lot_scan_code(self, scan_code):
+        self.ensure_one()
+        StockLot = self.env['stock.lot']
+
+        lots = StockLot.search([('name', '=', scan_code)])
+        move_lines = self._get_putaway_base_move_lines().filtered(
+            lambda line: (
+                (lots and line.lot_id in lots)
+                or (line.lot_name and line.lot_name == scan_code)
+            )
+        )
+
+        if not move_lines:
+            if lots:
+                raise ValidationError(_("Lot hasil scan tidak ada di dokumen ini."))
+            raise ValidationError(_("Lot tidak ditemukan untuk kode scan: %s") % scan_code)
+
+        products = move_lines.product_id
+        if len(products) > 1:
+            raise ValidationError(_("Lot hasil scan mengarah ke lebih dari satu product."))
+
+        return products[:1], move_lines, lots[:1]
+
+    def _find_picker_product_by_lot_scan_code(self, scan_code):
+        self.ensure_one()
+        StockLot = self.env['stock.lot']
+
+        lots = StockLot.search([('name', '=', scan_code)])
+        moves = self._get_picker_base_moves().filtered(
+            lambda move: (
+                (lots and move.lot_ids and bool(move.lot_ids & lots))
+                or move.move_line_ids.filtered(
+                    lambda line: (
+                        (lots and line.lot_id in lots)
+                        or (line.lot_name and line.lot_name == scan_code)
+                    )
+                )
+            )
+        )
+
+        if not moves:
+            if lots:
+                raise ValidationError(_("Lot hasil scan tidak ada di dokumen ini."))
+            raise ValidationError(_("Lot tidak ditemukan untuk kode scan: %s") % scan_code)
+
+        products = moves.product_id
+        if len(products) > 1:
+            raise ValidationError(_("Lot hasil scan mengarah ke lebih dari satu product."))
+
+        return products[:1], moves, lots[:1]
+
     def action_apply_scanned_product(self, scanned_code):
         self.ensure_one()
         scanned_code = (scanned_code or '').strip()
@@ -872,11 +1406,48 @@ class StockPicking(models.Model):
         if not product:
             raise ValidationError("Product tidak ditemukan untuk kode scan: %s" % scanned_code)
 
-        self.write({'putaway_product_id': product.id})
+        move_lines = self._get_putaway_move_lines_for_product(product)
+        self.write({
+            'putaway_product_id': product.id,
+            'putaway_lot_id': move_lines.mapped('lot_id')[:1].id,
+        })
 
         return {
             'product_id': product.id,
             'display_name': product.display_name,
+        }
+
+    def action_apply_scanned_product_by_lot(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        product, move_lines, lot = self._find_putaway_product_by_lot_scan_code(scanned_code)
+
+        self.write({
+            'putaway_product_id': product.id,
+            'putaway_lot_id': lot.id,
+        })
+
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+            'lot_id': lot.id,
+            'move_line_ids': move_lines.ids,
+        }
+
+    def action_apply_scanned_picker_product_by_lot(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        product, picker_moves, lot = self._find_picker_product_by_lot_scan_code(scanned_code)
+
+        self.write({
+            'picker_product_id': product.id,
+            'picker_lot_id': lot.id,
+        })
+
+        return {
+            'product_id': product.id,
+            'display_name': product.display_name,
+            'move_ids': picker_moves.ids,
         }
 
     def action_apply_scanned_picker_product(self, scanned_code):
@@ -893,7 +1464,10 @@ class StockPicking(models.Model):
         if not picker_moves:
             raise ValidationError(_("Product hasil scan tidak ada di dokumen ini."))
 
-        self.write({'picker_product_id': product.id})
+        self.write({
+            'picker_product_id': product.id,
+            'picker_lot_id': picker_moves.lot_ids[:1].id or picker_moves.move_line_ids.lot_id[:1].id,
+        })
 
         return {
             'product_id': product.id,
@@ -903,7 +1477,9 @@ class StockPicking(models.Model):
 
     def action_apply_scanned_package(self, scanned_code):
         self.ensure_one()
+
         scanned_code = (scanned_code or '').strip()
+
         package = self.available_package_ids.filtered(
             lambda available_package: available_package.name == scanned_code
         )[:1]
@@ -913,10 +1489,37 @@ class StockPicking(models.Model):
                 "Package tidak ditemukan untuk kode scan: %s" % scanned_code
             )
 
-        self.write({"scanned_package_id": package.id})
+        package_level = self.package_level_ids.filtered(
+            lambda package_level: package_level.package_id == package
+        )[:1]
+
+        self.write({
+            "scanned_package_id": package.id,
+            "filtered_package_level_id": package_level.id or False,
+        })
+
+        wizard = False
+
+        if package_level:
+            wizard = self.env[
+                "package.level.detail.wizard"
+            ].create({
+                "package_level_id": package_level.id,
+                "status": (
+                    "finished"
+                    if package_level.status == "finished"
+                    else "unfinished"
+                ),
+                "package_id": package_level.package_id.id,
+                "move_line_ids": [
+                    (6, 0, package_level.move_line_ids.ids)
+                ],
+            })
 
         return {
             "package_id": package.id,
+            "package_level_id": package_level.id or False,
+            "package_detail_wizard_id": wizard.id if wizard else False,
             "display_name": package.display_name,
         }
     
@@ -1154,7 +1757,35 @@ class StockPicking(models.Model):
                             'product_lot_id': line.lot_id.id,
                         })
 
-        return res  
+        return res
+
+    def action_mark_todo_and_check_availability(self):
+        """Mobile-friendly single-tap replacement for "Mark as Todo" +
+        "Check Availability" on Pick operations (see the button-hiding
+        xpath in stock_picking_views.xml for the "Pick" condition).
+
+        Deliberately NOT a blind `self.action_assign()` call:
+        `action_assign` already confirms draft pickings internally, but
+        it also raises a "Nothing to check the availability for"
+        `UserError` when there is nothing left to reserve -- which
+        *would* incorrectly fire right after a plain "Mark as Todo" on a
+        picking that becomes fully assigned automatically during
+        confirm. Instead this re-checks `show_check_availability` (the
+        same computed field the core button's `invisible` attribute
+        relies on) *after* confirming, and only calls `action_assign()`
+        on pickings that genuinely still need it. Both core actions
+        (`action_confirm`/`action_assign`, including the overrides
+        above) are reused as-is, never reimplemented.
+        """
+        to_confirm = self.filtered(lambda picking: picking.state == 'draft')
+        if to_confirm:
+            to_confirm.action_confirm()
+
+        to_check = self.filtered(lambda picking: picking.show_check_availability)
+        if to_check:
+            to_check.action_assign()
+
+        return True
 
     def action_confirm_shipment(self):
         self.ensure_one()
@@ -1191,6 +1822,9 @@ class StockPicking(models.Model):
             if picking.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
                 picking._check_validate_requirements()
                 picking._check_pick_quantity_vs_demand()
+                picking._check_pick_confirmation_quantity()
+            if picking.picking_type_id.name in ('Pack'):
+                picking._check_pick_quantity_vs_demand()
             if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
                 picking._check_putaway_status_requirements()
                 picking._check_picker_status_requirements()
@@ -1223,33 +1857,31 @@ class StockPicking(models.Model):
         document_only_pickings._adt_preserve_document_only_destination()
 
         for rec in self:
-            # _logger.info("=" * 80)
-            # _logger.info("Picking : %s", rec.name)
-            # _logger.info("State   : %s", rec.state)
-            # _logger.info("Origin  : %s", rec.origin)
-            # _logger.info("Return  : %s", rec.return_id.name if rec.return_id else "-")
-            # _logger.info("Move IDs: %s", rec.move_ids.ids)
 
-            # for move in rec.move_ids:
-            #     _logger.info(
-            #         "Move %-20s | State=%s | Qty=%s",
-            #         move.product_id.display_name,
-            #         move.state,
-            #         move.quantity,
-            #     )
+            if "Pick" in rec.picking_type_name:
+                for move in rec.move_ids:
+                    confirmation_qty = move.confirmation_quantity
 
-            #     for ml in move.move_line_ids:
-            #         _logger.info(
-            #             "    ML |  Done=%s | Lot=%s | Src=%s | Dest=%s",
-            #             ml.quantity,
-            #             ml.lot_id.name,
-            #             ml.location_id.display_name,
-            #             ml.location_dest_id.display_name,
-            #         )
+                    for dest_move in move.move_dest_ids:
+                        dest_move.write({
+                            'product_uom_qty': confirmation_qty,
+                            'quantity': confirmation_qty
+                        })
 
-            # _logger.info("=" * 80)
+            elif 'Pack' in rec.picking_type_name:
+                for move in rec.move_ids:
+                    for dest_move in move.move_dest_ids:
+                        packaged_qty = sum(
+                            ml.quantity
+                            for ml in dest_move.move_line_ids
+                            if ml.package_id
+                        )
+                        
+                        dest_move.write({
+                            "unpack_quantity": dest_move.quantity - packaged_qty
+                        })
+                        
 
-            # raise UserError('STOP')
             is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
             if is_document_only:
                 continue
@@ -1337,6 +1969,7 @@ class StockPicking(models.Model):
         for picking in self:
             has_discrepancy = False
             for move in picking.move_ids.filtered(lambda item: item.state != 'cancel'):
+                diff_qty = move.difference_quantity
                 demand_qty = move.product_uom_qty
                 picked_qty = move.quantity
                 rounding = move.product_uom.rounding if move.product_uom else 0.01
@@ -1360,10 +1993,37 @@ class StockPicking(models.Model):
                             demand_qty,
                         )
                     )
-                if comparison < 0:
+                
+                if not float_is_zero(
+                    diff_qty,
+                    precision_rounding=rounding,
+                ):
                     has_discrepancy = True
 
             picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
+
+    def _check_pick_confirmation_quantity(self):
+        for picking in self:
+
+            for line in picking.move_line_ids:
+                if line.confirmation_quantity <= 0:
+                    raise UserError(_(
+                        "Qty Diambil tidak boleh 0.\n\n"
+                        "Product: %s"
+                    ) % line.product_id.display_name)
+
+                if line.confirmation_quantity > line.quantity:
+                    raise UserError(_(
+                        "Qty Diambil tidak boleh lebih besar "
+                        "dari Qty Diterima.\n\n"
+                        "Product: %s\n"
+                        "Qty Diterima: %s\n"
+                        "Qty Diambil: %s"
+                    ) % (
+                        line.product_id.display_name,
+                        line.quantity,
+                        line.confirmation_quantity,
+                    ))
     
     def _check_putaway_quantity_vs_demand(self):
         for picking in self:
@@ -1541,6 +2201,63 @@ class StockPicking(models.Model):
             raise UserError(_(
                 "Failed to login to Acumatica.\n\n%s"
             ) % (error_message or str(exc)))
+
+    def action_get_shipment_completed_staging(self):
+        self.ensure_one()
+
+        ShipmentCompleted = self.env['acumatica.shipment.completed.staging']
+        shipment_nbr = self.origin
+
+        staging_data = ShipmentCompleted.search([('shipment_nbr','=',shipment_nbr)], limit=1)
+        staging_data_line = staging_data.line_ids
+
+        all_match = True
+        for move in self.move_ids:
+            staging_lines_for_product = staging_data_line.filtered(
+                lambda line:
+                    line.line_inventory_id == move.product_id.default_code
+            )
+
+            staging_qty = sum(
+                staging_lines_for_product.mapped('line_quantity')
+            )
+
+            if not staging_qty:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Gagal Melakukan Update',
+                        'message': f'Quantity {move.product_id.display_name} yang diupdate tidak memiliki quantity',
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+
+            if staging_qty < move.quantity:
+                all_match = False
+            
+            elif staging_qty > move.quantity:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Gagal Melakukan Update',
+                        'message': f'Quantity {move.product_id.display_name} yang diupdate tidak boleh melebihi quatity barang yang dikirim',
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+            
+            move.shipped_qty = staging_qty
+
+        self.shipment_information = (
+            "full_shipment"
+            if all_match
+            else "partial"
+        )
+
+        self.action_confirm_shipment()   
 
     def action_fetch_actual_qty(self):
         self.ensure_one()
@@ -1846,6 +2563,8 @@ class StockPickingAcumaticaError(models.Model):
         ('receipt', 'Receipt'),
         ('delivery', 'Delivery'),
         ('internal', 'Internal'),
+        ('manufacturing', 'Manufacturing'),
+        ('inventory', 'Inventory'),
     ], string='Operation Type')
 
     location = fields.Char(string='Source Location')
@@ -1872,6 +2591,14 @@ class StockPickingAcumaticaError(models.Model):
         ('issue_po_return', 'Issue Type PO Return'),
         ('transfer_one_step', 'Transfer Pinjaman (1 Step)'),
         ('transfer_two_step', 'Transfer Pinjaman (2 Step)'),
+        ('direct_transfer', 'Direct Transfer'),
+        ('vendor_return', 'Vendor Return'),
+        ('credit_memo_consignment', 'Credit Memo Consignment'),
+        ('invoice_consignment', 'Invoice Consignment'),
+        ('toko_pegang_do', 'Toko Pegang DO'),
+        ('inventory_receipt_transfer_wh_in', 'Inventory Receipt Transfer WH In'),
+        ('kit_assembly', 'Kit Assembly'),
+        ('inventory_stock', 'Inventory Stock'),
     ], string='API Acumatica', required=True)
 
     error_message = fields.Text(string='Error Message')

@@ -45,6 +45,10 @@ class ImportTransferWizard(models.TransientModel):
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
     def _search_picking_type(self, building_code, document_only=False):
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type
+
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         Warehouse = self.env['stock.warehouse']
@@ -62,11 +66,15 @@ class ImportTransferWizard(models.TransientModel):
             ('code', '=', building_code)
         ])
         if warehouse:
-            type = PickingType.search([
-                ('warehouse_id', '=', warehouse.id),
-                ('code', '=', 'incoming'),
-                ('is_default_api', '=', True)
-            ])
+            type = PickingType.resolve_picking_type(
+                warehouse=warehouse,
+                warehouse_code=building_code,
+                code='internal',
+                operation_category='receive',
+                api_acumatica='so_transfer',
+                transaction_key='so_transfer',
+                required=False,
+            )
 
         return type if type else None
 
@@ -164,8 +172,10 @@ class ImportTransferWizard(models.TransientModel):
                     result.append({
                         'external_id': item.get('id', '') or '',
                         'row_number': row_number,
-                        'note': item.get('HeaderNote', {}).get('value', '') or '',
+                        'note': item.get('NoteHeader', {}).get('value', '') or item.get('HeaderNote', {}).get('value', '') or '',
+                        'note_header_id': self._val(item, 'NoteHeaderID'),
                         'branch_warehouse': self._val(item, 'Branch'),
+                        'building_code': building_code,
                         'actual_qty': self._val(item, 'ControlQty'),
                         'scheduled_date': self._val(item, 'Date'),
                         'is_hold': self._val(item, 'Hold'),
@@ -179,18 +189,32 @@ class ImportTransferWizard(models.TransientModel):
                         'total_qty': self._val(item, 'TotalQty'),
                         'receipt_type': self._val(item, 'Type'),
                         'vendor_code': self._val(item, 'VendorID'),
+                        'vendor_name': self._val(item, 'VendorName'),
                         'partner_ref': self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
-                        'warehouse_code': shipment_warehouse.get('source_warehouse') or self._val(item, 'WarehouseID'),
-                        'warehouse_dest_code': shipment_warehouse.get('dest_warehouse') or self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
+                        'warehouse_code': (
+                            shipment_warehouse.get('source_warehouse')
+                            or self._val(item, 'FromWarehouseID')
+                            or self._val(item, 'WarehouseID')
+                            or self._val(item, 'LineFromWarehouseID')
+                        ),
+                        'warehouse_dest_code': (
+                            shipment_warehouse.get('dest_warehouse')
+                            or self._val(item, 'ToWarehouseID')
+                            or self._val(item, 'Warehouse')
+                            or self._val(item, 'LineWarehouseID')
+                        ),
+                        'transfer_shipment_number': transfer_shipment_nbr,
                         'picking_type_id': type.id if type else None,
 
-                        })
+                    })
 
                 detail_result.append({
-                    # 'header_external_id': item.get('id', '') or '',
+                    'header_external_id': item.get('id', '') or '',
                     'line_external_id': item.get('id', '') or '',
                     'receipt_nbr': self._val(item, 'ReceiptNbr'),
                     'line_note': item.get('LineNote', {}).get('value', '') or '',
+                    'line_note_id': self._val(item, 'LineNoteID'),
+                    'line_branch': self._val(item, 'LineBranch'),
                     'description': self._val(item, 'LineDescription'),
                     'inventory_id': self._val(item, 'LineInventoryID'),
                     'line_nbr': self._val(item, 'LineNbr'),
@@ -198,9 +222,14 @@ class ImportTransferWizard(models.TransientModel):
                     'location_dest_code': self._val(item, 'LineLocation'),
                     'open_qty': self._val(item, 'LineOpenQty'),
                     'order_qty': self._val(item, 'LineOrderedQty'),
+                    'po_line_number': self._val(item, 'LinePOLineNbr'),
+                    'po_number': self._val(item, 'LinePOOrderNbr'),
+                    'po_type': self._val(item, 'LinePOOrderType'),
+                    'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
                     'product_uom_qty': self._val(item, 'LineReceiptQty'),
+                    'transfer_shipment_number': transfer_shipment_nbr,
                     'uom_code': self._val(item, 'LineUOM'),
-                    'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+                    'warehouse_dest_code': self._val(item, 'ToWarehouseID') or self._val(item, 'LineWarehouseID'),
                 })
 
             _logger.info('Berhasil ambil %s rows Transfer Receipt dari Acumatica', len(result))
@@ -259,7 +288,7 @@ class ImportTransferWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{receipt_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -313,7 +342,7 @@ class ImportTransferWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -427,7 +456,7 @@ class ImportTransferWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.transfer.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

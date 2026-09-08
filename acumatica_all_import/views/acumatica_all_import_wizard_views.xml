@@ -21,15 +21,12 @@
                         <field name="warehouse_config_id" invisible="import_type != 'warehouse'" required="import_type == 'warehouse'"/>
                         <field name="stock_item_config_id" invisible="import_type != 'stock_item'" required="import_type == 'stock_item'"/>
                         <field name="non_stock_item_config_id" invisible="import_type != 'non_stock_item'" required="import_type == 'non_stock_item'"/>
-                        <field name="customer_location_config_id" invisible="import_type != 'customer_location'" required="import_type == 'customer_location'"/>
-                        <field name="shipvia_config_id" invisible="import_type != 'shipvia'" required="import_type == 'shipvia'"/>
                         <field name="receipt_config_id" invisible="import_type != 'po_receipt'" required="import_type == 'po_receipt'"/>
                         <field name="issue_po_return_config_id" invisible="import_type != 'issue_po_return'" required="import_type == 'issue_po_return'"/>
                         <field name="transfer_one_step_config_id" invisible="import_type != 'transfer_one_step'" required="import_type == 'transfer_one_step'"/>
                         <field name="transfer_two_step_config_id" invisible="import_type != 'transfer_two_step'" required="import_type == 'transfer_two_step'"/>
                         <field name="inventory_received_config_id" invisible="import_type != 'inventory_received'" required="import_type == 'inventory_received'"/>
                         <field name="inventory_issue_config_id" invisible="import_type != 'inventory_issue'" required="import_type == 'inventory_issue'"/>
-                        <field name="receipt_change_item_config_id" invisible="import_type != 'receipt_change_item'" required="import_type == 'receipt_change_item'"/>
                         <field name="issue_config_id" invisible="import_type != 'issue_change_item'" required="import_type == 'issue_change_item'"/>
                         <field name="shipment_config_id" invisible="import_type != 'shipment_so'" required="import_type == 'shipment_so'"/>
                         <field name="so_shipment_config_id" invisible="import_type != 'so_shipment'" required="import_type == 'so_shipment'"/>
@@ -39,15 +36,15 @@
                         <field name="inventory_stock_config_id" invisible="import_type != 'inventory_stock'" required="import_type == 'inventory_stock'"/>
                         -->
                     </group>
-                    <group string="Filter Fetch" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment', 'issue_po_return', 'so_transfer', 'transfer_shipment', 'invoice_consignment', 'inventory_received', 'inventory_issue']">
+                    <group string="Filter Fetch" invisible="import_type in ['inventory_stock', 'po_receipt', 'shipment_so', 'so_shipment', 'shipment_completed', 'issue_po_return', 'so_transfer', 'transfer_shipment', 'invoice_consignment', 'inventory_received', 'inventory_issue', 'kit_assembly', 'vendor_return_direct_transfer', 'vendor_return_document_direct_transfer', 'credit_memo_consignment']">
                         <field name="fetch_limit"/>
                         <field name="fetch_skip"/>
                         <field name="batch_size"/>
-                        <field name="reference_nbr" invisible="import_type not in ['issue_po_return','transfer_one_step','transfer_two_step','inventory_received','inventory_issue','receipt_change_item','issue_change_item','so_transfer']"/>
+                        <field name="reference_nbr" invisible="import_type not in ['issue_po_return','inventory_received','inventory_issue','issue_change_item','so_transfer']"/>
                         <field name="receipt_nbr" invisible="import_type != 'po_receipt'"/>
                         <field name="shipment_nbr" invisible="import_type not in ['shipment_so','so_shipment','transfer_shipment']"/>
                         <field name='wh33_filter' invisible="import_category != 'transaction' or import_type not in ['issue_po_return']"/>
-                        <field name="odata_filter"/>
+                        <field name="odata_filter" invisible="import_type in ['transfer_one_step', 'transfer_two_step', 'vendor_return_direct_transfer', 'vendor_return_document_direct_transfer', 'credit_memo_consignment']"/>
                     </group>
                     <group invisible="import_type != 'inventory_stock'" string="Inventory Stock Params">
                         <field name="warehouse_value"/>
@@ -55,7 +52,7 @@
                         <field name="odata_expand"/>
                         <field name="odata_top"/>
                     </group>
-                    <group string="Date Range" invisible="import_type in ['inventory_stock', 'po_receipt', 'receipt_external', 'shipment_so', 'so_shipment', 'issue_po_return', 'so_transfer', 'transfer_shipment', 'invoice_consignment', 'inventory_received', 'inventory_issue']">
+                    <group string="Date Range" invisible="import_type in ['inventory_stock', 'po_receipt', 'shipment_so', 'so_shipment', 'shipment_completed', 'issue_po_return', 'so_transfer', 'transfer_shipment', 'invoice_consignment', 'inventory_received', 'inventory_issue', 'transfer_one_step', 'transfer_two_step', 'kit_assembly', 'vendor_return_direct_transfer', 'vendor_return_document_direct_transfer']">
                         <field name="date_period"/>
                         <field name="start_date" invisible="date_period != True"/>
                         <field name="end_date" invisible="date_period != True"/>

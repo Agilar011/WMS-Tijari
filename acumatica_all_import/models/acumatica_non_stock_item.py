@@ -1,6 +1,7 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
+from markupsafe import Markup, escape
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ class AcumaticaNonStockItemLine(models.Model):
       Non-Stock Item → 'service' (tidak ada inventory tracking)
     """
     _name        = 'acumatica.non.stock.item.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Non-Stock Item dari Acumatica (Staging)'
     _order       = 'row_number asc'
 
@@ -68,15 +70,17 @@ class AcumaticaNonStockItemLine(models.Model):
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
-        ('pending',  'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated',  'Diupdate'),
-        ('error',    'Error'),
-    ], string='Status', default='pending', readonly=True)
+        ('staged',  'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
+        ('error', 'Error'),
+    ], string='Status', default='staged', readonly=True)
 
-    import_message  = fields.Char(string='Keterangan',          readonly=True)
-    odoo_product_id = fields.Many2one('product.template', string='Product di Odoo', readonly=True)
+    import_message  = fields.Char(string='Generation Message',          readonly=True)
+    odoo_product_id = fields.Many2one('product.template', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
+    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     config_id = fields.Many2one(
         'acumatica.config',
@@ -126,33 +130,196 @@ class AcumaticaNonStockItemLine(models.Model):
             if found:
                 found.type = 'consu'
                 return found
-        if rec.inventory_id:
-            found = Product.search([('default_code', '=', rec.inventory_id)], limit=1)
-            if found:
-                return found
+        # if rec.inventory_id:
+        #     found = Product.with_context(
+        #         active_test=False
+        #     ).search([('default_code', '=', rec.inventory_id)], limit=1)
+        #     if found:
+        #         return found
         return Product.browse()
+
+    def _sync_sku_history(self, product, old_sku=False, new_sku=False):
+        """Sinkronkan SKU Non-Stock Item ke product.sku.history."""
+        self.ensure_one()
+        new_sku = (new_sku or '').strip()
+        old_sku = (old_sku or '').strip()
+        if not product or not new_sku:
+            return
+
+        SkuHistory = self.env['product.sku.history']
+        current_history = SkuHistory.search([
+            ('product_tmpl_id', '=', product.id),
+            ('is_current', '=', True),
+        ])
+
+        # SKU sama dan history sudah ada: tidak membuat duplikasi.
+        if old_sku == new_sku and current_history.filtered(lambda h: h.sku == new_sku):
+            return
+
+        if current_history:
+            current_history.write({
+                'date_end': fields.Datetime.now(),
+                'is_current': False,
+            })
+
+        SkuHistory.create({
+            'product_tmpl_id': product.id,
+            'sku': new_sku,
+            'date_start': fields.Datetime.now(),
+            'is_current': True,
+        })
 
     # ─── Import Actions ──────────────────────────────
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
+    def _handle_acumatica_error(self, err_msg=False):
+        AcumaticaError = self.env['acumatica.error.master']
+        acumatica_err_id = self.acumatica_err_id
+        if not err_msg:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'solved'
+                return
+            return
+
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'NonStockItem-{self.id}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': err_msg
+            })
+            self.acumatica_err_id = acumatica_err_id
+            
+        acumatica_err_id.error_msg = err_msg
+        acumatica_err_id.import_state = state
+
+    def _get_changed_fields(self, record, vals):
+        changed_fields = []
+
+        for field_name, new_value in vals.items():
+            field = record._fields.get(field_name)
+
+            if not field:
+                continue
+
+            old_value = record[field_name]
+
+            # Normalisasi nilai
+            old_value = old_value or False
+            new_value = new_value or False
+
+            if old_value != new_value:
+                changed_fields.append({
+                    'field_name': field_name,
+                    'field_label': field.string,
+                    'old_value': old_value,
+                    'new_value': new_value,
+                })
+
+        return changed_fields
+    
+    def _log_import_result(
+        self,
+        state,
+        message,
+        record=False,
+        changed_fields=None,
+    ):
+        titles = {
+            'created': '✅ Import Berhasil',
+            'updated': '🔄 Data Diperbarui',
+            'error': '❌ Import Gagal',
+        }
+
+        body = Markup("""
+            <p>
+                <strong>{}</strong>
+            </p>
+            <p>{}</p>
+        """).format(
+            titles.get(state, 'Import Log'),
+            message,
+        )
+
+        if changed_fields:
+            body += Markup("""
+                <p><strong>Perubahan:</strong></p>
+                <ul>
+            """)
+
+            for change in changed_fields:
+                old_value = change['old_value'] or '-'
+                new_value = change['new_value'] or '-'
+
+                body += Markup("""
+                    <li>
+                        <strong>{}</strong>:
+                        {} → {}
+                    </li>
+                """).format(
+                    escape(change['field_label']),
+                    escape(str(old_value)),
+                    escape(str(new_value)),
+                )
+
+            body += Markup("</ul>")
+
+        if record:
+            body += Markup("""
+                <p>
+                    Record Odoo:
+                    <a href="#"
+                    data-oe-model="{}"
+                    data-oe-id="{}">
+                        {}
+                    </a>
+                </p>
+            """).format(
+                escape(record._name),
+                record.id,
+                escape(record.display_name),
+            )
+
+        self.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
+    
     def _do_import(self):
-        imported = updated = error = 0
+        created = updated = error = 0
 
         for line in self:
             try:
                 if not line.description:
+                    err_msg = 'Description (name) kosong'
                     line.write({
                         'import_state':   'error',
-                        'import_message': 'Description (name) kosong',
+                        'import_message': err_msg,
                     })
+
+                    line._handle_acumatica_error(err_msg)
+
+                    line._log_import_result(
+                        'error',
+                        f'Gagal mengimpor data: {err_msg}',
+                        False,
+                        False
+                    )
                     error += 1
                     continue
 
@@ -190,41 +357,80 @@ class AcumaticaNonStockItemLine(models.Model):
 
                 existing = self._find_existing_product(line)
 
-
                 if existing:
+                    old_sku = existing.default_code or False
+                    changed_fields = line._get_changed_fields(
+                        existing,
+                        vals,
+                    )       
                     existing.write(vals)
+                    line._sync_sku_history(
+                        existing,
+                        old_sku=old_sku,
+                        new_sku=line.inventory_id,
+                    )
 
                     line.write({
                         'import_state':    'updated',
-                        'import_message':  f'Diupdate: {existing.name} (ID: {existing.id})',
+                        'import_message':  f'Updated: {existing.name} (ID: {existing.id})',
                         'odoo_product_id': existing.id,
                     })
+
+                    line._log_import_result(
+                        'updated',
+                        f'Data {existing.display_name} berhasil diperbarui.',
+                        existing,
+                        changed_fields,
+                    )
                     updated += 1
                     # for item in existing:
 
 
                 else:
                     new_product = self.env['product.template'].create(vals)
+                    line._sync_sku_history(
+                        new_product,
+                        new_sku=line.inventory_id,
+                    )
 
                     line.write({
-                        'import_state':    'imported',
+                        'import_state':    'created',
                         'import_message':  f'Dibuat: {new_product.name} (ID: {new_product.id})',
                         'odoo_product_id': new_product.id,
                     })
-                    imported += 1
+
+                    line._handle_acumatica_error()
+
+                    line._log_import_result(
+                        'created',
+                        f'Data {new_product.display_name} berhasil dibuat.',
+                        new_product,
+                        False
+                    )
+                    created += 1
                     # for item in new_product:
 
 
 
             except Exception as e:
                 _logger.error("Error import Non-Stock Item %s: %s", line.inventory_id, str(e))
+
+                err_msg = str(e)[:200]
                 line.write({
                     'import_state':   'error',
-                    'import_message': str(e)[:200],
+                    'import_message': err_msg,
                 })
+                line._handle_acumatica_error(err_msg)
+
+                line._log_import_result(
+                    'error',
+                    f'Gagal mengimpor data: {err_msg}',
+                    False,
+                    False,
+                )
                 error += 1
 
-        msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
+        msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
         return {
             'type': 'ir.actions.client',
             'tag':  'display_notification',
@@ -238,7 +444,7 @@ class AcumaticaNonStockItemLine(models.Model):
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({
-            'import_state':   'pending',
+            'import_state':   'staged',
             'import_message': False,
         })
 

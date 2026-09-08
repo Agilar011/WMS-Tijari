@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="mail_compose_message_wizard_form_recipient_groups" model="ir.ui.view">
+        <field name="name">mail.compose.message.form.recipient.groups</field>
+        <field name="model">mail.compose.message</field>
+        <field name="inherit_id" ref="mail.email_compose_message_wizard_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//label[@for='partner_ids']" position="before">
+                <field name="group_ids"
+                    string="Kirim ke Group"
+                    widget="many2many_tags"
+                    placeholder="Pilih group penerima..."
+                    options="{'no_create': True}"
+                    invisible="composition_mode != 'comment' or subtype_is_log"/>
+            </xpath>
+            <xpath expr="//widget[@name='mail_composer_recipient_list']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='partner_ids']" position="attributes">
+                <attribute name="domain">[('user_ids', '!=', False), ('email', '!=', False)]</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -122,8 +122,12 @@ class ImportInventoryIssueWizard(models.TransientModel):
                     # print(f"Detail: {details}")
                     # print('='*100)
 
-                # warehouse_code = self._coalesce_val(item, 'Warehouse', 'LineWarehouseID')
-                warehouse_code = self._val(item, 'LineWarehouse')
+                warehouse_code = self._coalesce_val(item, 'LineWarehouse', 'Warehouse', 'WarehouseID', 'LineWarehouseID')
+                if not warehouse_code:
+                    for detail in details:
+                        warehouse_code = self._coalesce_val(detail, 'LineWarehouse', 'Warehouse', 'WarehouseID', 'LineWarehouseID')
+                        if warehouse_code:
+                            break
                 print(f"warehouse Code from API: {warehouse_code}")
                 header_id = ref or item.get('id', '')
 
@@ -158,7 +162,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id': exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{reference_nbr}: Sudah ada -> akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -202,7 +206,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
             if not existing:
                 to_create.append(vals)
                 continue
-            if existing.acumatica_write_date == vals.get('acumatica_write_date'):
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals.get('acumatica_write_date'):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -259,7 +263,11 @@ class ImportInventoryIssueWizard(models.TransientModel):
     # ---------------------------------------------------------
 
     def _build_inventory_issue_header(self, row_number, item, header_id, warehouse_code):
-        type, fallback_warehouse_code = self._search_picking_type(item, warehouse_code=warehouse_code)
+        is_disposal = (self._val(item, 'TransType') or '').strip().casefold() == 'disposal'
+        type = False
+        fallback_warehouse_code = warehouse_code
+        if not is_disposal:
+            type, fallback_warehouse_code = self._search_picking_type(item, warehouse_code=warehouse_code)
         warehouse_code = warehouse_code or fallback_warehouse_code
         if type:
             type = type.id
@@ -273,10 +281,15 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'external_id': header_id or item.get('id', '') or '',
             'row_number': row_number,
             'note': self._val(item, 'NoteHeader'),
+            'note_header_id': self._val(item, 'NoteHeaderID'),
+            'building_code': self._val(item, 'BuildingID'),
+            'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
             'actual_qty': self._val(item, 'ControlQty'),
             'total_qty': str(self._val(item, 'TotalQty')),
             'scheduled_date': self._val(item, 'Date'),
             'description': self._val(item, 'Description'),
+            'doc_type': self._val(item, 'DocType'),
+            'header_location_code': self._val(item, 'Location'),
             'post_period': str(self._val(item, 'PostPeriod')),
             'reference_nbr': self._val(item, 'ReferenceNbr'),
             'status': self._val(item, 'Status'),
@@ -289,6 +302,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'actual_amount': self._val(item, 'ControlAmount'),
             'total_amount': self._val(item, 'TotalAmount'),
             'customer_id': self._val(item, 'CustomerID'),
+            'customer_name': self._val(item, 'CustomerName'),
         }
 
 
@@ -341,7 +355,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -397,16 +411,19 @@ class ImportInventoryIssueWizard(models.TransientModel):
         return {
             'header_external_id': header_id,
             'line_external_id': detail.get('id', '') or '',
-            'line_nbr': str(self._val(detail, 'LineNbr')),
+            'line_nbr': str(self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr')),
             'line_note': self._val(detail, 'LineNote'),
+            'line_note_id': self._val(detail, 'LineNoteID'),
             'branch_warehouse': self._val(detail, 'LineBranch'),
             'line_description': self._val(detail, 'LineInventoryName'),
             'inventory_id': self._val(detail, 'LineInventoryID'),
             'location_code': self._val(detail, 'LineLocation'),
+            'line_location_name': self._val(detail, 'LineLocationName'),
             'product_uom_qty': str(self._val(detail, 'LineQuantity')),
             'line_trans_type': self._val(detail, 'LineTranType'),
             'uom_code': self._val(detail, 'LineUOM'),
             'warehouse_code': self._val(detail, 'LineWarehouse') or warehouse_code,
+            'line_warehouse_name': self._val(detail, 'LineWarehouseName'),
             'customer_id': self._val(detail, 'CustomerID'),
         }
         
@@ -543,8 +560,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Data Receipt Type Change Item dari Acumatica',
-            'res_model': 'acumatica.receipt.change.item.line',
+            'name': 'Data Inventory Issue dari Acumatica',
+            'res_model': 'acumatica.inventory.issue.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
             'context': {'default_config_id': self.config_id.id},
@@ -552,9 +569,9 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
     def action_import_all_pending(self):
         self.ensure_one()
-        lines = self.env['acumatica.receipt.change.item.line'].search([
+        lines = self.env['acumatica.inventory.issue.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -563,8 +580,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
         self.state = 'done'
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Hasil Import Receipt Type Change Item',
-            'res_model': 'acumatica.receipt.change.item.line',
+            'name': 'Hasil Import Inventory Issue',
+            'res_model': 'acumatica.inventory.issue.line',
             'view_mode': 'list,form',
             'domain': [('config_id', '=', self.config_id.id)],
         }
@@ -620,7 +637,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
     #         vals = dict(item)
     #         vals.update({
     #             'config_id': self.config_id.id,
-    #             'import_state': 'pending',
+    #             'import_state': 'staged',
     #             'import_message': msg,
     #             'selected': True,
     #             'sync_date': fields.Datetime.now(),
@@ -657,7 +674,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.inventory.issue.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -675,7 +692,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
     def _search_picking_type(self, header, warehouse_code=None):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        warehouse_code = warehouse_code or self._coalesce_val(header, 'Warehouse', 'WarehouseID', 'LineWarehouseID')
+        warehouse_code = warehouse_code or self._coalesce_val(header, 'LineWarehouse', 'Warehouse', 'WarehouseID', 'LineWarehouseID')
+
         # print(type(warehouse_code))
         type = False
 
@@ -693,15 +711,32 @@ class ImportInventoryIssueWizard(models.TransientModel):
             ('code', '=', warehouse_code)
         ], limit=1)
 
-        picking_code = 'internal'
-        if (self._val(header, 'TransType') or '').strip().casefold() == 'toko pegang do':
-            picking_code = 'outgoing'
+        if location and location.odoo_building_id:
+            warehouse = location.odoo_building_id
+            type = warehouse.pick_type_id or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('operation_category', '=', 'pick'),
+            ], limit=1) or PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', 'internal'),
+                ('name', 'ilike', 'Pick'),
+            ], limit=1)
+            if type:
+                return type, warehouse_code
+
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type, warehouse_code
 
         if location and location.odoo_building_id:
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id),
-                ('code', '=', picking_code),
-                ('is_default_api', '=', True)
-            ], limit=1)
+            type = PickingType.resolve_picking_type(
+                warehouse_code=warehouse_code,
+                code='internal',
+                operation_category='internal',
+                api_acumatica='inventory_issue',
+                transaction_key='inventory_issue',
+                required=False,
+            )
 
         return type, warehouse_code

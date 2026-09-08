@@ -115,28 +115,30 @@ class ImportReceiptWizard(models.TransientModel):
             return False
 
     def _search_picking_type(self, building_code, document_only=False):
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type
+
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        Warehouse = self.env['stock.warehouse']
         type = False
 
         document_only_type = PickingType.resolve_document_only_picking_type(
             api_acumatica='po_receipt',
             document_only=document_only,
-            warehouse_code=building_code,
+            building_id=building_code,
         )
         if document_only_type:
             return document_only_type
 
-        warehouse = Warehouse.search([
-            ('code', '=', building_code)
-        ])
-        if warehouse:
-            type = PickingType.search([
-                ('warehouse_id', '=', warehouse.id),
-                ('code', '=', 'incoming'),
-                ('is_default_api', '=', True)
-            ])
+        type = PickingType.resolve_picking_type(
+            building_id=building_code,
+            code='incoming',
+            operation_category='receive',
+            api_acumatica='po_receipt',
+            transaction_key='po_receipt',
+            required=False,
+        )
 
         return type if type else None
 
@@ -145,7 +147,7 @@ class ImportReceiptWizard(models.TransientModel):
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
+            params = {}
             filters = []
 
             if self.config_id.odata_expand:
@@ -200,6 +202,7 @@ class ImportReceiptWizard(models.TransientModel):
                         'inventory_ref': self._val(item, 'InventoryRefNbr'),
                         'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
                         'header_location_code': self._val(item, 'Location'),
+                        'note_header_id': self._val(item, 'NoteHeaderID'),
                         'post_period': self._val(item, 'PostPeriod'),
                         'receipt_nbr': self._val(item, 'ReceiptNbr'),
                         'document_only': document_only,
@@ -209,7 +212,7 @@ class ImportReceiptWizard(models.TransientModel):
                         'vendor_code': self._val(item, 'VendorID'),
                         'vendor_name': self._val(item, 'VendorName'),
                         'partner_ref': self._val(item, 'VendorRef'),
-                        'warehouse_code': self._val(item, 'LineWarehouseID'),
+                        'warehouse_code': self._val(item, 'LineWarehouseID') or self._val(item, 'Warehouse'),
                         'picking_type_id': type.id if type else None,
                     })
 
@@ -218,6 +221,8 @@ class ImportReceiptWizard(models.TransientModel):
                     # 'line_external_id': item.get('id', '') or '',
                     'receipt_nbr': self._val(item, 'ReceiptNbr'),
                     'line_note': item.get('LineNote', {}).get('value', '') or '',
+                    'line_note_id': self._val(item, 'LineNoteID'),
+                    'line_branch': self._val(item, 'LineBranch'),
                     'description': self._val(item, 'LineDescription'),
                     'inventory_id': self._val(item, 'LineInventoryID'),
                     'line_nbr': self._val(item, 'LineNbr'),
@@ -225,7 +230,12 @@ class ImportReceiptWizard(models.TransientModel):
                     'location_dest_code': self._val(item, 'LineLocation'),
                     'open_qty': self._val(item, 'LineOpenQty'),
                     'order_qty': self._val(item, 'LineOrderedQty'),
+                    'po_line_number': self._val(item, 'LinePOLineNbr'),
+                    'po_number': self._val(item, 'LinePOOrderNbr'),
+                    'po_type': self._val(item, 'LinePOOrderType'),
+                    'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
                     'product_uom_qty': self._val(item, 'LineReceiptQty'),
+                    'transfer_shipment_number': self._val(item, 'LineTransferShipmentNbr'),
                     'uom_code': self._val(item, 'LineUOM'),
                     'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
                 })
@@ -287,7 +297,7 @@ class ImportReceiptWizard(models.TransientModel):
             #     vals = dict(item)
             #     vals.update({
             #         'config_id': self.config_id.id,
-            #         'import_state': 'pending',
+            #         'import_state': 'staged',
             #         'import_message': msg,
             #         'selected': True,
             #         'sync_date': fields.Datetime.now(),
@@ -323,7 +333,7 @@ class ImportReceiptWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{receipt_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -378,7 +388,7 @@ class ImportReceiptWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == vals['acumatica_write_date']:
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals['acumatica_write_date']:
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -395,7 +405,6 @@ class ImportReceiptWizard(models.TransientModel):
         for item in data:
             record = item['record']
             vals = item['vals']
-
 
             record.write(vals)
 
@@ -475,7 +484,20 @@ class ImportReceiptWizard(models.TransientModel):
             ext_id = vals.get('receipt_nbr')
             vals['receipt_line_id'] = receipt_map.get(ext_id)
             if vals['receipt_line_id']:
-                product_line.browse(vals['receipt_line_id']).write(vals)
+                domain = [('receipt_line_id', '=', vals['receipt_line_id'])]
+                if vals.get('line_external_id'):
+                    domain.append(('line_external_id', '=', vals['line_external_id']))
+                else:
+                    domain.extend([
+                        ('line_nbr', '=', vals.get('line_nbr') or ''),
+                        ('inventory_id', '=', vals.get('inventory_id') or ''),
+                        ('po_number', '=', vals.get('po_number') or ''),
+                    ])
+                existing_line = product_line.search(domain, limit=1)
+                if existing_line:
+                    existing_line.write(vals)
+                else:
+                    product_line.create(vals)
 
     def action_view_staging(self):
         self.ensure_one()
@@ -492,7 +514,7 @@ class ImportReceiptWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.receipt.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

@@ -1,4 +1,12 @@
 <odoo>
+    <record id="action_import_selected_invoice_consignment" model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <field name="model_id" ref="model_acumatica_invoice_consignment_staging"/>
+        <field name="binding_model_id" ref="model_acumatica_invoice_consignment_staging"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">records.action_import_selected()</field>
+    </record>
     <!-- 1. Search View -->
     <record id="view_acumatica_invoice_consignment_search" model="ir.ui.view">
         <field name="name">acumatica.invoice.consignment.staging.search</field>
@@ -7,8 +15,8 @@
             <search string="Cari Data Invoice Consignment">
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
                 <field name="import_state"/>
-                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
-                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Staged" name="staged" domain="[('import_state','=','staged')]"/>
+                <filter string="Done" name="done" domain="[('import_state','in',('created','updated'))]"/>
                 <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
             </search>
         </field>
@@ -27,12 +35,12 @@
                 <field name="adt_CustomerID" string="Customer Code"/>
                 <!-- <field name="odoo_picking_id" string="Delivery Order"/> -->
                 <field name="import_state" widget="badge"
-                       decoration-success="import_state in ('imported','updated')"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
+                       decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-                <button name="action_import_this" string="Import" type="object" icon="fa-upload" invisible="import_state != 'pending'"/>
-                <button name="action_open_picking" string="Open Picking" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload" invisible="import_state != 'staged'"/>
+                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
             </list>
         </field>
     </record>
@@ -44,8 +52,9 @@
         <field name="arch" type="xml">
             <form string="Detail Data Invoice Consignment">
                 <header>
-                    <button name="action_import_this" string="Import Data" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
-                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,error"/>
+                    <button name="action_import_this" string="Import Data" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
+                    <button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>
                     <group string="Header Information">

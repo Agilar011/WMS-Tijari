@@ -1,0 +1,57 @@
+<odoo>
+    <record id="view_acumatica_inventory_stock_quant_search" model="ir.ui.view">
+        <field name="name">acumatica.inventory.stock.quant.search</field>
+        <field name="model">acumatica.inventory.stock.quant</field>
+        <field name="arch" type="xml">
+            <search string="Inventory Stock Comparison">
+                <field name="product_id"/>
+                <field name="location_id"/>
+                <field name="inventory_id"/>
+                <field name="warehouse_code"/>
+                <separator/>
+                <filter name="match" string="Match" domain="[('match_status', '=', 'match')]"/>
+                <filter name="unmatch" string="Unmatch" domain="[('match_status', '=', 'not_match')]"/>
+                <filter name="missing_product" string="Missing Product" domain="[('match_status', '=', 'missing_product')]"/>
+                <filter name="missing_location" string="Missing Location" domain="[('match_status', '=', 'missing_location')]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_acumatica_inventory_stock_quant_list" model="ir.ui.view">
+        <field name="name">acumatica.inventory.stock.quant.list</field>
+        <field name="model">acumatica.inventory.stock.quant</field>
+        <field name="arch" type="xml">
+            <list string="Inventory Stock Comparison" create="false" edit="false" delete="false">
+                <field name="product_id"/>
+                <field name="location_id"/>
+                <field name="warehouse_code" optional="show"/>
+                <field name="inventory_id" optional="show"/>
+                <field name="odoo_quantity" string="On Hand Odoo"/>
+                <field name="odoo_reserved_quantity" string="Reserved Odoo" optional="hidden"/>
+                <field name="odoo_available_quantity" string="Available Odoo" optional="show"/>
+                <field name="api_on_hand" string="Stock API"/>
+                <field name="api_available" string="Available API" optional="hidden"/>
+                <field name="difference" decoration-danger="difference != 0" decoration-success="difference == 0"/>
+                <field name="match_status" widget="badge"
+                       decoration-success="match_status == 'match'"
+                       decoration-danger="match_status == 'not_match'"
+                       decoration-warning="match_status in ('missing_product', 'missing_location')"/>
+                <field name="source_line_count" string="Staging Lines" optional="hidden"/>
+                <field name="sync_date" optional="hidden"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_acumatica_inventory_stock_quant" model="ir.actions.act_window">
+        <field name="name">Inventory Stock Comparison</field>
+        <field name="res_model">acumatica.inventory.stock.quant</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="view_acumatica_inventory_stock_quant_search"/>
+    </record>
+
+    <menuitem id="menu_acumatica_inventory_stock_quant"
+              name="Inventory Stock Comparison"
+              parent="stock.menu_stock_root"
+              action="action_acumatica_inventory_stock_quant"
+              sequence="31"/>
+</odoo>

@@ -1,6 +1,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
+from markupsafe import Markup, escape
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ class AcumaticaVendorLine(models.Model):
       VendorName            → complete_name / name    (Mandatory)
     """
     _name        = 'acumatica.vendor.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Vendor dari Acumatica (Staging)'
     _order       = 'row_number asc'
 
@@ -47,16 +49,17 @@ class AcumaticaVendorLine(models.Model):
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
-        ('pending',  'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated',  'Diupdate'),
-        ('skipped',  'Dilewati'),
+        ('staged',  'Staged'),
+        ('created', 'Created'),
+        ('updated',  'Updated'),
+        ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='pending', readonly=True)
+    ], string='Status', default='staged', readonly=True)
 
-    import_message  = fields.Char(string='Keterangan',       readonly=True)
-    odoo_partner_id = fields.Many2one('res.partner', string='Partner di Odoo', readonly=True)
+    import_message  = fields.Char(string='Generation Message',       readonly=True)
+    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference', readonly=True)
     selected        = fields.Boolean(string='Pilih',          default=True)
+    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
@@ -79,28 +82,89 @@ class AcumaticaVendorLine(models.Model):
             return False
 
     def _find_existing_partner(self, rec):
-        """Cari partner by UUID dulu, fallback by VendorID (company_registry)."""
+        """Cari vendor berdasarkan External ID lalu BAccount ID Acumatica."""
         Partner = self.env['res.partner']
         if rec.external_id:
             found = Partner.search([('adt_external_id', '=', rec.external_id)], limit=1)
             if found:
                 return found
-        if rec.vendor_id:
-            found = Partner.search([('company_registry', '=', rec.vendor_id)], limit=1)
+        if rec.b_account_id:
+            found = Partner.search([('adt_b_account_id', '=', rec.b_account_id)], limit=1)
             if found:
                 return found
         return Partner.browse()
 
+    def _sync_vendor_id_history(self, partner, old_vendor_id=False, new_vendor_id=False):
+        """Simpan riwayat perubahan VendorID Acumatica."""
+        self.ensure_one()
+        old_vendor_id = (old_vendor_id or '').strip()
+        new_vendor_id = (new_vendor_id or '').strip()
+        if not partner or not new_vendor_id:
+            return
+
+        History = self.env['vendor.id.history']
+        current_history = History.search([
+            ('partner_id', '=', partner.id),
+            ('is_current', '=', True),
+        ])
+
+        if old_vendor_id == new_vendor_id and current_history.filtered(
+            lambda history: history.vendor_id == new_vendor_id
+        ):
+            return
+
+        now = fields.Datetime.now()
+        if current_history:
+            current_history.write({
+                'date_end': now,
+                'is_current': False,
+            })
+
+        History.create({
+            'partner_id': partner.id,
+            'vendor_id': new_vendor_id,
+            'date_start': now,
+            'is_current': True,
+        })
+
     # ─── Import Actions ──────────────────────────────
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
+
+    def _handle_acumatica_error(self, err_msg=False):
+        AcumaticaError = self.env['acumatica.error.master']
+        acumatica_err_id = self.acumatica_err_id
+        if not err_msg:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'solved'
+                return
+            return
+
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'Vendor-{self.id}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': err_msg
+            })
+            self.acumatica_err_id = acumatica_err_id
+
+        acumatica_err_id.import_state = state
+        acumatica_err_id.error_msg = err_msg
+    
 
     def _do_import(self):
         """
@@ -117,7 +181,7 @@ class AcumaticaVendorLine(models.Model):
           Status       → adt_state
           VendorClass  → adt_class
         """
-        imported = updated = error = 0
+        created = updated = error = 0
 
         STATUS_MAP = {
             'active':   'Active',
@@ -129,10 +193,21 @@ class AcumaticaVendorLine(models.Model):
         for line in self:
             try:
                 if not line.vendor_name:
+
+                    err_msg = 'VendorName kosong'
                     line.write({
                         'import_state':   'error',
-                        'import_message': 'VendorName kosong',
+                        'import_message': err_msg,
                     })
+
+                    line._handle_acumatica_error(err_msg)
+
+                    line._log_import_result(
+                        'error',
+                        f'Gagal mengimpor data: {err_msg}',
+                        False,
+                        False
+                    )
                     error += 1
                     continue
 
@@ -164,31 +239,74 @@ class AcumaticaVendorLine(models.Model):
                 existing = self._find_existing_partner(line)
 
                 if existing:
+                    old_vendor_id = existing.adt_vendor_id or False
+
+                    changed_fields = line._get_changed_fields(
+                        existing,
+                        vals,
+                    )
                     existing.write(vals)
+                    line._sync_vendor_id_history(
+                        existing,
+                        old_vendor_id,
+                        line.vendor_id,
+                    )
                     line.write({
                         'import_state':    'updated',
-                        'import_message':  f'Diupdate: {existing.name} (ID: {existing.id})',
+                        'import_message':  f'Updated: {existing.name} (ID: {existing.id})',
                         'odoo_partner_id': existing.id,
                     })
+
+                    line._log_import_result(
+                        'updated',
+                        f'Data {existing.display_name} berhasil diperbarui.',
+                        existing,
+                        changed_fields,
+                    )
+
                     updated += 1
                 else:
                     new_partner = self.env['res.partner'].create(vals)
+                    line._sync_vendor_id_history(
+                        new_partner,
+                        new_vendor_id=line.vendor_id,
+                    )
                     line.write({
-                        'import_state':    'imported',
+                        'import_state':    'created',
                         'import_message':  f'Dibuat: {new_partner.name} (ID: {new_partner.id})',
                         'odoo_partner_id': new_partner.id,
                     })
-                    imported += 1
+
+                    line._handle_acumatica_error()
+
+                    line._log_import_result(
+                        'created',
+                        f'Data {new_partner.display_name} berhasil dibuat.',
+                        new_partner,
+                        False
+                    )
+                    created += 1
 
             except Exception as e:
                 _logger.error("Error import Vendor line %s: %s", line.vendor_id, str(e))
+
+                err_msg = str(e)[:200]
                 line.write({
                     'import_state':   'error',
-                    'import_message': str(e)[:200],
+                    'import_message': err_msg,
                 })
+
+                line._handle_acumatica_error(err_msg)
+
+                line._log_import_result(
+                    'error',
+                    f'Gagal mengimpor data: {err_msg}',
+                    False,
+                    False
+                )
                 error += 1
 
-        msg = f'Import selesai: {imported} dibuat, {updated} diupdate, {error} error.'
+        msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
         return {
             'type': 'ir.actions.client',
             'tag':  'display_notification',
@@ -202,8 +320,8 @@ class AcumaticaVendorLine(models.Model):
 
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state in ('error', 'skipped')).write({
-            'import_state':   'pending',
+        self.filtered(lambda l: l.import_state == 'error').write({
+            'import_state':   'staged',
             'import_message': False,
         })
 
@@ -217,3 +335,96 @@ class AcumaticaVendorLine(models.Model):
             'res_id':    self.odoo_partner_id.id,
             'view_mode': 'form',
         }
+
+    def _get_changed_fields(self, record, vals):
+        changed_fields = []
+
+        for field_name, new_value in vals.items():
+            field = record._fields.get(field_name)
+
+            if not field:
+                continue
+
+            old_value = record[field_name]
+
+            # Normalisasi nilai
+            old_value = old_value or False
+            new_value = new_value or False
+
+            if old_value != new_value:
+                changed_fields.append({
+                    'field_name': field_name,
+                    'field_label': field.string,
+                    'old_value': old_value,
+                    'new_value': new_value,
+                })
+
+        return changed_fields
+    
+    def _log_import_result(
+        self,
+        state,
+        message,
+        record=False,
+        changed_fields=None,
+    ):
+        titles = {
+            'created': '✅ Import Berhasil',
+            'updated': '🔄 Data Diperbarui',
+            'error': '❌ Import Gagal',
+        }
+
+        body = Markup("""
+            <p>
+                <strong>{}</strong>
+            </p>
+            <p>{}</p>
+        """).format(
+            titles.get(state, 'Import Log'),
+            message,
+        )
+
+        if changed_fields:
+            body += Markup("""
+                <p><strong>Perubahan:</strong></p>
+                <ul>
+            """)
+
+            for change in changed_fields:
+                old_value = change['old_value'] or '-'
+                new_value = change['new_value'] or '-'
+
+                body += Markup("""
+                    <li>
+                        <strong>{}</strong>:
+                        {} → {}
+                    </li>
+                """).format(
+                    escape(change['field_label']),
+                    escape(str(old_value)),
+                    escape(str(new_value)),
+                )
+
+            body += Markup("</ul>")
+
+        if record:
+            body += Markup("""
+                <p>
+                    Record Odoo:
+                    <a href="#"
+                    data-oe-model="{}"
+                    data-oe-id="{}">
+                        {}
+                    </a>
+                </p>
+            """).format(
+                escape(record._name),
+                record.id,
+                escape(record.display_name),
+            )
+
+        self.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )

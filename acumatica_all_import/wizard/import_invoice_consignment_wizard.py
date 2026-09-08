@@ -42,44 +42,21 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         loop_count = math.ceil(self.fetch_limit / self.batch_size)
         params = []
 
-        # if self.wh33_filter:
-        #     params.append("Details/Warehouse(d: startswith(Details/Warehouse, 'WH33'))")
-        #     print("="*80)
-        #     print(f"[DEBUG] Masuk ke proses filter warehouse jika field true, WH Filter: {self.wh33_filter}")
-        #     print(params)
-        #     print("="*80)
-
         if self.start_date and self.end_date:
             params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
-            print("="*80)
-            print("[DEBUG] Masuk ke proses get start and end date")
-            print("="*80)
 
         if self.odata_filter:
             params.append(self.odata_filter)
-            print("="*80)
-            print("[DEBUG] MASUK proses set filter")
-            print("="*80)
 
-        for i in range(loop_count):
-            offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.fetch_receipt_data(
-                limit=self.batch_size,
-                reference_nbr=self.receipt_nbr,
-                offset=offset,
-                odata_filter=params if params else None,
-            )
+        batch_data = self.fetch_receipt_data()
 
-            if not batch_data:
-                break
-
-            raw_list += batch_data
+        raw_list += batch_data
 
         self.total_fetched = raw_list
 
         return {
             'type': 'ir.actions.act_window',
-            'res_model': 'import.receipt.change.item.wizard',
+            'res_model': 'import.invoice.consignment.wizard',
             'res_id': self.id,
             'view_mode': 'form',
             'target': 'new',
@@ -90,7 +67,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     # MAIN PROCESS
     # ---------------------------------------------------------
 
-    def fetch_receipt_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
+    def fetch_receipt_data(self):
         print("="*80)
         print("[DEBUG] MASUK KE FUNGSI: fetch_receipt_data")
         print("="*80)
@@ -99,7 +76,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
+            params = {}
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
@@ -127,6 +104,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             sync_data = fields.Datetime.now() # Pastikan variabel sync_data terdefinisi
 
             seen_headers = {}
+            unchanged_headers = set()
 
             for row_number, item in enumerate(raw_data, start=1):
                 header_id = (self._val(item, 'ReferenceNbr') or item.get('id', '')) if flat_data is not None else item.get('id', '')
@@ -137,7 +115,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 lines_to_create = {
                     **header,
                     'config_id': self.config_id.id,
-                    'import_state': 'pending',
+                    'import_state': 'staged',
                     'import_message': "Data API Imported",
                     'selected': True,
                     'sync_date': sync_data,
@@ -147,9 +125,30 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 if flat_data is not None and header_id in seen_headers:
                     created_header = seen_headers[header_id]
                 else:
-                    created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
+                    existing_header = self.env['acumatica.invoice.consignment.staging'].search([
+                        ('config_id', '=', self.config_id.id),
+                        ('adt_ReferenceNbr', '=', header.get('adt_ReferenceNbr')),
+                    ], limit=1)
+                    incoming_last_modified = header.get('adt_LastModifiedDateTime')
+                    if (
+                        existing_header
+                        and incoming_last_modified
+                        and existing_header.adt_LastModifiedDateTime == incoming_last_modified
+                    ):
+                        created_header = existing_header
+                        unchanged_headers.add(header_id)
+                    elif existing_header:
+                        existing_header.line_ids.unlink()
+                        existing_header.write(lines_to_create)
+                        created_header = existing_header
+                    else:
+                        created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
                     seen_headers[header_id] = created_header
-                    total_imported_headers += 1
+                    if header_id not in unchanged_headers:
+                        total_imported_headers += 1
+
+                if header_id in unchanged_headers:
+                    continue
 
                 # 2. Normalisasi Data Detail/Lines
                 details = item.get('Details') or []
@@ -210,7 +209,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     #             **item, #header odoo
     #             # 'odoo_picking_id' : exists[0]['id'] if exists else False,
     #             'config_id': self.config_id.id,
-    #             'import_state': 'pending',
+    #             'import_state': 'staged',
     #             'import_message': "Data API Imported",
     #             'selected': True,
     #             'sync_date': sync_data,
@@ -368,12 +367,13 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             if d.get('receipt_nbr'):
                 receipt_nbrs.append(d['receipt_nbr'])
 
-        existing_lines = self.env['acumatica.issue.po.return.line'].search([
-            ('receipt_nbr', 'in', receipt_nbrs)
+        existing_lines = self.env['acumatica.invoice.consignment.staging'].search([
+            ('adt_ReferenceNbr', 'in', receipt_nbrs),
+            ('config_id', '=', self.config_id.id),
         ])
 
         existing_map = {
-            line.receipt_nbr: line
+            line.adt_ReferenceNbr: line
             for line in existing_lines
         }
 
@@ -389,7 +389,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if vals.get('adt_LastModifiedDateTime') and existing.adt_LastModifiedDateTime == vals.get('adt_LastModifiedDateTime'):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -544,6 +544,10 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     # HELPERS
     # ---------------------------------------------------------    
     def _search_picking_type(self, header):
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type
+
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         warehouse_code = header
@@ -558,11 +562,14 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         print(f"Location: {location}")
 
         if location:
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'outgoing'),                
-                ('is_default_api', '=', True)
-            ])
+            type = PickingType.resolve_picking_type(
+                warehouse_code=warehouse_code,
+                code='outgoing',
+                operation_category='delivery',
+                api_acumatica='invoice_consignment',
+                transaction_key='invoice_consignment',
+                required=False,
+            )
 
         return type
 
@@ -608,37 +615,6 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Data Receipt Type Change Item dari Acumatica',
-            'res_model': 'acumatica.receipt.change.item.line',
-            'view_mode': 'list,form',
-            'domain': [('config_id', '=', self.config_id.id)],
-            'context': {'default_config_id': self.config_id.id},
-        }
-
-    def action_import_all_pending(self):
-        self.ensure_one()
-        lines = self.env['acumatica.receipt.change.item.line'].search([
-            ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
-            ('selected', '=', True),
-        ])
-        if not lines:
-            raise UserError('Tidak ada data pending yang dipilih untuk diimport.')
-        lines._do_import()
-        self.state = 'done'
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Hasil Import Receipt Type Change Item',
-            'res_model': 'acumatica.receipt.change.item.line',
-            'view_mode': 'list,form',
-            'domain': [('config_id', '=', self.config_id.id)],
-        }
-
-
-    def action_view_staging(self):
-        self.ensure_one()
-        return {
-            'type': 'ir.actions.act_window',
             'name': 'Data Inventory Inventory Issue dari Acumatica',
             'res_model': 'acumatica.inventory.issue.line',
             'view_mode': 'list,form',
@@ -650,7 +626,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.inventory.issue.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:
@@ -709,7 +685,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     #         vals = dict(item)
     #         vals.update({
     #             'config_id': self.config_id.id,
-    #             'import_state': 'pending',
+    #             'import_state': 'staged',
     #             'import_message': msg,
     #             'selected': True,
     #             'sync_date': fields.Datetime.now(),
@@ -746,7 +722,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     #     self.ensure_one()
     #     lines = self.env['acumatica.issue.po.return.line'].search([
     #         ('config_id', '=', self.config_id.id),
-    #         ('import_state', '=', 'pending'),
+    #         ('import_state', '=', 'staged'),
     #         ('selected', '=', True),
     #     ])
     #     if not lines:
@@ -1019,7 +995,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     #     # proses per receipt number
     #     for receipt_nbr in self.mapped('receipt_nbr'):
     #         receipt_lines = self.filtered(
-    #             lambda l: l.receipt_nbr == receipt_nbr and l.import_state == 'pending'
+    #             lambda l: l.receipt_nbr == receipt_nbr and l.import_state == 'staged'
     #         )
     #         if not receipt_lines:
     #             continue

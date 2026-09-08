@@ -16,6 +16,11 @@
                     <field name="adt_document_only_enabled" nolabel="1"/>
                     <span>Direct Receipt and Direct Delivery Order</span>
                 </div>
+                <label for="adt_api_picking_type_enabled"/>
+                <div class="o_row">
+                    <field name="adt_api_picking_type_enabled" nolabel="1"/>
+                    <span>Apply SOP Aditya: For API INTEGRATION</span>
+                </div>
             </xpath>
             <xpath expr="//field[@name='xdock_type_id']" position="after">
                 <field name="adt_pick_internal_type_id" readonly="1"/>

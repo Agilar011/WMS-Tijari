@@ -9,6 +9,7 @@
             <form string="Konfigurasi Acumatica API">
                 <header>
                     <button name="action_test_connection" string="🔌 Test Connection" type="object" class="btn-primary"/>
+                    <button name="action_sync_transaction_types" string="Sync Transaction Types" type="object"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,connected,error"/>
                 </header>
                 <sheet>
@@ -63,6 +64,7 @@
                        decoration-danger="state == 'error'"
                        decoration-muted="state == 'draft'"/>
                 <button name="action_test_connection" string="Test" type="object" icon="fa-plug"/>
+                <button name="action_sync_transaction_types" string="Sync Types" type="object" icon="fa-refresh"/>
             </list>
         </field>
     </record>
@@ -72,109 +74,12 @@
         <field name="name">Konfigurasi Acumatica</field>
         <field name="res_model">acumatica.config</field>
         <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('stock.group_stock_manager')])]"/>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Tambahkan konfigurasi koneksi Acumatica pertama Anda!
             </p>
         </field>
-    </record>
-
-    <record id="action_acumatica_customer_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Customer</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'customer')]</field>
-    </record>
-
-    <record id="action_acumatica_customer_location_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Customer Location</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'customer_location')]</field>
-    </record>
-
-    <record id="action_acumatica_shipvia_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica ShipVia</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'shipvia')]</field>
-    </record>
-
-    <record id="action_acumatica_vendor_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Vendor</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'vendor')]</field>
-    </record>
-
-    <record id="action_acumatica_uom_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica UoM</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'uom')]</field>
-    </record>
-
-    <record id="action_acumatica_warehouse_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Warehouse</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'warehouse')]</field>
-    </record>
-
-    <record id="action_acumatica_stock_item_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Stock Item</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'stock_item')]</field>
-    </record>
-
-    <record id="action_acumatica_non_stock_item_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Non Stock Item</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'non_stock_item')]</field>
-    </record>
-
-    <record id="action_acumatica_receipt_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica PO Receipt</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'po_receipt')]</field>
-    </record>
-
-    <record id="action_acumatica_receipt_change_item_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Receipt Type Change Item</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'receipt_change_item')]</field>
-    </record>
-
-    <record id="action_acumatica_shipment_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica SO Return</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'shipment_so')]</field>
-    </record>
-
-    <record id="action_acumatica_inventory_recieved_config" model="ir.actions.act_window">
-        <field name="name">API Config</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'inventory_received')]</field>
-    </record>
-
-    <record id="action_acumatica_toko_pegang_do_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Toko Pegang DO</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'toko_pegang_do')]</field>
-    </record>
-
-    <record id="action_acumatica_inventory_external_config" model="ir.actions.act_window">
-        <field name="name">Konfigurasi Acumatica Inventory External</field>
-        <field name="res_model">acumatica.config</field>
-        <field name="view_mode">list,form</field>
-        <field name="domain">[('config_type', '=', 'inventory_external')]</field>
     </record>
 
 </odoo>

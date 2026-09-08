@@ -24,11 +24,11 @@
             <search string="Cari Warehouse &amp; Location">
                 <field name="warehouse_id"  string="WarehouseID"/>
                 <field name="description"   string="Description"/>
-                <filter string="Belum Diimport" name="pending"
-                        domain="[('import_state','=','pending')]"/>
-                <filter string="Sudah Dibuat"   name="imported"
-                        domain="[('import_state','=','imported')]"/>
-                <filter string="Diupdate"       name="updated"
+                <filter string="Staged" name="staged"
+                        domain="[('import_state','=','staged')]"/>
+                <filter string="Sudah Dibuat"   name="created"
+                        domain="[('import_state','=','created')]"/>
+                <filter string="Updated"       name="updated"
                         domain="[('import_state','=','updated')]"/>
                 <filter string="Error"          name="error"
                         domain="[('import_state','=','error')]"/>
@@ -50,6 +50,7 @@
         <field name="arch" type="xml">
             <list string="Data Warehouse &amp; Location" multi_edit="1">
                 <field name="warehouse_id" string="WarehouseID"/>
+                <field name="building_id" string="BuildingID"/>
                 <field name="description"    string="Description → name"/>
                 <field name="active"         string="Active"         widget="boolean"
                        optional="show"/>
@@ -58,17 +59,17 @@
                 <field name="shipping_location_id"  string="Shipping Loc"   optional="show"/>
                 <field name="last_modified_dt"      string="Last Modified"  optional="show"/>
                 <field name="import_state"   string="Status" widget="badge"
-                       decoration-success="import_state == 'imported'"
+                       decoration-success="import_state == 'created'"
                        decoration-info="import_state == 'updated'"
                        decoration-danger="import_state == 'error'"
-                       decoration-muted="import_state == 'pending'"/>
-                <field name="odoo_warehouse_id" string="Warehouse di Odoo" optional="show"/>
-                <field name="import_message"    string="Keterangan"        optional="show"/>
+                       decoration-muted="import_state == 'staged'"/>
+                <field name="odoo_warehouse_id" string="Document Reference" optional="show"/>
+                <field name="import_message"    string="Generation Message"        optional="show"/>
                 <button name="action_import_this"
                         string="Import"
                         type="object"
                         icon="fa-download"
-                        invisible="import_state != 'pending'"/>
+                        invisible="import_state != 'staged'"/>
                 <button name="action_open_warehouse"
                         string="Lihat"
                         type="object"
@@ -88,58 +89,64 @@
                     <button name="action_import_this"
                             string="Import ke Odoo"
                             type="object" class="btn-primary"
-                            invisible="import_state != 'pending'"/>
+                            invisible="import_state != 'staged'"/>
                     <button name="action_open_warehouse"
-                            string="Lihat Warehouse di Odoo"
+                            string="Lihat Document Reference"
                             type="object" class="btn-secondary"
                             invisible="not odoo_warehouse_id"/>
                     <button name="action_reset_pending"
                             string="Reset ke Pending"
                             type="object"
-                            invisible="import_state == 'pending'"/>
+                            invisible="import_state != 'error'"/>
                     <field name="import_state" widget="statusbar"
-                           statusbar_visible="pending,imported,updated,error"/>
+                           statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
+                <style>
+                    div.o-mail-ChatterContainer.o-mail-Form-chatter div.o-mail-Message-richBody.overflow-x-auto {
+                        overflow: visible !important;
+                    }
+                </style>
                 <sheet>
                     <!-- ── Field Sudah Ada di Odoo ── -->
-                    <group string="✅ Field Standar Odoo">
+                    <group string="Data Warehouse &amp; Location">
                         <group>
-                            <field name="warehouse_id"  string="WarehouseID → stock.warehouse.code"/>
-                            <field name="description"   string="Description → stock.warehouse.name"/>
+                            <field name="warehouse_id"  string="WarehouseID.warehouse.code"/>
+                            <field name="building_id"   string="BuildingID.warehouse.building"/>
                         </group>
                         <group>
+                            <field name="description"   string="Description.warehouse.name"/>
                             <field name="active"        string="Active"/>
                         </group>
                     </group>
 
                     <!-- ── Field to be ── -->
-                    <group string="🆕 Field to be (adt_*)">
+                    <group string="Optional Data">
                         <group>
-                            <field name="drop_ship_location_id"  string="DropShipLocationID → adt_drop_ship_location_id"/>
-                            <field name="receiving_location_id"  string="ReceivingLocationID → adt_receiving_location_id"/>
-                            <field name="rma_location_id"        string="RMALocationID → adt_rma_location_id"/>
-                            <field name="shipping_location_id"   string="ShippingLocationID → adt_shipping_location_id"/>
+                            <field name="drop_ship_location_id"  string="DropShipLocationID"/>
+                            <field name="receiving_location_id"  string="ReceivingLocationID"/>
+                            <field name="rma_location_id"        string="RMALocationID"/>
+                            <field name="shipping_location_id"   string="ShippingLocationID"/>
                         </group>
                         <group>
-                            <field name="last_modified_dt"       string="LastModifiedDateTime → adt_last_modified_dt"/>
-                            <field name="external_id"            string="UUID → adt_external_id"/>
+                            <field name="last_modified_dt"       string="LastModifiedDateTime"/>
+                            <field name="external_id"            string="UUID"/>
                             <field name="sync_date"/>
                             <field name="config_id"/>
                         </group>
                     </group>
 
-                    <group string="📝 Note → adt_note">
+                    <group string="Note">
                         <field name="note" nolabel="1"/>
                     </group>
 
                     <!-- ── Hasil Import ── -->
-                    <group string="🔗 Hasil di Odoo">
+                    <group string="Hasil di Odoo">
                         <field name="odoo_warehouse_id"/>
                         <field name="import_message"/>
                     </group>
 
                     <!-- ── Detail Locations ── -->
-                    <notebook>
+                    <!-- <notebook>
                         <page string="📍 Locations" name="locations">
                             <list string="Locations" editable="bottom">
                                 <field name="row_number"    string="No"/>
@@ -147,12 +154,12 @@
                                 <field name="description"   string="Description → adt_description"/>
                                 <field name="active"        string="Active" widget="boolean"/>
                                 <field name="import_state"  string="Status" widget="badge"
-                                       decoration-success="import_state == 'imported'"
+                                       decoration-success="import_state == 'created'"
                                        decoration-info="import_state == 'updated'"
                                        decoration-danger="import_state == 'error'"
-                                       decoration-muted="import_state == 'pending'"/>
+                                       decoration-muted="import_state == 'staged'"/>
                                 <field name="odoo_warehouse_id" string="Location di Odoo"/>
-                                <field name="import_message"   string="Keterangan"/>
+                                <field name="import_message"   string="Generation Message"/>
                                 <button name="action_open_warehouse"
                                         string="Lihat"
                                         type="object"
@@ -160,8 +167,11 @@
                                         invisible="not odoo_warehouse_id"/>
                             </list>
                         </page>
-                    </notebook>
+                    </notebook> -->
                 </sheet>
+                <div class="oe_chatter">
+                    <chatter/>
+                </div>
             </form>
         </field>
     </record>
@@ -172,7 +182,7 @@
         <field name="res_model">acumatica.warehouse.line</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_warehouse_line_search"/>
-        <field name="context">{'search_default_pending': 1}</field>
+        <field name="context">{'search_default_staged': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Belum ada data. Gunakan menu "Import Warehouse" untuk menarik data dari Acumatica.

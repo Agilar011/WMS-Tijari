@@ -59,29 +59,6 @@ class ImportKitAssemblyWizard(models.TransientModel):
         if not self.config_id:
             raise UserError('Pilih konfigurasi API terlebih dahulu.')
 
-        # cleanup staging
-        self.env['acumatica.kit.assembly.line'].search([
-            ('config_id', '=', self.config_id.id)
-        ]).unlink()
-
-        self.env['acumatica.kit.assembly'].sudo().search([]).unlink()
-        self.env['acumatica.kit.assembly.component'].sudo().search([]).unlink()
-        
-        self.env.cr.execute("""
-            TRUNCATE TABLE acumatica_kit_assembly RESTART IDENTITY CASCADE;
-        """)
-        self.env.cr.execute("""
-            TRUNCATE TABLE acumatica_kit_assembly_component RESTART IDENTITY CASCADE;
-        """)
-
-        self.env.cr.commit()
-
-        header_count = self.env['acumatica.kit.assembly'].search_count([])
-        component_count = self.env['acumatica.kit.assembly.component'].search_count([])
-
-        if header_count > 0 or component_count > 0:
-            raise UserError('Delete Function belum berhasil')
-
         # =========================
         # FETCH (AUTO LOOP)
         # =========================
@@ -137,6 +114,9 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 'description': item.get('description') or '',
                 'last_modified_datetime': item.get('last_modified_datetime') or '',
                 'location': item.get('location') or '',
+                'BuildingID': item.get('building_id') or item.get('BuildingID') or '',
+                'note_header': item.get('note_header') or '',
+                'note_header_id': item.get('note_header_id') or '',
                 'post_period': item.get('post_period') or '',
                 'quantity': item.get('quantity') or '',
                 'reason_code': item.get('reason_code') or '',
@@ -151,6 +131,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 # Line fields
                 'line_external_id': item.get('line_external_id') or '',
                 'line_note': item.get('line_note') or '',
+                'line_note_id': item.get('line_note_id') or '',
                 'line_inventory_id': item.get('line_inventory_id') or '',
                 'line_component_qty': item.get('line_component_qty') or '',
                 'line_nbr': item.get('line_nbr') or '',
@@ -161,13 +142,23 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 'line_uom': item.get('line_uom') or '',
 
                 # Import flags
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': msg,
                 'odoo_bom_id': existing_bom.id if existing_bom else False,
                 'selected': True,
                 'sync_date': fields.Datetime.now(),
             })
 
+        changed_reference_nbrs = {
+            vals['reference_nbr']
+            for vals in lines_to_create
+            if vals.get('reference_nbr')
+        }
+        if changed_reference_nbrs:
+            self.env['acumatica.kit.assembly.line'].search([
+                ('config_id', '=', self.config_id.id),
+                ('reference_nbr', 'in', list(changed_reference_nbrs)),
+            ]).unlink()
         self.env['acumatica.kit.assembly.line'].create(lines_to_create)
 
         self.write({
@@ -200,11 +191,20 @@ class ImportKitAssemblyWizard(models.TransientModel):
         staging_header = self.env['acumatica.kit.assembly']
         staging_line = self.env['acumatica.kit.assembly.component']
         try:
-            endpoint = f"{self.config_id.api_url}/KitAssembly"
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             # print(f"Fetching Kit Assembly data from {endpoint} with limit={limit} and offset={offset}...")
-            params = {'$top': limit, '$skip': offset, '$expand': 'StockComponents',  '$filter': "Warehouse eq 'WH33-FG'"}
+            params = {
+                '$top': limit,
+                '$skip': offset,
+                '$expand': self.config_id.odata_expand
+            }
+            body = {
+                "BuildingID": {
+                    "value": ""
+                }
+            }
 
-            response = session.get(endpoint, params=params, timeout=60)
+            response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
                 raise UserError(
                     f'Gagal ambil data Kit Assembly '
@@ -227,6 +227,9 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     'inventory_id': self._val(item, 'InventoryID'),
                     'last_modified_datetime': last_modified_datetime,
                     'location': self._val(item, 'Location'),
+                    'building_id': self._val(item, 'BuildingID'),
+                    'note_header': self._val(item, 'NoteHeader'),
+                    'note_header_id': self._val(item, 'NoteHeaderID'),
                     'post_period': self._val(item, 'PostPeriod'),
                     'quantity': self._val(item, 'Qty'),
                     'reason_code': self._val(item, 'ReasonCode'),
@@ -246,14 +249,31 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 # for h_key, h_val in header.items():
                     # print(f"{h_key:<25} : {h_val}")
 
-                assembly = self.env['acumatica.kit.assembly'].create(header)  # Simpan header ke staging untuk referensi, bisa dihapus jika tidak perlu
+                existing_assembly = staging_header.search([
+                    ('config_id', '=', self.config_id.id),
+                    ('name', '=', header['name']),
+                ], limit=1)
+                if existing_assembly:
+                    if (
+                        last_modified_datetime
+                        and existing_assembly.last_modified_datetime == last_modified_datetime
+                    ):
+                        continue
+                    existing_assembly.component_ids.unlink()
+                    existing_assembly.write(header)
+                    assembly = existing_assembly
+                else:
+                    assembly = staging_header.create(header)
                 print(f"Created staging header record with ID {assembly.id} for ReferenceNbr {header['reference_nbr']}")
 
-                stock_components = item.get('StockComponents') or []
+                stock_components = (item.get('KitAssemblyGIDetails'))
                 if isinstance(stock_components, dict):
                     stock_components = stock_components.get('value', []) or []
                 if not isinstance(stock_components, list):
                     stock_components = []
+
+                if not stock_components and self._val(item, 'LineStockInventoryID'):
+                    stock_components = [item]
 
                 if not stock_components:
                     # print("-- (No Components Available)") # Info jika component kosong
@@ -269,15 +289,16 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     # Buat dictionary component data untuk mempermudah perulangan print
                     component_data = {
                         'line_external_id': component.get('id', '') or '',
-                        'line_note': component.get('note', {}).get('value', '') or '',
-                        'line_inventory_id': self._val(component, 'InventoryID'),
+                        'line_note': self._val(component, 'LineNote') or component.get('note', {}).get('value', '') or '',
+                        'line_note_id': self._val(component, 'LineNoteID'),
+                        'line_inventory_id': self._val(component, 'LineInventoryID') or self._val(component, 'InventoryID'),
                         'line_component_qty': self._val(component, 'ComponentQty'),
                         'line_nbr': str(line_nbr),
-                        'line_location_id': self._val(component, 'LocationID'),
-                        'line_quantity': self._val(component, 'Qty'),
+                        'line_location_id': self._val(component, 'LineLocationID') or self._val(component, 'LocationID'),
+                        'line_quantity': self._val(component, 'LineQty') or self._val(component, 'Qty'),
                         'line_reason_code': self._val(component, 'ReasonCode'),
-                        'stock_inventory_id': self._val(component, 'StockInventoryID'),
-                        'line_uom': self._val(component, 'UOM'),
+                        'stock_inventory_id': self._val(component, 'LineStockInventoryID') or self._val(component, 'StockInventoryID'),
+                        'line_uom': self._val(component, 'LineUOM') or self._val(component, 'UOM'),
                         'assembly_id': assembly.id,  # Simpan component dengan relasi ke header yang sudah dibuat, bisa dihapus jika tidak perlu
                     }
                     
@@ -408,7 +429,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
         domain = [
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ]
 
@@ -464,7 +485,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
         domain = [
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ]
 

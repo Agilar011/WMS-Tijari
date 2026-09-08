@@ -114,6 +114,11 @@ class ResPartner(models.Model):
         string='Vendor ID (Acumatica)',
         help='VendorID dari Acumatica WMS',
     )
+    vendor_id_history_ids = fields.One2many(
+        'vendor.id.history',
+        'partner_id',
+        string='Vendor ID History',
+    )
     # customer_rank = fields.Integer(
     #     string='Customer Rank',
     #     help='Used to prioritize customers during import (lower is higher priority)',
@@ -126,3 +131,39 @@ class ResPartner(models.Model):
         ('warehouse', 'Warehouse'),
     ], string='Partner Type')
     digital_signature = fields.Binary(string="Signature")
+
+
+class VendorIdHistory(models.Model):
+    _name = 'vendor.id.history'
+    _description = 'Vendor ID History'
+    _order = 'date_start desc, id desc'
+    _rec_name = 'vendor_id'
+
+    partner_id = fields.Many2one(
+        'res.partner',
+        string='Vendor',
+        required=True,
+        index=True,
+        ondelete='cascade',
+    )
+    vendor_id = fields.Char(
+        string='Vendor ID',
+        required=True,
+        index=True,
+    )
+    date_start = fields.Datetime(
+        string='Start Date',
+        required=True,
+        default=fields.Datetime.now,
+        index=True,
+    )
+    date_end = fields.Datetime(
+        string='End Date',
+        index=True,
+    )
+    is_current = fields.Boolean(
+        string='Current Vendor ID',
+        default=True,
+        index=True,
+    )
+    note = fields.Text()

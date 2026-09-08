@@ -13,6 +13,7 @@ from . import stock_scrap
 from . import stock_package_level
 from . import stock_lot
 from . import stock_quant_package
+from . import stock_inventory
 
 from . import stock_report_velocity
 from . import stock_report_aging
@@ -22,6 +23,8 @@ from . import product_product
 from . import stock_location
 from . import res_partner
 from . import res_users
+from . import ir_ui_menu
 from . import loginext_model
+from . import mail_compose_message
 
 from . import mrp_production

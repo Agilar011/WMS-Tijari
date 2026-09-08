@@ -1,8 +1,24 @@
-from odoo import models, fields
+from odoo import api, models, fields
 
 class ProductProduct(models.Model):
     """ Extend of Product_product"""
     _inherit = 'product.product'
+
+    @api.depends('name', 'default_code', 'product_tmpl_id')
+    @api.depends_context(
+        'display_default_code',
+        'seller_id',
+        'company_id',
+        'partner_id',
+        'lang',
+        'tijari_stock_picking_product_code_only',
+    )
+    def _compute_display_name(self):
+        if not self.env.context.get('tijari_stock_picking_product_code_only'):
+            return super()._compute_display_name()
+
+        for product in self:
+            product.display_name = product.default_code or ''
 
     adt_external_id = fields.Char(
         string='UUID Acumatica',

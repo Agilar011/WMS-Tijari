@@ -146,6 +146,7 @@ class ImportUomWizard(models.TransientModel):
         Return: list of dict { unit_id, description, external_id }
         """
         self.ensure_one()
+        # logout -> login -> logout
         session = self.config_id._do_login()
 
         try:
@@ -172,26 +173,48 @@ class ImportUomWizard(models.TransientModel):
                     'row_number': item.get("rowNumber", 0),
                 })
 
+            UomLine = self.env['acumatica.uom.line']
+            seen_keys = set()
             for item in result:
-                uom = self.env['acumatica.uom.line']
-                existing = uom.browse()
-                if item['unit_id']:
-                    existing = uom.search([('unit_id', '=', item['unit_id'])], limit=1)
+                external_id = item['external_id'] or False
+                unit_id = item['unit_id'] or False
+                key = ('external_id', external_id) if external_id else ('unit_id', unit_id)
 
-                # if existing:
-                #     continue
+                # Acumatica dapat mengembalikan baris yang sama dalam satu
+                # batch. Jangan memproses key yang sama dua kali.
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
 
-                self.env['acumatica.uom.line'].create({
+                existing = UomLine.browse()
+                if external_id:
+                    existing = UomLine.search([
+                        ('config_id', '=', self.config_id.id),
+                        ('external_id', '=', external_id),
+                    ], limit=1)
+                if not existing and unit_id:
+                    existing = UomLine.search([
+                        ('config_id', '=', self.config_id.id),
+                        ('unit_id', '=', unit_id),
+                    ], limit=1)
+
+                vals = {
                     'config_id': self.config_id.id,
                     'row_number': item['row_number'],
-                    'external_id': item['external_id'],
-                    'unit_id': item['unit_id'],
+                    'external_id': external_id,
+                    'unit_id': unit_id,
                     'description': item['description'],
-                    'import_state': 'pending',
-                    'import_message': f'Sudah ada → akan diupdate: {existing.unit_id}' if existing else '',
                     'selected': True,
                     'sync_date': fields.Datetime.now(),
-                })
+                }
+                if existing:
+                    existing.write(vals)
+                else:
+                    vals.update({
+                        'import_state': 'staged',
+                        'import_message': False,
+                    })
+                    UomLine.create(vals)
 
             return len(result)
 
@@ -211,7 +234,7 @@ class ImportUomWizard(models.TransientModel):
             'domain': [('config_id', '=', self.config_id.id)],
             'context': {
                 'default_config_id': self.config_id.id,
-                'search_default_pending': 1,
+                'search_default_staged': 1,
             },
         }
 
@@ -220,7 +243,7 @@ class ImportUomWizard(models.TransientModel):
         self.ensure_one()
         lines = self.env['acumatica.uom.line'].search([
             ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'pending'),
+            ('import_state', '=', 'staged'),
             ('selected', '=', True),
         ])
         if not lines:

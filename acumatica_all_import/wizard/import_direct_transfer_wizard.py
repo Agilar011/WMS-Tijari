@@ -6,8 +6,6 @@ import logging
 _logger = logging.getLogger(__name__)
 
 
-# toko.pegang.do
-# toko_pegang_do
 class ImportDirectTransferWizard(models.TransientModel):
     _name = 'import.direct.transfer.wizard'
     _description = 'Wizard Import Inventory Recieved dari Acumatica'
@@ -33,7 +31,6 @@ class ImportDirectTransferWizard(models.TransientModel):
     end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
 
     def action_fetch_data(self):
-        print('Run function get data direct transfer')
         self.ensure_one()
 
         import math
@@ -108,8 +105,18 @@ class ImportDirectTransferWizard(models.TransientModel):
         except Exception:
             return 0.0
 
+    def _parse_int(self, value):
+        try:
+            return int(value or 0)
+        except Exception:
+            return 0
+
 
     def _search_picking_type(self, header):
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
+        if config_picking_type:
+            return config_picking_type
+
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
         type = False
@@ -120,10 +127,12 @@ class ImportDirectTransferWizard(models.TransientModel):
                 api_acumatica='vendor_return',
                 document_only=header.get('adt_DocumentOnly'),
                 warehouse_code=header.get('adt_FromWarehouseID'),
-                required=True,
+                required=False,
             )
             if document_only_type:
                 return document_only_type
+            if header.get('adt_DocumentOnly'):
+                return None
 
         print(f"Warehouse: {header['adt_FromWarehouseID']}")
 
@@ -131,15 +140,15 @@ class ImportDirectTransferWizard(models.TransientModel):
             ('code', '=', header['adt_FromWarehouseID'])
         ])
 
-            
         if location:
-            print(f"location : {location}")
-            print(f"location : {location.odoo_building_id.id}")
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),
-                ('is_default_api', '=', True)
-            ])
+            type = PickingType.resolve_picking_type(
+                warehouse_code=header['adt_FromWarehouseID'],
+                code='internal',
+                operation_category='internal',
+                api_acumatica='vendor_return',
+                transaction_key='vendor_return_document_direct_transfer',
+                required=False,
+            )
 
             print(f"Type: {type}")
 
@@ -147,173 +156,195 @@ class ImportDirectTransferWizard(models.TransientModel):
 
     def fetch_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
         self.ensure_one()
-        Picking = self.env['stock.picking']
         session = self.config_id._do_login()
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-            filters = []
+            params = {}
 
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
-            if self.config_id.odata_select:
-                params['$select'] = self.config_id.odata_select
-            if reference_nbr:
-                filters.append(f"ReferenceNbr eq '{reference_nbr}'")
-            if odata_filter:
-                filters.append(self.config_id.odata_filter)
-                filters.extend(odata_filter)
-            else:
-                if self.config_id.odata_filter:
-                    filters.append(f"({self.config_id.odata_filter})")
-            if filters:
-                params['$filter'] = ' and '.join(filters)
 
-            response = session.get(endpoint, params=params, timeout=60)
+            response = session.put(endpoint, params=params, json=self._get_vendor_return_fetch_body(), timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal fetch data (HTTP {response.status_code}): {response.text}')
 
-            raw_data = self._normalize_rows(response.json())
-            print(f"Raw Data: {raw_data}")
-            result = []
-            detail_result = []
+            raw_data = self._extract_response_rows(response.json())
+            raw_data = self._filter_response_rows(raw_data, reference_nbr, odata_filter)
+            raw_data = raw_data[offset:offset + limit] if limit else raw_data[offset:]
+            headers = []
+            details = []
+            seen_references = set()
 
             for row_number, item in enumerate(raw_data, start=1):
-                try:
-                    with self.env.cr.savepoint():
-                        # PERBAIKAN: Mapping diselaraskan dengan key JSON Direct Transfer asli Anda
-                        header = {
-                            'adt_id': item.get('id', '') or '',
-                            'adt_rowNumber': item.get('rowNumber', '') or '',
-                            'adt_note': item.get('note', {}).get('value', '') or '',
-                            # 'branch_warehouse': self._val(item, 'Branch'),
-                            # 'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
-                            # 'actual_qty': self._val(item, 'ControlQty'),
-                            # 'customer_code': self._val(item, 'CustomerID'), # JSON Anda menggunakan CustomerID
-                            'adt_Date': self._val(item, 'Date'),
-                            'adt_Description': self._val(item, 'Description'),
-                            'adt_DocumentOnly': self._bool_val(item, 'DocumentOnly'),
-                            'adt_ExternalRef': self._val(item, 'ExternalRef'),
-                            'adt_LastModifiedDateTime': self._val(item, 'LastModifiedDateTime'),
-                            # 'location_code': str(self._val(item, 'LocationID') or ''), # JSON menggunakan LocationID
-                            'adt_PostPeriod': str(self._val(item, 'PostPeriod') or ''),
-                            'adt_ReferenceNbr': self._val(item, 'ReferenceNbr'),
-                            'adt_Status': self._val(item, 'Status'),
-                            'adt_TotalQty': str(self._val(item, 'TotalQty') or '0.0'),
-                            'adt_TransferType': self._val(item, 'TransferType'), # JSON menggunakan TransferType
-                            
-                            # KOREKSI 2: Sesuaikan key pencarian ke payload API murni ('FromWarehouseID' & 'ToWarehouseID')
-                            'adt_FromWarehouseID': self._val(item, 'FromWarehouseID'),
-                            'adt_ToWarehouseID': self._val(item, 'ToWarehouseID'),
-                        }
+                header = self._prepare_direct_transfer_header_vals(item, row_number)
+                reference = header.get('adt_ReferenceNbr')
+                if not reference:
+                    continue
+                if reference not in seen_references:
+                    seen_references.add(reference)
+                    headers.append(header)
 
-                        if header.get('adt_FromWarehouseID'):
-                            # Kirim data header ke fungsi pembantu
-                            type_record = self._search_picking_type(header)
+                item_details = self._get_detail_rows(item) or [item]
+                for detail in item_details:
+                    details.append(self._prepare_direct_transfer_line_vals(
+                        detail,
+                        reference,
+                    ))
 
-                            # print(f"")
-                            # Ambil ID integer secara aman, gunakan False standar Odoo (bukan None)
-                            header['picking_type_id'] = type_record.id if type_record else False
-
-                        print(f"header : {header}")
-                        created_header = self.env['acumatica.direct.transfer.staging'].create(header)
-
-                        if created_header:
-                            sync_data = fields.Datetime.now()
-                            # Gunakan tanda kurung (), bukan sama dengan (=)
-                            created_header.write({
-                                'config_id': self.config_id.id,
-                                'import_state': 'pending',
-                                'import_message': "Data API Imported",
-                                'selected': True,
-                                'sync_date': sync_data,
-                            })
-
-
-                        details = item.get('Details') or []
-                        if isinstance(details, dict):
-                            details = details.get('value', []) or []
-                        if not isinstance(details, list):
-                            details = []
-                    
-                        # print(f"Header: {header}")
-                        result.append(header)
-
-                        if not details:
-                            raise UserError('Data Detail tidak ditemukan')
-
-                        for detail in details:
-                            print(f"detail : {detail}")
-                            vals = {      
-                                'adt_id' : detail.get('id', ''),
-                                'adt_rowNumber' : detail.get('rowNumber', ''), 
-                                'adt_note' : self._val(detail, 'note'), 
-                                'adt_Description' : self._val(detail, 'Description'), 
-                                'adt_FromLocationID' : self._val(detail, 'FromLocationID'), 
-                                'adt_InventoryID' : self._val(detail, 'InventoryID'), 
-                                'adt_LineNumber' : self._val(detail, 'LineNumber'), 
-                                'adt_NoteID' : self._val(detail, 'NoteID'), 
-                                'adt_Quantity' : self._val(detail, 'Quantity'), 
-                                'adt_SOOrderNbr' : self._val(detail, 'SOOrderNbr'), 
-                                'adt_SOOrderType' : self._val(detail, 'SOOrderType'), 
-                                'adt_SOShipmentNbr' : self._val(detail, 'SOShipmentNbr'), 
-                                'adt_ToLocationID' : self._val(detail, 'ToLocationID'), 
-                                'adt_UOM' : self._val(detail, 'UOM'), 
-                                'receipt_line_id' : created_header.id
-
-                                # 'header_external_id': item.get('id', ''),
-                                # 'line_external_id': detail.get('id', '') or '',
-                                # # Pada JSON Direct Transfer detail Anda, nomor baris menggunakan 'LineNumber' bukan 'LineNbr'
-                                # 'line_nbr': str(self._val(detail, 'LineNumber') or ''), 
-                                # 'line_note': detail.get('note', {}).get('value', '') or '',
-                                # 'line_description': self._val(detail, 'Description'),
-                                # 'inventory_id': self._val(detail, 'InventoryID'),
-                                # 'from_location_code': self._val(detail, 'FromLocationID'), # Ditambahkan sesuai JSON
-                                # 'to_location_code': self._val(detail, 'ToLocationID'),     # Ditambahkan sesuai JSON
-                                # 'product_uom_qty': str(self._val(detail, 'Quantity') or '0.0'),
-                                # 'uom_code': self._val(detail, 'UOM'),
-                                # 'so_order_nbr': self._val(detail, 'SOOrderNbr'),
-                                # 'so_shipment_nbr': self._val(detail, 'SOShipmentNbr'),
-                            }
-
-                            detail_result.append(vals)
-
-                        self.config_id.last_sync = fields.Datetime.now()
-                        print(f"="*60)
-                        print(f"All detail result")
-                        print(f"="*60)
-
-                        for item in detail_result:
-                            self.env['acumatica.direct.transfer.staging.line'].create(item)
-                            print(item)
-                            print(f"="*60)
-
-
-
-                        _logger.info("Berhasil ambil %s rows PO inventory dari Acumatica", len(result))
-                
-                        # raise UserError('debug')
-
-                except Exception as e:
-                    print("=" * 80)
-                    print(f"ERROR IMPORT HEADER KE-{row_number}")
-                    print(f"Reference Number : {item.get('ReferenceNbr', {}).get('value', '')}")
-                    print(f"Header UUID      : {item.get('id', '')}")
-                    print(f"Error Type       : {type(e).__name__}")
-                    print(f"Error Message    : {str(e)}")
-                    print("Header Data :")
-                    print(header if 'header' in locals() else item)
-                    print("=" * 80)
-
-                    _logger.exception(
-                        "Error import Direct Transfer %s",
-                        item.get('ReferenceNbr', {}).get('value', '')
-                    )
+            self._upsert_direct_transfer_staging(headers, details)
+            _logger.info("Berhasil ambil %s rows Vendor Return Document dari Acumatica", len(headers))
+            return len(headers)
         finally:
             if session:
                 self.config_id._do_logout(session)
-        
-        return len(result)
+
+    def _get_vendor_return_fetch_body(self):
+        return {
+            "ReturnType": {
+                "value": "Return Transfer Document"
+            }
+        }
+
+    def _extract_response_rows(self, payload):
+        if isinstance(payload, list):
+            return payload
+        if not isinstance(payload, dict):
+            return []
+
+        for key in (
+            'VendorReturnDocumentGIDetails',
+            'VendorReturnGIDetails',
+            'TransferOrderGIDetails',
+            'TransferPinjamanGIDetails',
+            'Details',
+        ):
+            rows = payload.get(key)
+            if isinstance(rows, dict):
+                rows = rows.get('value', []) or []
+            if isinstance(rows, list):
+                return rows
+
+        return self._normalize_rows(payload)
+
+    def _filter_response_rows(self, rows, reference_nbr=False, odata_filter=False):
+        if reference_nbr:
+            rows = [
+                item for item in rows
+                if self._val(item, 'ReferenceNbr') == reference_nbr
+            ]
+        if self.last_modified_from:
+            rows = [
+                item for item in rows
+                if self._val(item, 'LastModifiedDateTime') >= self.last_modified_from
+            ]
+        return rows
+
+    def _get_detail_rows(self, item):
+        details = (
+            item.get('VendorReturnDocumentGIDetails')
+            or item.get('VendorReturnGIDetails')
+            or item.get('TransferOrderGIDetails')
+            or item.get('Details')
+            or []
+        )
+        if isinstance(details, dict):
+            details = details.get('value', []) or []
+        if not isinstance(details, list):
+            return []
+        return details
+
+    def _prepare_direct_transfer_header_vals(self, item, row_number):
+        header = {
+            'adt_id': item.get('id', '') or '',
+            'adt_rowNumber': self._parse_int(item.get('rowNumber') or row_number),
+            'adt_note': self._val(item, 'note'),
+            'adt_Date': self._val(item, 'Date'),
+            'adt_Description': self._val(item, 'Description'),
+            'adt_DocumentOnly': self._bool_val(item, 'DocumentOnly'),
+            'adt_ExternalRef': self._val(item, 'ExternalRef'),
+            'adt_LastModifiedDateTime': self._val(item, 'LastModifiedDateTime'),
+            'adt_PostPeriod': str(self._val(item, 'PostPeriod') or ''),
+            'adt_ReferenceNbr': self._val(item, 'ReferenceNbr'),
+            'adt_ReturnType': self._val(item, 'ReturnType'),
+            'adt_Status': self._val(item, 'Status'),
+            'adt_TotalQty': self._parse_float(self._val(item, 'TotalQty')),
+            'adt_TransferType': self._val(item, 'TransferType'),
+            'adt_FromWarehouseID': self._val(item, 'FromWarehouseID'),
+            'adt_ToWarehouseID': self._val(item, 'ToWarehouseID'),
+            'config_id': self.config_id.id,
+            'import_state': 'staged',
+            'selected': True,
+            'sync_date': fields.Datetime.now(),
+        }
+        if header.get('adt_FromWarehouseID'):
+            type_record = self._search_picking_type(header)
+            header['picking_type_id'] = type_record.id if type_record else False
+        return header
+
+    def _prepare_direct_transfer_line_vals(self, item, reference_nbr):
+        return {
+            'reference_nbr': reference_nbr,
+            'adt_id': item.get('id', '') or '',
+            'adt_rowNumber': self._parse_int(item.get('rowNumber')),
+            'adt_note': self._val(item, 'note'),
+            'adt_Description': self._val(item, 'LineDescription') or self._val(item, 'Description'),
+            'adt_FromLocationID': self._val(item, 'LineFromLocationID') or self._val(item, 'FromLocationID'),
+            'adt_InventoryID': self._val(item, 'LineInventoryID') or self._val(item, 'InventoryID'),
+            'adt_LineNumber': self._parse_int(self._val(item, 'LineNumber') or self._val(item, 'LineNbr')),
+            'adt_NoteID': self._val(item, 'LineNoteID') or self._val(item, 'NoteID'),
+            'adt_Quantity': self._parse_float(self._val(item, 'LineQuantity') or self._val(item, 'Quantity')),
+            'adt_SOOrderNbr': self._val(item, 'LineSOOrderNbr') or self._val(item, 'SOOrderNbr'),
+            'adt_SOOrderType': self._val(item, 'LineSOOrderType') or self._val(item, 'SOOrderType'),
+            'adt_SOShipmentNbr': self._val(item, 'LineSOShipmentNbr') or self._val(item, 'SOShipmentNbr'),
+            'adt_ToLocationID': self._val(item, 'LineToLocationID') or self._val(item, 'ToLocationID'),
+            'adt_UOM': self._val(item, 'LineUOM') or self._val(item, 'UOM'),
+        }
+
+    def _upsert_direct_transfer_staging(self, headers, details):
+        if not headers:
+            return
+
+        Picking = self.env['stock.picking']
+        Header = self.env['acumatica.direct.transfer.staging']
+        Detail = self.env['acumatica.direct.transfer.staging.line']
+        reference_nbrs = [vals['adt_ReferenceNbr'] for vals in headers if vals.get('adt_ReferenceNbr')]
+        existing_headers = Header.search([
+            ('adt_ReferenceNbr', 'in', reference_nbrs),
+            ('config_id', '=', self.config_id.id),
+        ])
+        existing_map = {record.adt_ReferenceNbr: record for record in existing_headers}
+
+        detail_map = {}
+        for vals in details:
+            detail_map.setdefault(vals.pop('reference_nbr'), []).append(vals)
+
+        for vals in headers:
+            reference_nbr = vals.get('adt_ReferenceNbr')
+            if not reference_nbr:
+                continue
+
+            picking = Picking.search([('origin', '=', reference_nbr)], limit=1)
+            vals.update({
+                'odoo_picking_id': picking.id if picking else False,
+                'import_message': f'{reference_nbr}: Sudah ada - akan diupdate' if picking else 'Data API Imported',
+            })
+
+            existing = existing_map.get(reference_nbr)
+            if existing and vals.get('adt_LastModifiedDateTime') and existing.adt_LastModifiedDateTime == vals.get('adt_LastModifiedDateTime'):
+                continue
+            if existing:
+                existing.write(vals)
+                header = existing
+                header.line_ids.unlink()
+            else:
+                header = Header.create(vals)
+
+            line_vals = [
+                {**line, 'receipt_line_id': header.id}
+                for line in detail_map.get(reference_nbr, [])
+            ]
+            if line_vals:
+                Detail.create(line_vals)
 
                         
 
@@ -343,7 +374,7 @@ class ImportDirectTransferWizard(models.TransientModel):
                 **item,
                 'odoo_picking_id' : exists[0]['id'] if exists else False,
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': f'{reference_nbr}: Sudah ada → akan diupdate' if exists else '',
                 'selected': True,
                 'sync_date': sync_data,
@@ -396,7 +427,7 @@ class ImportDirectTransferWizard(models.TransientModel):
                 continue
 
             # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda
-            if existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
+            if vals.get('acumatica_write_date') and existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -427,7 +458,7 @@ class ImportDirectTransferWizard(models.TransientModel):
         for vals in data:
             header_vals = {
                 'config_id': self.config_id.id,
-                'import_state': 'pending',
+                'import_state': 'staged',
                 'import_message': 'Data API Imported',
                 'sync_date': sync_date,
                 'selected': True,

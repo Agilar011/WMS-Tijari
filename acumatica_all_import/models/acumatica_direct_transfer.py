@@ -9,7 +9,7 @@ class AcumaticaDirectTransferStaging(models.Model):
     _order = 'id desc'
 
     # --- Relasi Odoo ---
-    config_id = fields.Many2one('acumatica.direct.transfer.config', string="Konfigurasi API")
+    config_id = fields.Many2one('acumatica.config', string="Konfigurasi API")
     picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
     odoo_picking_id = fields.Many2one('stock.picking', string="Odoo Stock Picking")
     line_ids = fields.One2many(
@@ -20,12 +20,13 @@ class AcumaticaDirectTransferStaging(models.Model):
 
     # --- Status Sinkronisasi Intern ---
     import_state = fields.Selection([
-        ('pending', 'Pending'),
-        ('imported', 'Imported'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
         ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error')
-    ], string="Status Impor", default='pending', index=True)
-    import_message = fields.Text(string="Pesan Impor/Error")
+    ], string="Status", default='staged', index=True)
+    import_message = fields.Text(string="Generation Message")
     sync_date = fields.Datetime(string="Tanggal Ambil Data")
     selected = fields.Boolean(string="Pilih", default=True)
 
@@ -56,15 +57,26 @@ class AcumaticaDirectTransferStaging(models.Model):
 
     def action_import_selected(self):
         """Memicu proses impor massal untuk record yang dicentang user"""
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
+
+    def action_reset_pending(self):
+        self.filtered(lambda record: record.import_state == 'error').write({
+            'import_state': 'staged',
+            'import_message': False,
+        })
+        return True
 
     def action_import_this(self):
         """Memicu proses impor khusus untuk 1 record aktif"""
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _do_import(self):
         """Fungsi utama eksekusi pembuatan dokumen Stock Picking & Stock Move"""
@@ -78,7 +90,7 @@ class AcumaticaDirectTransferStaging(models.Model):
         # Ambil daftar unik reference number agar tidak memproses dokumen yang sama berulang kali
         for reference_nbr in self.mapped('adt_ReferenceNbr'):
             receipt_lines = self.filtered(
-                lambda l: l.adt_ReferenceNbr == reference_nbr and l.import_state in ['pending', 'error']
+                lambda l: l.adt_ReferenceNbr == reference_nbr and l.import_state in ['staged', 'error']
             )
             if not receipt_lines:
                 continue
@@ -152,10 +164,11 @@ class AcumaticaDirectTransferStaging(models.Model):
                             raise UserError(f"Dokumen {origin} sudah divalidasi di Odoo (State: {picking.state}), update digagalkan.")
                         picking.write(vals)
                         action_state = 'updated'
+                        self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=origin)
                     else:
                         picking = Picking.create(vals)
                         is_new_picking = True
-                        action_state = 'imported'
+                        action_state = 'created'
 
                     # ---------------------------------------------------------
                     # BULK CREATION STOCK MOVES (DETAIL LINES)
@@ -227,6 +240,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                         'import_message': f'Sukses diproses ke Odoo ({picking.name})',
                         'odoo_picking_id': picking.id,
                     })
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'direct_transfer')
 
                     if is_new_picking:
                         imported += 1
@@ -235,14 +249,31 @@ class AcumaticaDirectTransferStaging(models.Model):
 
             except Exception as e:
                 # 2. STRATEGI PENANGANAN JIKA DOKUMEN ERROR:
-                # Batalkan transaksi database (Picking dihapus total dari SQL memory)
+                # Savepoint di atas membatalkan picking/move dokumen yang gagal.
                 error += 1
-                self.env.cr.rollback()
-
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
+                    first,
+                    [str(e)],
+                    api_acumatica='direct_transfer',
+                    operation_type='internal',
+                    origin=reference_nbr,
+                    location=first.adt_FromWarehouseID or False,
+                    location_dest=first.adt_ToWarehouseID or False,
+                    scheduled_date=first.adt_Date,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.adt_InventoryID or False,
+                        'product_name': line.adt_Description or False,
+                        'qty': self._parse_float(line.adt_Quantity),
+                        'uom': line.adt_UOM or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in to_create_move_lines],
+                )
                 # Tulis pesan kegagalan ke UI Odoo agar user tahu detail masalahnya
                 first.write({
                     'import_state': 'error',
                     'import_message': str(e),
+                    'odoo_picking_id': False,
                 })
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
                 

@@ -9,8 +9,8 @@
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
                 <field name="adt_DocumentOnly" string="Document Only"/>
                 <field name="import_state"/>
-                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
-                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Staged" name="staged" domain="[('import_state','=','staged')]"/>
+                <filter string="Generated" name="generated" domain="[('import_state','in',('created','updated'))]"/>
                 <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
             </search>
         </field>
@@ -28,16 +28,19 @@
                 <field name="adt_TransType" string="Trans Type"/>
                 <field name="adt_TransferType" string="Transfer Type"/>
                 <field name="adt_DocumentOnly" string="Document Only"/>
-                <field name="adt_ToWarehouseID" string="Warehouse"/>
+                <field name="adt_FromWarehouseID" string="From Warehouse"/>
+                <field name="adt_FromWarehouseName" string="From Warehouse Name"/>
+                <field name="adt_ToWarehouseID" string="To Warehouse"/>
+                <field name="adt_ToWarehouseName" string="To Warehouse Name"/>
                 <field name="picking_type_id"/>
                 <field name="adt_TotalQty" string="Total Quantity"/>
                 <field name="import_state" widget="badge"
-                       decoration-success="import_state in ('imported','updated')"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-success="import_state in ('created','updated')"
+                       decoration-warning="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <button name="action_open_picking" string="Open Picking" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload" invisible="import_state != 'staged'"/>
+                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                 <field name="odoo_internal_transfer_order_id" column_invisible="1"/>
             </list>
         </field>
@@ -52,9 +55,10 @@
             <form string="Detail Data Direct Transfer Staging">
                 <header>
                     <button name="action_fill_picking_type_id" string="Fill Picking Type" type="object" class="btn-secondary"/>
-                    <button name="action_import_this" string="Import" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
+                    <button name="action_import_this" string="Import" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
+                    <button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/>
                     <!-- Diperbaiki: Ditambahkan statusbar_visible agar memunculkan titik status -->
-                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,error"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>
                     <group>
@@ -67,17 +71,20 @@
                             <field name="adt_DocumentOnly" string="Acumatica DocumentOnly" readonly="1"/>
                             <field name="adt_ExternalRef" string="Acumatica ExternalRef" readonly="1"/>
                             <field name="adt_FromWarehouseID" string="Acumatica FromWarehouseID" readonly="1"/>
+                            <field name="adt_FromWarehouseName" string="Acumatica FromWarehouseName" readonly="1"/>
                             <field name="adt_Hold" string="Acumatica Hold" readonly="1"/>
                             <field name="adt_LastModifiedDateTime" string="Acumatica LastModifiedDateTime" readonly="1"/>
                         </group>
                         <group>
                             <field name="adt_NoteID" string="Acumatica NoteID" readonly="1"/>
+                            <field name="adt_NoteHeaderID" string="Acumatica NoteHeaderID" readonly="1"/>
                             <field name="adt_PostPeriod" string="Acumatica PostPeriod" readonly="1"/>
                             <field name="adt_ReferenceNbr" string="Acumatica ReferenceNbr" readonly="1"/>
                             <field name="adt_ReturnType" string="Acumatica ReturnType" readonly="1"/>
                             <field name="adt_Status" string="Acumatica Status" readonly="1"/>
                             <field name="adt_TotalQty" string="Acumatica TotalQty" readonly="1"/>
                             <field name="adt_ToWarehouseID" string="Acumatica ToWarehouseID" readonly="1"/>
+                            <field name="adt_ToWarehouseName" string="Acumatica ToWarehouseName" readonly="1"/>
                             <field name="adt_TransferType" string="Acumatica TransferType" readonly="1"/>
                             <field name="adt_TransType" string="Acumatica TransType" readonly="1"/>
                         </group>
@@ -96,7 +103,9 @@
                                     <field name="adt_Quantity" string="Quantity"/>
                                     <field name="adt_UOM" string="UOM"/>
                                     <field name="adt_SOOrderNbr" string="SO Nbr"/>
+                                    <field name="adt_SOOrderType" string="SO Order Type"/>
                                     <field name="adt_SOShipmentNbr" string="Shipment Nbr"/>
+                                    <field name="adt_LineNoteID" string="Line Note ID"/>
                                     <field name="adt_note" string="Line Note"/>
                                 </list>
                             </field>
@@ -117,7 +126,7 @@
 
     <!-- 4. Window Action -->
     <record id="action_vendor_return_acumatica_direct_transfer" model="ir.actions.act_window">
-        <field name="name">Vendor Return Direct Transfer Staging</field>
+        <field name="name">Vendor Return Consignment Staging</field>
         <!-- Diperbaiki: Ditambahkan .vendor.return. -->
         <field name="res_model">acumatica.vendor.return.direct.transfer.staging</field>
         <field name="view_mode">list,form</field>
@@ -126,7 +135,7 @@
 
     <!-- 5. Server Action -->
     <record id="action_import_selected_vendor_return_direct_transfer" model="ir.actions.server">
-        <field name="name">Process Selected Import</field>
+        <field name="name">Generate Data</field>
         <!-- Diperbaiki: Menggunakan titik diganti underscore untuk referensi model internal Odoo -->
         <field name="model_id" ref="model_acumatica_vendor_return_direct_transfer_staging"/>
         <field name="binding_model_id" ref="model_acumatica_vendor_return_direct_transfer_staging"/>

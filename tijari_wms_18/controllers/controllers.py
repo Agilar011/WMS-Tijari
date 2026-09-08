@@ -106,28 +106,39 @@ class WmsApiController(http.Controller):
         document_only = self._document_only_value(
             self._get_payload_value(payload, 'document_only', 'adt_is_document_only', 'adt_DocumentOnly')
         )
-        target_picking_type = PickingType.resolve_document_only_picking_type(
+        warehouse_code = self._get_payload_value(
+            payload, 'warehouse_code', 'adt_warehouse_code'
+        )
+
+        # Override eksplisit lewat sequence_code (misal 'RECEIPT', 'DDO', dst.)
+        picking_type_code = payload.get('picking_type_code')
+        if picking_type_code:
+            code_domain = [('sequence_code', '=', picking_type_code), ('active', '=', True)]
+            warehouse = PickingType._adt_find_warehouse(warehouse_code)
+            if warehouse:
+                code_domain.append(('warehouse_id', '=', warehouse.id))
+            candidates = PickingType.search(code_domain)
+            if len(candidates) > 1:
+                raise UserError(_(
+                    "Kode picking type %s ambigu untuk warehouse %s: %s."
+                ) % (
+                    picking_type_code,
+                    warehouse.display_name if warehouse else '-',
+                    ', '.join(pt.display_name for pt in candidates),
+                ))
+            if candidates:
+                return candidates
+
+        return PickingType.resolve_picking_type(
             target_picking_type_id=self._get_payload_value(payload, 'target_picking_type_id', 'picking_type_id'),
             target_operation_type=self._get_payload_value(payload, 'target_operation_type', 'target_operation_type_code'),
             api_acumatica=self._get_payload_value(payload, 'api_acumatica', 'api_type'),
+            transaction_key=operation_category,
             document_only=document_only,
-            warehouse_code=self._get_payload_value(payload, 'warehouse_code', 'adt_warehouse_code'),
-            required=bool(
-                self._get_payload_value(payload, 'target_picking_type_id', 'picking_type_id')
-                or self._get_payload_value(payload, 'target_operation_type', 'target_operation_type_code')
-            ),
+            warehouse_code=warehouse_code,
+            operation_category=operation_category,
+            required=True,
         )
-        if target_picking_type:
-            return target_picking_type
-
-        picking_type_domain = [('operation_category', '=', operation_category)]
-        picking_type_code = payload.get('picking_type_code')
-        if picking_type_code:
-            picking_type_domain.append(('sequence_code', '=', picking_type_code))
-        picking_type = PickingType.search(picking_type_domain, limit=1)
-        if not picking_type:
-            raise UserError(_("No picking type configured for operation_category = '%s'") % operation_category)
-        return picking_type
 
     def _prepare_acumatica_header_vals(self, payload, transaction_type):
         vals = {
@@ -595,7 +606,7 @@ class WmsApiController(http.Controller):
 
     @http.route('/print/lot_number_move_line', type='http', auth='user')
     def PrintLotNumberLine(self, ids=None, **kw):
-
+        blank_image = create_blank_image()
         if not ids:
             return request.make_response(
                 json.dumps({'error': 'ids tidak ditemukan'}),
@@ -673,7 +684,7 @@ class WmsApiController(http.Controller):
                 json.dumps({'error': 'id tidak ditemukan'}),
                 [('Content-Type', 'application/json')]
             )
-
+        blank_image = create_blank_image()
         stok = request.env['stock.quant.package'].sudo().browse(int(id))
         package_level = request.env['stock.package_level'].sudo().search([
             ('package_id', '=', stok.id)
@@ -695,6 +706,7 @@ class WmsApiController(http.Controller):
             'warehouse_name': picking.picking_type_id.name or '',
             'warehouse_id': picking.picking_type_id.warehouse_id.name or '',
             'scheduled_date': format_tanggal_indo(picking.scheduled_date) if picking else "",
+            'qrcode': (stok.qr_code_image.decode('utf-8') if stok.qr_code_image else blank_image),
             'detail': [],
         }
 
@@ -730,6 +742,203 @@ class WmsApiController(http.Controller):
             export_id = xml.find('.//export//id').text
             result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "PACKING_LIST.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/packing_package', type='http', auth='user')
+    def PrintPackingPackage(self, id=None, **kw):
+        if not id:
+            return request.make_response(
+                json.dumps({'error': 'id tidak ditemukan'}),
+                [('Content-Type', 'application/json')]
+            )
+        blank_image = create_blank_image()
+        stok = request.env['stock.quant.package'].sudo().browse(int(id))
+        
+
+        data = {
+            'name': stok.name or "",
+            'package_type': stok.package_cat or "",
+            'date': format_tanggal_indo(stok.pack_date),
+            'qrcode': (stok.qr_code_image.decode('utf-8') if stok.qr_code_image else blank_image),
+        }
+
+    
+
+        data = json.dumps(data)
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/Lot_package',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "PACKING_LIST.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/stok_opname', type='http', auth='user')
+    def PrintStokOpname(self, id, **kw):
+        blank_image = create_blank_image()
+        stock = request.env['stock.inventory'].sudo().browse(int(id))
+        lines = request.env['stock.quant'].sudo().search([('location_id', 'in', stock.location_ids.ids),])
+        
+        warehouse = request.env['stock.warehouse'].sudo().search([
+            ('lot_stock_id', 'in', stock.location_ids.ids)
+        ], limit=1)
+
+        data = {
+            'warehouse_id': warehouse.name or '',
+            'date': format_tanggal_indo(stock.date),
+            'lok': stock.location_ids.complete_name or '',
+            'note': stock.notes or '',
+            'created_by': stock.responsible_id.name or '',
+            'ttd_created_by': (stock.responsible_id.partner_id.digital_signature.decode('utf-8') if stock.responsible_id.partner_id.digital_signature else blank_image),
+            'status_ba': dict(stock._fields['status_ba'].selection).get(stock.status_ba, ''),
+
+            'detail': []
+        }
+        for line in lines:
+            is_counted = line.inventory_quantity_set
+            system_qty = float(line.quantity or 0)
+            qty2 = float(line.inventory_quantity or 0) if is_counted else 0.0
+            diff = float(line.inventory_diff_quantity or 0) if is_counted else 0.0
+
+            diff_text = str(int(diff)) if diff.is_integer() else str(diff)
+
+            if diff != 0:
+                formatted_diff = f"<style forecolor='red'>{diff_text}</style>"
+            else:
+                formatted_diff = diff_text
+            obj = {
+                'name': line.product_id.display_name or '',
+                'uom': line.product_uom_id.name or '',
+                'system_qty': system_qty,
+                'qty2': qty2,
+                'diff': formatted_diff,
+                'ket': ''
+            }
+            data['detail'].append(obj)
+        data = json.dumps(data)
+
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_STOCK_OPNAME',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "stok_opname.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/stok_scrab', type='http', auth='user')
+    def PrintStokScrab(self, id, **kw):
+        blank_image = create_blank_image()
+        stock = request.env['stock.scrap'].sudo().browse(int(id))
+        
+        if stock and stock.location_id:
+            location_id = stock.location_id.id
+            warehouse = request.env['stock.warehouse'].sudo().search([
+                ('lot_stock_id', '=', location_id)
+            ], limit=1)
+        else:
+            warehouse = request.env['stock.warehouse'].sudo() 
+
+        data = {
+            'name': stock.name or '', 
+            'warehouse_id': warehouse.name or '',
+            'source': ( stock.location_id.complete_name or ''),
+            'scrap': ( stock.scrap_location_id.complete_name or ''),
+            'reason': ( stock.scrap_reason_tag_ids.name or ''),
+            'date': format_tanggal_indo(datetime.now()),
+            'note': stock.note or '',
+            'created_by': request.env.user.name or '',
+            'ttd_created_by': (request.env.user.partner_id.digital_signature.decode('utf-8') if request.env.user.partner_id.digital_signature else blank_image),
+            'detail': [],
+        
+        }
+        for line in stock.scrap_line_ids:
+            obj = {
+                'name': line.product_id.display_name or '',
+                'uom': line.product_uom_id.name or '',
+                'qty2': line.scrapped_qty or '',
+                'diff': '',
+            }
+            data['detail'].append(obj)
+        data = json.dumps(data)
+
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_SCRAP_ORDER',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "stok_scrab.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
             import traceback

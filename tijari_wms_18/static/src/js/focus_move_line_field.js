@@ -11,8 +11,50 @@ const ZXING_BROWSER_CDN_URLS = [
     "https://unpkg.com/@zxing/browser@0.1.5/umd/zxing-browser.min.js",
 ];
 const SCANNER_FALLBACK_MESSAGE = "Scanner kamera tidak tersedia. Input manual diaktifkan.";
+const SCANNER_FORMATS = ["qr_code", "code_128", "ean_13", "ean_8", "code_39", "code_93", "upc_a", "upc_e"];
+const CAMERA_ACCESS_ERROR_NAMES = [
+    "NotAllowedError",
+    "SecurityError",
+    "NotFoundError",
+    "DevicesNotFoundError",
+    "NotReadableError",
+    "TrackStartError",
+    "OverconstrainedError",
+    "ConstraintNotSatisfiedError",
+];
+const CAMERA_RETRYABLE_ERROR_NAMES = [
+    "NotFoundError",
+    "DevicesNotFoundError",
+    "OverconstrainedError",
+    "ConstraintNotSatisfiedError",
+];
+const MOVE_LINE_SCAN_TEXT_FIELDS = [
+    "confirmation_lot_code",
+    "confirmation_location_code",
+    "confirmation_package_code",
+];
+const MOVE_LINE_SCAN_RELATION_FIELDS = [
+    "matching_lot_id",
+    "matching_loc_dest_id",
+    "location_dest_id",
+    "location_putaway_id",
+    "result_package_id",
+];
+const MOVE_LINE_RECORD_UPDATE_FIELDS = [
+    "confirmation_location_code",
+    "matching_lot_id",
+    "matching_loc_dest_id",
+    "location_dest_id",
+    "location_putaway_id",
+    "confirmation_package_code",
+    "result_package_id",
+];
 
 let zxingBrowserLoadPromise = null;
+
+function hasOwn(object, key) {
+    return Object.prototype.hasOwnProperty.call(object || {}, key);
+}
 
 function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -86,25 +128,11 @@ function getScannerErrorMessage(error) {
 }
 
 function isCameraAccessError(error) {
-    return [
-        "NotAllowedError",
-        "SecurityError",
-        "NotFoundError",
-        "DevicesNotFoundError",
-        "NotReadableError",
-        "TrackStartError",
-        "OverconstrainedError",
-        "ConstraintNotSatisfiedError",
-    ].includes(error?.name || "");
+    return CAMERA_ACCESS_ERROR_NAMES.includes(error?.name || "");
 }
 
 function isCameraRetryableError(error) {
-    return [
-        "NotFoundError",
-        "DevicesNotFoundError",
-        "OverconstrainedError",
-        "ConstraintNotSatisfiedError",
-    ].includes(error?.name || "");
+    return CAMERA_RETRYABLE_ERROR_NAMES.includes(error?.name || "");
 }
 
 function notifyScannerError(envOrService, error) {
@@ -113,6 +141,23 @@ function notifyScannerError(envOrService, error) {
         title: "Scan barcode gagal",
         type: "danger",
     });
+}
+
+async function scanCodeWithNotification(notification, title) {
+    try {
+        return await scanQrFromCamera(title);
+    } catch (error) {
+        notifyScannerError(notification, error);
+        return null;
+    }
+}
+
+async function reloadRecordSafely(record, notification) {
+    try {
+        await record?.load?.();
+    } catch (error) {
+        notifyScannerError(notification, error);
+    }
 }
 
 function findRowById(recordId) {
@@ -211,30 +256,27 @@ function applyMoveLineScanResult(action, result) {
         return;
     }
 
-    for (const fieldName of ["confirmation_lot_code", "confirmation_location_code"]) {
-        if (Object.prototype.hasOwnProperty.call(result, fieldName)) {
+    for (const fieldName of MOVE_LINE_SCAN_TEXT_FIELDS) {
+        if (hasOwn(result, fieldName)) {
             setCellText(row, fieldName, result[fieldName]);
         }
     }
 
-    if (Object.prototype.hasOwnProperty.call(result, "matching")) {
+    if (hasOwn(result, "matching")) {
         setBadgeCell(row, "matching", result.matching_label || result.matching, result.matching);
         updateScanButtons(row, result.matching === "match");
     }
+    if (hasOwn(result, "second_matching")) {
+        setBadgeCell(row, "second_matching", result.second_matching, result.second_matching);
+    }
 
-    if (Object.prototype.hasOwnProperty.call(result, "matching_lot_id")) {
-        setCellText(row, "matching_lot_id", result.matching_lot_id?.[1] || "");
+    for (const fieldName of MOVE_LINE_SCAN_RELATION_FIELDS) {
+        if (hasOwn(result, fieldName)) {
+            setCellText(row, fieldName, result[fieldName]?.[1] || "");
+        }
     }
-    if (Object.prototype.hasOwnProperty.call(result, "matching_loc_dest_id")) {
-        setCellText(row, "matching_loc_dest_id", result.matching_loc_dest_id?.[1] || "");
-    }
-    if (Object.prototype.hasOwnProperty.call(result, "location_dest_id")) {
-        setCellText(row, "location_dest_id", result.location_dest_id?.[1] || "");
-    }
-    if (Object.prototype.hasOwnProperty.call(result, "location_putaway_id")) {
-        setCellText(row, "location_putaway_id", result.location_putaway_id?.[1] || "");
-    }
-    if (Object.prototype.hasOwnProperty.call(result, "putaway_status")) {
+
+    if (hasOwn(result, "putaway_status")) {
         setBadgeCell(row, "putaway_status", result.putaway_status_label || result.putaway_status, result.putaway_status);
     }
 }
@@ -408,7 +450,30 @@ function createScannerDialog(title) {
 }
 
 function stopStream(stream) {
-    stream?.getTracks?.().forEach((track) => track.stop());
+    try {
+        stream?.getTracks?.().forEach((track) => track.stop());
+    } catch {
+        // Mobile camera cleanup can fail after a successful scan; ignore cleanup errors.
+    }
+}
+
+function removeScannerOverlay(dialog) {
+    try {
+        dialog?.overlay?.remove();
+    } catch {
+        // The overlay may already be gone if the scanner closes from multiple async paths.
+    }
+}
+
+function stopScannerControls(controls) {
+    try {
+        const result = controls?.stop?.();
+        if (result?.catch) {
+            result.catch(() => {});
+        }
+    } catch {
+        // Stopping the mobile camera must not turn a successful scan into a UI error.
+    }
 }
 
 function getVideoConstraintCandidates() {
@@ -467,9 +532,7 @@ async function scanQrWithBarcodeDetector(title) {
         throw new Error(SCANNER_FALLBACK_MESSAGE);
     }
 
-    const detector = new BarcodeDetector({
-        formats: ["qr_code", "code_128", "ean_13", "ean_8", "code_39", "code_93", "upc_a", "upc_e"],
-    });
+    const detector = new BarcodeDetector({ formats: SCANNER_FORMATS });
     const dialog = createScannerDialog(title);
     let stream = null;
     let stopped = false;
@@ -477,7 +540,7 @@ async function scanQrWithBarcodeDetector(title) {
     const close = () => {
         stopped = true;
         stopStream(stream);
-        dialog.overlay.remove();
+        removeScannerOverlay(dialog);
     };
 
     dialog.closeButton.addEventListener("click", close);
@@ -531,8 +594,8 @@ async function scanQrWithZxing(title) {
             return;
         }
         stopped = true;
-        controls?.stop?.();
-        dialog.overlay.remove();
+        stopScannerControls(controls);
+        removeScannerOverlay(dialog);
     };
 
     dialog.closeButton.addEventListener("click", close);
@@ -585,6 +648,35 @@ async function scanQrWithZxing(title) {
     }
 }
 
+async function callScannedCodeMethod({ orm, notification, resModel, resId, methodName, title }) {
+    if (!orm || !resModel || !resId || !methodName) {
+        return { ok: false, result: null };
+    }
+
+    const scannedCode = await scanCodeWithNotification(notification, title);
+    if (!scannedCode) {
+        return { ok: false, result: null };
+    }
+
+    try {
+        const result = await orm.call(resModel, methodName, [[resId], scannedCode]);
+        return { ok: true, result };
+    } catch (error) {
+        notifyScannerError(notification, error);
+        return { ok: false, result: null };
+    }
+}
+
+function getResultUpdates(result, fieldNames) {
+    const updates = {};
+    for (const fieldName of fieldNames) {
+        if (hasOwn(result, fieldName)) {
+            updates[fieldName] = result[fieldName] || false;
+        }
+    }
+    return updates;
+}
+
 async function scanQrToMoveLineField(env, action) {
     const params = action.params || {};
     const fieldName = params.field_name;
@@ -622,17 +714,14 @@ async function scanQrToPickingProduct(env, action) {
         return;
     }
 
-    try {
-        const scannedCode = await scanQrFromCamera(params.title);
-        await env.services.orm.call(
-            resModel,
-            "action_apply_scanned_product",
-            [[resId], scannedCode]
-        );
-    } catch (error) {
-        notifyScannerError(env, error);
-        return;
-    }
+    await callScannedCodeMethod({
+        orm: env.services.orm,
+        notification: env,
+        resModel,
+        resId,
+        methodName: "action_apply_scanned_product",
+        title: params.title,
+    });
 }
 
 async function scanQrToPickingPackage(env, action) {
@@ -644,16 +733,29 @@ async function scanQrToPickingPackage(env, action) {
         return;
     }
 
+    await callScannedCodeMethod({
+        orm: env.services.orm,
+        notification: env,
+        resModel,
+        resId,
+        methodName: "action_apply_scanned_package",
+        title: params.title,
+    });
+}
+
+async function scanQrToPickingOrigin(env, action) {
+    const params = action.params || {};
+
     try {
-        const scannedCode = await scanQrFromCamera(params.title);
-        await env.services.orm.call(
-            resModel,
-            "action_apply_scanned_package",
-            [[resId], scannedCode]
+        const scannedCode = await scanQrFromCamera(params.title || "Search Document");
+        const result = await env.services.orm.call(
+            "stock.picking",
+            "action_open_by_scanned_origin",
+            [scannedCode]
         );
+        await env.services.action.doAction(result);
     } catch (error) {
         notifyScannerError(env, error);
-        return;
     }
 }
 
@@ -681,6 +783,11 @@ class MoveLineScanButton extends Component {
         return this.constructor.scanTitle;
     }
 
+    get label() {
+        return this.constructor.label;
+    }
+
+
     get iconClass() {
         return this.constructor.iconClass;
     }
@@ -694,29 +801,25 @@ class MoveLineScanButton extends Component {
             return;
         }
 
-        let scannedCode;
-        try {
-            scannedCode = await scanQrFromCamera(this.title);
-        } catch (error) {
-            notifyScannerError(this.notification, error);
+        const scannedCode = await scanCodeWithNotification(this.notification, this.title);
+        if (!scannedCode) {
             return;
         }
 
-        const result = await this.orm.call(
-            "stock.move.line",
-            "action_apply_scanned_field",
-            [[moveLineId], this.fieldName, scannedCode]
-        );
-        const updates = {};
-        for (const fieldName of ["matching_lot_id", "matching_loc_dest_id"]) {
-            if (Object.prototype.hasOwnProperty.call(result || {}, fieldName)) {
-                updates[fieldName] = result[fieldName] || false;
+        try {
+            const result = await this.orm.call(
+                this.props.record.resModel,
+                "action_apply_scanned_field",
+                [[moveLineId], this.fieldName, scannedCode]
+            );
+            const updates = getResultUpdates(result, MOVE_LINE_RECORD_UPDATE_FIELDS);
+            if (Object.keys(updates).length) {
+                await this.props.record.update(updates);
             }
+            await this.props.record.load();
+        } catch (error) {
+            notifyScannerError(this.notification, error);
         }
-        if (Object.keys(updates).length) {
-            await this.props.record.update(updates);
-        }
-        await this.props.record.load();
     }
 }
 
@@ -734,6 +837,44 @@ class MoveLineScanLocationButton extends MoveLineScanButton {
     static iconClass = "fa fa-map-marker";
 }
 
+class MoveLineScanLotFormButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanFormButton";
+    static scanFieldName = "confirmation_lot_code";
+    static scanTitle = "Scan Lot QR Code";
+    static label = "Scan LOT";
+    static iconClass = "fa fa-barcode";
+}
+
+class MoveLineScanLocationFormButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanFormButton";
+    static scanFieldName = "confirmation_location_code";
+    static scanTitle = "Scan Location QR Code";
+    static label = "Scan Location";
+    static iconClass = "fa fa-map-marker";
+}
+
+class MoveLineScanLocationTextButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanTextButton";
+    static scanFieldName = "confirmation_location_code";
+    static scanTitle = "Scan Location QR Code";
+    static iconClass = "fa fa-map-marker";
+}
+
+class MoveLineScanPackageButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanButton";
+    static scanFieldName = "result_package_id";
+    static scanTitle = "Scan Package QR Code";
+    static iconClass = "fa fa-barcode";
+}
+
+class MoveLineScanPackageFormButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanFormButton";
+    static scanFieldName = "result_package_id";
+    static scanTitle = "Scan Package QR Code";
+    static label = "Scan Box";
+    static iconClass = "fa fa-barcode";
+}
+
 class ProductScanButton extends Component {
     static props = { ...standardFieldProps };
     static template = "tijari.ProductScanButton";
@@ -747,7 +888,31 @@ class ProductScanButton extends Component {
         return "action_apply_scanned_product";
     }
 
+    get applyByLotMethodName() {
+        return "action_apply_scanned_product_by_lot";
+    }
+
+    get scanTitle() {
+        return "Scan Product QR Code";
+    }
+
+    get scanByLotTitle() {
+        return "Scan Lot QR Code";
+    }
+
     async onClick(ev) {
+        await this.scanWithMethod(ev, this.applyMethodName, this.scanTitle);
+    }
+
+    async onProductClick(ev) {
+        await this.scanWithMethod(ev, this.applyMethodName, this.scanTitle);
+    }
+
+    async onProductByLotClick(ev) {
+        await this.scanWithMethod(ev, this.applyByLotMethodName, this.scanByLotTitle);
+    }
+
+    async scanWithMethod(ev, methodName, title) {
         ev.preventDefault();
         ev.stopPropagation();
 
@@ -756,26 +921,47 @@ class ProductScanButton extends Component {
             return;
         }
 
-        let scannedCode;
-        try {
-            scannedCode = await scanQrFromCamera("Scan Product QR Code");
-        } catch (error) {
-            notifyScannerError(this.notification, error);
+        const applyResult = await callScannedCodeMethod({
+            orm: this.orm,
+            notification: this.notification,
+            resModel,
+            resId,
+            methodName,
+            title,
+        });
+        if (!applyResult.ok) {
             return;
         }
 
-        await this.orm.call(
-            resModel,
-            this.applyMethodName,
-            [[resId], scannedCode]
-        );
-        await this.props.record.load();
+        await reloadRecordSafely(this.props.record, this.notification);
     }
 }
 
 class PickerProductScanButton extends ProductScanButton {
     get applyMethodName() {
         return "action_apply_scanned_picker_product";
+    }
+
+    get applyByLotMethodName() {
+        return "action_apply_scanned_picker_product_by_lot";
+    }
+}
+
+class ProductByLotScanButton extends ProductScanButton {
+    static template = "tijari.ProductByLotScanButton";
+
+    get applyMethodName() {
+        return "action_apply_scanned_product_by_lot";
+    }
+
+    get scanTitle() {
+        return "Scan Lot QR Code";
+    }
+}
+
+class PickerProductByLotScanButton extends ProductByLotScanButton {
+    get applyMethodName() {
+        return "action_apply_scanned_picker_product_by_lot";
     }
 }
 
@@ -786,6 +972,8 @@ class PackageScanButton extends Component {
     setup() {
         this.orm = useService("orm");
         this.notification = useService("notification");
+        this.action = useService("action");
+
     }
 
     async onClick(ev) {
@@ -797,20 +985,45 @@ class PackageScanButton extends Component {
             return;
         }
 
-        let scannedCode;
-        try {
-            scannedCode = await scanQrFromCamera("Scan Package QR Code");
-        } catch (error) {
-            notifyScannerError(this.notification, error);
+        const applyResult = await callScannedCodeMethod({
+            orm: this.orm,
+            notification: this.notification,
+            resModel,
+            resId,
+            methodName: "action_apply_scanned_package",
+            title: "Scan Package QR Code",
+        });
+        if (!applyResult.ok) {
             return;
         }
 
-        await this.orm.call(
-            resModel,
-            "action_apply_scanned_package",
-            [[resId], scannedCode]
-        );
-        await this.props.record.load();
+        await reloadRecordSafely(this.props.record, this.notification);
+
+        try {
+            const { result } = applyResult;
+
+            if (result?.package_detail_wizard_id) {
+                await this.action.doAction(
+                    {
+                        type: "ir.actions.act_window",
+                        res_model: "package.level.detail.wizard",
+                        res_id: result.package_detail_wizard_id,
+                        views: [[false, "form"]],
+                        target: "new",
+                    },
+                    {
+                        onClose: async () => {
+                            await reloadRecordSafely(
+                                this.props.record,
+                                this.notification
+                            );
+                        },
+                    }
+                );
+            }
+        } catch (error) {
+            notifyScannerError(this.notification, error);
+        }
     }
 }
 
@@ -818,17 +1031,39 @@ registry.category("actions").add("adt_focus_move_line_field", focusMoveLineField
 registry.category("actions").add("adt_scan_qr_to_move_line_field", scanQrToMoveLineField);
 registry.category("actions").add("adt_scan_qr_to_picking_product", scanQrToPickingProduct);
 registry.category("actions").add("adt_scan_qr_to_picking_package", scanQrToPickingPackage);
+registry.category("actions").add("adt_scan_qr_to_picking_origin", scanQrToPickingOrigin);
 registry.category("fields").add("adt_scan_lot_button", {
     component: MoveLineScanLotButton,
 });
 registry.category("fields").add("adt_scan_location_button", {
     component: MoveLineScanLocationButton,
 });
+registry.category("fields").add("adt_scan_lot_form_button", {
+    component: MoveLineScanLotFormButton,
+});
+registry.category("fields").add("adt_scan_location_form_button", {
+    component: MoveLineScanLocationFormButton,
+});
+registry.category("fields").add("adt_scan_location_text_button", {
+    component: MoveLineScanLocationTextButton,
+});
+registry.category("fields").add("adt_scan_result_package_button", {
+    component: MoveLineScanPackageButton,
+});
+registry.category("fields").add("adt_scan_package_form_button", {
+    component: MoveLineScanPackageFormButton,
+});
 registry.category("fields").add("adt_scan_product_button", {
     component: ProductScanButton,
 });
+registry.category("fields").add("adt_scan_product_by_lot_button", {
+    component: ProductByLotScanButton,
+});
 registry.category("fields").add("adt_scan_picker_product_button", {
     component: PickerProductScanButton,
+});
+registry.category("fields").add("adt_scan_picker_product_by_lot_button", {
+    component: PickerProductByLotScanButton,
 });
 registry.category("fields").add("adt_scan_package_button", {
     component: PackageScanButton,

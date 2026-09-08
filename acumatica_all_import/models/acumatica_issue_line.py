@@ -9,203 +9,6 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
-class AcumaticaIssueConfig(models.Model):
-    _name = 'acumatica.issue.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Issue Change Item'
-    _rec_name = 'name'
-
-    name = fields.Char(required=True, default='Acumatica Issue Change Item')
-    base_url = fields.Char(required=True, help='Contoh: http://server/acumportal/entity')
-    api_version = fields.Char(required=True, default='25.200.002')
-    username = fields.Char(required=True)
-    password = fields.Char(required=True)
-    company_code = fields.Char(required=True)
-    endpoint_name = fields.Char(required=True, default='Shipment')
-    active = fields.Boolean(default=True)
-    last_sync = fields.Datetime(readonly=True)
-    state = fields.Selection([
-        ('draft', 'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error', 'Error'),
-    ], default='draft', readonly=True)
-
-    odata_expand = fields.Char(default='Details')
-    odata_select = fields.Char()
-    odata_filter = fields.Char(default="Type eq 'Issue' and Operation eq 'Issue'")
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            self._do_logout(session)
-            self.state = 'connected'
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Koneksi Berhasil',
-                    'message': f'Berhasil terhubung ke {self.base_url}',
-                    'type': 'success',
-                    'sticky': False,
-                }
-            }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-    def _do_login(self):
-        self.ensure_one()
-        session = requests.Session()
-        response = session.post(
-            self.login_url,
-            json={
-                'name': self.username,
-                'password': self.password,
-                'company': self.company_code,
-            },
-            headers={'Content-Type': 'application/json'},
-            timeout=30,
-        )
-        if response.status_code == 204:
-            return session
-        raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
-
-    def _do_logout(self, session):
-        try:
-            session.post(self.logout_url, timeout=10)
-        except Exception:
-            pass
-
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
-
-    def _bool_val(self, item, key):
-        return self._bool_value(item.get(key, {}))
-
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
-
-    def fetch_issue_data(self, limit=50, offset=0, reference_nbr=False, last_modified_from=False, odata_filter=False):
-        self.ensure_one()
-        session = self._do_login()
-        try:
-            endpoint = f"{self.api_url}/{self.endpoint_name}"
-            params = {'$top': limit, '$skip': offset}
-            filters = []
-
-            if self.odata_expand:
-                params['$expand'] = self.odata_expand
-            if self.odata_select:
-                params['$select'] = self.odata_select
-            if reference_nbr:
-                filters.append(f"ReferenceNbr eq '{reference_nbr}'")
-            if last_modified_from:
-                filters.append(f"LastModifiedDateTime ge datetimeoffset'{last_modified_from}'")
-            if odata_filter:
-                filters.append(f"({odata_filter})")
-            # elif self.odata_filter:
-            #     filters.append(f"({self.odata_filter})")
-
-            if filters:
-                params['$filter'] = ' and '.join(filters)
-
-            response = session.get(endpoint, params=params, timeout=90)
-            if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Issue Change Item (HTTP {response.status_code}): {response.text}')
-
-            raw_data = self._normalize_rows(response.json())
-            result = []
-            print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched with params: {params}")
-            for row_number, item in enumerate(raw_data, start=1):
-                header = {
-                    'external_id': item.get('id', '') or '',
-                    'row_number': row_number,
-                    'note': item.get('note', {}).get('value', '') or '',
-                    'branch_warehouse': self._val(item, 'Branch'),
-                    'actual_amount': self._val(item, 'ControlAmount'),
-                    'actual_qty': self._val(item, 'ControlQty'),
-                    'scheduled_date': self._val(item, 'Date'),
-                    'description': self._val(item, 'Description'),
-                    'external_ref': self._val(item, 'ExternalRef'),
-                    'document_only': self._bool_val(item, 'DocumentOnly'),
-                    'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                    'post_period': self._val(item, 'PostPeriod'),
-                    'reference_nbr': self._val(item, 'ReferenceNbr'),
-                    'status': self._val(item, 'Status'),
-                    'total_amount': self._val(item, 'TotalAmount'),
-                    'total_qty': self._val(item, 'TotalQty'),
-                    'trans_type': self._val(item, 'TransType') or self._val(item, 'Type'),
-                }
-                print(f" Get data : {header['reference_nbr']}, Trans Type: {header['trans_type']}, Status: {header['status']}")
-
-
-                details = item.get('Details') or item.get('details') or []
-                if isinstance(details, dict):
-                    details = details.get('value', []) or []
-                if not isinstance(details, list):
-                    details = []
-
-                if not details:
-                    result.append(dict(header, line_nbr='0'))
-                    continue
-
-                for detail in details:
-                    line_nbr = self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
-                    result.append({
-                        **header,
-                        'line_external_id': detail.get('id', '') or '',
-                        'line_note': detail.get('note', {}).get('value', '') or '',
-                        'branch_warehouse': self._val(detail, 'Branch'),
-                        'line_description': self._val(detail, 'Description'),
-                        'inventory_id': self._val(detail, 'InventoryID'),
-                        'line_nbr': str(line_nbr),
-                        'location_code': self._val(detail, 'Location'),
-                        'product_uom_qty': self._val(detail, 'Qty'),
-                        'line_trans_type': self._val(detail, 'TranType'),
-                        'uom_code': self._val(detail, 'UOM'),
-                        'warehouse_code': self._val(detail, 'WarehouseID'),
-                    })
-
-            _logger.info('Berhasil ambil %s rows Issue Change Item dari Acumatica', len(result))
-            self.last_sync = fields.Datetime.now()
-            return result
-        finally:
-            self._do_logout(session)
-
 class AcumaticaIssueLine(models.Model):
     _name = 'acumatica.issue.line'
     _description = 'Data Issue Change Item dari Acumatica'
@@ -215,7 +18,7 @@ class AcumaticaIssueLine(models.Model):
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)
 
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
     # product_line_ids = fields.Many2one('acumatica.issue.line', string='Issue Header', ondelete='cascade')
     product_line_ids = fields.One2many(
         'acumatica.issue.line.product',  # Model tujuan (detail)
@@ -238,6 +41,8 @@ class AcumaticaIssueLine(models.Model):
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
     trans_type = fields.Char(string='Trans Type', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
+    customer_id = fields.Char(string='Customer ID', readonly=True)
+    customer_name = fields.Char(string='Customer Name', readonly=True)
 
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
     line_description = fields.Char(string='Description', readonly=True)
@@ -251,13 +56,14 @@ class AcumaticaIssueLine(models.Model):
     line_note = fields.Text(string='Line Note', readonly=True)
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Delivery Order di Odoo', readonly=True)
+    ], default='staged', readonly=True)
+    import_message = fields.Char(string='Generation Message', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -335,15 +141,29 @@ class AcumaticaIssueLine(models.Model):
             uom = product.uom_id
         return uom
 
+    def _find_partner(self, customer_code):
+        if not customer_code:
+            return self.env['res.partner']
+        Partner = self.env['res.partner']
+        return Partner.search([
+            '|',
+            ('adt_b_account_id', '=', customer_code),
+            ('company_registry', '=', customer_code),
+        ], limit=1) or Partner.search([('name', '=', customer_code)], limit=1)
+
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _do_import(self):
         Picking = self.env['stock.picking']
@@ -354,11 +174,12 @@ class AcumaticaIssueLine(models.Model):
         keys = [k for k in self.mapped('reference_nbr') if k]
 
         for issue_key in keys:
-            issue_lines = self.filtered(lambda l: l.reference_nbr == issue_key and l.import_state == 'pending')
+            issue_lines = self.filtered(lambda l: l.reference_nbr == issue_key and l.import_state == 'staged')
             if not issue_lines:
                 continue
             first = issue_lines[0]
             try:
+                self.env.cr.execute('SAVEPOINT import_issue_change_item_doc')
                 warehouse = self._find_warehouse(first)
                 if not warehouse:
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
@@ -380,8 +201,11 @@ class AcumaticaIssueLine(models.Model):
                 if dest_location.usage == 'customer':
                     raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
 
+                partner = self._find_partner(first.customer_id)
+
                 vals = {
                     'origin': first.reference_nbr,
+                    'partner_id': partner.id if partner else False,
                     'picking_type_id': picking_type.id,
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,
@@ -408,9 +232,10 @@ class AcumaticaIssueLine(models.Model):
                     picking.write(vals)
                     action_state = 'updated'
                     updated += 1
+                    self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=issue_key)
                 else:
                     picking = Picking.create(vals)
-                    action_state = 'imported'
+                    action_state = 'created'
                     imported += 1
 
                 for line in issue_lines:
@@ -461,9 +286,36 @@ class AcumaticaIssueLine(models.Model):
 
                 if issue_lines.filtered('document_only'):
                     picking.action_validate_document_only_import(force=True)
+                self.env['acumatica.error.transaction']._handle_acumatica_error(issue_key, 'issue_change_item')
+                self.env.cr.execute('RELEASE SAVEPOINT import_issue_change_item_doc')
             except Exception as e:
+                self.env.cr.execute('ROLLBACK TO SAVEPOINT import_issue_change_item_doc')
                 _logger.exception('Error import issue %s', issue_key)
-                issue_lines.write({'import_state': 'error', 'import_message': str(e)[:200]})
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
+                    first,
+                    [str(e)],
+                    api_acumatica='issue_change_item',
+                    operation_type='delivery',
+                    origin=issue_key,
+                    location=first.warehouse_code or False,
+                    location_dest=dest_location.display_name if 'dest_location' in locals() and dest_location else False,
+                    scheduled_date=first.scheduled_date,
+                    total_qty=first.total_qty,
+                    actual_qty=first.actual_qty,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.inventory_id or False,
+                        'product_name': line.line_description or False,
+                        'qty': self._parse_int(line.product_uom_qty),
+                        'uom': line.uom_code or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in issue_lines],
+                )
+                issue_lines.write({
+                    'import_state': 'error',
+                    'import_message': str(e)[:200],
+                    'odoo_picking_id': False,
+                })
                 error += len(issue_lines)
 
         msg = f'Import selesai: {imported} delivery dibuat, {updated} delivery diupdate, {error} line error.'
@@ -479,7 +331,7 @@ class AcumaticaIssueLine(models.Model):
         }
 
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
     def action_open_picking(self):
         self.ensure_one()

@@ -135,6 +135,7 @@ class ImportInventoryStockWizard(models.TransientModel):
                         'warehouse_code': self._val(detail, 'WarehouseID') or self._val(item, 'WarehouseID') or '',
                         'inventory_id': self._val(detail, 'InventoryID') or self._val(item, 'InventoryID'),
                         'description': self._val(detail, 'Description'),
+                        'last_modified_datetime': self._val(detail, 'LastModifiedDateTime') or self._val(item, 'LastModifiedDateTime'),
                         'branch': self._val(detail, 'Branch'),
                         'item_status': self._val(detail, 'ItemStatus'),
                         'kode_barang_dan_jasa': self._val(detail, 'KodeBarangdanJasa'),
@@ -181,6 +182,9 @@ class ImportInventoryStockWizard(models.TransientModel):
                 'sync_date': now,
             })
             if existing:
+                incoming_last_modified = vals.get('last_modified_datetime')
+                if incoming_last_modified and existing.last_modified_datetime == incoming_last_modified:
+                    continue
                 existing.write(vals)
                 existing_count += 1
             else:

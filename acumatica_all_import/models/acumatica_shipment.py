@@ -29,6 +29,7 @@ class AcumaticaShipmentProductLine(models.Model):
     shipment_nbr = fields.Char(string='Shipment Number', index=True)
     description = fields.Char(string='Description Line')
     note = fields.Text(string='Detail Note')
+    line_note_id = fields.Char(string='Line Note ID')
     is_free_item = fields.Char(string='Free Item')
     inventory_id = fields.Char(string='InventoryID')
     line_nbr = fields.Char(string='Line Nbr')
@@ -42,11 +43,13 @@ class AcumaticaShipmentProductLine(models.Model):
     uom_code = fields.Char(string='UOM')
     original_qty = fields.Char(string='Original Qty')
     warehouse_dest_code = fields.Char(string='Warehouse Detail')
+    warehouse_dest_name = fields.Char(string='Warehouse Detail Name')
     shipped_weight = fields.Char(string='Shipped Weight')
 
 
 class AcumaticaShipmentLine(models.Model):
     _name = 'acumatica.shipment.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Shipment Receipt dari Acumatica'
     _order = 'shipment_nbr asc, id asc'
 
@@ -55,22 +58,26 @@ class AcumaticaShipmentLine(models.Model):
     line_external_id = fields.Char(string='UUID Line')
 
     product_line_ids = fields.One2many('acumatica.shipment.product.line', 'shipment_line_id', string='Lines')
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
     building_code = fields.Char(string='Building Code')
     shipment_nbr = fields.Char(string='Shipment Number', index=True)
     partner_code = fields.Char(string='CustomerID')
+    partner_name = fields.Char(string='Customer Name')
     scheduled_date = fields.Char(string='Shipment Date')
     warehouse_code = fields.Char(string='Warehouse Asal')
     warehouse_name = fields.Char(string='Warehouse Name')
     warehouse_dest_code = fields.Char(string='Warehouse Tujuan')
     header_location_code = fields.Char(string='Location Header')
     header_location_name = fields.Char(string='Location Header Name')
+    header_location_code_2 = fields.Char(string='Location Header 2')
+    header_location_name_2 = fields.Char(string='Location Header Name 2')
     status = fields.Char(string='Status')
     document_only = fields.Boolean(string='Document Only', readonly=True)
     shipment_type = fields.Char(string='Type')
     operation = fields.Char(string='Operation')
 
     note = fields.Text(string='Header Note')
+    note_header_id = fields.Char(string='Note Header ID')
     actual_qty = fields.Char(string='Control Qty')
     description = fields.Char(string='Description Header')
     fob_point = fields.Char(string='FOB Point')
@@ -97,13 +104,14 @@ class AcumaticaShipmentLine(models.Model):
     original_qty = fields.Char(string='Original Qty')
 
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Receipt di Odoo', readonly=True)
+    ], default='staged', readonly=True)
+    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
@@ -171,7 +179,7 @@ class AcumaticaShipmentLine(models.Model):
                 if not warehouse.odoo_building_id:
                     warehouse = False
                 else:
-                    warehouse = warehouse.odoo_building_id    
+                    warehouse = warehouse.odoo_building_id
             else:
                 warehouse = False
         return warehouse
@@ -209,84 +217,30 @@ class AcumaticaShipmentLine(models.Model):
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: (
-                l.import_state in ['pending', 'error'] 
-                or (l.import_state in ['imported', 'updated'] and not l.odoo_picking_id)
+                l.import_state in ['staged', 'error']
+                or (l.import_state in ['created', 'updated'] and not l.odoo_picking_id)
             )
         )
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
-    def _persist_error_tracking(self, first, error_messages, line_payloads=None, payload=None):
-        origin = first.shipment_nbr or False
-        if not origin:
-            return False
-
-        line_payloads = line_payloads or []
-        payload_text = payload if payload is not None else {}
-
-        with self.env.registry.cursor() as cr:
-            error_env = api.Environment(cr, self.env.uid, dict(self.env.context))
-            Error = error_env['stock.picking.acumatica.error'].sudo()
-            ErrorLine = error_env['stock.picking.acumatica.error.line'].sudo()
-
-            error_data = Error.search([('origin', '=', origin)], limit=1)
-            error_values = {
-                'partner': first.partner_code or False,
-                'operation_type': 'receipt',
-                'location': first.warehouse_code or False,
-                'location_dest': first.warehouse_dest_code or False,
-                'scheduled_date': first._parse_dt(first.scheduled_date),
-                'origin': origin,
-                'adt_total_qty': first._parse_float(first.shipped_qty),
-                'adt_actual_qty': first._parse_float(first.actual_qty),
-                'api_acumatica': 'shipment_so',
-                'error_message': '\n'.join(error_messages),
-                'payload': str(payload_text)[:1000],
-                'state': 'new',
-            }
-
-            if error_data:
-                error_data.write(error_values)
-            else:
-                error_data = Error.create(error_values)
-
-            for line_payload in line_payloads:
-                line_domain = [
-                    ('error_id', '=', error_data.id),
-                    ('inventory_id', '=', line_payload.get('inventory_id') or False),
-                    ('qty', '=', line_payload.get('qty') or False),
-                    ('uom', '=', line_payload.get('uom') or False),
-                ]
-                error_line = ErrorLine.search(line_domain, limit=1)
-                line_values = {
-                    'error_id': error_data.id,
-                    'inventory_id': line_payload.get('inventory_id') or False,
-                    'product_name': line_payload.get('product_name') or False,
-                    'qty': line_payload.get('qty') or False,
-                    'uom': line_payload.get('uom') or False,
-                    'payload': str(line_payload.get('payload') or {})[:1000],
-                }
-                if error_line:
-                    error_line.write(line_values)
-                else:
-                    ErrorLine.create(line_values)
-
-            cr.commit()
-            return error_data
-
-    def _resolve_error_tracking(self, first):
-        origin = first.shipment_nbr or False
-        if not origin:
-            return
-
-        error_data = self.env['stock.picking.acumatica.error'].search([('origin', '=', origin)], limit=1)
-        if error_data:
-            error_data.write({'state': 'resolved'})
+    def _handle_acumatica_error(self, first, error_messages=False, line_payloads=None, payload=None):
+        return self.env['acumatica.error.transaction']._handle_acumatica_error(
+            first,
+            error_messages,
+            origin=first.shipment_nbr or False,
+            payload=payload,
+            line_payloads=line_payloads,
+        )
 
     def _import_single_shipment(self, shipment):
         shipment.ensure_one()
@@ -300,7 +254,7 @@ class AcumaticaShipmentLine(models.Model):
         error_messages = []
         all_line_payloads = []
         picking = shipment.odoo_picking_id
-        action_state = 'pending'
+        action_state = 'staged'
 
         for shipment_line in shipment.product_line_ids:
             all_line_payloads.append({
@@ -370,12 +324,13 @@ class AcumaticaShipmentLine(models.Model):
                     f'Shipment {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
                     line_payloads=all_line_payloads
-                )
+            )
             picking.write(picking_vals)
             action_state = 'updated'
+            self.env['acumatica.error.transaction']._handle_acumatica_update(shipment, origin=origin)
         else:
             picking = Picking.create(picking_vals)
-            action_state = 'imported'
+            action_state = 'created'
 
         for shipment_line in shipment.product_line_ids:
             move_vals = {}
@@ -463,15 +418,15 @@ class AcumaticaShipmentLine(models.Model):
 
         shipment.write({
             'import_state': action_state,
-            'import_message': f'{action_state.title()}: {picking.name if picking else False}',
+            'import_message': 'success',
             'odoo_picking_id': picking.id if picking else False,
         })
-        self._resolve_error_tracking(shipment)
+        self._handle_acumatica_error(shipment)
         # picking.action_confirm()
         return action_state
 
     def _do_import(self):
-        imported = 0
+        created = 0
         updated = 0
         error = 0
 
@@ -488,8 +443,8 @@ class AcumaticaShipmentLine(models.Model):
             try:
                 with self.env.cr.savepoint():
                     action_state = self._import_single_shipment(shipment)
-                if action_state == 'imported':
-                    imported += 1
+                if action_state == 'created':
+                    created += 1
                 elif action_state == 'updated':
                     updated += 1
             except Exception as exc:
@@ -504,7 +459,7 @@ class AcumaticaShipmentLine(models.Model):
                     error_message = str(exc)
 
                 try:
-                    self._persist_error_tracking(
+                    self._handle_acumatica_error(
                         shipment,
                         [error_message],
                         line_payloads=all_line_payloads,
@@ -517,26 +472,26 @@ class AcumaticaShipmentLine(models.Model):
                     )
 
                 shipment.write({
-                    'import_state': 'error',
+                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
                     'import_message': error_message[:1000],
                 })
                 error += 1
                 continue
 
-        # msg = f'Import done: {imported} shipment created, {updated} shipment updated, {error} shipment error.'
-        # return {
-        #     'type': 'ir.actions.client',
-        #     'tag': 'display_notification',
-        #     'params': {
-        #         'title': 'Import Shipment SO Return',
-        #         'message': msg,
-        #         'type': 'success' if error == 0 else 'warning',
-        #         'sticky': True,
-        #     }
-        # }
+        msg = f'Generate done: {created} shipment created, {updated} shipment updated, {error} shipment error.'
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Generate Shipment SO Return',
+                'message': msg,
+                'type': 'success' if error == 0 else 'danger',
+                'sticky': True,
+            }
+        }
 
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'pending', 'import_message': False})
+        self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
 
     def action_open_picking(self):
         self.ensure_one()
@@ -550,7 +505,7 @@ class AcumaticaShipmentLine(models.Model):
         }
 
     def action_select_all(self):
-        self.search([('import_state', '=', 'pending')]).write({'selected': True})
+        self.search([('import_state', '=', 'staged')]).write({'selected': True})
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})

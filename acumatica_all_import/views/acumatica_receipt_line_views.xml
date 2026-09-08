@@ -24,15 +24,17 @@
                 <field name="receipt_type"/>
                 <field name="document_only"/>
                 <field name="vendor_code"/>
+                <field name="vendor_name"/>
                 <field name="building_code"/>
+                <field name="warehouse_code"/>
                 <field name="total_qty"/>
                 <field name="import_state" widget="badge"
-                       decoration-success="import_state in ('imported','updated')"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
+                       decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
             </list>
         </field>
     </record>
@@ -43,20 +45,25 @@
         <field name="arch" type="xml">
             <form string="Data PO Receipt">
                 <header>
-                    <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'pending'"/>
-                    <button name="action_open_picking" string="Buka Receipt" type="object" invisible="not odoo_picking_id"/>
-                    <field name="import_state" widget="statusbar" statusbar_visible="pending,imported,updated,error"/>
+                    <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
+                    <button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <button name="action_open_picking" string="Open Document" type="object" invisible="not odoo_picking_id"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>
                     <group string="Header Receipt">
                         <group>
+                            <field name="external_id"/>
+                            <field name="row_number"/>
                             <field name="receipt_nbr"/>
                             <field name="picking_type_id"/>
                             <field name="document_only"/>
                             <field name="vendor_code"/>
+                            <field name="vendor_name"/>
                             <field name="partner_ref"/>
                             <field name="scheduled_date"/>
                             <field name="building_code"/>
+                            <field name="warehouse_code"/>
                             <field name="header_location_code"/>
                             <field name="status"/>
                             <field name="receipt_type"/>
@@ -69,6 +76,7 @@
                             <field name="post_period"/>
                             <field name="acumatica_write_date"/>
                             <field name="branch_warehouse"/>
+                            <field name="note_header_id"/>
                             <field name="note"/>                            
                         </group>
                         <!-- <group string="Detail Line">
@@ -99,10 +107,29 @@
                         <page name="Details" string="Details">
                             <field name="product_line_ids">
                                 <list>
+                                    <field name="line_external_id"/>
+                                    <field name="line_nbr"/>
+                                    <field name="line_branch"/>
                                     <field name="inventory_id"/>
                                     <field name="description"/>
+                                    <field name="line_type"/>
+                                    <field name="location_dest_code"/>
                                     <field name="warehouse_dest_code"/>
+                                    <field name="open_qty"/>
+                                    <field name="order_qty"/>
                                     <field name="product_uom_qty"/>
+                                    <field name="uom_code"/>
+                                    <field name="po_line_number"/>
+                                    <field name="po_number"/>
+                                    <field name="po_type"/>
+                                    <field name="po_receipt_line_number"/>
+                                    <field name="po_receipt_number"/>
+                                    <field name="transfer_order_line_number"/>
+                                    <field name="transfer_order_number"/>
+                                    <field name="transfer_order_type"/>
+                                    <field name="transfer_shipment_number"/>
+                                    <field name="line_note_id"/>
+                                    <field name="line_note"/>
                                 </list>
                             </field>
                         </page>

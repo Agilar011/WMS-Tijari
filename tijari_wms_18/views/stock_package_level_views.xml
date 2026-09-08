@@ -1,6 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <record id="stock_package_level_view_kanban" model="ir.ui.view">
+        <field name="name">stock.package_level.view.kanban</field>
+        <field name="model">stock.package_level</field>
+        <field name="arch" type="xml">
+            <kanban class="o_kanban_mobile" can_open="0">
+                <field name="package_id" invisible="1"/>
+                <field name="status" invisible="1"/>
+                <field name="state" invisible='1' />
+                <templates>
+                    <t t-name="card">
+                        <div class="d-flex justify-content-between align-items-start mb-1">
+                            <field name="package_id" readonly="1" force_save="1" class="fw-bold fs-6"/>
+                            
+                            <field 
+                                name="status"
+                                widget="badge"
+                                decoration-success="status == 'finished'"
+                                decoration-danger="status == 'unfinished'" 
+                            />
+                        </div>
+
+
+                        <div class="d-flex gap-2 mt-2">
+                            <button name="action_show_package_details"
+                                type="object"
+                                string="Open Detail"
+                                class="btn-primary"/>
+                            <button name="action_mark_unfinished"
+                                type="object"
+                                string="Rollback"
+                                class="btn-danger o_wms_auto_save_before_action"
+                                invisible="status == 'unfinished' or state in ('done', 'cancel')"/>
+                        </div>
+
+                    </t>
+                </templates>
+            </kanban>
+        </field>
+    </record>
+
     <record id="view_package_level_tree_inherit_wms" model="ir.ui.view">
         <field name="name">stock.package.level.tree.inherit.wms</field>
         <field name="model">stock.package_level</field>
@@ -30,6 +70,86 @@
                     invisible="status != 'finished'"/>
             </field>
 
+        </field>
+    </record>
+
+    <record id="tijari_stock_package_level_view_form_inherit" model="ir.ui.view">
+        <field name="name">tijari.stock.package.level.view.form.inherit</field>
+        <field name="model">stock.package_level</field>
+        <field name="inherit_id" ref="stock.package_level_form_view"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//header" position="attributes">
+                <attribute name="class">tijari-package-invisible</attribute>
+            </xpath>
+
+            <xpath expr="//form/group[1]/group[1]" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='move_line_ids']" position="before">
+                <group class="tijari-package-invisible">
+                    <field name="package_id"/>
+                    <field name="location_id" options="{'no_create': True}" invisible="picking_type_code == 'incoming'" groups="stock.group_stock_multi_locations"/>
+                    <field name="location_dest_id" options="{'no_create': True}" invisible="picking_type_code == 'outgoing'" groups="stock.group_stock_multi_locations"/>
+                    <field name="is_done"/>
+                    <field name="company_id" groups="base.group_multi_company"/>
+                </group>
+                <group class="tijari-package-mobile">
+                    <field name="package_cat" />
+                    <field name="package_id"/>
+                </group>
+            </xpath>
+            
+
+            <xpath expr="//field[@name='move_line_ids']/list/field[@name='lot_id']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='move_line_ids']/list/field[@name='owner_id']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
+
+            <xpath expr='//form' position='inside'>
+                <footer>
+                    <button
+                        name="action_mark_finished"
+                        type="object"
+                        string="Confirm"
+                        class="btn-primary"
+                        invisible="status == 'finished'"
+                    />
+
+                    <button 
+                        name="action_mark_unfinished"
+                        type="object"
+                        string="Rollback"
+                        class="btn-danger"
+                        invisible="status != 'finished'"/>
+                    
+                    <button string="Close"
+                            special="cancel"
+                            class="btn-secondary"/>
+                </footer>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_form_package_level_list_only" model="ir.ui.view">
+        <field name="name">stock.picking.form.package.level.list.only</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="priority" eval="2100"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='operations']//field[@name='package_level_ids']" position="attributes">
+                <attribute name="mode">list</attribute>
+                <attribute name="context">{
+                    'default_location_id': location_id,
+                    'default_location_dest_id': location_dest_id,
+                    'default_company_id': company_id,
+                    'tree_view_ref': 'stock.package_level_tree_view_picking'
+                }</attribute>
+            </xpath>
         </field>
     </record>
 

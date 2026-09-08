@@ -5,170 +5,9 @@ from odoo.exceptions import UserError
 
 from dateutil import parser as dateutil_parser
 import logging
-import requests
 
 _logger = logging.getLogger(__name__)
 
-
-class AcumaticaKitAssemblyConfig(models.Model):
-    _name        = 'acumatica.kit.assembly.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Kit Assembly Import'
-    _rec_name    = 'name'
-
-    name         = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica WMS')
-    base_url     = fields.Char(
-        string='Base URL', required=True,
-        default='http://staging.aditya.group/acumportal/entity',
-    )
-    api_version  = fields.Char(string='API Version', required=True, default='25.200.002')
-    username     = fields.Char(string='Username', required=True, default='wms')
-    password     = fields.Char(string='Password', required=True)
-    company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
-    active       = fields.Boolean(default=True)
-    last_sync    = fields.Datetime(string='Terakhir Sync', readonly=True)
-    state        = fields.Selection([
-        ('draft',     'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error',     'Error'),
-    ], string='Status', default='draft', readonly=True)
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            self._do_logout(session)
-            self.state = 'connected'
-            return {
-                'type': 'ir.actions.client',
-                'tag':  'display_notification',
-                'params': {
-                    'title':   'Koneksi Berhasil!',
-                    'message': f'Berhasil terhubung ke Acumatica ({self.base_url})',
-                    'type':    'success',
-                    'sticky':  False,
-                },
-            }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-    def _do_login(self):
-        self.ensure_one()
-
-        last_error = None
-
-        for attempt in range(1, 4):
-            try:
-                session = requests.Session()
-                response = session.post(
-                    self.login_url,
-                    json={
-                        "name": self.username,
-                        "password": self.password,
-                        "company": self.company_code
-                    },
-                    headers={"Content-Type": "application/json"},
-                    timeout=30,
-                )
-
-                if response.status_code == 204:
-                    return session
-
-                raise UserError(
-                    f'Login gagal (HTTP {response.status_code}): {response.text}'
-                )
-
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout) as e:
-                last_error = e
-
-                if attempt < 3:
-                    time.sleep(30)
-
-        if isinstance(last_error, requests.exceptions.ConnectionError):
-            raise UserError(
-                f'Tidak bisa terhubung ke server: {self.base_url} (sudah dicoba 3 kali)'
-            )
-
-        if isinstance(last_error, requests.exceptions.Timeout):
-            raise UserError(
-                'Koneksi timeout setelah 3 kali percobaan. Periksa URL server.'
-            )
-
-        raise UserError('Login gagal setelah 3 kali percobaan.')
-
-
-    def _do_logout(self, session):
-        for attempt in range(1, 4):
-            try:
-                response = session.post(
-                    self.logout_url,
-                    timeout=10
-                )
-
-                # opsional: validasi status code
-                if response.status_code in (200, 204):
-                    return
-
-                if attempt < 3:
-                    time.sleep(30)
-
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout):
-                if attempt < 3:
-                    time.sleep(30)
-
-            except Exception:
-                # tetap diam seperti kode asli
-                return
-        
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
-
-
-
-    def _parse_datetime(self, value):
-        if not value:
-            return False
-
-        if isinstance(value, datetime):
-            return value
-
-        try:
-            # Support:
-            # 2011-12-09T22:18:00+07:00
-            # 2011-12-09T22:18:00Z
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except Exception:
-            return False        
-        
 
 class AcumaticaKitAssembly(models.Model):
     _name = 'acumatica.kit.assembly'
@@ -199,6 +38,9 @@ class AcumaticaKitAssembly(models.Model):
     last_modified_datetime = fields.Datetime()
 
     location = fields.Char()
+    building_id = fields.Char(string='Building ID')
+    note_header = fields.Text(string='Header Note')
+    note_header_id = fields.Char(string='Note Header ID')
 
     post_period = fields.Char()
 
@@ -226,12 +68,14 @@ class AcumaticaKitAssembly(models.Model):
     warehouse = fields.Char()
 
     import_state = fields.Selection([
-        ('pending', 'Pending'),
-        ('imported', 'Imported'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='pending')
+    ], default='staged', tracking=True)
 
-    import_message = fields.Text()
+    import_message = fields.Text(string='Generation Message', tracking=True)
 
     mrp_production_id = fields.Many2one(
         'mrp.production',
@@ -261,13 +105,17 @@ class AcumaticaKitAssembly(models.Model):
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def _do_import(self):
         print("Starting import process...")
@@ -279,7 +127,7 @@ class AcumaticaKitAssembly(models.Model):
         ComponentReference = self.env["acumatica.kit.assembly.component"]
         Product = self.env["product.product"]
 
-        imported = 0
+        created = 0
         updated = 0
         error = 0
 
@@ -287,6 +135,7 @@ class AcumaticaKitAssembly(models.Model):
         last_manufacturing = Manufacturing
 
         for reference_nbr in self.mapped("reference_nbr"):
+            records = self.filtered(lambda line: line.reference_nbr == reference_nbr)
             try:
                 # ---------------------------------------------------------
                 # Setiap reference punya savepoint sendiri.
@@ -368,6 +217,7 @@ class AcumaticaKitAssembly(models.Model):
                         [("origin", "=", header.name)],
                         limit=1,
                     )
+                    created_manufacturing = False
 
                     # -----------------------------------------------------
                     # CREATE / UPDATE MO
@@ -397,8 +247,9 @@ class AcumaticaKitAssembly(models.Model):
                             ),
                             "company_id": warehouse_record.company_id.id,
                         })
+                        created_manufacturing = True
 
-                        imported += 1
+                        created += 1
 
                         print(
                             f"MO berhasil dibuat: "
@@ -464,7 +315,7 @@ class AcumaticaKitAssembly(models.Model):
                             "Manufacturing Order sudah tidak tersedia."
                         )
 
-                    if raw_moves and not updated:
+                    if raw_moves and created_manufacturing:
                         manufacturing.write({
                             "move_raw_ids": raw_moves,
                         })
@@ -473,6 +324,17 @@ class AcumaticaKitAssembly(models.Model):
                             f"Raw moves berhasil dibuat: "
                             f"{len(raw_moves)}"
                         )
+
+                    records.write({
+                        "import_message": (
+                            f"Created: {manufacturing.display_name}"
+                            if manufacturing
+                            else "Created"
+                        ),
+                        "mrp_production_id": manufacturing.id if manufacturing else False,
+                        "import_state": "created",
+                    })
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'kit_assembly')
 
                     # _logger.warning("""
                     #     ========== RAW MOVE AFTER CREATE ==========
@@ -516,6 +378,32 @@ class AcumaticaKitAssembly(models.Model):
                     f"ERROR processing {reference_nbr}: "
                     f"{type(e).__name__}: {e}"
                 )
+                records.write({
+                    "import_message": f"{type(e).__name__}: {e}",
+                    "mrp_production_id": False,
+                    "import_state": "error",
+                })
+                header_payload = header.read()[0] if 'header' in locals() and header and header.exists() else {}
+                component_records = components if 'components' in locals() else self.env['acumatica.kit.assembly.component']
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
+                    records[:1] or self,
+                    [f"{type(e).__name__}: {e}"],
+                    api_acumatica='kit_assembly',
+                    operation_type='manufacturing',
+                    origin=reference_nbr,
+                    location=header.warehouse if 'header' in locals() and header else False,
+                    location_dest=header.location if 'header' in locals() and header else False,
+                    scheduled_date=header.requested_on if 'header' in locals() and header else False,
+                    total_qty=header.quantity if 'header' in locals() and header else 0.0,
+                    payload={'header': header_payload},
+                    line_payloads=[{
+                        'inventory_id': component.stock_inventory_id or False,
+                        'product_name': component.line_inventory_id or False,
+                        'qty': component.line_quantity,
+                        'uom': component.line_uom or False,
+                        'payload': component.read()[0] if component.exists() else {},
+                    } for component in component_records],
+                )
 
         # -------------------------------------------------------------
         # RESULT
@@ -525,20 +413,10 @@ class AcumaticaKitAssembly(models.Model):
         msg = (
             "Import Kit Assembly selesai.\n\n"
             f"Total Reference Number : {total}\n"
-            f"Manufacturing Order dibuat : {imported}\n"
+            f"Manufacturing Order dibuat : {created}\n"
             f"Manufacturing Order sudah ada : {updated}\n"
             f"Error : {error}"
         )
-
-        self.write({
-            "import_message": msg,
-            "mrp_production_id": (
-                last_manufacturing.id
-                if last_manufacturing and last_manufacturing.exists()
-                else False
-            ),
-            "import_state": "imported",
-        })
 
         return {
             "type": "ir.actions.client",
@@ -546,15 +424,15 @@ class AcumaticaKitAssembly(models.Model):
             "params": {
                 "title": "Import Kit Assembly",
                 "message": msg,
-                "type": "success" if error == 0 else "warning",
+                "type": "success" if error == 0 else "danger",
                 "sticky": True,
             },
         }
-    
+
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({
-            'import_state':   'pending',
+            'import_state':   'staged',
             'import_message': False,
         })
 
@@ -588,6 +466,7 @@ class AcumaticaKitAssemblyComponent(models.Model):
     line_nbr = fields.Integer()
 
     line_note = fields.Text()
+    line_note_id = fields.Char(string='Line Note ID')
 
     line_inventory_id = fields.Char()
 
@@ -612,7 +491,7 @@ class AcumaticaKitAssemblyComponent(models.Model):
         readonly=True,
     )
 
-    import_message = fields.Text()    
+    import_message = fields.Text(string='Generation Message', tracking=True)
 
 
 
@@ -634,7 +513,7 @@ class AcumaticaKitAssemblyLine(models.Model):
     _name        = 'acumatica.kit.assembly.line'
     _description = 'Data Kit Assembly dari Acumatica (Staging)'
     _order       = 'row_number asc'
-    
+
 
     # 'external_id':item.get("id", "") or "",
     # 'row_number': item.get("rowNumber", 0),
@@ -670,6 +549,8 @@ class AcumaticaKitAssemblyLine(models.Model):
     description = fields.Char(string='Description', readonly=True)
     last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
     location = fields.Char(string='Location', readonly=True)
+    note_header = fields.Char(string='Header Note', readonly=True)
+    note_header_id = fields.Char(string='Note Header ID', readonly=True)
     post_period = fields.Char(string='PostPeriod', readonly=True)
     quantity = fields.Char(string='Qty', readonly=True)
     reason_code = fields.Char(string='ReasonCode', readonly=True)
@@ -683,6 +564,7 @@ class AcumaticaKitAssemblyLine(models.Model):
 
     line_external_id = fields.Char(string='Line UUID', readonly=True)
     line_note = fields.Char(string='Line Note', readonly=True)
+    line_note_id = fields.Char(string='Line Note ID', readonly=True)
     line_inventory_id = fields.Char(string='Line InventoryID', readonly=True)
     line_component_qty = fields.Char(string='Line Component Qty', readonly=True)
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
@@ -698,14 +580,15 @@ class AcumaticaKitAssemblyLine(models.Model):
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
-        ('pending',  'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated',  'Diupdate'),
-        ('error',    'Error'),
-    ], string='Status', default='pending', readonly=True)
+        ('staged',  'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
+        ('error', 'Error'),
+    ], string='Status', default='staged', readonly=True, tracking=True)
 
-    import_message   = fields.Char(string='Keterangan',         readonly=True)
-    odoo_product_id  = fields.Many2one('product.template', string='Product di Odoo', readonly=True)
+    import_message   = fields.Char(string='Generation Message',         readonly=True)
+    odoo_product_id  = fields.Many2one('product.template', string='Document Reference', readonly=True)
     odoo_bom_id = fields.Many2one('mrp.bom', string='BOM di Odoo', readonly=True)
     selected         = fields.Boolean(string='Pilih',           default=True)
 
@@ -718,7 +601,7 @@ class AcumaticaKitAssemblyLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
     warehouse_code = fields.Char(string='Warehouse Code', readonly=True)
     location_dest_code = fields.Char(string='Location Dest Code', readonly=True)
-    header_location_code = fields.Char(string='Header Location Code', readonly=True)    
+    header_location_code = fields.Char(string='Header Location Code', readonly=True)
     uom_code = fields.Char(string='UOM Code', readonly=True)
     receipt_nbr = fields.Char(string='Receipt Nbr', readonly=True)
     po_number = fields.Char(string='PO Number', readonly=True)
@@ -782,7 +665,7 @@ class AcumaticaKitAssemblyLine(models.Model):
             if found:
                 return found
         return Product.browse()
-    
+
     def _find_warehouse(self, line):
         Warehouse = self.env['stock.warehouse']
         code = line.warehouse_code
@@ -792,7 +675,7 @@ class AcumaticaKitAssemblyLine(models.Model):
             if not warehouse:
                 warehouse = Warehouse.search([('name', '=', code)], limit=1)
         return warehouse or Warehouse.search([], limit=1)
-    
+
     def _find_destination_location(self, line, warehouse=False):
         Location = self.env['stock.location']
         code = line.location_dest_code or line.header_location_code
@@ -815,18 +698,22 @@ class AcumaticaKitAssemblyLine(models.Model):
         return uom
 
 
-    
+
 
     # ─── Import Actions ──────────────────────────────
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def _do_import(self):
         print("Starting import process...")
@@ -841,88 +728,110 @@ class AcumaticaKitAssemblyLine(models.Model):
         stock_picking = self.env['stock.picking']
         Move = self.env['stock.move']
         looping_count = 0
-        
 
 
-        imported = 0
+
+        created = 0
         updated = 0
         error = 0
 
         # proses per reference number
         for reference_nbr in self.mapped('reference_nbr'):
-            # print(f"Processing ReferenceNbr: {reference_nbr}")
-            vals = {}
-            header = header_reference.search([('name', '=', reference_nbr)])
-            print(f"Header Value : {header.name} ")
+            records = self.filtered(lambda line: line.reference_nbr == reference_nbr)
+            header = header_reference.search([('name', '=', reference_nbr)], limit=1)
+            component_lines = component_reference
+            try:
+                with self.env.cr.savepoint():
+                    if not header:
+                        raise UserError(f"Header tidak ditemukan: {reference_nbr}")
 
-            warehouse = Warehouse.search([('code', '=', header.warehouse)], limit=1)
-            if not warehouse:
-                print(f"Warehouse tidak ditemukan untuk: {header.warehouse}")
+                    warehouse = Warehouse.search([('code', '=', header.warehouse)], limit=1)
+                    if not warehouse:
+                        raise UserError(f"Warehouse tidak ditemukan untuk: {header.warehouse or '-'}")
 
-            processed_product = self.env['product.product'].search([
-                    ('default_code', '=', header.inventory_id),
-                ], limit=1)
-            if not processed_product:
-                print(f"Processed product not found for: {header.inventory_id}")
+                    processed_product = self.env['product.product'].search([
+                        ('default_code', '=', header.inventory_id),
+                    ], limit=1)
+                    if not processed_product:
+                        raise UserError(
+                            f"Finished product tidak ditemukan untuk InventoryID: "
+                            f"{header.inventory_id or '-'}"
+                        )
 
-            picking_type = PickingType.search([
-                ('name', '=', 'Manufacturing'),
-                ('warehouse_id', '=', warehouse.id),
-            ], limit=1)
+                    picking_type = PickingType.search([
+                        ('name', '=', 'Manufacturing'),
+                        ('warehouse_id', '=', warehouse.id),
+                    ], limit=1)
+                    if not picking_type:
+                        raise UserError(
+                            f"Manufacturing Picking Type tidak ditemukan untuk warehouse: "
+                            f"{warehouse.display_name}"
+                        )
 
-            vals = {
-                'name' : reference_nbr,
-                'product_id' : processed_product.id,
-                'product_qty' : header.quantity,
-                'product_uom_id' : processed_product.product_tmpl_id.uom_id.id,
-                # 'scheduled_date': header.requested_on,
-                'user_id': self.env.uid,
-                'picking_type_id': picking_type.id,
-                'location_src_id': picking_type.default_location_src_id.id,
-                'location_dest_id': picking_type.default_location_dest_id.id,
-                # 'source' : reference_nbr,
-                'company_id' : warehouse.company_id.id,
-            }
-            manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)])
-            if not manufacturing_check:
-                manufacturing = Manufacturing.create(vals)
-                print(f"Created manufacture: {manufacturing}")
+                    component_lines = component_reference.search([('assembly_id', '=', header.id)])
+                    for item in component_lines:
+                        component_product = self.env['product.product'].search([
+                            ('default_code', '=', item.stock_inventory_id),
+                        ], limit=1)
+                        if not component_product:
+                            raise UserError(
+                                f"Component product tidak ditemukan untuk InventoryID: "
+                                f"{item.stock_inventory_id or '-'}"
+                            )
 
+                    vals = {
+                        'origin': reference_nbr,
+                        'product_id': processed_product.id,
+                        'product_qty': header.quantity,
+                        'product_uom_id': processed_product.uom_id.id,
+                        'user_id': self.env.uid,
+                        'picking_type_id': picking_type.id,
+                        'location_src_id': picking_type.default_location_src_id.id,
+                        'location_dest_id': picking_type.default_location_dest_id.id,
+                        'company_id': warehouse.company_id.id,
+                    }
+                    manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)], limit=1)
+                    if manufacturing_check:
+                        manufacturing = manufacturing_check
+                        updated += 1
+                    else:
+                        manufacturing = Manufacturing.create(vals)
+                        created += 1
 
-
-            # boms = self.env['mrp.bom'].search([('code', '=', reference_nbr)], limit=1)
-
-            # if boms:
-            #     Bom = boms
-            # if not boms:
-            #     Bom = Bom.create(vals)
-
-            # print(Bom)
-            vals = {}
-
-            component = component_reference.search([('assembly_id', '=', header.id)])
-            print(component)
-
-            for item in component:
-                component = self.env['product.template'].search(
-                    [('default_code', '=', item.stock_inventory_id)],
-                    limit=1
+                    records.write({
+                        'import_state': 'created' if not manufacturing_check else 'updated',
+                        'import_message': 'success',
+                        'odoo_product_id': processed_product.product_tmpl_id.id,
+                    })
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'kit_assembly')
+            except Exception as e:
+                error += len(records) or 1
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
+                    records[:1] or self,
+                    [str(e)],
+                    api_acumatica='kit_assembly',
+                    operation_type='manufacturing',
+                    origin=reference_nbr,
+                    location=header.warehouse if header else False,
+                    location_dest=header.location if header else False,
+                    scheduled_date=header.requested_on if header else False,
+                    total_qty=header.quantity if header else 0.0,
+                    payload={'header': header.read()[0] if header and header.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.stock_inventory_id or line.inventory_id or False,
+                        'product_name': line.line_inventory_id or line.description or False,
+                        'qty': line.line_quantity or line.quantity,
+                        'uom': line.line_uom or line.uom or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in (component_lines if component_lines else records)],
                 )
-                print(component)
-                
+                records.write({
+                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                    'import_message': str(e)[:200],
+                    'odoo_product_id': False,
+                    'odoo_bom_id': False,
+                })
 
-                vals = {
-                    'product_id' : component.product_id.id,
-                    'product_uom_qty' : item.line_quantity,
-                    'product_uom_id' : component.uom_id.id,
-                    'location_id' : picking_type.default_location_src_id.id,
-                    'raw_material_production_id' : manufacturing.id,
-                }
-
-                # if not manufacturing_check:
-                #     move = Move.create(vals)
-                vals = {}
-            
 
         # picking_type = PickingType.search([
         #     ('name', '=', 'Pick Components'),
@@ -933,7 +842,7 @@ class AcumaticaKitAssemblyLine(models.Model):
 
         # if not picking_type:
         #     raise UserError('Picking type Manufacture tidak ditemukan.')
-        
+
         # kit_assembly_warehouse = mapping_location.search([('code', '=', header.warehouse)], limit=1)
         # print(kit_assembly_warehouse)
 
@@ -943,10 +852,10 @@ class AcumaticaKitAssemblyLine(models.Model):
         # product_id = self.env['product.product'].search([
         #         ('product_tmpl_id', '=', processed_product.id),
         #     ], limit=1)
-        
+
         # print(product_id)
 
-        
+
         # vals = {
         #         'product_id': product_id.id,
         #         'product_uom_id': processed_product.uom_id.id,
@@ -983,14 +892,14 @@ class AcumaticaKitAssemblyLine(models.Model):
         #         'write_date': fields.Datetime.now(),
         #         'product_uom_qty': False,
         #     }
-        
+
         # if manufacturing_check:
         #     print("Create MO Skipped")
         # if not manufacturing_check:
         #     if kit_assembly_warehouse.odoo_location_id.id:
         #         manufacturing = manufacturing.create(vals)
         #         print(f"Created : {manufacturing}")
-                
+
         #     if not kit_assembly_warehouse.odoo_location_id.id:
         #         print('created skipped cause location not found')
 
@@ -998,7 +907,7 @@ class AcumaticaKitAssemblyLine(models.Model):
 # Block Kode Generate 1-Step Transfer Pemindahan barang dari penyimpanan ke Assembly Line
         # operation_type = self.env['stock.picking.type'].search([('code', '=', 'internal'), ('name', '=', 'Pick Components')], limit=1)
 
-        # total_moving_qty = 0 
+        # total_moving_qty = 0
 
         # component = component_reference.search([('assembly_id', '=', header.id)])
         # for item in component:
@@ -1023,7 +932,7 @@ class AcumaticaKitAssemblyLine(models.Model):
         #         # stock_picking = self.env['stock.picking']
         #         stock_picking = stock_picking.create(vals)
         #         print(stock_picking.name)
-                
+
         #     if not kit_assembly_warehouse.odoo_location_id.id:
         #         print('created skipped cause location not found')
 
@@ -1032,7 +941,7 @@ class AcumaticaKitAssemblyLine(models.Model):
         #         [('default_code', '=', item.stock_inventory_id)],
         #         limit=1
         #     )
-            
+
         #     vals = {
         #             'name' : stock_picking.name,
         #             'product_id' : component.id,
@@ -1047,18 +956,18 @@ class AcumaticaKitAssemblyLine(models.Model):
         #         if kit_assembly_warehouse.odoo_location_id.id:
         #             stock_move = self.env['stock.move']
         #             stock_move = stock_move.create(vals)
-                    
+
         #         if not kit_assembly_warehouse.odoo_location_id.id:
         #             print('created skipped cause location not found')
 
-        msg = f'Import selesai: {imported} receipt dibuat, {updated} receipt diupdate, {error} line error.'
+        msg = f'Import selesai: {created} receipt dibuat, {updated} receipt diupdate, {error} line error.'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': 'Import Inventory Receipt',
                 'message': msg,
-                'type': 'success' if error == 0 else 'warning',
+                'type': 'success' if error == 0 else 'danger',
                 'sticky': True,
             }
         }
@@ -1066,7 +975,7 @@ class AcumaticaKitAssemblyLine(models.Model):
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({
-            'import_state':   'pending',
+            'import_state':   'staged',
             'import_message': False,
         })
 

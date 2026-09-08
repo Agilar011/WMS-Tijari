@@ -1,0 +1,396 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_import_selected_shipment_completed" model="ir.actions.server">
+        <field name="name">Generate Data</field>
+        <field name="model_id" ref="model_acumatica_shipment_completed_staging"/>
+        <field name="binding_model_id" ref="model_acumatica_shipment_completed_staging"/>
+        <field name="binding_type">action</field>
+        <field name="state">code</field>
+        <field name="code">records.action_import_selected()</field>
+    </record>
+
+    <!-- =========================================================
+         STAGING SHIPMENT COMPLETED - LIST
+         ========================================================= -->
+
+    <record id="acumatica_shipment_completed_staging_view_list" model="ir.ui.view">
+        <field name="name">acumatica.shipment.completed.staging.view.list</field>
+        <field name="model">acumatica.shipment.completed.staging</field>
+        <field name="arch" type="xml">
+            <list>
+
+                <field name="selected" widget="boolean_toggle"/>
+
+                <field name="shipment_nbr"/>
+                <field name="ship_date"/>
+
+                <field name="inventory_nbr" />
+                <field name="order_type"/>
+                <field name="shipment_type"/>
+                <field name="status"/>
+
+                <field name="customer_id"/>
+                <field name="customer_name"/>
+
+                <field name="warehouse_id"/>
+                <field name="to_warehouse_id"/>
+
+                <field name="shipment_qty"/>
+                <field name="shipment_weight"/>
+
+                <field name="import_state"
+                       decoration-success="import_state == 'created'"
+                       decoration-info="import_state == 'updated'"
+                       decoration-muted="import_state == 'staged'"
+                       decoration-danger="import_state == 'error'"/>
+
+                <field name="sync_date"/>
+                <field name="config_id"/>
+
+            </list>
+        </field>
+    </record>
+
+    <!-- <record id="view_acumatica_shipment_completed_staging_list"
+            model="ir.ui.view">
+        <field name="name">
+            acumatica.shipment.completed.staging.list
+        </field>
+        <field name="model">
+            acumatica.shipment.completed.staging
+        </field>
+        <field name="arch" type="xml">
+            <list string="Shipment Completed">
+
+                <field name="selected" widget="boolean_toggle"/>
+
+                <field name="shipment_nbr"/>
+                <field name="ship_date"/>
+
+                <field name="order_type"/>
+                <field name="shipment_type"/>
+                <field name="status"/>
+
+                <field name="customer_id"/>
+                <field name="customer_name"/>
+
+                <field name="warehouse_id"/>
+                <field name="to_warehouse_id"/>
+
+                <field name="shipment_qty"/>
+                <field name="shipment_weight"/>
+
+                <field name="import_state"
+                       decoration-success="import_state == 'created'"
+                       decoration-info="import_state == 'updated'"
+                       decoration-muted="import_state == 'staged'"
+                       decoration-danger="import_state == 'error'"/>
+
+                <field name="sync_date"/>
+                <field name="config_id"/>
+
+            </list>
+        </field>
+    </record> -->
+
+
+    <!-- =========================================================
+         STAGING SHIPMENT COMPLETED - FORM
+         ========================================================= -->
+
+    <record id="view_acumatica_shipment_completed_staging_form" model="ir.ui.view">
+        <field name="name">acumatica.shipment.completed.staging.form</field>
+        <field name="model">acumatica.shipment.completed.staging</field>
+        <field name="arch" type="xml">
+
+            <form string="Shipment Completed">
+
+                <header>
+                    <button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
+                </header>
+
+                <sheet>
+
+                    <div class="oe_title">
+                        <h1>
+                            <field name="shipment_nbr"/>
+                        </h1>
+                    </div>
+
+                    <!-- =================================================
+                         STATUS
+                         ================================================= -->
+
+                    <group>
+
+                        <group string="Shipment">
+                            <field name="shipment_nbr"/>
+                            <field name="inventory_nbr" />
+                            <field name="order_type"/>
+                            <field name="shipment_type"/>
+                            <field name="status"/>
+                            <field name="ship_date"/>
+                        </group>
+
+                        <group string="Shipment Information">
+                            <field name="shipment_qty"/>
+                            <field name="shipment_volume"/>
+                            <field name="shipment_weight"/>
+                            <field name="shipment_via"/>
+                        </group>
+
+                    </group>
+
+
+                    <!-- =================================================
+                         CUSTOMER
+                         ================================================= -->
+
+                    <group string="Customer">
+
+                        <group>
+                            <field name="customer_id"/>
+                            <field name="customer_name"/>
+                        </group>
+
+                        <group>
+                            <field name="address_id"/>
+                            <field name="address_line"/>
+                            <field name="building_id"/>
+                        </group>
+
+                    </group>
+
+
+                    <group string="Address">
+
+                        <group>
+                            <field name="city"/>
+                            <field name="state"/>
+                            <field name="state_name"/>
+                        </group>
+
+                        <group>
+                            <field name="country"/>
+                            <field name="country_name"/>
+                            <field name="postal_code"/>
+                        </group>
+
+                    </group>
+
+
+                    <!-- =================================================
+                         WAREHOUSE / CONFIG
+                         ================================================= -->
+
+                    <group>
+
+                        <group string="Warehouse">
+                            <field name="warehouse_id"/>
+                            <field name="to_warehouse_id"/>
+                        </group>
+
+                        <group string="Synchronization">
+                            <field name="config_id"/>
+                            <field name="sync_date"/>
+                        </group>
+
+                    </group>
+
+
+                    <!-- =================================================
+                         IMPORT STATUS
+                         ================================================= -->
+
+                    <group string="Processing">
+
+                        <group>
+                            <field name="selected"/>
+                            <field name="import_state"/>
+                        </group>
+
+                        <group>
+                            <field name="import_message"
+                                   widget="text"/>
+                        </group>
+
+                    </group>
+
+
+                    <!-- =================================================
+                         DETAILS
+                         ================================================= -->
+
+                    <notebook>
+
+                        <page string="Shipment Details">
+
+                            <field name="line_ids"
+                                   nolabel="1">
+
+                                <list editable="bottom">
+
+                                    <field name="line_nbr"/>
+                                    <field name="line_inventory_id"/>
+                                    <field name="line_description"/>
+
+                                    <field name="line_quantity"/>
+                                    <field name="line_uom"/>
+
+                                    <field name="line_free_item"/>
+
+                                    <field name="location_id"/>
+                                    <field name="location_name"/>
+
+                                    <field name="line_note"/>
+
+                                </list>
+
+                            </field>
+
+                        </page>
+
+
+                        <page string="Notes">
+
+                            <group>
+                                <field name="note"
+                                       nolabel="1"
+                                       widget="text"/>
+                            </group>
+
+                        </page>
+
+                    </notebook>
+
+                </sheet>
+
+            </form>
+
+        </field>
+    </record>
+
+
+    <!-- =========================================================
+         STAGING SHIPMENT COMPLETED LINE - LIST
+         ========================================================= -->
+
+    <!-- <record id="view_acumatica_shipment_completed_staging_line_list" model="ir.ui.view">
+        <field name="name">acumatica.shipment.completed.staging.line.list</field>
+        <field name="model">acumatica.shipment.completed.staging.line</field>
+        <field name="arch" type="xml">
+
+            <list string="Shipment Completed Details">
+
+                <field name="staging_id"/>
+
+                <field name="line_nbr"/>
+                <field name="line_inventory_id"/>
+                <field name="line_description"/>
+
+                <field name="line_quantity"/>
+                <field name="line_uom"/>
+                <field name="line_free_item"/>
+
+                <field name="location_id"/>
+                <field name="location_name"/>
+
+                <field name="config_id"/>
+                <field name="sync_date"/>
+
+            </list>
+
+        </field>
+    </record> -->
+
+
+    <!-- =========================================================
+         STAGING SHIPMENT COMPLETED LINE - FORM
+         ========================================================= -->
+
+    <!-- <record id="view_acumatica_shipment_completed_staging_line_form" model="ir.ui.view">
+        <field name="name">acumatica.shipment.completed.staging.line.form</field>
+        <field name="model">acumatica.shipment.completed.staging.line</field>
+        <field name="arch" type="xml">
+
+            <form string="Shipment Completed Detail">
+
+                <sheet>
+
+                    <group>
+
+                        <group string="Shipment">
+                            <field name="staging_id"/>
+                            <field name="line_nbr"/>
+                            <field name="row_number"/>
+                        </group>
+
+                        <group string="Product">
+                            <field name="line_inventory_id"/>
+                            <field name="line_description"/>
+                            <field name="line_quantity"/>
+                            <field name="line_uom"/>
+                            <field name="line_free_item"/>
+                        </group>
+
+                    </group>
+
+                    <group string="Location">
+
+                        <group>
+                            <field name="location_id"/>
+                            <field name="location_name"/>
+                        </group>
+
+                    </group>
+
+                    <group string="Notes">
+
+                        <field name="line_note"
+                               widget="text"/>
+
+                        <field name="note"
+                               widget="text"/>
+
+                    </group>
+
+                    <group string="Tracking">
+
+                        <field name="acumatica_id"/>
+                        <field name="line_note_id"/>
+                        <field name="config_id"/>
+                        <field name="sync_date"/>
+
+                    </group>
+
+                </sheet>
+
+            </form>
+
+        </field>
+    </record> -->
+
+
+    <!-- =========================================================
+<<<<<<< HEAD
+=======
+         ACTION - HEADER
+         ========================================================= -->    
+
+    <!-- =========================================================
+>>>>>>> d2a843c2aca94bc7d6f0f5d180aca23664ea0919
+         ACTION - DETAIL
+         ========================================================= -->
+
+    <!-- <record id="action_acumatica_shipment_completed_staging_line" model="ir.actions.act_window">
+
+        <field name="name">Shipment Completed Details</field>
+
+        <field name="res_model">acumatica.shipment.completed.staging.line</field>
+
+        <field name="view_mode">list,form</field>
+
+    </record> -->
+
+</odoo>

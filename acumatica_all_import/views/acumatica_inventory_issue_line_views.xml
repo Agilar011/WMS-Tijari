@@ -23,8 +23,8 @@
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
                 <field name="import_state"/>
-                <filter string="Pending" name="pending" domain="[('import_state','=','pending')]"/>
-                <filter string="Done" name="done" domain="[('import_state','in',('imported','updated'))]"/>
+                <filter string="Staged" name="staged" domain="[('import_state','=','staged')]"/>
+                <filter string="Done" name="done" domain="[('import_state','in',('created','updated'))]"/>
                 <filter string="Error" name="error" domain="[('import_state','=','error')]"/>
             </search>
         </field>
@@ -38,23 +38,28 @@
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="reference_nbr"/>
                 <field name="trans_type"/>
+                <field name="doc_type"/>
                 <field name="document_only"/>
-                <!-- <field name="vendor_code"/> -->
+                <field name="building_code"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
+                <field name="line_nbr"/>
+                <field name="inventory_id"/>
                 <!-- <field name="inventory_id"/> -->
                 <!-- <field name="transaction_description"/> -->
                 <!-- <field name="product_uom_qty"/> -->
                 <!-- <field name="uom_code"/> -->
                 <!-- <field name="location_dest_code"/> -->
                 <field name="import_state" widget="badge"
-                       decoration-success="import_state in ('imported','updated')"
-                       decoration-warning="import_state == 'pending'"
+                       decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
+                       decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <field name="odoo_internal_transfer_order_id" column_invisible="1"/>
+                <field name="odoo_scrap_id" column_invisible="1"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>            </list>
+                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id and not odoo_scrap_id"/>
+            </list>
         </field>
     </record>
 
@@ -64,27 +69,38 @@
         <field name="arch" type="xml">
             <form string="Data Issue : Inventory Issue">
                 <header>
-                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'pending'"/>
-                    <button name="action_open_picking" type="object" string="Open Odoo Document" class="btn-secondary" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
-                    <button name="action_reset_pending" type="object" string="Reset Pending" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged'"/>
+                    <button name="action_open_picking" type="object" string="Open Document" class="btn-secondary" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id and not odoo_scrap_id"/>
+                    <button name="action_reset_pending" type="object" string="Reset Staged" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <field name="import_state"/>
                 </header>
                 <sheet>
                     <group string="Header">
                         <group>
+                            <field name="external_id" readonly="1"/>
+                            <field name="row_number" readonly="1"/>
                             <field name="reference_nbr" readonly="1"/>
                             <field name="picking_type_id"/>
                             <field name="scheduled_date" readonly="1"/>
                             <field name="status" readonly="1"/>
                             <field name="customer_id"/>
+                            <field name="customer_name" readonly="1"/>
                             <field name="trans_type" readonly="1"/>
+                            <field name="doc_type" readonly="1"/>
                             <field name="actual_qty" readonly="1"/>
                             <field name="total_qty" readonly="1"/>
+                            <field name="warehouse_code" readonly="1"/>
+                            <field name="building_code" readonly="1"/>
                         </group>
                         <group>
                             <field name="description" readonly="1"/>
                             <field name="external_ref" readonly="1"/>
+                            <field name="change_item_ref_nbr" readonly="1"/>
+                            <field name="header_location_code" readonly="1"/>
                             <field name="post_period" readonly="1"/>
                             <field name="acumatica_write_date" readonly="1"/>
+                            <field name="branch_warehouse" readonly="1"/>
+                            <field name="note_header_id" readonly="1"/>
                             <field name="note" readonly="1"/>
                         </group>
                     </group>
@@ -92,18 +108,25 @@
                         <page name="Details" string="Details">
                             <field name="product_line_ids">
                                 <list>
+                                    <field name="line_nbr"/>
                                     <field name="inventory_id"/>
                                     <field name="line_description"/>
+                                    <field name="location_code"/>
+                                    <field name="line_location_name"/>
                                     <field name="warehouse_code"/>
-                                    <field name="customer_id"/>
+                                    <field name="line_warehouse_name"/>
                                     <field name="product_uom_qty"/>
+                                    <field name="uom_code"/>
+                                    <field name="line_note_id"/>
+                                    <field name="line_note"/>
                                 </list>
                             </field>
                         </page>
                     </notebook>
                     <group>
                         <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
+                        <field name="odoo_picking_id" string="Document Reference" readonly="1" invisible="not odoo_picking_id"/>
+                        <field name="odoo_scrap_id" string="Document Reference" readonly="1" invisible="not odoo_scrap_id"/>
                         <field name="odoo_internal_transfer_order_id" readonly="1"/>
                         <field name="exists_in_odoo" readonly="1"/>
                     </group>

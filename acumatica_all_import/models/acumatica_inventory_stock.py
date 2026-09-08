@@ -6,131 +6,14 @@ import requests
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 from odoo.tools import float_compare, float_is_zero
+from markupsafe import Markup, escape
 
 _logger = logging.getLogger(__name__)
 
 
-class AcumaticaInventoryStockConfig(models.Model):
-    _name = 'acumatica.inventory.stock.config'
-    _description = 'Konfigurasi Koneksi Acumatica - Inventory Stock'
-    _rec_name = 'name'
-
-    name = fields.Char(string='Nama Konfigurasi', required=True, default='Acumatica Inventory Stock')
-    base_url = fields.Char(string='Base URL', required=True, default='http://staging.aditya.group/acumportal/entity')
-    api_version = fields.Char(string='API Version', required=True, default='25.200.002')
-    username = fields.Char(string='Username', required=True, default='wms')
-    password = fields.Char(string='Password', required=True)
-    company_code = fields.Char(string='Company Code', required=True, default='asgjkt')
-    endpoint_name = fields.Char(string='Endpoint Name', required=True, default='InventorySiteInquiry')
-    active = fields.Boolean(default=True)
-    last_sync = fields.Datetime(string='Terakhir Sync', readonly=True)
-    state = fields.Selection([
-        ('draft', 'Belum Ditest'),
-        ('connected', 'Terhubung'),
-        ('error', 'Error'),
-    ], string='Status', default='draft', readonly=True)
-
-    odata_expand = fields.Char(string='OData Expand', default='InventorySiteInquiryDetails')
-    odata_top = fields.Integer(string='OData Top', default=1)
-    request_warehouse_value = fields.Char(string='Warehouse', default='WH33-FG')
-    request_inventory_id_value = fields.Char(string='InventoryID')
-
-    @property
-    def api_url(self):
-        return f"{self.base_url}/wms/{self.api_version}"
-
-    @property
-    def login_url(self):
-        return f"{self.base_url}/auth/login"
-
-    @property
-    def logout_url(self):
-        return f"{self.base_url}/auth/logout"
-
-    def action_test_connection(self):
-        self.ensure_one()
-        try:
-            session = self._do_login()
-            self._do_logout(session)
-            self.state = 'connected'
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Koneksi Berhasil',
-                    'message': f'Berhasil terhubung ke Acumatica ({self.base_url})',
-                    'type': 'success',
-                    'sticky': False,
-                }
-            }
-        except Exception as e:
-            self.state = 'error'
-            raise UserError(f'Koneksi gagal: {str(e)}')
-
-    def _do_login(self):
-        self.ensure_one()
-        try:
-            session = requests.Session()
-            response = session.post(
-                self.login_url,
-                json={
-                    'name': self.username,
-                    'password': self.password,
-                    'company': self.company_code,
-                },
-                headers={'Content-Type': 'application/json'},
-                timeout=30,
-            )
-            if response.status_code == 204:
-                return session
-            raise UserError(f'Login gagal (HTTP {response.status_code}): {response.text}')
-        except requests.exceptions.ConnectionError:
-            raise UserError(f'Tidak bisa terhubung ke server: {self.base_url}')
-        except requests.exceptions.Timeout:
-            raise UserError('Koneksi timeout. Periksa URL server.')
-
-    def _do_logout(self, session):
-        try:
-            session.post(self.logout_url, timeout=10)
-        except Exception:
-            pass
-
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
-
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-            return [payload]
-        return []
-
-    def _build_request_body(self, warehouse=None, inventory_id=None):
-        body = {
-            'Warehouse': {'value': warehouse if warehouse is not None else self.request_warehouse_value or ''},
-            'InventoryID': {'value': inventory_id if inventory_id is not None else self.request_inventory_id_value or ''},
-        }
-        return body
-
-    @staticmethod
-    def _parse_float(value):
-        try:
-            return float(value or 0)
-        except Exception:
-            return 0.0
-
-
 class AcumaticaInventoryStockLine(models.Model):
     _name = 'acumatica.inventory.stock.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = 'Data Inventory Stock dari Acumatica'
     _order = 'warehouse_code asc, inventory_id asc, id asc'
 
@@ -149,45 +32,98 @@ class AcumaticaInventoryStockLine(models.Model):
     available = fields.Float(string='Available (API)', readonly=True)
     on_hand_acumatica = fields.Float(string='On Hand Acumatica', readonly=True)
     note = fields.Text(string='Note', readonly=True)
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True, index=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     selected = fields.Boolean(string='Pilih', default=True)
     import_state = fields.Selection([
-        ('pending', 'Belum Diimport'),
-        ('imported', 'Sudah Diimport'),
-        ('updated', 'Diupdate'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
+        ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status Import', default='pending', readonly=True)
-    import_message = fields.Char(string='Keterangan', readonly=True)
+    ], string='Status Import', default='staged', readonly=True)
+    import_message = fields.Char(string='Generation Message', readonly=True)
 
-    odoo_product_id = fields.Many2one('product.product', string='Product Odoo', readonly=True)
-    odoo_location_id = fields.Many2one('stock.location', string='Location Odoo', readonly=True)
+    odoo_product_id = fields.Many2one(
+        'product.product',
+        string='Product',
+        compute='_compute_stock_snapshot',
+        store=True,
+        readonly=True,
+    )
+    odoo_location_id = fields.Many2one(
+        'stock.location',
+        string='Location',
+        compute='_compute_stock_snapshot',
+        store=True,
+        readonly=True,
+    )
+    location_mapping_id = fields.Many2one(
+        'stock.location.acumatica',
+        string='Location Mapping',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
+    odoo_quantity = fields.Float(
+        string='On Hand Odoo',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
+    odoo_reserved_quantity = fields.Float(
+        string='Reserved Odoo',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
+    odoo_available_quantity = fields.Float(
+        string='Available Odoo',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
     odoo_on_hand = fields.Float(string='On Hand Odoo', readonly=True)
+    stock_difference = fields.Float(
+        string='Difference',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
     match_status = fields.Selection([
         ('match', 'Match'),
         ('not_match', 'Not Match'),
         ('missing_product', 'Missing Product'),
         ('missing_location', 'Missing Location'),
         ('error', 'Error'),
-    ], string='Match Status', compute='_compute_stock_snapshot', store=False)
+    ], string='Match Status', compute='_compute_stock_snapshot', store=True)
 
-    exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_stock_snapshot', store=False)
+    exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_stock_snapshot', store=True)
+    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
-    @api.depends('inventory_id', 'warehouse_code', 'on_hand_acumatica')
+    def _get_mapped_location(self):
+        """Return the main Odoo location configured for the Acumatica warehouse."""
+        self.ensure_one()
+        mapping = self.env['stock.location.acumatica'].search([
+            ('code', '=', self.warehouse_code),
+            ('active', '=', True),
+        ], limit=1)
+        if mapping.odoo_location_id:
+            return mapping, mapping.odoo_location_id
+        if mapping.odoo_building_id and mapping.odoo_building_id.lot_stock_id:
+            return mapping, mapping.odoo_building_id.lot_stock_id
+        return mapping, self.env['stock.location'].browse()
+
+    @api.depends('inventory_id', 'warehouse_code', 'description', 'on_hand_acumatica')
     def _compute_stock_snapshot(self):
         Quant = self.env['stock.quant']
-        WarehouseMap = self.env['stock.location.acumatica']
-        Warehouse = self.env['stock.warehouse']
-        Location = self.env['stock.location']
         Product = self.env['product.product']
 
         for rec in self:
             product = False
             location = False
+            mapping = self.env['stock.location.acumatica'].browse()
             match_status = 'error'
             odoo_on_hand = 0.0
+            odoo_reserved = 0.0
 
             if rec.inventory_id:
                 product = Product.search([
@@ -199,43 +135,41 @@ class AcumaticaInventoryStockLine(models.Model):
                     product = Product.search([('name', '=', rec.description)], limit=1) if rec.description else False
 
             if rec.warehouse_code:
-                mapping = WarehouseMap.search([('code', '=', rec.warehouse_code)], limit=1)
-                if mapping.odoo_location_id:
-                    location = mapping.odoo_location_id
-                elif mapping.odoo_building_id:
-                    location = mapping.odoo_building_id.lot_stock_id
-
-                if not location:
-                    warehouse = Warehouse.search([('code', '=', rec.warehouse_code)], limit=1)
-                    if warehouse:
-                        location = warehouse.lot_stock_id
-
-                if not location:
-                    location = Location.search([
-                        '|',
-                        ('complete_name', '=', rec.warehouse_code),
-                        ('name', '=', rec.warehouse_code),
-                    ], limit=1)
+                mapping, location = rec._get_mapped_location()
 
             rec.odoo_product_id = product.id if product else False
             rec.odoo_location_id = location.id if location else False
+            rec.location_mapping_id = mapping.id if mapping else False
             rec.exists_in_odoo = bool(product and location)
+            rec.odoo_on_hand = 0.0
+            rec.odoo_quantity = 0.0
+            rec.odoo_reserved_quantity = 0.0
+            rec.odoo_available_quantity = 0.0
+            rec.stock_difference = rec.on_hand_acumatica
 
             if not product:
-                rec.odoo_on_hand = 0.0
                 rec.match_status = 'missing_product'
                 continue
             if not location:
-                rec.odoo_on_hand = 0.0
                 rec.match_status = 'missing_location'
                 continue
 
             try:
                 odoo_on_hand = Quant._get_available_quantity(product, location, strict=False)
+                quants = Quant.search([
+                    ('product_id', '=', product.id),
+                    ('location_id', 'child_of', location.id),
+                ])
+                odoo_reserved = sum(quants.mapped('reserved_quantity'))
             except Exception:
                 odoo_on_hand = 0.0
+                odoo_reserved = 0.0
 
             rec.odoo_on_hand = odoo_on_hand
+            rec.odoo_quantity = odoo_on_hand
+            rec.odoo_reserved_quantity = odoo_reserved
+            rec.odoo_available_quantity = odoo_on_hand - odoo_reserved
+            rec.stock_difference = rec.on_hand_acumatica - odoo_on_hand
             precision = product.uom_id.rounding if product.uom_id else 0.01
             if float_compare(rec.on_hand_acumatica, odoo_on_hand, precision_rounding=precision) == 0:
                 match_status = 'match'
@@ -244,26 +178,30 @@ class AcumaticaInventoryStockLine(models.Model):
             rec.match_status = match_status
 
     def action_select_all(self):
-        self.search([('import_state', '=', 'pending')]).write({'selected': True})
+        self.search([('import_state', '=', 'staged')]).write({'selected': True})
 
     def action_deselect_all(self):
         self.search([]).write({'selected': False})
 
     def action_reset_pending(self):
-        self.filtered(lambda line: line.import_state in ('updated', 'error')).write({
-            'import_state': 'pending',
+        self.filtered(lambda line: line.import_state == 'error').write({
+            'import_state': 'staged',
             'import_message': False,
         })
 
     def action_import_selected(self):
-        lines = self.filtered(lambda line: line.selected and line.import_state in ('pending', 'error'))
+        lines = self.filtered(lambda line: line.selected and line.import_state in ('staged', 'error'))
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _find_product(self):
         self.ensure_one()
@@ -281,30 +219,7 @@ class AcumaticaInventoryStockLine(models.Model):
 
     def _find_location(self):
         self.ensure_one()
-        WarehouseMap = self.env['stock.location.acumatica']
-        Warehouse = self.env['stock.warehouse']
-        Location = self.env['stock.location']
-        location = False
-
-        if self.warehouse_code:
-            mapping = WarehouseMap.search([('code', '=', self.warehouse_code)], limit=1)
-            if mapping.odoo_location_id:
-                location = mapping.odoo_location_id
-            elif mapping.odoo_building_id:
-                location = mapping.odoo_building_id.lot_stock_id
-
-            if not location:
-                warehouse = Warehouse.search([('code', '=', self.warehouse_code)], limit=1)
-                if warehouse:
-                    location = warehouse.lot_stock_id
-
-            if not location:
-                location = Location.search([
-                    '|',
-                    ('complete_name', '=', self.warehouse_code),
-                    ('name', '=', self.warehouse_code),
-                ], limit=1)
-
+        _mapping, location = self._get_mapped_location()
         return location
 
     def _sync_stock_quant_snapshot(self, product, location, on_hand_acumatica, status, message):
@@ -321,9 +236,125 @@ class AcumaticaInventoryStockLine(models.Model):
                 'adt_inventory_stock_sync_date': fields.Datetime.now(),
             })
 
+    def _handle_acumatica_error(self, err_msg=False):
+        AcumaticaError = self.env['acumatica.error.master']
+        acumatica_err_id = self.acumatica_err_id
+        if not err_msg:
+            if acumatica_err_id:
+                acumatica_err_id.import_state = 'solved'
+                return
+            return
+
+        state = 'error'
+        if not acumatica_err_id:
+            acumatica_err_id = AcumaticaError.create({
+                'name': f'StockOnventory-{self.id}',
+                'data_type': self._name,
+                'import_state': state,
+                'data_id': self.id,
+                'error_msg': err_msg
+            })
+            self.acumatica_err_id = acumatica_err_id
+            
+        acumatica_err_id.error_msg = err_msg
+        acumatica_err_id.import_state = state
+
+    def _get_changed_fields(self, record, vals):
+        changed_fields = []
+
+        for field_name, new_value in vals.items():
+            field = record._fields.get(field_name)
+
+            if not field:
+                continue
+
+            old_value = record[field_name]
+
+            # Normalisasi nilai
+            old_value = old_value or False
+            new_value = new_value or False
+
+            if old_value != new_value:
+                changed_fields.append({
+                    'field_name': field_name,
+                    'field_label': field.string,
+                    'old_value': old_value,
+                    'new_value': new_value,
+                })
+
+        return changed_fields
+    
+    def _log_import_result(
+        self,
+        state,
+        message,
+        record=False,
+        changed_fields=None,
+    ):
+        titles = {
+            'created': '✅ Import Berhasil',
+            'updated': '🔄 Data Diperbarui',
+            'error': '❌ Import Gagal',
+        }
+
+        body = Markup("""
+            <p>
+                <strong>{}</strong>
+            </p>
+            <p>{}</p>
+        """).format(
+            titles.get(state, 'Import Log'),
+            message,
+        )
+
+        if changed_fields:
+            body += Markup("""
+                <p><strong>Perubahan:</strong></p>
+                <ul>
+            """)
+
+            for change in changed_fields:
+                old_value = change['old_value'] or '-'
+                new_value = change['new_value'] or '-'
+
+                body += Markup("""
+                    <li>
+                        <strong>{}</strong>:
+                        {} → {}
+                    </li>
+                """).format(
+                    escape(change['field_label']),
+                    escape(str(old_value)),
+                    escape(str(new_value)),
+                )
+
+            body += Markup("</ul>")
+
+        if record:
+            body += Markup("""
+                <p>
+                    Record Odoo:
+                    <a href="#"
+                    data-oe-model="{}"
+                    data-oe-id="{}">
+                        {}
+                    </a>
+                </p>
+            """).format(
+                escape(record._name),
+                record.id,
+                escape(record.display_name),
+            )
+
+        self.message_post(
+            body=body,
+            message_type='comment',
+            subtype_xmlid='mail.mt_note',
+        )
+    
     def _do_import(self):
         Quant = self.env['stock.quant'].sudo()
-        imported = 0
+        created = 0
         updated = 0
         error = 0
 
@@ -352,18 +383,34 @@ class AcumaticaInventoryStockLine(models.Model):
                 if not float_is_zero(delta, precision_rounding=precision):
                     Quant._update_available_quantity(product, location, delta)
                     action_state = 'updated'
+                    self.env['acumatica.error.transaction']._handle_acumatica_update(
+                        line,
+                        origin=f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
+                    )
                     message = (
                         f"Updated: {product.display_name} @ {location.display_name} | "
                         f"old={current_qty} new={target_qty}"
                     )
+                    line.message_post(
+                        body=f"Updated: {product.display_name} @ {location.display_name} | \n old={current_qty} new={target_qty}",
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_note',
+                    )
                     updated += 1
                 else:
-                    action_state = 'imported'
+                    action_state = 'created'
                     message = (
                         f"Already match: {product.display_name} @ {location.display_name} | "
                         f"old={current_qty} new={target_qty}"
                     )
-                    imported += 1
+                    line.message_post(
+                        body=f"Already match: {product.display_name} @ {location.display_name} | \n old={current_qty} new={target_qty}",
+                        message_type='comment',
+                        subtype_xmlid='mail.mt_note',
+                    )
+                    if line.acumatica_err_id:
+                        line.acumatica_err_id.import_state = 'resolved'
+                    created += 1
 
                 new_qty = Quant._get_available_quantity(product, location, strict=False)
                 match_status = 'match' if float_compare(new_qty, target_qty, precision_rounding=precision) == 0 else 'not_match'
@@ -380,16 +427,40 @@ class AcumaticaInventoryStockLine(models.Model):
                 line.write({
                     'import_state': action_state,
                     'import_message': message,
-                    'odoo_product_id': product.id,
-                    'odoo_location_id': location.id,
                     'odoo_on_hand': new_qty,
                 })
+                # Recompute the stored comparison fields after the quant adjustment,
+                # so the list immediately shows the new Match/Unmatch state.
+                line._compute_stock_snapshot()
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
+                    f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
+                    'inventory_stock',
+                )
             except Exception as e:
                 _logger.exception('Error import Inventory Stock line %s', line.id)
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
+                    line,
+                    [str(e)],
+                    api_acumatica='inventory_stock',
+                    operation_type='inventory',
+                    origin=f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
+                    location=line.warehouse_code or False,
+                    total_qty=line.on_hand_acumatica,
+                    actual_qty=line.available,
+                    payload={'line': line.read()[0] if line.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.inventory_id or False,
+                        'product_name': line.description or False,
+                        'qty': line.on_hand_acumatica,
+                        'uom': False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    }],
+                )
                 line.write({
                     'import_state': 'error',
                     'import_message': str(e)[:200],
                 })
+
                 error += 1
 
         return {
@@ -397,7 +468,7 @@ class AcumaticaInventoryStockLine(models.Model):
             'tag': 'display_notification',
             'params': {
                 'title': 'Import Inventory Stock',
-                'message': f'Import selesai: {imported} berhasil, {updated} diupdate, {error} error.',
+                'message': f'Import selesai: {created} berhasil, {updated} diupdate, {error} error.',
                 'type': 'success' if error == 0 else 'warning',
                 'sticky': True,
             }

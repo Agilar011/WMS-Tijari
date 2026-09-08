@@ -16,7 +16,7 @@
         <field name="name">acumatica.transfer.two.step.line.list</field>
         <field name="model">acumatica.transfer.two.step.line</field>
         <field name="arch" type="xml">
-            <list string="Data Transfer - Intra Warehouse : OUT" create="0" delete="0">
+            <list string="Data Transfer 1 STEP" create="0" delete="0">
                 <field name="selected" widget="boolean_toggle"/>
 
                 <field name="reference_nbr"/>
@@ -25,6 +25,9 @@
                 <field name="document_only"/>
                 <!-- <field name="scheduled_date"/> -->
                 <field name="from_warehouse_code"/>
+                <field name="from_warehouse_name"/>
+                <field name="to_warehouse_code"/>
+                <field name="to_warehouse_name"/>
                 <field name="total_qty"/>
                 <!-- <field name="inventory_id"/> -->
                 <!-- <field name="quantity"/> -->
@@ -35,24 +38,19 @@
                 <!-- <field name="transfer_type"/> -->
 
                 <field name="import_state" widget="badge"
-                    decoration-success="import_state in ('imported','updated')"
-                    decoration-warning="import_state == 'pending'"
+                    decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
+                    decoration-muted="import_state == 'staged'"
                     decoration-danger="import_state == 'error'"/>
 
                 <button name="action_import_this"
                         string="Import"
                         type="object"
                         icon="fa-upload"
-                        invisible="import_state != 'pending'"/>
+                        invisible="import_state != 'staged'"/>
 
-                <button name="action_reset_pending"
-                        string="Reset Error"
-                        type="object"
-                        icon="fa-refresh"
-                        invisible="import_state != 'error'"/>
 
                 <button name="action_open_picking"
-                        string="Open Transfer"
+                        string="Open Document"
                         type="object"
                         icon="fa-external-link"
                         invisible="not odoo_picking_id"/>
@@ -64,16 +62,16 @@
         <field name="name">acumatica.transfer.two.step.line.form</field>
         <field name="model">acumatica.transfer.two.step.line</field>
         <field name="arch" type="xml">
-            <form string="Data Transfer - Intra Warehouse : OUT">
+            <form string="Data Transfer 1 STEP">
                 <header>
                     <button name="action_import_this"
                             string="Import Baris Ini"
                             type="object"
                             class="btn-primary"
-                            invisible="import_state != 'pending'"/>
+                            invisible="import_state != 'staged'"/>
 
                     <button name="action_open_picking"
-                            string="Buka Transfer"
+                            string="Open Document"
                             type="object"
                             invisible="not odoo_picking_id"/>
 
@@ -85,7 +83,7 @@
 
                     <field name="import_state"
                         widget="statusbar"
-                        statusbar_visible="pending,imported,updated,error"/>
+                        statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
 
                 <sheet>
@@ -94,15 +92,20 @@
                             <field name="reference_nbr"/>
                             <field name="scheduled_date"/>
                             <field name="description"/>
+                            <field name="external_ref"/>
                             <field name="from_warehouse_code"/>
+                            <field name="from_warehouse_name"/>
                             <field name="to_warehouse_code"/>
+                            <field name="to_warehouse_name"/>
                             <field name="status"/>
+                            <field name="return_type"/>
                             <field name="transfer_type"/>
                             <field name="trans_type"/>
                             <field name="total_qty"/>
                             <field name="is_hold"/>
                             <field name="post_period"/>
                             <field name="acumatica_write_date"/>
+                            <field name="note_header_id"/>
                             <field name="note"/>
                         </group>
                     </group>
@@ -111,10 +114,18 @@
                             <!-- Field relasi One2many ditaruh di sini secara aman -->
                             <field name="line_ids" readonly="1">
                                 <list>
+                                    <field name="adt_LineNumber"/>
                                     <field name="adt_InventoryID"/>
                                     <field name="adt_Description"/>
                                     <field name="adt_FromLocationID"/>
+                                    <field name="adt_ToLocationID"/>
                                     <field name="adt_Quantity"/>
+                                    <field name="adt_UOM"/>
+                                    <field name="adt_SOOrderNbr"/>
+                                    <field name="adt_SOOrderType"/>
+                                    <field name="adt_SOShipmentNbr"/>
+                                    <field name="adt_LineNoteID"/>
+                                    <field name="adt_note"/>
                                 </list>
                             </field>
                         </page>
@@ -130,7 +141,7 @@
     </record>
 
     <record id="action_acumatica_transfer_two_step_line" model="ir.actions.act_window">
-        <field name="name">Data Transfer - Intra Warehouse : OUT</field>
+        <field name="name">Data Transfer 1 STEP</field>
         <field name="res_model">acumatica.transfer.two.step.line</field>
         <field name="view_mode">list,form</field>
     </record>

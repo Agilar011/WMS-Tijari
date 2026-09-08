@@ -12,6 +12,7 @@
     "data": [
         "security/ir.model.access.csv",
         "security/security.xml",
+        "data/approval_model_data.xml",
         "views/stock_inventory.xml",
         "views/stock_quant.xml",
         "views/stock_move_line.xml",

@@ -9,7 +9,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     _order = 'id desc'
 
     # --- Relasi Odoo ---
-    config_id = fields.Many2one('acumatica.direct.transfer.config', string="Konfigurasi API")
+    config_id = fields.Many2one('acumatica.config', string="Konfigurasi API")
     picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
     odoo_picking_id = fields.Many2one('stock.picking', string="Odoo Stock Picking")
     odoo_internal_transfer_order_id = fields.Many2one(
@@ -25,12 +25,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
     # --- Status Sinkronisasi Intern ---
     import_state = fields.Selection([
-        ('pending', 'Pending'),
-        ('imported', 'Imported'),
+        ('staged', 'Staged'),
+        ('created', 'Created'),
         ('updated', 'Updated'),
+        ('rejected', 'Rejected'),
         ('error', 'Error')
-    ], string="Status Impor", default='pending', index=True)
-    import_message = fields.Text(string="Pesan Impor/Error")
+    ], string="Status", default='staged', index=True)
+    import_message = fields.Text(string="Generation Message")
     sync_date = fields.Datetime(string="Tanggal Ambil Data")
     selected = fields.Boolean(string="Pilih", default=True)
 
@@ -43,15 +44,18 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_DocumentOnly = fields.Boolean(string="Document Only")
     adt_ExternalRef = fields.Char(string="External Ref")
     adt_FromWarehouseID = fields.Char(string="From Warehouse ID")
+    adt_FromWarehouseName = fields.Char(string="From Warehouse Name")
     adt_Hold = fields.Boolean(string="Hold Status")
     adt_LastModifiedDateTime = fields.Char(string="Last Modified Date Time")
     adt_NoteID = fields.Char(string="Note ID Header")
+    adt_NoteHeaderID = fields.Char(string="Note Header ID")
     adt_PostPeriod = fields.Char(string="Post Period")
     adt_ReferenceNbr = fields.Char(string="Reference Number", index=True)
     adt_ReturnType = fields.Char(string="Return Type")
     adt_Status = fields.Char(string="Acumatica Status")
     adt_TotalQty = fields.Float(string="Total Quantity")
     adt_ToWarehouseID = fields.Char(string="To Warehouse ID")
+    adt_ToWarehouseName = fields.Char(string="To Warehouse Name")
     adt_TransferType = fields.Char(string="Transfer Type")
     adt_TransType = fields.Char(string="Transaction Type")
 
@@ -79,19 +83,22 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
             return picking_type
 
         warehouse = self._find_warehouse_by_code(warehouse_code)
-        domain = [
-            ('code', '=', 'outgoing'),
-            ('is_default_api', '=', True),
-        ]
-        if warehouse:
-            domain.append(('warehouse_id', '=', warehouse.id))
-        picking_type = PickingType.search(domain, limit=1)
+        picking_type = PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse_code,
+            code='outgoing',
+            operation_category='delivery',
+            api_acumatica='vendor_return',
+            transaction_key='vendor_return',
+            required=False,
+        )
         if picking_type:
             return picking_type
 
         return PickingType.search([
             ('code', '=', 'outgoing'),
-            ('is_default_api', '=', True),
+            ('operation_category', '=', 'delivery'),
+            ('active', '=', True),
         ], limit=1)
 
     def _fill_vendor_return_picking_type(self):
@@ -111,6 +118,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 'Picking Type Direct Delivery Order tidak ditemukan untuk: %s'
                 % ', '.join(missing.mapped('adt_ReferenceNbr'))
             )
+        return True
+
+    def action_reset_pending(self):
+        self.filtered(lambda record: record.import_state == 'error').write({
+            'import_state': 'staged',
+            'import_message': False,
+        })
         return True
 
     def _get_or_create_consignment_location(
@@ -203,15 +217,19 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
     def action_import_selected(self):
         """Memicu proses impor massal untuk record yang dicentang user"""
-        lines = self.filtered(lambda l: l.selected and l.import_state in ['pending', 'error'])
+        lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
-            raise UserError('Tidak ada baris yang dipilih untuk diimport.')
-        return lines._do_import()
+            raise UserError('Hanya bisa generate data dengan state Staged & Error')
+        result = lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        return result
 
     def action_import_this(self):
         """Memicu proses impor khusus untuk 1 record aktif"""
         self.ensure_one()
-        return self._do_import()
+        result = self._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        return result
 
     def _do_import(self):
         """Fungsi utama eksekusi pembuatan dokumen Internal Transfer Order."""
@@ -224,7 +242,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         for reference_nbr in self.mapped('adt_ReferenceNbr'):
             receipt_lines = self.filtered(
                 lambda l: l.adt_ReferenceNbr == reference_nbr and (
-                    l.import_state in ['pending', 'error']
+                    l.import_state in ['staged', 'error']
                     or not l.odoo_internal_transfer_order_id
                 )
             )
@@ -307,8 +325,9 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         'odoo_picking_id': False,
                         'odoo_internal_transfer_order_id': order.id,
                     })
+                    self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'vendor_return')
 
-                    if action_state == 'imported':
+                    if action_state == 'created':
                         imported += 1
                     else:
                         updated += 1
@@ -318,6 +337,25 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # Savepoint di atas sudah membatalkan dokumen Odoo yang gagal.
                 # Jangan rollback cursor utama karena record staging masih harus ditulis error.
                 error += 1
+                self.env['acumatica.error.transaction']._handle_acumatica_error(
+                    first,
+                    [str(e)],
+                    api_acumatica='vendor_return',
+                    operation_type='internal',
+                    origin=reference_nbr,
+                    location=first.adt_FromWarehouseID or False,
+                    location_dest=first.adt_ToWarehouseID or False,
+                    scheduled_date=first.adt_Date,
+                    total_qty=first.adt_TotalQty,
+                    payload={'header': first.read()[0] if first.exists() else {}},
+                    line_payloads=[{
+                        'inventory_id': line.adt_InventoryID or False,
+                        'product_name': line.adt_Description or False,
+                        'qty': self._parse_float(line.adt_Quantity),
+                        'uom': line.adt_UOM or False,
+                        'payload': line.read()[0] if line.exists() else {},
+                    } for line in to_create_move_lines],
+                )
 
                 # Tulis pesan kegagalan ke UI Odoo agar user tahu detail masalahnya
                 staging = self.env['acumatica.vendor.return.direct.transfer.staging'].browse(first_id).exists()
@@ -325,6 +363,8 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     staging.write({
                         'import_state': 'error',
                         'import_message': str(e),
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': False,
                     })
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
                 
@@ -420,6 +460,7 @@ class AcumaticaVendorReturnDirectTransferStagingLine(models.Model):
     adt_InventoryID = fields.Char(string="Inventory ID", index=True)
     adt_LineNumber = fields.Integer(string="Line Number")
     adt_NoteID = fields.Char(string="Note ID Line")
+    adt_LineNoteID = fields.Char(string="Line Note ID")
     adt_Quantity = fields.Float(string="Quantity")
     adt_SOOrderNbr = fields.Char(string="SO Order Number")
     adt_SOOrderType = fields.Char(string="SO Order Type")
