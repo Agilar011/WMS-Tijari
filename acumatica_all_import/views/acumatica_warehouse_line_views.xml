@@ -97,7 +97,7 @@
                     <button name="action_reset_pending"
                             string="Reset ke Pending"
                             type="object"
-                            invisible="import_state == 'staged'"/>
+                            invisible="import_state != 'error'"/>
                     <field name="import_state" widget="statusbar"
                            statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>

@@ -244,13 +244,13 @@ class InternalTransferOrder(models.Model):
     def _get_internal_picking_type(self):
         self.ensure_one()
         warehouse = self._get_operational_warehouse()
-        domain = [
-            ('code', '=', 'internal'),
-            ('is_default_api', '=', True),
-        ]
-        if warehouse:
-            domain.append(('warehouse_id', '=', warehouse.id))
-        picking_type = self.env['stock.picking.type'].search(domain, limit=1)
+        picking_type = self.env['stock.picking.type'].resolve_picking_type(
+            warehouse=warehouse,
+            code='internal',
+            operation_category='pick',
+            transaction_key='internal_transfer_order',
+            required=False,
+        )
         if not picking_type:
             picking_type = self._get_picking_type(warehouse=warehouse)
         return picking_type

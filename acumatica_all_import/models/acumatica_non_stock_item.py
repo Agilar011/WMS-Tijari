@@ -136,6 +136,37 @@ class AcumaticaNonStockItemLine(models.Model):
                 return found
         return Product.browse()
 
+    def _sync_sku_history(self, product, old_sku=False, new_sku=False):
+        """Sinkronkan SKU Non-Stock Item ke product.sku.history."""
+        self.ensure_one()
+        new_sku = (new_sku or '').strip()
+        old_sku = (old_sku or '').strip()
+        if not product or not new_sku:
+            return
+
+        SkuHistory = self.env['product.sku.history']
+        current_history = SkuHistory.search([
+            ('product_tmpl_id', '=', product.id),
+            ('is_current', '=', True),
+        ])
+
+        # SKU sama dan history sudah ada: tidak membuat duplikasi.
+        if old_sku == new_sku and current_history.filtered(lambda h: h.sku == new_sku):
+            return
+
+        if current_history:
+            current_history.write({
+                'date_end': fields.Datetime.now(),
+                'is_current': False,
+            })
+
+        SkuHistory.create({
+            'product_tmpl_id': product.id,
+            'sku': new_sku,
+            'date_start': fields.Datetime.now(),
+            'is_current': True,
+        })
+
     # ─── Import Actions ──────────────────────────────
     def action_import_this(self):
         self.ensure_one()
@@ -325,11 +356,17 @@ class AcumaticaNonStockItemLine(models.Model):
                 existing = self._find_existing_product(line)
 
                 if existing:
+                    old_sku = existing.default_code or False
                     changed_fields = line._get_changed_fields(
                         existing,
                         vals,
                     )       
                     existing.write(vals)
+                    line._sync_sku_history(
+                        existing,
+                        old_sku=old_sku,
+                        new_sku=line.inventory_id,
+                    )
 
                     line.write({
                         'import_state':    'updated',
@@ -349,6 +386,10 @@ class AcumaticaNonStockItemLine(models.Model):
 
                 else:
                     new_product = self.env['product.template'].create(vals)
+                    line._sync_sku_history(
+                        new_product,
+                        new_sku=line.inventory_id,
+                    )
 
                     line.write({
                         'import_state':    'created',

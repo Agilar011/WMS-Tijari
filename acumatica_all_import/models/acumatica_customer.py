@@ -171,7 +171,7 @@ class AcumaticaCustomerLine(models.Model):
                     'company_registry': line.customer_id or False,
                     # 'customer_rank':    1,
                     'is_company':       True,
-                    'active': False if line.status == "Inactive" else True,
+                    # 'active': False if line.status == "Inactive" else True,
 
                     # Field "to be" (custom) - semua diprefix acumatica_
                     # agar tidak conflict dengan field bawaan Odoo
@@ -310,7 +310,7 @@ class AcumaticaCustomerLine(models.Model):
 
     # ─── Misc Actions ─────────────────────────────────
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state in ('rejected', 'error')).write({
+        self.filtered(lambda l: l.import_state == 'error').write({
             'import_state':   'staged',
             'import_message': False,
         })

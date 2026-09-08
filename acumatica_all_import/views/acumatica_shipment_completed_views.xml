@@ -105,6 +105,11 @@
 
             <form string="Shipment Completed">
 
+                <header>
+                    <button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
+                </header>
+
                 <sheet>
 
                     <div class="oe_title">
@@ -368,10 +373,13 @@
 
 
     <!-- =========================================================
+<<<<<<< HEAD
+=======
          ACTION - HEADER
          ========================================================= -->    
 
     <!-- =========================================================
+>>>>>>> d2a843c2aca94bc7d6f0f5d180aca23664ea0919
          ACTION - DETAIL
          ========================================================= -->
 

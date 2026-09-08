@@ -31,7 +31,7 @@ class AcumaticaCronJob(models.Model):
             self.env.cr.rollback()
             _logger.exception("Cron import %s skipped because of an error.", key)
             return self._cron_result(
-                success=True,
+                success=False,
                 records_errors=1,
                 records_skipped=1,
                 message=str(exc),

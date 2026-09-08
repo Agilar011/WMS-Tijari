@@ -74,6 +74,12 @@ class AcumaticaShipmentCompletedStaging(models.Model):
         string='Shipment Via',
     )
 
+    last_modified_datetime = fields.Datetime(
+        string='Last Modified Date',
+        readonly=True,
+        index=True,
+    )
+
     status = fields.Char(
         string='Status',
         index=True,
@@ -204,6 +210,13 @@ class AcumaticaShipmentCompletedStaging(models.Model):
         ),
     ]
 
+    def action_reset_pending(self):
+        self.filtered(lambda record: record.import_state == 'error').write({
+            'import_state': 'staged',
+            'import_message': False,
+        })
+        return True
+
 class AcumaticaShipmentCompletedStagingLine(models.Model):
     _name = 'acumatica.shipment.completed.staging.line'
     _description = 'Detail Staging Shipment Completed dari Acumatica'
@@ -295,4 +308,3 @@ class AcumaticaShipmentCompletedStagingLine(models.Model):
         store=True,
         readonly=True,
     )
-

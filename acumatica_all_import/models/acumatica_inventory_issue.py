@@ -19,7 +19,7 @@ class AcumaticaInventoryIssueLine(models.Model):
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)
 
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
     product_line_ids = fields.One2many(
         'acumatica.inventory.issue.product',  # Model tujuan (detail)
@@ -128,25 +128,18 @@ class AcumaticaInventoryIssueLine(models.Model):
             #     warehouse = Warehouse.search([('id', '=', 1)], limit=1)
         return warehouse or Warehouse.search([], limit=1)
 
-    def _find_location(self, code, warehouse=False, fallback='src'):
-        Location = self.env['stock.location']
+    def _find_location(self, code):
+        Location = self.env['stock.location.acumatica']
         location = False
         if code:
-            location = Location.search([('complete_name', '=', code)], limit=1)
-            if not location:
-                location = Location.search([('name', '=', code)], limit=1)
-        # if not location and warehouse:
-        #     location = warehouse.lot_stock_id
+            location = Location.search([('code', '=', code)], limit=1)
         return location
 
-    def _find_bad_stock_location(self, warehouse):
+    def _find_bad_stock_location(self, warehouse, location_code=None):
         """Return the internal Bad Stock location belonging to ``warehouse``."""
+        loc = self._find_location(location_code)
         return self.env['stock.location'].search([
-            ('id', 'child_of', warehouse.view_location_id.id),
-            ('usage', '=', 'internal'),
-            # Nama lokasi di warehouse dapat memakai penanda, misalnya
-            # "Bad Stock (BS)". Tetap batasi pencarian ke warehouse ini.
-            ('name', '=ilike', 'Bad Stock%'),
+            ('id', '=', loc.odoo_location_id.id),
         ], limit=1)
 
     def _is_disposal(self):
@@ -244,7 +237,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                             f'belum punya Building Grouping.'
                         )
                     source_location = warehouse.lot_stock_id
-                    dest_location = self._find_bad_stock_location(warehouse)
+                    dest_location = self._find_bad_stock_location(warehouse, first.warehouse_code)
                     if not dest_location:
                         raise UserError(
                             f'Lokasi internal "Bad Stock" tidak ditemukan pada warehouse '
@@ -261,6 +254,8 @@ class AcumaticaInventoryIssueLine(models.Model):
                     raise UserError('Destination location tidak ditemukan.')
                 # if dest_location.usage == 'customer':
                     # raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
+
+                customer = self._find_customer(first.customer_id)
 
                 if is_disposal:
                     order, action_state = self._generate_disposal_scrap(first, dest_location)
@@ -314,6 +309,7 @@ class AcumaticaInventoryIssueLine(models.Model):
 
                 vals = {
                     'origin': first.reference_nbr,
+                    'partner_id': customer.id if customer else False,
                     'picking_type_id': picking_type.id,
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,
@@ -692,8 +688,16 @@ class AcumaticaInventoryIssueLine(models.Model):
                 'view_mode': 'form',
                 'target': 'current',
             }
+        if self.odoo_scrap_id:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'stock.scrap',
+                'res_id': self.odoo_scrap_id.id,
+                'view_mode': 'form',
+                'target': 'current',
+            }
         if not self.odoo_picking_id:
-            raise UserError('Belum ada picking Odoo.')
+            raise UserError('Belum ada dokumen Odoo.')
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'stock.picking',

@@ -232,7 +232,7 @@ class AcumaticaUomLine(models.Model):
 
     # ─── Action: Reset status ─────────────────────────
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state in ('rejected', 'error')).write({
+        self.filtered(lambda l: l.import_state == 'error').write({
             'import_state': 'staged',
             'import_message': False,
         })

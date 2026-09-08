@@ -13,6 +13,7 @@
           'views/api_scheduler_views.xml',
           'views/acumatica_inventory_issue_line_views.xml',
           'views/acumatica_inventory_stock_line_views.xml',
+          'views/acumatica_inventory_stock_quant_views.xml',
           'views/acumatica_inventory_recieved_line_views.xml',
           'views/acumatica_issue_line_views.xml',
           'views/acumatica_issue_po_return_line_views.xml',

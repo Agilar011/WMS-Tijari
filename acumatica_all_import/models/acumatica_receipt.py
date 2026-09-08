@@ -62,7 +62,7 @@ class AcumaticaReceiptLine(models.Model):
     building_code = fields.Char(string='Building Code')
 
     product_line_ids = fields.One2many('acumatica.receipt.product.line', 'receipt_line_id', string='Lines')
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
     receipt_nbr = fields.Char(string='Receipt Number', index=True)
     vendor_code = fields.Char(string='VendorID')
     vendor_name = fields.Char(string='Vendor Name')

@@ -59,29 +59,6 @@ class ImportKitAssemblyWizard(models.TransientModel):
         if not self.config_id:
             raise UserError('Pilih konfigurasi API terlebih dahulu.')
 
-        # cleanup staging
-        self.env['acumatica.kit.assembly.line'].search([
-            ('config_id', '=', self.config_id.id)
-        ]).unlink()
-
-        self.env['acumatica.kit.assembly'].sudo().search([]).unlink()
-        self.env['acumatica.kit.assembly.component'].sudo().search([]).unlink()
-        
-        self.env.cr.execute("""
-            TRUNCATE TABLE acumatica_kit_assembly RESTART IDENTITY CASCADE;
-        """)
-        self.env.cr.execute("""
-            TRUNCATE TABLE acumatica_kit_assembly_component RESTART IDENTITY CASCADE;
-        """)
-
-        self.env.cr.commit()
-
-        header_count = self.env['acumatica.kit.assembly'].search_count([])
-        component_count = self.env['acumatica.kit.assembly.component'].search_count([])
-
-        if header_count > 0 or component_count > 0:
-            raise UserError('Delete Function belum berhasil')
-
         # =========================
         # FETCH (AUTO LOOP)
         # =========================
@@ -172,6 +149,16 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 'sync_date': fields.Datetime.now(),
             })
 
+        changed_reference_nbrs = {
+            vals['reference_nbr']
+            for vals in lines_to_create
+            if vals.get('reference_nbr')
+        }
+        if changed_reference_nbrs:
+            self.env['acumatica.kit.assembly.line'].search([
+                ('config_id', '=', self.config_id.id),
+                ('reference_nbr', 'in', list(changed_reference_nbrs)),
+            ]).unlink()
         self.env['acumatica.kit.assembly.line'].create(lines_to_create)
 
         self.write({
@@ -262,7 +249,21 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 # for h_key, h_val in header.items():
                     # print(f"{h_key:<25} : {h_val}")
 
-                assembly = self.env['acumatica.kit.assembly'].create(header)  # Simpan header ke staging untuk referensi, bisa dihapus jika tidak perlu
+                existing_assembly = staging_header.search([
+                    ('config_id', '=', self.config_id.id),
+                    ('name', '=', header['name']),
+                ], limit=1)
+                if existing_assembly:
+                    if (
+                        last_modified_datetime
+                        and existing_assembly.last_modified_datetime == last_modified_datetime
+                    ):
+                        continue
+                    existing_assembly.component_ids.unlink()
+                    existing_assembly.write(header)
+                    assembly = existing_assembly
+                else:
+                    assembly = staging_header.create(header)
                 print(f"Created staging header record with ID {assembly.id} for ReferenceNbr {header['reference_nbr']}")
 
                 stock_components = (item.get('KitAssemblyGIDetails'))

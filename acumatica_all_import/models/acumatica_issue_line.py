@@ -18,7 +18,7 @@ class AcumaticaIssueLine(models.Model):
     external_id = fields.Char(string='UUID Header', readonly=True)
     line_external_id = fields.Char(string='UUID Line', readonly=True)
 
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
     # product_line_ids = fields.Many2one('acumatica.issue.line', string='Issue Header', ondelete='cascade')
     product_line_ids = fields.One2many(
         'acumatica.issue.line.product',  # Model tujuan (detail)
@@ -41,6 +41,8 @@ class AcumaticaIssueLine(models.Model):
     acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
     trans_type = fields.Char(string='Trans Type', readonly=True)
     note = fields.Text(string='Header Note', readonly=True)
+    customer_id = fields.Char(string='Customer ID', readonly=True)
+    customer_name = fields.Char(string='Customer Name', readonly=True)
 
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
     line_description = fields.Char(string='Description', readonly=True)
@@ -139,6 +141,16 @@ class AcumaticaIssueLine(models.Model):
             uom = product.uom_id
         return uom
 
+    def _find_partner(self, customer_code):
+        if not customer_code:
+            return self.env['res.partner']
+        Partner = self.env['res.partner']
+        return Partner.search([
+            '|',
+            ('adt_b_account_id', '=', customer_code),
+            ('company_registry', '=', customer_code),
+        ], limit=1) or Partner.search([('name', '=', customer_code)], limit=1)
+
     def action_import_selected(self):
         lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
@@ -189,8 +201,11 @@ class AcumaticaIssueLine(models.Model):
                 if dest_location.usage == 'customer':
                     raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
 
+                partner = self._find_partner(first.customer_id)
+
                 vals = {
                     'origin': first.reference_nbr,
+                    'partner_id': partner.id if partner else False,
                     'picking_type_id': picking_type.id,
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,

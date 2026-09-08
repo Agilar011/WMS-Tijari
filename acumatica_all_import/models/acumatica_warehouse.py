@@ -167,7 +167,7 @@ class AcumaticaWarehouseLine(models.Model):
     def action_import_this(self):
         self.ensure_one()
         result = self._do_import()
-        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(self)
         return result
 
     def action_import_selected(self):
@@ -175,7 +175,7 @@ class AcumaticaWarehouseLine(models.Model):
         if not lines:
             raise UserError('Hanya bisa generate data dengan state Staged & Error')
         result = lines._do_import()
-        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
         return result
 
     def _create_partner(self, line):
@@ -299,18 +299,8 @@ class AcumaticaWarehouseLine(models.Model):
         return self.env['stock.location'].create(vals)
 
     def _create_location_consignment(self, line, warehouse_odoo):
-        # line.building_id and line.warehouse_id and line.is_active
-        parent_cons = self._search_parent_consignment_location(warehouse_odoo.view_location_id)
-        if not parent_cons:
-            parent_cons = self._create_parent_consignment_location(line, warehouse_odoo)
-
-        name = line.warehouse_id + '/' + 'CONS' + '/' + line.warehouse_id
-        vals = {
-            'name': name,
-            'usage': 'internal',
-            'location_id': parent_cons.id,
-        }
-        return self.env['stock.location'].create(vals)
+        """Backward-compatible wrapper for the canonical CONS hierarchy."""
+        return self._get_or_create_consignment_locations(line, warehouse_odoo)
 
 
     def _do_import(self):
@@ -356,7 +346,7 @@ class AcumaticaWarehouseLine(models.Model):
                 if line.building_id and not self._find_virtual_location_for_building(line.building_id):
                     self._generate_virtual_locations_for_existing_buildings()
 
-                cons = line.receiving_location_id == 'CONS'
+                cons = self._receiving_location_is_consignment(line)
                 existing = self._find_existing_location(line)
                 if existing and not cons:
 
@@ -374,22 +364,41 @@ class AcumaticaWarehouseLine(models.Model):
                     if line.building_id and line.warehouse_id and warehouse_odoo:
                         vals.update({
                             'is_error': False,
-                            'error_message': None
+                            'error_message': None,
+                            'odoo_building_id': warehouse_odoo.id,
                         })
-                        changed_fields = line._get_changed_fields(
-                            existing,
-                            vals,
-                        )
+                    elif not line.building_id:
+                        vals.update({
+                            'is_error': True,
+                            'error_message': 'BuildingID kosong',
+                        })
+                    else:
+                        vals.update({
+                            'is_error': True,
+                            'error_message': (
+                                'BuildingID %s belum ditemukan di Odoo.'
+                                % line.building_id
+                            ),
+                        })
 
-                        existing.write(vals)
-                        # self._get_or_create_consignment_locations(line, warehouse_odoo)
+                    # Tetap update mapping lama berdasarkan WarehouseID. Ini penting
+                    # ketika fetch pertama BuildingID kosong lalu fetch berikutnya
+                    # sudah membawa BuildingID.
+                    changed_fields = line._get_changed_fields(
+                        existing,
+                        vals,
+                    )
+                    existing.write(vals)
 
-                        line._log_import_result(
-                            'updated',
-                            f'Data {existing.display_name} berhasil diperbarui.',
-                            existing,
-                            changed_fields,
-                        )
+                    line._log_import_result(
+                        'updated',
+                        f'Data {existing.display_name} berhasil diperbarui.',
+                        existing,
+                        changed_fields,
+                    )
+
+                    if not existing.is_error:
+                        line._handle_acumatica_error()
 
                     line.write({
                         'import_state':    'updated',
@@ -443,15 +452,32 @@ class AcumaticaWarehouseLine(models.Model):
                             vals['is_error'] = True
                             error_list.append(err_msg)
 
-                    if line.receiving_location_id == 'CONS' and line.building_id and line.warehouse_id and line.is_active:
-                        existing_cons = self._find_existing_location_cons(line)
-                        if not existing_cons:
-                            self._create_location_consignment(line, warehouse_odoo)
-                            continue
-                        else:
-                            line.import_message = f'Location {existing_cons.name} sudah ada'
-                            line.import_state = 'updated'
-                            continue
+                    if self._receiving_location_is_consignment(line) and line.building_id and line.warehouse_id and line.is_active:
+                        if not warehouse_odoo:
+                            raise UserError(
+                                'Warehouse BuildingID %s belum ditemukan untuk lokasi consignment.'
+                                % line.building_id
+                            )
+
+                        cons_location = self._create_location_consignment(line, warehouse_odoo)
+                        line.write({
+                            'import_state': 'created',
+                            'import_message': (
+                                'Location consignment siap: %s'
+                                % cons_location.complete_name
+                            ),
+                            'odoo_warehouse_id': warehouse_odoo.id,
+                        })
+                        line._handle_acumatica_error()
+                        line._log_import_result(
+                            'created',
+                            'Location consignment %s berhasil disiapkan.'
+                            % cons_location.display_name,
+                            cons_location,
+                            False,
+                        )
+                        created += 1
+                        continue
                         
                     new_location = self.env['stock.location.acumatica'].create(vals)
                     if error_list:

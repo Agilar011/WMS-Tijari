@@ -66,11 +66,15 @@ class ImportTransferWizard(models.TransientModel):
             ('code', '=', building_code)
         ])
         if warehouse:
-            type = PickingType.search([
-                ('warehouse_id', '=', warehouse.id),
-                ('code', '=', 'incoming'),
-                ('is_default_api', '=', True)
-            ])
+            type = PickingType.resolve_picking_type(
+                warehouse=warehouse,
+                warehouse_code=building_code,
+                code='internal',
+                operation_category='receive',
+                api_acumatica='so_transfer',
+                transaction_key='so_transfer',
+                required=False,
+            )
 
         return type if type else None
 
@@ -338,7 +342,7 @@ class ImportTransferWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
                 unchanged.append(existing)
             else:
                 to_update.append({

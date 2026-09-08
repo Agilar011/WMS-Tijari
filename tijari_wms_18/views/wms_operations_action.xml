@@ -62,7 +62,7 @@
     </record>
 
     <record id="action_wms_operations_so_consignment_receipts" model="ir.actions.act_window">
-        <field name="name">Manage SO Consignment</field>
+        <field name="name">Manage Receipt Consignment</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
@@ -172,6 +172,47 @@
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
-        <field name="domain">[('adt_is_document_only', '=', True)]</field>
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_document_only': 1}</field>
+    </record>
+
+    <!-- Operations menu shortcuts: filtered by the configured operation category. -->
+    <record id="action_stock_operations_pick" model="ir.actions.act_window">
+        <field name="name">Pick</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pick': 1}</field>
+    </record>
+
+    <record id="action_stock_operations_pack" model="ir.actions.act_window">
+        <field name="name">Pack</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pack': 1}</field>
+    </record>
+
+    <record id="action_stock_operations_internal_intra" model="ir.actions.act_window">
+        <field name="name">Internal Transfer - Intra</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_internal_intra': 1}</field>
+    </record>
+
+    <record id="action_stock_operations_internal_inter" model="ir.actions.act_window">
+        <field name="name">Internal Transfer - Inter</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_internal_inter': 1}</field>
+    </record>
+
+    <record id="action_stock_operations_document_only" model="ir.actions.act_window">
+        <field name="name">Document Only</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,kanban,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_document_only': 1}</field>
     </record>
 </odoo>

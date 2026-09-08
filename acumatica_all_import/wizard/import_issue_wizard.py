@@ -84,6 +84,8 @@ class ImportIssueWizard(models.TransientModel):
                         'status': self._val(item, 'Status'),
                         'total_qty': self._val(item, 'ShippedQty'),
                         'trans_type': self._val(item, 'Type'),
+                        'customer_id': self._val(item, 'CustomerID'),
+                        'customer_name': self._val(item, 'CustomerName'),
                         'picking_type_id': picking_type_id,
                         'warehouse_code': self._val(item, 'WarehouseID'),
                         'branch_warehouse': self._val(item, 'WarehouseName'),
@@ -92,6 +94,13 @@ class ImportIssueWizard(models.TransientModel):
                     # 3. Create atau Update Header
                     issue_record = issue_model.search([('external_id', '=', external_id)], limit=1)
                     if issue_record:
+                        incoming_last_modified = header_vals.get('acumatica_write_date')
+                        if (
+                            incoming_last_modified
+                            and issue_record.acumatica_write_date == incoming_last_modified
+                        ):
+                            staging_list.append(issue_record.id)
+                            continue
                         issue_record.write(header_vals)
                     else:
                         issue_record = issue_model.create(header_vals)

@@ -32,6 +32,7 @@ class AcumaticaInventoryStockLine(models.Model):
     available = fields.Float(string='Available (API)', readonly=True)
     on_hand_acumatica = fields.Float(string='On Hand Acumatica', readonly=True)
     note = fields.Text(string='Note', readonly=True)
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True, index=True)
 
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
@@ -46,33 +47,83 @@ class AcumaticaInventoryStockLine(models.Model):
     ], string='Status Import', default='staged', readonly=True)
     import_message = fields.Char(string='Generation Message', readonly=True)
 
-    odoo_product_id = fields.Many2one('product.product', string='Document Reference', readonly=True)
-    odoo_location_id = fields.Many2one('stock.location', string='Document Reference', readonly=True)
+    odoo_product_id = fields.Many2one(
+        'product.product',
+        string='Product',
+        compute='_compute_stock_snapshot',
+        store=True,
+        readonly=True,
+    )
+    odoo_location_id = fields.Many2one(
+        'stock.location',
+        string='Location',
+        compute='_compute_stock_snapshot',
+        store=True,
+        readonly=True,
+    )
+    location_mapping_id = fields.Many2one(
+        'stock.location.acumatica',
+        string='Location Mapping',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
+    odoo_quantity = fields.Float(
+        string='On Hand Odoo',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
+    odoo_reserved_quantity = fields.Float(
+        string='Reserved Odoo',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
+    odoo_available_quantity = fields.Float(
+        string='Available Odoo',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
     odoo_on_hand = fields.Float(string='On Hand Odoo', readonly=True)
+    stock_difference = fields.Float(
+        string='Difference',
+        compute='_compute_stock_snapshot',
+        store=True,
+    )
     match_status = fields.Selection([
         ('match', 'Match'),
         ('not_match', 'Not Match'),
         ('missing_product', 'Missing Product'),
         ('missing_location', 'Missing Location'),
         ('error', 'Error'),
-    ], string='Match Status', compute='_compute_stock_snapshot', store=False)
+    ], string='Match Status', compute='_compute_stock_snapshot', store=True)
 
-    exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_stock_snapshot', store=False)
+    exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_stock_snapshot', store=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
-    @api.depends('inventory_id', 'warehouse_code', 'on_hand_acumatica')
+    def _get_mapped_location(self):
+        """Return the main Odoo location configured for the Acumatica warehouse."""
+        self.ensure_one()
+        mapping = self.env['stock.location.acumatica'].search([
+            ('code', '=', self.warehouse_code),
+            ('active', '=', True),
+        ], limit=1)
+        if mapping.odoo_location_id:
+            return mapping, mapping.odoo_location_id
+        if mapping.odoo_building_id and mapping.odoo_building_id.lot_stock_id:
+            return mapping, mapping.odoo_building_id.lot_stock_id
+        return mapping, self.env['stock.location'].browse()
+
+    @api.depends('inventory_id', 'warehouse_code', 'description', 'on_hand_acumatica')
     def _compute_stock_snapshot(self):
         Quant = self.env['stock.quant']
-        WarehouseMap = self.env['stock.location.acumatica']
-        Warehouse = self.env['stock.warehouse']
-        Location = self.env['stock.location']
         Product = self.env['product.product']
 
         for rec in self:
             product = False
             location = False
+            mapping = self.env['stock.location.acumatica'].browse()
             match_status = 'error'
             odoo_on_hand = 0.0
+            odoo_reserved = 0.0
 
             if rec.inventory_id:
                 product = Product.search([
@@ -84,43 +135,41 @@ class AcumaticaInventoryStockLine(models.Model):
                     product = Product.search([('name', '=', rec.description)], limit=1) if rec.description else False
 
             if rec.warehouse_code:
-                mapping = WarehouseMap.search([('code', '=', rec.warehouse_code)], limit=1)
-                if mapping.odoo_location_id:
-                    location = mapping.odoo_location_id
-                elif mapping.odoo_building_id:
-                    location = mapping.odoo_building_id.lot_stock_id
-
-                if not location:
-                    warehouse = Warehouse.search([('code', '=', rec.warehouse_code)], limit=1)
-                    if warehouse:
-                        location = warehouse.lot_stock_id
-
-                if not location:
-                    location = Location.search([
-                        '|',
-                        ('complete_name', '=', rec.warehouse_code),
-                        ('name', '=', rec.warehouse_code),
-                    ], limit=1)
+                mapping, location = rec._get_mapped_location()
 
             rec.odoo_product_id = product.id if product else False
             rec.odoo_location_id = location.id if location else False
+            rec.location_mapping_id = mapping.id if mapping else False
             rec.exists_in_odoo = bool(product and location)
+            rec.odoo_on_hand = 0.0
+            rec.odoo_quantity = 0.0
+            rec.odoo_reserved_quantity = 0.0
+            rec.odoo_available_quantity = 0.0
+            rec.stock_difference = rec.on_hand_acumatica
 
             if not product:
-                rec.odoo_on_hand = 0.0
                 rec.match_status = 'missing_product'
                 continue
             if not location:
-                rec.odoo_on_hand = 0.0
                 rec.match_status = 'missing_location'
                 continue
 
             try:
                 odoo_on_hand = Quant._get_available_quantity(product, location, strict=False)
+                quants = Quant.search([
+                    ('product_id', '=', product.id),
+                    ('location_id', 'child_of', location.id),
+                ])
+                odoo_reserved = sum(quants.mapped('reserved_quantity'))
             except Exception:
                 odoo_on_hand = 0.0
+                odoo_reserved = 0.0
 
             rec.odoo_on_hand = odoo_on_hand
+            rec.odoo_quantity = odoo_on_hand
+            rec.odoo_reserved_quantity = odoo_reserved
+            rec.odoo_available_quantity = odoo_on_hand - odoo_reserved
+            rec.stock_difference = rec.on_hand_acumatica - odoo_on_hand
             precision = product.uom_id.rounding if product.uom_id else 0.01
             if float_compare(rec.on_hand_acumatica, odoo_on_hand, precision_rounding=precision) == 0:
                 match_status = 'match'
@@ -135,7 +184,7 @@ class AcumaticaInventoryStockLine(models.Model):
         self.search([]).write({'selected': False})
 
     def action_reset_pending(self):
-        self.filtered(lambda line: line.import_state in ('updated', 'error')).write({
+        self.filtered(lambda line: line.import_state == 'error').write({
             'import_state': 'staged',
             'import_message': False,
         })
@@ -170,30 +219,7 @@ class AcumaticaInventoryStockLine(models.Model):
 
     def _find_location(self):
         self.ensure_one()
-        WarehouseMap = self.env['stock.location.acumatica']
-        Warehouse = self.env['stock.warehouse']
-        Location = self.env['stock.location']
-        location = False
-
-        if self.warehouse_code:
-            mapping = WarehouseMap.search([('code', '=', self.warehouse_code)], limit=1)
-            if mapping.odoo_location_id:
-                location = mapping.odoo_location_id
-            elif mapping.odoo_building_id:
-                location = mapping.odoo_building_id.lot_stock_id
-
-            if not location:
-                warehouse = Warehouse.search([('code', '=', self.warehouse_code)], limit=1)
-                if warehouse:
-                    location = warehouse.lot_stock_id
-
-            if not location:
-                location = Location.search([
-                    '|',
-                    ('complete_name', '=', self.warehouse_code),
-                    ('name', '=', self.warehouse_code),
-                ], limit=1)
-
+        _mapping, location = self._get_mapped_location()
         return location
 
     def _sync_stock_quant_snapshot(self, product, location, on_hand_acumatica, status, message):
@@ -401,10 +427,11 @@ class AcumaticaInventoryStockLine(models.Model):
                 line.write({
                     'import_state': action_state,
                     'import_message': message,
-                    'odoo_product_id': product.id,
-                    'odoo_location_id': location.id,
                     'odoo_on_hand': new_qty,
                 })
+                # Recompute the stored comparison fields after the quant adjustment,
+                # so the list immediately shows the new Match/Unmatch state.
+                line._compute_stock_snapshot()
                 self.env['acumatica.error.transaction']._handle_acumatica_error(
                     f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
                     'inventory_stock',
@@ -432,8 +459,6 @@ class AcumaticaInventoryStockLine(models.Model):
                 line.write({
                     'import_state': 'error',
                     'import_message': str(e)[:200],
-                    'odoo_product_id': False,
-                    'odoo_location_id': False,
                 })
 
                 error += 1

@@ -305,6 +305,12 @@ class ImportShipmentCompletedWizard(models.TransientModel):
 
                     if existing:
 
+                        if (
+                            header_vals.get('last_modified_datetime')
+                            and existing.last_modified_datetime == header_vals.get('last_modified_datetime')
+                        ):
+                            continue
+
                         # UPDATE HEADER
                         existing.write(header_vals)
 
@@ -390,6 +396,9 @@ class ImportShipmentCompletedWizard(models.TransientModel):
             'shipment_via': self._val(
                 item,
                 'ShipVia'
+            ),
+            'last_modified_datetime': self._parse_datetime(
+                self._val(item, 'LastModifiedDateTime')
             ),
             'status': self._val(
                 item,

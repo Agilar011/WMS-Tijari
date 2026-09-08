@@ -9,6 +9,7 @@ access_stock_picking_acumatica_error_line_manager,access.stock.picking.acumatica
 access_stock_move_scan_wizard_operator,access.stock.move.scan.wizard.operator,model_stock_move_scan_wizard,tijari_wms_18.group_operator,1,1,1,1
 access_stock_move_scan_wizard_manager,access.stock.move.scan.wizard.manager,model_stock_move_scan_wizard,stock.group_stock_manager,1,1,1,1
 access_product_sku_history_user,access.product.sku.history.user,model_product_sku_history,base.group_user,1,0,0,0
+access_vendor_id_history_user,access.vendor.id.history.user,model_vendor_id_history,base.group_user,1,1,1,0
 
 access_stock_location_acumatica_manager,access.stock.location.acumatica.manager,model_stock_location_acumatica,stock.group_stock_manager,1,1,1,1
 access_internal_transfer_order_operator,access.internal.transfer.order.operator,model_internal_transfer_order,tijari_wms_18.group_operator,1,1,1,1

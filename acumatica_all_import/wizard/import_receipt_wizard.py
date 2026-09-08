@@ -121,26 +121,24 @@ class ImportReceiptWizard(models.TransientModel):
 
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        Warehouse = self.env['stock.warehouse']
         type = False
 
         document_only_type = PickingType.resolve_document_only_picking_type(
             api_acumatica='po_receipt',
             document_only=document_only,
-            warehouse_code=building_code,
+            building_id=building_code,
         )
         if document_only_type:
             return document_only_type
 
-        warehouse = Warehouse.search([
-            ('code', '=', building_code)
-        ])
-        if warehouse:
-            type = PickingType.search([
-                ('warehouse_id', '=', warehouse.id),
-                ('code', '=', 'incoming'),
-                ('is_default_api', '=', True)
-            ])
+        type = PickingType.resolve_picking_type(
+            building_id=building_code,
+            code='incoming',
+            operation_category='receive',
+            api_acumatica='po_receipt',
+            transaction_key='po_receipt',
+            required=False,
+        )
 
         return type if type else None
 
@@ -390,7 +388,7 @@ class ImportReceiptWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == vals['acumatica_write_date']:
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals['acumatica_write_date']:
                 unchanged.append(existing)
             else:
                 to_update.append({
