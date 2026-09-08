@@ -202,23 +202,27 @@
             <xpath expr="//notebook/page[@name='operations']" position="after">
 
                 <page string="Unpacked Item Details" name="detail_product" invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']">
-                    <field name="move_ids_without_package" mode="list"
-                        widget="stock_move_one2many"
+                    <field name="move_ids_without_package" mode="list,kanban"
+                        widget="picker_move_one2many"
                         context="{
                             'default_company_id': company_id, 
                             'default_date': scheduled_date, 
                             'default_date_deadline': date_deadline, 
                             'picking_type_code': picking_type_code, 
                             'default_picking_id': id, 
-                            'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
                             'address_in_id': partner_id, 
                             'default_picking_type_id': picking_type_id, 
                             'default_location_id': location_id, 
                             'default_location_dest_id': location_dest_id, 
-                            'default_partner_id': partner_id}"
+                            'default_partner_id': partner_id,
+                        }"
                         add-label="Add a Product"
                         >
-                        <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" editable="bottom">
+                        <list 
+                            decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" 
+                            string="Stock Moves" 
+                            editable="bottom"
+                            readonly="state in ('done', 'cancel')">
                             <field name="company_id" column_invisible="True"/>
                             <field name="picking_id" column_invisible="True"/>
                             <field name="name" column_invisible="True"/>
@@ -255,7 +259,8 @@
                                 readonly="not product_id"/>
                             <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
                             <field name="remaining_package_qty" string="Remaining Product" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders']"/>
-                            <field name="unpack_quantity" force_save="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']" />
+                            <field name="remaining_package_qty" string="Qty Unpack" readonly="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
+                            <!-- <field name="unpack_quantity" force_save="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']" /> -->
                             <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
                                 invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
                             <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
@@ -265,11 +270,27 @@
                                 column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
                             <field name="product_qty" readonly="1" column_invisible="True"/>
                             <!-- <field name="temp_float" string="Confirmed Quantity"/> -->
-                            <field name="so_confirmation_quantity" string="Confirmed Quantity" column_invisible="parent.picking_type_name not in ['Delivery Orders', 'Transfer Internal']"/>
+                            <field name="so_confirmation_quantity" string="Confirmed Quantity" column_invisible="parent.picking_type_name not in ['Transfer Internal']"/>
+                            <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
                             <field name="quantity" string="Qty Diterima" optional="hide" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                             <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
                             <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
                             <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
+                            <field name="status_check"
+                                decoration-success="status_check == 'finished'"
+                                decoration-danger="status_check == 'unfinished'" widget="badge" />
+                            <button name="action_mark_check_finished"
+                                type="object"
+                                icon="fa-check"
+                                class="btn-success"
+                                title="Finish Package"
+                                invisible="status_check == 'finished'"/>
+                            <button name="action_mark_check_unfinished"
+                                type="object"
+                                icon="fa-undo"
+                                class="btn-danger"
+                                title="Undo Package"
+                                invisible="status_check != 'finished'"/>
                             <field name="lot_ids" widget="many2many_tags"
                                 readonly="has_tracking != 'serial'"
                                 column_invisible="parent.state == 'draft'"
@@ -281,23 +302,63 @@
                                 domain="[('product_id','=',product_id)]"
                             />
                             <field name="shipped_qty" optional='hide' />
-                            <field name="status_check"
-                                decoration-success="status_check == 'finished'"
-                                decoration-danger="status_check == 'unfinished'" widget="badge" />
-                            <button name="action_mark_check_finished"
-                                type="object"
-                                icon="fa-check"
-                                class="btn-success"
-                                title="Finish Package"
-                                invisible="status_check == 'finished'"/>
-
-                            <button name="action_mark_check_unfinished"
-                                type="object"
-                                icon="fa-undo"
-                                class="btn-danger"
-                                title="Undo Package"
-                                invisible="status_check != 'finished'"/>
                         </list>
+                        <kanban class="o_kanban_mobile" can_open="0">
+                            <field name="product_id" invisible="1"/>
+                            <field name="status_check" invisible="1"/>
+                            <field name="product_uom_qty" invisible="1"/>
+                            <field name="remaining_package_qty" invisible="1"/>
+                            <field name="so_confirmation_quantity" invisible="1"/>
+                            <field name="product_uom" invisible="1"/>
+                            <templates>
+                                <t t-name="card">
+                                    <div class="d-flex justify-content-between align-items-start mb-1">
+                                        <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
+                                            context="{'tijari_stock_picking_product_code_only': True}"
+                                        />
+                                        
+                                        <field 
+                                            name="status_check"
+                                            widget="badge"
+                                            decoration-success="status_check == 'finished'"
+                                            decoration-danger="status_check == 'unfinished'" 
+                                        />
+                                    </div>
+
+                                    <br/>
+
+                                    <div class="d-flex align-items-center gap-1">
+                                        <strong>Total Qty: </strong>
+                                        <field name="product_uom_qty"/>
+                                        <field name="product_uom"/>
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-1">
+                                        <strong>Qty Unpack: </strong>
+                                        <field class="tijari-qty-unpack" name="remaining_package_qty"/>
+                                        <field name="product_uom"/>
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-1">
+                                        <strong>Qty Dikirim: </strong>
+                                        <field name="so_confirmation_quantity"/>
+                                        <field name="product_uom"/>
+                                    </div>
+
+                                    <div class="d-flex gap-2 mt-2">
+                                        <button name="action_open_upack_wizard"
+                                            type="object"
+                                            string="Open Detail"
+                                            class="btn-primary"/>
+                                        <button name="action_mark_check_unfinished"
+                                            type="object"
+                                            string="Rollback"
+                                            class="btn-danger o_wms_auto_save_before_action"
+                                            invisible="status_check == 'unfinished' or state in ('done', 'cancel')"/>
+                                    </div>
+                                </t>
+                            </templates>
+                        </kanban>
                     </field>
                     <field name="id" invisible="1"/>
                     <!-- <field name="package_level_ids" context="{'default_location_id': location_id, 'default_location_dest_id': location_dest_id, 'default_company_id': company_id}" invisible="not picking_type_entire_packs" readonly="state == 'done'" /> -->
@@ -323,11 +384,11 @@
                     </group>
 
                     <field name="filtered_package_level_ids"
-                        mode="list"
+                        mode="list,kanban"
                         context="{
                             'default_location_id': location_id,
                             'default_location_dest_id': location_dest_id,
-                            'default_company_id': company_id
+                            'default_company_id': company_id,
                         }"
                         readonly="state == 'done'"
                         invisible="not picking_type_entire_packs"/>
@@ -683,10 +744,10 @@
                             <field name="scan_picker_product_button"
                                 widget="adt_scan_picker_product_button"
                                 nolabel="1"/>
-                            <field name="scan_picker_product_by_lot_button"
-                                widget="adt_scan_picker_product_by_lot_button"
-                                nolabel="1"/>
+                            
+                            <field name="allowed_picker_product_ids" invisible="1"/>
                             <field name="allowed_picker_lot_ids" invisible="1"/>
+                            <field name="picker_product_id" domain="[('id', 'in', allowed_picker_product_ids)]"/>
                             <field name="picker_lot_id" domain="[('id', 'in', allowed_picker_lot_ids)]"/>
                         </group>
                         <field name="filtered_move_ids"
