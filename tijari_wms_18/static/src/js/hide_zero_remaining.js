@@ -2,7 +2,7 @@
 
 const observed = new WeakSet();
 
-function hideZeroRemainingRows(container) {
+function hideZeroRemainingRecords(container) {
     container.querySelectorAll("tbody tr.o_data_row").forEach((row) => {
 
         const qtyCell = row.querySelector(
@@ -20,7 +20,25 @@ function hideZeroRemainingRows(container) {
                 ? "none"
                 : "";
     });
+
+    container.querySelectorAll(".o_kanban_record").forEach((card) => {
+        const qtyElement = card.querySelector(".tijari-qty-unpack");
+
+        if (!qtyElement) {
+            return;
+        }
+
+        const qty = parseFloat(qtyElement.textContent.trim());
+
+        if (!isNaN(qty) && qty <= 0) {
+            card.style.setProperty("display", "none", "important");
+        } else {
+            card.style.removeProperty("display");
+        }
+    });
+
 }
+
 
 function observe(container) {
 
@@ -30,10 +48,11 @@ function observe(container) {
 
     observed.add(container);
 
-    hideZeroRemainingRows(container);
+    hideZeroRemainingRecords(container);
+
 
     new MutationObserver(() => {
-        hideZeroRemainingRows(container);
+        hideZeroRemainingRecords(container);
     }).observe(container, {
         childList: true,
         subtree: true,

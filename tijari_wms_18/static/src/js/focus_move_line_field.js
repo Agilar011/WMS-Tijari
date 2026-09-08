@@ -783,6 +783,11 @@ class MoveLineScanButton extends Component {
         return this.constructor.scanTitle;
     }
 
+    get label() {
+        return this.constructor.label;
+    }
+
+
     get iconClass() {
         return this.constructor.iconClass;
     }
@@ -832,6 +837,22 @@ class MoveLineScanLocationButton extends MoveLineScanButton {
     static iconClass = "fa fa-map-marker";
 }
 
+class MoveLineScanLotFormButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanFormButton";
+    static scanFieldName = "confirmation_lot_code";
+    static scanTitle = "Scan Lot QR Code";
+    static label = "Scan LOT";
+    static iconClass = "fa fa-barcode";
+}
+
+class MoveLineScanLocationFormButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanFormButton";
+    static scanFieldName = "confirmation_location_code";
+    static scanTitle = "Scan Location QR Code";
+    static label = "Scan Location";
+    static iconClass = "fa fa-map-marker";
+}
+
 class MoveLineScanLocationTextButton extends MoveLineScanButton {
     static template = "tijari.MoveLineScanTextButton";
     static scanFieldName = "confirmation_location_code";
@@ -843,6 +864,14 @@ class MoveLineScanPackageButton extends MoveLineScanButton {
     static template = "tijari.MoveLineScanButton";
     static scanFieldName = "result_package_id";
     static scanTitle = "Scan Package QR Code";
+    static iconClass = "fa fa-barcode";
+}
+
+class MoveLineScanPackageFormButton extends MoveLineScanButton {
+    static template = "tijari.MoveLineScanFormButton";
+    static scanFieldName = "result_package_id";
+    static scanTitle = "Scan Package QR Code";
+    static label = "Scan Box";
     static iconClass = "fa fa-barcode";
 }
 
@@ -972,19 +1001,25 @@ class PackageScanButton extends Component {
 
         try {
             const { result } = applyResult;
-            if (result?.package_level_id) {
-                await this.action.doAction({
-                    type: "ir.actions.act_window",
-                    res_model: "stock.package_level",
-                    res_id: result.package_level_id,
-                    views: [[false, "form"]],
-                    target: "new",
-                },
-                {
-                    onClose: async () => {
-                        await reloadRecordSafely(this.props.record, this.notification);
+
+            if (result?.package_detail_wizard_id) {
+                await this.action.doAction(
+                    {
+                        type: "ir.actions.act_window",
+                        res_model: "package.level.detail.wizard",
+                        res_id: result.package_detail_wizard_id,
+                        views: [[false, "form"]],
+                        target: "new",
                     },
-                });
+                    {
+                        onClose: async () => {
+                            await reloadRecordSafely(
+                                this.props.record,
+                                this.notification
+                            );
+                        },
+                    }
+                );
             }
         } catch (error) {
             notifyScannerError(this.notification, error);
@@ -1003,11 +1038,20 @@ registry.category("fields").add("adt_scan_lot_button", {
 registry.category("fields").add("adt_scan_location_button", {
     component: MoveLineScanLocationButton,
 });
+registry.category("fields").add("adt_scan_lot_form_button", {
+    component: MoveLineScanLotFormButton,
+});
+registry.category("fields").add("adt_scan_location_form_button", {
+    component: MoveLineScanLocationFormButton,
+});
 registry.category("fields").add("adt_scan_location_text_button", {
     component: MoveLineScanLocationTextButton,
 });
 registry.category("fields").add("adt_scan_result_package_button", {
     component: MoveLineScanPackageButton,
+});
+registry.category("fields").add("adt_scan_package_form_button", {
+    component: MoveLineScanPackageFormButton,
 });
 registry.category("fields").add("adt_scan_product_button", {
     component: ProductScanButton,

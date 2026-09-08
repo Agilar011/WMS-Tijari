@@ -1498,9 +1498,28 @@ class StockPicking(models.Model):
             "filtered_package_level_id": package_level.id or False,
         })
 
+        wizard = False
+
+        if package_level:
+            wizard = self.env[
+                "package.level.detail.wizard"
+            ].create({
+                "package_level_id": package_level.id,
+                "status": (
+                    "finished"
+                    if package_level.status == "finished"
+                    else "unfinished"
+                ),
+                "package_id": package_level.package_id.id,
+                "move_line_ids": [
+                    (6, 0, package_level.move_line_ids.ids)
+                ],
+            })
+
         return {
             "package_id": package.id,
             "package_level_id": package_level.id or False,
+            "package_detail_wizard_id": wizard.id if wizard else False,
             "display_name": package.display_name,
         }
     
