@@ -25,4 +25,34 @@
             </xpath>
         </field>
     </record>
+    <record id="view_stock_stock_scrap_form" model="ir.ui.view">
+        <field name="name">stock.scrap.form.print</field>
+        <field name="model">stock.scrap</field>
+        <field name="inherit_id" ref="stock.stock_scrap_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//header" position="inside">
+                <button
+                    name="action_print_stok_scrab"
+                    string="Print"
+                    type="object"
+                    class="btn-primary"
+                />
+            </xpath>
+        </field>
+    </record> 
+
+    <record id="view_stock_stock_scrap_form_print" model="ir.ui.view">
+        <field name="name">stock.scrap.inherit.wms.print</field>
+        <field name="model">stock.scrap</field>
+        <field name="inherit_id" ref="tijari_wms_18.view_stock_scrap_inherit_wms"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='item_to_scrap']" position="after">
+                <page name="scrap_notes_page" string="Catatan">
+                    <group>
+                        <field name="note" nolabel="1" placeholder="Tambahkan catatan di sini..."/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
 </odoo>

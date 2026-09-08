@@ -868,3 +868,71 @@ class WmsApiController(http.Controller):
             resp = {'msg': msg, 'request_content': str(request_content)}
             resp = json.dumps(resp)
             return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/stok_scrab', type='http', auth='user')
+    def PrintStokScrab(self, id, **kw):
+        blank_image = create_blank_image()
+        stock = request.env['stock.scrap'].sudo().browse(int(id))
+        
+        if stock and stock.location_id:
+            location_id = stock.location_id.id
+            warehouse = request.env['stock.warehouse'].sudo().search([
+                ('lot_stock_id', '=', location_id)
+            ], limit=1)
+        else:
+            warehouse = request.env['stock.warehouse'].sudo() 
+
+        data = {
+            'name': stock.name or '', 
+            'warehouse_id': warehouse.name or '',
+            'source': ( stock.location_id.complete_name or ''),
+            'scrap': ( stock.scrap_location_id.complete_name or ''),
+            'reason': ( stock.scrap_reason_tag_ids.name or ''),
+            'date': format_tanggal_indo(datetime.now()),
+            'note': stock.note or '',
+            'created_by': request.env.user.name or '',
+            'ttd_created_by': (request.env.user.partner_id.digital_signature.decode('utf-8') if request.env.user.partner_id.digital_signature else blank_image),
+            'detail': [],
+        
+        }
+        for line in stock.scrap_line_ids:
+            obj = {
+                'name': line.product_id.display_name or '',
+                'uom': line.product_uom_id.name or '',
+                'qty2': line.scrapped_qty or '',
+                'diff': '',
+            }
+            data['detail'].append(obj)
+        data = json.dumps(data)
+
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_SCRAP_ORDER',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "stok_scrab.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])

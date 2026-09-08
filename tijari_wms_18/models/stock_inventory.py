@@ -27,3 +27,15 @@ class InventoryAdjustmentsGroup(models.Model):
         action['url'] = '/print/stok_opname?id=' + str(self.id)
         action['target'] = 'new'
         return action
+
+class StockScrap(models.Model):
+    _inherit = "stock.scrap"
+    
+    note = fields.Text(string="Notes For Official Report")
+
+    def action_print_stok_scrab(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/stok_scrab?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
