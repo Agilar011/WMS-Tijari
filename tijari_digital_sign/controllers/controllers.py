@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from odoo import fields, http, SUPERUSER_ID, tools, _, api
 from odoo.http import request, route
-from odoo.addons.web.controllers.main import ensure_db, Home
 from odoo.exceptions import UserError
 from odoo.addons.auth_signup.models.res_users import SignupError
 import random

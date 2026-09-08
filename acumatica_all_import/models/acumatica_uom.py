@@ -79,14 +79,14 @@ class AcumaticaUomLine(models.Model):
         if not lines:
             raise UserError('Hanya bisa generate data dengan state Staged & Error')
         result = lines._do_import()
-        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
         return result
 
     def action_import_this(self):
         """Import 1 baris saja (dari tombol di list)"""
         self.ensure_one()
         result = self._do_import()
-        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(self)
         return result
 
     def _handle_acumatica_error(self, err_msg=False):
@@ -232,7 +232,7 @@ class AcumaticaUomLine(models.Model):
 
     # ─── Action: Reset status ─────────────────────────
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state in ('rejected', 'error')).write({
+        self.filtered(lambda l: l.import_state == 'error').write({
             'import_state': 'staged',
             'import_message': False,
         })

@@ -105,6 +105,11 @@
 
             <form string="Shipment Completed">
 
+                <header>
+                    <button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
+                </header>
+
                 <sheet>
 
                     <div class="oe_title">
@@ -365,31 +370,6 @@
 
         </field>
     </record> -->
-
-
-    <!-- =========================================================
-         ACTION - HEADER
-         ========================================================= -->
-
-    <record id="action_acumatica_shipment_completed_staging" model="ir.actions.act_window">
-
-        <field name="name">Shipment Completed</field>
-
-        <field name="res_model">acumatica.shipment.completed.staging</field>
-
-        <field name="view_mode">list,form</field>
-
-        <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-                Belum ada data Shipment Completed.
-            </p>
-            <p>
-                Gunakan wizard Shipment Completed untuk mengambil
-                data dari Acumatica.
-            </p>
-        </field>
-
-    </record>
 
 
     <!-- =========================================================

@@ -42,7 +42,7 @@ class AcumaticaShipmentGIStaging(models.Model):
         ('staged', 'Staged'),
         ('processed', "Telah di Proses"),
     ], string='Status Odoo', default='staged')
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
     total_qty = fields.Float(string='Total Quantity',compute='_compute_total_qty',store=True,digits=(16, 2))
 
     acumatica_id = fields.Char(string="atica_id")
@@ -70,6 +70,7 @@ class AcumaticaShipmentGIStaging(models.Model):
     adt_LineUOM = fields.Char(string="LineUOM")
     adt_LocationID = fields.Char(string="LocationID")
     adt_LocationName = fields.Char(string="LocationName")
+    lastmodifieddatetime = fields.Datetime(string="Last Modified Date", readonly=True)
     adt_NoteHeader = fields.Char(string="NoteHeader")
     adt_NoteHeaderID = fields.Char(string="NoteHeaderID")
     adt_OrderType = fields.Char(string="OrderType")
@@ -1010,7 +1011,7 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
 
 # =====================================================================================================================================================================

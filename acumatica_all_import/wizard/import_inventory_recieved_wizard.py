@@ -127,11 +127,15 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             ('code', '=', header['warehouse_code'])
         ])
         if location:
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'incoming'),
-                ('is_default_api', '=', True)
-            ])
+            type_key = str(header.get('transfer_type') or '').strip().lower().replace('-', '_').replace(' ', '_')
+            type = PickingType.resolve_picking_type(
+                warehouse_code=header.get('building_code'),
+                code='internal' if type_key == 'transfer_in' else 'incoming',
+                operation_category='receive',
+                api_acumatica='inventory_received',
+                transaction_key=type_key,
+                required=False,
+            )
 
         return type if type else None
 
@@ -344,7 +348,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
                 unchanged.append(existing)
             else:
                 to_update.append({

@@ -208,12 +208,37 @@ class ImportReceiptWizard(models.TransientModel):
                 'sync_date': sync_data,
             }
 
-            # 4. CREATE DATA HEADER STAGING
-            created_header = self.env['acumatica.issue.po.return.line'].create(lines_to_create)
+            receipt_nbr = lines_to_create.get('receipt_nbr')
+            Staging = self.env['acumatica.issue.po.return.line']
+            existing_headers = Staging.search([
+                ('config_id', '=', self.config_id.id),
+                ('receipt_nbr', '=', receipt_nbr),
+            ], order='id asc') if receipt_nbr else Staging.browse()
+
+            # Satu receipt hanya boleh punya satu header staging.
+            # Hapus duplikat lama yang masih staged/error; record created/updated
+            # tidak disentuh karena sudah terhubung ke picking Odoo.
+            created_header = existing_headers[:1]
+            if created_header:
+                duplicate_headers = existing_headers[1:].filtered(
+                    lambda record: record.import_state in ('staged', 'error')
+                )
+                duplicate_headers.unlink()
+                created_header.write(lines_to_create)
+                created_header.product_line_ids.unlink()
+            else:
+                created_header = Staging.create(lines_to_create)
             created_headers.append(created_header)
 
             # 5. CREATE DATA DETAIL BARANG (CHILD)
+            seen_line_keys = set()
             for move_item in to_create_move:
+                line_key = move_item.get('line_external_id') or (
+                    move_item.get('line_nbr'), move_item.get('inventory_id')
+                )
+                if line_key in seen_line_keys:
+                    continue
+                seen_line_keys.add(line_key)
                 self.env['acumatica.issue.po.return.product'].create({
                     'receipt_line_id': created_header.id,
                     'line_external_id': move_item.get('line_external_id'),
@@ -353,7 +378,7 @@ class ImportReceiptWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
                 unchanged.append(existing)
             else:
                 to_update.append({

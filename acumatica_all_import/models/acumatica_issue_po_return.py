@@ -19,7 +19,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
     external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
     line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
 
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
 
     receipt_nbr = fields.Char(string='Receipt Number', readonly=True, index=True)
@@ -229,7 +229,8 @@ class AcumaticaIssuePoReturnLine(models.Model):
             if not receipt_lines:
                 continue
 
-            # Gunakan record induk pertama sebagai acuan pengisian data level Header/Picking
+            # Gunakan satu record induk sebagai acuan pengisian data level Header/Picking.
+            # Ini juga melindungi import dari staging lama yang terlanjur dobel.
             first = receipt_lines[0]
 
             # WAJIB: Ambil sub-transaksi database tingkat dokumen agar tidak menghentikan loop massal jika terjadi error
@@ -320,7 +321,19 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     # Menarik semua baris detail produk (acumatica.issue.po.return.product) yang terikat dengan seluruh receipt_lines ini
                     product_lines = self.env['acumatica.issue.po.return.product'].search([
                         ('receipt_line_id', 'in', receipt_lines.ids)
-                    ])
+                    ], order='id asc')
+
+                    unique_product_lines = self.env['acumatica.issue.po.return.product'].browse()
+                    seen_line_keys = set()
+                    for product_line in product_lines:
+                        line_key = product_line.line_external_id or (
+                            product_line.line_nbr, product_line.inventory_id
+                        )
+                        if line_key in seen_line_keys:
+                            continue
+                        seen_line_keys.add(line_key)
+                        unique_product_lines |= product_line
+                    product_lines = unique_product_lines
 
                     print(f"Memproses {len(product_lines)} baris produk untuk Receipt: {origin}")
                     

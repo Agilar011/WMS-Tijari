@@ -206,7 +206,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
             if not existing:
                 to_create.append(vals)
                 continue
-            if existing.acumatica_write_date == vals.get('acumatica_write_date'):
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals.get('acumatica_write_date'):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -355,7 +355,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -730,10 +730,13 @@ class ImportInventoryIssueWizard(models.TransientModel):
             return config_picking_type, warehouse_code
 
         if location and location.odoo_building_id:
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id),
-                ('code', '=', 'internal'),
-                ('is_default_api', '=', True)
-            ], limit=1)
+            type = PickingType.resolve_picking_type(
+                warehouse_code=warehouse_code,
+                code='internal',
+                operation_category='internal',
+                api_acumatica='inventory_issue',
+                transaction_key='inventory_issue',
+                required=False,
+            )
 
         return type, warehouse_code

@@ -52,7 +52,7 @@
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
 
             </list>
         </field>
@@ -65,7 +65,7 @@
             <form string="Data Issue : Change Item">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged'"/>
-                    <button name="action_open_picking" type="object" string="Open Delivery Order" class="btn-secondary" invisible="not odoo_picking_id"/>
+                    <button name="action_open_picking" type="object" string="Open Document" class="btn-secondary" invisible="not odoo_picking_id"/>
                     <button name="action_reset_pending" type="object" string="Reset Staged" class="btn-secondary" invisible="import_state != 'error'"/>
                 </header>
                 <sheet>

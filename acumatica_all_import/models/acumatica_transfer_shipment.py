@@ -27,7 +27,7 @@ class AcumaticaTransferShipmentLine(models.Model):
         string='Shipment Lines'
     )
 
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
     row_number = fields.Integer(string='No')
     external_id = fields.Char(string='UUID Header')
@@ -88,7 +88,7 @@ class AcumaticaTransferShipmentLine(models.Model):
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
     @api.depends('shipment_nbr')
     def _compute_exists_in_odoo(self):

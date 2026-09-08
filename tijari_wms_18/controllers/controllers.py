@@ -106,28 +106,39 @@ class WmsApiController(http.Controller):
         document_only = self._document_only_value(
             self._get_payload_value(payload, 'document_only', 'adt_is_document_only', 'adt_DocumentOnly')
         )
-        target_picking_type = PickingType.resolve_document_only_picking_type(
+        warehouse_code = self._get_payload_value(
+            payload, 'warehouse_code', 'adt_warehouse_code'
+        )
+
+        # Override eksplisit lewat sequence_code (misal 'RECEIPT', 'DDO', dst.)
+        picking_type_code = payload.get('picking_type_code')
+        if picking_type_code:
+            code_domain = [('sequence_code', '=', picking_type_code), ('active', '=', True)]
+            warehouse = PickingType._adt_find_warehouse(warehouse_code)
+            if warehouse:
+                code_domain.append(('warehouse_id', '=', warehouse.id))
+            candidates = PickingType.search(code_domain)
+            if len(candidates) > 1:
+                raise UserError(_(
+                    "Kode picking type %s ambigu untuk warehouse %s: %s."
+                ) % (
+                    picking_type_code,
+                    warehouse.display_name if warehouse else '-',
+                    ', '.join(pt.display_name for pt in candidates),
+                ))
+            if candidates:
+                return candidates
+
+        return PickingType.resolve_picking_type(
             target_picking_type_id=self._get_payload_value(payload, 'target_picking_type_id', 'picking_type_id'),
             target_operation_type=self._get_payload_value(payload, 'target_operation_type', 'target_operation_type_code'),
             api_acumatica=self._get_payload_value(payload, 'api_acumatica', 'api_type'),
+            transaction_key=operation_category,
             document_only=document_only,
-            warehouse_code=self._get_payload_value(payload, 'warehouse_code', 'adt_warehouse_code'),
-            required=bool(
-                self._get_payload_value(payload, 'target_picking_type_id', 'picking_type_id')
-                or self._get_payload_value(payload, 'target_operation_type', 'target_operation_type_code')
-            ),
+            warehouse_code=warehouse_code,
+            operation_category=operation_category,
+            required=True,
         )
-        if target_picking_type:
-            return target_picking_type
-
-        picking_type_domain = [('operation_category', '=', operation_category)]
-        picking_type_code = payload.get('picking_type_code')
-        if picking_type_code:
-            picking_type_domain.append(('sequence_code', '=', picking_type_code))
-        picking_type = PickingType.search(picking_type_domain, limit=1)
-        if not picking_type:
-            raise UserError(_("No picking type configured for operation_category = '%s'") % operation_category)
-        return picking_type
 
     def _prepare_acumatica_header_vals(self, payload, transaction_type):
         vals = {

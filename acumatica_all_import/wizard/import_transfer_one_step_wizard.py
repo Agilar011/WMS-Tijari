@@ -121,7 +121,7 @@ class ImportTransferOneStepWizard(models.TransientModel):
                 to_create.append(vals)
                 continue
 
-            if existing.acumatica_write_date == vals['acumatica_write_date']:
+            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals['acumatica_write_date']:
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -478,13 +478,14 @@ class ImportTransferOneStepWizard(models.TransientModel):
 
             
         if location:
-            print(f"location : {location}")
-            print(f"location : {location.odoo_building_id.id}")
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),
-                ('is_default_api', '=', True)
-            ])
+            type = PickingType.resolve_picking_type(
+                warehouse_code=header['from_warehouse_code'],
+                code='internal',
+                operation_category='internal',
+                api_acumatica='transfer_one_step',
+                transaction_key='transfer_one_step',
+                required=False,
+            )
 
             print(f"Type: {type}")
 

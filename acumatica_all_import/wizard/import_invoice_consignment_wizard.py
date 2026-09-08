@@ -104,6 +104,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             sync_data = fields.Datetime.now() # Pastikan variabel sync_data terdefinisi
 
             seen_headers = {}
+            unchanged_headers = set()
 
             for row_number, item in enumerate(raw_data, start=1):
                 header_id = (self._val(item, 'ReferenceNbr') or item.get('id', '')) if flat_data is not None else item.get('id', '')
@@ -124,9 +125,30 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 if flat_data is not None and header_id in seen_headers:
                     created_header = seen_headers[header_id]
                 else:
-                    created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
+                    existing_header = self.env['acumatica.invoice.consignment.staging'].search([
+                        ('config_id', '=', self.config_id.id),
+                        ('adt_ReferenceNbr', '=', header.get('adt_ReferenceNbr')),
+                    ], limit=1)
+                    incoming_last_modified = header.get('adt_LastModifiedDateTime')
+                    if (
+                        existing_header
+                        and incoming_last_modified
+                        and existing_header.adt_LastModifiedDateTime == incoming_last_modified
+                    ):
+                        created_header = existing_header
+                        unchanged_headers.add(header_id)
+                    elif existing_header:
+                        existing_header.line_ids.unlink()
+                        existing_header.write(lines_to_create)
+                        created_header = existing_header
+                    else:
+                        created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
                     seen_headers[header_id] = created_header
-                    total_imported_headers += 1
+                    if header_id not in unchanged_headers:
+                        total_imported_headers += 1
+
+                if header_id in unchanged_headers:
+                    continue
 
                 # 2. Normalisasi Data Detail/Lines
                 details = item.get('Details') or []
@@ -345,12 +367,13 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             if d.get('receipt_nbr'):
                 receipt_nbrs.append(d['receipt_nbr'])
 
-        existing_lines = self.env['acumatica.issue.po.return.line'].search([
-            ('receipt_nbr', 'in', receipt_nbrs)
+        existing_lines = self.env['acumatica.invoice.consignment.staging'].search([
+            ('adt_ReferenceNbr', 'in', receipt_nbrs),
+            ('config_id', '=', self.config_id.id),
         ])
 
         existing_map = {
-            line.receipt_nbr: line
+            line.adt_ReferenceNbr: line
             for line in existing_lines
         }
 
@@ -366,7 +389,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 continue
 
 
-            if existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if vals.get('adt_LastModifiedDateTime') and existing.adt_LastModifiedDateTime == vals.get('adt_LastModifiedDateTime'):
                 unchanged.append(existing)
             else:
                 to_update.append({
@@ -539,11 +562,14 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         print(f"Location: {location}")
 
         if location:
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'outgoing'),                
-                ('is_default_api', '=', True)
-            ])
+            type = PickingType.resolve_picking_type(
+                warehouse_code=warehouse_code,
+                code='outgoing',
+                operation_category='delivery',
+                api_acumatica='invoice_consignment',
+                transaction_key='invoice_consignment',
+                required=False,
+            )
 
         return type
 

@@ -48,14 +48,9 @@
                         icon="fa-upload"
                         invisible="import_state != 'staged'"/>
 
-                <button name="action_reset_pending"
-                        string="Reset Error"
-                        type="object"
-                        icon="fa-refresh"
-                        invisible="import_state != 'error'"/>
 
                 <button name="action_open_picking"
-                        string="Open Transfer"
+                        string="Open Document"
                         type="object"
                         icon="fa-external-link"
                         invisible="not odoo_picking_id"/>
@@ -76,7 +71,7 @@
                             invisible="import_state != 'staged'"/>
 
                     <button name="action_open_picking"
-                            string="Buka Transfer"
+                            string="Open Document"
                             type="object"
                             invisible="not odoo_picking_id"/>
 

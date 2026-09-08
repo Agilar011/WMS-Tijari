@@ -101,7 +101,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
         if document_only_type:
             return document_only_type
 
-        return PickingType.search([('name', '=', 'Direct Delivery Order')], limit=1)
+        return PickingType.browse()
 
     def fetch_data(self):
         self.ensure_one()
@@ -371,7 +371,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                 continue
 
             # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda
-            if existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
+            if vals.get('acumatica_write_date') and existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
                 unchanged.append(existing)
             else:
                 to_update.append({

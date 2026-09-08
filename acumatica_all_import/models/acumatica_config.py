@@ -241,33 +241,15 @@ class AcumaticaConfig(models.Model):
     def _resolve_inventory_receive_picking_type(self, transfer_type=False, warehouse_code=False, document_only=False):
         self.ensure_one()
         PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
         type_key = self._normalize_inventory_receive_type(transfer_type)
         domain_by_type = {
-            'transfer_in': [('code', '=', 'internal')],
-            'change_item': [('code', '=', 'incoming')],
-            'inventory_receive': [('code', '=', 'incoming')],
-            'inventory_received': [('code', '=', 'incoming')],
-            'inventory_receipt': [('code', '=', 'incoming')],
+            'transfer_in': ('internal', 'receive'),
+            'change_item': ('incoming', 'receive'),
+            'inventory_receive': ('incoming', 'receive'),
+            'inventory_received': ('incoming', 'receive'),
+            'inventory_receipt': ('incoming', 'receive'),
         }
-
-        picking_type_domain = domain_by_type.get(type_key)
-        if picking_type_domain:
-            domain = list(picking_type_domain) + [('is_default_api', '=', True)]
-            if warehouse_code:
-                location = Location.search([('code', '=', warehouse_code)], limit=1)
-                if location and location.odoo_building_id:
-                    domain.append(('warehouse_id', '=', location.odoo_building_id.id))
-            picking_type = PickingType.search(domain, limit=1)
-            if picking_type:
-                return picking_type
-
-            picking_type = PickingType.search(
-                list(picking_type_domain) + [('is_default_api', '=', True)],
-                limit=1,
-            )
-            if picking_type:
-                return picking_type
+        code, operation_category = domain_by_type.get(type_key, (False, False))
 
         if document_only and type_key != 'transfer_in':
             return PickingType.resolve_document_only_picking_type(
@@ -275,7 +257,18 @@ class AcumaticaConfig(models.Model):
                 document_only=document_only,
                 warehouse_code=warehouse_code,
             )
-        return PickingType.browse()
+
+        if not code:
+            return PickingType.browse()
+
+        return PickingType.resolve_picking_type(
+            warehouse_code=warehouse_code,
+            code=code,
+            operation_category=operation_category,
+            api_acumatica='inventory_received',
+            transaction_key=type_key,
+            required=False,
+        )
 
     @api.model
     def _create_default_kit_assembly_config(self):
@@ -373,6 +366,10 @@ class AcumaticaConfig(models.Model):
             "company": self.company_code,
         }
         try:
+            # Acumatica dapat menyisakan session server dari proses sebelumnya.
+            # Jalankan logout preflight sebelum membuat session baru. Logout
+            # sengaja non-blocking karena session lama bisa saja sudah expired.
+            self._do_logout()
             session = requests.Session()
             response = session.post(
                 self.login_url,
@@ -393,11 +390,15 @@ class AcumaticaConfig(models.Model):
             raise UserError('Koneksi timeout. Periksa URL server.')
 
     # ─── Logout helper ───────────────────────────────
-    def _do_logout(self, session):
+    def _do_logout(self, session=None):
+        logout_session = session or requests.Session()
         try:
-            session.post(self.logout_url, timeout=10)
+            logout_session.post(self.logout_url, timeout=10)
         except Exception:
             pass  # Logout gagal tidak masalah
+        finally:
+            if session is None:
+                logout_session.close()
 
     # ─── Fetch UoM dari API ──────────────────────────
     def fetch_uom_data(self, limit=500, offset=0):

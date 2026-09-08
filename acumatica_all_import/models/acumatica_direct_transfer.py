@@ -64,6 +64,13 @@ class AcumaticaDirectTransferStaging(models.Model):
         self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
         return result
 
+    def action_reset_pending(self):
+        self.filtered(lambda record: record.import_state == 'error').write({
+            'import_state': 'staged',
+            'import_message': False,
+        })
+        return True
+
     def action_import_this(self):
         """Memicu proses impor khusus untuk 1 record aktif"""
         self.ensure_one()

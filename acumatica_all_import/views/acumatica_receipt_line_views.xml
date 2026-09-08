@@ -34,7 +34,7 @@
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <button name="action_open_picking" string="Open Receipt" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
             </list>
         </field>
     </record>
@@ -46,7 +46,8 @@
             <form string="Data PO Receipt">
                 <header>
                     <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
-                    <button name="action_open_picking" string="Buka Receipt" type="object" invisible="not odoo_picking_id"/>
+                    <button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <button name="action_open_picking" string="Open Document" type="object" invisible="not odoo_picking_id"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>

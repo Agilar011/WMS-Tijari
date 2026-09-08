@@ -21,6 +21,14 @@ class StockWarehouse(models.Model):
             'Direct Receipt and Direct Delivery Order.'
         ),
     )
+    adt_api_picking_type_enabled = fields.Boolean(
+        string='SOP Aditya',
+        help=(
+            'Apply SOP Aditya: incoming 1 step, outgoing 3 steps, '
+            'internal transfer active, document-only active, and configure '
+            'Receipt, Pick, Pack, and Delivery operation types.'
+        ),
+    )
     adt_pick_internal_type_id = fields.Many2one(
         'stock.picking.type',
         string='Pick Internal Type',
@@ -66,8 +74,17 @@ class StockWarehouse(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get('adt_api_picking_type_enabled'):
+                vals.update({
+                    'reception_steps': 'one_step',
+                    'delivery_steps': 'pick_pack_ship',
+                    'adt_internal_transfer_enabled': True,
+                    'adt_document_only_enabled': True,
+                })
         warehouses = super().create(vals_list)
         warehouses._adt_sync_shipment_configuration()
+        warehouses.filtered('adt_api_picking_type_enabled')._adt_sync_api_picking_type_configuration()
         return warehouses
 
     def write(self, vals):
@@ -87,7 +104,29 @@ class StockWarehouse(models.Model):
             }
             if trigger_fields & set(vals):
                 self._adt_sync_shipment_configuration()
+        if 'adt_api_picking_type_enabled' in vals:
+            self._adt_sync_api_picking_type_configuration()
+        if (
+            vals.get('adt_api_picking_type_enabled')
+            and not self.env.context.get('skip_adt_sop_sync')
+        ):
+            self._adt_apply_sop_aditya()
         return res
+
+    def _adt_apply_sop_aditya(self):
+        """Apply the complete Aditya warehouse SOP when it is enabled."""
+        warehouses = self.filtered('adt_api_picking_type_enabled')
+        for warehouse in warehouses:
+            sop_values = {
+                'reception_steps': 'one_step',
+                'delivery_steps': 'pick_pack_ship',
+                'adt_internal_transfer_enabled': True,
+                'adt_document_only_enabled': True,
+            }
+            if any(warehouse[field] != value for field, value in sop_values.items()):
+                warehouse.with_context(skip_adt_sop_sync=True).write(sop_values)
+            warehouse._adt_sync_shipment_configuration()
+            warehouse._adt_sync_api_picking_type_configuration()
 
     def _adt_check_can_disable_internal_transfer(self):
         for warehouse in self:
@@ -161,6 +200,30 @@ class StockWarehouse(models.Model):
             warehouse._adt_sync_document_only_configuration()
         return True
 
+    def _adt_sync_api_picking_type_configuration(self):
+        for warehouse in self:
+            operation_types = (
+                (warehouse.in_type_id, 'incoming', 'receive'),
+                (warehouse.pick_type_id, 'internal', 'pick'),
+                (warehouse.out_type_id, 'outgoing', 'delivery'),
+            )
+            for picking_type, code, category in operation_types:
+                if not picking_type or picking_type.code != code:
+                    continue
+                picking_type.write({
+                    'operation_category': category,
+                    'is_api_config': warehouse.adt_api_picking_type_enabled,
+                })
+            # Operation type internal transfer & document-only khusus dipakai flow
+            # API/internal, sehingga selalu eligible untuk resolver API.
+            (warehouse._adt_get_internal_transfer_picking_types()).write({'is_api_config': True})
+            (warehouse._adt_get_document_only_picking_types()).write({'is_api_config': True})
+
+    def action_adt_sync_api_picking_types(self):
+        """Button: terapkan is_api_config ke operation type warehouse terpilih."""
+        self._adt_sync_api_picking_type_configuration()
+        return True
+
     def _adt_get_internal_transfer_locations(self):
         self.ensure_one()
         self._create_missing_locations({})
@@ -194,6 +257,7 @@ class StockWarehouse(models.Model):
         location_dest=False,
         is_document_only=False,
         is_default_api=False,
+        is_api_config=False,
     ):
         self.ensure_one()
         PickingType = self.env['stock.picking.type'].with_context(active_test=False)
@@ -227,6 +291,7 @@ class StockWarehouse(models.Model):
             'operation_category': operation_category,
             'is_document_only_api': is_document_only,
             'is_default_api': is_default_api,
+            'is_api_config': is_api_config,
             'company_id': self.company_id.id,
         }
         if location_src:
@@ -257,6 +322,7 @@ class StockWarehouse(models.Model):
             'pick',
             self.lot_stock_id,
             packing_zone,
+            is_api_config=True,
         )
         pack_type = self._adt_get_or_create_picking_type(
             'adt_pack_internal_type_id',
@@ -266,6 +332,7 @@ class StockWarehouse(models.Model):
             'pack',
             packing_zone,
             loading_dock,
+            is_api_config=True,
         )
         transfer_type = self._adt_get_or_create_picking_type(
             'adt_transfer_internal_type_id',
@@ -276,6 +343,7 @@ class StockWarehouse(models.Model):
             loading_dock,
             transit_location or self.lot_stock_id,
             is_default_api=True,
+            is_api_config=True,
         )
         receipt_type = self._adt_get_or_create_picking_type(
             'adt_receipt_internal_type_id',
@@ -285,6 +353,7 @@ class StockWarehouse(models.Model):
             'receive',
             transit_location or self.lot_stock_id,
             self.lot_stock_id,
+            is_api_config=True,
         )
         self.with_context(skip_adt_shipment_sync=True).write({
             'adt_pick_internal_type_id': pick_type.id,
@@ -361,6 +430,7 @@ class StockWarehouse(models.Model):
             False,
             self.lot_stock_id,
             is_document_only=True,
+            is_api_config=True,
         )
         direct_delivery = self._adt_get_or_create_picking_type(
             'adt_direct_delivery_type_id',
@@ -371,6 +441,7 @@ class StockWarehouse(models.Model):
             self.lot_stock_id,
             False,
             is_document_only=True,
+            is_api_config=True,
         )
         self.with_context(skip_adt_shipment_sync=True).write({
             'adt_direct_receipt_type_id': direct_receipt.id,

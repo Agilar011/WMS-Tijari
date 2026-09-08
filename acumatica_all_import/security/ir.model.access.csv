@@ -12,6 +12,7 @@ access_import_inventory_recieved_wizard_user,import.inventory.recieved.wizard,mo
 access_acumatica_inventory_issue_line_user,acumatica.inventory.issue.line,model_acumatica_inventory_issue_line,base.group_user,1,1,1,1
 access_import_inventory_issue_wizard_user,import.inventory.issue.wizard,model_import_inventory_issue_wizard,base.group_user,1,1,1,1
 access_acumatica_inventory_stock_line_user,acumatica.inventory.stock.line,model_acumatica_inventory_stock_line,base.group_user,1,1,1,1
+access_acumatica_inventory_stock_quant_user,acumatica.inventory.stock.quant,model_acumatica_inventory_stock_quant,base.group_user,1,0,0,0
 access_import_inventory_stock_wizard_user,import.inventory.stock.wizard,model_import_inventory_stock_wizard,base.group_user,1,1,1,1
 access_acumatica_issue_po_return_line_manager,acumatica.issue.po.return.line manager,model_acumatica_issue_po_return_line,base.group_system,1,1,1,1
 access_acumatica_issue_po_return_line_user,acumatica.issue.po.return.line user,model_acumatica_issue_po_return_line,base.group_user,1,1,1,1

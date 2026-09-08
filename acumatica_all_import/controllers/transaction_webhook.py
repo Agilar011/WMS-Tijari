@@ -54,6 +54,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         document_only=False,
         api_acumatica=False,
         target_operation_type=False,
+        operation_category=False,
     ):
         PickingType = self._env()["stock.picking.type"].sudo()
         target_picking_type = PickingType.resolve_document_only_picking_type(
@@ -65,6 +66,9 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         if target_picking_type:
             return target_picking_type
 
+        if document_only or target_operation_type:
+            return PickingType.browse()
+
         if not warehouse_code:
             return PickingType.browse()
 
@@ -72,11 +76,20 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         if not warehouse:
             return PickingType.browse()
 
-        return PickingType.search([
-            ("warehouse_id", "=", warehouse.id),
-            ("code", "=", picking_code),
-            ("is_default_api", "=", True),
-        ], limit=1)
+        if not operation_category:
+            operation_category = {
+                "incoming": "receive",
+                "outgoing": "delivery",
+            }.get(picking_code, "internal")
+
+        return PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            code=picking_code,
+            operation_category=operation_category,
+            api_acumatica=api_acumatica,
+            transaction_key=api_acumatica,
+            required=False,
+        )
 
     def _search_incoming_picking_type(self, warehouse_code, document_only=False, api_acumatica=False):
         return self._search_picking_type(
@@ -112,6 +125,9 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         if target_picking_type:
             return target_picking_type
 
+        if document_only:
+            return PickingType.browse()
+
         if not warehouse_code:
             return PickingType.browse()
 
@@ -119,11 +135,19 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         if not warehouse:
             return PickingType.browse()
 
+        picking_type = PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            code="internal",
+            operation_category="pick",
+            api_acumatica=api_acumatica,
+            transaction_key=api_acumatica,
+            required=False,
+        )
+        if picking_type:
+            return picking_type
+
+        # Backward-compat: gunakan Pick standar warehouse bila resolver kosong.
         return warehouse.pick_type_id or PickingType.search([
-            ("warehouse_id", "=", warehouse.id),
-            ("code", "=", "internal"),
-            ("operation_category", "=", "pick"),
-        ], limit=1) or PickingType.search([
             ("warehouse_id", "=", warehouse.id),
             ("code", "=", "internal"),
             ("name", "ilike", "Pick"),
@@ -532,10 +556,14 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         building_code = self._first_value(item, "BuildingID", "building_code")
         warehouse_code = self._first_value(item, "FromWarehouseID", "WarehouseID", "LineFromWarehouseID", "warehouse_code")
         document_only = self._bool_value(item, "DocumentOnly", "document_only")
-        picking_type = self._search_internal_picking_type(
+        # SOTR adalah internal transfer: operation type-nya Receipt Internal
+        # (code=internal + operation_category=receive), bukan Transfer Internal.
+        picking_type = self._search_picking_type(
             building_code or warehouse_code,
+            "internal",
             document_only=document_only,
             api_acumatica="so_transfer",
+            operation_category="receive",
         )
         vals.update({
             "warehouse_code": warehouse_code,
@@ -627,7 +655,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             api_acumatica="vendor_return",
             document_only=document_only,
             warehouse_code=from_warehouse,
-            required=True,
+            required=False,
         )
         vals["picking_type_id"] = picking_type.id if picking_type else False
         return vals

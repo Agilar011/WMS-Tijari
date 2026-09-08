@@ -82,23 +82,56 @@ class AcumaticaVendorLine(models.Model):
             return False
 
     def _find_existing_partner(self, rec):
-        """Cari partner by UUID dulu, fallback by VendorID (company_registry)."""
+        """Cari vendor berdasarkan External ID lalu BAccount ID Acumatica."""
         Partner = self.env['res.partner']
         if rec.external_id:
             found = Partner.search([('adt_external_id', '=', rec.external_id)], limit=1)
             if found:
                 return found
-        if rec.vendor_id:
-            found = Partner.search([('company_registry', '=', rec.vendor_id)], limit=1)
+        if rec.b_account_id:
+            found = Partner.search([('adt_b_account_id', '=', rec.b_account_id)], limit=1)
             if found:
                 return found
         return Partner.browse()
+
+    def _sync_vendor_id_history(self, partner, old_vendor_id=False, new_vendor_id=False):
+        """Simpan riwayat perubahan VendorID Acumatica."""
+        self.ensure_one()
+        old_vendor_id = (old_vendor_id or '').strip()
+        new_vendor_id = (new_vendor_id or '').strip()
+        if not partner or not new_vendor_id:
+            return
+
+        History = self.env['vendor.id.history']
+        current_history = History.search([
+            ('partner_id', '=', partner.id),
+            ('is_current', '=', True),
+        ])
+
+        if old_vendor_id == new_vendor_id and current_history.filtered(
+            lambda history: history.vendor_id == new_vendor_id
+        ):
+            return
+
+        now = fields.Datetime.now()
+        if current_history:
+            current_history.write({
+                'date_end': now,
+                'is_current': False,
+            })
+
+        History.create({
+            'partner_id': partner.id,
+            'vendor_id': new_vendor_id,
+            'date_start': now,
+            'is_current': True,
+        })
 
     # ─── Import Actions ──────────────────────────────
     def action_import_this(self):
         self.ensure_one()
         result = self._do_import()
-        self.env['acumatica.error.transaction']._handle_acumatica_created(self)
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(self)
         return result
 
     def action_import_selected(self):
@@ -106,7 +139,7 @@ class AcumaticaVendorLine(models.Model):
         if not lines:
             raise UserError('Hanya bisa generate data dengan state Staged & Error')
         result = lines._do_import()
-        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
+        # self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
         return result
 
     def _handle_acumatica_error(self, err_msg=False):
@@ -206,12 +239,18 @@ class AcumaticaVendorLine(models.Model):
                 existing = self._find_existing_partner(line)
 
                 if existing:
+                    old_vendor_id = existing.adt_vendor_id or False
 
                     changed_fields = line._get_changed_fields(
                         existing,
                         vals,
                     )
                     existing.write(vals)
+                    line._sync_vendor_id_history(
+                        existing,
+                        old_vendor_id,
+                        line.vendor_id,
+                    )
                     line.write({
                         'import_state':    'updated',
                         'import_message':  f'Updated: {existing.name} (ID: {existing.id})',
@@ -228,6 +267,10 @@ class AcumaticaVendorLine(models.Model):
                     updated += 1
                 else:
                     new_partner = self.env['res.partner'].create(vals)
+                    line._sync_vendor_id_history(
+                        new_partner,
+                        new_vendor_id=line.vendor_id,
+                    )
                     line.write({
                         'import_state':    'created',
                         'import_message':  f'Dibuat: {new_partner.name} (ID: {new_partner.id})',
@@ -277,7 +320,7 @@ class AcumaticaVendorLine(models.Model):
 
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):
-        self.filtered(lambda l: l.import_state in ('error', 'rejected')).write({
+        self.filtered(lambda l: l.import_state == 'error').write({
             'import_state':   'staged',
             'import_message': False,
         })

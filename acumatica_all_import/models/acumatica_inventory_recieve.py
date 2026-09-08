@@ -46,7 +46,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header', readonly=True)
     product_line_ids = fields.One2many('acumatica.inventory.recieved.product.line', 'inventory_line_id', string='Lines')
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
     reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
     scheduled_date = fields.Char(string='Date', readonly=True)

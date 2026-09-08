@@ -92,6 +92,13 @@ class ImportIssueWizard(models.TransientModel):
                     # 3. Create atau Update Header
                     issue_record = issue_model.search([('external_id', '=', external_id)], limit=1)
                     if issue_record:
+                        incoming_last_modified = header_vals.get('acumatica_write_date')
+                        if (
+                            incoming_last_modified
+                            and issue_record.acumatica_write_date == incoming_last_modified
+                        ):
+                            staging_list.append(issue_record.id)
+                            continue
                         issue_record.write(header_vals)
                     else:
                         issue_record = issue_model.create(header_vals)

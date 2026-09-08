@@ -83,19 +83,22 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
             return picking_type
 
         warehouse = self._find_warehouse_by_code(warehouse_code)
-        domain = [
-            ('code', '=', 'outgoing'),
-            ('is_default_api', '=', True),
-        ]
-        if warehouse:
-            domain.append(('warehouse_id', '=', warehouse.id))
-        picking_type = PickingType.search(domain, limit=1)
+        picking_type = PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse_code,
+            code='outgoing',
+            operation_category='delivery',
+            api_acumatica='vendor_return',
+            transaction_key='vendor_return',
+            required=False,
+        )
         if picking_type:
             return picking_type
 
         return PickingType.search([
             ('code', '=', 'outgoing'),
-            ('is_default_api', '=', True),
+            ('operation_category', '=', 'delivery'),
+            ('active', '=', True),
         ], limit=1)
 
     def _fill_vendor_return_picking_type(self):
@@ -115,6 +118,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 'Picking Type Direct Delivery Order tidak ditemukan untuk: %s'
                 % ', '.join(missing.mapped('adt_ReferenceNbr'))
             )
+        return True
+
+    def action_reset_pending(self):
+        self.filtered(lambda record: record.import_state == 'error').write({
+            'import_state': 'staged',
+            'import_message': False,
+        })
         return True
 
     def _get_or_create_consignment_location(

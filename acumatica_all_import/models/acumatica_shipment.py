@@ -58,7 +58,7 @@ class AcumaticaShipmentLine(models.Model):
     line_external_id = fields.Char(string='UUID Line')
 
     product_line_ids = fields.One2many('acumatica.shipment.product.line', 'shipment_line_id', string='Lines')
-    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types', domain=[('is_default_api', '=', True)])
+    picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
     building_code = fields.Char(string='Building Code')
     shipment_nbr = fields.Char(string='Shipment Number', index=True)
     partner_code = fields.Char(string='CustomerID')

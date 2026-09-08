@@ -365,6 +365,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                 if phrase_date:
                     print(phrase_date)
                 warehouse_id = self._val(item, "WarehouseID")
+                building_id = self._val(item, "BuildingID") or warehouse_id
                 OrderType = self._val(item, "OrderType")
                 # print(f"Warehouse ID : {warehouse_id}")
 
@@ -377,7 +378,7 @@ class ImportSOShipmentWizard(models.TransientModel):
 
                 document_only = self._bool_val(item, 'DocumentOnly')
                 picking_type = self._search_picking_type(
-                    warehouse_id,
+                    building_id,
                     OrderType,
                     document_only=document_only,
                 )
@@ -476,6 +477,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_WarehouseID': row.get("adt_WarehouseID"),
                     'adt_LocationID': row.get("adt_LocationID"),
                     'adt_LocationName': row.get("adt_LocationName"),
+                    'lastmodifieddatetime': row.get("lastmodifieddatetime"),
                     'adt_AddressLine': row.get("adt_AddressLine"),
                     'adt_Status': row.get("adt_Status"),
                     'adt_ShipmentType': row.get("adt_ShipmentType"),
@@ -517,6 +519,7 @@ class ImportSOShipmentWizard(models.TransientModel):
         # =====================================================
         all_shipment_numbers = list(grouped_shipments.keys())
         existing_records = GIStaging.search([
+            ('config_id', '=', self.config_id.id),
             ('adt_ShipmentNbr', 'in', all_shipment_numbers)
         ])
         existing_map = {rec.adt_ShipmentNbr: rec for rec in existing_records}
@@ -536,6 +539,12 @@ class ImportSOShipmentWizard(models.TransientModel):
             with self.env.cr.savepoint():
                 try:
                     if existing_gi:
+                        if (
+                            gi_vals.get('lastmodifieddatetime')
+                            and existing_gi.lastmodifieddatetime == gi_vals.get('lastmodifieddatetime')
+                        ):
+                            continue
+
                         # -------------------------------------------------
                         # KONDISI A: DATA SUDAH ADA -> UPDATE & RECREATE
                         # -------------------------------------------------
@@ -678,55 +687,40 @@ class ImportSOShipmentWizard(models.TransientModel):
             last_error,
         )
 
-    def _search_picking_type(self, header, code, document_only=False):
+    def _search_picking_type(self, building_id, code, document_only=False):
         config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
         if config_picking_type:
             return config_picking_type
 
         PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
-        Warehouse = self.env['stock.warehouse']
 
         document_only_type = PickingType.resolve_document_only_picking_type(
             api_acumatica='so_shipment',
             document_only=document_only,
-            warehouse_code=header,
+            building_id=building_id,
         )
         if document_only_type:
             return document_only_type
 
-        location = Location.search([
-            ('code', '=', header)
-        ], limit=1)
-        warehouse = location.odoo_building_id if location else False
-        if not warehouse and header:
-            warehouse = Warehouse.search([('code', '=', header)], limit=1)
-        type = False
-
         if code == 'CO':
-            if warehouse:
-                # print(f"Building id: {location.odoo_building_id.id}")
-                type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'internal'),
-                    ('is_default_api', '=', True)
-                ], limit=1)
-                # print(f"Type: {type}")
+            type = PickingType.resolve_picking_type(
+                building_id=building_id,
+                code='internal',
+                operation_category='internal',
+                api_acumatica='so_shipment',
+                transaction_key='so_shipment_co',
+                required=False,
+            )
 
         else:
-            type = warehouse.pick_type_id if warehouse else False
-            if not type and warehouse:
-                type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'internal'),
-                    ('operation_category', '=', 'pick'),
-                ], limit=1)
-            if not type and warehouse:
-                type = PickingType.search([
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'internal'),
-                    ('name', 'ilike', 'Pick'),
-                ], limit=1)
+            type = PickingType.resolve_picking_type(
+                building_id=building_id,
+                code='internal',
+                operation_category='pick',
+                api_acumatica='so_shipment',
+                transaction_key='so_shipment',
+                required=False,
+            )
 
         
 

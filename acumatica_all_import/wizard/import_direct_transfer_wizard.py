@@ -127,10 +127,12 @@ class ImportDirectTransferWizard(models.TransientModel):
                 api_acumatica='vendor_return',
                 document_only=header.get('adt_DocumentOnly'),
                 warehouse_code=header.get('adt_FromWarehouseID'),
-                required=True,
+                required=False,
             )
             if document_only_type:
                 return document_only_type
+            if header.get('adt_DocumentOnly'):
+                return None
 
         print(f"Warehouse: {header['adt_FromWarehouseID']}")
 
@@ -138,15 +140,15 @@ class ImportDirectTransferWizard(models.TransientModel):
             ('code', '=', header['adt_FromWarehouseID'])
         ])
 
-            
         if location:
-            print(f"location : {location}")
-            print(f"location : {location.odoo_building_id.id}")
-            type = PickingType.search([
-                ('warehouse_id', '=', location.odoo_building_id.id if location else False),
-                ('code', '=', 'internal'),
-                ('is_default_api', '=', True)
-            ])
+            type = PickingType.resolve_picking_type(
+                warehouse_code=header['adt_FromWarehouseID'],
+                code='internal',
+                operation_category='internal',
+                api_acumatica='vendor_return',
+                transaction_key='vendor_return_document_direct_transfer',
+                required=False,
+            )
 
             print(f"Type: {type}")
 
@@ -328,7 +330,7 @@ class ImportDirectTransferWizard(models.TransientModel):
             })
 
             existing = existing_map.get(reference_nbr)
-            if existing and existing.adt_LastModifiedDateTime == vals.get('adt_LastModifiedDateTime'):
+            if existing and vals.get('adt_LastModifiedDateTime') and existing.adt_LastModifiedDateTime == vals.get('adt_LastModifiedDateTime'):
                 continue
             if existing:
                 existing.write(vals)
@@ -425,7 +427,7 @@ class ImportDirectTransferWizard(models.TransientModel):
                 continue
 
             # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda
-            if existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
+            if vals.get('acumatica_write_date') and existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
                 unchanged.append(existing)
             else:
                 to_update.append({
