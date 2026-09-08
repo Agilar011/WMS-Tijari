@@ -130,10 +130,12 @@ class AcumaticaNonStockItemLine(models.Model):
             if found:
                 found.type = 'consu'
                 return found
-        if rec.inventory_id:
-            found = Product.search([('default_code', '=', rec.inventory_id)], limit=1)
-            if found:
-                return found
+        # if rec.inventory_id:
+        #     found = Product.with_context(
+        #         active_test=False
+        #     ).search([('default_code', '=', rec.inventory_id)], limit=1)
+        #     if found:
+        #         return found
         return Product.browse()
 
     def _sync_sku_history(self, product, old_sku=False, new_sku=False):

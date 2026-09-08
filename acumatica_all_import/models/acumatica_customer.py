@@ -99,10 +99,10 @@ class AcumaticaCustomerLine(models.Model):
             found = Partner.search([('adt_b_account_id', '=', rec.b_account_id)], limit=1)
             if found:
                 return found
-        if rec.customer_id:
-            found = Partner.search([('company_registry', '=', rec.customer_id)], limit=1)
-            if found:
-                return found
+        # if rec.customer_id:
+        #     found = Partner.search([('company_registry', '=', rec.customer_id)], limit=1)
+        #     if found:
+        #         return found
         return Partner
 
     # ─── Helpers parse datetime ──────────────────────

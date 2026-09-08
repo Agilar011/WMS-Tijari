@@ -12,6 +12,7 @@ class AcumaticaErrorTransaction(models.Model):
         ('acumatica.inventory.recieved.line', 'Inventory Receive'),
         ('acumatica.transfer.line', 'SOTR Receipt'),
         ('acumatica.shipment.line', 'Shipment SO Return'),
+        ('acumatica.warehouse.line', 'Warehouse & Location'),
         ('acumatica.transfer.shipment.line', 'Transfer Shipment'),
         ('acumatica.transfer.one.step.line', 'Transfer Pinjaman (1 Step)'),
         ('acumatica.transfer.two.step.line', 'Transfer Pinjaman (2 Step)'),
@@ -178,8 +179,8 @@ class AcumaticaErrorTransaction(models.Model):
                 log.write(values)
             else:
                 log = self.create(values)
-            if 'acumatica_err_id' in record._fields:
-                record.acumatica_err_id = log
+            # if 'acumatica_err_id' in record._fields:
+            #     record.acumatica_err_id = log
         return True
 
     def action_open_record(self):

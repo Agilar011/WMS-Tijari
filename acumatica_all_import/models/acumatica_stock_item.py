@@ -181,7 +181,6 @@ class AcumaticaStockItemLine(models.Model):
             UPDATE product_template
             SET name = %s,
                 type = %s,
-                barcode = %s,
                 uom_id = %s,
                 uom_po_id = %s,
                 adt_external_id = %s,
@@ -195,7 +194,6 @@ class AcumaticaStockItemLine(models.Model):
             json.dumps({"en_US": line.description}),
             # line.inventory_id,
             self.ITEM_TYPE_MAP.get((line.item_type or '').lower(), 'consu'),
-            line.barcode or None,
             self._resolve_uom(line.base_uom).id if line.base_uom else None,
             self._resolve_uom(line.base_uom).id if line.base_uom else None,
             line.external_id,
@@ -208,6 +206,8 @@ class AcumaticaStockItemLine(models.Model):
         )
         self.env.cr.execute(query_product, params_product)
         result = self.env.cr.fetchone()
+        if result and line.barcode:
+            self.env['product.template'].browse(result[0]).write({'barcode': line.barcode})
         if not result:
             # Tidak ada perubahan data, skip update
             query_staging = """

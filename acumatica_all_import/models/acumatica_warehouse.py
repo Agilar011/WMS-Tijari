@@ -272,7 +272,7 @@ class AcumaticaWarehouseLine(models.Model):
         if not acumatica_err_id:
             acumatica_err_id = AcumaticaError.create({
                 'name': f'Warehouse-{self.id}',
-                'data_type': 'warehouse',
+                'data_type': self._name,
                 'import_state': state,
                 'data_id': self.id,
                 'error_msg': err_msg
