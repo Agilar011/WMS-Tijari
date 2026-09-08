@@ -56,6 +56,7 @@
         'views/stock_report_aging_views.xml',
         'views/stock_report_velocity_views.xml',
         'views/stock_report_inherit_inventory.xml',
+        'views/stock_inventory.xml',
         'views/stock_scrap.xml',
         'views/mrp_production_views.xml',
         'views/templates.xml',
