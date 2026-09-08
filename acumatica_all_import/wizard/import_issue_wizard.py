@@ -84,6 +84,8 @@ class ImportIssueWizard(models.TransientModel):
                         'status': self._val(item, 'Status'),
                         'total_qty': self._val(item, 'ShippedQty'),
                         'trans_type': self._val(item, 'Type'),
+                        'customer_id': self._val(item, 'CustomerID'),
+                        'customer_name': self._val(item, 'CustomerName'),
                         'picking_type_id': picking_type_id,
                         'warehouse_code': self._val(item, 'WarehouseID'),
                         'branch_warehouse': self._val(item, 'WarehouseName'),

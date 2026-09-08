@@ -255,6 +255,8 @@ class AcumaticaInventoryIssueLine(models.Model):
                 # if dest_location.usage == 'customer':
                     # raise UserError('Destination location customer hanya boleh dipakai oleh SO Shipment.')
 
+                customer = self._find_customer(first.customer_id)
+
                 if is_disposal:
                     order, action_state = self._generate_disposal_scrap(first, dest_location)
                     # order, action_state = self._prepare_disposal_internal_transfer(
@@ -307,6 +309,7 @@ class AcumaticaInventoryIssueLine(models.Model):
 
                 vals = {
                     'origin': first.reference_nbr,
+                    'partner_id': customer.id if customer else False,
                     'picking_type_id': picking_type.id,
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,
