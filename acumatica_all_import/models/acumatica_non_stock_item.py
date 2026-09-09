@@ -144,7 +144,9 @@ class AcumaticaNonStockItemLine(models.Model):
         if not product or not new_sku:
             return
 
-        SkuHistory = self.env['product.sku.history']
+        # SKU history is maintained by this importer; keep direct user access
+        # read-only while allowing the controlled synchronization to proceed.
+        SkuHistory = self.env['product.sku.history'].sudo()
         current_history = SkuHistory.search([
             ('product_tmpl_id', '=', product.id),
             ('is_current', '=', True),
@@ -195,7 +197,7 @@ class AcumaticaNonStockItemLine(models.Model):
         if not acumatica_err_id:
             acumatica_err_id = AcumaticaError.create({
                 'name': f'NonStockItem-{self.id}',
-                'data_type': self._name,
+                'data_type': 'acumatica.non.stock.item.line',
                 'import_state': state,
                 'data_id': self.id,
                 'error_msg': err_msg

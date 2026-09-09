@@ -37,8 +37,8 @@
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">so_transfer</field>
-            <field name="endpoint_name">PurchaseReceiptGI</field>
-            <field name="odata_expand">PurchaseReceiptGIDetails</field>
+            <field name="endpoint_name">SOTRGI</field>
+            <field name="odata_expand">SOTRGIDetails</field>
             <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
@@ -140,8 +140,8 @@
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">issue_po_return</field>
-            <field name="endpoint_name">PurchaseReceiptGI</field>
-            <field name="odata_expand">PurchaseReceiptGIDetails</field>
+            <field name="endpoint_name">PurchaseReceiptReturnGI</field>
+            <field name="odata_expand">PurchaseReceiptReturnGIDetails</field>
             <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
