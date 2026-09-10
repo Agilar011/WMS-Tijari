@@ -485,6 +485,14 @@
                 <field name="adt_is_document_only" invisible="1"/>
                 <field name="adt_total_qty" string="Total Qty"/>
                 <field name="adt_actual_qty" string="Total Penerimaan"/>
+                <field name="adt_change_item_ref_nbr"
+                       string="Change Item Ref. Nbr"
+                       invisible="adt_type != 'Change Item'"
+                       readonly="1"/>
+                <field name="adt_order_type"
+                       string="Order Type"
+                       invisible="adt_type not in ['Sales Order Shipment', 'SO Shipment']"
+                       readonly="1"/>
                 <field name="status_ba"/>
                 <field name="adt_dest_location_id" string="Final Location" invisible="adt_type == 'Receipt' or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
                 <field name="all_moves_picked" invisible="1"/>

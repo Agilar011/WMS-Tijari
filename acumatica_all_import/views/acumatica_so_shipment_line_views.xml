@@ -76,6 +76,7 @@
                             <field name="picking_type_id" readonly="1"/>
                             <field name="adt_CustomerID" readonly="1"/>
                             <field name="adt_CustomerName" readonly="1"/>
+                            <field name="adt_Description" readonly="1"/>
                             <field name="adt_ShipDate" readonly="1"/>
                             <field name="adt_WarehouseID" readonly="1"/>
                             <field name="adt_LocationID" readonly="1"/>
@@ -126,6 +127,7 @@
                                 <list>
                                     <field name="adt_LineInventoryID" readonly="1"/>
                                     <field name="adt_LineDescription" readonly="1"/>
+                                    <field name="adt_LineNote" readonly="1"/>
                                     <field name="adt_WarehouseID" readonly="1"/>
                                     <field name="adt_ShipmentQty" readonly="1"/>
                                 </list>
