@@ -484,7 +484,9 @@ class AcumaticaStockItemLine(models.Model):
 
             old_value = record[field_name]
 
-            # Normalisasi nilai
+            if field.type == 'many2one':
+                old_value = old_value.id if old_value else False
+                
             old_value = old_value or False
             new_value = new_value or False
 
@@ -565,7 +567,10 @@ class AcumaticaStockItemLine(models.Model):
                 escape(record.display_name),
             )
 
-        self.message_post(
+        self.with_context(
+            mail_create_nosubscribe=True,
+            mail_post_autofollow=False,
+        ).message_post(
             body=body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
@@ -849,12 +854,18 @@ class AcumaticaStockItemLine(models.Model):
                                 'acumatica.stock.item.line'
                             ].browse(line_id).exists()
                             acu_product._handle_acumatica_error()
-                            acu_product._log_import_result(
-                                'created',
-                                f'Data {product.display_name} berhasil dibuat.',
-                                product,
-                                False,
-                            )
+                            try:
+                                acu_product._log_import_result(
+                                    'created',
+                                    f'Data {product.display_name} berhasil dibuat.',
+                                    product,
+                                    False
+                                )
+                            except Exception:
+                                _logger.exception(
+                                    "Failed to create chatter log for stock item line %s",
+                                    acu_product.id,
+                                )
 
                             sku_insert_params.append((
                                 product.id,

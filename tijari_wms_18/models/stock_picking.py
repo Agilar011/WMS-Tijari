@@ -78,7 +78,7 @@ class StockPicking(models.Model):
         relation="stock_picking_pick_responsible_rel",
         column1="picking_id",
         column2="user_id",
-        string="Penanggungjawab Pick",
+        string="Assigned Picker",
     )
 
     pack_responsible_ids = fields.Many2many(
@@ -86,7 +86,7 @@ class StockPicking(models.Model):
         relation="stock_picking_pack_responsible_rel",
         column1="picking_id",
         column2="user_id",
-        string="Penanggungjawab Pack",
+        string="Assigned Packer",
     )
 
     do_responsible_ids = fields.Many2many(
@@ -94,7 +94,7 @@ class StockPicking(models.Model):
         relation="stock_picking_do_responsible_rel",
         column1="picking_id",
         column2="user_id",
-        string="Penanggungjawab Delivery Order",
+        string="Assigned Loader",
     )
 
     @api.model
@@ -672,7 +672,7 @@ class StockPicking(models.Model):
     @api.depends("state")
     def _compute_wms_state(self):
         for picking in self:
-            if picking.state != "done":
+            if picking.state != "done" or picking.adt_type != "Sales Order Shipment":
                 picking.wms_state = picking.state
 
     @api.depends(
