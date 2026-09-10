@@ -12,6 +12,8 @@ class WMSMRPProduction(models.Model):
         related="picking_type_id.name",
         store=False,
     )
+    catatan = fields.Text(string="Notes")
+
 
     def _prepare_stock_lot_values(self):
         self.ensure_one()
