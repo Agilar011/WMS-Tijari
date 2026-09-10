@@ -123,7 +123,7 @@ class ImportReceiptWizard(models.TransientModel):
 
             raw_payload = response.json()
             raw_data = (
-                raw_payload.get('PurchaseReceiptGIDetails')
+                raw_payload.get('PurchaseReceiptReturnGIDetails')
                 if isinstance(raw_payload, dict)
                 else None
             ) or self._normalize_rows(raw_payload)
