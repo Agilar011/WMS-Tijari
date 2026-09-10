@@ -498,46 +498,101 @@ class ImportStockItemWizard(models.TransientModel):
             'domain': [('config_id', '=', self.config_id.id)],
         }
         
+    # def action_import_batch(self):
+    #     self.ensure_one()
+    #     _logger.info("Memulai batch import stock item...")
+
+    #     BATCH_SIZE = 1000
+    #     # batch_
+    #     # _;logger.info("Mencari hingga %s record pending untuk diimport...", BATCH_SIZE)
+
+    #     lines = self.env['acumatica.stock.item.line'].search([
+    #         ('config_id', '=', self.config_id.id),
+    #         ('import_state', '=', 'staged'),
+    #     ], limit=BATCH_SIZE)
+
+    #     if not lines:
+    #         raise UserError('Tidak ada data pending untuk diimport.')
+        
+    #     _logger.info("Menemukan %s record pending untuk diimport.", len(lines))
+    #     total_before = self.env['acumatica.stock.item.line'].search_count([
+    #         ('config_id', '=', self.config_id.id),
+    #         ('import_state', '=', 'staged'),
+    #     ])
+
+    #     count_to_import = round(total_before / BATCH_SIZE)
+
+    #     for i in range(count_to_import + 1):
+    #         _logger.info("Memulai batch import ke-%s dari %s...", i + 1, count_to_import + 1)
+    #         lines._do_import()
+
+    #         # 🔥 penting: commit biar tidak nge-hang
+    #         self.env.cr.commit()
+
+    #     total_after = self.env['acumatica.stock.item.line'].search_count([
+    #         ('config_id', '=', self.config_id.id),
+    #         ('import_state', '=', 'staged'),
+    #     ])
+
+    #     _logger.info(
+    #         "Import batch selesai: %s -> %s",
+    #         total_before,
+    #         total_after
+    #     )
+
+    #     return {
+    #         'type': 'ir.actions.client',
+    #         'tag': 'display_notification',
+    #         'params': {
+    #             'title': 'Batch Import Selesai',
+    #             'message': f'{len(lines)} data diproses. Sisa: {total_after}',
+    #             'type': 'success',
+    #             'sticky': False,
+    #         },
+    #     }
+
     def action_import_batch(self):
         self.ensure_one()
-        _logger.info("Memulai batch import stock item...")
 
         BATCH_SIZE = 1000
-        # batch_
-        # _;logger.info("Mencari hingga %s record pending untuk diimport...", BATCH_SIZE)
+        processed = 0
 
-        lines = self.env['acumatica.stock.item.line'].search([
-            ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'staged'),
-        ], limit=BATCH_SIZE)
+        _logger.info("STOCK ITEM BATCH IMPORT START")
 
-        if not lines:
-            raise UserError('Tidak ada data pending untuk diimport.')
-        
-        _logger.info("Menemukan %s record pending untuk diimport.", len(lines))
-        total_before = self.env['acumatica.stock.item.line'].search_count([
-            ('config_id', '=', self.config_id.id),
-            ('import_state', '=', 'staged'),
-        ])
+        while True:
+            lines = self.env['acumatica.stock.item.line'].search([
+                ('config_id', '=', self.config_id.id),
+                ('import_state', '=', 'staged'),
+            ], limit=BATCH_SIZE)
 
-        count_to_import = round(total_before / BATCH_SIZE)
+            if not lines:
+                break
 
-        for i in range(count_to_import + 1):
-            _logger.info("Memulai batch import ke-%s dari %s...", i + 1, count_to_import + 1)
+            _logger.info(
+                "STOCK ITEM BATCH | processing=%s",
+                len(lines),
+            )
+
             lines._do_import()
 
-            # 🔥 penting: commit biar tidak nge-hang
             self.env.cr.commit()
 
-        total_after = self.env['acumatica.stock.item.line'].search_count([
+            processed += len(lines)
+
+            _logger.info(
+                "STOCK ITEM BATCH DONE | processed=%s",
+                processed,
+            )
+
+        remaining = self.env['acumatica.stock.item.line'].search_count([
             ('config_id', '=', self.config_id.id),
             ('import_state', '=', 'staged'),
         ])
 
         _logger.info(
-            "Import batch selesai: %s -> %s",
-            total_before,
-            total_after
+            "STOCK ITEM BATCH IMPORT END | processed=%s | remaining=%s",
+            processed,
+            remaining,
         )
 
         return {
@@ -545,7 +600,7 @@ class ImportStockItemWizard(models.TransientModel):
             'tag': 'display_notification',
             'params': {
                 'title': 'Batch Import Selesai',
-                'message': f'{len(lines)} data diproses. Sisa: {total_after}',
+                'message': f'{processed} data diproses. Sisa: {remaining}',
                 'type': 'success',
                 'sticky': False,
             },

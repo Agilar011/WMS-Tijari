@@ -206,9 +206,10 @@
   <!-- INTERNAL SUB MENUS -->
   <menuitem id="wms_operations_internal_transfer_order"
             name="Internal Transfer Orders"
-            parent="wms_operations_menu_internal"
-            sequence="1"
-            action="action_internal_transfer_order"/>
+            parent="stock.menu_stock_transfers"
+            sequence="29"
+            action="action_internal_transfer_order"
+            groups="tijari_wms_18.group_operator,stock.group_stock_manager"/>
 
   <!-- WMS Operations lama disembunyikan; shortcut Operations tetap aktif. -->
   <record id="wms_operations_menu" model="ir.ui.menu">

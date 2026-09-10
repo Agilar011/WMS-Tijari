@@ -130,10 +130,12 @@ class AcumaticaNonStockItemLine(models.Model):
             if found:
                 found.type = 'consu'
                 return found
-        if rec.inventory_id:
-            found = Product.search([('default_code', '=', rec.inventory_id)], limit=1)
-            if found:
-                return found
+        # if rec.inventory_id:
+        #     found = Product.with_context(
+        #         active_test=False
+        #     ).search([('default_code', '=', rec.inventory_id)], limit=1)
+        #     if found:
+        #         return found
         return Product.browse()
 
     def _sync_sku_history(self, product, old_sku=False, new_sku=False):
@@ -218,7 +220,9 @@ class AcumaticaNonStockItemLine(models.Model):
 
             old_value = record[field_name]
 
-            # Normalisasi nilai
+            if field.type == 'many2one':
+                old_value = old_value.id if old_value else False
+                
             old_value = old_value or False
             new_value = new_value or False
 
@@ -294,7 +298,10 @@ class AcumaticaNonStockItemLine(models.Model):
                 escape(record.display_name),
             )
 
-        self.message_post(
+        self.with_context(
+            mail_create_nosubscribe=True,
+            mail_post_autofollow=False,
+        ).message_post(
             body=body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',

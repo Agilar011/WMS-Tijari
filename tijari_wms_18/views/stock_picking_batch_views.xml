@@ -40,6 +40,10 @@
                 <attribute name="string">Transaksi</attribute>
             </xpath>
 
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
             <xpath expr="//page[@name='page_operations']" position="after">
                 <page string="Putaway" name="page_putaway" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
                     <group>
@@ -189,6 +193,37 @@
                         title="Open Move Lines"/>
                 </list>
             </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_batch_list_inherit_tijari" model="ir.ui.view">
+        <field name="name">stock.picking.batch.list.inherit.tijari</field>
+        <field name="model">stock.picking.batch</field>
+        <field name="inherit_id" ref="stock_picking_batch.stock_picking_batch_tree"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+
+        </field>
+    </record>
+
+    <record id="stock_picking_batch_to_form_inherit_tijari" model="ir.ui.view">
+        <field name="name">stock.picking.to.batch.form.inherit.tijari</field>
+        <field name="model">stock.picking.to.batch</field>
+        <field name="inherit_id" ref="stock_picking_batch.stock_picking_to_batch_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='user_id']" position="replace">
+                <field name="pick_responsible_ids" widget="many2many_avatar_user"  groups="!tijari_wms_18.group_operator"/>
+                <field name="pick_responsible_ids" widget="many2many_avatar_user" readonly="1" groups="tijari_wms_18.group_operator"/>
+                <field name="pack_responsible_ids" widget="many2many_avatar_user"  readonly="not can_edit_pack_responsible_ids"/>
+                <field name="do_responsible_ids" widget="many2many_avatar_user"  />
+            </xpath>
+
+
         </field>
     </record>
 

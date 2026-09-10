@@ -16,6 +16,13 @@ class AcumaticaErrorMaster(models.Model):
         ('uom', 'UOM'),
         ('vendor', 'Vendor'),
         ('inventory_stock', 'Detail Stock Acumatica'),
+        ('acumatica.warehouse.line', 'Warehouse & Location'),
+        ('acumatica.stock.item.line', 'Stock Item'),
+        ('acumatica.non.stock.item.line', 'Non-Stock Item'),
+        ('acumatica.uom.line', 'UOM'),
+        ('acumatica.vendor.line', 'Vendor'),
+        ('acumatica.inventory.stock.line', 'Detail Stock Acumatica'),
+        
     ], string='Tipe Data')
     data_id = fields.Integer('Data ID')
     import_state = fields.Selection([

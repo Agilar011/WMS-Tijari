@@ -14,6 +14,25 @@
                 <attribute name="optional">hide</attribute>
                 <attribute name="force_save">1</attribute>
             </xpath>
+
+            <xpath expr="//header" position="inside">
+                <button
+                    name="action_print_hasil_manufacturing"
+                    string="Print"
+                    type="object"
+                    class="btn-primary"
+                />
+            </xpath>
+            <xpath expr="//page[@name='miscellaneous']" position="after">
+                <page name="note" string="Notes">
+                    <group>
+                        <field name="catatan" nolabel="1"/>
+                    </group>
+                </page>
+            </xpath>
+            <xpath expr="//field[@name='move_raw_ids']/list/field[@name='quantity']" position="after">
+                <field name="difference_quantity"/>
+            </xpath>
         </field>
     </record>
 

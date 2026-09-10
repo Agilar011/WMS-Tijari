@@ -272,7 +272,7 @@ class AcumaticaWarehouseLine(models.Model):
         if not acumatica_err_id:
             acumatica_err_id = AcumaticaError.create({
                 'name': f'Warehouse-{self.id}',
-                'data_type': 'warehouse',
+                'data_type': self._name,
                 'import_state': state,
                 'data_id': self.id,
                 'error_msg': err_msg
@@ -583,7 +583,9 @@ class AcumaticaWarehouseLine(models.Model):
 
             old_value = record[field_name]
 
-            # Normalisasi nilai
+            if field.type == 'many2one':
+                old_value = old_value.id if old_value else False
+                
             old_value = old_value or False
             new_value = new_value or False
 
@@ -650,17 +652,20 @@ class AcumaticaWarehouseLine(models.Model):
                     <a href="#"
                     data-oe-model="{}"
                     data-oe-id="{}">
-                        {} code ({})
+                        {} 
                     </a>
                 </p>
             """).format(
                 escape(record._name),
                 record.id,
                 escape(record.display_name),
-                escape(record.code),
+                # escape(record.code),
             )
 
-        self.message_post(
+        self.with_context(
+            mail_create_nosubscribe=True,
+            mail_post_autofollow=False,
+        ).message_post(
             body=body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
