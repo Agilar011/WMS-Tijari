@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_uom_uom_tree_add_code" model="ir.ui.view">
+        <field name="name">uom.uom.list.add.code</field>
+        <field name="model">uom.uom</field>
+        <field name="inherit_id" ref="uom.product_uom_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="code"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_uom_uom_form_add_code" model="ir.ui.view">
+        <field name="name">uom.uom.form.add.code</field>
+        <field name="model">uom.uom</field>
+        <field name="inherit_id" ref="uom.product_uom_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="code"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_uom_uom_search_add_code" model="ir.ui.view">
+        <field name="name">uom.uom.search.add.code</field>
+        <field name="model">uom.uom</field>
+        <field name="inherit_id" ref="uom.uom_uom_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="after">
+                <field name="code"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_uom_category_form_add_code" model="ir.ui.view">
+        <field name="name">uom.category.form.add.uom.code</field>
+        <field name="model">uom.category</field>
+        <field name="inherit_id" ref="uom.product_uom_categ_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='uom_ids']/list/field[@name='name']" position="after">
+                <field name="code"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

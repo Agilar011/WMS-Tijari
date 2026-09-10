@@ -28,3 +28,4 @@ from . import loginext_model
 from . import mail_compose_message
 
 from . import mrp_production
+from . import uom_uom
