@@ -40,3 +40,10 @@ class WMSMRPProduction(models.Model):
             "product_id": self.product_id.id,
             "name": name,
         }
+
+    def action_print_hasil_manufacturing(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/hasil_manufacturing?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
