@@ -34,6 +34,7 @@
                 <field name="odoo_location_id" domain="[('is_location_mapping', '=', True)]"/>
                 <field name="odoo_building_id" domain="[('lot_stock_id', 'parent_of', odoo_location_id)]"/>
                 <field name="is_active"/>
+                <field name="error_message"/>
             </list>
         </field>
     </record>
