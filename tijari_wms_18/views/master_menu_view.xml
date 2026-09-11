@@ -4,7 +4,8 @@
   <menuitem id="custom_master_menu" 
       name="Master Data"
       parent="stock.menu_stock_root" 
-      sequence="100"/>
+      sequence="100"
+      active="False"/>
   
   <menuitem id="custom_master_menu_customer" 
           name="Customer"
@@ -33,7 +34,7 @@
   <menuitem
     id="menu_master_approval_type"
     name="Approval Types"
-    parent="custom_master_menu"
+    parent="stock.menu_warehouse_config"
     action="approval_base.action_approval_type"
     sequence="30"/>
 

@@ -494,6 +494,7 @@
                        invisible="adt_type not in ['Sales Order Shipment', 'SO Shipment']"
                        readonly="1"/>
                 <field name="status_ba"/>
+                <field name="owner_id" string="Pemilik Stock" invisible="adt_type != 'Toko Pegang DO'" />
                 <field name="adt_dest_location_id" string="Final Location" invisible="adt_type == 'Receipt' or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
                 <field name="all_moves_picked" invisible="1"/>
             </xpath>
@@ -946,7 +947,8 @@
         id="custom_logs_menu"
         name="Logs"
         parent="stock.menu_stock_root"
-        sequence="101"/>
+        sequence="101"
+        active="False"/>
 
     <menuitem
         id="menu_stock_picking_acumatica_error"

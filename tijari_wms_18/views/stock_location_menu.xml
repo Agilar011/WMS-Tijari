@@ -4,15 +4,15 @@
     <menuitem
       id="menu_stock_location_acumatica"
       name="Location Acumatica"
-      parent="custom_master_menu"
+      parent="stock.menu_warehouse_config"
       action="action_stock_location_acumatica"
-      sequence="10"/>
+      sequence="3"/>
 
-    <menuitem
+    <!-- <menuitem
       id="menu_stock_location_acumatica_error"
       name="Location Acumatica Error"
       parent="custom_master_menu"
       action="action_stock_location_acumatica_error"
-      sequence="11"/>
+      sequence="11"/> -->
 
 </odoo>

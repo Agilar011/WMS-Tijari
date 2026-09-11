@@ -102,10 +102,14 @@
         <field name="params" eval="{'dashboard_id': ref('tijari_wms_18.spreadsheet_dashboard_api_scheduler')}"/>
     </record>
     <menuitem id="menu_acumatica_api_scheduler_dashboard" name="Scheduler Activity" parent="menu_acumatica_all_import_root" action="action_acumatica_api_scheduler_kanban" sequence="5" groups="stock.group_stock_manager" active="False"/>
+
+    <menuitem id="menu_acumatica_all_import_config_root" name="Integrations" parent="menu_acumatica_all_import_root" action="action_acumatica_config" sequence="5"/>
+        <menuitem id="menu_acumatica_all_import_config" name="API Connections Config" parent="menu_acumatica_all_import_config_root" action="action_acumatica_config" sequence="51"/>
+        <menuitem id="menu_acumatica_api_scheduler" name="Schedulers" parent="menu_acumatica_all_import_config_root" action="action_api_scheduler_job" sequence="52"/>
+        <menuitem id="menu_acumatica_webhook_log" name="Webhooks" parent="menu_acumatica_all_import_config_root" action="action_acumatica_webhook_log" sequence="53"/>
+        <menuitem id="menu_acumatica_webhook_key_config" name="Webhook API Key" parent="menu_acumatica_all_import_config_root" action="action_acumatica_webhook_key_config" sequence="54" groups="base.group_system"/>
+
     <menuitem id="menu_acumatica_all_import_unified" name="Import Data" parent="menu_acumatica_all_import_root" action="action_acumatica_unified_import_wizard" sequence="10"/>
-    <menuitem id="menu_acumatica_api_scheduler" name="API Scheduler" parent="menu_acumatica_all_import_root" action="action_api_scheduler_job" sequence="15"/>
-    <menuitem id="menu_acumatica_webhook_log" name="Webhook Logs" parent="menu_acumatica_all_import_root" action="action_acumatica_webhook_log" sequence="20"/>
-    <menuitem id="menu_acumatica_webhook_key_config" name="Webhook API Key" parent="menu_acumatica_all_import_root" action="action_acumatica_webhook_key_config" sequence="25" groups="base.group_system"/>
 
     <record id="view_api_data_hub_dashboard_card_kanban" model="ir.ui.view">
         <field name="name">api.data.hub.dashboard.card.kanban</field>
@@ -247,7 +251,8 @@
         </field>
     </record>
 
-    <menuitem id="menu_acumatica_all_import_staging_root" name="Data Staging" parent="menu_acumatica_all_import_root" sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_staging_root" name="Data Transaksi" parent="menu_acumatica_all_import_root" sequence="30"/>
+
     <record id="action_acumatica_shipment_completed_staging" model="ir.actions.act_window">
         <field name="name">Shipment Completed</field>
         <field name="res_model">acumatica.shipment.completed.staging</field>
@@ -266,7 +271,7 @@
         parent="menu_acumatica_all_import_staging_root"
         sequence="10"/>
     <menuitem id="menu_acumatica_all_import_staging_receipt" name="PO Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_receipt_line" sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_staging_so_transfer" name="SO Transfer - Inter WH IN" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_transfer_line" sequence="20"/>
+    
     <menuitem id="menu_acumatica_all_import_staging_inventory_received" name="Inventory Receipt" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_inventory_recieved_line" sequence="40"/>
     <menuitem id="menu_acumatica_all_import_staging_shipment_so" name="SO Return" parent="menu_acumatica_all_import_staging_inbound" action="action_acumatica_shipment_line" sequence="50"/>
     <!-- <menuitem id="menu_acumatica_all_import_staging_inventory_stock_import" name="Inventory Stock Import" parent="menu_acumatica_all_import_staging_inbound" action="action_import_inventory_stock_wizard" sequence="61"/> -->
@@ -278,7 +283,6 @@
         sequence="20"/>
     <menuitem id="menu_acumatica_all_import_staging_so_shipment" name="SO Shipment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_so_shipment_line" sequence="10"/>
     <menuitem id="menu_acumatica_all_import_staging_shipment_completed" name="Shipment Completed" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_shipment_completed_staging" sequence="11"/>
-    <menuitem id="menu_acumatica_all_import_staging_transfer_shipment" name="SO Transfer - Inter WH OUT" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_transfer_shipment_line" sequence="20"/>
     <!-- <menuitem id="menu_acumatica_all_import_staging_issue_change_item" name="Issue : Change Item" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_line" sequence="30"/> -->
     <menuitem id="menu_acumatica_all_import_staging_inventory_issue" name="Inventory Issue" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inventory_issue_line" sequence="40"/>
     <menuitem id="menu_acumatica_all_import_staging_issue_po_return" name="PO Return" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_po_return_line" sequence="50"/>
@@ -288,29 +292,29 @@
         name="Internal Transfer" 
         parent="menu_acumatica_all_import_staging_root" 
         sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_staging_so_shipment_co" name="SO Shipment Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_so_shipment_consignment_line" sequence="10"/>
-    <menuitem id="menu_acumatica_all_import_staging_direct_transfer" name="Direct Transfer" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_direct_transfer" sequence="20"/>
-    <menuitem id="menu_acumatica_all_import_staging_vendor_return_direct_transfer" name="Vendor Return Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_vendor_return_acumatica_direct_transfer" sequence="30"/>
-    <menuitem id="menu_acumatica_all_import_staging_credit_memo_consignment" name="Credit Memo Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_credit_memo_consignment" sequence="40"/>
-    <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer 1 STEP" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_one_step_line" sequence="50"/>
-    <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer 2 STEP" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_two_step_line" sequence="60"/>
-    <menuitem id="menu_acumatica_all_import_staging_kit_assembly" name="Kit Assembly" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_kit_assembly_line" sequence="80"/>
+        <!-- <menuitem id="menu_acumatica_all_import_staging_direct_transfer" name="Direct Transfer" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_direct_transfer" sequence="20"/> -->
+        <menuitem id="menu_acumatica_all_import_staging_so_shipment_co" name="SO Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_so_shipment_consignment_line" sequence="10"/>
+        <menuitem id="menu_acumatica_all_import_staging_vendor_return_direct_transfer" name="Return Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_vendor_return_acumatica_direct_transfer" sequence="30"/>
+        <menuitem id="menu_acumatica_all_import_staging_credit_memo_consignment" name="Credit Memo Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_credit_memo_consignment" sequence="40"/>
+        <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer 1 Step" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_one_step_line" sequence="50"/>
+        <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer 2 Step" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_two_step_line" sequence="60"/>
+        <menuitem id="menu_acumatica_all_import_staging_so_transfer" name="Transfer (In/SOTR)" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_line" sequence="70"/>
+        <menuitem id="menu_acumatica_all_import_staging_transfer_shipment" name="Transfer (Out/Shipment)" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_shipment_line" sequence="80"/>
 
-
-
-    <menuitem id="menu_acumatica_all_import_staging_master"
-        name="Master Data"
-        parent="menu_acumatica_all_import_staging_root"
+    <menuitem id="menu_acumatica_all_import_staging_production" 
+        name="Production" 
+        parent="menu_acumatica_all_import_staging_root" 
         sequence="40"/>
-    <menuitem id="menu_acumatica_all_import_staging_uom" name="UoM" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_uom_line" sequence="1"/>
-    <menuitem id="menu_acumatica_all_import_staging_customer" name="Customer" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_customer_line" sequence="2"/>
-    <menuitem id="menu_acumatica_all_import_staging_vendor" name="Vendor" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_vendor_line" sequence="3"/>
-    <menuitem id="menu_acumatica_all_import_staging_warehouse" name="Warehouse" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_warehouse_line" sequence="4"/>
-    <menuitem id="menu_acumatica_all_import_staging_stock_item" name="Stock Item" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_stock_item_line" sequence="5"/>
-    <menuitem id="menu_acumatica_all_import_staging_non_stock_item" name="Non-Stock Item" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_non_stock_item_line" sequence="6"/>
-    <menuitem id="menu_acumatica_all_import_staging_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_inventory_stock_line" sequence="9"/>
+        <menuitem id="menu_acumatica_all_import_staging_kit_assembly" name="Kit Assembly" parent="menu_acumatica_all_import_staging_production" action="action_acumatica_kit_assembly_line" sequence="401"/>
 
-    <menuitem id="menu_acumatica_all_import_config_root" name="Konfigurasi API" parent="menu_acumatica_all_import_root" action="action_acumatica_config" sequence="5"/>
-    <menuitem id="menu_acumatica_all_import_config" name="All Config" parent="menu_acumatica_all_import_config_root" action="action_acumatica_config" sequence="0"/>
+    <menuitem id="menu_acumatica_all_import_staging_master" name="Data Master" parent="menu_acumatica_all_import_root" sequence="40"/>
+        <menuitem id="menu_acumatica_all_import_staging_uom" name="UoM" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_uom_line" sequence="1"/>
+        <menuitem id="menu_acumatica_all_import_staging_customer" name="Customer" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_customer_line" sequence="2"/>
+        <menuitem id="menu_acumatica_all_import_staging_vendor" name="Vendor" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_vendor_line" sequence="3"/>
+        <menuitem id="menu_acumatica_all_import_staging_warehouse" name="Warehouse" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_warehouse_line" sequence="4"/>
+        <menuitem id="menu_acumatica_all_import_staging_stock_item" name="Stock Item" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_stock_item_line" sequence="5"/>
+        <menuitem id="menu_acumatica_all_import_staging_non_stock_item" name="Non-Stock Item" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_non_stock_item_line" sequence="6"/>
+        <menuitem id="menu_acumatica_all_import_staging_inventory_stock" name="Inventory Stock" parent="menu_acumatica_all_import_staging_master" action="action_acumatica_inventory_stock_line" sequence="9"/>
+
 
 </odoo>

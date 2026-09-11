@@ -16,7 +16,7 @@
         <field name="name">acumatica.transfer.line.search</field>
         <field name="model">acumatica.transfer.line</field>
         <field name="arch" type="xml">
-            <search string="Cari Data SO Transfer - Inter WH IN">
+            <search string="Cari Data Transfer (In/SOTR)">
                 <field name="receipt_nbr"/>
                 <field name="document_only"/>
                 <!-- <field name="transfer_order_nbr"/> -->
@@ -43,7 +43,7 @@
         <field name="name">acumatica.transfer.line.list</field>
         <field name="model">acumatica.transfer.line</field>
         <field name="arch" type="xml">
-            <list string="Data SO Transfer - Inter WH IN" multi_edit="1">
+            <list string="Data Transfer (In/SOTR)" multi_edit="1">
                 <!-- <field name="transfer_order_number"/> -->
                 <field name="receipt_nbr"/>
                 <field name="receipt_type"/>
@@ -73,7 +73,7 @@
         <field name="name">acumatica.transfer.line.form</field>
         <field name="model">acumatica.transfer.line</field>
         <field name="arch" type="xml">
-            <form string="Data SO Transfer - Inter WH IN">
+            <form string="Transfer (In/SOTR)">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged'"/>
                     <button name="action_open_picking" type="object" string="Open Document" class="btn-secondary" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
@@ -178,7 +178,7 @@
     </record>
 
     <record id="action_acumatica_transfer_line" model="ir.actions.act_window">
-        <field name="name">Data SO Transfer - Inter WH IN</field>
+        <field name="name">Data Transfer (In/SOTR)</field>
         <field name="res_model">acumatica.transfer.line</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_transfer_line_search"/>
