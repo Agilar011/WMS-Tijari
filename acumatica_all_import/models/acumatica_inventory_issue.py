@@ -324,6 +324,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     'adt_warehouse_code': first.warehouse_code or False,
                     'adt_external_id': first.external_id or False,
                     'adt_type': first.trans_type or False,
+                    'adt_change_item_ref_nbr': first.change_item_ref_nbr or False,
                     'transaction_type' : 'outbound'
                 }
                 

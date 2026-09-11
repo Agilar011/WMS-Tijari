@@ -313,7 +313,7 @@ class ImportShipmentWizard(models.TransientModel):
                     'open_qty': self._val(item, 'LineOpenOrderQty'),
                     'order_qty': self._val(item, 'LineOrderedQty'),
                     'order_number': self._val(item, 'LineOrderNbr'),
-                    'shipped_qty': self._val(item, 'ShippedQty'),
+                    'shipped_qty': self._val(item, 'LineQuantity'),
                     'shipped_weight': self._val(item, 'LineShippedWeight'),
                     'uom_code': self._val(item, 'LineUOM'),
                     'warehouse_dest_code': self._val(item, 'LineWarehouseID'),

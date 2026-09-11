@@ -518,7 +518,7 @@ class AcumaticaReceiptLine(models.Model):
                     error_message = str(exc)
 
                 try:
-                    self._handle_acumatica_error(
+                    receipt._handle_acumatica_error(
                         receipt,
                         error_message,
                     )

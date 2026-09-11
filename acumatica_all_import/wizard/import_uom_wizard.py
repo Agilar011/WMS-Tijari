@@ -186,16 +186,17 @@ class ImportUomWizard(models.TransientModel):
                     continue
                 seen_keys.add(key)
 
+                # UnitID adalah business key utama untuk mendeteksi update.
                 existing = UomLine.browse()
-                if external_id:
-                    existing = UomLine.search([
-                        ('config_id', '=', self.config_id.id),
-                        ('external_id', '=', external_id),
-                    ], limit=1)
-                if not existing and unit_id:
+                if unit_id:
                     existing = UomLine.search([
                         ('config_id', '=', self.config_id.id),
                         ('unit_id', '=', unit_id),
+                    ], limit=1)
+                if not existing and external_id:
+                    existing = UomLine.search([
+                        ('config_id', '=', self.config_id.id),
+                        ('external_id', '=', external_id),
                     ], limit=1)
 
                 vals = {
@@ -208,7 +209,13 @@ class ImportUomWizard(models.TransientModel):
                     'sync_date': fields.Datetime.now(),
                 }
                 if existing:
+                    changed = any(existing[field] != vals[field] for field in ('unit_id', 'description', 'external_id', 'row_number'))
                     existing.write(vals)
+                    if changed:
+                        existing.write({
+                            'import_state': 'staged',
+                            'import_message': False,
+                        })
                 else:
                     vals.update({
                         'import_state': 'staged',

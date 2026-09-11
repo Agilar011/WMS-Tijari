@@ -113,6 +113,7 @@ class ImportStockItemWizard(models.TransientModel):
                 limit=fetch_size,
                 offset=offset,
                 skip=self.fetch_skip,
+                filter=self.config_id.odata_filter or "",
             )
             if not batch_data:
                 _logger.info(
@@ -202,6 +203,7 @@ class ImportStockItemWizard(models.TransientModel):
                 "$top": limit,
                 "$skip": real_skip,
                 "$expand": "CrossReferences",
+                "$filter": self.config_id.odata_filter or "",
             }
 
             _logger.info(

@@ -36,14 +36,7 @@ class ResPartner(models.Model):
         string='Customer Class (Acumatica)',
         help='CustomerClass dari Acumatica WMS',
     )
-    adt_status = fields.Selection([
-        ('Active',     'Active'),
-        ('Inactive',   'Inactive'),
-        ('Hold',       'Hold'),
-        ('CreditHold', 'Credit Hold'),
-        ('OneTime',    'One Time'),
-        ('Prospect',    'Prospect'),
-    ],
+    adt_status = fields.Char(
         string='Status Customer (Acumatica)',
         help='Status Customer di Acumatica WMS',
     )
@@ -93,12 +86,7 @@ class ResPartner(models.Model):
     # FIELD VENDOR
     # ══════════════════════════════════════════════════════
 
-    adt_vendor_state = fields.Selection([
-        ('Active',   'Active'),
-        ('Inactive', 'Inactive'),
-        ('Hold',     'Hold'),
-        ('OneTime',  'One Time'),
-    ],
+    adt_vendor_state = fields.Char(
         string='Status Vendor (Acumatica)',
         help='Status Vendor di Acumatica WMS',
     )

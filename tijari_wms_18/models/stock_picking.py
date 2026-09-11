@@ -42,6 +42,8 @@ class StockPicking(models.Model):
     adt_to_warehouse_code = fields.Char(string='To Warehouse (Acumatica)')
     adt_from_warehouse_code = fields.Char(string='From Warehouse (Acumatica)')
     adt_description = fields.Char(string='Description (Acumatica)')
+    adt_order_type = fields.Char(string='Order Type (Acumatica)')
+    adt_change_item_ref_nbr = fields.Char(string='Change Item Ref. Nbr (Acumatica)')
     adt_is_document_only = fields.Boolean(string='Is Document Only', index=True, copy=False)
     operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
     adt_destination_location_address = fields.Char(string='Destination Address')

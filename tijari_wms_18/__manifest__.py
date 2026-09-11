@@ -39,6 +39,7 @@
         'views/internal_transfer_order_kanban_views.xml',
         'views/master_menu_view.xml',
         'views/product_template.xml',
+        'views/uom_uom_views.xml',
         'views/res_partner.xml',
         'views/res_users.xml',
         'views/stock_location_views.xml',

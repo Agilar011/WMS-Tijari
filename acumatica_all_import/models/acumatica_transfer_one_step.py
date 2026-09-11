@@ -228,7 +228,7 @@ class AcumaticaTransferOneStepLine(models.Model):
 
         for reference_nbr in self.mapped('reference_nbr'):
             receipt_lines = self.filtered(
-                lambda l: l.reference_nbr == reference_nbr and l.import_state == 'staged'
+                lambda l: l.reference_nbr == reference_nbr
             )
             if not receipt_lines:
                 continue
