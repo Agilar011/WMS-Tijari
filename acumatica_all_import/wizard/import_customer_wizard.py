@@ -221,8 +221,7 @@ class ImportCustomerWizard(models.TransientModel):
 
         AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
-            # endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
-            endpoint = f"{self.config_id.api_url}/Customers"
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             
             # ==============================================
             # PARAMS
