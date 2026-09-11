@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <record id="stock.out_picking" model="ir.ui.menu">
+        <field name="sequence">25</field>
+    </record>
+
+    <record id="stock.int_picking" model="ir.ui.menu">
+        <field name="active" eval="False" />
+    </record>
+
     <menuitem
         id="menu_operations_productions"
         name="Productions"
