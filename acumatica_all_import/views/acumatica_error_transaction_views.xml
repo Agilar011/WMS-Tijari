@@ -33,9 +33,9 @@
 
     <menuitem
         id="menu_acumatica_error_transaction_data"
-        name="Transaction"
+        name="Error Data Transaksi"
         parent="menu_acumatica_error_master_root"
         action="acumatica_error_transaction_data_action"
-        sequence="42"
+        sequence="52"
     />
 </odoo>

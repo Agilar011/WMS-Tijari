@@ -50,8 +50,8 @@
     </record>
 
     <menuitem id="menu_acumatica_inventory_stock_quant"
-              name="Inventory Stock Comparison"
-              parent="stock.menu_stock_root"
+              name="Data Stock ERP"
+              parent="stock.menu_stock_adjustments"
               action="action_acumatica_inventory_stock_quant"
-              sequence="31"/>
+              sequence="99"/>
 </odoo>

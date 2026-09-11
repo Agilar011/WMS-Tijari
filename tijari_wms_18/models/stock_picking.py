@@ -1860,30 +1860,6 @@ class StockPicking(models.Model):
 
         for rec in self:
 
-            if "Pick" in rec.picking_type_name:
-                for move in rec.move_ids:
-                    confirmation_qty = move.confirmation_quantity
-
-                    for dest_move in move.move_dest_ids:
-                        dest_move.write({
-                            'product_uom_qty': confirmation_qty,
-                            'quantity': confirmation_qty
-                        })
-
-            elif 'Pack' in rec.picking_type_name:
-                for move in rec.move_ids:
-                    for dest_move in move.move_dest_ids:
-                        packaged_qty = sum(
-                            ml.quantity
-                            for ml in dest_move.move_line_ids
-                            if ml.package_id
-                        )
-                        
-                        dest_move.write({
-                            "unpack_quantity": dest_move.quantity - packaged_qty
-                        })
-                        
-
             is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
             if is_document_only:
                 continue
@@ -1922,6 +1898,29 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
+            if "Pick" in rec.picking_type_name:
+                for move in rec.move_ids:
+                    confirmation_qty = move.confirmation_quantity
+
+                    for dest_move in move.move_dest_ids:
+                        dest_move.write({
+                            'product_uom_qty': confirmation_qty,
+                            'quantity': confirmation_qty
+                        })
+            
+            elif 'Pack' in rec.picking_type_name:
+                for move in rec.move_ids:
+                    for dest_move in move.move_dest_ids:
+                        packaged_qty = sum(
+                            ml.quantity
+                            for ml in dest_move.move_line_ids
+                            if ml.package_id
+                        )
+                        
+                        dest_move.write({
+                            "unpack_quantity": dest_move.quantity - packaged_qty
+                        })
+                                    
             if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
                 rec.wms_state = 'waiting_response'
 

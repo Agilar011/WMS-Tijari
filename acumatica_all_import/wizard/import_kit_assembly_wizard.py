@@ -190,6 +190,8 @@ class ImportKitAssemblyWizard(models.TransientModel):
         session = self.config_id._do_login()
         staging_header = self.env['acumatica.kit.assembly']
         staging_line = self.env['acumatica.kit.assembly.component']
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             # print(f"Fetching Kit Assembly data from {endpoint} with limit={limit} and offset={offset}...")
@@ -206,10 +208,21 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
             response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
-                raise UserError(
-                    f'Gagal ambil data Kit Assembly '
-                    f'(HTTP {response.status_code}): {response.text}'
+
+                last_error = (
+                    f'Gagal fetch data Kit Assembly '
+                    f'(HTTP {response.status_code}): '
+                    f'{response.text}'
                 )
+
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="issue change item",
+                    error=last_error,
+                    error_type="http",
+                )
+                
+                raise UserError(last_error)
 
             raw_data = self.config_id._normalize_rows(response.json())
             result = []

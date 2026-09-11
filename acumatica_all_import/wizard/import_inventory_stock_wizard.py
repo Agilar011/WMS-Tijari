@@ -93,6 +93,8 @@ class ImportInventoryStockWizard(models.TransientModel):
             raise UserError('Pilih konfigurasi API terlebih dahulu.')
 
         session = config._do_login()
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{config.api_url}/{config.endpoint_name.lstrip('/')}"
             params = {}
@@ -111,7 +113,21 @@ class ImportInventoryStockWizard(models.TransientModel):
 
             response = session.put(endpoint, params=params, json=payload, timeout=300)
             if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Inventory Stock (HTTP {response.status_code}): {response.text}')
+
+                last_error = (
+                    f'Gagal ambil data Inventory Stock '
+                    f'(HTTP {response.status_code}): '
+                    f'{response.text}'
+                )
+
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="inventory stock",
+                    error=last_error,
+                    error_type="http",
+                )
+                
+                raise UserError(last_error)
 
             raw_data = self._normalize_rows(response.json())
             result = []
