@@ -5,6 +5,15 @@
         <field name="model">stock.report.aging.line</field>
         <field name="arch" type="xml">
             <list create="0" delete="0" edit="0">
+                <header>
+                    <button
+                        name="%(action_stock_report_aging_generate)d"
+                        string="Generate"
+                        type="action"
+                        class="btn-primary"
+                        display="always"
+                    />
+                </header>
                 <field name="product_id"/>
                 <field name="product_name"/>
                 <field name="receipt_date"/>

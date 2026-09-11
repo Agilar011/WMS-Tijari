@@ -113,7 +113,7 @@
 
     <!-- 4. Window Action -->
     <record id="action_acumatica_direct_transfer" model="ir.actions.act_window">
-        <field name="name">Vendor Return Consignment Staging</field>
+        <field name="name">Return Consignment Staging</field>
         <!-- Diperbaiki: Ditambahkan . -->
         <field name="res_model">acumatica.direct.transfer.staging</field>
         <field name="view_mode">list,form</field>

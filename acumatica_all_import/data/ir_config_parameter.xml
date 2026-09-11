@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="param_chat_webhook_url" model="ir.config_parameter">
+            <field name="key">acumatica_all_import.chat_webhook_url</field>
+            <field name="value">https://chat.googleapis.com/v1/spaces/AAQAdh8qBb8/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&amp;token=80FVWffnJ0fR5pzjw29ke88UxcdCgrA8Lu-k4myKjhQ</field>
+        </record>
+    </data>
+</odoo>

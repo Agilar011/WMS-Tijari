@@ -19,7 +19,7 @@
         <field name="data_model">acumatica.receipt.line</field><field name="sequence">11</field>
     </record>
     <record id="api_dashboard_card_so_transfer_in" model="api.data.hub.dashboard.card">
-        <field name="name">SO Transfer - Inter WH IN</field><field name="card_type">transactions</field>
+        <field name="name">Transfer (In/SOTR)</field><field name="card_type">transactions</field>
         <field name="data_model">acumatica.transfer.line</field><field name="sequence">12</field>
     </record>
     <record id="api_dashboard_card_inventory_receipt" model="api.data.hub.dashboard.card">
@@ -39,7 +39,7 @@
         <field name="data_model">acumatica.shipment.completed.staging</field><field name="sequence">16</field>
     </record>
     <record id="api_dashboard_card_so_transfer_out" model="api.data.hub.dashboard.card">
-        <field name="name">SO Transfer - Inter WH OUT</field><field name="card_type">transactions</field>
+        <field name="name">Transfer (Out/Shipment)</field><field name="card_type">transactions</field>
         <field name="data_model">acumatica.transfer.shipment.line</field><field name="sequence">17</field>
     </record>
     <record id="api_dashboard_card_inventory_issue" model="api.data.hub.dashboard.card">
@@ -59,11 +59,11 @@
         <field name="data_model">acumatica.direct.transfer.staging</field><field name="sequence">21</field>
     </record>
     <record id="api_dashboard_card_transfer_one_step" model="api.data.hub.dashboard.card">
-        <field name="name">Transfer 1 STEP</field><field name="card_type">transactions</field>
+        <field name="name">Transfer 1 Step</field><field name="card_type">transactions</field>
         <field name="data_model">acumatica.transfer.one.step.line</field><field name="sequence">22</field>
     </record>
     <record id="api_dashboard_card_transfer_two_step" model="api.data.hub.dashboard.card">
-        <field name="name">Transfer 2 STEP</field><field name="card_type">transactions</field>
+        <field name="name">Transfer 2 Step</field><field name="card_type">transactions</field>
         <field name="data_model">acumatica.transfer.two.step.line</field><field name="sequence">23</field>
     </record>
     <record id="api_dashboard_card_kit_assembly" model="api.data.hub.dashboard.card">
@@ -143,7 +143,7 @@
         <field name="dashboard_scope">inventory</field><field name="sequence">305</field>
     </record>
     <record id="inventory_dashboard_card_inventory_adjustment" model="api.data.hub.dashboard.card">
-        <field name="name">Inventory Adjustment</field><field name="card_type">inventory_adjustment</field>
+        <field name="name">Stock Opname</field><field name="card_type">inventory_adjustment</field>
         <field name="dashboard_scope">inventory</field><field name="sequence">306</field>
     </record>
     <record id="inventory_dashboard_card_scrap_monitoring" model="api.data.hub.dashboard.card">

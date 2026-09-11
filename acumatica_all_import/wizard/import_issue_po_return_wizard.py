@@ -96,6 +96,8 @@ class ImportReceiptWizard(models.TransientModel):
         print("="*80)
         
         session = self.config_id._do_login()
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {}
@@ -119,11 +121,24 @@ class ImportReceiptWizard(models.TransientModel):
                 print("[DEBUG] MASUK Ke proses get data api")
                 print("="*80)
 
-                raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
+                last_error = (
+                    f'Gagal fetch data PO Receipt '
+                    f'(HTTP {response.status_code}): '
+                    f'{response.text}'
+                )
+
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="po receipt",
+                    error=last_error,
+                    error_type="http",
+                )
+                
+                raise UserError(last_error)
 
             raw_payload = response.json()
             raw_data = (
-                raw_payload.get('PurchaseReceiptGIDetails')
+                raw_payload.get('PurchaseReceiptReturnGIDetails')
                 if isinstance(raw_payload, dict)
                 else None
             ) or self._normalize_rows(raw_payload)

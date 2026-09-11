@@ -947,3 +947,88 @@ class WmsApiController(http.Controller):
             resp = {'msg': msg, 'request_content': str(request_content)}
             resp = json.dumps(resp)
             return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/hasil_manufacturing', type='http', auth='user')
+    def PrintHasilManufacturing(self, id, **kw):
+        blank_image = create_blank_image()
+        mrp = request.env['mrp.production'].sudo().browse(int(id))
+        
+        data = {
+            'reference': mrp.name or '', 
+            'date': format_tanggal_indo(mrp.date_start) if mrp.date_start else '',
+            'warehouse_id': mrp.warehouse_id.name or '', 
+            # 'lok':  '',
+            # 'lok':  mrp.warehouse_id.source_location or'',
+            'lok':  mrp.location_src_id.name or'',
+            # 'lok':  mrp.location_dest_id.name or'',
+            'user': mrp.user_id.name or '',
+            'note': mrp.catatan or '',
+            'name': mrp.product_id.name or '',
+            'default_code': mrp.product_id.default_code or '',
+            'lot': mrp.lot_producing_id.name or '',
+            'demand': mrp.qty_producing or 0.0,
+            'qty': mrp.product_qty or 0.0,
+            'uom': mrp.product_uom_id.name or 0.0,
+            'created_by': mrp.user_id.name or '',
+            'ttd_created_by': (mrp.user_id.partner_id.digital_signature.decode('utf-8') if mrp.user_id.partner_id.digital_signature else blank_image),
+        }
+
+        list_dikonsumsi = []
+        list_tidak_digunakan = []
+
+        for line in mrp.move_raw_ids:
+            lot_names = ", ".join(line.lot_ids.mapped('name')) if line.lot_ids else ''
+            diff_qty = getattr(line, 'difference_quantity', 0.0) or 0.0
+
+            if diff_qty > 0:
+                list_tidak_digunakan.append({
+                    'name': line.product_id.name or '',
+                    'lot': lot_names,
+                    'qty': diff_qty,
+                    'uom': line.product_uom.name or '',
+                    'lok': line.location_id.name or '',
+                })
+            else:
+                list_dikonsumsi.append({
+                    'name': line.product_id.name or '',
+                    'lot': lot_names,
+                    'demand': line.product_uom_qty or 0.0,
+                    'qty': line.quantity or 0.0,
+                    'uom': line.product_uom.name or '',
+                })
+        data['detail_konsumsi'] = list_dikonsumsi
+        data['detail_sisa'] = list_tidak_digunakan
+
+        data = json.dumps(data)
+
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_HASIL_MANUFACTURING',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "berita_acara_hasil_manufacturing.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except Exception:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])

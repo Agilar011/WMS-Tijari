@@ -83,17 +83,17 @@ class AcumaticaConfig(models.Model):
     config_type = fields.Selection(
         selection=[
             ('po_receipt', 'PO Receipt'),
-            ('so_transfer', 'SO Transfer - Inter WH IN'),
+            ('so_transfer', 'Transfer (In/SOTR)'),
             ('inventory_received', 'Inventory Receipt'),
             ('shipment_so', 'SO Return'),
             ('so_shipment', 'SO Shipment'),
             ('shipment_completed', 'Shipment Completed'),
-            ('transfer_shipment', 'SO Transfer - Inter WH OUT'),
+            ('transfer_shipment', 'Transfer (Out/Shipment)'),
             ('issue_change_item', 'Issue Change Item'),
             ('inventory_issue', 'Inventory Issue'),
             ('issue_po_return', 'PO Return'),
-            ('transfer_one_step', 'Transfer 1 STEP'),
-            ('transfer_two_step', 'Transfer 2 STEP'),
+            ('transfer_one_step', 'Transfer 1 Step'),
+            ('transfer_two_step', 'Transfer 2 Step'),
             ('kit_assembly', 'Kit Assembly'),
 
             ('customer', 'Customer'),
@@ -104,7 +104,7 @@ class AcumaticaConfig(models.Model):
             ('vendor', 'Vendor'),
             ('inventory_stock', 'Inventory Stock'),
             ('invoice_consignment', 'Invoice Consignment'),
-            ('vendor_return_direct_transfer', 'Vendor Return Consignment'),
+            ('vendor_return_direct_transfer', 'Return Consignment'),
             ('vendor_return_document_direct_transfer', 'Direct Transfer'),
             ('credit_memo_consignment', 'Credit Memo Consignment'),
 
@@ -174,7 +174,7 @@ class AcumaticaConfig(models.Model):
                 'old_odata_expands': {'', 'StockComponents'},
             },
             'vendor_return_direct_transfer': {
-                'name': 'Acumatica Vendor Return Consignment V2 - Default',
+                'name': 'Acumatica Return Consignment V2 - Default',
                 'endpoint_name': 'VendorReturnGI',
                 'odata_expand': 'VendorReturnGIDetails',
                 'odata_filter': False,

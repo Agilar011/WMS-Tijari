@@ -110,34 +110,57 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         except Exception:
             return False
 
-    def _search_picking_type(self, header):
+    def _search_picking_type(self, header, picking_type_cache):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        type = False
+
+        cache_key = (
+            header.get('transfer_type'),
+            header.get('document_only'),
+            header.get('warehouse_code'),
+        )
+
+        if cache_key in picking_type_cache:
+            return picking_type_cache[cache_key]
 
         mapped_type = self.config_id._resolve_inventory_receive_picking_type(
             transfer_type=header.get('transfer_type'),
             document_only=header.get('document_only'),
             warehouse_code=header.get('warehouse_code'),
         )
+
         if mapped_type:
+            picking_type_cache[cache_key] = mapped_type
             return mapped_type
 
-        location = Location.search([
-            ('code', '=', header['warehouse_code'])
-        ])
+        location = Location.search(
+            [('code', '=', header['warehouse_code'])],
+            limit=1,
+        )
+
+        picking_type = False
+
         if location:
-            type_key = str(header.get('transfer_type') or '').strip().lower().replace('-', '_').replace(' ', '_')
-            type = PickingType.resolve_picking_type(
-                warehouse_code=header.get('building_code'),
-                code='internal' if type_key == 'transfer_in' else 'incoming',
-                operation_category='receive',
-                api_acumatica='inventory_received',
-                transaction_key=type_key,
-                required=False,
+            picking_type = PickingType.search(
+                [
+                    (
+                        'warehouse_id',
+                        '=',
+                        location.odoo_building_id.id
+                        if location.odoo_building_id
+                        else False,
+                    ),
+                    ('code', '=', 'incoming'),
+                    ('is_default_api', '=', True),
+                ],
+                limit=1,
             )
 
-        return type if type else None
+        result = picking_type or False
+
+        picking_type_cache[cache_key] = result
+
+        return result        
 
     def _coalesce_val(self, item, *keys):
         for key in keys:
@@ -168,7 +191,15 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             'transfer_receipt',
         )
 
-    def _build_inventory_receipt_header(self, row_number, item, header_id, warehouse_code, warehouse_dest_code=False):
+    def _build_inventory_receipt_header(
+        self,
+        row_number,
+        item,
+        header_id,
+        warehouse_code,
+        warehouse_dest_code=False,
+        picking_type_cache=None,
+    ):
         transfer_type = self._val(item, 'TransType')
         header = {
             'external_id': self._val(item, 'id'),
@@ -199,7 +230,15 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             'warehouse_code': warehouse_code,
             'warehouse_dest_code': warehouse_dest_code or warehouse_code,
         }
-        picking_type = self._search_picking_type(header)
+
+        if picking_type_cache is None:
+            picking_type_cache = {}
+
+        picking_type = self._search_picking_type(
+            header,
+            picking_type_cache,
+        )
+
         header['picking_type_id'] = picking_type.id if picking_type else None
         return header
 
@@ -224,6 +263,8 @@ class ImportInventoryRecievedWizard(models.TransientModel):
     def fetch_inventory_recieved_data(self):
         self.ensure_one()
         session = self.config_id._do_login()
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {}
@@ -232,12 +273,27 @@ class ImportInventoryRecievedWizard(models.TransientModel):
 
             response = session.put(endpoint, params=params, json={"TransType": {"value": ""}}, timeout=300)
             if response.status_code != 200:
-                raise UserError(f'Gagal fetch data Inventory Receipt (HTTP {response.status_code}): {response.text}')
+
+                last_error = (
+                    f'Gagal fetch data Inventory Receipt '
+                    f'(HTTP {response.status_code}): '
+                    f'{response.text}'
+                )
+
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="inventory receipt",
+                    error=last_error,
+                    error_type="http",
+                )
+                
+                raise UserError(last_error)
 
             raw_data = response.json()
             result = []
             detail_result = []
             headers_seen = set()
+            picking_type_cache = {}
 
             data = self._normalize_rows(raw_data)
             if not data and isinstance(raw_data, dict):
@@ -268,7 +324,16 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                 header_id = ref or item.get('id', '')
 
                 if header_id not in headers_seen:
-                    result.append(self._build_inventory_receipt_header(row_number, item, header_id, warehouse_code, warehouse_dest_code))
+                    result.append(
+                        self._build_inventory_receipt_header(
+                            row_number,
+                            item,
+                            header_id,
+                            warehouse_code,
+                            warehouse_dest_code,
+                            picking_type_cache=picking_type_cache,
+                        )
+                    )
                     headers_seen.add(header_id)
 
                 for detail in details:

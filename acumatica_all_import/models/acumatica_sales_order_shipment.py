@@ -48,6 +48,7 @@ class AcumaticaShipmentGIStaging(models.Model):
     acumatica_id = fields.Char(string="atica_id")
     adt_rowNumber = fields.Char(string="rowNumber")
     adt_note = fields.Char(string="note")
+    adt_Description = fields.Char(string="Description")
     adt_AddressID = fields.Char(string="AddressID")
     adt_AddressLine = fields.Char(string="AddressLine")
     adt_BuildingID = fields.Char(string="BuildingID")
@@ -237,6 +238,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'origin': shipment.adt_ShipmentNbr,
                         'scheduled_date': ship_date,
                         'adt_type' : "Sales Order Shipment",
+                        'adt_order_type': shipment.adt_OrderType or False,
                         'transaction_type' : 'outbound'
                     }
 
@@ -323,8 +325,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                             'adt_line_external_id': item.acumatica_id,
                             'adt_inventory_id': item.adt_LineInventoryID,
                             'adt_uom_code': item.adt_LineUOM,
-                            # PERBAIKAN: Ganti 'item.adt_LineNote' menjadi 'item.adt_note' yang asli
-                            # 'adt_line_note': item.adt_note or item.note,
+                            'adt_line_note': item.adt_LineNote or False,
                             'adt_open_qty': float(item.adt_ShipmentQty or 0.0),
                             'adt_type': 'Sales Order Shipment',
                             'adt_line_description': item.adt_LineDescription or item.description,
@@ -583,7 +584,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'adt_uom_code': item.adt_LineUOM,
                 'adt_open_qty': qty,
                 'adt_quantity': qty,
-                'adt_type': 'SO Shipment Consignment',
+                'adt_type': 'SO Consignment',
                 'adt_line_description': item.adt_LineDescription or False,
                 'adt_line_nbr': item.adt_LineNbr or False,
                 'adt_transfer_order_number': shipment.adt_ShipmentNbr,
@@ -1234,6 +1235,8 @@ class AcumaticaSalesOrderShipmentStagingLine(models.Model):
     adt_rowNumber = fields.Char(string="rowNumber")
     adt_LineInventoryID = fields.Char(string="LineInventoryID")
     adt_LineDescription = fields.Char(string="LineDescription")
+    adt_LineNote = fields.Char(string="LineNote")
+    adt_LineNoteID = fields.Char(string="LineNoteID")
     adt_LineLocation = fields.Char(string="LineLocation")
     adt_LineNbr = fields.Char(string="LineNbr")
     adt_ShipmentQty = fields.Char(string="ShipmentQty")

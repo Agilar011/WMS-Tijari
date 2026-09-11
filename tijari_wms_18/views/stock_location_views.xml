@@ -1,6 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <record id="view_stock_location_acumatica_search" model="ir.ui.view">
+        <field name="name">stock.location.acumatica.search</field>
+        <field name="model">stock.location.acumatica</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+
+                <filter
+                    name="is_error"
+                    string="Error"
+                    domain="[('is_error', '=', True)]"
+                />
+
+                <filter
+                    name="not_is_error"
+                    string="Non-Error"
+                    domain="[('is_error', '=', False)]"
+                />
+            </search>
+        </field>
+    </record>
+
     <record id="view_stock_location_acumatica_list" model="ir.ui.view">
         <field name="name">stock.location.acumatica.list</field>
         <field name="model">stock.location.acumatica</field>

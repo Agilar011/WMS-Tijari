@@ -97,7 +97,10 @@ class AcumaticaInventoryStockLine(models.Model):
     ], string='Match Status', compute='_compute_stock_snapshot', store=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_stock_snapshot', store=True)
-    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
+    # Inventory Stock errors are logged by acumatica.error.transaction.
+    # Keep this comodel aligned with _handle_acumatica_error(), otherwise a
+    # missing product/location raises a second RPC error while saving the log.
+    acumatica_err_id = fields.Many2one('acumatica.error.transaction', string='Error ID')
 
     def _get_mapped_location(self):
         """Return the main Odoo location configured for the Acumatica warehouse."""
@@ -270,7 +273,9 @@ class AcumaticaInventoryStockLine(models.Model):
 
             old_value = record[field_name]
 
-            # Normalisasi nilai
+            if field.type == 'many2one':
+                old_value = old_value.id if old_value else False
+                
             old_value = old_value or False
             new_value = new_value or False
 
@@ -346,7 +351,10 @@ class AcumaticaInventoryStockLine(models.Model):
                 escape(record.display_name),
             )
 
-        self.message_post(
+        self.with_context(
+            mail_create_nosubscribe=True,
+            mail_post_autofollow=False,
+        ).message_post(
             body=body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',

@@ -485,7 +485,16 @@
                 <field name="adt_is_document_only" invisible="1"/>
                 <field name="adt_total_qty" string="Total Qty"/>
                 <field name="adt_actual_qty" string="Total Penerimaan"/>
+                <field name="adt_change_item_ref_nbr"
+                       string="Change Item Ref. Nbr"
+                       invisible="adt_type != 'Change Item'"
+                       readonly="1"/>
+                <field name="adt_order_type"
+                       string="Order Type"
+                       invisible="adt_type not in ['Sales Order Shipment', 'SO Shipment']"
+                       readonly="1"/>
                 <field name="status_ba"/>
+                <field name="owner_id" string="Pemilik Stock" invisible="adt_type != 'Toko Pegang DO'" />
                 <field name="adt_dest_location_id" string="Final Location" invisible="adt_type == 'Receipt' or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
                 <field name="all_moves_picked" invisible="1"/>
             </xpath>
@@ -572,7 +581,14 @@
                         decoration-info="state == 'assigned'"
                         decoration-muted="state == 'draft'"
                         decoration-success="state == 'done'"
-                        decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"/>
+                        decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"
+                        column_invisible="1"/>
+                    <field name="wms_state" string="Status" widget="badge"
+                        decoration-danger="state == 'cancel'"
+                        decoration-info="state == 'assigned'"
+                        decoration-muted="state == 'draft'"
+                        decoration-success="state == 'done'"
+                        decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned', 'waiting_response', 'return_shipment')"/>
                     <field name="user_ids" widget="many2many_avatar_user" optional="show"/>
                     <field name="batch_id" string="Batch" optional="hide"/>
                 </list>
@@ -931,7 +947,8 @@
         id="custom_logs_menu"
         name="Logs"
         parent="stock.menu_stock_root"
-        sequence="101"/>
+        sequence="101"
+        active="False"/>
 
     <menuitem
         id="menu_stock_picking_acumatica_error"

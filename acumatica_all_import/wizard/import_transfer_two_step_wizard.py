@@ -214,7 +214,7 @@ class ImportTransferTwoStepWizard(models.TransientModel):
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
 
-            response = session.put(endpoint, params=params, json={"TransferType": {"value": "2 Step"}}, timeout=300)
+            response = session.put(endpoint, params=params, json={"TransferType": {"value": "2-Step"}}, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Transfer Order (HTTP {response.status_code}): {response.text}')
 

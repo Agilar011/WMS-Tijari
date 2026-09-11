@@ -10,7 +10,9 @@ class AcumaticaErrorMaster(models.Model):
         ('acumatica.customer.line', 'Customer'),
         ('warehouse', 'Warehouse & Location'),
         ('stock_item', 'Stock Item'),
-        ('non_stock_item', 'Non-Stock Item'),
+        ('acumatica.non.stock.item.line', 'Non-Stock Item'),
+        # Kept so existing error rows remain valid after the model key was fixed.
+        ('non_stock_item', 'Non-Stock Item (Legacy)'),
         ('uom', 'UOM'),
         ('vendor', 'Vendor'),
         ('inventory_stock', 'Detail Stock Acumatica'),
@@ -35,14 +37,13 @@ class AcumaticaErrorMaster(models.Model):
 
     def action_open_record(self):
         self.ensure_one()
-        name = dict(
-            self._fields['data_type'].selection
-        ).get(self.data_type)
-
+        res_model = {
+            'non_stock_item': 'acumatica.non.stock.item.line',
+        }.get(self.data_type, self.data_type)
         return {
             'type': 'ir.actions.act_window',
             'name': 'Detail',
-            'res_model': self.data_type,
+            'res_model': res_model,
             'res_id': self.data_id,
             'view_mode': 'form',
             'target': 'current',

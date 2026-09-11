@@ -1,7 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
-
 class StockPickingBatch(models.Model):
     _inherit = 'stock.picking.batch'
 
@@ -42,6 +41,26 @@ class StockPickingBatch(models.Model):
         related='picking_type_id.name',
         store=False,
     )
+
+    def _sync_responsible_users(self):
+        for picking in self:
+            missing_do = (
+                picking.pick_responsible_ids
+                - picking.do_responsible_ids
+            )
+
+            if missing_do:
+                picking.do_responsible_ids = (
+                    picking.do_responsible_ids | missing_do
+                )
+
+            responsible_users = (
+                picking.pick_responsible_ids
+                | picking.pack_responsible_ids
+                | picking.do_responsible_ids
+            )
+
+            picking.user_ids = [(6, 0, responsible_users.ids)]
 
     def _compute_scan_product_by_lot_button(self):
         for batch in self:
@@ -392,4 +411,133 @@ class StockPickingBatch(models.Model):
             'display_name': product.display_name,
             'lot_id': lot.id,
             'move_line_ids': move_lines.ids,
+        }
+
+class StockPickingToBatchInherit(models.TransientModel):
+    _inherit = 'stock.picking.to.batch'
+
+    pick_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_to_batch_pick_responsible_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Assigned Picker",
+        domain=[("share", "=", False)],
+    )
+
+    pack_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_to_batch_pack_responsible_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Assigned Packer",
+        domain=[("share", "=", False)],
+    )
+
+    do_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_to_batch_do_responsible_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Assigned Loader",
+        domain=[("share", "=", False)],
+    )
+
+    can_edit_pack_responsible_ids = fields.Boolean(
+        string="Can Edit Pack Responsible",
+        compute="_compute_can_edit_pack_responsible_ids",
+        help="Technical field driving the view: only a user who is themself "
+             "listed in this transfer's Penanggungjawab Pick may edit "
+             "Penanggungjawab Pack here.",
+    )
+
+    def _compute_can_edit_pack_responsible_ids(self):
+        current_user = self.env.user
+        for picking in self:
+            picking.can_edit_pack_responsible_ids = current_user in picking.pick_responsible_ids
+
+    @api.onchange(
+        "pick_responsible_ids",
+        "pack_responsible_ids",
+        "do_responsible_ids",
+    )
+    def _onchange_responsible_ids(self):
+        for wizard in self:
+            missing_do = (
+                wizard.pick_responsible_ids
+                - wizard.do_responsible_ids
+            )
+
+            if missing_do:
+                wizard.do_responsible_ids = (
+                    wizard.do_responsible_ids | missing_do
+                )
+
+    def attach_pickings(self):
+        self.ensure_one()
+
+        pickings = self.env['stock.picking'].browse(
+            self.env.context.get('active_ids')
+        )
+
+        if self.mode == 'new':
+            company = pickings.company_id
+
+            if len(company) > 1:
+                raise UserError(
+                    _("The selected pickings should belong to an unique company.")
+                )
+
+            batch = self.env['stock.picking.batch'].create({
+                'user_id': self.user_id.id,
+                'company_id': company.id,
+                'picking_type_id': pickings[0].picking_type_id.id,
+                'description': self.description,
+            })
+        else:
+            batch = self.batch_id
+
+        # Pick responsible is also Loader responsible.
+        missing_do = (
+            self.pick_responsible_ids
+            - self.do_responsible_ids
+        )
+
+        do_responsible_ids = (
+            self.do_responsible_ids
+            | missing_do
+        )
+
+        # All responsible users.
+        responsible_users = (
+            self.pick_responsible_ids
+            | self.pack_responsible_ids
+            | do_responsible_ids
+        )
+
+        pickings.with_context(
+            tijari_responsible_sync=True
+        ).write({
+            'batch_id': batch.id,
+            'pick_responsible_ids': [
+                (6, 0, self.pick_responsible_ids.ids)
+            ],
+            'pack_responsible_ids': [
+                (6, 0, self.pack_responsible_ids.ids)
+            ],
+            'do_responsible_ids': [
+                (6, 0, self.do_responsible_ids.ids)
+            ],
+        })
+
+        # you have to set some pickings to batch before confirm it.
+        if self.mode == 'new' and not self.is_create_draft:
+            batch.action_confirm()
+
+        return {
+            'name': _('Batch Transfer'),
+            'view_mode': 'form',
+            'res_model': 'stock.picking.batch',
+            'type': 'ir.actions.act_window',
+            'res_id': batch.id,
         }

@@ -76,6 +76,7 @@
                             <field name="picking_type_id" readonly="1"/>
                             <field name="adt_CustomerID" readonly="1"/>
                             <field name="adt_CustomerName" readonly="1"/>
+                            <field name="adt_Description" readonly="1"/>
                             <field name="adt_ShipDate" readonly="1"/>
                             <field name="adt_WarehouseID" readonly="1"/>
                             <field name="adt_LocationID" readonly="1"/>
@@ -126,6 +127,7 @@
                                 <list>
                                     <field name="adt_LineInventoryID" readonly="1"/>
                                     <field name="adt_LineDescription" readonly="1"/>
+                                    <field name="adt_LineNote" readonly="1"/>
                                     <field name="adt_WarehouseID" readonly="1"/>
                                     <field name="adt_ShipmentQty" readonly="1"/>
                                 </list>
@@ -153,7 +155,7 @@
     </record>
 
     <record id="action_acumatica_so_shipment_consignment_line" model="ir.actions.act_window">
-        <field name="name">Data SO Shipment Consignment</field>
+        <field name="name">Data SO Consignment</field>
         <field name="res_model">acumatica.shipment.gi.staging</field>
         <field name="view_mode">list,form</field>
         <field name="domain">[('adt_OrderType', '=', 'CO')]</field>
