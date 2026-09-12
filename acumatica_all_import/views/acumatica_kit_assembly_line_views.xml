@@ -26,6 +26,7 @@
                 <field name="date" optional="show"/>
                 <field name="uom" optional="show"/>
                 <field name="warehouse" optional="show"/>
+                <field name="last_modified_datetime" string="Last Modified" optional="show"/>
                 <!-- <field name="line_inventory_id" optional="show"/> -->
                 <!-- <field name="line_component_qty" optional="show"/>
                 <field name="line_uom" optional="show"/> -->
@@ -100,11 +101,11 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1"/>
+                        <field name="import_message"/>
                         <field name="mrp_production_id"/>
-                        <!-- <field name="odoo_bom_id" readonly="1"/> -->
-                        <field name="config_id" readonly="1"/>
-                        <!-- <field name="sync_date" readonly="1"/> -->
+                        <!-- <field name="odoo_bom_id"/> -->
+                        <field name="config_id"/>
+                        <!-- <field name="sync_date"/> -->
                     </group>
                 </sheet>
             </form>

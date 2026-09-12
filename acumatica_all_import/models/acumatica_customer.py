@@ -63,19 +63,18 @@ class AcumaticaCustomerLine(models.Model):
         ('updated',  'Updated'),
         ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
+    ], string='Status', default='staged', tracking=True)
 
-    import_message = fields.Char(string='Generation Message', readonly=True)
-    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference', readonly=True)
+    import_message = fields.Char(string='Generation Message')
+    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference')
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ─── Computed: sudah ada di Odoo? ────────────────
     exists_in_odoo = fields.Boolean(

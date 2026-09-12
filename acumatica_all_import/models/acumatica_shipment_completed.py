@@ -85,7 +85,6 @@ class AcumaticaShipmentCompletedStaging(models.Model):
 
     last_modified_datetime = fields.Datetime(
         string='Last Modified Date',
-        readonly=True,
         index=True,
     )
 
@@ -188,27 +187,23 @@ class AcumaticaShipmentCompletedStaging(models.Model):
     ],
         string='Status',
         default='staged',
-        readonly=True,
         index=True,
     )
 
     import_message = fields.Text(
         string='Generation Message',
-        readonly=True,
     )
 
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
         required=True,
-        readonly=True,
         ondelete='cascade',
         index=True,
     )
 
     sync_date = fields.Datetime(
         string='Tanggal Sync',
-        readonly=True,
     )
 
     _sql_constraints = [
@@ -308,12 +303,10 @@ class AcumaticaShipmentCompletedStagingLine(models.Model):
     config_id = fields.Many2one(
         related='staging_id.config_id',
         store=True,
-        readonly=True,
         index=True,
     )
 
     sync_date = fields.Datetime(
         related='staging_id.sync_date',
         store=True,
-        readonly=True,
     )

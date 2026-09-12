@@ -28,24 +28,23 @@ class AcumaticaWarehouseLine(models.Model):
     _order = 'row_number asc'
  
     # ─── Data dari Acumatica ─────────────────────────
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Acumatica', readonly=True)
-    warehouse_id = fields.Char(string='WarehouseID → code', readonly=True)
-    description = fields.Char(string='Description → name', readonly=True)
-    active = fields.Boolean(string='Active', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Acumatica')
+    warehouse_id = fields.Char(string='WarehouseID → code')
+    description = fields.Char(string='Description → name')
+    active = fields.Boolean(string='Active')
     is_active = fields.Boolean(string='Aktif (Active)')
-    note = fields.Text(string='Note', readonly=True)
-    drop_ship_location_id = fields.Char(string='DropShipLocationID', readonly=True)
-    last_modified_dt = fields.Char(string='LastModifiedDateTime', readonly=True)
-    receiving_location_id = fields.Char(string='ReceivingLocationID', readonly=True)
-    rma_location_id = fields.Char(string='RMALocationID', readonly=True)
-    shipping_location_id = fields.Char(string='ShippingLocationID', readonly=True)
-    building_id = fields.Char(string='BuildingID', readonly=True)
+    note = fields.Text(string='Note')
+    drop_ship_location_id = fields.Char(string='DropShipLocationID')
+    last_modified_dt = fields.Char(string='LastModifiedDateTime')
+    receiving_location_id = fields.Char(string='ReceivingLocationID')
+    rma_location_id = fields.Char(string='RMALocationID')
+    shipping_location_id = fields.Char(string='ShippingLocationID')
+    building_id = fields.Char(string='BuildingID')
     generate_virtual_location = fields.Boolean(
         string='Generate Virtual Location/Building',
         related='config_id.generate_virtual_location',
         store=True,
-        readonly=True,
         help=(
             'Jika aktif, BuildingID selain WH33 dibuat sebagai lokasi di '
             'Virtual Locations. Jika nonaktif, BuildingID dibuat sebagai warehouse.'
@@ -54,7 +53,6 @@ class AcumaticaWarehouseLine(models.Model):
     odoo_building_location_id = fields.Many2one(
         'stock.location',
         string='Virtual Building Reference',
-        readonly=True,
         ondelete='set null',
     )
 
@@ -64,19 +62,18 @@ class AcumaticaWarehouseLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True)
+    ], string='Status', default='staged')
 
-    import_message = fields.Char(string='Generation Message', readonly=True)
-    odoo_warehouse_id = fields.Many2one('stock.warehouse', string='Document Reference', readonly=True, ondelete='set null')
+    import_message = fields.Char(string='Generation Message')
+    odoo_warehouse_id = fields.Many2one('stock.warehouse', string='Document Reference', ondelete='set null')
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ─── Helpers ─────────────────────────────────────
     @staticmethod

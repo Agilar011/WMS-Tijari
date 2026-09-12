@@ -46,7 +46,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_CustomerOrder = fields.Char(string="Acumatica CustomerOrder")
     adt_Date = fields.Char(string="Acumatica Date")
     adt_Description = fields.Char(string="Acumatica Description")
-    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly", readonly=True)
+    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly")
     adt_DueDate = fields.Char(string="Acumatica DueDate")
     adt_ExternalRef = fields.Char(string="Acumatica ExternalRef")
     adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime")

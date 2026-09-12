@@ -19,10 +19,11 @@ class AcumaticaUomLine(models.Model):
     _order = 'row_number asc, unit_id asc'
 
     # ─── Data dari Acumatica ─────────────────────────
-    row_number  = fields.Integer(string='No', readonly=True)
-    unit_id = fields.Char(string='UnitID (→ Code)', required=True, readonly=True)
-    description = fields.Char(string='Description (→ Nama UoM)', readonly=True)
-    external_id = fields.Char(string='UUID Acumatica', readonly=True)
+    row_number  = fields.Integer(string='No')
+    unit_id = fields.Char(string='UnitID (→ Code)', required=True)
+    description = fields.Char(string='Description (→ Nama UoM)')
+    external_id = fields.Char(string='UUID Acumatica')
+    last_modified_datetime = fields.Char(string='Last Modified')
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
@@ -31,11 +32,11 @@ class AcumaticaUomLine(models.Model):
         ('updated', 'Updated'),
         ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='staged', readonly=True)
+    ], string='Status', default='staged')
 
-    import_message = fields.Char(string='Generation Message', readonly=True)
-    odoo_uom_id = fields.Many2one('uom.uom', string='Document Reference', readonly=True)
-    odoo_categ_id = fields.Many2one('uom.category', string='Document Reference', readonly=True)
+    import_message = fields.Char(string='Generation Message')
+    odoo_uom_id = fields.Many2one('uom.uom', string='Document Reference')
+    odoo_categ_id = fields.Many2one('uom.category', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
@@ -43,10 +44,9 @@ class AcumaticaUomLine(models.Model):
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
 
     def _clean_uom_value(self, value):

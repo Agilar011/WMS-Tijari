@@ -93,77 +93,35 @@ class ImportSOShipmentWizard(models.TransientModel):
             endpoint = f"{self.config_id.api_url}/Shipment"
 
             # =====================================================
-            # 1. BERSIHKAN & PECAH DATA SHIPMENT (CHUNKING)
+            # 1. SIAPKAN FILTER SHIPMENT DALAM SATU REQUEST
             # =====================================================
-            # Hilangkan nomor duplikat dan nilai kosong/False
             clean_shipment_numbers = list(set([nbr for nbr in shipment_numbers if nbr])) if shipment_numbers else []
-            
-            # Potong daftar menjadi per 20 nomor shipment agar URL tidak kepanjangan
-            chunk_size = 10
-            shipment_chunks = [
-                clean_shipment_numbers[i:i + chunk_size] 
-                for i in range(0, len(clean_shipment_numbers), chunk_size)
-            ]
 
-            # Jika shipment_numbers kosong sejak awal, pastikan loop tetap berjalan 1 kali tanpa filter nomor
-            if not shipment_chunks:
-                shipment_chunks = [[]]
+            params = {}
+            filters = []
+            if self.config_id.odata_expand:
+                params["$expand"] = self.config_id.odata_expand
+            if self.config_id.odata_select:
+                params["$select"] = self.config_id.odata_select
+            if clean_shipment_numbers:
+                shipment_filter = " or ".join(
+                    f"ShipmentNbr eq '{nbr}'" for nbr in clean_shipment_numbers
+                )
+                filters.append(f"({shipment_filter})")
+            if odata_filter:
+                filters.append(f"({odata_filter})")
+            elif self.config_id.odata_filter:
+                filters.append(f"({self.config_id.odata_filter})")
+            if filters:
+                params["$filter"] = " and ".join(filters)
 
-            # List untuk menampung seluruh row data mentah hasil normalisasi dari semua chunk
-            all_raw_data = []
-
-            # =====================================================
-            # 2. LOOPING API REQUEST PER CHUNK
-            # =====================================================
-            for chunk in shipment_chunks:
-                params = {}
-                filters = []
-
-                if self.config_id.odata_expand:
-                    params["$expand"] = self.config_id.odata_expand
-
-                if self.config_id.odata_select:
-                    params["$select"] = self.config_id.odata_select
-
-                # Terapkan filter nomor dokumen khusus untuk chunk ini saja
-                if chunk:
-                    shipment_filter = " or ".join([
-                        f"ShipmentNbr eq '{nbr}'"
-                        for nbr in chunk
-                    ])
-                    if shipment_filter:
-                        filters.append(f"({shipment_filter})")
-
-                if odata_filter:
-                    filters.append(f"({odata_filter})")
-                elif self.config_id.odata_filter:
-                    filters.append(f"({self.config_id.odata_filter})")
-
-                if filters:
-                    params["$filter"] = " and ".join(filters)
-
-                # print("--- Mengirim Request Chunk ---")
-                # print("Endpoint: ", endpoint)
-                # print("params: ", params)
-
-                response = session.get(
-                    endpoint,
-                    params=params,
-                    timeout=90
+            response = session.get(endpoint, params=params, timeout=90)
+            if response.status_code != 200:
+                raise UserError(
+                    f"Gagal ambil Shipment (HTTP {response.status_code}): {response.text}"
                 )
 
-                if response.status_code != 200:
-                    raise UserError(
-                        f"Gagal ambil Shipment "
-                        f"(HTTP {response.status_code}): "
-                        f"{response.text}"
-                    )
-
-                # Normalisasi data chunk ini dan gabungkan ke dalam penampung utama
-                chunk_raw_data = self._normalize_rows(
-                    response.json()
-                )
-                all_raw_data.extend(chunk_raw_data)
+            all_raw_data = self._normalize_rows(response.json())
 
             # =====================================================
             # 3. PROSES PEMETAAN DATA (LOGIKA ASLI ANDA)
@@ -186,7 +144,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                         "fobpointdescription":self._val(item,"FOBPointDescription"),
                         "hold":self._val(item, "Hold"),
                         "insurance":self._val(item, "Insurance"),
-                        "lastmodifieddatetime":self._parse_dt(self._val(item,"LastModifiedDateTime")),
+                        "lastmodifieddatetime":self._val(item,"LastModifiedDateTime"),
                         "locationid":self._val(item, "LocationID"),
                         "locationname":self._val(item, "LocationName"),
                         "operation":self._val(item, "Operation"),

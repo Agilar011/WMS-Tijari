@@ -47,6 +47,7 @@
                 <field name="total_qty"/>
                 <field name="line_nbr"/>
                 <field name="inventory_id"/>
+                <field name="acumatica_write_date" string="Last Modified"/>
                 <!-- <field name="inventory_id"/> -->
                 <!-- <field name="transaction_description"/> -->
                 <!-- <field name="product_uom_qty"/> -->
@@ -84,7 +85,7 @@
                             <field name="reference_nbr"/>
                             <field name="picking_type_id"/>
                             <field name="scheduled_date"/>
-                            <field name="status" readonly="1"/>
+                            <field name="status"/>
                             <field name="customer_id"/>
                             <field name="customer_name"/>
                             <field name="customer_location_id"/>
@@ -130,11 +131,11 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" string="Document Reference" readonly="1" invisible="not odoo_picking_id"/>
-                        <field name="odoo_scrap_id" string="Document Reference" readonly="1" invisible="not odoo_scrap_id"/>
-                        <field name="odoo_internal_transfer_order_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id" string="Document Reference" invisible="not odoo_picking_id"/>
+                        <field name="odoo_scrap_id" string="Document Reference" invisible="not odoo_scrap_id"/>
+                        <field name="odoo_internal_transfer_order_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

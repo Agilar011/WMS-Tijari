@@ -74,7 +74,7 @@
                         <group>
                             <field name="reference_nbr"/>
                             <field name="scheduled_date"/>
-                            <field name="status" readonly="1"/>
+                            <field name="status"/>
                             <field name="trans_type"/>
                             <field name="actual_qty"/>
                             <field name="total_qty"/>
@@ -103,9 +103,9 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

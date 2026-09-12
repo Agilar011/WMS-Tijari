@@ -76,15 +76,15 @@
                             <field name="shipment_nbr"/>
                             <field name="document_only"/>
                             <field name="picking_type_id"/>
-                            <field name="odoo_picking_id" readonly="1"/>
-                            <field name="odoo_internal_transfer_order_id" readonly="1"/>
+                            <field name="odoo_picking_id"/>
+                            <field name="odoo_internal_transfer_order_id"/>
                             <field name="partner_code"/>
                             <field name="shipment_type"/>
                             <field name="warehouse_code"/>
                             <field name="warehouse_dest_code"/>
                             <field name="header_location_code"/>
                             <field name="scheduled_date"/>
-                            <field name="acumatica_write_date" string="Last Modified" readonly="1"/>
+                            <field name="acumatica_write_date" string="Last Modified"/>
                             <!-- <field name="order_number"/>
                             <field name="warehouse_code"/>
                             <field name="warehouse_dest_code"/>
@@ -92,7 +92,7 @@
                             <field name="scheduled_date"/> -->
                         </group>
                         <group>
-                            <field name="status" readonly="1"/>
+                            <field name="status"/>
                             <field name="operation"/>
                             <field name="shipment_type"/>
                             <field name="actual_qty"/>
@@ -103,7 +103,7 @@
                             <field name="package_weight"/>
                             <field name="ship_via"/>
                             <field name="shipping_zone"/>
-                            <field name="import_message" readonly="1"/>
+                            <field name="import_message"/>
                             <field name="note"/>
                         </group>
                     </group>
@@ -121,9 +121,9 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

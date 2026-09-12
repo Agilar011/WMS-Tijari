@@ -25,7 +25,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order',
-        readonly=True,
     )
     line_ids = fields.One2many(
         'acumatica.vendor.return.direct.transfer.staging.line', 

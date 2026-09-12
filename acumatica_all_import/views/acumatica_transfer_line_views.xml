@@ -56,6 +56,7 @@
                 <field name="warehouse_code"/>
                 <field name="warehouse_dest_code"/>
                 <field name="total_qty"/>
+                <field name="acumatica_write_date" string="Last Modified"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                        decoration-muted="import_state == 'staged'"
@@ -88,7 +89,7 @@
                             <field name="transfer_shipment_number"/>
                             <field name="receipt_nbr"/>
                             <field name="receipt_type"/>
-                            <field name="status" readonly="1"/>
+                            <field name="status"/>
                             <field name="vendor_code"/>
                             <field name="vendor_name"/>
                             <field name="partner_ref"/>
@@ -108,7 +109,7 @@
                             <field name="inventory_ref"/>
                             <field name="is_hold"/>
                             <field name="document_only"/>
-                            <field name="picking_type_id" readonly="1"/>
+                            <field name="picking_type_id"/>
                             <field name="note"/>
                         </group>
                     </group>
@@ -145,10 +146,10 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="odoo_internal_transfer_order_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="odoo_internal_transfer_order_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
 
 
@@ -168,8 +169,8 @@
                             <field name="transfer_order_line_number"/>
                             <field name="transfer_order_type"/>
                             <field name="transfer_shipment_number"/>
-                            <field name="import_state" readonly="1"/>
-                            <field name="import_message" readonly="1"/>
+                            <field name="import_state"/>
+                            <field name="import_message"/>
                         </group>
                     </group> -->
                 </sheet>
