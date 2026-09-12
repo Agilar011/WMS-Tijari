@@ -115,7 +115,7 @@
     </record>
 
     <record id="action_api_scheduler_job" model="ir.actions.act_window">
-        <field name="name">API Scheduler</field>
+        <field name="name">Schedulers</field>
         <field name="res_model">api.scheduler.job</field>
         <field name="view_mode">list,form</field>
     </record>

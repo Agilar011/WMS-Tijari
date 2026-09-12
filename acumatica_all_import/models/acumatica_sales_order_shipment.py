@@ -584,7 +584,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'adt_uom_code': item.adt_LineUOM,
                 'adt_open_qty': qty,
                 'adt_quantity': qty,
-                'adt_type': 'SO Shipment Consignment',
+                'adt_type': 'SO Consignment',
                 'adt_line_description': item.adt_LineDescription or False,
                 'adt_line_nbr': item.adt_LineNbr or False,
                 'adt_transfer_order_number': shipment.adt_ShipmentNbr,

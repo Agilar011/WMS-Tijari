@@ -325,7 +325,8 @@ class AcumaticaInventoryIssueLine(models.Model):
                     'adt_external_id': first.external_id or False,
                     'adt_type': first.trans_type or False,
                     'adt_change_item_ref_nbr': first.change_item_ref_nbr or False,
-                    'transaction_type' : 'outbound'
+                    'transaction_type' : 'outbound',
+                    'owner_id': first.partner_id.id if (first.trans_type or "").strip().casefold() == "toko pegang do" else False
                 }
                 
                 picking = Picking.search([

@@ -107,6 +107,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
         self.ensure_one()
         Picking = self.env['stock.picking']
         session = self.config_id._do_login()
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {}
@@ -135,7 +136,14 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
             }
             response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
-                raise UserError(f'Gagal fetch data (HTTP {response.status_code}): {response.text}')
+                last_error = f'Gagal fetch data (HTTP {response.status_code}): {response.text}'
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="credit memo consignment",
+                    error=last_error,
+                    error_type="http",
+                )
+                raise UserError(last_error)
 
             raw_payload = response.json()
             flat_data = (
@@ -278,7 +286,16 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                     print(header if 'header' in locals() else item)
                     print("=" * 80)
 
-                    raise UserError(f"ERROR IMPORT HEADER KE-{row_number} dengan error message: {str(e)}")
+                    last_error = f"ERROR IMPORT HEADER KE-{row_number} dengan error message: {str(e)}"
+
+                    AcumaticaErrorService.send_error(
+                        webhook_type="fetch",
+                        webhook_name="credit memo consignment",
+                        error=last_error,
+                        error_type="unknown",
+                    )
+
+                    raise UserError(last_error)
 
                     _logger.exception(
                         "Error import Direct Transfer %s",

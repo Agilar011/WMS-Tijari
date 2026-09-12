@@ -5,15 +5,16 @@
       <field name="name">Location Acumatica</field>
       <field name="res_model">stock.location.acumatica</field>
       <field name="view_mode">list</field>
-      <field name="domain">[('is_error', '=', False)]</field>
+      <field name="context">{'search_default_not_is_error': 1}</field>
+      <field name="domain">[]</field>
     </record>
 
-    <record id="action_stock_location_acumatica_error" model="ir.actions.act_window">
+    <!-- <record id="action_stock_location_acumatica_error" model="ir.actions.act_window">
       <field name="name">Location Acumatica Error</field>
       <field name="res_model">stock.location.acumatica</field>
       <field name="view_mode">list</field>
       <field name="view_id" ref="view_stock_location_acumatica_list_error"/>
       <field name="domain">[('is_error', '=', True)]</field>
-    </record>
+    </record> -->
 
 </odoo>

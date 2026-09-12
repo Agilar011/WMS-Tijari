@@ -36,14 +36,14 @@
         id="menu_acumatica_error_master_root" 
         name="Error Logs" 
         parent="menu_acumatica_all_import_root" 
-        sequence="40"
+        sequence="50"
     />
 
     <menuitem 
         id="menu_acumatica_error_master_data" 
-        name="Master Data" 
+        name="Error Data Master" 
         parent="menu_acumatica_error_master_root" 
         action="acumatica_error_master_data_action"
-        sequence="41"
+        sequence="51"
     />
 </odoo>

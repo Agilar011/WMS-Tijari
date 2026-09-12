@@ -8,6 +8,7 @@
           'views/acumatica_all_import_menu.xml',
           'data/api_dashboard_data.xml',
           'data/acumatica_cron_data.xml',
+          'data/ir_config_parameter.xml',
           'views/acumatica_config_views.xml',
           'views/acumatica_transaction_type_views.xml',
           'views/api_scheduler_views.xml',
