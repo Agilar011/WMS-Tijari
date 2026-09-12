@@ -227,127 +227,111 @@ class AcumaticaShipmentCompletedStaging(models.Model):
         self.ensure_one()
 
         Picking = self.env['stock.picking']
-
         shipment_nbr = self.shipment_nbr
 
-        # Cari Stock Picking berdasarkan shipment number
-        picking = Picking.search([
-            ('origin', '=', shipment_nbr),
-        ], limit=1)
+        self.env.cr.execute("SAVEPOINT shipment_completed_update")
 
-        if not picking:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Gagal Melakukan Update',
-                    'message': (
-                        f'Stock Picking dengan Shipment Number '
-                        f'{shipment_nbr} tidak ditemukan.'
-                    ),
-                    'type': 'warning',
-                    'sticky': False,
-                }
-            }
+        try:
+            picking = Picking.search([
+                ('origin', '=', shipment_nbr),
+            ], limit=1)
 
-        staging_lines = self.line_ids
+            if not picking:
+                _logger.error(
+                    "SHIPMENT COMPLETED | SKIP | Stock Picking tidak ditemukan | "
+                    "shipment_nbr=%s | staging_id=%s",
+                    shipment_nbr,
+                    self.id,
+                )
+                self.env.cr.execute(
+                    "ROLLBACK TO SAVEPOINT shipment_completed_update"
+                )
+                return False
 
-        if not staging_lines:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Gagal Melakukan Update',
-                    'message': (
-                        f'Tidak ada detail shipment untuk '
-                        f'{shipment_nbr}.'
-                    ),
-                    'type': 'warning',
-                    'sticky': False,
-                }
-            }
+            staging_lines = self.line_ids
 
-        all_match = True
+            if not staging_lines:
+                _logger.error(
+                    "SHIPMENT COMPLETED | SKIP | Tidak ada staging line | "
+                    "shipment_nbr=%s | staging_id=%s",
+                    shipment_nbr,
+                    self.id,
+                )
+                self.env.cr.execute(
+                    "ROLLBACK TO SAVEPOINT shipment_completed_update"
+                )
+                return False
 
-        for move in picking.move_ids:
+            all_match = True
 
-            # Cari staging line berdasarkan Inventory ID
-            staging_lines_for_product = staging_lines.filtered(
-                lambda line:
-                    line.line_inventory_id
-                    == move.product_id.default_code
+            for move in picking.move_ids:
+
+                staging_lines_for_product = staging_lines.filtered(
+                    lambda line:
+                        line.line_inventory_id
+                        == move.product_id.default_code
+                )
+
+                staging_qty = sum(
+                    staging_lines_for_product.mapped('line_quantity')
+                )
+
+                if not staging_qty:
+                    raise UserError(
+                        f"Quantity tidak ditemukan untuk "
+                        f"{move.product_id.display_name}"
+                    )
+
+                if staging_qty < move.quantity:
+                    all_match = False
+
+                elif staging_qty > move.quantity:
+                    raise UserError(
+                        f"Quantity {move.product_id.display_name} "
+                        f"melebihi quantity DO. "
+                        f"DO={move.quantity}, staging={staging_qty}"
+                    )
+
+                move.shipped_qty = staging_qty
+
+            picking.shipment_information = (
+                'full_shipment'
+                if all_match
+                else 'partial'
             )
 
-            staging_qty = sum(
-                staging_lines_for_product.mapped('line_quantity')
+            self.is_used = True
+
+            picking.action_confirm_shipment()
+
+            self.env.cr.execute(
+                "RELEASE SAVEPOINT shipment_completed_update"
             )
 
-            # Tidak ada quantity di staging
-            if not staging_qty:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Gagal Melakukan Update',
-                        'message': (
-                            f'Quantity {move.product_id.display_name} '
-                            f'yang diupdate tidak memiliki quantity.'
-                        ),
-                        'type': 'warning',
-                        'sticky': False,
-                    }
-                }
+            _logger.info(
+                "SHIPMENT COMPLETED | SUCCESS | shipment_nbr=%s | "
+                "picking=%s | type=%s",
+                shipment_nbr,
+                picking.name,
+                picking.shipment_information,
+            )
 
-            # Staging lebih sedikit → partial shipment
-            if staging_qty < move.quantity:
-                all_match = False
+            return True
 
-            # Staging lebih banyak → tidak boleh
-            elif staging_qty > move.quantity:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Gagal Melakukan Update',
-                        'message': (
-                            f'Quantity {move.product_id.display_name} '
-                            f'yang diupdate tidak boleh melebihi '
-                            f'quantity barang yang dikirim.'
-                        ),
-                        'type': 'warning',
-                        'sticky': False,
-                    }
-                }
+        except Exception as e:
+            self.env.cr.execute(
+                "ROLLBACK TO SAVEPOINT shipment_completed_update"
+            )
 
-            # Update shipped qty
-            move.shipped_qty = staging_qty
+            _logger.exception(
+                "SHIPMENT COMPLETED | SKIP | shipment_nbr=%s | "
+                "staging_id=%s | error=%s",
+                shipment_nbr,
+                self.id,
+                e,
+            )
 
-        # Tentukan shipment type
-        picking.shipment_information = (
-            'full_shipment'
-            if all_match
-            else 'partial'
-        )
-
-        # Tandai staging sudah digunakan
-        self.is_used = True
-
-        # Jalankan proses konfirmasi shipment
-        picking.action_confirm_shipment()
-
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Berhasil',
-                'message': (
-                    f'Shipment {shipment_nbr} berhasil '
-                    f'diupdate ke Stock Picking {picking.name}.'
-                ),
-                'type': 'success',
-                'sticky': False,
-            }
-        }
+            return False
     
 class AcumaticaShipmentCompletedStagingLine(models.Model):
     _name = 'acumatica.shipment.completed.staging.line'
