@@ -1329,7 +1329,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "product_vals": self._so_shipment_line_vals,
             },
             "so_shipment_consignment": {
-                "label": "SO Shipment Consignment",
+                "label": "SO Consignment",
                 "records_keys": ("Inserted",),
                 "detail_keys": ("ShipmentGIDetails", "Details", "details"),
                 "document_keys": ("ShipmentNbr", "adt_ShipmentNbr"),

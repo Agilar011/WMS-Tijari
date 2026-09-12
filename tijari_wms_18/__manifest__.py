@@ -65,6 +65,7 @@
         'views/action_mobile_view_mode.xml',
         'views/wms_operations_menu.xml',
         'views/operator_menu_security.xml',
+        'views/inventory_menu_views.xml',
     ],
     'assets': {
         'spreadsheet.o_spreadsheet': [

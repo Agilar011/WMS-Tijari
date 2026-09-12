@@ -243,9 +243,9 @@
 
     <menuitem
         id="menu_action_inventory_tree"
-        name="Inventory Adjustments"
+        name="Stock Opname"
         parent="stock.menu_stock_adjustments"
-        sequence="30"
+        sequence="97"
         action="action_view_inventory_group_form"
     />
     <record id="stock.menu_action_inventory_tree" model="ir.ui.menu">

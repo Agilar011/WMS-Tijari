@@ -207,7 +207,7 @@
             <field name="state">draft</field>
         </record>
         <record id="acumatica_config_vendor_return_direct_transfer_default" model="acumatica.config">
-            <field name="name">Acumatica Vendor Return Consignment V2 - Default</field>
+            <field name="name">Acumatica Return Consignment V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
             <field name="api_version">25.200.002</field>
             <field name="username">wms</field>

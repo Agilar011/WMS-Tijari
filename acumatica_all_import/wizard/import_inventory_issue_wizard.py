@@ -93,6 +93,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
     def fetch_receipt_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
         self.ensure_one()
         session = self.config_id._do_login()
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {}
@@ -101,7 +103,20 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
             response = session.put(endpoint, params=params, json={"TransType": {"value": ""}}, timeout=300)
             if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Inventory Issue (HTTP {response.status_code}): {response.text}')
+                last_error = (
+                    f'Gagal Gagal ambil data Inventory Issue '
+                    f'(HTTP {response.status_code}): '
+                    f'{response.text}'
+                )
+
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="Inventory Issue",
+                    error=last_error,
+                    error_type="http",
+                )
+                
+                raise UserError(last_error)
 
             raw_data = response.json()
             result = []

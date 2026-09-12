@@ -7,11 +7,11 @@
             action="action_stock_report_velocity_lines"
             sequence="310"/>
 
-    <menuitem id="menu_inherit_stock_report_velocity_generate"
+    <!-- <menuitem id="menu_inherit_stock_report_velocity_generate"
               name="Generate Stock Velocity"
               parent="stock.menu_warehouse_report"
               action="action_stock_report_velocity_generate"
-              sequence="320"/>
+              sequence="320"/> -->
 
     <menuitem id="menu_inherit_stock_report_aging"
               name="Report Aging Stock"
@@ -19,10 +19,10 @@
               action="action_stock_report_aging_lines"
               sequence="330"/>
 
-    <menuitem id="menu_inherit_stock_report_aging_generate"
+    <!-- <menuitem id="menu_inherit_stock_report_aging_generate"
               name="Generate Aging"
               parent="stock.menu_warehouse_report"
               action="action_stock_report_aging_generate"
-              sequence="340"/>
+              sequence="340"/> -->
 
 </odoo>

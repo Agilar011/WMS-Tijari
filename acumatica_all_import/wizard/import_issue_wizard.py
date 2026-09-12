@@ -30,7 +30,8 @@ class ImportIssueWizard(models.TransientModel):
         self.ensure_one()
         staging_list = []
         session = self.config_id._do_login()
-        
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {'$top': limit, '$skip': offset}
@@ -52,7 +53,21 @@ class ImportIssueWizard(models.TransientModel):
                 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Issue Change Item (HTTP {response.status_code}): {response.text}')
+
+                last_error = (
+                    f'Gagal fetch data Issue Change Item '
+                    f'(HTTP {response.status_code}): '
+                    f'{response.text}'
+                )
+
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="issue change item",
+                    error=last_error,
+                    error_type="http",
+                )
+                
+                raise UserError(last_error)
                 
             raw_data = self._normalize_rows(response.json())
             print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched")
@@ -162,8 +177,22 @@ class ImportIssueWizard(models.TransientModel):
                                 'import_state' : 'error',
                                 'import_message' : 'Proses generate product error'
                             })
+
+                            last_error = (
+                                f"Gagal memproses baris detail "
+                                f"(ID: {line_external_id}) pada dokumen {ref_nbr}. "
+                                f"Error: {str(e_detail)}"
+                            )
+
+                            AcumaticaErrorService.send_error(
+                                webhook_type="fetch",
+                                webhook_name="issue change item",
+                                error=last_error,
+                                error_type="unknown",
+                            )
+                            
                             # Jika detail error, rollback database khusus untuk baris detail ini saja
-                            _logger.error("Gagal memproses baris detail (ID: %s) pada dokumen %s. Error: %s", line_external_id, ref_nbr, str(e_detail))
+                            _logger.error(last_error)
                             continue  # Lanjutkan ke baris detail berikutnya
                             
                 except Exception as e_header:
@@ -175,9 +204,21 @@ class ImportIssueWizard(models.TransientModel):
                             'import_message' : 'Proses generate header error'
                         })
 
+                    last_error = (
+                        f"Gagal sinkronisasi dokumen Acumatica "
+                        f"(RefNbr: {ref_nbr}, ID: {external_id}). "
+                        f"Error: {str(e_header)}"
+                    )
+
+                    AcumaticaErrorService.send_error(
+                        webhook_type="fetch",
+                        webhook_name="issue change item",
+                        error=last_error,
+                        error_type="unknown",
+                    )
 
                     # Jika header error, rollback seluruh perubahan dokumen ini (termasuk jika ada detail yang sempat masuk)
-                    _logger.error("Gagal sinkronisasi dokumen Acumatica (RefNbr: %s, ID: %s). Error: %s", ref_nbr, external_id, str(e_header))
+                    _logger.error(last_error)
                     continue  # Lanjutkan ke dokumen (item) berikutnya di raw_data
                         
             _logger.info('Selesai menjalankan sinkronisasi terjadwal Issue Change Item.')
