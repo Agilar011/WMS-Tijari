@@ -75,7 +75,7 @@ class AcumaticaShipmentLine(models.Model):
     header_location_code_2 = fields.Char(string='Location Header 2')
     header_location_name_2 = fields.Char(string='Location Header Name 2')
     status = fields.Char(string='Status')
-    document_only = fields.Boolean(string='Document Only', readonly=True)
+    document_only = fields.Boolean(string='Document Only')
     shipment_type = fields.Char(string='Type')
     operation = fields.Char(string='Operation')
 
@@ -112,13 +112,13 @@ class AcumaticaShipmentLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='staged', readonly=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    ], default='staged')
+    import_message = fields.Char(string='Generation Message', tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 

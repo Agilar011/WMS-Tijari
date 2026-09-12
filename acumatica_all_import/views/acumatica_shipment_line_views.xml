@@ -46,6 +46,7 @@
                 <field name="building_code"/>
                 <field name="actual_qty" string="Qty"/>
                 <field name="status"/>
+                <field name="acumatica_write_date" string="Last Modified"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                        decoration-muted="import_state == 'staged'"
@@ -76,7 +77,7 @@
                             <field name="picking_type_id" />
                             <field name="shipment_type"/>
                             <field name="operation"/>
-                            <field name="status" readonly="1"/>
+                            <field name="status"/>
                             <field name="partner_code"/>
                             <field name="partner_name"/>
                             <field name="building_code"/>
@@ -136,9 +137,9 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

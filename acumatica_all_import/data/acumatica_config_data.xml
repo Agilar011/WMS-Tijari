@@ -81,9 +81,8 @@
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">so_shipment</field>
-            <field name="endpoint_name">Shipment</field>
-            <field name="odata_expand">Details</field>
-            <field name="odata_filter">Type eq 'Shipment' and Operation eq 'Receipt'</field>
+            <field name="endpoint_name">ShipmentGI</field>
+            <field name="odata_expand">ShipmentGIDetails</field>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
@@ -99,20 +98,6 @@
             <field name="endpoint_name">ShipmentTransferGI</field>
             <field name="odata_expand">ShipmentTransferGIDetails</field>
             <field name="odata_filter" eval="False"/>
-            <field name="is_default">True</field>
-            <field name="active">True</field>
-            <field name="state">draft</field>
-        </record>
-        <record id="acumatica_config_issue_change_item_default" model="acumatica.config">
-            <field name="name">Acumatica Issue Change Item - Default</field>
-            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
-            <field name="api_version">25.200.002</field>
-            <field name="username">wms</field>
-            <field name="password">WMSAditya@2026</field>
-            <field name="company_code">asgjkt</field>
-            <field name="config_type">issue_change_item</field>
-            <field name="endpoint_name">InventoryIssue</field>
-            <field name="odata_filter">Status eq 'On Hold' or Status eq 'Balanced'</field>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>
@@ -155,8 +140,8 @@
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">transfer_one_step</field>
-            <field name="endpoint_name">TransferOrderGI</field>
-            <field name="odata_expand">TransferOrderGIDetails</field>
+            <field name="endpoint_name">TransferPinjamanGI</field>
+            <field name="odata_expand">TransferPinjamanGIDetails</field>
             <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
@@ -170,8 +155,8 @@
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">transfer_two_step</field>
-            <field name="endpoint_name">TransferOrderGI</field>
-            <field name="odata_expand">TransferOrderGIDetails</field>
+            <field name="endpoint_name">TransferPinjamanGI</field>
+            <field name="odata_expand">TransferPinjamanGIDetails</field>
             <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
@@ -199,8 +184,8 @@
             <field name="password">WMSAditya@2026</field>
             <field name="company_code">asgjkt</field>
             <field name="config_type">invoice_consignment</field>
-            <field name="endpoint_name">InvoiceGI</field>
-            <field name="odata_expand">InvoiceGIDetails</field>
+            <field name="endpoint_name">InvoiceConsignmentGI</field>
+            <field name="odata_expand">InvoiceConsignmentGIDetails</field>
             <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>
@@ -245,7 +230,22 @@
             <field name="company_code">asgjkt</field>
             <field name="config_type">credit_memo_consignment</field>
             <field name="endpoint_name">CreditMemoConsignmentGI</field>
-            <field name="odata_expand" eval="False"/>
+            <field name="odata_expand">CreditMemoConsignmentGIDetails</field>
+            <field name="odata_filter" eval="False"/>
+            <field name="is_default">True</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
+        <record id="acumatica_update_so_complete_default" model="acumatica.config">
+            <field name="name">Acumatica Update Sales Order Complete - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="config_type">shipment_completed</field>
+            <field name="endpoint_name">ShipmentCompletedGI</field>
+            <field name="odata_expand">ShipmentCompletedGIDetails</field>
             <field name="odata_filter" eval="False"/>
             <field name="is_default">True</field>
             <field name="active">True</field>

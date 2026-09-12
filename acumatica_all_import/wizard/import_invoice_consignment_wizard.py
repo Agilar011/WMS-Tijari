@@ -145,7 +145,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                         ('adt_ReferenceNbr', '=', header.get('adt_ReferenceNbr')),
                     ], limit=1)
                     if existing_header:
-                        existing_header.line_ids.unlink()
+                        existing_header.product_line_ids.unlink()
                         existing_header.write(lines_to_create)
                         created_header = existing_header
                     else:

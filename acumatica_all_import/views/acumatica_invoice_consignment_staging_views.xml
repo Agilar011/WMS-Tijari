@@ -34,6 +34,7 @@
                 <!-- <field name="id" string="ID"/> -->
                 <field name="adt_CustomerID" string="Customer Code"/>
                 <!-- <field name="odoo_picking_id" string="Delivery Order"/> -->
+                <field name="adt_LastModifiedDateTime" string="Last Modified"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                        decoration-muted="import_state == 'staged'"
@@ -60,8 +61,8 @@
                 <sheet>
                     <group string="Header Information">
                         <group>
-                            <field name="id" readonly="1"/>
-                            <field name="picking_type_id" readonly="1"/>
+                            <field name="id"/>
+                            <field name="picking_type_id"/>
                             <field name="adt_id"/>
                             <field name="adt_rowNumber"/>
                             <field name="adt_note"/>
@@ -109,9 +110,9 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

@@ -45,6 +45,7 @@
                 <field name="adt_DocumentOnly"/>
                 <field name="adt_CustomerID"/>
                 <field name="adt_WarehouseID"/>
+                <field name="picking_type_id" string="Operation Type"/>
                 <field name="total_qty"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
@@ -128,12 +129,12 @@
                         <group string="Warehouse">
                             <field name="adt_WarehouseID"/>
                             <field name="adt_ToWarehouseID"/>
-                            <field name="picking_type_id" readonly="1"/>
+                            <field name="picking_type_id"/>
                         </group>
                         <group string="Synchronization">
-                            <field name="config_id" readonly="1"/>
-                            <field name="sync_date" readonly="1"/>
-                            <field name="lastmodifieddatetime" string="Last Modified" readonly="1"/>
+                            <field name="config_id"/>
+                            <field name="sync_date"/>
+                            <field name="lastmodifieddatetime" string="Last Modified"/>
                             <field name="adt_rowNumber"/>
                         </group>
                     </group>
@@ -142,10 +143,10 @@
                         <group>
                             <field name="selected"/>
                             <field name="adt_DocumentOnly"/>
-                            <field name="exists_in_odoo" readonly="1"/>
+                            <field name="exists_in_odoo"/>
                         </group>
                         <group>
-                            <field name="import_message" readonly="1" widget="text"/>
+                            <field name="import_message" widget="text"/>
                         </group>
                     </group>
 

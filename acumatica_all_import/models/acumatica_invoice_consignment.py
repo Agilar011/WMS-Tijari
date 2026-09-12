@@ -22,28 +22,28 @@ class AcumaticaInvoiceConsignment(models.Model):
             return False
         return ('import.invoice.consignment.wizard', (line.adt_Warehouse,), {})
 
-    adt_id = fields.Char(string="Acumatica id", readonly=True)
-    adt_rowNumber = fields.Char(string="Acumatica rowNumber", readonly=True)
-    adt_note = fields.Char(string="Acumatica note", readonly=True)
-    adt_ConsignmentType = fields.Char(string="Acumatica ConsignmentType", readonly=True)
-    adt_CreatedDateTime = fields.Char(string="Acumatica CreatedDateTime", readonly=True)
-    adt_CustomerID = fields.Char(string="Acumatica CustomerID", readonly=True)
-    adt_CustomerName = fields.Char(string="Acumatica CustomerName", readonly=True)
-    adt_CustomerOrder = fields.Char(string="Acumatica CustomerOrder", readonly=True)
-    adt_Date = fields.Char(string="Acumatica Date", readonly=True)
-    adt_BuildingID = fields.Char(string="Acumatica BuildingID", readonly=True)
-    adt_Description = fields.Char(string="Acumatica Description", readonly=True)
-    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly", readonly=True)
-    adt_DueDate = fields.Char(string="Acumatica DueDate", readonly=True)
-    adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime", readonly=True)
-    adt_LocationID = fields.Char(string="Acumatica LocationID", readonly=True)
-    adt_LocationName = fields.Char(string="Acumatica LocationName", readonly=True)
-    adt_NoteHeaderID = fields.Char(string="Acumatica NoteHeaderID", readonly=True)
-    adt_NoteID = fields.Char(string="Acumatica NoteID", readonly=True)
-    adt_OrigRefNbr = fields.Char(string="Acumatica OrigRefNbr", readonly=True)
-    adt_ReferenceNbr = fields.Char(string="Acumatica ReferenceNbr", readonly=True)
-    adt_Status = fields.Char(string="Acumatica Status", readonly=True)
-    adt_Type = fields.Char(string="Acumatica Type", readonly=True)
+    adt_id = fields.Char(string="Acumatica id")
+    adt_rowNumber = fields.Char(string="Acumatica rowNumber")
+    adt_note = fields.Char(string="Acumatica note")
+    adt_ConsignmentType = fields.Char(string="Acumatica ConsignmentType")
+    adt_CreatedDateTime = fields.Char(string="Acumatica CreatedDateTime")
+    adt_CustomerID = fields.Char(string="Acumatica CustomerID")
+    adt_CustomerName = fields.Char(string="Acumatica CustomerName")
+    adt_CustomerOrder = fields.Char(string="Acumatica CustomerOrder")
+    adt_Date = fields.Char(string="Acumatica Date")
+    adt_BuildingID = fields.Char(string="Acumatica BuildingID")
+    adt_Description = fields.Char(string="Acumatica Description")
+    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly")
+    adt_DueDate = fields.Char(string="Acumatica DueDate")
+    adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime")
+    adt_LocationID = fields.Char(string="Acumatica LocationID")
+    adt_LocationName = fields.Char(string="Acumatica LocationName")
+    adt_NoteHeaderID = fields.Char(string="Acumatica NoteHeaderID")
+    adt_NoteID = fields.Char(string="Acumatica NoteID")
+    adt_OrigRefNbr = fields.Char(string="Acumatica OrigRefNbr")
+    adt_ReferenceNbr = fields.Char(string="Acumatica ReferenceNbr")
+    adt_Status = fields.Char(string="Acumatica Status")
+    adt_Type = fields.Char(string="Acumatica Type")
 
     product_line_ids = fields.One2many('acumatica.invoice.consignment.staging.line', 'receipt_line_id', string='Lines')
 
@@ -56,13 +56,13 @@ class AcumaticaInvoiceConsignment(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    ], string='Status', default='staged', tracking=True)
+    import_message = fields.Char(string='Generation Message', tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -504,10 +504,10 @@ class AcumaticaInvoiceConsignmentLine(models.Model):
     adt_rowNumber = fields.Char(string='Acumatica Detail Row Number')
     adt_note = fields.Char(string='Acumatica Detail Note')
     adt_Branch = fields.Char(string='Acumatica Detail Branch')
-    adt_LineBranchName = fields.Char(string='Acumatica Detail LineBranchName', readonly=True)
+    adt_LineBranchName = fields.Char(string='Acumatica Detail LineBranchName')
     adt_InventoryID = fields.Char(string='Acumatica Detail Inventory ID')
-    adt_LineNoteID = fields.Char(string='Acumatica Detail LineNoteID', readonly=True)
-    adt_NoteID = fields.Char(string='Acumatica Detail NoteID', readonly=True)
+    adt_LineNoteID = fields.Char(string='Acumatica Detail LineNoteID')
+    adt_NoteID = fields.Char(string='Acumatica Detail NoteID')
     adt_Qty = fields.Char(string='Acumatica Detail Quantity')
     adt_TransactionDescription = fields.Char(string='Acumatica Detail Transaction Description')
     adt_UOM = fields.Char(string='Acumatica Detail UOM')
@@ -515,53 +515,53 @@ class AcumaticaInvoiceConsignmentLine(models.Model):
 
     # line_external_id = fields.Char(
     #     string='Line External ID',
-    #     readonly=True,
+    #     ,
     #     index=True,
     # )
 
     # line_note = fields.Text(
     #     string='Line Note',
-    #     readonly=True,
+    #     ,
     # )
 
     # branch_warehouse = fields.Char(
     #     string='Branch',
-    #     readonly=True,
+    #     ,
     # )
 
     # line_description = fields.Char(
     #     string='Description',
-    #     readonly=True,
+    #     ,
     # )
 
     # inventory_id = fields.Char(
     #     string='Inventory ID',
-    #     readonly=True,
+    #     ,
     #     index=True,
     # )
 
     # line_nbr = fields.Integer(
     #     string='Line Number',
-    #     readonly=True,
+    #     ,
     # )
 
     # location_code = fields.Char(
     #     string='Location',
-    #     readonly=True,
+    #     ,
     # )
 
     # product_uom_qty = fields.Float(
     #     string='Quantity',
     #     digits=(16, 4),
-    #     readonly=True,
+    #     ,
     # )
 
     # uom_code = fields.Char(
     #     string='UOM',
-    #     readonly=True,
+    #     ,
     # )
 
     # warehouse_code = fields.Char(
     #     string='Warehouse',
-    #     readonly=True,
+    #     ,
     # )

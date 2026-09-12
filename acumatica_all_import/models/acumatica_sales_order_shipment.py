@@ -27,11 +27,10 @@ class AcumaticaShipmentGIStaging(models.Model):
     # shipment_ids = fields.One2many('acumatica.sales.order.shipment.staging','gi_id',string='Shipments')
     all_line_ids = fields.One2many('acumatica.sales.order.shipment.staging.line', 'gi_id',string='All Shipment Details')
     active = fields.Boolean(default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order',
-        readonly=True,
     )
     import_state = fields.Selection([
         ('staged', 'Staged'),
@@ -39,11 +38,11 @@ class AcumaticaShipmentGIStaging(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    ], string='Status', default='staged', tracking=True)
+    import_message = fields.Char(string='Generation Message', tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
     odoo_shipment_status = fields.Selection([
         ('staged', 'Staged'),
@@ -78,7 +77,7 @@ class AcumaticaShipmentGIStaging(models.Model):
     adt_LineUOM = fields.Char(string="LineUOM")
     adt_LocationID = fields.Char(string="LocationID")
     adt_LocationName = fields.Char(string="LocationName")
-    lastmodifieddatetime = fields.Datetime(string="Last Modified Date", readonly=True)
+    lastmodifieddatetime = fields.Char(string="Last Modified Date")
     adt_NoteHeader = fields.Char(string="NoteHeader")
     adt_NoteHeaderID = fields.Char(string="NoteHeaderID")
     adt_OrderType = fields.Char(string="OrderType")
@@ -980,35 +979,35 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
     shiptoaddressoverride = fields.Boolean()
     shiptocontactoverride = fields.Boolean()
 
-    note = fields.Text(string='Note', readonly=True)
-    controlqty = fields.Float(string='Control Qty', readonly=True)
-    customerid = fields.Char(string='Customer ID', readonly=True)
-    description = fields.Text(string='Description', readonly=True)
-    fobpoint = fields.Char(string='FOB Point', readonly=True)
-    fobpointdescription = fields.Text(string='FOB Point Description', readonly=True)
-    hold = fields.Boolean(string='Hold', readonly=True)
-    insurance = fields.Float(string='Insurance', readonly=True)
-    lastmodifieddatetime = fields.Datetime(string='Last Modified Date', readonly=True)
-    locationid = fields.Char(string='Location ID', readonly=True)
-    locationname = fields.Char(string='Location Name', readonly=True)
-    operation = fields.Char(string='Operation', readonly=True)
-    packagecount = fields.Integer(string='Package Count', readonly=True)
-    packageweight = fields.Float(string='Package Weight', readonly=True)
-    shipmentdate = fields.Date(string='Shipment Date', readonly=True)
-    shipmentnbr = fields.Char(string='Shipment Number', readonly=True)
-    shippedqty = fields.Float(string='Shipped Qty', readonly=True)
-    shippedvolume = fields.Float(string='Shipped Volume', readonly=True)
-    shippedweight = fields.Float(string='Shipped Weight', readonly=True)
-    shippingzoneid = fields.Char(string='Shipping Zone ID', readonly=True)
-    shipvia = fields.Char(string='Ship Via', readonly=True)
-    status = fields.Char(string='Status', readonly=True)
-    towarehouseid = fields.Char(string='To Warehouse ID', readonly=True)
-    type = fields.Char(string='Type', readonly=True)
-    unlimitedpackages = fields.Boolean(string='Unlimited Packages', readonly=True)
-    warehouseid = fields.Char(string='Warehouse ID', readonly=True)
-    locationname = fields.Char(string='Location Name', readonly=True)
+    note = fields.Text(string='Note')
+    controlqty = fields.Float(string='Control Qty')
+    customerid = fields.Char(string='Customer ID')
+    description = fields.Text(string='Description')
+    fobpoint = fields.Char(string='FOB Point')
+    fobpointdescription = fields.Text(string='FOB Point Description')
+    hold = fields.Boolean(string='Hold')
+    insurance = fields.Float(string='Insurance')
+    lastmodifieddatetime = fields.Char(string='Last Modified Date')
+    locationid = fields.Char(string='Location ID')
+    locationname = fields.Char(string='Location Name')
+    operation = fields.Char(string='Operation')
+    packagecount = fields.Integer(string='Package Count')
+    packageweight = fields.Float(string='Package Weight')
+    shipmentdate = fields.Date(string='Shipment Date')
+    shipmentnbr = fields.Char(string='Shipment Number')
+    shippedqty = fields.Float(string='Shipped Qty')
+    shippedvolume = fields.Float(string='Shipped Volume')
+    shippedweight = fields.Float(string='Shipped Weight')
+    shippingzoneid = fields.Char(string='Shipping Zone ID')
+    shipvia = fields.Char(string='Ship Via')
+    status = fields.Char(string='Status')
+    towarehouseid = fields.Char(string='To Warehouse ID')
+    type = fields.Char(string='Type')
+    unlimitedpackages = fields.Boolean(string='Unlimited Packages')
+    warehouseid = fields.Char(string='Warehouse ID')
+    locationname = fields.Char(string='Location Name')
     selected = fields.Boolean(string='Pilih', default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
 
     import_state = fields.Selection([
         ('staged', 'Staged'),
@@ -1016,12 +1015,12 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    ], string='Status', default='staged', tracking=True)
+    import_message = fields.Char(string='Generation Message', tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
@@ -1257,7 +1256,7 @@ class AcumaticaSalesOrderShipmentStagingLine(models.Model):
     adt_WarehouseID = fields.Char(string="WarehouseID")
 
     selected = fields.Boolean(string='Pilih', default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
 
     import_state = fields.Selection([
         ('staged', 'Staged'),
@@ -1265,12 +1264,12 @@ class AcumaticaSalesOrderShipmentStagingLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    ], string='Status', default='staged', tracking=True)
+    import_message = fields.Char(string='Generation Message', tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -1283,17 +1282,17 @@ class AcumaticaSalesOrderShipmentStagingAllocation(models.Model):
         'acumatica.sales.order.shipment.staging.line'
     )
 
-    acumatica_id = fields.Char(string='ID', readonly=True)
-    rownumber = fields.Integer(string='Row Number', readonly=True)
-    note = fields.Text(string='Note', readonly=True)
-    description = fields.Text(string='Description', readonly=True)
-    inventoryid = fields.Char(string='Inventory ID', readonly=True)
-    location  = fields.Char(string='Location ID', readonly=True)
-    quantity = fields.Float(string='Quantity', readonly=True)
-    splitlinenbr = fields.Integer(string='Split Line Number', readonly=True)
-    uom = fields.Char(string='UOM', readonly=True)
+    acumatica_id = fields.Char(string='ID')
+    rownumber = fields.Integer(string='Row Number')
+    note = fields.Text(string='Note')
+    description = fields.Text(string='Description')
+    inventoryid = fields.Char(string='Inventory ID')
+    location  = fields.Char(string='Location ID')
+    quantity = fields.Float(string='Quantity')
+    splitlinenbr = fields.Integer(string='Split Line Number')
+    uom = fields.Char(string='UOM')
     selected = fields.Boolean(string='Pilih', default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
 
     import_state = fields.Selection([
         ('staged', 'Staged'),
@@ -1301,12 +1300,12 @@ class AcumaticaSalesOrderShipmentStagingAllocation(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    ], string='Status', default='staged', tracking=True)
+    import_message = fields.Char(string='Generation Message', tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -1325,16 +1324,16 @@ class AcumaticaSalesOrderShipmentShipToAddressStaging(models.Model):
     rownumber = fields.Integer()
     note = fields.Text()
 
-    addressline1 = fields.Char(string='Address Line 1', readonly=True)
-    addressline2 = fields.Char(string='Address Line 2', readonly=True)
-    city = fields.Char(string='City', readonly=True)
-    country = fields.Char(string='Country', readonly=True)
-    countryname = fields.Char(string='Country Name', readonly=True)
-    document_only = fields.Boolean(string='Document Only', readonly=True)
-    postalcode = fields.Char(string='Postal Code', readonly=True)
-    state = fields.Char(string='State', readonly=True)
+    addressline1 = fields.Char(string='Address Line 1')
+    addressline2 = fields.Char(string='Address Line 2')
+    city = fields.Char(string='City')
+    country = fields.Char(string='Country')
+    countryname = fields.Char(string='Country Name')
+    document_only = fields.Boolean(string='Document Only')
+    postalcode = fields.Char(string='Postal Code')
+    state = fields.Char(string='State')
     selected = fields.Boolean(string='Pilih', default=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
 
     import_state = fields.Selection([
         ('staged', 'Staged'),
@@ -1342,12 +1341,12 @@ class AcumaticaSalesOrderShipmentShipToAddressStaging(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
+    ], string='Status', default='staged', tracking=True)
+    import_message = fields.Char(string='Generation Message', tracking=True)
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -1358,62 +1357,62 @@ class AcumaticaShipmentLine(models.Model):
     _description = 'Data Shipment Receipt dari Acumatica'
     _order = 'receipt_nbr asc, line_nbr asc, id asc'
 
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Header', readonly=True)
-    line_external_id = fields.Char(string='UUID Line', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Header')
+    line_external_id = fields.Char(string='UUID Line')
 
-    receipt_nbr = fields.Char(string='Shipment Number', readonly=True, index=True)
-    partner_code = fields.Char(string='CustomerID', readonly=True)
-    scheduled_date = fields.Char(string='Shipment Date', readonly=True)
-    warehouse_code = fields.Char(string='Warehouse Asal', readonly=True)
-    warehouse_name = fields.Char(string='Warehouse Name', readonly=True)
-    warehouse_dest_code = fields.Char(string='Warehouse Tujuan', readonly=True)
-    header_location_code = fields.Char(string='Location Header', readonly=True)
-    header_location_name = fields.Char(string='Location Header Name', readonly=True)
-    status = fields.Char(string='Status', readonly=True)
-    shipment_type = fields.Char(string='Type', readonly=True)
-    operation = fields.Char(string='Operation', readonly=True)
+    receipt_nbr = fields.Char(string='Shipment Number', index=True)
+    partner_code = fields.Char(string='CustomerID')
+    scheduled_date = fields.Char(string='Shipment Date')
+    warehouse_code = fields.Char(string='Warehouse Asal')
+    warehouse_name = fields.Char(string='Warehouse Name')
+    warehouse_dest_code = fields.Char(string='Warehouse Tujuan')
+    header_location_code = fields.Char(string='Location Header')
+    header_location_name = fields.Char(string='Location Header Name')
+    status = fields.Char(string='Status')
+    shipment_type = fields.Char(string='Type')
+    operation = fields.Char(string='Operation')
 
-    note = fields.Text(string='Header Note', readonly=True)
-    actual_qty = fields.Char(string='Control Qty', readonly=True)
-    description = fields.Char(string='Description Header', readonly=True)
-    fob_point = fields.Char(string='FOB Point', readonly=True)
-    fob_point_description = fields.Char(string='FOB Point Description', readonly=True)
-    is_hold = fields.Char(string='Hold', readonly=True)
-    is_insurance = fields.Char(string='Insurance', readonly=True)
-    acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
-    package_count = fields.Char(string='Package Count', readonly=True)
-    package_weight = fields.Char(string='Package Weight', readonly=True)
-    is_picked = fields.Char(string='Picked', readonly=True)
-    shipped_qty = fields.Char(string='Shipped Qty Header', readonly=True)
-    shipped_volume = fields.Char(string='Shipped Volume', readonly=True)
-    shipped_weight = fields.Char(string='Shipped Weight', readonly=True)
-    shipping_terms = fields.Char(string='Shipping Terms', readonly=True)
-    shipping_settings = fields.Char(string='Shipping Settings', readonly=True)
-    shipping_zone = fields.Char(string='Shipping Zone', readonly=True)
-    ship_via = fields.Char(string='Ship Via', readonly=True)
-    unlimited_packages = fields.Char(string='Unlimited Packages', readonly=True)
+    note = fields.Text(string='Header Note')
+    actual_qty = fields.Char(string='Control Qty')
+    description = fields.Char(string='Description Header')
+    fob_point = fields.Char(string='FOB Point')
+    fob_point_description = fields.Char(string='FOB Point Description')
+    is_hold = fields.Char(string='Hold')
+    is_insurance = fields.Char(string='Insurance')
+    acumatica_write_date = fields.Char(string='Last Modified')
+    package_count = fields.Char(string='Package Count')
+    package_weight = fields.Char(string='Package Weight')
+    is_picked = fields.Char(string='Picked')
+    shipped_qty = fields.Char(string='Shipped Qty Header')
+    shipped_volume = fields.Char(string='Shipped Volume')
+    shipped_weight = fields.Char(string='Shipped Weight')
+    shipping_terms = fields.Char(string='Shipping Terms')
+    shipping_settings = fields.Char(string='Shipping Settings')
+    shipping_zone = fields.Char(string='Shipping Zone')
+    ship_via = fields.Char(string='Ship Via')
+    unlimited_packages = fields.Char(string='Unlimited Packages')
     allocations = fields.Text(string='Allocations JSON')
 
-    acumatica_id = fields.Char(string='Acumatica ID', readonly=True)
-    acumatica_row_number = fields.Integer(string='Acumatica Row Number', readonly=True)
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)
-    acumatica_line_number = fields.Char(string='Acumatica Line Number', readonly=True)
-    line_description = fields.Char(string='Description Line', readonly=True)
-    detail_note = fields.Text(string='Detail Note', readonly=True)
-    is_free_item = fields.Char(string='Free Item', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    location_dest_code = fields.Char(string='Location Detail', readonly=True)
-    open_qty = fields.Char(string='Open Qty', readonly=True)
-    order_qty = fields.Char(string='Ordered Qty', readonly=True)
-    order_line_number = fields.Char(string='Order Line Nbr', readonly=True)
-    order_number = fields.Char(string='Order Nbr', readonly=True)
-    order_type = fields.Char(string='Order Type', readonly=True)
-    original_qty = fields.Char(string='Original Qty', readonly=True)
-    detail_shipped_qty = fields.Char(string='Shipped Qty Detail', readonly=True)
-    uom_code = fields.Char(string='UOM', readonly=True)
-    detail_warehouse_code = fields.Char(string='Warehouse Detail', readonly=True)
-    adt_type = fields.Char(string='ADT Type', readonly=True)
+    acumatica_id = fields.Char(string='Acumatica ID')
+    acumatica_row_number = fields.Integer(string='Acumatica Row Number')
+    line_nbr = fields.Char(string='Line Nbr')
+    acumatica_line_number = fields.Char(string='Acumatica Line Number')
+    line_description = fields.Char(string='Description Line')
+    detail_note = fields.Text(string='Detail Note')
+    is_free_item = fields.Char(string='Free Item')
+    inventory_id = fields.Char(string='InventoryID')
+    location_dest_code = fields.Char(string='Location Detail')
+    open_qty = fields.Char(string='Open Qty')
+    order_qty = fields.Char(string='Ordered Qty')
+    order_line_number = fields.Char(string='Order Line Nbr')
+    order_number = fields.Char(string='Order Nbr')
+    order_type = fields.Char(string='Order Type')
+    original_qty = fields.Char(string='Original Qty')
+    detail_shipped_qty = fields.Char(string='Shipped Qty Detail')
+    uom_code = fields.Char(string='UOM')
+    detail_warehouse_code = fields.Char(string='Warehouse Detail')
+    adt_type = fields.Char(string='ADT Type')
 
     import_state = fields.Selection([
         ('staged', 'Staged'),
@@ -1421,13 +1420,13 @@ class AcumaticaShipmentLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='staged', readonly=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    ], default='staged')
+    import_message = fields.Char(string='Generation Message', tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 

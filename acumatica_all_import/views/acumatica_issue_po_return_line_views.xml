@@ -28,6 +28,7 @@
                 <field name="vendor_code"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
+                <field name="acumatica_write_date" string="Last Modified"/>
                 <!-- <field name="inventory_id"/> -->
                 <!-- <field name="transaction_description"/> -->
                 <!-- <field name="product_uom_qty"/> -->
@@ -130,9 +131,9 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

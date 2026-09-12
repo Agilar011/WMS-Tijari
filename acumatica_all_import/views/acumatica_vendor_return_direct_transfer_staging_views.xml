@@ -34,6 +34,7 @@
                 <field name="adt_ToWarehouseName" string="To Warehouse Name"/>
                 <field name="picking_type_id"/>
                 <field name="adt_TotalQty" string="Total Quantity"/>
+                <field name="adt_LastModifiedDateTime" string="Last Modified"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state in ('created','updated')"
                        decoration-warning="import_state == 'staged'"
@@ -113,11 +114,11 @@
                     </notebook>
 
                     <group string="Status Integrasi Odoo">
-                        <field name="picking_type_id" readonly="1"/>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="odoo_internal_transfer_order_id" readonly="1"/>
-                        <field name="sync_date" readonly="1"/>
+                        <field name="picking_type_id"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="odoo_internal_transfer_order_id"/>
+                        <field name="sync_date"/>
                     </group>
                 </sheet>
             </form>

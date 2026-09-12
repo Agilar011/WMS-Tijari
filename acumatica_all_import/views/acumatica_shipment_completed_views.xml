@@ -202,7 +202,7 @@
                         <group string="Synchronization">
                             <field name="config_id"/>
                             <field name="sync_date"/>
-                            <field name="last_modified_datetime" string="Last Modified" readonly="1"/>
+                            <field name="last_modified_datetime" string="Last Modified"/>
                             <field name="note_header_id"/>
                         </group>
 

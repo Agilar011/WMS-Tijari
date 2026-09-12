@@ -51,17 +51,16 @@ class AcumaticaStockItemLine(models.Model):
         ('error', 'Error'),
     ], string='Status', default='staged')
 
-    import_message = fields.Char(string='Generation Message', readonly=True)
-    odoo_product_id  = fields.Many2one('product.template', string='Document Reference', readonly=True)
+    import_message = fields.Char(string='Generation Message')
+    odoo_product_id  = fields.Many2one('product.template', string='Document Reference')
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ─── Helpers ─────────────────────────────────────
     @staticmethod

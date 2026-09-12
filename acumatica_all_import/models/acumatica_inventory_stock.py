@@ -17,25 +17,25 @@ class AcumaticaInventoryStockLine(models.Model):
     _description = 'Data Inventory Stock dari Acumatica'
     _order = 'warehouse_code asc, inventory_id asc, id asc'
 
-    external_id = fields.Char(string='UUID Header Acumatica', readonly=True, index=True)
-    row_number = fields.Integer(string='No', readonly=True)
-    line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True, index=True)
-    line_row_number = fields.Integer(string='Line No', readonly=True)
+    external_id = fields.Char(string='UUID Header Acumatica', index=True)
+    row_number = fields.Integer(string='No')
+    line_external_id = fields.Char(string='UUID Line Acumatica', index=True)
+    line_row_number = fields.Integer(string='Line No')
 
-    warehouse_code = fields.Char(string='Warehouse Code', readonly=True, index=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True, index=True)
-    description = fields.Char(string='Description', readonly=True)
-    branch = fields.Char(string='Branch', readonly=True)
-    item_status = fields.Char(string='Item Status', readonly=True)
-    kode_barang_dan_jasa = fields.Char(string='Kode Barang dan Jasa', readonly=True)
-    product_group = fields.Char(string='Product Group', readonly=True)
-    available = fields.Float(string='Available (API)', readonly=True)
-    on_hand_acumatica = fields.Float(string='On Hand Acumatica', readonly=True)
-    note = fields.Text(string='Note', readonly=True)
-    last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True, index=True)
+    warehouse_code = fields.Char(string='Warehouse Code', index=True)
+    inventory_id = fields.Char(string='InventoryID', index=True)
+    description = fields.Char(string='Description')
+    branch = fields.Char(string='Branch')
+    item_status = fields.Char(string='Item Status')
+    kode_barang_dan_jasa = fields.Char(string='Kode Barang dan Jasa')
+    product_group = fields.Char(string='Product Group')
+    available = fields.Float(string='Available (API)')
+    on_hand_acumatica = fields.Float(string='On Hand Acumatica')
+    note = fields.Text(string='Note')
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime', index=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     selected = fields.Boolean(string='Pilih', default=True)
     import_state = fields.Selection([
@@ -44,22 +44,20 @@ class AcumaticaInventoryStockLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status Import', default='staged', readonly=True)
-    import_message = fields.Char(string='Generation Message', readonly=True)
+    ], string='Status Import', default='staged')
+    import_message = fields.Char(string='Generation Message')
 
     odoo_product_id = fields.Many2one(
         'product.product',
         string='Product',
         compute='_compute_stock_snapshot',
         store=True,
-        readonly=True,
     )
     odoo_location_id = fields.Many2one(
         'stock.location',
         string='Location',
         compute='_compute_stock_snapshot',
         store=True,
-        readonly=True,
     )
     location_mapping_id = fields.Many2one(
         'stock.location.acumatica',
@@ -82,7 +80,7 @@ class AcumaticaInventoryStockLine(models.Model):
         compute='_compute_stock_snapshot',
         store=True,
     )
-    odoo_on_hand = fields.Float(string='On Hand Odoo', readonly=True)
+    odoo_on_hand = fields.Float(string='On Hand Odoo')
     stock_difference = fields.Float(
         string='Difference',
         compute='_compute_stock_snapshot',
