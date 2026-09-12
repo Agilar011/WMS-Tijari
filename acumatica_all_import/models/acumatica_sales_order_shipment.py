@@ -519,6 +519,7 @@ class AcumaticaShipmentGIStaging(models.Model):
             order.write({
                 'transaction_type': 'consignment',
                 'transfer_type': 'transfer_out',
+                'adt_order_type': shipment.adt_OrderType or False,
                 'partner_id': partner.id,
                 'location_id': source_location.id,
                 'location_dest_id': destination_location.id,
@@ -535,6 +536,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'external_ref': shipment.adt_ShipmentNbr,
                 'transaction_type': 'consignment',
                 'transfer_type': 'transfer_out',
+                'adt_order_type': shipment.adt_OrderType or False,
                 'partner_id': partner.id,
                 'location_id': source_location.id,
                 'location_dest_id': destination_location.id,
@@ -1249,6 +1251,7 @@ class AcumaticaSalesOrderShipmentStagingLine(models.Model):
     adt_LineNoteID = fields.Char(string="LineNoteID")
     adt_LineLocation = fields.Char(string="LineLocation")
     adt_LineNbr = fields.Char(string="LineNbr")
+    adt_LineQuantity = fields.Char(string="LineQuantity")
     adt_ShipmentQty = fields.Char(string="ShipmentQty")
     adt_LineUOM = fields.Char(string="LineUOM")
     adt_WarehouseID = fields.Char(string="WarehouseID")

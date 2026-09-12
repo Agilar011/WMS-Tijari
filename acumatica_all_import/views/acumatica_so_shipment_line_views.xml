@@ -156,7 +156,8 @@
                                     <field name="adt_LineNbr"/>
                                     <field name="adt_LineInventoryID"/>
                                     <field name="adt_LineDescription"/>
-                                    <!-- <field name="adt_LineQuantity"/> -->
+                                    <field name="adt_LineQuantity" string="Line Quantity"/>
+                                    <field name="adt_ShipmentQty" string="Shipment Quantity"/>
                                     <field name="adt_LineUOM"/>
                                     <field name="adt_LineLocation"/>
                                     <field name="adt_LineNote"/>

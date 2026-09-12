@@ -53,6 +53,10 @@ class InternalTransferOrder(models.Model):
         default='transfer_out',
         tracking=True,
     )
+    adt_order_type = fields.Char(
+        string='Order Type (Acumatica)',
+        tracking=True,
+    )
     partner_id = fields.Many2one(
         comodel_name='res.partner',
         string='Contact',
@@ -419,6 +423,7 @@ class InternalTransferOrder(models.Model):
             'location_id': location.id,
             'location_dest_id': location_dest.id,
             'adt_type': self._get_picking_adt_type(),
+            'adt_order_type': self.adt_order_type or False,
             'adt_external_ref': self.external_ref or self.name,
             'internal_transfer_order_id': self.id,
             'internal_transfer_leg': leg,
@@ -642,6 +647,7 @@ class InternalTransferOrder(models.Model):
         vals = {
             'origin': self._get_picking_origin(leg),
             'adt_type': self._get_picking_adt_type(),
+            'adt_order_type': self.adt_order_type or False,
             'adt_external_ref': self.external_ref or self.name,
             'internal_transfer_order_id': self.id,
             'internal_transfer_leg': leg,

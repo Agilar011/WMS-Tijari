@@ -502,6 +502,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_note': row.get("adt_note"),
                     'adt_Description': row.get("adt_Description"),
                     'picking_type_id': row.get("picking_type_id"),
+                    'adt_ShipmentQty': row.get("adt_ShipmentQty") or row.get("adt_LineQty"),
                     'adt_ShipmentVolume': row.get("adt_ShipmentVolume"),
                     'adt_ShipmentWeight': row.get("adt_ShipmentWeight"),
                 }
@@ -515,7 +516,11 @@ class ImportSOShipmentWizard(models.TransientModel):
                 'adt_LineNoteID': row.get("adt_LineNoteID"),
                 'adt_LineLocation': row.get("adt_LineLocation"),
                 'adt_LineNbr': row.get("adt_LineNbr"),
-                'adt_ShipmentQty': row.get("adt_LineQty"),
+                'adt_LineQuantity': row.get("adt_LineQuantity"),
+                # ShipmentQty adalah quantity aktual yang dipakai saat membuat
+                # move SO Shipment. Fallback ke LineQty untuk payload lama yang
+                # belum mengirim ShipmentQty.
+                'adt_ShipmentQty': row.get("adt_ShipmentQty") or row.get("adt_LineQty"),
                 'adt_LineUOM': row.get("adt_LineUOM"),
                 'adt_WarehouseID': row.get("adt_WarehouseID"),
             }
