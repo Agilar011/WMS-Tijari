@@ -1048,8 +1048,12 @@ class StockPicking(models.Model):
         #             vals['adt_type'] = parent_picking.adt_type
 
         # # Panggil fungsi super() dengan melewatkan vals_list yang sudah diperbarui
-        pickings = super(StockPicking, self).create(vals_list)
+        pickings = super(
+            StockPicking,
+            self.with_context(mail_create_nolog=True)
+        ).create(vals_list)
         for picking, vals in zip(pickings, vals_list):
+            description = picking.adt_type or ""
             if 'user_ids' not in vals:
                 picking._sync_user_ids_from_user_id()
             if 'pick_responsible_ids' in vals:
@@ -1061,6 +1065,16 @@ class StockPicking(models.Model):
                 picking._sync_user_ids_from_responsible()
             if self._get_responsible_carry_over_fields_set() & set(vals):
                 picking._propagate_responsible_to_next_transfers()
+
+            picking.with_context(
+                mail_create_nosubscribe=True,
+                mail_post_autofollow=False,
+            ).message_post(
+                body=f"{description} created",
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+            
         pickings._set_acumatica_document_only_flag()
         pickings._set_document_only_picking_type()
         print(pickings)
@@ -1863,10 +1877,7 @@ class StockPicking(models.Model):
         to_confirm = self.filtered(lambda picking: picking.state == 'draft')
         if to_confirm:
             to_confirm.action_confirm()
-
-        to_check = self.filtered(lambda picking: picking.show_check_availability)
-        if to_check:
-            to_check.action_assign()
+            to_confirm.action_assign()
 
         return True
 
@@ -2338,6 +2349,8 @@ class StockPicking(models.Model):
             if all_match
             else "partial"
         )
+
+        staging_data.is_used = True
 
         self.action_confirm_shipment()   
 

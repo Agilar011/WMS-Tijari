@@ -477,7 +477,10 @@
                     invisible="picking_type_name != 'Internal Transfers'"
                     readonly="state == 'done'"
                     domain="[('id', 'child_of', internal_transfer_adt_dest_location_id)]"/>
+            </xpath>
 
+            <xpath expr="//field[@name='owner_id']" position="replace">
+                <field name="owner_id" string="Pemilik Stock" invisible="adt_type != 'Toko Pegang DO'" />
             </xpath>
 
             <xpath expr="//field[@name='origin']" position="after">
@@ -498,8 +501,7 @@
                        invisible="adt_type != 'SO Return'"
                        readonly="1"/>
                 <field name="status_ba"/>
-                <field name="owner_id" string="Pemilik Stock" invisible="adt_type != 'Toko Pegang DO'" />
-                <field name="adt_dest_location_id" string="Final Location" invisible="adt_type == 'Receipt' or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
+                <field name="adt_dest_location_id" string="Final Location" invisible="'Receipt' in (picking_type_name or '') or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
                 <field name="all_moves_picked" invisible="1"/>
             </xpath>
 
@@ -919,7 +921,7 @@
                 <attribute name="invisible">state != 'draft' or 'Pick' in (picking_type_name or '')</attribute>
             </xpath>
             <xpath expr="//button[@name='action_assign']" position="attributes">
-                <attribute name="invisible">not show_check_availability or 'Pick' in (picking_type_name or '')</attribute>
+                <attribute name="invisible">'Pick' in (picking_type_name or '')</attribute>
             </xpath>
 
             <xpath expr="//button[@name='action_assign']" position="after">
@@ -928,7 +930,7 @@
                         string="Mark As To Do"
                         class="oe_highlight"
                         groups="base.group_user"
-                        invisible="'Pick' not in (picking_type_name or '') or (state != 'draft' and not show_check_availability)"
+                        invisible="'Pick' not in (picking_type_name or '') or (state != 'draft')"
                         data-hotkey="q"/>
             </xpath>
 
