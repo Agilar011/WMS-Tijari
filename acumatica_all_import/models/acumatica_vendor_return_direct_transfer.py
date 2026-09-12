@@ -246,7 +246,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             'adt_transfer_order_line_number': line.adt_LineNumber or line.adt_rowNumber or False,
                             'adt_transfer_order_type': first.adt_TransferType or first.adt_ReturnType or False,
                             'adt_quantity': qty,
-                            'adt_type': 'Vendor Return',
+                            'adt_type': 'PO Return',
                             'transaction_type': 'internal',
                         })
 
