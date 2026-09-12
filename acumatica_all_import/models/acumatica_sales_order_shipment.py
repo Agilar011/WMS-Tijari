@@ -13,9 +13,16 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaShipmentGIStaging(models.Model):
     _name = 'acumatica.shipment.gi.staging'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Acumatica Shipment GI'
     _rec_name = 'adt_ShipmentNbr'
+
+    def _adt_picking_type_wizard_call(self):
+        return (
+            'import.so.shipment.wizard',
+            (self.adt_BuildingID or self.adt_WarehouseID, self.adt_OrderType),
+            {'document_only': self.adt_DocumentOnly},
+        )
 
     # shipment_ids = fields.One2many('acumatica.sales.order.shipment.staging','gi_id',string='Shipments')
     all_line_ids = fields.One2many('acumatica.sales.order.shipment.staging.line', 'gi_id',string='All Shipment Details')
@@ -78,6 +85,7 @@ class AcumaticaShipmentGIStaging(models.Model):
     adt_Phone = fields.Char(string="Phone")
     adt_PostalCode = fields.Char(string="PostalCode")
     adt_ShipDate = fields.Char(string="ShipDate")
+    adt_IssueNbr = fields.Char(string="IssueNbr")
     adt_ShipmentNbr = fields.Char(string="ShipmentNbr")
     adt_ShipmentQty = fields.Char(string="ShipmentQty")
     adt_ShipmentType = fields.Char(string="ShipmentType")
@@ -215,7 +223,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                     if not warehouse:
                         raise UserError(f"Warehouse {shipment.adt_WarehouseID} tidak ditemukan di Odoo.")
 
-                    picking_type = shipment.picking_type_id
+                    picking_type = shipment._adt_reresolve_picking_type()
                     if not picking_type:
                         raise UserError(f"Operation Type Incoming untuk gudang {warehouse.name} tidak ditemukan.")
 
@@ -261,11 +269,13 @@ class AcumaticaShipmentGIStaging(models.Model):
 
                     if picking:
                         picking.write(updated_vals)
+                        action_state = 'updated'
                         print(f"SUCCESS UPDATING PICKING ID: {picking.id}")
                         picking.move_ids.unlink()
                         print(f"--> SUCCESS UNLINK OLD LINES FOR PICKING ID: {picking.id}")
                     else:
                         picking = Picking.create(updated_vals)
+                        action_state = 'created'
                         # exist_post_data = self.env['loginext.staging.data'].search([('odoo_shipment_number', '=', picking.origin)], limit=1)
                         # if not exist_post_data:
                         #     create_tms_state = True
@@ -350,7 +360,7 @@ class AcumaticaShipmentGIStaging(models.Model):
 
                     # Tandai sukses jika semua proses di atas berhasil tanpa memicu exception
                     shipment.write({
-                        'import_state': 'created',
+                        'import_state': action_state,
                         'import_message': 'success',
                         'odoo_picking_id': picking.id
                     })

@@ -273,6 +273,7 @@
             <field name="company_code">asgjkt</field>
             <field name="config_type">warehouse</field>
             <field name="endpoint_name">Warehouse</field>
+            <field name="generate_virtual_location">True</field>
             <field name="is_default">True</field>
             <field name="active">True</field>
             <field name="state">draft</field>

@@ -22,6 +22,9 @@
                 <field name="doc_type"/>
                 <field name="document_only"/>
                 <field name="customer_code"/>
+                <field name="customer_location_id"/>
+                <field name="customer_location_name"/>
+                <field name="customer_name"/>
                 <field name="vendor_code"/>
                 <field name="vendor_name"/>
                 <field name="building_code"/>
@@ -77,6 +80,9 @@
                             <field name="note_header_id"/>
                             <field name="note"/>
                             <field name="customer_code"/>
+                            <field name="customer_location_id"/>
+                            <field name="customer_location_name"/>
+                            <field name="customer_name"/>
                             <field name="vendor_code"/>
                             <field name="vendor_name"/>
                             <field name="external_ref"/>

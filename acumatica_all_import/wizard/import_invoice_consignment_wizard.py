@@ -104,7 +104,6 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             sync_data = fields.Datetime.now() # Pastikan variabel sync_data terdefinisi
 
             seen_headers = {}
-            unchanged_headers = set()
 
             for row_number, item in enumerate(raw_data, start=1):
                 header_id = (self._val(item, 'ReferenceNbr') or item.get('id', '')) if flat_data is not None else item.get('id', '')
@@ -129,26 +128,14 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                         ('config_id', '=', self.config_id.id),
                         ('adt_ReferenceNbr', '=', header.get('adt_ReferenceNbr')),
                     ], limit=1)
-                    incoming_last_modified = header.get('adt_LastModifiedDateTime')
-                    if (
-                        existing_header
-                        and incoming_last_modified
-                        and existing_header.adt_LastModifiedDateTime == incoming_last_modified
-                    ):
-                        created_header = existing_header
-                        unchanged_headers.add(header_id)
-                    elif existing_header:
+                    if existing_header:
                         existing_header.line_ids.unlink()
                         existing_header.write(lines_to_create)
                         created_header = existing_header
                     else:
                         created_header = self.env['acumatica.invoice.consignment.staging'].create(lines_to_create)
                     seen_headers[header_id] = created_header
-                    if header_id not in unchanged_headers:
-                        total_imported_headers += 1
-
-                if header_id in unchanged_headers:
-                    continue
+                    total_imported_headers += 1
 
                 # 2. Normalisasi Data Detail/Lines
                 details = item.get('Details') or []
@@ -308,11 +295,14 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             'adt_CustomerName' : self._val(item, 'CustomerName'),
             'adt_CustomerOrder' : self._val(item, 'CustomerOrder'),
             'adt_Date' : self._val(item, 'Date'),
+            'adt_BuildingID' : self._val(item, 'BuildingID'),
             'adt_Description' : self._val(item, 'Description'),
             'adt_DueDate' : self._val(item, 'DueDate'),
             'adt_LastModifiedDateTime' : self._val(item, 'LastModifiedDateTime'),
             'adt_LocationID' : self._val(item, 'LocationID'),
             'adt_LocationName' : self._val(item, 'LocationName'),
+            'adt_NoteHeaderID' : self._val(item, 'NoteHeaderID'),
+            'adt_NoteID' : self._val(item, 'NoteID'),
             'adt_OrigRefNbr' : self._val(item, 'OrigRefNbr'),
             'adt_ReferenceNbr' : self._val(item, 'ReferenceNbr'),
             'adt_Status' : self._val(item, 'Status'),
@@ -389,13 +379,10 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 continue
 
 
-            if vals.get('adt_LastModifiedDateTime') and existing.adt_LastModifiedDateTime == vals.get('adt_LastModifiedDateTime'):
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 
@@ -449,7 +436,10 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             'adt_rowNumber': detail.get('rowNumber') or self._val(detail, 'rowNumber'),
             'adt_note': self._val(detail, 'LineNote') or self._val(detail, 'Note'),
             'adt_Branch': self._val(detail, 'LineBranchID') or self._val(detail, 'Branch'),
+            'adt_LineBranchName': self._val(detail, 'LineBranchName'),
             'adt_InventoryID': self._val(detail, 'LineInventoryID') or self._val(detail, 'InventoryID'),
+            'adt_LineNoteID': self._val(detail, 'LineNoteID'),
+            'adt_NoteID': self._val(detail, 'NoteID'),
             'adt_Qty': self._val(detail, 'LineQty') or self._val(detail, 'Qty'),
             'adt_TransactionDescription': self._val(detail, 'LineTransactionDescription') or self._val(detail, 'TransactionDescription'),
             'adt_UOM': self._val(detail, 'LineUOM') or self._val(detail, 'UOM'),

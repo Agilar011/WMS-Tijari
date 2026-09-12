@@ -189,7 +189,8 @@ class ImportInventoryIssueWizard(models.TransientModel):
             if item.get('reference_nbr')
         ]
         existing_lines = self.env['acumatica.inventory.issue.line'].search([
-            ('reference_nbr', 'in', reference_nbrs)
+            ('reference_nbr', 'in', reference_nbrs),
+            ('config_id', '=', self.config_id.id),
         ])
 
         existing_map = {
@@ -206,13 +207,10 @@ class ImportInventoryIssueWizard(models.TransientModel):
             if not existing:
                 to_create.append(vals)
                 continue
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals.get('acumatica_write_date'):
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 
@@ -303,6 +301,10 @@ class ImportInventoryIssueWizard(models.TransientModel):
             'total_amount': self._val(item, 'TotalAmount'),
             'customer_id': self._val(item, 'CustomerID'),
             'customer_name': self._val(item, 'CustomerName'),
+            'customer_location_id': self._val(item, 'CustomerLocationID'),
+            'customer_location_name': self._val(item, 'CustomerLocationName'),
+            'shipment_nbr': self._val(item, 'ShipmentNbr'),
+            'transfer_nbr': self._val(item, 'TransferNbr'),
         }
 
 
@@ -355,13 +357,10 @@ class ImportInventoryIssueWizard(models.TransientModel):
                 continue
 
 
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

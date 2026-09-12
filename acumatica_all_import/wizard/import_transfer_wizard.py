@@ -671,68 +671,48 @@ class ImportTransferWizard(models.TransientModel):
         line_list,
     ):
         Picking = self.env['stock.picking']
-        lines_to_create = []
         sync_data = fields.Datetime.now()
+        Header = self.env['acumatica.transfer.line']
+        ProductLine = self.env['acumatica.transfer.product.line']
+        receipt_numbers = [item.get('receipt_nbr') for item in header_list if item.get('receipt_nbr')]
+        existing_headers = Header.search([
+            ('receipt_nbr', 'in', receipt_numbers),
+            ('config_id', '=', self.config_id.id),
+        ])
+        existing_map = {record.receipt_nbr: record for record in existing_headers}
 
         for item in header_list:
             receipt_nbr = item.get('receipt_nbr')
-
-            exists = Picking.search_read(
-                domain=[('origin', '=', receipt_nbr)],
-                fields=['id', 'origin'],
-                limit=1,
-            )
-
-            lines_to_create.append({
+            picking = Picking.search([('origin', '=', receipt_nbr)], limit=1)
+            values = {
                 **item,
-                'odoo_picking_id': (
-                    exists[0]['id']
-                    if exists
-                    else False
-                ),
+                'odoo_picking_id': picking.id if picking else False,
                 'config_id': self.config_id.id,
                 'import_state': 'staged',
                 'import_message': (
                     f'{receipt_nbr}: Sudah ada → akan diupdate'
-                    if exists
+                    if picking
                     else ''
                 ),
                 'selected': True,
                 'sync_date': sync_data,
-            })
+            }
+            receipt = existing_map.get(receipt_nbr)
+            if receipt:
+                receipt.write(values)
+            else:
+                receipt = Header.create(values)
 
-        if lines_to_create:
-            unchanged, to_update, to_create = (
-                self._search_receipt_lines(
-                    lines_to_create
-                )
-            )
-
-            self._update_receipt_lines(to_update)
-
-            receipts = self._create_receipt_lines(
-                to_create
-            )
-
-            line_update, line_create = (
-                self.filter_product_line(
-                    line_list,
-                    to_update,
-                    to_create,
-                )
-            )
-
-            if line_update:
-                self._update_receipt_lines_product(
-                    line_update,
-                    to_update,
-                )
-
-            if line_create:
-                self._create_receipt_lines_product(
-                    line_create,
-                    receipts,
-                )
+            # Replace the complete API snapshot. This also removes a previous
+            # product line when Acumatica changes InventoryID or removes it.
+            receipt.product_line_ids.unlink()
+            product_values = [
+                {**line, 'transfer_line_id': receipt.id}
+                for line in line_list
+                if line.get('receipt_nbr') == receipt_nbr
+            ]
+            if product_values:
+                ProductLine.create(product_values)
 
     def _search_receipt_lines(self, data):
         if not data:
@@ -764,13 +744,10 @@ class ImportTransferWizard(models.TransientModel):
                 continue
 
 
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

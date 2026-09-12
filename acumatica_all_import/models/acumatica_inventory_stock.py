@@ -13,7 +13,7 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaInventoryStockLine(models.Model):
     _name = 'acumatica.inventory.stock.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Inventory Stock dari Acumatica'
     _order = 'warehouse_code asc, inventory_id asc, id asc'
 

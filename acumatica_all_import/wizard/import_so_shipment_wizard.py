@@ -419,6 +419,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_Phone' : self._val(item, "Phone"),
                     'adt_PostalCode' : self._val(item, "PostalCode"),
                     'adt_ShipDate' : self._val(item, "ShipDate"),
+                    'adt_IssueNbr' : self._val(item, "IssueNbr"),
                     'adt_ShipmentNbr' : self._val(item, "ShipmentNbr"),
                     'adt_ShipmentQty' : self._val(item, "ShipmentQty"),
                     'adt_LineQty' : self._val(item, "LineQuantity"),
@@ -489,6 +490,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_Country': row.get("adt_Country"),
                     'adt_CountryName': row.get("adt_CountryName"),
                     'adt_ShipDate': row.get("adt_ShipDate"),
+                    'adt_IssueNbr': row.get("adt_IssueNbr"),
                     'adt_PostalCode': row.get("adt_PostalCode"),
                     'adt_ShipVia': row.get("adt_ShipVia"),
                     'adt_FOBPoint': row.get("adt_FOBPoint"),
@@ -536,6 +538,12 @@ class ImportSOShipmentWizard(models.TransientModel):
         for shipment_nbr, data in grouped_shipments.items():
             gi_vals = data['header']
             lines_vals = data['lines']
+            gi_vals.update({
+                'import_state': 'staged',
+                'import_message': 'Data API Imported',
+                'selected': True,
+                'sync_date': fields.Datetime.now(),
+            })
 
             # Cek memori RAM untuk data lama
             existing_gi = existing_map.get(shipment_nbr)
@@ -545,12 +553,6 @@ class ImportSOShipmentWizard(models.TransientModel):
             with self.env.cr.savepoint():
                 try:
                     if existing_gi:
-                        if (
-                            gi_vals.get('lastmodifieddatetime')
-                            and existing_gi.lastmodifieddatetime == gi_vals.get('lastmodifieddatetime')
-                        ):
-                            continue
-
                         # -------------------------------------------------
                         # KONDISI A: DATA SUDAH ADA -> UPDATE & RECREATE
                         # -------------------------------------------------
@@ -575,7 +577,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                         })
                         print(f"GI Vals: {gi_vals}")
                         GIStaging.create(gi_vals)
-                        
+
                         print(f"--> SUCCESS CREATED NEW FRESH SHIPMENT: {shipment_nbr}")
 
                 except Exception as e:

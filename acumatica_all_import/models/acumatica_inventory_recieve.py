@@ -39,7 +39,7 @@ class AcumaticaReceiptProductLine(models.Model):
 
 class AcumaticaInventoryRecievedLine(models.Model):
     _name = 'acumatica.inventory.recieved.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Inventory Recieved dari Acumatica'
     _order = 'reference_nbr asc, id asc'
 
@@ -68,6 +68,9 @@ class AcumaticaInventoryRecievedLine(models.Model):
     external_ref = fields.Char(string='External Ref', readonly=True)
     document_only = fields.Boolean(string='Document Only', readonly=True)
     customer_code = fields.Char(string='Customer Code', readonly=True)
+    customer_location_id = fields.Char(string='Customer Location ID', readonly=True)
+    customer_location_name = fields.Char(string='Customer Location Name', readonly=True)
+    customer_name = fields.Char(string='Customer Name', readonly=True)
     vendor_code = fields.Char(string='VendorID', readonly=True)
     vendor_name = fields.Char(string='Vendor Name', readonly=True)
     shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
@@ -419,12 +422,40 @@ class AcumaticaInventoryRecievedLine(models.Model):
         #     ('operation_category', '=', 'internal'),
         #     ('code', '=', 'internal'),
         # ], limit=1)
-        picking_type = receive.config_id._resolve_inventory_receive_picking_type(
-            transfer_type=receive.transfer_type,
-            document_only=receive.document_only,
-            warehouse_code=receive.warehouse_code,
-        ) if receive.config_id else receive.picking_type_id
-        picking_type = picking_type or receive.picking_type_id
+        if receive.picking_type_id:
+            picking_type = receive.picking_type_id
+        elif receive.config_id:
+            picking_type = receive.config_id._resolve_inventory_receive_picking_type(
+                transfer_type=receive.transfer_type,
+                document_only=receive.document_only,
+                warehouse_code=receive.warehouse_code,
+            )
+        else:
+            type_key = (receive.transfer_type or 'inventory_receive').strip().lower().replace('-', '_').replace(' ', '_')
+            type_map = {
+                'change_item': ('incoming', 'receive'),
+                'inventory_receive': ('incoming', 'receive'),
+                'inventory_received': ('incoming', 'receive'),
+                'inventory_receipt': ('incoming', 'receive'),
+            }
+            code, operation_category = type_map.get(type_key, (False, False))
+            if receive.document_only and type_key != 'transfer_in':
+                picking_type = PickingType.resolve_document_only_picking_type(
+                    api_acumatica='inventory_received',
+                    document_only=True,
+                    warehouse_code=receive.warehouse_code,
+                )
+            elif code:
+                picking_type = PickingType.resolve_picking_type(
+                    warehouse_code=receive.warehouse_code,
+                    code=code,
+                    operation_category=operation_category,
+                    api_acumatica='inventory_received',
+                    transaction_key=type_key,
+                    required=False,
+                )
+            else:
+                picking_type = PickingType.browse()
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {receive.warehouse_code}'
@@ -470,6 +501,9 @@ class AcumaticaInventoryRecievedLine(models.Model):
             picking = Picking.create(picking_vals)
             action_state = 'created'
 
+        if action_state == 'updated':
+            picking.move_ids.unlink()
+
         for receive_line in receive.product_line_ids:
             move_vals = {}
             try:
@@ -502,16 +536,6 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     continue
 
                 qty = receive._parse_float(receive_line.product_uom_qty)
-                existing = picking.move_ids.filtered(
-                    lambda move: (
-                        move.picking_id.id == picking.id
-                        and move.product_id.id == product.id
-                        and move.product_uom_qty == qty
-                    )
-                )
-                if existing:
-                    continue
-
                 move_vals = {
                     'name': receive_line.line_description or product.display_name,
                     'picking_id': picking.id if picking else False,

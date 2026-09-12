@@ -39,6 +39,7 @@
           'views/acumatica_direct_transfer_staging_views.xml',
           'views/acumatica_vendor_return_direct_transfer_staging_views.xml',
           'views/acumatica_credit_memo_consignment_staging_views.xml',
+          'views/acumatica_transaction_chatter_views.xml',
           'views/acumatica_webhook_key_config_views.xml',
           'views/acumatica_webhook_log_views.xml',
           'views/acumatica_all_import_wizard_views.xml',

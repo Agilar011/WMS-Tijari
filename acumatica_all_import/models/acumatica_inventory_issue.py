@@ -11,9 +11,19 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaInventoryIssueLine(models.Model):
     _name = 'acumatica.inventory.issue.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Inventory Inventory Issue dari Acumatica'
     _order = 'reference_nbr asc, line_nbr asc, id asc'
+
+    def _adt_picking_type_wizard_call(self):
+        if self._is_disposal():
+            # wizard juga tidak mencari picking type untuk disposal
+            return False
+        return (
+            'import.inventory.issue.wizard',
+            ({'DocumentOnly': self.document_only},),
+            {'warehouse_code': self.warehouse_code},
+        )
 
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header', readonly=True)
@@ -47,6 +57,10 @@ class AcumaticaInventoryIssueLine(models.Model):
     change_item_ref_nbr = fields.Char(string='Change Item Ref Number', readonly=True)
     header_location_code = fields.Char(string='Header Location', readonly=True)
     customer_name = fields.Char(string='Customer Name', readonly=True)
+    customer_location_id = fields.Char(string='Customer Location ID', readonly=True)
+    customer_location_name = fields.Char(string='Customer Location Name', readonly=True)
+    shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
+    transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
 
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
     line_description = fields.Char(string='Description', readonly=True)
@@ -79,6 +93,12 @@ class AcumaticaInventoryIssueLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
     customer_id = fields.Char(string='Customer ID')
+    partner_id = fields.Many2one(
+        'res.partner',
+        string='Customer/Partner',
+        compute='_compute_partner_id',
+        help='Partner Odoo yang ditemukan dari Customer ID Acumatica.',
+    )
 
     odoo_scrap_id = fields.Many2one(
             'stock.scrap',
@@ -89,6 +109,11 @@ class AcumaticaInventoryIssueLine(models.Model):
     # ---------------------------------------------------------
     # BUTTONS
     # ---------------------------------------------------------
+
+    @api.depends('customer_id')
+    def _compute_partner_id(self):
+        for record in self:
+            record.partner_id = record._find_customer(record.customer_id)
 
     # ---------------------------------------------------------
     # MAIN PROCESS
@@ -226,7 +251,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
                     
                 is_disposal = first._is_disposal()
-                picking_type = first.picking_type_id
+                picking_type = first._adt_reresolve_picking_type()
                 if not picking_type and not is_disposal:
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
 
@@ -334,7 +359,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                 ], limit=1)
                 
                 if picking:
-                    if picking.state in ('done', 'cancel'):
+                    if picking.state != 'draft':
                         raise UserError(f'Delivery Order {first.reference_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
                     picking.write(vals)
                     action_state = 'updated'
@@ -346,6 +371,9 @@ class AcumaticaInventoryIssueLine(models.Model):
                     action_state = 'created'
                     created += 1
                     print(f"Create Picking: {picking}")
+
+                if action_state == 'updated':
+                    picking.move_ids.unlink()
 
                 to_create_move = self.env['acumatica.inventory.issue.product'].search([('receipt_line_id', '=', first.id)])
                     

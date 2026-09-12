@@ -11,8 +11,16 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaIssueLine(models.Model):
     _name = 'acumatica.issue.line'
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Issue Change Item dari Acumatica'
     _order = 'reference_nbr asc, line_nbr asc, id asc'
+
+    def _adt_picking_type_wizard_call(self):
+        return (
+            'import.issue.wizard',
+            ({'WarehouseID': self.warehouse_code, 'DocumentOnly': self.document_only},),
+            {},
+        )
 
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header', readonly=True)
@@ -184,7 +192,7 @@ class AcumaticaIssueLine(models.Model):
                 if not warehouse:
                     raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
-                picking_type = first.picking_type_id
+                picking_type = first._adt_reresolve_picking_type()
                 # picking_type = PickingType.search([
                 #     ('warehouse_id', '=', warehouse.id),
                 #     ('code', '=', 'outgoing'),
@@ -227,7 +235,7 @@ class AcumaticaIssueLine(models.Model):
 
                 picking = Picking.search([('origin', '=', first.reference_nbr)], limit=1)
                 if picking:
-                    if picking.state in ('done', 'cancel'):
+                    if picking.state != 'draft':
                         raise UserError(f'Delivery Order {first.reference_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
                     picking.write(vals)
                     action_state = 'updated'
@@ -236,6 +244,9 @@ class AcumaticaIssueLine(models.Model):
                 else:
                     picking = Picking.create(vals)
                     action_state = 'created'
+
+                if action_state == 'updated':
+                    picking.move_ids.unlink()
                     imported += 1
 
                 for line in issue_lines:
@@ -244,20 +255,6 @@ class AcumaticaIssueLine(models.Model):
                         raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.inventory_id or '-'}")
                     uom = self._find_uom(line, product)
                     qty = self._parse_int(line.product_uom_qty)
-
-                    existing = Move.search([
-                        ('picking_id', '=', picking.id),
-                        ('product_id', '=', product.id),
-                        ('name', '=', line.line_description or product.display_name),
-                        ('product_uom_qty', '=', qty),
-                    ], limit=1)
-                    if existing:
-                        line.write({
-                            'import_state': action_state,
-                            'import_message': f'{action_state.title()}: {picking.name} (move sudah ada)',
-                            'odoo_picking_id': picking.id,
-                        })
-                        continue
 
                     Move.create({
                         'name': line.line_description or product.display_name,

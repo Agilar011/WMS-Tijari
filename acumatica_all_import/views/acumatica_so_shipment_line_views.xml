@@ -39,6 +39,7 @@
             <list string="Data SO Shipment" multi_edit="1">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="adt_ShipmentNbr"/>
+                <field name="adt_IssueNbr"/>
                 <field name="adt_OrderType"/>
                 <field name="adt_ShipmentType"/>
                 <field name="adt_DocumentOnly"/>
@@ -50,6 +51,7 @@
                        decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
+                <field name="lastmodifieddatetime" string="Last Modified"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
                 <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>            </list>
         </field>
@@ -66,79 +68,109 @@
                     <button name="action_reset_pending" type="object" string="Reset Staged" class="btn-secondary" invisible="import_state != 'error'"/>
                 </header>
                 <sheet>
-                    <!-- Field indikator tersembunyi agar tidak memicu error pada tombol header -->
                     <field name="import_state" invisible="1"/>
                     <field name="odoo_picking_id" invisible="1"/>
 
-                    <group string="Header">
+                    <div class="oe_title">
+                        <h1><field name="adt_ShipmentNbr"/></h1>
+                    </div>
+
+                    <group>
+                        <group string="Shipment">
+                            <field name="adt_ShipmentNbr"/>
+                            <field name="adt_IssueNbr"/>
+                            <field name="adt_Description"/>
+                            <field name="adt_OrderType"/>
+                            <field name="adt_ShipmentType"/>
+                            <field name="adt_Status"/>
+                            <field name="adt_ShipDate"/>
+                        </group>
+                        <group string="Shipment Information">
+                            <field name="adt_ShipmentQty"/>
+                            <field name="adt_ShipmentVolume"/>
+                            <field name="adt_ShipmentWeight"/>
+                            <field name="adt_ShipVia"/>
+                            <field name="adt_FOBPoint"/>
+                            <field name="adt_FOBPointDescription"/>
+                            <field name="adt_SiteIDDescription"/>
+                        </group>
+                    </group>
+
+                    <group string="Customer">
                         <group>
-                            <field name="adt_ShipmentNbr" readonly="1"/>
-                            <field name="picking_type_id" readonly="1"/>
-                            <field name="adt_CustomerID" readonly="1"/>
-                            <field name="adt_CustomerName" readonly="1"/>
-                            <field name="adt_Description" readonly="1"/>
-                            <field name="adt_ShipDate" readonly="1"/>
-                            <field name="adt_WarehouseID" readonly="1"/>
-                            <field name="adt_LocationID" readonly="1"/>
-                            <field name="adt_LocationName" readonly="1"/>
-                            <field name="adt_Status" readonly="1"/>
-                            <field name="adt_OrderType" readonly="1"/>
+                            <field name="adt_CustomerID"/>
+                            <field name="adt_CustomerName"/>
+                            <field name="adt_Phone"/>
                         </group>
                         <group>
-                            <field name="adt_rowNumber" readonly="1"/>
-                            <field name="adt_note" readonly="1"/>
-                            <field name="adt_AddressID" readonly="1"/>
-                            <field name="adt_AddressLine" readonly="1"/>
-                            <field name="adt_BuildingID" readonly="1"/>
-                            <field name="adt_City" readonly="1"/>
-                            <field name="adt_Country" readonly="1"/>
-                            <field name="adt_CountryName" readonly="1"/>
-                            <field name="adt_DocumentOnly" readonly="1"/>
-                            <field name="adt_FOBPoint" readonly="1"/>
-                            <field name="adt_FOBPointDescription" readonly="1"/>
-                            <!-- <field name="adt_LineDescription" readonly="1"/> -->
-                            <!-- <field name="adt_LineFreeItem" readonly="1"/> -->
-                            <!-- <field name="adt_LineInventoryID" readonly="1"/> -->
-                            <!-- <field name="adt_LineLocation" readonly="1"/> -->
-                            <!-- <field name="adt_LineNbr" readonly="1"/> -->
-                            <!-- <field name="adt_LineNote" readonly="1"/> -->
-                            <!-- <field name="adt_LineNoteID" readonly="1"/> -->
-                            <!-- <field name="adt_LineQuantity" readonly="1"/> -->
-                            <!-- <field name="adt_LineUOM" readonly="1"/> -->
-                            <field name="adt_NoteHeader" readonly="1"/>
-                            <field name="adt_NoteHeaderID" readonly="1"/>
-                            <field name="adt_Phone" readonly="1"/>
-                            <field name="adt_PostalCode" readonly="1"/>
-                            <field name="adt_ShipmentQty" readonly="1"/>
-                            <field name="adt_ShipmentType" readonly="1"/>
-                            <field name="adt_ShipmentVolume" readonly="1"/>
-                            <field name="adt_ShipmentWeight" readonly="1"/>
-                            <field name="adt_ShipVia" readonly="1"/>
-                            <field name="adt_SiteIDDescription" readonly="1"/>
-                            <field name="adt_State" readonly="1"/>
-                            <field name="adt_StateName" readonly="1"/>
-                            <field name="adt_ToWarehouseID" readonly="1"/>
-                        </group> 
+                            <field name="adt_AddressID"/>
+                            <field name="adt_AddressLine"/>
+                            <field name="adt_BuildingID"/>
+                            <field name="adt_LocationID"/>
+                            <field name="adt_LocationName"/>
+                        </group>
+                    </group>
+
+                    <group string="Address">
+                        <group>
+                            <field name="adt_City"/>
+                            <field name="adt_State"/>
+                            <field name="adt_StateName"/>
+                        </group>
+                        <group>
+                            <field name="adt_Country"/>
+                            <field name="adt_CountryName"/>
+                            <field name="adt_PostalCode"/>
+                        </group>
+                    </group>
+
+                    <group>
+                        <group string="Warehouse">
+                            <field name="adt_WarehouseID"/>
+                            <field name="adt_ToWarehouseID"/>
+                            <field name="picking_type_id" readonly="1"/>
+                        </group>
+                        <group string="Synchronization">
+                            <field name="config_id" readonly="1"/>
+                            <field name="sync_date" readonly="1"/>
+                            <field name="lastmodifieddatetime" string="Last Modified" readonly="1"/>
+                            <field name="adt_rowNumber"/>
+                        </group>
+                    </group>
+
+                    <group string="Processing">
+                        <group>
+                            <field name="selected"/>
+                            <field name="adt_DocumentOnly"/>
+                            <field name="exists_in_odoo" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="import_message" readonly="1" widget="text"/>
+                        </group>
                     </group>
 
                     <notebook name="Details">
-                        <page string="All Shipment Lines" name="all_shipment_lines">
-                            <field name="all_line_ids" readonly="1">
+                        <page string="Shipment Details" name="all_shipment_lines">
+                            <field name="all_line_ids">
                                 <list>
-                                    <field name="adt_LineInventoryID" readonly="1"/>
-                                    <field name="adt_LineDescription" readonly="1"/>
-                                    <field name="adt_LineNote" readonly="1"/>
-                                    <field name="adt_WarehouseID" readonly="1"/>
-                                    <field name="adt_ShipmentQty" readonly="1"/>
+                                    <field name="adt_LineNbr"/>
+                                    <field name="adt_LineInventoryID"/>
+                                    <field name="adt_LineDescription"/>
+                                    <!-- <field name="adt_LineQuantity"/> -->
+                                    <field name="adt_LineUOM"/>
+                                    <field name="adt_LineLocation"/>
+                                    <field name="adt_LineNote"/>
                                 </list>
                             </field>
                         </page>
+                        <page string="Notes">
+                            <group>
+                                <field name="adt_NoteHeader" widget="text"/>
+                                <field name="adt_NoteHeaderID"/>
+                                <field name="adt_note" widget="text"/>
+                            </group>
+                        </page>
                     </notebook>
-                    <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
-                    </group>
                 </sheet>
             </form>
         </field>

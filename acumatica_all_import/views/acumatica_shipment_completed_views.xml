@@ -22,6 +22,7 @@
                 <field name="selected" widget="boolean_toggle"/>
 
                 <field name="shipment_nbr"/>
+                <field name="issue_nbr" optional="show"/>
                 <field name="ship_date"/>
 
                 <field name="inventory_nbr" />
@@ -46,6 +47,7 @@
 
                 <field name="sync_date"/>
                 <field name="config_id"/>
+                <field name="last_modified_datetime" string="Last Modified"/>
 
             </list>
         </field>
@@ -126,6 +128,7 @@
 
                         <group string="Shipment">
                             <field name="shipment_nbr"/>
+                            <field name="issue_nbr"/>
                             <field name="inventory_nbr" />
                             <field name="order_type"/>
                             <field name="shipment_type"/>
@@ -138,6 +141,9 @@
                             <field name="shipment_volume"/>
                             <field name="shipment_weight"/>
                             <field name="shipment_via"/>
+                            <field name="fob_point"/>
+                            <field name="fob_point_description"/>
+                            <field name="site_id_description"/>
                         </group>
 
                     </group>
@@ -158,6 +164,8 @@
                             <field name="address_id"/>
                             <field name="address_line"/>
                             <field name="building_id"/>
+                            <field name="location_id"/>
+                            <field name="phone"/>
                         </group>
 
                     </group>
@@ -194,6 +202,8 @@
                         <group string="Synchronization">
                             <field name="config_id"/>
                             <field name="sync_date"/>
+                            <field name="last_modified_datetime" string="Last Modified" readonly="1"/>
+                            <field name="note_header_id"/>
                         </group>
 
                     </group>
@@ -255,6 +265,7 @@
                         <page string="Notes">
 
                             <group>
+                                <field name="note_header" widget="text"/>
                                 <field name="note"
                                        nolabel="1"
                                        widget="text"/>
