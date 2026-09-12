@@ -51,6 +51,12 @@
             <list string="Data Warehouse &amp; Location" multi_edit="1">
                 <field name="warehouse_id" string="WarehouseID"/>
                 <field name="building_id" string="BuildingID"/>
+                <field name="generate_virtual_location"
+                       string="Virtual Location/Building"
+                       optional="show"/>
+                <field name="odoo_building_location_id"
+                       string="Virtual Building Reference"
+                       optional="show"/>
                 <field name="description"    string="Description → name"/>
                 <field name="active"         string="Active"         widget="boolean"
                        optional="show"/>
@@ -112,6 +118,10 @@
                         <group>
                             <field name="warehouse_id"  string="WarehouseID.warehouse.code"/>
                             <field name="building_id"   string="BuildingID.warehouse.building"/>
+                            <field name="generate_virtual_location"
+                                   string="Generate Virtual Location/Building"/>
+                            <field name="odoo_building_location_id"
+                                   string="Virtual Building Reference"/>
                         </group>
                         <group>
                             <field name="description"   string="Description.warehouse.name"/>

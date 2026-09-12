@@ -27,6 +27,7 @@
                        decoration-warning="import_state == 'staged'"/>
                 <field name="import_message"/>
                 <field name="sync_date"/>
+                <field name="last_modified_datetime" string="Last Modified"/>
                 <!-- <button name="action_import_this" string="Import" type="object" icon="fa-upload"/> -->
             </list>
         </field>
@@ -65,8 +66,9 @@
                         </group>
                         <group string="Import">
                             <field name="import_message" readonly="1" widget="text"/>
-                            <field name="note" readonly="1"/>
+                            <field name="note"/>
                             <field name="sync_date" readonly="1"/>
+                            <field name="last_modified_datetime" string="Last Modified" readonly="1"/>
                         </group>
                     </group>
                 </sheet>

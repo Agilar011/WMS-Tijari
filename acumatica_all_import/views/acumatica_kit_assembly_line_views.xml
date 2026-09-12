@@ -23,6 +23,7 @@
                 <field name="description"/>
                 <field name="building_id" optional="show"/>
                 <field name="quantity" optional="show"/>
+                <field name="date" optional="show"/>
                 <field name="uom" optional="show"/>
                 <field name="warehouse" optional="show"/>
                 <!-- <field name="line_inventory_id" optional="show"/> -->
@@ -33,8 +34,9 @@
                        decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-                <field name="mrp_production_id" readonly="1"/>
+                <field name="mrp_production_id"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_manufacturing" string="Open Document" type="object" icon="fa-external-link" invisible="not mrp_production_id"/>
                 <!-- <button name="action_open_product" string="Open Product" type="object" icon="fa-external-link" invisible="not odoo_product_id"/> -->
             </list>
         </field>
@@ -47,6 +49,7 @@
             <form string="Data Manufacturing Order">
                 <header>
                     <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
+                    <button name="action_open_manufacturing" string="Open Document" type="object" invisible="not mrp_production_id"/>
                     <!-- <button name="action_open_product" string="Buka Product" type="object" invisible="not odoo_product_id"/> -->
                     <button name="action_reset_pending" string="Reset ke Staged" type="object" invisible="import_state != 'error'"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
@@ -66,6 +69,7 @@
                             <field name="type"/>
                             <field name="reason_code"/>
                             <field name="post_period"/>
+                            <field name="date"/>
                             <field name="requested_on"/>
                             <field name="revision"/>
                             <field name="note_header_id"/>
@@ -76,7 +80,7 @@
                     </group>
                     <notebook>
                         <page string="Components">
-                            <field name="component_ids" readonly="1">
+                            <field name="component_ids">
                                 <list string="Components" create="0" edit="0" delete="0">
                                     <field name="line_nbr"/>
                                     <field name="stock_inventory_id"/>
@@ -97,7 +101,7 @@
                     </notebook>
                     <group>
                         <field name="import_message" readonly="1"/>
-                        <field name="mrp_production_id" readonly="1"/>
+                        <field name="mrp_production_id"/>
                         <!-- <field name="odoo_bom_id" readonly="1"/> -->
                         <field name="config_id" readonly="1"/>
                         <!-- <field name="sync_date" readonly="1"/> -->

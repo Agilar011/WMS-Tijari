@@ -118,6 +118,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 'note_header': item.get('note_header') or '',
                 'note_header_id': item.get('note_header_id') or '',
                 'post_period': item.get('post_period') or '',
+                'date': item.get('date') or '',
                 'quantity': item.get('quantity') or '',
                 'reason_code': item.get('reason_code') or '',
                 'reference_nbr': reference_nbr,
@@ -244,6 +245,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     'note_header': self._val(item, 'NoteHeader'),
                     'note_header_id': self._val(item, 'NoteHeaderID'),
                     'post_period': self._val(item, 'PostPeriod'),
+                    'date': self._val(item, 'Date'),
                     'quantity': self._val(item, 'Qty'),
                     'reason_code': self._val(item, 'ReasonCode'),
                     'reference_nbr': self._val(item, 'ReferenceNbr'),
@@ -253,7 +255,11 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     'type': self._val(item, 'Type'),
                     'uom': self._val(item, 'UOM'),
                     'warehouse': self._val(item, 'Warehouse'),
-                    'config_id' : self.config_id.id
+                    'config_id': self.config_id.id,
+                    'import_state': 'staged',
+                    'import_message': 'Data API Imported',
+                    'selected': True,
+                    'sync_date': fields.Datetime.now(),
                 }
 
                 # === PRINT DATA HEADER ===
@@ -267,11 +273,6 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     ('name', '=', header['name']),
                 ], limit=1)
                 if existing_assembly:
-                    if (
-                        last_modified_datetime
-                        and existing_assembly.last_modified_datetime == last_modified_datetime
-                    ):
-                        continue
                     existing_assembly.component_ids.unlink()
                     existing_assembly.write(header)
                     assembly = existing_assembly

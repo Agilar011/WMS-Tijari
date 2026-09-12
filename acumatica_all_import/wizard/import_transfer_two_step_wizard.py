@@ -121,13 +121,10 @@ class ImportTransferTwoStepWizard(models.TransientModel):
                 to_create.append(vals)
                 continue
 
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals['acumatica_write_date']:
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

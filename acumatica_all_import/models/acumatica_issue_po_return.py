@@ -11,9 +11,17 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaIssuePoReturnLine(models.Model):
     _name = 'acumatica.issue.po.return.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Inventory Receipt dari Acumatica'
     _order = 'receipt_nbr asc, line_nbr asc, id asc'
+
+    def _adt_picking_type_wizard_call(self):
+        return (
+            'import.issue.po.return.wizard',
+            ({'warehouse_code': self.warehouse_code, 'document_only': self.document_only},),
+            {},
+        )
+
     product_line_ids = fields.One2many('acumatica.issue.po.return.product', 'receipt_line_id', string='Lines')
     row_number = fields.Integer(string='No', readonly=True)
     external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
@@ -23,6 +31,18 @@ class AcumaticaIssuePoReturnLine(models.Model):
 
 
     receipt_nbr = fields.Char(string='Receipt Number', readonly=True, index=True)
+    building_code = fields.Char(string='Building ID', readonly=True)
+    change_item_ref_nbr = fields.Char(string='Change Item Ref Nbr', readonly=True)
+    customer_id = fields.Char(string='Customer ID', readonly=True)
+    customer_location_id = fields.Char(string='Customer Location ID', readonly=True)
+    customer_location_name = fields.Char(string='Customer Location Name', readonly=True)
+    customer_name = fields.Char(string='Customer Name', readonly=True)
+    doc_type = fields.Char(string='Doc Type', readonly=True)
+    external_ref = fields.Char(string='External Ref', readonly=True)
+    note_header_id = fields.Char(string='Note Header ID', readonly=True)
+    shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
+    transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
+    trans_type = fields.Char(string='Trans Type', readonly=True)
     vendor_code = fields.Char(string='VendorID', readonly=True)
     partner_ref = fields.Char(string='Vendor Ref', readonly=True)
     scheduled_date = fields.Char(string='Date', readonly=True)
@@ -43,6 +63,11 @@ class AcumaticaIssuePoReturnLine(models.Model):
     line_nbr = fields.Char(string='Line Nbr', readonly=True)
     description = fields.Char(string='Description', readonly=True)
     transaction_description = fields.Char(string='Transaction Description', readonly=True)
+    line_inventory_name = fields.Char(string='Line Inventory Name', readonly=True)
+    line_location_name = fields.Char(string='Line Location Name', readonly=True)
+    line_note_id = fields.Char(string='Line Note ID', readonly=True)
+    line_warehouse = fields.Char(string='Line Warehouse', readonly=True)
+    line_warehouse_name = fields.Char(string='Line Warehouse Name', readonly=True)
     inventory_id = fields.Char(string='InventoryID', readonly=True)
     line_type = fields.Char(string='Line Type', readonly=True)
     location_dest_code = fields.Char(string='Location', readonly=True)
@@ -97,6 +122,13 @@ class AcumaticaIssuePoReturnLine(models.Model):
     def _parse_int(value):
         try:
             return int(value or 0)
+        except Exception:
+            return 0.0
+
+    @staticmethod
+    def _parse_qty(value):
+        try:
+            return float(value or 0.0)
         except Exception:
             return 0.0
 
@@ -246,7 +278,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     if not warehouse:
                         raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
-                    picking_type = first.picking_type_id
+                    picking_type = first._adt_reresolve_picking_type()
                     if not picking_type:
                         raise UserError('Picking type Pick tidak ditemukan.')
 
@@ -301,7 +333,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     picking = Picking.search([('origin', '=', origin)], limit=1)
 
                     if picking:
-                        if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                        if picking.state != 'draft':
                             raise UserError(f'Receipt {receipt_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
                         picking.write(vals)
                         action_state = 'updated'
@@ -343,7 +375,12 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             raise UserError(f'Product tidak ditemukan untuk InventoryID: {item.inventory_id or "-"}')
 
                         uom = product.uom_id
-                        qty = self._parse_int(item.product_uom_qty) if hasattr(item, 'product_uom_qty') else float(item.product_uom_qty or 0.0)
+                        # Some PO Return payloads provide only Ordered Qty.
+                        qty = self._parse_qty(item.product_uom_qty)
+                        if not qty:
+                            qty = self._parse_qty(
+                                item.order_qty or item.receipt_line_id.order_qty
+                            )
 
                         move_vals = {
                             # PERBAIKAN: Hapus kata 'item.description' yang memicu AttributeError
@@ -487,6 +524,11 @@ class AcumaticaIssuePoReturnProduct(models.Model):
         readonly=True,
     )
 
+    line_inventory_name = fields.Char(string='Line Inventory Name', readonly=True)
+    line_location_name = fields.Char(string='Line Location Name', readonly=True)
+    line_note_id = fields.Char(string='Line Note ID', readonly=True)
+    line_warehouse_name = fields.Char(string='Line Warehouse Name', readonly=True)
+
     inventory_id = fields.Char(
         string='Inventory ID',
         readonly=True,
@@ -508,6 +550,8 @@ class AcumaticaIssuePoReturnProduct(models.Model):
         digits=(16, 4),
         readonly=True,
     )
+
+    order_qty = fields.Char(string='Ordered Qty', readonly=True)
 
     uom_code = fields.Char(
         string='UOM',

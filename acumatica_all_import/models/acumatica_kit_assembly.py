@@ -12,7 +12,7 @@ _logger = logging.getLogger(__name__)
 class AcumaticaKitAssembly(models.Model):
     _name = 'acumatica.kit.assembly'
     _description = 'Acumatica Kit Assembly'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
 
     name = fields.Char(
         string='Reference Number',
@@ -43,6 +43,7 @@ class AcumaticaKitAssembly(models.Model):
     note_header_id = fields.Char(string='Note Header ID')
 
     post_period = fields.Char()
+    date = fields.Date(string='Date')
 
     quantity = fields.Float()
 
@@ -76,6 +77,8 @@ class AcumaticaKitAssembly(models.Model):
     ], default='staged', tracking=True)
 
     import_message = fields.Text(string='Generation Message', tracking=True)
+    selected = fields.Boolean(string='Pilih', default=True)
+    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
 
     mrp_production_id = fields.Many2one(
         'mrp.production',
@@ -194,9 +197,13 @@ class AcumaticaKitAssembly(models.Model):
                         )
 
                     # -----------------------------------------------------
-                    # PICKING TYPE
+                    # FIND EXISTING MO
                     # -----------------------------------------------------
-                    picking_type = PickingType.search(
+                    manufacturing = Manufacturing.search(
+                        [("origin", "=", header.name)],
+                        limit=1,
+                    )
+                    picking_type = manufacturing.picking_type_id if manufacturing else PickingType.search(
                         [
                             ("name", "=", "Manufacturing"),
                             ("warehouse_id", "=", warehouse_record.id),
@@ -209,20 +216,28 @@ class AcumaticaKitAssembly(models.Model):
                             "Manufacturing Picking Type tidak ditemukan "
                             f"untuk warehouse: {warehouse_record.display_name}"
                         )
-
-                    # -----------------------------------------------------
-                    # FIND EXISTING MO
-                    # -----------------------------------------------------
-                    manufacturing = Manufacturing.search(
-                        [("origin", "=", header.name)],
-                        limit=1,
-                    )
-                    created_manufacturing = False
-
                     # -----------------------------------------------------
                     # CREATE / UPDATE MO
                     # -----------------------------------------------------
                     if manufacturing:
+                        if manufacturing.state not in ('draft', 'cancel'):
+                            raise UserError(
+                                f'Manufacturing Order {reference_nbr} sudah berada pada state '
+                                f'{manufacturing.state}, tidak bisa diupdate.'
+                            )
+                        manufacturing.write({
+                            'product_id': finished_product.id,
+                            'product_qty': header.quantity,
+                            'product_uom_id': finished_product.uom_id.id,
+                            'date_start': header.requested_on,
+                            'picking_type_id': picking_type.id,
+                            'warehouse_id': warehouse_record.id,
+                            'location_src_id': picking_type.default_location_src_id.id,
+                            'location_dest_id': picking_type.default_location_dest_id.id,
+                            'company_id': warehouse_record.company_id.id,
+                        })
+                        manufacturing.move_raw_ids.unlink()
+                        action_state = 'updated'
                         updated += 1
                         print(
                             f"MO sudah ada: "
@@ -247,7 +262,7 @@ class AcumaticaKitAssembly(models.Model):
                             ),
                             "company_id": warehouse_record.company_id.id,
                         })
-                        created_manufacturing = True
+                        action_state = 'created'
 
                         created += 1
 
@@ -309,13 +324,12 @@ class AcumaticaKitAssembly(models.Model):
                     # -----------------------------------------------------
                     # RAW MATERIAL MOVES
                     # -----------------------------------------------------
-                    # Hanya tambahkan raw moves untuk MO baru.
                     if raw_moves and not manufacturing.exists():
                         raise ValueError(
                             "Manufacturing Order sudah tidak tersedia."
                         )
 
-                    if raw_moves and created_manufacturing:
+                    if raw_moves:
                         manufacturing.write({
                             "move_raw_ids": raw_moves,
                         })
@@ -332,7 +346,7 @@ class AcumaticaKitAssembly(models.Model):
                             else "Created"
                         ),
                         "mrp_production_id": manufacturing.id if manufacturing else False,
-                        "import_state": "created",
+                        "import_state": action_state,
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'kit_assembly')
 
@@ -447,6 +461,17 @@ class AcumaticaKitAssembly(models.Model):
             'view_mode': 'form',
         }
 
+    def action_open_manufacturing(self):
+        self.ensure_one()
+        if not self.mrp_production_id:
+            raise UserError('Manufacturing Order belum dibuat.')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'mrp.production',
+            'res_id': self.mrp_production_id.id,
+            'view_mode': 'form',
+        }
+
 
 class AcumaticaKitAssemblyComponent(models.Model):
     _name = 'acumatica.kit.assembly.component'
@@ -552,6 +577,7 @@ class AcumaticaKitAssemblyLine(models.Model):
     note_header = fields.Char(string='Header Note', readonly=True)
     note_header_id = fields.Char(string='Note Header ID', readonly=True)
     post_period = fields.Char(string='PostPeriod', readonly=True)
+    date = fields.Char(string='Date', readonly=True)
     quantity = fields.Char(string='Qty', readonly=True)
     reason_code = fields.Char(string='ReasonCode', readonly=True)
     reference_nbr = fields.Char(string='ReferenceNbr', readonly=True)
@@ -758,7 +784,10 @@ class AcumaticaKitAssemblyLine(models.Model):
                             f"{header.inventory_id or '-'}"
                         )
 
-                    picking_type = PickingType.search([
+                    existing_manufacturing = header.mrp_production_id or self.env['mrp.production'].search(
+                        [('origin', '=', header.name)], limit=1,
+                    )
+                    picking_type = existing_manufacturing.picking_type_id if existing_manufacturing else PickingType.search([
                         ('name', '=', 'Manufacturing'),
                         ('warehouse_id', '=', warehouse.id),
                     ], limit=1)
@@ -792,11 +821,37 @@ class AcumaticaKitAssemblyLine(models.Model):
                     }
                     manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)], limit=1)
                     if manufacturing_check:
+                        if manufacturing_check.state not in ('draft', 'cancel'):
+                            raise UserError(
+                                f'Manufacturing Order {reference_nbr} sudah berada pada state '
+                                f'{manufacturing_check.state}, tidak bisa diupdate.'
+                            )
                         manufacturing = manufacturing_check
+                        manufacturing.write(vals)
+                        manufacturing.move_raw_ids.unlink()
                         updated += 1
                     else:
                         manufacturing = Manufacturing.create(vals)
                         created += 1
+
+                    raw_move_vals = []
+                    for item in component_lines:
+                        component_product = self.env['product.product'].search([
+                            ('default_code', '=', item.stock_inventory_id),
+                        ], limit=1)
+                        raw_move_vals.append({
+                            'name': component_product.display_name,
+                            'product_id': component_product.id,
+                            'product_uom_qty': item.line_quantity,
+                            'product_uom': component_product.uom_id.id,
+                            'location_id': picking_type.default_location_src_id.id,
+                            'location_dest_id': picking_type.default_location_dest_id.id,
+                            'picking_type_id': picking_type.id,
+                            'warehouse_id': manufacturing.warehouse_id.id,
+                            'raw_material_production_id': manufacturing.id,
+                        })
+                    if raw_move_vals:
+                        Move.create(raw_move_vals)
 
                     records.write({
                         'import_state': 'created' if not manufacturing_check else 'updated',

@@ -59,6 +59,11 @@ class StockLocationAcumatica(models.Model):
     building = fields.Char(string='Building ID (Acumatica)')
     odoo_location_id = fields.Many2one('stock.location', string='Location Grouping')
     odoo_building_id = fields.Many2one('stock.warehouse', string='Building Grouping')
+    odoo_building_location_id = fields.Many2one(
+        'stock.location',
+        string='Building Virtual Location',
+        ondelete='set null',
+    )
     active = fields.Boolean(string='Aktif', default=True)
     is_active = fields.Boolean(string='Is Active')
     is_error = fields.Boolean(string='Is Error')

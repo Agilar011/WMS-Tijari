@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaShipmentCompletedStaging(models.Model):
     _name = 'acumatica.shipment.completed.staging'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Staging Shipment Completed dari Acumatica'
     _rec_name = 'shipment_nbr'
     _order = 'id desc'
@@ -33,6 +33,15 @@ class AcumaticaShipmentCompletedStaging(models.Model):
     note = fields.Text(
         string='Note',
     )
+
+    issue_nbr = fields.Char(string='Issue Number')
+    fob_point = fields.Char(string='FOB Point')
+    fob_point_description = fields.Char(string='FOB Point Description')
+    location_id = fields.Char(string='Location ID')
+    note_header = fields.Text(string='Note Header')
+    note_header_id = fields.Char(string='Note Header ID')
+    phone = fields.Char(string='Phone')
+    site_id_description = fields.Char(string='Site ID Description')
 
     # =========================================================
     # SHIPMENT

@@ -72,6 +72,15 @@ class AcumaticaConfig(models.Model):
         default=False,
         help='Dipakai sebagai config bawaan untuk tipe import yang sama.',
     )
+    generate_virtual_location = fields.Boolean(
+        string='Generate Building sebagai Virtual Location',
+        default=True,
+        help=(
+            'Khusus Config Type Warehouse. Jika aktif, BuildingID dibuat di '
+            'Virtual Locations dan tidak dibuat sebagai stock.warehouse. '
+            'Jika nonaktif, BuildingID dibuat sebagai stock.warehouse.'
+        ),
+    )
     picking_type_ids = fields.Many2many(
         'stock.picking.type',
         'acumatica_config_stock_picking_type_rel',

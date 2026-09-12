@@ -104,19 +104,24 @@ class ImportIssueWizard(models.TransientModel):
                         'picking_type_id': picking_type_id,
                         'warehouse_code': self._val(item, 'WarehouseID'),
                         'branch_warehouse': self._val(item, 'WarehouseName'),
+                        'config_id': self.config_id.id,
+                        'import_state': 'staged',
+                        'import_message': 'Data API Imported',
+                        'selected': True,
+                        'sync_date': fields.Datetime.now(),
                     }
                     
                     # 3. Create atau Update Header
-                    issue_record = issue_model.search([('external_id', '=', external_id)], limit=1)
+                    issue_record = issue_model.search([
+                        ('external_id', '=', external_id),
+                        ('config_id', '=', self.config_id.id),
+                    ], limit=1)
                     if issue_record:
-                        incoming_last_modified = header_vals.get('acumatica_write_date')
-                        if (
-                            incoming_last_modified
-                            and issue_record.acumatica_write_date == incoming_last_modified
-                        ):
-                            staging_list.append(issue_record.id)
-                            continue
                         issue_record.write(header_vals)
+                        # Staging adalah snapshot penuh dari API. Hapus detail lama
+                        # terlebih dahulu agar baris yang sudah hilang/berubah dari API
+                        # tidak tertinggal dan tidak ikut tergenerate ke stock.picking.
+                        issue_record.product_line_ids.unlink()
                     else:
                         issue_record = issue_model.create(header_vals)
 
@@ -161,11 +166,7 @@ class ImportIssueWizard(models.TransientModel):
                                 'warehouse_code': self._val(detail, 'WarehouseID'),
                             }
                             
-                            product_record = product_model.search([('line_external_id', '=', line_external_id)], limit=1) if line_external_id else False
-                            if product_record:
-                                product_record.write(detail_vals)
-                            else:
-                                product_model.create(detail_vals)
+                            product_model.create(detail_vals)
                             
                             # Commit setiap baris detail yang sukses
                             self.env.cr.commit()
@@ -343,6 +344,16 @@ class ImportIssueWizard(models.TransientModel):
         if isinstance(value, dict):
             return value.get('value', '') or ''
         return value or ''
+
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
     def _search_picking_type(self, header):
         PickingType = self.env['stock.picking.type']

@@ -45,13 +45,15 @@
                 <!-- <field name="partner_code"/> -->
                 <field name="warehouse_code"/>
                 <field name="actual_qty"/>
+                <field name="acumatica_write_date" string="Last Modified"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                        decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
+                <field name="odoo_internal_transfer_order_id" column_invisible="1"/>
             </list>
         </field>
     </record>
@@ -63,6 +65,7 @@
             <form string="Data Transfer (Out/Shipment)">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged'"/>
+                    <button name="action_open_picking" type="object" string="Open Document" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                     <button name="action_reset_pending" type="object" string="Reset Staged" class="btn-secondary" invisible="import_state != 'error'"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
@@ -70,42 +73,44 @@
                     <group string="Data Header" >
                         <group >
                             <!-- <field name="selected"/> -->
-                            <field name="shipment_nbr" readonly="1"/>
-                            <field name="document_only" readonly="1"/>
+                            <field name="shipment_nbr"/>
+                            <field name="document_only"/>
                             <field name="picking_type_id"/>
                             <field name="odoo_picking_id" readonly="1"/>
-                            <field name="partner_code" readonly="1"/>
-                            <field name="shipment_type" readonly="1"/>
+                            <field name="odoo_internal_transfer_order_id" readonly="1"/>
+                            <field name="partner_code"/>
+                            <field name="shipment_type"/>
                             <field name="warehouse_code"/>
                             <field name="warehouse_dest_code"/>
-                            <field name="header_location_code" readonly="1"/>
-                            <field name="scheduled_date" readonly="1"/>
-                            <!-- <field name="order_number" readonly="1"/>
-                            <field name="warehouse_code" readonly="1"/>
-                            <field name="warehouse_dest_code" readonly="1"/>
-                            <field name="location_dest_code" readonly="1"/>
-                            <field name="scheduled_date" readonly="1"/> -->
+                            <field name="header_location_code"/>
+                            <field name="scheduled_date"/>
+                            <field name="acumatica_write_date" string="Last Modified" readonly="1"/>
+                            <!-- <field name="order_number"/>
+                            <field name="warehouse_code"/>
+                            <field name="warehouse_dest_code"/>
+                            <field name="location_dest_code"/>
+                            <field name="scheduled_date"/> -->
                         </group>
                         <group>
                             <field name="status" readonly="1"/>
-                            <field name="operation" readonly="1"/>
-                            <field name="shipment_type" readonly="1"/>
-                            <field name="actual_qty" readonly="1"/>
-                            <field name="shipped_qty" readonly="1"/>
-                            <field name="shipped_volume" readonly="1"/>
-                            <field name="shipped_weight" readonly="1"/>
-                            <field name="package_count" readonly="1"/>
-                            <field name="package_weight" readonly="1"/>
-                            <field name="ship_via" readonly="1"/>
-                            <field name="shipping_zone" readonly="1"/>
+                            <field name="operation"/>
+                            <field name="shipment_type"/>
+                            <field name="actual_qty"/>
+                            <field name="shipped_qty"/>
+                            <field name="shipped_volume"/>
+                            <field name="shipped_weight"/>
+                            <field name="package_count"/>
+                            <field name="package_weight"/>
+                            <field name="ship_via"/>
+                            <field name="shipping_zone"/>
                             <field name="import_message" readonly="1"/>
-                            <field name="note" readonly="1"/>
+                            <field name="note"/>
                         </group>
                     </group>
                     <notebook>
                         <page name="details" string="Details/Lines">
                             <!-- Field relasi One2many ditaruh di sini secara aman -->
-                            <field name="shipment_line_ids" readonly="1">
+                            <field name="shipment_line_ids">
                                 <list>
                                     <field name="inventory_id"/>
                                     <field name="line_description"/>

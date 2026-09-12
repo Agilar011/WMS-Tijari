@@ -23,6 +23,8 @@
                             <field name="endpoint_name"/>
                             <field name="config_type" />
                             <field name="is_default"/>
+                            <field name="generate_virtual_location"
+                                   invisible="config_type != 'warehouse'"/>
                         </group>
                         <group string="🔑 Kredensial">
                             <field name="username"/>

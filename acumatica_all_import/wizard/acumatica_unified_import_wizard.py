@@ -552,7 +552,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
         total_pending_before = Line.search_count(pending_domain)
         if not total_pending_before:
-            raise UserError(_('Tidak ada data staged di staging yang dapat digenerate.'))
+            raise UserError(_('Tidak ada perubahan data pada API ERP Acumatica, sehingga tidak dapat melakukan generate data'))
 
         processed = 0
         batch_count = 0

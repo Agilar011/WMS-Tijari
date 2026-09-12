@@ -193,17 +193,30 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                         if header_key in seen_headers:
                             created_header = seen_headers[header_key]
                         else:
-                            created_header = self.env['acumatica.credit.memo.consignment.staging'].create(header)
-                            seen_headers[header_key] = created_header
-                            result.append(header)
-                            sync_data = fields.Datetime.now()
-                            created_header.write({
+                            header.update({
                                 'config_id': self.config_id.id,
                                 'import_state': 'staged',
                                 'import_message': "Data API Imported",
                                 'selected': True,
-                                'sync_date': sync_data,
+                                'sync_date': fields.Datetime.now(),
                             })
+                            existing_header = self.env['acumatica.credit.memo.consignment.staging'].search([
+                                ('config_id', '=', self.config_id.id),
+                                ('adt_ReferenceNbr', '=', header.get('adt_ReferenceNbr')),
+                            ], limit=1)
+                            if existing_header:
+                                existing_header.line_ids.unlink()
+                                existing_header.write(header)
+                                created_header = existing_header
+                            else:
+                                created_header = self.env['acumatica.credit.memo.consignment.staging'].create(header)
+                            seen_headers[header_key] = created_header
+                            result.append(header)
+                            picking = Picking.search([
+                                ('origin', '=', header.get('adt_ReferenceNbr')),
+                            ], limit=1)
+                            if picking:
+                                created_header.write({'odoo_picking_id': picking.id})
 
 
                         if flat_data is not None:
@@ -388,13 +401,10 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                 continue
 
             # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda
-            if vals.get('acumatica_write_date') and existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

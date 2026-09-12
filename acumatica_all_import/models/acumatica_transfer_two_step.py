@@ -9,7 +9,7 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaTransferTwoStepLine(models.Model):
     _name = 'acumatica.transfer.two.step.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Transfer Order dari Acumatica'
     _order = 'reference_nbr asc, line_nbr asc, id asc'
 

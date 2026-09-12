@@ -49,9 +49,12 @@ class AcumaticaShipmentProductLine(models.Model):
 
 class AcumaticaShipmentLine(models.Model):
     _name = 'acumatica.shipment.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Shipment Receipt dari Acumatica'
     _order = 'shipment_nbr asc, id asc'
+
+    def _adt_picking_type_wizard_call(self):
+        return ('import.shipment.wizard', (self.building_code,), {})
 
     row_number = fields.Integer(string='No')
     external_id = fields.Char(string='UUID Header')
@@ -287,7 +290,7 @@ class AcumaticaShipmentLine(models.Model):
         #     ('warehouse_id', '=', warehouse.id if warehouse else False),
         #     ('code', '=', 'incoming'),
         # ], limit=1)
-        picking_type = self.picking_type_id
+        picking_type = shipment._adt_reresolve_picking_type()
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {shipment.warehouse_code}'
@@ -332,6 +335,9 @@ class AcumaticaShipmentLine(models.Model):
             picking = Picking.create(picking_vals)
             action_state = 'created'
 
+        if action_state == 'updated':
+            picking.move_ids.unlink()
+
         for shipment_line in shipment.product_line_ids:
             move_vals = {}
             try:
@@ -364,16 +370,6 @@ class AcumaticaShipmentLine(models.Model):
                     continue
 
                 qty = shipment._parse_float(shipment_line.shipped_qty)
-                existing = picking.move_ids.filtered(
-                    lambda move: (
-                        move.picking_id.id == picking.id
-                        and move.product_id.id == product.id
-                        and move.product_uom_qty == qty
-                    )
-                )
-                if existing:
-                    continue
-
                 move_vals = {
                     'name': shipment_line.description or product.display_name,
                     'picking_id': picking.id if picking else False,

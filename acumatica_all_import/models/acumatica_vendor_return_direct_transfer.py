@@ -5,8 +5,18 @@ from dateutil import parser as dateutil_parser
 
 class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     _name = 'acumatica.vendor.return.direct.transfer.staging'
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Staging Header Acumatica Direct Transfer'
     _order = 'id desc'
+
+    def _adt_picking_type_wizard_call(self):
+        if not self.adt_FromWarehouseID:
+            return False
+        return (
+            'import.vendor.return.direct.transfer.wizard',
+            ({'adt_FromWarehouseID': self.adt_FromWarehouseID, 'adt_DocumentOnly': self.adt_DocumentOnly},),
+            {},
+        )
 
     # --- Relasi Odoo ---
     config_id = fields.Many2one('acumatica.config', string="Konfigurasi API")
@@ -110,16 +120,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 rec.picking_type_id = picking_type.id
         return True
 
-    def action_fill_picking_type_id(self):
-        self._fill_vendor_return_picking_type()
-        missing = self.filtered(lambda rec: not rec.picking_type_id)
-        if missing:
-            raise UserError(
-                'Picking Type Direct Delivery Order tidak ditemukan untuk: %s'
-                % ', '.join(missing.mapped('adt_ReferenceNbr'))
-            )
-        return True
-
     def action_reset_pending(self):
         self.filtered(lambda record: record.import_state == 'error').write({
             'import_state': 'staged',
@@ -127,83 +127,17 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         })
         return True
 
-    def _get_or_create_consignment_location(
-        self, source_location=False, customer_code=False, cons_location_code=False
-    ):
-        Location = self.env['stock.location'].sudo()
-        if not source_location:
-            raise UserError('Source location wajib diisi untuk membuat lokasi consignment.')
-
-        customer_code = (customer_code or '').strip() or 'Unknown Customer'
-        cons_location_code = (cons_location_code or '').strip() or 'Consignment'
-
-        def get_or_create_child(parent, name, is_consignment=False):
-            location = Location.search([
-                ('location_id', '=', parent.id),
-                ('name', '=', name),
-            ], limit=1)
-            vals = {
-                'name': name,
-                'usage': 'internal',
-                'location_id': parent.id,
-            }
-            if source_location.company_id:
-                vals['company_id'] = source_location.company_id.id
-            if 'is_consignment' in Location._fields:
-                vals['is_consignment'] = is_consignment
-            if location:
-                write_vals = {}
-                if is_consignment and not location.is_consignment:
-                    write_vals['is_consignment'] = True
-                if write_vals:
-                    location.write(write_vals)
-                return location
-            return Location.create(vals)
-
-        warehouse_root = source_location
-        warehouse = self.env['stock.warehouse'].sudo().search([]).filtered(
-            lambda wh: source_location.parent_path.startswith(wh.view_location_id.parent_path)
-        )[:1]
-        if warehouse:
-            warehouse_root = warehouse.view_location_id
-
-        cons_root = get_or_create_child(warehouse_root, 'CONS')
-        customer_location = get_or_create_child(cons_root, customer_code)
-        return get_or_create_child(
-            customer_location,
-            cons_location_code,
-            is_consignment=True,
-        )
-
     def _get_vendor_return_base_location(self, first, picking_type):
-        destination_warehouse = self._find_warehouse_by_code(first.adt_ToWarehouseID)
-        if destination_warehouse and destination_warehouse.lot_stock_id:
-            return destination_warehouse.lot_stock_id
         return picking_type.default_location_src_id
 
     def _get_vendor_return_source_location(self, first, picking_type):
-        warehouse_src = self._find_warehouse_by_code(first.adt_FromWarehouseID)
-        if warehouse_src and warehouse_src.lot_stock_id:
-            return warehouse_src.lot_stock_id
-
         base_location = self._get_vendor_return_base_location(first, picking_type)
         if not base_location:
             raise UserError(
                 f"Lokasi basis consignment tidak ditemukan untuk Vendor Return {first.adt_ReferenceNbr or '-'}."
             )
 
-        first_line = first.line_ids[:1]
-        cons_location_code = (
-            (first_line.adt_FromLocationID if first_line else False)
-            or (first_line.adt_ToLocationID if first_line else False)
-            or first.adt_FromWarehouseID
-            or 'Consignment'
-        )
-        return self._get_or_create_consignment_location(
-            base_location,
-            first.adt_FromWarehouseID,
-            cons_location_code,
-        )
+        return base_location
 
     def _get_vendor_return_destination_location(self, first, picking_type):
         destination_warehouse = self._find_warehouse_by_code(first.adt_ToWarehouseID)
@@ -267,7 +201,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
                     # Tentukan jenis operasi picking (Operation Type)
                     first._fill_vendor_return_picking_type()
-                    picking_type = first.picking_type_id
+                    picking_type = first._adt_reresolve_picking_type()
                     if not picking_type:
                         raise UserError(f"Picking type (Operation Type) belum diatur pada header staging ID {first.id}.")
 

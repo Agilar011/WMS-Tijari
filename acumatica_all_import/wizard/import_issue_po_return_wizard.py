@@ -266,6 +266,7 @@ class ImportReceiptWizard(models.TransientModel):
                     'line_nbr': move_item.get('line_nbr'),
                     'line_note': move_item.get('line_note'),
                     'product_uom_qty': move_item.get('product_uom_qty'),
+                    'order_qty': move_item.get('order_qty'),
                 })
 
         # return created_headers
@@ -300,7 +301,14 @@ class ImportReceiptWizard(models.TransientModel):
             'external_id': item.get('id', '') or '',
             'row_number': row_number,
             'note': self._val(item, 'NoteHeader')  or '',
+            'note_header_id': self._val(item, 'NoteHeaderID'),
             'branch_warehouse': self._val(item, 'Branch'),
+            'building_code': self._val(item, 'BuildingID'),
+            'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
+            'customer_id': self._val(item, 'CustomerID'),
+            'customer_location_id': self._val(item, 'CustomerLocationID'),
+            'customer_location_name': self._val(item, 'CustomerLocationName'),
+            'customer_name': self._val(item, 'CustomerName'),
             'actual_qty': self._val(item, 'ControlQty'),
             'total_qty': self._val(item, 'TotalQty'),
             'scheduled_date': self._val(item, 'Date'),
@@ -308,6 +316,8 @@ class ImportReceiptWizard(models.TransientModel):
             'header_location_code': self._val(item, 'Location'),
             # 'external_ref': self._val(item, 'ExternalRef'),
             'document_only': self._bool_val(item, 'DocumentOnly'),
+            'doc_type': self._val(item, 'DocType'),
+            'external_ref': self._val(item, 'ExternalRef'),
             'is_hold': self._val(item, 'Hold'),
             'inventory_ref': self._val(item, 'InventoryRefNbr'),
             'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
@@ -317,11 +327,17 @@ class ImportReceiptWizard(models.TransientModel):
             # 'total_amount': self._val(item, 'TotalAmount'),
             # 'total_qty': self._val(item, 'TotalQty'),
             'receipt_type': self._val(item, 'Type'),
+            'trans_type': self._val(item, 'TransType'),
+            'shipment_nbr': self._val(item, 'ShipmentNbr'),
+            'transfer_nbr': self._val(item, 'TransferNbr'),
             'vendor_code' : self._val(item, 'VendorID'),
             'partner_ref' : self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
-            'line_nbr': self._val(item, 'LineNbr'),
-            'description': self._val(item, 'LineDescription'),
-            'transaction_description': self._val(item, 'LineDescription'),
+            'line_nbr': self._val(item, 'LineNumber') or self._val(item, 'LineNbr'),
+            'description': self._val(item, 'LineDescription') or self._val(item, 'LineInventoryName'),
+            'transaction_description': self._val(item, 'LineDescription') or self._val(item, 'LineInventoryName'),
+            'line_inventory_name': self._val(item, 'LineInventoryName'),
+            'line_location_name': self._val(item, 'LineLocationName'),
+            'line_note_id': self._val(item, 'LineNoteID'),
             'inventory_id': self._val(item, 'LineInventoryID'),
             'line_type': self._val(item, 'LineType'),
             'location_dest_code': self._val(item, 'LineLocation'),
@@ -332,13 +348,16 @@ class ImportReceiptWizard(models.TransientModel):
             'po_type': self._val(item, 'LinePOOrderType') or self._val(item, 'Type'),
             'po_receipt_line_number': self._val(item, 'LinePOReceiptLineNbr'),
             'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
-            'product_uom_qty': self._val(item, 'LineReceiptQty'),
+            'product_uom_qty': self._val(item, 'LineQuantity') or self._val(item, 'LineReceiptQty'),
             'transfer_order_line_number': self._val(item, 'LineTransferOrderLineNbr'),
             'transfer_order_number': self._val(item, 'LineTransferOrderNbr'),
             'transfer_order_type': self._val(item, 'LineTransferOrderType'),
             'transfer_shipment_number': self._val(item, 'LineTransferShipmentNbr'),
             'uom_code': self._val(item, 'LineUOM'),
-            'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+            'warehouse_code': self._val(item, 'LineWarehouse') or self._val(item, 'LineWarehouseID'),
+            'line_warehouse': self._val(item, 'LineWarehouse'),
+            'line_warehouse_name': self._val(item, 'LineWarehouseName'),
+            'warehouse_dest_code': self._val(item, 'LineWarehouseID') or self._val(item, 'LineWarehouse'),
             'picking_type_id': type
 
             }
@@ -393,13 +412,10 @@ class ImportReceiptWizard(models.TransientModel):
                 continue
 
 
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 
@@ -448,14 +464,19 @@ class ImportReceiptWizard(models.TransientModel):
             'header_external_id': header_id,
             'line_external_id': detail.get('id', '') or '',
             'line_note': self._val(detail, 'LineNote') or '',
+            'line_note_id': self._val(detail, 'LineNoteID') or '',
             'branch_warehouse': self._val(detail, 'LineBranch') or '',
-            'line_description': self._val(detail, 'LineDescription') or '',
+            'line_description': self._val(detail, 'LineDescription') or self._val(detail, 'LineInventoryName') or '',
+            'line_inventory_name': self._val(detail, 'LineInventoryName') or '',
+            'line_location_name': self._val(detail, 'LineLocationName') or '',
             'inventory_id': self._val(detail, 'LineInventoryID') or '',
-            'line_nbr': self._val(detail, 'LineNbr'),
+            'line_nbr': self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr'),
             'location_code': self._val(detail, 'LineLocation') or '',
-            'product_uom_qty': self._val(detail, 'LineReceiptQty') or '',
+            'order_qty': self._val(detail, 'LineOrderedQty') or '',
+            'product_uom_qty': self._val(detail, 'LineQuantity') or self._val(detail, 'LineReceiptQty') or '',
             'uom_code': self._val(detail, 'LineUOM') or '',
-            'warehouse_code': self._val(detail, 'LineWarehouseID') or '',
+            'warehouse_code': self._val(detail, 'LineWarehouse') or self._val(detail, 'LineWarehouseID') or '',
+            'line_warehouse_name': self._val(detail, 'LineWarehouseName') or '',
         }
 
         

@@ -5,8 +5,18 @@ from dateutil import parser as dateutil_parser
 
 class AcumaticaDirectTransferStaging(models.Model):
     _name = 'acumatica.direct.transfer.staging'
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Staging Header Acumatica Direct Transfer'
     _order = 'id desc'
+
+    def _adt_picking_type_wizard_call(self):
+        if not self.adt_FromWarehouseID:
+            return False
+        return (
+            'import.direct.transfer.wizard',
+            ({'adt_FromWarehouseID': self.adt_FromWarehouseID, 'adt_DocumentOnly': self.adt_DocumentOnly},),
+            {},
+        )
 
     # --- Relasi Odoo ---
     config_id = fields.Many2one('acumatica.config', string="Konfigurasi API")
@@ -111,7 +121,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                     print(f"[DIRECT TRANSFER] Processing Document: {origin}")
 
                     # Tentukan jenis operasi picking (Operation Type)
-                    picking_type = first.picking_type_id
+                    picking_type = first._adt_reresolve_picking_type()
                     if not picking_type:
                         raise UserError(f"Picking type (Operation Type) belum diatur pada header staging ID {first.id}.")
 
@@ -160,7 +170,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                     is_new_picking = False
 
                     if picking:
-                        if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                        if picking.state != 'draft':
                             raise UserError(f"Dokumen {origin} sudah divalidasi di Odoo (State: {picking.state}), update digagalkan.")
                         picking.write(vals)
                         action_state = 'updated'
@@ -169,6 +179,9 @@ class AcumaticaDirectTransferStaging(models.Model):
                         picking = Picking.create(vals)
                         is_new_picking = True
                         action_state = 'created'
+
+                    if action_state == 'updated':
+                        picking.move_ids.unlink()
 
                     # ---------------------------------------------------------
                     # BULK CREATION STOCK MOVES (DETAIL LINES)
@@ -188,20 +201,6 @@ class AcumaticaDirectTransferStaging(models.Model):
                         # Tentukan lokasi detail per baris barang secara spesifik (jika ada)
                         line_loc_src = picking.location_id
                         line_loc_dest = picking.location_dest_id
-
-                        # DEDUP LOGIKA: Mengunci kombinasi ID Produk + Nomor Baris asli Acumatica
-                        move_domain = [('picking_id', '=', picking.id)]
-                        if 'adt_line_external_id' in Move._fields and line.adt_id:
-                            move_domain.append(('adt_line_external_id', '=', line.adt_id))
-                        else:
-                            move_domain += [
-                                ('product_id', '=', product.id),
-                                ('adt_line_nbr', '=', line.adt_rowNumber or False)
-                            ]
-
-                        existing_move = Move.search(move_domain, limit=1)
-                        if existing_move:
-                            continue
 
                         # Bangun dictionary baris barang tunggal
                         single_move_vals = {

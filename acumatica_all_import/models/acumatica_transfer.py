@@ -51,7 +51,7 @@ class AcumaticaTransferProductLine(models.Model):
 
 class AcumaticaTransferLine(models.Model):
     _name = 'acumatica.transfer.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Data SOTR dari Acumatica'
     _order = 'transfer_order_number asc, line_nbr asc, id asc'
 
@@ -487,7 +487,7 @@ class AcumaticaTransferLine(models.Model):
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 
         if picking:
-            if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+            if picking.state != 'draft':
                 raise ReceiptImportError(
                     f'Receipt {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
@@ -498,6 +498,9 @@ class AcumaticaTransferLine(models.Model):
         else:
             picking = Picking.create(picking_vals)
             action_state = 'created'
+
+        if action_state == 'updated':
+            picking.move_ids.unlink()
 
         for receipt_line in receipt.product_line_ids:
             move_vals = {}
@@ -533,18 +536,6 @@ class AcumaticaTransferLine(models.Model):
                 qty = receipt._parse_float(receipt_line.product_uom_qty)
                 location_id = picking.location_id.id if picking else False
                 location_dest_id = picking.location_dest_id.id if picking else False
-                existing = picking.move_ids.filtered(
-                    lambda move: (
-                        move.picking_id.id == picking.id
-                        and move.product_id.id == product.id
-                        and move.product_uom_qty == qty
-                        and move.location_id.id == location_id
-                        and move.location_dest_id.id == location_dest_id
-                    )
-                )
-                if existing:
-                    continue
-
                 move_vals = {
                     'name': receipt_line.transaction_description or receipt_line.description or product.display_name,
                     'picking_id': picking.id if picking else False,

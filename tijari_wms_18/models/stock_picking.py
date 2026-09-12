@@ -322,6 +322,19 @@ class StockPicking(models.Model):
                 )
 
     def write(self, vals):
+        import_audit_fields = {
+            field_name for field_name in vals
+            if field_name in self._fields and field_name not in {
+                'write_uid', 'write_date', 'message_follower_ids', 'activity_ids',
+            }
+        }
+        import_audit_before = {
+            picking.id: {
+                field_name: picking[field_name]
+                for field_name in import_audit_fields
+            }
+            for picking in self
+        }
         if (
             'pick_responsible_ids' in vals
             and not self.env.context.get('tijari_responsible_sync')
@@ -346,6 +359,58 @@ class StockPicking(models.Model):
                 ))
 
         result = super().write(vals)
+        if import_audit_fields and not self.env.context.get('skip_acumatica_import_log'):
+            staging_models = (
+                'acumatica.receipt.line', 'acumatica.inventory.recieved.line',
+                'acumatica.transfer.line', 'acumatica.shipment.line',
+                'acumatica.transfer.shipment.line', 'acumatica.transfer.one.step.line',
+                'acumatica.transfer.two.step.line', 'acumatica.direct.transfer.staging',
+                'acumatica.vendor.return.direct.transfer.staging',
+                'acumatica.credit.memo.consignment.staging',
+                'acumatica.invoice.consignment.staging', 'acumatica.inventory.issue.line',
+                'acumatica.issue.line', 'acumatica.issue.po.return.line',
+                'acumatica.kit.assembly', 'acumatica.shipment.gi.staging',
+                'acumatica.shipment.completed.staging',
+                'acumatica.sales.order.shipment.staging',
+            )
+            for picking in self:
+                staging = self.env['acumatica.import.log.mixin'].browse()
+                for model_name in staging_models:
+                    try:
+                        model = self.env[model_name]
+                    except KeyError:
+                        continue
+                    if model and 'odoo_picking_id' in model._fields:
+                        staging = model.search([('odoo_picking_id', '=', picking.id)], limit=1)
+                        if staging:
+                            break
+                if not staging or not hasattr(staging, '_acumatica_post_import_log'):
+                    continue
+                changed_fields = []
+                for field_name in import_audit_fields:
+                    old_value = import_audit_before[picking.id].get(field_name)
+                    new_value = picking[field_name]
+                    field = picking._fields[field_name]
+                    if field.type == 'many2one':
+                        old_value = old_value.display_name if old_value else False
+                        new_value = new_value.display_name if new_value else False
+                    elif field.type in ('many2many', 'one2many'):
+                        old_value = ', '.join(old_value.mapped('display_name'))
+                        new_value = ', '.join(new_value.mapped('display_name'))
+                    if old_value != new_value:
+                        changed_fields.append({
+                            'field_name': field_name,
+                            'field_label': field.string,
+                            'old_value': old_value,
+                            'new_value': new_value,
+                        })
+                if changed_fields:
+                    staging._acumatica_post_import_log(
+                        'updated',
+                        'Data stock.picking diperbarui dari import transaksi.',
+                        picking,
+                        changed_fields,
+                    )
         if (
             not self.env.context.get('skip_user_ids_sync')
             and 'user_id' in vals

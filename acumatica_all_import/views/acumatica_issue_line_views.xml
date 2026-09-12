@@ -72,19 +72,19 @@
                     <!-- Group Header Utama -->
                     <group string="Header">
                         <group>
-                            <field name="reference_nbr" readonly="1"/>
-                            <field name="scheduled_date" readonly="1"/>
+                            <field name="reference_nbr"/>
+                            <field name="scheduled_date"/>
                             <field name="status" readonly="1"/>
-                            <field name="trans_type" readonly="1"/>
-                            <field name="actual_qty" readonly="1"/>
-                            <field name="total_qty" readonly="1"/>
+                            <field name="trans_type"/>
+                            <field name="actual_qty"/>
+                            <field name="total_qty"/>
                         </group>
                         <group>
-                            <field name="description" readonly="1"/>
-                            <field name="external_ref" readonly="1"/>
-                            <field name="post_period" readonly="1"/>
-                            <field name="acumatica_write_date" readonly="1"/>
-                            <field name="note" readonly="1"/>
+                            <field name="description"/>
+                            <field name="external_ref"/>
+                            <field name="post_period"/>
+                            <field name="acumatica_write_date"/>
+                            <field name="note"/>
                         </group>
                     </group>
 
