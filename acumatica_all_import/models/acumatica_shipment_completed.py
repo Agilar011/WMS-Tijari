@@ -206,6 +206,8 @@ class AcumaticaShipmentCompletedStaging(models.Model):
         string='Tanggal Sync',
     )
 
+    is_used = fields.Boolean('is_used', default=False)
+
     _sql_constraints = [
         (
             'shipment_completed_unique',
@@ -221,6 +223,132 @@ class AcumaticaShipmentCompletedStaging(models.Model):
         })
         return True
 
+    def action_update_stock_picking(self):
+        self.ensure_one()
+
+        Picking = self.env['stock.picking']
+
+        shipment_nbr = self.shipment_nbr
+
+        # Cari Stock Picking berdasarkan shipment number
+        picking = Picking.search([
+            ('origin', '=', shipment_nbr),
+        ], limit=1)
+
+        if not picking:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Gagal Melakukan Update',
+                    'message': (
+                        f'Stock Picking dengan Shipment Number '
+                        f'{shipment_nbr} tidak ditemukan.'
+                    ),
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        staging_lines = self.line_ids
+
+        if not staging_lines:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Gagal Melakukan Update',
+                    'message': (
+                        f'Tidak ada detail shipment untuk '
+                        f'{shipment_nbr}.'
+                    ),
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        all_match = True
+
+        for move in picking.move_ids:
+
+            # Cari staging line berdasarkan Inventory ID
+            staging_lines_for_product = staging_lines.filtered(
+                lambda line:
+                    line.line_inventory_id
+                    == move.product_id.default_code
+            )
+
+            staging_qty = sum(
+                staging_lines_for_product.mapped('line_quantity')
+            )
+
+            # Tidak ada quantity di staging
+            if not staging_qty:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Gagal Melakukan Update',
+                        'message': (
+                            f'Quantity {move.product_id.display_name} '
+                            f'yang diupdate tidak memiliki quantity.'
+                        ),
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+
+            # Staging lebih sedikit → partial shipment
+            if staging_qty < move.quantity:
+                all_match = False
+
+            # Staging lebih banyak → tidak boleh
+            elif staging_qty > move.quantity:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Gagal Melakukan Update',
+                        'message': (
+                            f'Quantity {move.product_id.display_name} '
+                            f'yang diupdate tidak boleh melebihi '
+                            f'quantity barang yang dikirim.'
+                        ),
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+
+            # Update shipped qty
+            move.shipped_qty = staging_qty
+
+        # Tentukan shipment type
+        picking.shipment_information = (
+            'full_shipment'
+            if all_match
+            else 'partial'
+        )
+
+        # Tandai staging sudah digunakan
+        self.is_used = True
+
+        # Jalankan proses konfirmasi shipment
+        picking.action_confirm_shipment()
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': 'Berhasil',
+                'message': (
+                    f'Shipment {shipment_nbr} berhasil '
+                    f'diupdate ke Stock Picking {picking.name}.'
+                ),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+    
 class AcumaticaShipmentCompletedStagingLine(models.Model):
     _name = 'acumatica.shipment.completed.staging.line'
     _description = 'Detail Staging Shipment Completed dari Acumatica'
