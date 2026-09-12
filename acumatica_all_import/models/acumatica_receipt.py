@@ -356,7 +356,8 @@ class AcumaticaReceiptLine(models.Model):
             'adt_post_period': receipt.post_period or False,
             'adt_status': receipt.status or False,
             'adt_total_qty': receipt._parse_float(receipt.total_qty),
-            'adt_type': receipt.receipt_type or False,
+            # 'adt_type': receipt.receipt_type or False,
+            'adt_type': "PO Receipt",
             'adt_warehouse_code': receipt.warehouse_code or False,
             'adt_external_id': receipt.external_id or False,
         }
