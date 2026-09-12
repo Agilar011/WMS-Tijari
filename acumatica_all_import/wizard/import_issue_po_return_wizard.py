@@ -235,6 +235,11 @@ class ImportReceiptWizard(models.TransientModel):
             # tidak disentuh karena sudah terhubung ke picking Odoo.
             created_header = existing_headers[:1]
             if created_header:
+                if (
+                    not lines_to_create.get('acumatica_write_date')
+                    or created_header.acumatica_write_date == lines_to_create['acumatica_write_date']
+                ):
+                    continue
                 duplicate_headers = existing_headers[1:].filtered(
                     lambda record: record.import_state in ('staged', 'error')
                 )

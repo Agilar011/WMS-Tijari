@@ -199,7 +199,7 @@ class ImportInventoryStockWizard(models.TransientModel):
             })
             if existing:
                 incoming_last_modified = vals.get('last_modified_datetime')
-                if incoming_last_modified and existing.last_modified_datetime == incoming_last_modified:
+                if not incoming_last_modified or existing.last_modified_datetime == incoming_last_modified:
                     continue
                 existing.write(vals)
                 existing_count += 1

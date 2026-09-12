@@ -195,6 +195,8 @@ class ImportCustomerWizard(models.TransientModel):
         }
 
     def _check_last_modified_staging(self, item):
+        if not item.get('last_modified_datetime'):
+            return
         Staging = self.env['acumatica.customer.line']
         existing = Staging.search([
             ('b_account_id', '=', item['b_account_id']),

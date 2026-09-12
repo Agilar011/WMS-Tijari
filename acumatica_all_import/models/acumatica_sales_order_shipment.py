@@ -104,14 +104,14 @@ class AcumaticaShipmentGIStaging(models.Model):
     #         # Ambil semua record line_ids dari setiap shipment di dalam shipment_ids
     #         rec.all_line_ids = rec.shipment_ids.mapped('line_ids')
 
-    @api.depends('all_line_ids.adt_ShipmentQty')
+    @api.depends('all_line_ids.adt_LineQuantity')
     def _compute_total_qty(self):
         for rec in self:
             # Konversi setiap nilai secara paksa ke float untuk mengantisipasi tipe data str di DB
             total = 0.0
             for line in rec.all_line_ids:
                 try:
-                    total += float(line.adt_ShipmentQty or 0.0)
+                    total += float(line.adt_LineQuantity or 0.0)
                 except (ValueError, TypeError):
                     total += 0.0
             rec.total_qty = total
@@ -328,14 +328,14 @@ class AcumaticaShipmentGIStaging(models.Model):
                             'name': item.adt_LineDescription or item.description,
                             'origin': picking.origin,
                             'description_picking': item.adt_LineDescription or item.description,
-                            'product_uom_qty': float(item.adt_ShipmentQty or 0.0),
+                            'product_uom_qty': float(item.adt_LineQuantity or 0.0),
                             'date': ship_date,
                             'date_deadline': ship_date,
                             'adt_line_external_id': item.acumatica_id,
                             'adt_inventory_id': item.adt_LineInventoryID,
                             'adt_uom_code': item.adt_LineUOM,
                             'adt_line_note': item.adt_LineNote or False,
-                            'adt_open_qty': float(item.adt_ShipmentQty or 0.0),
+                            'adt_open_qty': float(item.adt_LineQuantity or 0.0),
                             'adt_type': 'Sales Order Shipment',
                             'adt_line_description': item.adt_LineDescription or item.description,
                             'adt_dest_location_id' : product_location.id if product_location else picking_type.default_location_src_id.id,
@@ -345,7 +345,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                         adt_dest_location_id =  Move.create(move_vals)
                         print(f"mapped location: {adt_dest_location_id.id}")
 
-                        item_qty = float(item.adt_ShipmentQty or 0.0)
+                        item_qty = float(item.adt_LineQuantity or 0.0)
 
                     #     if create_tms_state == True:
                     #         self._build_loginext_item(product, shipment.adt_OrderType, created_loginext_header.id, move_count, shipment.adt_ShipmentWeight, item_qty)
@@ -580,7 +580,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
 
             uom = self._find_uom(item, product)
-            qty = float(item.adt_ShipmentQty or 0.0)
+            qty = float(item.adt_LineQuantity or 0.0)
             move_vals = {
                 'name': item.adt_LineDescription or product.display_name,
                 'product_id': product.id,

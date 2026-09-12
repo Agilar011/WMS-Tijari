@@ -117,6 +117,9 @@ class ImportIssueWizard(models.TransientModel):
                         ('config_id', '=', self.config_id.id),
                     ], limit=1)
                     if issue_record:
+                        incoming_last_modified = header_vals.get('acumatica_write_date')
+                        if not incoming_last_modified or issue_record.acumatica_write_date == incoming_last_modified:
+                            continue
                         issue_record.write(header_vals)
                         # Staging adalah snapshot penuh dari API. Hapus detail lama
                         # terlebih dahulu agar baris yang sudah hilang/berubah dari API

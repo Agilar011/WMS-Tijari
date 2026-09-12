@@ -145,6 +145,12 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                         ('adt_ReferenceNbr', '=', header.get('adt_ReferenceNbr')),
                     ], limit=1)
                     if existing_header:
+                        if (
+                            not lines_to_create.get('adt_LastModifiedDateTime')
+                            or existing_header.adt_LastModifiedDateTime == lines_to_create['adt_LastModifiedDateTime']
+                        ):
+                            seen_headers[header_id] = existing_header
+                            continue
                         existing_header.product_line_ids.unlink()
                         existing_header.write(lines_to_create)
                         created_header = existing_header
@@ -574,6 +580,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 operation_category='delivery',
                 api_acumatica='invoice_consignment',
                 transaction_key='invoice_consignment',
+                document_only=True,
                 required=False,
             )
 

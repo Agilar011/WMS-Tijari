@@ -8,6 +8,8 @@
             <list string="Internal Transfer Orders">
                 <field name="name"/>
                 <field name="external_ref" optional="hide"/>
+                <field name="external_ref_in" optional="hide"/>
+                <field name="external_ref_out" optional="hide"/>
                 <field name="transaction_type"/>
                 <field name="transfer_type"/>
                 <field name="location_id"/>
@@ -58,7 +60,9 @@
                             <field name="transaction_type"/>
                             <field name="transfer_type"/>
                             <field name="validation_policy"/>
-                            <field name="external_ref"/>
+                            <field name="external_ref" invisible="1"/>
+                            <field name="external_ref_in"/>
+                            <field name="external_ref_out"/>
                         </group>
                         <group>
                             <field name="location_id"/>
@@ -128,7 +132,6 @@
         <field name="arch" type="xml">
             <search string="Internal Transfer Orders">
                 <field name="name"/>
-                <field name="external_ref"/>
                 <field name="transaction_type"/>
                 <field name="transfer_type"/>
                 <field name="location_id"/>

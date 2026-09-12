@@ -436,6 +436,11 @@ class ImportShipmentWizard(models.TransientModel):
             }
             shipment = existing_shipments.get(shipment_nbr)
             if shipment:
+                if (
+                    not values.get('acumatica_write_date')
+                    or shipment.acumatica_write_date == values['acumatica_write_date']
+                ):
+                    continue
                 shipment.write(values)
             else:
                 shipment = self.env['acumatica.shipment.line'].create(values)

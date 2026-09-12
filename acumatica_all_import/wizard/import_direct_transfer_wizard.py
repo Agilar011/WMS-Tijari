@@ -347,6 +347,11 @@ class ImportDirectTransferWizard(models.TransientModel):
 
             existing = existing_map.get(reference_nbr)
             if existing:
+                if (
+                    not vals.get('adt_LastModifiedDateTime')
+                    or existing.adt_LastModifiedDateTime == vals['adt_LastModifiedDateTime']
+                ):
+                    continue
                 existing.write(vals)
                 header = existing
                 header.line_ids.unlink()

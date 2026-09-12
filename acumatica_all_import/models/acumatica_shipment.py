@@ -263,7 +263,7 @@ class AcumaticaShipmentLine(models.Model):
             all_line_payloads.append({
                 'inventory_id': shipment_line.inventory_id or False,
                 'product_name': shipment_line.description or False,
-                'qty': shipment._parse_float(shipment_line.shipped_qty),
+                'qty': shipment._parse_float(shipment_line.order_qty),
                 'uom': shipment_line.uom_code or False,
                 'payload': shipment_line.read()[0] if shipment_line.exists() else {},
             })
@@ -305,6 +305,13 @@ class AcumaticaShipmentLine(models.Model):
                 line_payloads=all_line_payloads
             )
 
+        order_nbrs = []
+        for product_line in shipment.product_line_ids:
+            order_nbr = (product_line.order_number or '').strip()
+            if order_nbr and order_nbr not in order_nbrs:
+                order_nbrs.append(order_nbr)
+
+        adt_type = 'SO Return' if shipment.shipment_type == 'Shipment' else shipment.shipment_type
         picking_vals = {
             'partner_id': partner.id if partner else False,
             'picking_type_id': picking_type.id,
@@ -315,7 +322,8 @@ class AcumaticaShipmentLine(models.Model):
             'adt_acumatica_write_date': self._parse_dt(shipment.acumatica_write_date),
             'adt_total_qty': self._parse_float(shipment.actual_qty),
             'adt_actual_qty': self._parse_float(shipment.actual_qty),
-            'adt_type': 'SO Return' if shipment.shipment_type == 'Shipment' else shipment.shipment_type,
+            'adt_type': adt_type,
+            'adt_order_nbr': ','.join(order_nbrs) if adt_type == 'SO Return' else False,
             # 'adt_type': shipment.shipment_type or False
 
         }
@@ -369,7 +377,7 @@ class AcumaticaShipmentLine(models.Model):
                     # })
                     continue
 
-                qty = shipment._parse_float(shipment_line.shipped_qty)
+                qty = shipment._parse_float(shipment_line.order_qty)
                 move_vals = {
                     'name': shipment_line.description or product.display_name,
                     'picking_id': picking.id if picking else False,
@@ -396,7 +404,7 @@ class AcumaticaShipmentLine(models.Model):
                 all_line_payloads.append({
                     'inventory_id': shipment_line.inventory_id or False,
                     'product_name': shipment_line.description or False,
-                    'qty': shipment._parse_float(shipment_line.shipped_qty),
+                    'qty': shipment._parse_float(shipment_line.order_qty),
                     'uom': shipment_line.uom_code or False,
                     'payload': move_vals if move_vals else (shipment_line.read()[0] if shipment_line.exists() else {}),
                 })
