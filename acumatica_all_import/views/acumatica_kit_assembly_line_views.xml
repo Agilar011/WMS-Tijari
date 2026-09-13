@@ -2,8 +2,8 @@
     <record id="action_import_selected_kit_assembly"
             model="ir.actions.server">
         <field name="name">Generate Data</field>
-        <field name="model_id" ref="model_acumatica_kit_assembly_line"/>
-        <field name="binding_model_id" ref="model_acumatica_kit_assembly_line"/>
+        <field name="model_id" ref="model_acumatica_kit_assembly"/>
+        <field name="binding_model_id" ref="model_acumatica_kit_assembly"/>
         <field name="binding_type">action</field>
         <field name="state">code</field>
         <field name="code">
@@ -15,7 +15,7 @@
         <field name="name">acumatica.kit.assembly.list</field>
         <field name="model">acumatica.kit.assembly</field>
         <field name="arch" type="xml">
-            <list string="Data Manufacturing Order" create="0" delete="0">
+            <list string="Data Manufacturing Order">
                 <!-- <field name="selected" widget="boolean_toggle"/> -->
                 <field name="reference_nbr"/>
                 <!-- <field name="line_nbr"/> -->
@@ -82,7 +82,7 @@
                     <notebook>
                         <page string="Components">
                             <field name="component_ids">
-                                <list string="Components" create="0" edit="0" delete="0">
+                                <list string="Components" edit="0">
                                     <field name="line_nbr"/>
                                     <field name="stock_inventory_id"/>
                                     <field name="line_inventory_id"/>
