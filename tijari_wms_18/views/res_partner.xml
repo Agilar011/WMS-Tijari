@@ -54,6 +54,17 @@
                         <field name="adt_note"/> -->
                     </group>
                 </page>
+                <page name="vendor_id_history" string="Vendor ID History" invisible="partner_type != 'vendor'">
+                    <field name="vendor_id_history_ids" readonly="1">
+                        <list create="0" edit="0" delete="0">
+                            <field name="vendor_id"/>
+                            <field name="date_start"/>
+                            <field name="date_end"/>
+                            <field name="is_current"/>
+                            <field name="note"/>
+                        </list>
+                    </field>
+                </page>
                 <page name="e_signature" string="Digital Signature">
                     <group>
                         <label for="digital_signature" string="Digital Signature" class="oe_edit_only"/>

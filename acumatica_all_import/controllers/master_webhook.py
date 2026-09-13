@@ -14,7 +14,7 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
     def _customer_vals(self, item, row_number):
         b_account_id = self._first_value(item, "BAccountID", "b_account_id")
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "note": self._note_value(item),
             "b_account_id": str(b_account_id) if b_account_id else "",
@@ -36,7 +36,7 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
 
     def _vendor_vals(self, item, row_number):
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "note": self._note_value(item),
             "account_ref": self._first_value(item, "AccountRef", "account_ref"),
@@ -57,7 +57,7 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
 
     def _uom_vals(self, item, row_number):
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "unit_id": self._first_value(item, "UnitID", "unit_id"),
             "description": self._first_value(item, "Description", "description"),
@@ -69,7 +69,7 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
 
     def _warehouse_vals(self, item, row_number):
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "building_id": self._first_value(item, "BuildingID", "building_id"),
             "note": self._note_value(item),
@@ -89,7 +89,7 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
 
     def _stock_item_vals(self, item, row_number):
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "inventory_id": self._first_value(item, "InventoryID", "inventory_id"),
             "description": self._first_value(item, "Description", "description"),
@@ -106,7 +106,7 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
 
     def _non_stock_item_vals(self, item, row_number):
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "inventory_id": self._first_value(item, "InventoryID", "inventory_id"),
             "description": self._first_value(item, "Description", "description"),
@@ -138,28 +138,28 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "customer": {
                 "model_name": "acumatica.customer.line",
                 "vals_getter": self._customer_vals,
-                "lookup_fields": [("b_account_id", "customer_id"), ("external_id",), ("customer_id",)],
+                "lookup_fields": [("b_account_id",), ("customer_id",)],
                 "payload_keys": ("Inserted", "records", "data", "value"),
                 "label": "Customer",
             },
             "vendor": {
                 "model_name": "acumatica.vendor.line",
                 "vals_getter": self._vendor_vals,
-                "lookup_fields": [("vendor_id",), ("external_id",)],
+                "lookup_fields": [("b_account_id",), ("vendor_id",)],
                 "payload_keys": ("Inserted", "records", "data", "value"),
                 "label": "Vendor",
             },
             "uom": {
                 "model_name": "acumatica.uom.line",
                 "vals_getter": self._uom_vals,
-                "lookup_fields": [("unit_id",), ("description",), ("external_id",)],
+                "lookup_fields": [("unit_id",)],
                 "payload_keys": ("Inserted", "records", "data", "value"),
                 "label": "UoM",
             },
             "warehouse": {
                 "model_name": "acumatica.warehouse.line",
                 "vals_getter": self._warehouse_vals,
-                "lookup_fields": [("warehouse_id",), ("external_id",)],
+                "lookup_fields": [("external_id",), ("warehouse_id",)],
                 "payload_keys": ("Inserted", "records", "data", "value"),
                 "label": "Warehouse",
             },
