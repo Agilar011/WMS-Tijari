@@ -121,6 +121,11 @@ class ImportTransferTwoStepWizard(models.TransientModel):
                 to_create.append(vals)
                 continue
 
+            incoming_last_modified = vals.get('acumatica_write_date')
+            if not incoming_last_modified or existing.acumatica_write_date == incoming_last_modified:
+                unchanged.append(existing)
+                continue
+
             to_update.append({
                 'record': existing,
                 'vals': vals,

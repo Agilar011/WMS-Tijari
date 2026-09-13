@@ -305,6 +305,12 @@ class ImportShipmentCompletedWizard(models.TransientModel):
 
                     if existing:
 
+                        if (
+                            not header_vals.get('last_modified_datetime')
+                            or existing.last_modified_datetime == header_vals['last_modified_datetime']
+                        ):
+                            continue
+
                         # UPDATE HEADER
                         existing.write(header_vals)
 

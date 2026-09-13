@@ -250,11 +250,24 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             })
         return transit_location
 
-    def prepare_order(self, external_ref, source_location, destination_location, transaction_type, schedule_date=False, note=False, transfer_type='transfer_out'):
+    def prepare_order(
+        self,
+        external_ref,
+        source_location,
+        destination_location,
+        transaction_type,
+        schedule_date=False,
+        note=False,
+        transfer_type='transfer_out',
+        external_ref_in=False,
+        external_ref_out=False,
+    ):
         InternalTransferOrder = self.env['internal.transfer.order']
         order = InternalTransferOrder.search([('external_ref', '=', external_ref)], limit=1)
         vals = {
             'external_ref': external_ref,
+            'external_ref_in': external_ref_in or external_ref_out or external_ref,
+            'external_ref_out': external_ref_out or external_ref_in or external_ref,
             'transaction_type': transaction_type,
             'transfer_type': transfer_type,
             'location_id': source_location.id,
@@ -265,8 +278,15 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             'note': note or False,
         }
         if order:
-            if order.picking_ids:
-                raise UserError(f'Transfer {external_ref} sudah memiliki picking, tidak bisa diupdate.')
+            related_pickings = order._get_related_pickings()
+            blocked_picking = related_pickings.filtered(
+                lambda picking: picking.state != 'draft'
+            )[:1]
+            if blocked_picking:
+                raise UserError(
+                    f'Transfer {external_ref} tidak bisa diupdate karena '
+                    f'picking {blocked_picking.display_name} sudah tidak draft.'
+                )
             if order.state not in ('draft', 'cancel'):
                 raise UserError(f'Transfer {external_ref} sudah ada di state {order.state}, tidak bisa diupdate.')
             order.move_ids.unlink()

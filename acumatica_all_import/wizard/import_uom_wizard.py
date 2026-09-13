@@ -211,6 +211,9 @@ class ImportUomWizard(models.TransientModel):
                     'sync_date': fields.Datetime.now(),
                 }
                 if existing:
+                    incoming_last_modified = vals.get('last_modified_datetime')
+                    if not incoming_last_modified or existing.last_modified_datetime == incoming_last_modified:
+                        continue
                     changed = any(existing[field] != vals[field] for field in ('unit_id', 'description', 'external_id', 'row_number', 'last_modified_datetime'))
                     existing.write(vals)
                     if changed:

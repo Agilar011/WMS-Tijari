@@ -278,6 +278,9 @@ class ImportTransferShipmentWizard(models.TransientModel):
             print(f"vals staging: {vals}")
             existing = existing_map.get(origin)
             if existing:
+                incoming_last_modified = vals.get('acumatica_write_date')
+                if not incoming_last_modified or existing.acumatica_write_date == incoming_last_modified:
+                    continue
                 existing.shipment_line_ids.unlink()
                 existing.write(vals)
                 created_shipment = existing

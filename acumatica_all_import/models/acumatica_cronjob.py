@@ -108,6 +108,49 @@ class AcumaticaCronJob(models.Model):
             domain.append(('selected', '=', True))
         return Line.search(domain)
 
+    def _import_master_lines_in_batches(self, model_name, config, batch_size=1000):
+        """Import master staging rows in bounded batches.
+
+        The upper id boundary prevents rows created during the import from
+        being pulled into the same run. The id cursor also guarantees forward
+        progress when an importer leaves a row in ``staged`` after processing.
+        """
+        Line = self.env[model_name]
+        domain = [('import_state', '=', 'staged')]
+        config_field = Line._fields.get('config_id')
+        if config_field and getattr(config_field, 'comodel_name', False) == 'acumatica.config':
+            domain.append(('config_id', '=', config.id))
+        if 'selected' in Line._fields:
+            domain.append(('selected', '=', True))
+
+        max_id = Line.search([], order='id desc', limit=1).id
+        last_id = 0
+        imported_ids = []
+        batch_number = 0
+        while True:
+            batch = Line.search(
+                domain + [('id', '>', last_id), ('id', '<=', max_id)],
+                order='id asc',
+                limit=batch_size,
+            )
+            if not batch:
+                break
+
+            batch_number += 1
+            _logger.info(
+                "MASTER IMPORT BATCH; MODEL=%s, BATCH=%s, SIZE=%s, FIRST_ID=%s, LAST_ID=%s",
+                model_name,
+                batch_number,
+                len(batch),
+                batch[0].id,
+                batch[-1].id,
+            )
+            imported_ids.extend(batch.ids)
+            last_id = batch[-1].id
+            batch._do_import()
+
+        return Line.browse(imported_ids)
+
     def _run_generic_transaction_import_job(self, key, batch_size=1000, fetch_skip=0):
         definition = False
         for item in self._get_transaction_import_definitions():
@@ -205,7 +248,7 @@ class AcumaticaCronJob(models.Model):
             return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
 
         _logger.info("Cron import Customer starting _do_import; PENDING_LINES=%s", pending_count)
-        lines._do_import()
+        lines = self._import_master_lines_in_batches('acumatica.customer.line', config, batch_size=1000)
 
         Line = self.env['acumatica.customer.line']
         imported_count = Line.search_count([
@@ -273,7 +316,7 @@ class AcumaticaCronJob(models.Model):
             return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
 
         _logger.info("Cron import Vendor starting _do_import; PENDING_LINES=%s", pending_count)
-        lines._do_import()
+        lines = self._import_master_lines_in_batches('acumatica.vendor.line', config, batch_size=1000)
 
         Line = self.env['acumatica.vendor.line']
         imported_count = Line.search_count([
@@ -341,7 +384,7 @@ class AcumaticaCronJob(models.Model):
             return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
 
         _logger.info("Cron import Stock Item starting _do_import; PENDING_LINES=%s", pending_count)
-        lines._do_import()
+        lines = self._import_master_lines_in_batches('acumatica.stock.item.line', config, batch_size=1000)
 
         Line = self.env['acumatica.stock.item.line']
         imported_count = Line.search_count([
@@ -410,7 +453,7 @@ class AcumaticaCronJob(models.Model):
             return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
 
         _logger.info("Cron import Non-Stock Item starting _do_import; PENDING_LINES=%s", pending_count)
-        lines._do_import()
+        lines = self._import_master_lines_in_batches('acumatica.non.stock.item.line', config, batch_size=1000)
 
         Line = self.env['acumatica.non.stock.item.line']
         imported_count = Line.search_count([
@@ -479,7 +522,7 @@ class AcumaticaCronJob(models.Model):
             return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
 
         _logger.info("Cron import UoM starting _do_import; PENDING_LINES=%s", pending_count)
-        lines._do_import()
+        lines = self._import_master_lines_in_batches('acumatica.uom.line', config, batch_size=1000)
 
         imported_count, updated_count, error_count, skipped_count = self._get_import_counts(
             'acumatica.uom.line',
@@ -535,7 +578,7 @@ class AcumaticaCronJob(models.Model):
             return self._cron_result(data_retrieved=data_retrieved, records_skipped=data_retrieved)
 
         _logger.info("Cron import Warehouse starting _do_import; PENDING_LINES=%s", pending_count)
-        lines._do_import()
+        lines = self._import_master_lines_in_batches('acumatica.warehouse.line', config, batch_size=1000)
 
         imported_count, updated_count, error_count, skipped_count = self._get_import_counts(
             'acumatica.warehouse.line',

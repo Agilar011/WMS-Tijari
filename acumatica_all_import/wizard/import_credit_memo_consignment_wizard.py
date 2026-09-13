@@ -205,6 +205,12 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                                 ('adt_ReferenceNbr', '=', header.get('adt_ReferenceNbr')),
                             ], limit=1)
                             if existing_header:
+                                if (
+                                    not header.get('adt_LastModifiedDateTime')
+                                    or existing_header.adt_LastModifiedDateTime == header['adt_LastModifiedDateTime']
+                                ):
+                                    seen_headers[header_key] = existing_header
+                                    continue
                                 existing_header.line_ids.unlink()
                                 existing_header.write(header)
                                 created_header = existing_header
@@ -398,6 +404,13 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
 
             if not existing:
                 to_create.append(vals)
+                continue
+
+            if (
+                not vals.get('adt_LastModifiedDateTime')
+                or existing.adt_LastModifiedDateTime == vals['adt_LastModifiedDateTime']
+            ):
+                unchanged.append(existing)
                 continue
 
             # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda

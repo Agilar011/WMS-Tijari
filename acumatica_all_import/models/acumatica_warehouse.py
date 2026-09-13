@@ -375,7 +375,7 @@ class AcumaticaWarehouseLine(models.Model):
                     'name': line.description,
                     'code': line.warehouse_id,
                     'building': line.building_id,
-                    'is_active': bool(line.building_id),
+                    'is_active': bool(line.is_active),
                 }
 
                 building_code = (

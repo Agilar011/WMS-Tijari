@@ -43,6 +43,7 @@ class StockPicking(models.Model):
     adt_from_warehouse_code = fields.Char(string='From Warehouse (Acumatica)')
     adt_description = fields.Char(string='Description (Acumatica)')
     adt_order_type = fields.Char(string='Order Type (Acumatica)')
+    adt_order_nbr = fields.Char(string='Order Nbr (Acumatica)')
     adt_change_item_ref_nbr = fields.Char(string='Change Item Ref. Nbr (Acumatica)')
     adt_is_document_only = fields.Boolean(string='Is Document Only', index=True, copy=False)
     operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
@@ -1211,9 +1212,24 @@ class StockPicking(models.Model):
         #             _("Source Location dan Destination Location tidak boleh sama.")
         #         )
 
+        marked_as_todo = self.filtered(lambda picking: picking.state == 'draft')
         res = super().action_confirm()
         self._adt_apply_dest_location_to_move_lines()
         self._remove_qty_move_line()
+
+        # Transfer IN: ketika Receipt Internal di-Mark as Todo, otomatis
+        # proses leg delivery yang menjadi pasangan transfer-nya.
+        transfer_in_receipts = marked_as_todo.filtered(
+            lambda picking: (
+                picking.state in ('confirmed', 'waiting', 'assigned')
+                and picking.internal_transfer_order_id
+                and picking.internal_transfer_order_id.transfer_type == 'transfer_in'
+                and picking.internal_transfer_leg == 'receipt'
+                and picking.picking_type_id.name == 'Receipt Internal'
+            )
+        )
+        for receipt in transfer_in_receipts:
+            receipt.internal_transfer_order_id.action_auto_validate_transfer_in_delivery()
         
         for picking in self:
                     for move in picking.move_ids:

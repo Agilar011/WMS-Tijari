@@ -46,7 +46,7 @@
                 <field name="adt_CustomerID"/>
                 <field name="adt_WarehouseID"/>
                 <field name="picking_type_id" string="Operation Type"/>
-                <field name="total_qty"/>
+                <field name="adt_ShipmentQty" string="Shipment Qty"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                        decoration-muted="import_state == 'staged'"
@@ -158,7 +158,6 @@
                                     <field name="adt_LineInventoryID"/>
                                     <field name="adt_LineDescription"/>
                                     <field name="adt_LineQuantity" string="Line Quantity"/>
-                                    <field name="adt_ShipmentQty" string="Shipment Quantity"/>
                                     <field name="adt_LineUOM"/>
                                     <field name="adt_LineLocation"/>
                                     <field name="adt_LineNote"/>

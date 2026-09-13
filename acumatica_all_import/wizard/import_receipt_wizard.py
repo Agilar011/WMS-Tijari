@@ -342,6 +342,11 @@ class ImportReceiptWizard(models.TransientModel):
             }
             receipt = existing_receipts.get(receipt_nbr)
             if receipt:
+                if (
+                    not values.get('acumatica_write_date')
+                    or receipt.acumatica_write_date == values['acumatica_write_date']
+                ):
+                    continue
                 receipt.write(values)
             else:
                 receipt = self.env['acumatica.receipt.line'].create(values)

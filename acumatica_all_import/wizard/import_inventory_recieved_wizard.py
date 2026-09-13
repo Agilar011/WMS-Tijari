@@ -376,6 +376,11 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             }
             receipt = existing_receipts.get(reference_nbr)
             if receipt:
+                if (
+                    not values.get('acumatica_write_date')
+                    or receipt.acumatica_write_date == values['acumatica_write_date']
+                ):
+                    continue
                 receipt.write(values)
             else:
                 receipt = self.env['acumatica.inventory.recieved.line'].create(values)
@@ -416,6 +421,13 @@ class ImportInventoryRecievedWizard(models.TransientModel):
 
             if not existing:
                 to_create.append(vals)
+                continue
+
+            if (
+                not vals.get('acumatica_write_date')
+                or existing.acumatica_write_date == vals['acumatica_write_date']
+            ):
+                unchanged.append(existing)
                 continue
 
 

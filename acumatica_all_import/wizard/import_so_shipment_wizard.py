@@ -389,6 +389,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_State' : self._val(item, "State"),
                     'adt_StateName' : self._val(item, "StateName"),
                     'adt_Status' : self._val(item, "Status"),
+                    'lastmodifieddatetime' : self._val(item, "LastModifiedDateTime"),
                     'adt_ToWarehouseID' : self._val(item, "ToWarehouseID"),
                     'adt_WarehouseID' : self._val(item, "WarehouseID"),
                     'picking_type_id' : picking_type_id,
@@ -475,9 +476,8 @@ class ImportSOShipmentWizard(models.TransientModel):
                 'adt_LineLocation': row.get("adt_LineLocation"),
                 'adt_LineNbr': row.get("adt_LineNbr"),
                 'adt_LineQuantity': row.get("adt_LineQuantity"),
-                # ShipmentQty adalah quantity aktual yang dipakai saat membuat
-                # move SO Shipment. Fallback ke LineQty untuk payload lama yang
-                # belum mengirim ShipmentQty.
+                # Simpan ShipmentQty untuk payload staging/kompatibilitas lama;
+                # pembuatan stock move menggunakan LineQuantity sebagai acuan.
                 'adt_ShipmentQty': row.get("adt_ShipmentQty") or row.get("adt_LineQty"),
                 'adt_LineUOM': row.get("adt_LineUOM"),
                 'adt_WarehouseID': row.get("adt_WarehouseID"),
@@ -516,6 +516,9 @@ class ImportSOShipmentWizard(models.TransientModel):
             with self.env.cr.savepoint():
                 try:
                     if existing_gi:
+                        incoming_last_modified = gi_vals.get('lastmodifieddatetime')
+                        if not incoming_last_modified or existing_gi.lastmodifieddatetime == incoming_last_modified:
+                            continue
                         # -------------------------------------------------
                         # KONDISI A: DATA SUDAH ADA -> UPDATE & RECREATE
                         # -------------------------------------------------

@@ -280,6 +280,11 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     ('name', '=', header['name']),
                 ], limit=1)
                 if existing_assembly:
+                    if (
+                        not header.get('last_modified_datetime')
+                        or existing_assembly.last_modified_datetime == header['last_modified_datetime']
+                    ):
+                        continue
                     existing_assembly.component_ids.unlink()
                     existing_assembly.write(header)
                     assembly = existing_assembly

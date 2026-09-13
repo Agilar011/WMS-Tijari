@@ -58,6 +58,8 @@ class ImportWarehouseWizard(models.TransientModel):
         }
 
     def _check_last_modified_staging(self, item):
+        if not item.get('last_modified_dt'):
+            return
         Staging = self.env['acumatica.warehouse.line']
         existing = Staging.search([
             ('warehouse_id', '=', item['warehouse_id']),

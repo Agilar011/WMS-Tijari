@@ -496,6 +496,10 @@
                        string="Order Type"
                        invisible="adt_type not in ['Sales Order Shipment', 'SO Shipment']"
                        readonly="1"/>
+                <field name="adt_order_nbr"
+                       string="Order Nbr"
+                       invisible="adt_type != 'SO Return'"
+                       readonly="1"/>
                 <field name="status_ba"/>
                 <field name="adt_dest_location_id" string="Final Location" invisible="'Receipt' in (picking_type_name or '') or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
                 <field name="all_moves_picked" invisible="1"/>

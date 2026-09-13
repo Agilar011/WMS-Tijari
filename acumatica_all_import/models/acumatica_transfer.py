@@ -287,6 +287,17 @@ class AcumaticaTransferLine(models.Model):
                 payload={'header': header_payload},
             )
 
+        transfer_shipment_numbers = []
+        for product_line in receipt.product_line_ids:
+            transfer_shipment_number = (
+                product_line.transfer_shipment_number or ''
+            ).strip()
+            if (
+                transfer_shipment_number
+                and transfer_shipment_number not in transfer_shipment_numbers
+            ):
+                transfer_shipment_numbers.append(transfer_shipment_number)
+
         order, action_state = TransferService.prepare_order(
             origin,
             source_location,
@@ -295,6 +306,8 @@ class AcumaticaTransferLine(models.Model):
             schedule_date=receipt._parse_dt(receipt.scheduled_date),
             note=receipt.note or False,
             transfer_type='transfer_in',
+            external_ref_in=origin,
+            external_ref_out=','.join(transfer_shipment_numbers),
         )
         order.write({'validation_policy': 'validate_all'})
 
@@ -387,10 +400,7 @@ class AcumaticaTransferLine(models.Model):
                 line_payloads=error_line_payloads,
             )
 
-        TransferService.set_order_ready(
-            order,
-            auto_validate_transfer_in_delivery=True,
-        )
+        TransferService.set_order_ready(order)
         receipt.write({
             'import_state': action_state,
             'import_message': 'success',

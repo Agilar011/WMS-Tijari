@@ -294,6 +294,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                             operation_category='delivery',
                             api_acumatica='invoice_consignment',
                             transaction_key='invoice_consignment',
+                            document_only=True,
                             required=False,
                         )
                     if not picking_type:
@@ -329,7 +330,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                         'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
                         'adt_status': first.adt_Status or False,
                         'adt_type': first.adt_Type or False,
-                        'adt_is_document_only': False,
+                        'adt_is_document_only': True,
                         'adt_external_id': first.adt_id or False,
                     }
                     

@@ -699,12 +699,15 @@ class ImportTransferWizard(models.TransientModel):
             }
             receipt = existing_map.get(receipt_nbr)
             if receipt:
+                if (
+                    not values.get('acumatica_write_date')
+                    or receipt.acumatica_write_date == values['acumatica_write_date']
+                ):
+                    continue
                 receipt.write(values)
             else:
                 receipt = Header.create(values)
 
-            # Replace the complete API snapshot. This also removes a previous
-            # product line when Acumatica changes InventoryID or removes it.
             receipt.product_line_ids.unlink()
             product_values = [
                 {**line, 'transfer_line_id': receipt.id}
@@ -741,6 +744,13 @@ class ImportTransferWizard(models.TransientModel):
 
             if not existing:
                 to_create.append(vals)
+                continue
+
+            if (
+                not vals.get('acumatica_write_date')
+                or existing.acumatica_write_date == vals['acumatica_write_date']
+            ):
+                unchanged.append(existing)
                 continue
 
 

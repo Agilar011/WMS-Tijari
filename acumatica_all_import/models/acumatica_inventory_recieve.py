@@ -273,14 +273,17 @@ class AcumaticaInventoryRecievedLine(models.Model):
 
         source_location = transfer_info['source_location']
         destination_location = transfer_info['destination_location']
+        primary_external_ref = receive.reference_nbr or receive.transfer_nbr
         order, action_state = TransferService.prepare_order(
-            origin,
+            primary_external_ref,
             source_location,
             destination_location,
             transfer_info['transaction_type'],
             schedule_date=receive._parse_dt(receive.scheduled_date),
             note=receive.note or False,
             transfer_type='transfer_in',
+            external_ref_in=receive.reference_nbr,
+            external_ref_out=receive.transfer_nbr,
         )
 
         order.write({'validation_policy': 'validate_all'})
@@ -363,10 +366,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 line_payloads=error_line_payloads,
             )
 
-        TransferService.set_order_ready(
-            order,
-            auto_validate_transfer_in_delivery=True,
-        )
+        TransferService.set_order_ready(order)
         receive.write({
             'import_state': action_state,
             'import_message': 'success',
@@ -486,6 +486,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
             'adt_total_qty': self._parse_float(receive.total_qty),
             'adt_type': receive.transfer_type or False,
             'adt_external_ref': receive.external_ref or False,
+            'adt_change_item_ref_nbr': receive.change_item_ref_nbr or False,
         }
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 
