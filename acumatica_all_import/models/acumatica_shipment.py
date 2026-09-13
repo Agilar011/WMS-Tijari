@@ -49,9 +49,12 @@ class AcumaticaShipmentProductLine(models.Model):
 
 class AcumaticaShipmentLine(models.Model):
     _name = 'acumatica.shipment.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Shipment Receipt dari Acumatica'
     _order = 'shipment_nbr asc, id asc'
+
+    def _adt_picking_type_wizard_call(self):
+        return ('import.shipment.wizard', (self.building_code,), {})
 
     row_number = fields.Integer(string='No')
     external_id = fields.Char(string='UUID Header')
@@ -72,7 +75,7 @@ class AcumaticaShipmentLine(models.Model):
     header_location_code_2 = fields.Char(string='Location Header 2')
     header_location_name_2 = fields.Char(string='Location Header Name 2')
     status = fields.Char(string='Status')
-    document_only = fields.Boolean(string='Document Only', readonly=True)
+    document_only = fields.Boolean(string='Document Only')
     shipment_type = fields.Char(string='Type')
     operation = fields.Char(string='Operation')
 
@@ -109,13 +112,13 @@ class AcumaticaShipmentLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='staged', readonly=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    ], default='staged')
+    import_message = fields.Char(string='Generation Message', tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -260,7 +263,7 @@ class AcumaticaShipmentLine(models.Model):
             all_line_payloads.append({
                 'inventory_id': shipment_line.inventory_id or False,
                 'product_name': shipment_line.description or False,
-                'qty': shipment._parse_float(shipment_line.shipped_qty),
+                'qty': shipment._parse_float(shipment_line.order_qty),
                 'uom': shipment_line.uom_code or False,
                 'payload': shipment_line.read()[0] if shipment_line.exists() else {},
             })
@@ -287,7 +290,7 @@ class AcumaticaShipmentLine(models.Model):
         #     ('warehouse_id', '=', warehouse.id if warehouse else False),
         #     ('code', '=', 'incoming'),
         # ], limit=1)
-        picking_type = self.picking_type_id
+        picking_type = shipment._adt_reresolve_picking_type()
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {shipment.warehouse_code}'
@@ -302,6 +305,13 @@ class AcumaticaShipmentLine(models.Model):
                 line_payloads=all_line_payloads
             )
 
+        order_nbrs = []
+        for product_line in shipment.product_line_ids:
+            order_nbr = (product_line.order_number or '').strip()
+            if order_nbr and order_nbr not in order_nbrs:
+                order_nbrs.append(order_nbr)
+
+        adt_type = 'SO Return' if shipment.shipment_type == 'Shipment' else shipment.shipment_type
         picking_vals = {
             'partner_id': partner.id if partner else False,
             'picking_type_id': picking_type.id,
@@ -312,7 +322,8 @@ class AcumaticaShipmentLine(models.Model):
             'adt_acumatica_write_date': self._parse_dt(shipment.acumatica_write_date),
             'adt_total_qty': self._parse_float(shipment.actual_qty),
             'adt_actual_qty': self._parse_float(shipment.actual_qty),
-            'adt_type': 'SO Return' if shipment.shipment_type == 'Shipment' else shipment.shipment_type,
+            'adt_type': adt_type,
+            'adt_order_nbr': ','.join(order_nbrs) if adt_type == 'SO Return' else False,
             # 'adt_type': shipment.shipment_type or False
 
         }
@@ -331,6 +342,9 @@ class AcumaticaShipmentLine(models.Model):
         else:
             picking = Picking.create(picking_vals)
             action_state = 'created'
+
+        if action_state == 'updated':
+            picking.move_ids.unlink()
 
         for shipment_line in shipment.product_line_ids:
             move_vals = {}
@@ -363,17 +377,7 @@ class AcumaticaShipmentLine(models.Model):
                     # })
                     continue
 
-                qty = shipment._parse_float(shipment_line.shipped_qty)
-                existing = picking.move_ids.filtered(
-                    lambda move: (
-                        move.picking_id.id == picking.id
-                        and move.product_id.id == product.id
-                        and move.product_uom_qty == qty
-                    )
-                )
-                if existing:
-                    continue
-
+                qty = shipment._parse_float(shipment_line.order_qty)
                 move_vals = {
                     'name': shipment_line.description or product.display_name,
                     'picking_id': picking.id if picking else False,
@@ -400,7 +404,7 @@ class AcumaticaShipmentLine(models.Model):
                 all_line_payloads.append({
                     'inventory_id': shipment_line.inventory_id or False,
                     'product_name': shipment_line.description or False,
-                    'qty': shipment._parse_float(shipment_line.shipped_qty),
+                    'qty': shipment._parse_float(shipment_line.order_qty),
                     'uom': shipment_line.uom_code or False,
                     'payload': move_vals if move_vals else (shipment_line.read()[0] if shipment_line.exists() else {}),
                 })

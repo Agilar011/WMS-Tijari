@@ -68,6 +68,7 @@
                 <field name="is_kit"         string="Kit"           widget="boolean" optional="show"/>
                 <field name="posting_class"  string="PostingClass"  optional="show"/>
                 <field name="price_class"    string="PriceClass"    optional="show"/>
+                <field name="last_modified_datetime" string="Last Modified" optional="show"/>
                 <field name="import_state"   string="Status Import" widget="badge"
                        decoration-success="import_state == 'created'"
                        decoration-info="import_state == 'updated'"

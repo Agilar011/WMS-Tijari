@@ -306,8 +306,8 @@ class ImportShipmentCompletedWizard(models.TransientModel):
                     if existing:
 
                         if (
-                            header_vals.get('last_modified_datetime')
-                            and existing.last_modified_datetime == header_vals.get('last_modified_datetime')
+                            not header_vals.get('last_modified_datetime')
+                            or existing.last_modified_datetime == header_vals['last_modified_datetime']
                         ):
                             continue
 
@@ -369,6 +369,14 @@ class ImportShipmentCompletedWizard(models.TransientModel):
             'acumatica_id': item.get('id'),
             'row_number': item.get('rowNumber'),
             'note': self._val(item, 'note'),
+            'issue_nbr': self._val(item, 'IssueNbr'),
+            'fob_point': self._val(item, 'FOBPoint'),
+            'fob_point_description': self._val(item, 'FOBPointDescription'),
+            'location_id': self._val(item, 'LocationID'),
+            'note_header': self._val(item, 'NoteHeader'),
+            'note_header_id': self._val(item, 'NoteHeaderID'),
+            'phone': self._val(item, 'Phone'),
+            'site_id_description': self._val(item, 'SiteIDDescription'),
 
             # Shipment
             'order_type': self._val(item, 'OrderType'),
@@ -464,6 +472,9 @@ class ImportShipmentCompletedWizard(models.TransientModel):
             ),
 
             # Tracking
+            'import_state': 'staged',
+            'import_message': 'Data API Imported',
+            'selected': True,
             'sync_date': fields.Datetime.now(),
         }
 

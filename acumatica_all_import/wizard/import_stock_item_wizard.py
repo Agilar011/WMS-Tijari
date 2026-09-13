@@ -159,6 +159,8 @@ class ImportStockItemWizard(models.TransientModel):
         }
 
     def _check_last_modified_staging(self, item):
+        if not item.get('last_modified_datetime'):
+            return
         Staging = self.env['acumatica.stock.item.line']
         existing = Staging.search([
             ('external_id', '=', item['external_id']),

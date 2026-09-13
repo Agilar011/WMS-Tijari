@@ -333,9 +333,12 @@ class ImportDirectTransferWizard(models.TransientModel):
             })
 
             existing = existing_map.get(reference_nbr)
-            if existing and vals.get('adt_LastModifiedDateTime') and existing.adt_LastModifiedDateTime == vals.get('adt_LastModifiedDateTime'):
-                continue
             if existing:
+                if (
+                    not vals.get('adt_LastModifiedDateTime')
+                    or existing.adt_LastModifiedDateTime == vals['adt_LastModifiedDateTime']
+                ):
+                    continue
                 existing.write(vals)
                 header = existing
                 header.line_ids.unlink()
@@ -418,14 +421,10 @@ class ImportDirectTransferWizard(models.TransientModel):
                 to_create.append(vals)
                 continue
 
-            # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda
-            if vals.get('acumatica_write_date') and existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

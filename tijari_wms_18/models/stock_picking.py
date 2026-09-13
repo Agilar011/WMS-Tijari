@@ -43,6 +43,7 @@ class StockPicking(models.Model):
     adt_from_warehouse_code = fields.Char(string='From Warehouse (Acumatica)')
     adt_description = fields.Char(string='Description (Acumatica)')
     adt_order_type = fields.Char(string='Order Type (Acumatica)')
+    adt_order_nbr = fields.Char(string='Order Nbr (Acumatica)')
     adt_change_item_ref_nbr = fields.Char(string='Change Item Ref. Nbr (Acumatica)')
     adt_is_document_only = fields.Boolean(string='Is Document Only', index=True, copy=False)
     operation_category = fields.Selection(related='picking_type_id.operation_category', string='Operation Category', store=True, readonly=True)
@@ -322,6 +323,19 @@ class StockPicking(models.Model):
                 )
 
     def write(self, vals):
+        import_audit_fields = {
+            field_name for field_name in vals
+            if field_name in self._fields and field_name not in {
+                'write_uid', 'write_date', 'message_follower_ids', 'activity_ids',
+            }
+        }
+        import_audit_before = {
+            picking.id: {
+                field_name: picking[field_name]
+                for field_name in import_audit_fields
+            }
+            for picking in self
+        }
         if (
             'pick_responsible_ids' in vals
             and not self.env.context.get('tijari_responsible_sync')
@@ -346,6 +360,58 @@ class StockPicking(models.Model):
                 ))
 
         result = super().write(vals)
+        if import_audit_fields and not self.env.context.get('skip_acumatica_import_log'):
+            staging_models = (
+                'acumatica.receipt.line', 'acumatica.inventory.recieved.line',
+                'acumatica.transfer.line', 'acumatica.shipment.line',
+                'acumatica.transfer.shipment.line', 'acumatica.transfer.one.step.line',
+                'acumatica.transfer.two.step.line', 'acumatica.direct.transfer.staging',
+                'acumatica.vendor.return.direct.transfer.staging',
+                'acumatica.credit.memo.consignment.staging',
+                'acumatica.invoice.consignment.staging', 'acumatica.inventory.issue.line',
+                'acumatica.issue.line', 'acumatica.issue.po.return.line',
+                'acumatica.kit.assembly', 'acumatica.shipment.gi.staging',
+                'acumatica.shipment.completed.staging',
+                'acumatica.sales.order.shipment.staging',
+            )
+            for picking in self:
+                staging = self.env['acumatica.import.log.mixin'].browse()
+                for model_name in staging_models:
+                    try:
+                        model = self.env[model_name]
+                    except KeyError:
+                        continue
+                    if model and 'odoo_picking_id' in model._fields:
+                        staging = model.search([('odoo_picking_id', '=', picking.id)], limit=1)
+                        if staging:
+                            break
+                if not staging or not hasattr(staging, '_acumatica_post_import_log'):
+                    continue
+                changed_fields = []
+                for field_name in import_audit_fields:
+                    old_value = import_audit_before[picking.id].get(field_name)
+                    new_value = picking[field_name]
+                    field = picking._fields[field_name]
+                    if field.type == 'many2one':
+                        old_value = old_value.display_name if old_value else False
+                        new_value = new_value.display_name if new_value else False
+                    elif field.type in ('many2many', 'one2many'):
+                        old_value = ', '.join(old_value.mapped('display_name'))
+                        new_value = ', '.join(new_value.mapped('display_name'))
+                    if old_value != new_value:
+                        changed_fields.append({
+                            'field_name': field_name,
+                            'field_label': field.string,
+                            'old_value': old_value,
+                            'new_value': new_value,
+                        })
+                if changed_fields:
+                    staging._acumatica_post_import_log(
+                        'updated',
+                        'Data stock.picking diperbarui dari import transaksi.',
+                        picking,
+                        changed_fields,
+                    )
         if (
             not self.env.context.get('skip_user_ids_sync')
             and 'user_id' in vals
@@ -982,8 +1048,12 @@ class StockPicking(models.Model):
         #             vals['adt_type'] = parent_picking.adt_type
 
         # # Panggil fungsi super() dengan melewatkan vals_list yang sudah diperbarui
-        pickings = super(StockPicking, self).create(vals_list)
+        pickings = super(
+            StockPicking,
+            self.with_context(mail_create_nolog=True)
+        ).create(vals_list)
         for picking, vals in zip(pickings, vals_list):
+            description = picking.adt_type or ""
             if 'user_ids' not in vals:
                 picking._sync_user_ids_from_user_id()
             if 'pick_responsible_ids' in vals:
@@ -995,6 +1065,16 @@ class StockPicking(models.Model):
                 picking._sync_user_ids_from_responsible()
             if self._get_responsible_carry_over_fields_set() & set(vals):
                 picking._propagate_responsible_to_next_transfers()
+
+            picking.with_context(
+                mail_create_nosubscribe=True,
+                mail_post_autofollow=False,
+            ).message_post(
+                body=f"{description} created",
+                message_type='notification',
+                subtype_xmlid='mail.mt_note',
+            )
+            
         pickings._set_acumatica_document_only_flag()
         pickings._set_document_only_picking_type()
         print(pickings)
@@ -1132,9 +1212,24 @@ class StockPicking(models.Model):
         #             _("Source Location dan Destination Location tidak boleh sama.")
         #         )
 
+        marked_as_todo = self.filtered(lambda picking: picking.state == 'draft')
         res = super().action_confirm()
         self._adt_apply_dest_location_to_move_lines()
         self._remove_qty_move_line()
+
+        # Transfer IN: ketika Receipt Internal di-Mark as Todo, otomatis
+        # proses leg delivery yang menjadi pasangan transfer-nya.
+        transfer_in_receipts = marked_as_todo.filtered(
+            lambda picking: (
+                picking.state in ('confirmed', 'waiting', 'assigned')
+                and picking.internal_transfer_order_id
+                and picking.internal_transfer_order_id.transfer_type == 'transfer_in'
+                and picking.internal_transfer_leg == 'receipt'
+                and picking.picking_type_id.name == 'Receipt Internal'
+            )
+        )
+        for receipt in transfer_in_receipts:
+            receipt.internal_transfer_order_id.action_auto_validate_transfer_in_delivery()
         
         for picking in self:
                     for move in picking.move_ids:
@@ -1782,10 +1877,7 @@ class StockPicking(models.Model):
         to_confirm = self.filtered(lambda picking: picking.state == 'draft')
         if to_confirm:
             to_confirm.action_confirm()
-
-        to_check = self.filtered(lambda picking: picking.show_check_availability)
-        if to_check:
-            to_check.action_assign()
+            to_confirm.action_assign()
 
         return True
 
@@ -2257,6 +2349,8 @@ class StockPicking(models.Model):
             if all_match
             else "partial"
         )
+
+        staging_data.is_used = True
 
         self.action_confirm_shipment()   
 

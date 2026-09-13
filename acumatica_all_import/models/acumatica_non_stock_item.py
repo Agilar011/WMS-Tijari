@@ -42,31 +42,31 @@ class AcumaticaNonStockItemLine(models.Model):
     _order       = 'row_number asc'
 
     # ─── Data mentah dari Acumatica ──────────────────
-    row_number             = fields.Integer(string='No',                    readonly=True)
-    external_id            = fields.Char(string='UUID Acumatica',           readonly=True)
+    row_number             = fields.Integer(string='No')
+    external_id            = fields.Char(string='UUID Acumatica')
 
     # Mandatory
-    inventory_id           = fields.Char(string='InventoryID',              readonly=True)
-    description            = fields.Char(string='Description',              readonly=True)
-    item_type              = fields.Char(string='ItemType',                 readonly=True)
-    item_class             = fields.Char(string='ItemClass',                readonly=True)
-    item_status            = fields.Char(string='ItemStatus',               readonly=True)
-    base_unit              = fields.Char(string='BaseUnit',                 readonly=True)
-    purchase_unit          = fields.Char(string='PurchaseUnit',             readonly=True)
-    sales_unit             = fields.Char(string='SalesUnit',                readonly=True)
-    is_a_kit               = fields.Boolean(string='IsAKit',                readonly=True)
-    is_kit                 = fields.Boolean(string='IsKit',                 readonly=True)
-    note_id                = fields.Char(string='NoteID',                   readonly=True)
-    posting_class          = fields.Char(string='PostingClass',             readonly=True)
-    note                   = fields.Text(string='Note',                     readonly=True)
+    inventory_id           = fields.Char(string='InventoryID')
+    description            = fields.Char(string='Description')
+    item_type              = fields.Char(string='ItemType')
+    item_class             = fields.Char(string='ItemClass')
+    item_status            = fields.Char(string='ItemStatus')
+    base_unit              = fields.Char(string='BaseUnit')
+    purchase_unit          = fields.Char(string='PurchaseUnit')
+    sales_unit             = fields.Char(string='SalesUnit')
+    is_a_kit               = fields.Boolean(string='IsAKit')
+    is_kit                 = fields.Boolean(string='IsKit')
+    note_id                = fields.Char(string='NoteID')
+    posting_class          = fields.Char(string='PostingClass')
+    note                   = fields.Text(string='Note')
 
     # Optional
-    last_modified_datetime = fields.Char(string='LastModifiedDateTime',     readonly=True)
-    price_class            = fields.Char(string='PriceClass',               readonly=True)
-    volume                 = fields.Float(string='Volume',                  readonly=True)
-    volume_uom             = fields.Char(string='VolumeUOM',                readonly=True)
-    weight                 = fields.Float(string='Weight',                  readonly=True)
-    weight_uom             = fields.Char(string='WeightUOM',                readonly=True)
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime')
+    price_class            = fields.Char(string='PriceClass')
+    volume                 = fields.Float(string='Volume')
+    volume_uom             = fields.Char(string='VolumeUOM')
+    weight                 = fields.Float(string='Weight')
+    weight_uom             = fields.Char(string='WeightUOM')
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
@@ -75,20 +75,19 @@ class AcumaticaNonStockItemLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True)
+    ], string='Status', default='staged')
 
-    import_message  = fields.Char(string='Generation Message',          readonly=True)
-    odoo_product_id = fields.Many2one('product.template', string='Document Reference', readonly=True)
+    import_message  = fields.Char(string='Generation Message')
+    odoo_product_id = fields.Many2one('product.template', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ItemStatus Acumatica → adt_item_status selection
     STATUS_MAP = {

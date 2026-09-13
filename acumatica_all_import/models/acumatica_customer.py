@@ -36,25 +36,25 @@ class AcumaticaCustomerLine(models.Model):
     _order = 'row_number asc'
 
     # ─── Data mentah dari Acumatica ──────────────────
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Acumatica', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Acumatica')
 
     # Mandatory fields
     customer_id = fields.Char(string='CustomerID')
-    b_account_id = fields.Char(string='BAccountID', readonly=True)
+    b_account_id = fields.Char(string='BAccountID')
     customer_name = fields.Char(string='CustomerName')
-    status = fields.Char(string='Status', readonly=True)
-    warehouse_id = fields.Char(string='WarehouseID', readonly=True)
-    shipping_zone_id = fields.Char(string='ShippingZoneID', readonly=True)
-    fob_point = fields.Char(string='FOBPoint', readonly=True)
+    status = fields.Char(string='Status')
+    warehouse_id = fields.Char(string='WarehouseID')
+    shipping_zone_id = fields.Char(string='ShippingZoneID')
+    fob_point = fields.Char(string='FOBPoint')
 
     # Optional fields
-    customer_class = fields.Char(string='CustomerClass', readonly=True)
-    tax_registration_id  = fields.Char(string='TaxRegistrationID', readonly=True)
+    customer_class = fields.Char(string='CustomerClass')
+    tax_registration_id  = fields.Char(string='TaxRegistrationID')
     last_modified_datetime = fields.Char(string='LastModifiedDateTime')
-    note_id = fields.Char(string='NoteID', readonly=True)
-    note = fields.Text(string='Note', readonly=True)
-    location_name = fields.Char(string='LocationName', readonly=True)
+    note_id = fields.Char(string='NoteID')
+    note = fields.Text(string='Note')
+    location_name = fields.Char(string='LocationName')
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
@@ -63,19 +63,18 @@ class AcumaticaCustomerLine(models.Model):
         ('updated',  'Updated'),
         ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
+    ], string='Status', default='staged', tracking=True)
 
-    import_message = fields.Char(string='Generation Message', readonly=True)
-    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference', readonly=True)
+    import_message = fields.Char(string='Generation Message')
+    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference')
 
     # ─── Config reference ────────────────────────────
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ─── Computed: sudah ada di Odoo? ────────────────
     exists_in_odoo = fields.Boolean(

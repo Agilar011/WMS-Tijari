@@ -171,6 +171,7 @@ class ImportUomWizard(models.TransientModel):
                     'description': item.get("Description", {}).get("value", "") or "",
                     'external_id': item.get("id", "") or "",
                     'row_number': item.get("rowNumber", 0),
+                    'last_modified_datetime': item.get("LastModifiedDateTime", {}).get("value", "") or "",
                 })
 
             UomLine = self.env['acumatica.uom.line']
@@ -205,11 +206,15 @@ class ImportUomWizard(models.TransientModel):
                     'external_id': external_id,
                     'unit_id': unit_id,
                     'description': item['description'],
+                    'last_modified_datetime': item['last_modified_datetime'],
                     'selected': True,
                     'sync_date': fields.Datetime.now(),
                 }
                 if existing:
-                    changed = any(existing[field] != vals[field] for field in ('unit_id', 'description', 'external_id', 'row_number'))
+                    incoming_last_modified = vals.get('last_modified_datetime')
+                    if not incoming_last_modified or existing.last_modified_datetime == incoming_last_modified:
+                        continue
+                    changed = any(existing[field] != vals[field] for field in ('unit_id', 'description', 'external_id', 'row_number', 'last_modified_datetime'))
                     existing.write(vals)
                     if changed:
                         existing.write({

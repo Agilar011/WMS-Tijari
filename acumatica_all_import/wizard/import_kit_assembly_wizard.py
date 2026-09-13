@@ -1,7 +1,6 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
 import logging
-from datetime import datetime
 
 _logger = logging.getLogger(__name__)
 
@@ -73,15 +72,12 @@ class ImportKitAssemblyWizard(models.TransientModel):
         raw_list = []
         loop_count = math.ceil(effective_total / self.batch_size)
 
-        for i in range(loop_count):
-            offset = self.fetch_skip + (i * self.batch_size)
-            batch_data = self.fetch_kit_assembly_data(
-                limit=self.batch_size,
-                offset=offset,
-            )
-            if not batch_data:
-                break
-            raw_list.extend(batch_data)
+        batch_data = self.fetch_kit_assembly_data(
+            limit=self.batch_size,
+        )
+        if not batch_data:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+        raw_list.extend(batch_data)
 
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
@@ -118,6 +114,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 'note_header': item.get('note_header') or '',
                 'note_header_id': item.get('note_header_id') or '',
                 'post_period': item.get('post_period') or '',
+                'date': item.get('date') or '',
                 'quantity': item.get('quantity') or '',
                 'reason_code': item.get('reason_code') or '',
                 'reference_nbr': reference_nbr,
@@ -180,7 +177,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
     # VIEW STAGING
     # =========================
 
-    def fetch_kit_assembly_data(self, limit=100, offset=0):
+    def fetch_kit_assembly_data(self, limit=100):
         """Fetch 1 page Kit Assembly dari Acumatica (paging via $top/$skip)."""
         # print("==========================================================================================")
         # print("ACTION: Fetch data from Acumatica")
@@ -197,7 +194,6 @@ class ImportKitAssemblyWizard(models.TransientModel):
             # print(f"Fetching Kit Assembly data from {endpoint} with limit={limit} and offset={offset}...")
             params = {
                 '$top': limit,
-                '$skip': offset,
                 '$expand': self.config_id.odata_expand
             }
             body = {
@@ -224,12 +220,24 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 
                 raise UserError(last_error)
 
-            raw_data = self.config_id._normalize_rows(response.json())
+            payload = response.json()
+            # Acumatica can return the GI rows under the named root key
+            # instead of the generic ``value``/``rows`` envelope.
+            raw_data = []
+            if isinstance(payload, dict) and 'KitAssemblyGIDetails' in payload:
+                details = payload.get('KitAssemblyGIDetails')
+                if isinstance(details, list):
+                    raw_data = details
+                elif isinstance(details, dict):
+                    raw_data = details.get('value') or details.get('rows') or []
+            if not raw_data:
+                raw_data = self.config_id._normalize_rows(payload)
+            raw_data = [item for item in raw_data if isinstance(item, dict)]
             result = []
 
             for item in raw_data:
 
-                last_modified_datetime = self._parse_datetime(item.get('LastModifiedDateTime'))
+                last_modified_datetime = self._val(item, 'LastModifiedDateTime')
                 print(f"Last Modified Date Time: :{last_modified_datetime}")
                 print(self._val(item, 'Warehouse'))
                 header = {
@@ -244,6 +252,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     'note_header': self._val(item, 'NoteHeader'),
                     'note_header_id': self._val(item, 'NoteHeaderID'),
                     'post_period': self._val(item, 'PostPeriod'),
+                    'date': self._val(item, 'Date'),
                     'quantity': self._val(item, 'Qty'),
                     'reason_code': self._val(item, 'ReasonCode'),
                     'reference_nbr': self._val(item, 'ReferenceNbr'),
@@ -253,7 +262,11 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     'type': self._val(item, 'Type'),
                     'uom': self._val(item, 'UOM'),
                     'warehouse': self._val(item, 'Warehouse'),
-                    'config_id' : self.config_id.id
+                    'config_id': self.config_id.id,
+                    'import_state': 'staged',
+                    'import_message': 'Data API Imported',
+                    'selected': True,
+                    'sync_date': fields.Datetime.now(),
                 }
 
                 # === PRINT DATA HEADER ===
@@ -268,8 +281,8 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 ], limit=1)
                 if existing_assembly:
                     if (
-                        last_modified_datetime
-                        and existing_assembly.last_modified_datetime == last_modified_datetime
+                        not header.get('last_modified_datetime')
+                        or existing_assembly.last_modified_datetime == header['last_modified_datetime']
                     ):
                         continue
                     existing_assembly.component_ids.unlink()
@@ -284,6 +297,10 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     stock_components = stock_components.get('value', []) or []
                 if not isinstance(stock_components, list):
                     stock_components = []
+                stock_components = [
+                    component for component in stock_components
+                    if isinstance(component, dict)
+                ]
 
                 if not stock_components and self._val(item, 'LineStockInventoryID'):
                     stock_components = [item]
@@ -302,7 +319,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     # Buat dictionary component data untuk mempermudah perulangan print
                     component_data = {
                         'line_external_id': component.get('id', '') or '',
-                        'line_note': self._val(component, 'LineNote') or component.get('note', {}).get('value', '') or '',
+                        'line_note': self._val(component, 'LineNote') or self._val(component, 'note'),
                         'line_note_id': self._val(component, 'LineNoteID'),
                         'line_inventory_id': self._val(component, 'LineInventoryID') or self._val(component, 'InventoryID'),
                         'line_component_qty': self._val(component, 'ComponentQty'),
@@ -380,7 +397,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
             
             _logger.info(
                 'Berhasil ambil %s rows Kit Assembly dari Acumatica (skip=%s, top=%s)',
-                len(result), offset, limit,
+                len(result), limit,
             )
             return result
         finally:
@@ -389,6 +406,8 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
     @staticmethod
     def _val(item, key):
+        if not isinstance(item, dict):
+            return ''
         value = item.get(key, {})
         if isinstance(value, dict):
             return value.get('value', '') or ''
@@ -404,22 +423,6 @@ class ImportKitAssemblyWizard(models.TransientModel):
             if isinstance(payload.get('rows'), list):
                 return payload.get('rows')
         return []
-
-    def _parse_datetime(self, value):
-        if not value:
-            return False
-
-        if isinstance(value, datetime):
-            return value
-
-        try:
-            # Support:
-            # 2011-12-09T22:18:00+07:00
-            # 2011-12-09T22:18:00Z
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except Exception:
-            return False        
-
 
     def action_view_staging(self):
         self.ensure_one()

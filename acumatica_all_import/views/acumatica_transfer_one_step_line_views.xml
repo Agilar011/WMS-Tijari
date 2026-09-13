@@ -44,7 +44,8 @@
                         string="Open Document"
                         type="object"
                         icon="fa-external-link"
-                        invisible="not odoo_picking_id"/>
+                        invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
+                <field name="odoo_internal_transfer_order_id" column_invisible="1"/>
             </list>
         </field>
     </record>
@@ -69,7 +70,7 @@
                     <button name="action_open_picking"
                             string="Open Document"
                             type="object"
-                            invisible="not odoo_picking_id"/>
+                            invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
 
                     <field name="import_state"
                         widget="statusbar"
@@ -102,7 +103,7 @@
                     <notebook>
                         <page name="details" string="Details/Lines">
                             <!-- Field relasi One2many ditaruh di sini secara aman -->
-                            <field name="line_ids" readonly="1">
+                            <field name="line_ids">
                                 <list>
                                     <field name="line_nbr"/>
                                     <field name="inventory_id"/>
@@ -121,9 +122,10 @@
                         </page>
                     </notebook>
                     <group string="Import Odoo">
-                        <field name="import_message" readonly="1"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="odoo_internal_transfer_order_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

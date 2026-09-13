@@ -17,7 +17,7 @@ class TransferShipmentImportError(Exception):
 
 class AcumaticaTransferShipmentLine(models.Model):
     _name = 'acumatica.transfer.shipment.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Transfer Shipment dari Acumatica'
     _order = 'shipment_nbr asc, id asc'
 
@@ -73,18 +73,17 @@ class AcumaticaTransferShipmentLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='staged', readonly=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    ], default='staged')
+    import_message = fields.Char(string='Generation Message', tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order',
-        readonly=True,
     )
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -277,18 +276,16 @@ class AcumaticaTransferShipmentLine(models.Model):
         )
         source_wh = shipment._find_warehouse_by_code(source_warehouse_code)
         dest_wh = False
-        picking_type = False
+        picking_type = shipment.picking_type_id
         if shipment.document_only:
-            picking_type = shipment.picking_type_id
-            document_only_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
-                api_acumatica='transfer_shipment',
-                document_only=shipment.document_only,
-                warehouse_code=source_warehouse_code,
-            )
-            if document_only_type:
-                picking_type = document_only_type
-                if shipment.picking_type_id != document_only_type:
-                    shipment.picking_type_id = document_only_type
+            if not picking_type:
+                picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
+                    api_acumatica='transfer_shipment',
+                    document_only=shipment.document_only,
+                    warehouse_code=source_warehouse_code,
+                )
+                if picking_type:
+                    shipment.picking_type_id = picking_type
 
         if not source_wh:
             error_messages.append(
@@ -490,6 +487,9 @@ class AcumaticaTransferShipmentLine(models.Model):
                 picking = Picking.create(picking_vals)
                 action_state = 'created'
 
+        if action_state == 'updated':
+            picking.move_ids.unlink()
+
         for shipment_line in shipment.shipment_line_ids:
             move_vals = {}
             try:
@@ -509,18 +509,6 @@ class AcumaticaTransferShipmentLine(models.Model):
 
                 qty = shipment._parse_float(shipment_line.product_uom_qty)
                 adt_dest_location = picking.location_dest_id.id if picking else False
-                existing = picking.move_ids.filtered(
-                    lambda move: (
-                        move.picking_id.id == picking.id
-                        and move.product_id.id == product.id
-                        and move.product_uom_qty == qty
-                        and move.adt_line_nbr == shipment_line.line_nbr
-                        and move.adt_transfer_shipment_number == origin
-                    )
-                )
-                if existing:
-                    continue
-
                 move_vals = {
                     'name': shipment_line.line_description or product.display_name,
                     'picking_id': picking.id,

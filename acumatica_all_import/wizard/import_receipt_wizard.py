@@ -318,45 +318,52 @@ class ImportReceiptWizard(models.TransientModel):
 
     def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']
-        lines_to_create = []
         sync_data = fields.Datetime.now()
+        existing_receipts = {
+            receipt.receipt_nbr: receipt
+            for receipt in self.env['acumatica.receipt.line'].search([
+                ('receipt_nbr', 'in', [item.get('receipt_nbr') for item in header_list]),
+                ('config_id', '=', self.config_id.id),
+            ])
+        }
+        ProductLine = self.env['acumatica.receipt.product.line']
+
         for item in header_list:
-            
             receipt_nbr = item.get('receipt_nbr')
-            # exists = receipt_nbr and Picking.search_count([('origin', '=', receipt_nbr)])
-            exists = Picking.search_read(
-                domain=[('origin', '=', receipt_nbr)],
-                fields=['id', 'origin'],
-                limit=1
-            )
-            lines_to_create.append({
+            picking = Picking.search([('origin', '=', receipt_nbr)], limit=1)
+            values = {
                 **item,
-                'odoo_picking_id' : exists[0]['id'] if exists else False,
+                'odoo_picking_id': picking.id if picking else False,
                 'config_id': self.config_id.id,
                 'import_state': 'staged',
-                'import_message': f'{receipt_nbr}: Sudah ada → akan diupdate' if exists else '',
+                'import_message': f'{receipt_nbr}: Sudah ada → akan diupdate' if picking else '',
                 'selected': True,
                 'sync_date': sync_data,
-            })
+            }
+            receipt = existing_receipts.get(receipt_nbr)
+            if receipt:
+                if (
+                    not values.get('acumatica_write_date')
+                    or receipt.acumatica_write_date == values['acumatica_write_date']
+                ):
+                    continue
+                receipt.write(values)
+            else:
+                receipt = self.env['acumatica.receipt.line'].create(values)
 
-        if lines_to_create:
-            # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
-            unchanged, to_update, to_create = self._search_receipt_lines(lines_to_create)
-
-            # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
-            self._update_receipt_lines(to_update)
-
-            receipts = self._create_receipt_lines(to_create)
-            line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
-            if line_update:
-                self._update_receipt_lines_product(line_update, to_update)
-
-            if line_create:
-                self._create_receipt_lines_product(line_create, receipts)
-
-            # to_create_filtered = self.filter_by_receipt_lines(to_create, receipts)
-            # to_update_filtered = self.filter_by_receipt_lines(to_update, receipts)
-            # self._create_receipt_lines_product(to_create_filtered, receipts)
+            # Product lines are a snapshot of Acumatica. Replace the whole
+            # snapshot so an InventoryID replacement cannot leave old rows.
+            receipt.product_line_ids.unlink()
+            product_values = [
+                {
+                    **line,
+                    'receipt_line_id': receipt.id,
+                }
+                for line in line_list
+                if line.get('receipt_nbr') == receipt_nbr
+            ]
+            if product_values:
+                ProductLine.create(product_values)
 
     def _search_receipt_lines(self, data):
         if not data:
@@ -388,13 +395,10 @@ class ImportReceiptWizard(models.TransientModel):
                 continue
 
 
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals['acumatica_write_date']:
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

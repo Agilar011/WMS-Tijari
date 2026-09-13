@@ -21,6 +21,16 @@ class InternalTransferOrder(models.Model):
         copy=False,
         index=True,
     )
+    external_ref_in = fields.Char(
+        string='External Ref IN',
+        copy=False,
+        index=True,
+    )
+    external_ref_out = fields.Char(
+        string='External Ref OUT',
+        copy=False,
+        index=True,
+    )
     state = fields.Selection(
         selection=[
             ('draft', 'Draft'),
@@ -51,6 +61,10 @@ class InternalTransferOrder(models.Model):
         ],
         string='Transfer Type',
         default='transfer_out',
+        tracking=True,
+    )
+    adt_order_type = fields.Char(
+        string='Order Type (Acumatica)',
         tracking=True,
     )
     partner_id = fields.Many2one(
@@ -122,6 +136,37 @@ class InternalTransferOrder(models.Model):
             if order.name == 'New':
                 order.name = 'ITO/%05d' % order.id
         return orders
+
+    def write(self, vals):
+        # Data ITO hanya boleh diedit selama seluruh picking hasil generate
+        # masih draft. Satu picking yang sudah confirmed/assigned/done/cancel
+        # membuat header dan pasangan transfer tidak boleh diubah lagi.
+        editable_vals = set(vals) - {'state', 'picking_ids'}
+        if editable_vals:
+            for order in self:
+                related_pickings = order._get_related_pickings()
+                blocked_picking = related_pickings.filtered(
+                    lambda picking: picking.state != 'draft'
+                )[:1]
+                if blocked_picking:
+                    raise ValidationError(_(
+                        'Internal Transfer Order %s tidak dapat diedit karena '
+                        'picking %s sudah tidak dalam state Draft.'
+                    ) % (order.display_name, blocked_picking.display_name))
+        result = super().write(vals)
+        if editable_vals & {'external_ref', 'external_ref_in', 'external_ref_out'}:
+            for order in self:
+                for picking in order._get_related_pickings().filtered(
+                    lambda item: item.state == 'draft'
+                ):
+                    picking_ref = order._get_picking_external_ref(
+                        picking.internal_transfer_leg
+                    )
+                    picking.write({
+                        'origin': picking_ref,
+                        'adt_external_ref': picking_ref,
+                    })
+        return result
 
     @api.depends('picking_ids')
     def _compute_picking_count(self):
@@ -308,6 +353,30 @@ class InternalTransferOrder(models.Model):
             required=True,
         )
 
+    def _get_transfer_in_direct_delivery_picking_type(self):
+        self.ensure_one()
+        warehouse = self._get_operational_warehouse()
+        warehouse_code = warehouse.code if warehouse else False
+        return self.env['stock.picking.type'].resolve_document_only_picking_type(
+            target_operation_type='direct_delivery_order',
+            api_acumatica='transfer_in',
+            document_only=True,
+            warehouse_code=warehouse_code,
+            required=True,
+        )
+
+    def _get_transfer_out_direct_receipt_picking_type(self):
+        self.ensure_one()
+        warehouse = self._get_receipt_warehouse()
+        warehouse_code = warehouse.code if warehouse else False
+        return self.env['stock.picking.type'].resolve_document_only_picking_type(
+            target_operation_type='direct_receipt',
+            api_acumatica='transfer_out',
+            document_only=True,
+            warehouse_code=warehouse_code,
+            required=True,
+        )
+
     def _get_required_picking_type(self, name, operation_category=False, warehouse=False):
         self.ensure_one()
         warehouse = warehouse or self._get_operational_warehouse()
@@ -410,19 +479,40 @@ class InternalTransferOrder(models.Model):
             pickings.write(vals)
             pickings.move_ids.write(vals)
 
+    def _get_picking_external_ref(self, leg):
+        self.ensure_one()
+        if leg == 'receipt':
+            return (
+                self.external_ref_in
+                or self.external_ref_out
+                or self.external_ref
+                or self.name
+            )
+        if leg in ('pick', 'pack', 'delivery'):
+            return (
+                self.external_ref_out
+                or self.external_ref_in
+                or self.external_ref
+                or self.name
+            )
+        return self.external_ref_in or self.external_ref_out or self.external_ref or self.name
+
     def _prepare_picking_vals(self, picking_type, location, location_dest, suffix, leg):
         self.ensure_one()
+        picking_external_ref = self._get_picking_external_ref(leg)
         vals = {
             'picking_type_id': picking_type.id,
             'scheduled_date': self.schedule_date,
-            'origin': self._get_picking_origin(leg),
+            'origin': picking_external_ref,
             'location_id': location.id,
             'location_dest_id': location_dest.id,
             'adt_type': self._get_picking_adt_type(),
-            'adt_external_ref': self.external_ref or self.name,
+            'adt_order_type': self.adt_order_type or False,
+            'adt_external_ref': picking_external_ref,
             'internal_transfer_order_id': self.id,
             'internal_transfer_leg': leg,
             'internal_transfer_sequence': self._get_transfer_leg_sequence(leg),
+            'adt_is_document_only': bool(picking_type.is_document_only_api),
         }
         partner = self._get_picking_partner(leg)
         if partner:
@@ -434,7 +524,7 @@ class InternalTransferOrder(models.Model):
 
     def _get_picking_origin(self, leg):
         self.ensure_one()
-        return self.external_ref or self.name
+        return self._get_picking_external_ref(leg)
 
     def _get_transfer_leg_sequence(self, leg):
         self.ensure_one()
@@ -640,9 +730,10 @@ class InternalTransferOrder(models.Model):
             return False
 
         vals = {
-            'origin': self._get_picking_origin(leg),
+            'origin': self._get_picking_external_ref(leg),
             'adt_type': self._get_picking_adt_type(),
-            'adt_external_ref': self.external_ref or self.name,
+            'adt_order_type': self.adt_order_type or False,
+            'adt_external_ref': self._get_picking_external_ref(leg),
             'internal_transfer_order_id': self.id,
             'internal_transfer_leg': leg,
             'internal_transfer_sequence': self._get_transfer_leg_sequence(leg),
@@ -802,11 +893,7 @@ class InternalTransferOrder(models.Model):
                 )
                 picking_specs = [
                     (
-                        order._get_required_picking_type(
-                            'Transfer Internal',
-                            'internal',
-                            warehouse=operational_warehouse,
-                        ),
+                        order._get_transfer_in_direct_delivery_picking_type(),
                         order.location_id,
                         transit_location,
                         'Transfer OUT',
@@ -821,11 +908,7 @@ class InternalTransferOrder(models.Model):
                     ),
                 ]
             else:
-                receipt_picking_type = order._get_required_picking_type(
-                    'Receipt Internal',
-                    'receive',
-                    warehouse=receipt_warehouse,
-                )
+                receipt_picking_type = order._get_transfer_out_direct_receipt_picking_type()
                 packing_zone = order._get_or_create_packing_zone_location(operational_warehouse)
                 picking_specs = [
                     (

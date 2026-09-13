@@ -63,6 +63,7 @@
                 <field name="odoo_categ_id" string="Document Reference" optional="show"/>
                 <field name="odoo_uom_id" string="Document Reference" optional="show"/>
                 <field name="import_message" string="Generation Message" optional="show"/>
+                <field name="last_modified_datetime" string="Last Modified" optional="show"/>
                 <field name="sync_date" string="Tgl Sync" optional="show"/>
                 <button name="action_import_this"
                         string="Import"
@@ -103,6 +104,7 @@
                         <field name="description" string="UoM Name"/>
                         <field name="external_id"/>
                         <field name="row_number"/>
+                        <field name="last_modified_datetime" string="Last Modified"/>
                     </group>
                     <group string="Hasil di Odoo">
                         <field name="odoo_categ_id" string="Kategori UoM"/>

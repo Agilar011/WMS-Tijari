@@ -412,40 +412,47 @@ class ImportShipmentWizard(models.TransientModel):
 
     def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']
-        lines_to_create = []
         sync_data = fields.Datetime.now()
+        existing_shipments = {
+            shipment.shipment_nbr: shipment
+            for shipment in self.env['acumatica.shipment.line'].search([
+                ('shipment_nbr', 'in', [item.get('shipment_nbr') for item in header_list]),
+                ('config_id', '=', self.config_id.id),
+            ])
+        }
+        ProductLine = self.env['acumatica.shipment.product.line']
+
         for item in header_list:
-            
             shipment_nbr = item.get('shipment_nbr')
-            exists = Picking.search_read(
-                domain=[('origin', '=', shipment_nbr)],
-                fields=['id', 'origin'],
-                limit=1
-            )
-            lines_to_create.append({
+            picking = Picking.search([('origin', '=', shipment_nbr)], limit=1)
+            values = {
                 **item,
-                'odoo_picking_id' : exists[0]['id'] if exists else False,
+                'odoo_picking_id': picking.id if picking else False,
                 'config_id': self.config_id.id,
                 'import_state': 'staged',
-                'import_message': f'{shipment_nbr}: Sudah ada → akan diupdate' if exists else '',
+                'import_message': f'{shipment_nbr}: Sudah ada → akan diupdate' if picking else '',
                 'selected': True,
                 'sync_date': sync_data,
-            })
+            }
+            shipment = existing_shipments.get(shipment_nbr)
+            if shipment:
+                if (
+                    not values.get('acumatica_write_date')
+                    or shipment.acumatica_write_date == values['acumatica_write_date']
+                ):
+                    continue
+                shipment.write(values)
+            else:
+                shipment = self.env['acumatica.shipment.line'].create(values)
 
-        if lines_to_create:
-            # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
-            unchanged, to_update, to_create = self._search_shipment_lines(lines_to_create)
-
-            # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
-            self._update_shipment_lines(to_update)
-
-            shipments = self._create_shipment_lines(to_create)
-            line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
-            if line_update:
-                self._update_shipment_lines_product(line_update, to_update)
-
-            if line_create:
-                self._create_shipment_lines_product(line_create, shipments)
+            shipment.product_line_ids.unlink()
+            product_values = [
+                {**line, 'shipment_line_id': shipment.id}
+                for line in line_list
+                if line.get('shipment_nbr') == shipment_nbr
+            ]
+            if product_values:
+                ProductLine.create(product_values)
 
     def _search_shipment_lines(self, data):
         if not data:
@@ -477,13 +484,10 @@ class ImportShipmentWizard(models.TransientModel):
                 continue
 
 
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals['acumatica_write_date']:
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

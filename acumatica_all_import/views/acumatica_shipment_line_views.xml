@@ -46,6 +46,7 @@
                 <field name="building_code"/>
                 <field name="actual_qty" string="Qty"/>
                 <field name="status"/>
+                <field name="acumatica_write_date" string="Last Modified"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                        decoration-muted="import_state == 'staged'"
@@ -70,42 +71,42 @@
                 <sheet>
                     <group string="Header">
                         <group>
-                            <field name="external_id" readonly="1"/>
-                            <field name="row_number" readonly="1"/>
-                            <field name="shipment_nbr" readonly="1"/>
+                            <field name="external_id"/>
+                            <field name="row_number"/>
+                            <field name="shipment_nbr"/>
                             <field name="picking_type_id" />
-                            <field name="shipment_type" readonly="1"/>
-                            <field name="operation" readonly="1"/>
-                            <field name="status" readonly="1"/>
-                            <field name="partner_code" readonly="1"/>
-                            <field name="partner_name" readonly="1"/>
-                            <field name="building_code" readonly="1"/>
-                            <field name="warehouse_code" readonly="1"/>
-                            <field name="warehouse_name" readonly="1"/>
-                            <field name="warehouse_dest_code" readonly="1"/>
-                            <field name="header_location_code" readonly="1"/>
-                            <field name="header_location_name" readonly="1"/>
-                            <field name="header_location_code_2" readonly="1"/>
-                            <field name="header_location_name_2" readonly="1"/>
+                            <field name="shipment_type"/>
+                            <field name="operation"/>
+                            <field name="status"/>
+                            <field name="partner_code"/>
+                            <field name="partner_name"/>
+                            <field name="building_code"/>
+                            <field name="warehouse_code"/>
+                            <field name="warehouse_name"/>
+                            <field name="warehouse_dest_code"/>
+                            <field name="header_location_code"/>
+                            <field name="header_location_name"/>
+                            <field name="header_location_code_2"/>
+                            <field name="header_location_name_2"/>
                         </group>
                         <group>
-                            <field name="scheduled_date" readonly="1"/>
-                            <field name="actual_qty" readonly="1"/>
-                            <field name="shipped_qty" readonly="1"/>
-                            <field name="shipped_volume" readonly="1"/>
-                            <field name="shipped_weight" readonly="1"/>
-                            <field name="package_count" readonly="1"/>
-                            <field name="package_weight" readonly="1"/>
-                            <field name="unlimited_packages" readonly="1"/>
-                            <field name="acumatica_write_date" readonly="1"/>
-                            <field name="description" readonly="1"/>
-                            <field name="fob_point" readonly="1"/>
-                            <field name="fob_point_description" readonly="1"/>
-                            <field name="shipping_zone" readonly="1"/>
-                            <field name="shipping_terms" readonly="1"/>
-                            <field name="ship_via" readonly="1"/>
-                            <field name="note_header_id" readonly="1"/>
-                            <field name="note" readonly="1"/>
+                            <field name="scheduled_date"/>
+                            <field name="actual_qty"/>
+                            <field name="shipped_qty"/>
+                            <field name="shipped_volume"/>
+                            <field name="shipped_weight"/>
+                            <field name="package_count"/>
+                            <field name="package_weight"/>
+                            <field name="unlimited_packages"/>
+                            <field name="acumatica_write_date"/>
+                            <field name="description"/>
+                            <field name="fob_point"/>
+                            <field name="fob_point_description"/>
+                            <field name="shipping_zone"/>
+                            <field name="shipping_terms"/>
+                            <field name="ship_via"/>
+                            <field name="note_header_id"/>
+                            <field name="note"/>
                         </group>
                     </group>
                     <notebook>
@@ -136,9 +137,9 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaShipmentCompletedStaging(models.Model):
     _name = 'acumatica.shipment.completed.staging'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Staging Shipment Completed dari Acumatica'
     _rec_name = 'shipment_nbr'
     _order = 'id desc'
@@ -33,6 +33,15 @@ class AcumaticaShipmentCompletedStaging(models.Model):
     note = fields.Text(
         string='Note',
     )
+
+    issue_nbr = fields.Char(string='Issue Number')
+    fob_point = fields.Char(string='FOB Point')
+    fob_point_description = fields.Char(string='FOB Point Description')
+    location_id = fields.Char(string='Location ID')
+    note_header = fields.Text(string='Note Header')
+    note_header_id = fields.Char(string='Note Header ID')
+    phone = fields.Char(string='Phone')
+    site_id_description = fields.Char(string='Site ID Description')
 
     # =========================================================
     # SHIPMENT
@@ -76,7 +85,6 @@ class AcumaticaShipmentCompletedStaging(models.Model):
 
     last_modified_datetime = fields.Datetime(
         string='Last Modified Date',
-        readonly=True,
         index=True,
     )
 
@@ -179,28 +187,26 @@ class AcumaticaShipmentCompletedStaging(models.Model):
     ],
         string='Status',
         default='staged',
-        readonly=True,
         index=True,
     )
 
     import_message = fields.Text(
         string='Generation Message',
-        readonly=True,
     )
 
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
         required=True,
-        readonly=True,
         ondelete='cascade',
         index=True,
     )
 
     sync_date = fields.Datetime(
         string='Tanggal Sync',
-        readonly=True,
     )
+
+    is_used = fields.Boolean('is_used', default=False)
 
     _sql_constraints = [
         (
@@ -217,6 +223,116 @@ class AcumaticaShipmentCompletedStaging(models.Model):
         })
         return True
 
+    def action_update_stock_picking(self):
+        self.ensure_one()
+
+        Picking = self.env['stock.picking']
+        shipment_nbr = self.shipment_nbr
+
+        self.env.cr.execute("SAVEPOINT shipment_completed_update")
+
+        try:
+            picking = Picking.search([
+                ('origin', '=', shipment_nbr),
+            ], limit=1)
+
+            if not picking:
+                _logger.error(
+                    "SHIPMENT COMPLETED | SKIP | Stock Picking tidak ditemukan | "
+                    "shipment_nbr=%s | staging_id=%s",
+                    shipment_nbr,
+                    self.id,
+                )
+                self.env.cr.execute(
+                    "ROLLBACK TO SAVEPOINT shipment_completed_update"
+                )
+                return False
+
+            staging_lines = self.line_ids
+
+            if not staging_lines:
+                _logger.error(
+                    "SHIPMENT COMPLETED | SKIP | Tidak ada staging line | "
+                    "shipment_nbr=%s | staging_id=%s",
+                    shipment_nbr,
+                    self.id,
+                )
+                self.env.cr.execute(
+                    "ROLLBACK TO SAVEPOINT shipment_completed_update"
+                )
+                return False
+
+            all_match = True
+
+            for move in picking.move_ids:
+
+                staging_lines_for_product = staging_lines.filtered(
+                    lambda line:
+                        line.line_inventory_id
+                        == move.product_id.default_code
+                )
+
+                staging_qty = sum(
+                    staging_lines_for_product.mapped('line_quantity')
+                )
+
+                if not staging_qty:
+                    raise UserError(
+                        f"Quantity tidak ditemukan untuk "
+                        f"{move.product_id.display_name}"
+                    )
+
+                if staging_qty < move.quantity:
+                    all_match = False
+
+                elif staging_qty > move.quantity:
+                    raise UserError(
+                        f"Quantity {move.product_id.display_name} "
+                        f"melebihi quantity DO. "
+                        f"DO={move.quantity}, staging={staging_qty}"
+                    )
+
+                move.shipped_qty = staging_qty
+
+            picking.shipment_information = (
+                'full_shipment'
+                if all_match
+                else 'partial'
+            )
+
+            self.is_used = True
+
+            picking.action_confirm_shipment()
+
+            self.env.cr.execute(
+                "RELEASE SAVEPOINT shipment_completed_update"
+            )
+
+            _logger.info(
+                "SHIPMENT COMPLETED | SUCCESS | shipment_nbr=%s | "
+                "picking=%s | type=%s",
+                shipment_nbr,
+                picking.name,
+                picking.shipment_information,
+            )
+
+            return True
+
+        except Exception as e:
+            self.env.cr.execute(
+                "ROLLBACK TO SAVEPOINT shipment_completed_update"
+            )
+
+            _logger.exception(
+                "SHIPMENT COMPLETED | SKIP | shipment_nbr=%s | "
+                "staging_id=%s | error=%s",
+                shipment_nbr,
+                self.id,
+                e,
+            )
+
+            return False
+    
 class AcumaticaShipmentCompletedStagingLine(models.Model):
     _name = 'acumatica.shipment.completed.staging.line'
     _description = 'Detail Staging Shipment Completed dari Acumatica'
@@ -299,12 +415,10 @@ class AcumaticaShipmentCompletedStagingLine(models.Model):
     config_id = fields.Many2one(
         related='staging_id.config_id',
         store=True,
-        readonly=True,
         index=True,
     )
 
     sync_date = fields.Datetime(
         related='staging_id.sync_date',
         store=True,
-        readonly=True,
     )

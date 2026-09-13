@@ -12,7 +12,7 @@ _logger = logging.getLogger(__name__)
 class AcumaticaKitAssembly(models.Model):
     _name = 'acumatica.kit.assembly'
     _description = 'Acumatica Kit Assembly'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
 
     name = fields.Char(
         string='Reference Number',
@@ -35,7 +35,7 @@ class AcumaticaKitAssembly(models.Model):
         index=True,
     )
 
-    last_modified_datetime = fields.Datetime()
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime')
 
     location = fields.Char()
     building_id = fields.Char(string='Building ID')
@@ -43,6 +43,7 @@ class AcumaticaKitAssembly(models.Model):
     note_header_id = fields.Char(string='Note Header ID')
 
     post_period = fields.Char()
+    date = fields.Date(string='Date')
 
     quantity = fields.Float()
 
@@ -59,7 +60,7 @@ class AcumaticaKitAssembly(models.Model):
 
     status = fields.Char()
 
-    document_only = fields.Boolean(string='Document Only', readonly=True)
+    document_only = fields.Boolean(string='Document Only')
 
     type = fields.Char()
 
@@ -76,11 +77,12 @@ class AcumaticaKitAssembly(models.Model):
     ], default='staged', tracking=True)
 
     import_message = fields.Text(string='Generation Message', tracking=True)
+    selected = fields.Boolean(string='Pilih', default=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     mrp_production_id = fields.Many2one(
         'mrp.production',
         string='Manufacturing Order',
-        readonly=True,
     )
 
     component_ids = fields.One2many(
@@ -92,7 +94,6 @@ class AcumaticaKitAssembly(models.Model):
     config_id = fields.Many2one(
             'acumatica.config',
             string='Konfigurasi',
-            readonly=True,
             ondelete='cascade',
         )
     _sql_constraints = [
@@ -194,9 +195,13 @@ class AcumaticaKitAssembly(models.Model):
                         )
 
                     # -----------------------------------------------------
-                    # PICKING TYPE
+                    # FIND EXISTING MO
                     # -----------------------------------------------------
-                    picking_type = PickingType.search(
+                    manufacturing = Manufacturing.search(
+                        [("origin", "=", header.name)],
+                        limit=1,
+                    )
+                    picking_type = manufacturing.picking_type_id if manufacturing else PickingType.search(
                         [
                             ("name", "=", "Manufacturing"),
                             ("warehouse_id", "=", warehouse_record.id),
@@ -209,20 +214,28 @@ class AcumaticaKitAssembly(models.Model):
                             "Manufacturing Picking Type tidak ditemukan "
                             f"untuk warehouse: {warehouse_record.display_name}"
                         )
-
-                    # -----------------------------------------------------
-                    # FIND EXISTING MO
-                    # -----------------------------------------------------
-                    manufacturing = Manufacturing.search(
-                        [("origin", "=", header.name)],
-                        limit=1,
-                    )
-                    created_manufacturing = False
-
                     # -----------------------------------------------------
                     # CREATE / UPDATE MO
                     # -----------------------------------------------------
                     if manufacturing:
+                        if manufacturing.state not in ('draft', 'cancel'):
+                            raise UserError(
+                                f'Manufacturing Order {reference_nbr} sudah berada pada state '
+                                f'{manufacturing.state}, tidak bisa diupdate.'
+                            )
+                        manufacturing.write({
+                            'product_id': finished_product.id,
+                            'product_qty': header.quantity,
+                            'product_uom_id': finished_product.uom_id.id,
+                            'date_start': header.requested_on,
+                            'picking_type_id': picking_type.id,
+                            'warehouse_id': warehouse_record.id,
+                            'location_src_id': picking_type.default_location_src_id.id,
+                            'location_dest_id': picking_type.default_location_dest_id.id,
+                            'company_id': warehouse_record.company_id.id,
+                        })
+                        manufacturing.move_raw_ids.unlink()
+                        action_state = 'updated'
                         updated += 1
                         print(
                             f"MO sudah ada: "
@@ -247,7 +260,7 @@ class AcumaticaKitAssembly(models.Model):
                             ),
                             "company_id": warehouse_record.company_id.id,
                         })
-                        created_manufacturing = True
+                        action_state = 'created'
 
                         created += 1
 
@@ -309,13 +322,12 @@ class AcumaticaKitAssembly(models.Model):
                     # -----------------------------------------------------
                     # RAW MATERIAL MOVES
                     # -----------------------------------------------------
-                    # Hanya tambahkan raw moves untuk MO baru.
                     if raw_moves and not manufacturing.exists():
                         raise ValueError(
                             "Manufacturing Order sudah tidak tersedia."
                         )
 
-                    if raw_moves and created_manufacturing:
+                    if raw_moves:
                         manufacturing.write({
                             "move_raw_ids": raw_moves,
                         })
@@ -332,7 +344,7 @@ class AcumaticaKitAssembly(models.Model):
                             else "Created"
                         ),
                         "mrp_production_id": manufacturing.id if manufacturing else False,
-                        "import_state": "created",
+                        "import_state": action_state,
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'kit_assembly')
 
@@ -447,6 +459,17 @@ class AcumaticaKitAssembly(models.Model):
             'view_mode': 'form',
         }
 
+    def action_open_manufacturing(self):
+        self.ensure_one()
+        if not self.mrp_production_id:
+            raise UserError('Manufacturing Order belum dibuat.')
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'mrp.production',
+            'res_id': self.mrp_production_id.id,
+            'view_mode': 'form',
+        }
+
 
 class AcumaticaKitAssemblyComponent(models.Model):
     _name = 'acumatica.kit.assembly.component'
@@ -488,7 +511,6 @@ class AcumaticaKitAssemblyComponent(models.Model):
     product_id = fields.Many2one(
         'product.product',
         string='Matched Product',
-        readonly=True,
     )
 
     import_message = fields.Text(string='Generation Message', tracking=True)
@@ -543,40 +565,41 @@ class AcumaticaKitAssemblyLine(models.Model):
     # 'uom_code': self._val(component, 'UOM'),
 
     # ─── Data mentah dari Acumatica ──────────────────
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Acumatica', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    description = fields.Char(string='Description', readonly=True)
-    last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
-    location = fields.Char(string='Location', readonly=True)
-    note_header = fields.Char(string='Header Note', readonly=True)
-    note_header_id = fields.Char(string='Note Header ID', readonly=True)
-    post_period = fields.Char(string='PostPeriod', readonly=True)
-    quantity = fields.Char(string='Qty', readonly=True)
-    reason_code = fields.Char(string='ReasonCode', readonly=True)
-    reference_nbr = fields.Char(string='ReferenceNbr', readonly=True)
-    requested_on = fields.Char(string='RequestedOn', readonly=True)
-    revision = fields.Char(string='Revision', readonly=True)
-    status = fields.Char(string='Status', readonly=True)
-    type = fields.Char(string='Type', readonly=True)
-    uom = fields.Char(string='uom', readonly=True)
-    warehouse = fields.Char(string='Warehouse', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Acumatica')
+    inventory_id = fields.Char(string='InventoryID')
+    description = fields.Char(string='Description')
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime')
+    location = fields.Char(string='Location')
+    note_header = fields.Char(string='Header Note')
+    note_header_id = fields.Char(string='Note Header ID')
+    post_period = fields.Char(string='PostPeriod')
+    date = fields.Char(string='Date')
+    quantity = fields.Char(string='Qty')
+    reason_code = fields.Char(string='ReasonCode')
+    reference_nbr = fields.Char(string='ReferenceNbr')
+    requested_on = fields.Char(string='RequestedOn')
+    revision = fields.Char(string='Revision')
+    status = fields.Char(string='Status')
+    type = fields.Char(string='Type')
+    uom = fields.Char(string='uom')
+    warehouse = fields.Char(string='Warehouse')
 
-    line_external_id = fields.Char(string='Line UUID', readonly=True)
-    line_note = fields.Char(string='Line Note', readonly=True)
-    line_note_id = fields.Char(string='Line Note ID', readonly=True)
-    line_inventory_id = fields.Char(string='Line InventoryID', readonly=True)
-    line_component_qty = fields.Char(string='Line Component Qty', readonly=True)
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)
-    line_location_id = fields.Char(string='Line LocationID', readonly=True)
-    line_quantity = fields.Char(string='Line Quantity', readonly=True)
-    line_reason_code = fields.Char(string='Line ReasonCode', readonly=True)
-    stock_inventory_id = fields.Char(string='Stock InventoryID', readonly=True)
-    line_uom = fields.Char(string='Line UOM', readonly=True)
+    line_external_id = fields.Char(string='Line UUID')
+    line_note = fields.Char(string='Line Note')
+    line_note_id = fields.Char(string='Line Note ID')
+    line_inventory_id = fields.Char(string='Line InventoryID')
+    line_component_qty = fields.Char(string='Line Component Qty')
+    line_nbr = fields.Char(string='Line Nbr')
+    line_location_id = fields.Char(string='Line LocationID')
+    line_quantity = fields.Char(string='Line Quantity')
+    line_reason_code = fields.Char(string='Line ReasonCode')
+    stock_inventory_id = fields.Char(string='Stock InventoryID')
+    line_uom = fields.Char(string='Line UOM')
 
-    RMALocationID = fields.Char(string='RMA Location ID', readonly=True)
-    WarehouseID = fields.Char(string='Warehouse ID', readonly=True)
-    BuildingID = fields.Char(string='Building ID', readonly=True)
+    RMALocationID = fields.Char(string='RMA Location ID')
+    WarehouseID = fields.Char(string='Warehouse ID')
+    BuildingID = fields.Char(string='Building ID')
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
@@ -585,26 +608,25 @@ class AcumaticaKitAssemblyLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
+    ], string='Status', default='staged', tracking=True)
 
-    import_message   = fields.Char(string='Generation Message',         readonly=True)
-    odoo_product_id  = fields.Many2one('product.template', string='Document Reference', readonly=True)
-    odoo_bom_id = fields.Many2one('mrp.bom', string='BOM di Odoo', readonly=True)
+    import_message   = fields.Char(string='Generation Message',         )
+    odoo_product_id  = fields.Many2one('product.template', string='Document Reference')
+    odoo_bom_id = fields.Many2one('mrp.bom', string='BOM di Odoo')
     selected         = fields.Boolean(string='Pilih',           default=True)
 
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
-    warehouse_code = fields.Char(string='Warehouse Code', readonly=True)
-    location_dest_code = fields.Char(string='Location Dest Code', readonly=True)
-    header_location_code = fields.Char(string='Header Location Code', readonly=True)
-    uom_code = fields.Char(string='UOM Code', readonly=True)
-    receipt_nbr = fields.Char(string='Receipt Nbr', readonly=True)
-    po_number = fields.Char(string='PO Number', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
+    warehouse_code = fields.Char(string='Warehouse Code')
+    location_dest_code = fields.Char(string='Location Dest Code')
+    header_location_code = fields.Char(string='Header Location Code')
+    uom_code = fields.Char(string='UOM Code')
+    receipt_nbr = fields.Char(string='Receipt Nbr')
+    po_number = fields.Char(string='PO Number')
 
 
     # ─── Helpers ─────────────────────────────────────
@@ -758,7 +780,10 @@ class AcumaticaKitAssemblyLine(models.Model):
                             f"{header.inventory_id or '-'}"
                         )
 
-                    picking_type = PickingType.search([
+                    existing_manufacturing = header.mrp_production_id or self.env['mrp.production'].search(
+                        [('origin', '=', header.name)], limit=1,
+                    )
+                    picking_type = existing_manufacturing.picking_type_id if existing_manufacturing else PickingType.search([
                         ('name', '=', 'Manufacturing'),
                         ('warehouse_id', '=', warehouse.id),
                     ], limit=1)
@@ -792,11 +817,37 @@ class AcumaticaKitAssemblyLine(models.Model):
                     }
                     manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)], limit=1)
                     if manufacturing_check:
+                        if manufacturing_check.state not in ('draft', 'cancel'):
+                            raise UserError(
+                                f'Manufacturing Order {reference_nbr} sudah berada pada state '
+                                f'{manufacturing_check.state}, tidak bisa diupdate.'
+                            )
                         manufacturing = manufacturing_check
+                        manufacturing.write(vals)
+                        manufacturing.move_raw_ids.unlink()
                         updated += 1
                     else:
                         manufacturing = Manufacturing.create(vals)
                         created += 1
+
+                    raw_move_vals = []
+                    for item in component_lines:
+                        component_product = self.env['product.product'].search([
+                            ('default_code', '=', item.stock_inventory_id),
+                        ], limit=1)
+                        raw_move_vals.append({
+                            'name': component_product.display_name,
+                            'product_id': component_product.id,
+                            'product_uom_qty': item.line_quantity,
+                            'product_uom': component_product.uom_id.id,
+                            'location_id': picking_type.default_location_src_id.id,
+                            'location_dest_id': picking_type.default_location_dest_id.id,
+                            'picking_type_id': picking_type.id,
+                            'warehouse_id': manufacturing.warehouse_id.id,
+                            'raw_material_production_id': manufacturing.id,
+                        })
+                    if raw_move_vals:
+                        Move.create(raw_move_vals)
 
                     records.write({
                         'import_state': 'created' if not manufacturing_check else 'updated',

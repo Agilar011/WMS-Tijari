@@ -18,11 +18,17 @@
             <list string="Data PO Return">
                 <field name="selected" widget="boolean_toggle"/>
                 <field name="receipt_nbr"/>
+                <field name="building_code" optional="show"/>
+                <field name="customer_id" optional="show"/>
+                <field name="customer_name" optional="show"/>
+                <field name="shipment_nbr" optional="show"/>
+                <field name="transfer_nbr" optional="show"/>
                 <field name="receipt_type"/>
                 <field name="document_only"/>
                 <field name="vendor_code"/>
                 <field name="warehouse_code"/>
                 <field name="total_qty"/>
+                <field name="acumatica_write_date" string="Last Modified"/>
                 <!-- <field name="inventory_id"/> -->
                 <!-- <field name="transaction_description"/> -->
                 <!-- <field name="product_uom_qty"/> -->
@@ -54,6 +60,18 @@
                     <group>
                         <group string="Header Receipt">
                             <field name="receipt_nbr"/>
+                            <field name="building_code"/>
+                            <field name="change_item_ref_nbr"/>
+                            <field name="customer_id"/>
+                            <field name="customer_location_id"/>
+                            <field name="customer_location_name"/>
+                            <field name="customer_name"/>
+                            <field name="doc_type"/>
+                            <field name="external_ref"/>
+                            <field name="note_header_id"/>
+                            <field name="shipment_nbr"/>
+                            <field name="transfer_nbr"/>
+                            <field name="trans_type"/>
                             <field name="vendor_code"/>
                             <field name="partner_ref"/>
                             <field name="scheduled_date"/>
@@ -72,6 +90,11 @@
                         </group>
                         <group string="Detail Line">
                             <field name="line_nbr"/>
+                            <field name="line_inventory_name"/>
+                            <field name="line_location_name"/>
+                            <field name="line_note_id"/>
+                            <field name="line_warehouse"/>
+                            <field name="line_warehouse_name"/>
                             <field name="inventory_id"/>
                             <field name="transaction_description"/>
                             <field name="description"/>
@@ -96,20 +119,21 @@
                     </group>
                     <notebook name="Details">
                         <page string="All Shipment Lines" name="all_shipment_lines">
-                            <field name="product_line_ids" readonly="1">
+                            <field name="product_line_ids">
                                 <list>
-                                    <field name="inventory_id" readonly="1"/>
-                                    <field name="line_note" readonly="1"/>
-                                    <field name="warehouse_code" readonly="1"/>
-                                    <field name="product_uom_qty" readonly="1"/>
+                                    <field name="inventory_id"/>
+                                    <field name="line_note"/>
+                                    <field name="warehouse_code"/>
+                                    <field name="product_uom_qty"/>
+                                    <field name="order_qty"/>
                                 </list>
                             </field>
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

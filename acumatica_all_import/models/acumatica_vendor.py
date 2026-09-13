@@ -29,23 +29,23 @@ class AcumaticaVendorLine(models.Model):
     _order       = 'row_number asc'
 
     # ─── Data mentah dari Acumatica ──────────────────
-    row_number             = fields.Integer(string='No',           readonly=True)
-    external_id            = fields.Char(string='UUID Acumatica',  readonly=True)
+    row_number             = fields.Integer(string='No')
+    external_id            = fields.Char(string='UUID Acumatica')
 
     # Mandatory
-    vendor_id              = fields.Char(string='VendorID',        readonly=True)
-    vendor_name            = fields.Char(string='VendorName',      readonly=True)
-    location_name          = fields.Char(string='LocationName',    readonly=True)
-    status                 = fields.Char(string='Status',          readonly=True)
-    lead_time_days         = fields.Integer(string='LeadTimedays', readonly=True)
-    fob_point              = fields.Char(string='FOBPoint',        readonly=True)
-    last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
-    note                   = fields.Text(string='Note',            readonly=True)
-    account_ref            = fields.Char(string='AccountRef',      readonly=True)
-    b_account_id          = fields.Char(string='BAccountID',     readonly=True)
+    vendor_id              = fields.Char(string='VendorID')
+    vendor_name            = fields.Char(string='VendorName')
+    location_name          = fields.Char(string='LocationName')
+    status                 = fields.Char(string='Status')
+    lead_time_days         = fields.Integer(string='LeadTimedays')
+    fob_point              = fields.Char(string='FOBPoint')
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime')
+    note                   = fields.Text(string='Note')
+    account_ref            = fields.Char(string='AccountRef')
+    b_account_id          = fields.Char(string='BAccountID')
 
     # Optional
-    vendor_class           = fields.Char(string='VendorClass',     readonly=True)
+    vendor_class           = fields.Char(string='VendorClass')
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
@@ -54,10 +54,10 @@ class AcumaticaVendorLine(models.Model):
         ('updated',  'Updated'),
         ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='staged', readonly=True)
+    ], string='Status', default='staged')
 
-    import_message  = fields.Char(string='Generation Message',       readonly=True)
-    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference', readonly=True)
+    import_message  = fields.Char(string='Generation Message')
+    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference')
     selected        = fields.Boolean(string='Pilih',          default=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
@@ -65,10 +65,9 @@ class AcumaticaVendorLine(models.Model):
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ─── Helpers ─────────────────────────────────────
     @staticmethod
