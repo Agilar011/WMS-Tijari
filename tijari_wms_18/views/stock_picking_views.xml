@@ -479,8 +479,9 @@
                     domain="[('id', 'child_of', internal_transfer_adt_dest_location_id)]"/>
             </xpath>
 
-            <xpath expr="//field[@name='owner_id']" position="replace">
-                <field name="owner_id" string="Pemilik Stock" invisible="adt_type != 'Toko Pegang DO'" />
+            <xpath expr="//field[@name='owner_id']" position="attributes">
+                <attribute name="string">Pemilik Stock</attribute>
+                <attribute name="invisible">adt_type != 'Toko Pegang DO'</attribute>
             </xpath>
 
             <xpath expr="//field[@name='origin']" position="after">
