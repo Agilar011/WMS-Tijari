@@ -205,8 +205,12 @@ class AcumaticaStockItemLine(models.Model):
         )
         self.env.cr.execute(query_product, params_product)
         result = self.env.cr.fetchone()
-        if result and line.barcode:
-            self.env['product.template'].browse(result[0]).write({'barcode': line.barcode})
+        if result:
+            # Barcode kosong dari staging berarti barcode di Acumatica sudah
+            # dihapus, jadi barcode product juga harus dikosongkan.
+            self.env['product.template'].browse(result[0]).write({
+                'barcode': line.barcode or False,
+            })
         if not result:
             # Tidak ada perubahan data, skip update
             query_staging = """
@@ -750,8 +754,10 @@ class AcumaticaStockItemLine(models.Model):
                                 ),
                                 existing['id']
                             ))
-                            if line.barcode:
-                                barcode_updates.append((existing['id'], line.barcode))
+                            # Nilai kosong bukan berarti "skip": itu snapshot
+                            # terbaru dari Acumatica dan harus menghapus barcode
+                            # lama pada product.
+                            barcode_updates.append((existing['id'], line.barcode or False))
 
                             # SKU changed
                             if existing['default_code'] != line.inventory_id:

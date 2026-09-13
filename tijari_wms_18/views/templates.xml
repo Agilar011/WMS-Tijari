@@ -1,5 +1,8 @@
 <odoo>
     <data>
+        <template id="email_layout_picking_plain" name="Picking email layout without document link">
+            <t t-out="message.body"/>
+        </template>
 <!--
         <template id="listing">
           <ul>
