@@ -93,7 +93,7 @@
                         <page name="Details" string="Details">
                             <field name="product_line_ids">
                                 <!-- CATATAN: Gunakan <tree> jika Odoo versi 16 ke bawah, gunakan <list> jika Odoo 17/18 -->
-                                <list edit="0" create="0" delete="0">
+                                <list edit="0">
                                     <field name="inventory_id"/>
                                     <field name="description"/>
                                     <field name="warehouse_code"/>
