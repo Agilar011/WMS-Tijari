@@ -11,7 +11,7 @@
                     <button name="action_clear_api_key" type="object" string="Clear API Key" class="btn-secondary" confirm="Clear the configured webhook API key? Existing integrations will stop working."/>
                 </header>
                 <sheet>
-                    <group>
+                    <group string="Last Generated Key">
                         <field name="api_key_status"/>
                         <field name="generated_at"/>
                         <field name="latest_api_key"/>
@@ -47,7 +47,7 @@
                     <group>
                         <field name="name"/>
                         <field name="generated_at" readonly="1"/>
-                        <field name="api_key"/>
+                        <field name="api_key" readonly="1"/>
                     </group>
                     <div class="alert alert-info" role="alert">
                         Leave API Key empty and save to generate a new value automatically.
