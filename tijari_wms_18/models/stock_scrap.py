@@ -540,7 +540,6 @@ class WMSScrapMoveLine(models.Model):
 
 class ScrapStockPicking(models.Model):
     _inherit = 'stock.picking'
-    _description = 'ScrapStockPicking'
 
     scrap_ids = fields.One2many(
         "stock.scrap",
