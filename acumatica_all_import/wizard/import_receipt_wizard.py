@@ -33,11 +33,6 @@ class ImportReceiptWizard(models.TransientModel):
 
     def action_fetch_data(self):
         self.ensure_one()
-
-        import math
-
-        count = 0
-        loop_count = math.ceil(self.fetch_limit / self.batch_size)
         params = []
         if self.wh33_filter:
             params.append("startswith(Warehouse,'WH33')")
@@ -59,13 +54,13 @@ class ImportReceiptWizard(models.TransientModel):
 
 
         batch_data = self.fetch_receipt_data(
-            limit=self.batch_size,
+            limit=self.fetch_limit,
+            offset=self.fetch_skip,
             receipt_nbr=self.receipt_nbr,
             odata_filter=params if params else None,
         )
-        count += batch_data
-        self.total_fetched = count
-        if not count:
+        self.total_fetched = batch_data
+        if not batch_data:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
         return {
@@ -181,7 +176,28 @@ class ImportReceiptWizard(models.TransientModel):
 
             seen_receipts = set()
 
-            data = raw_data.get("PurchaseReceiptGIDetails", [])
+            data = self._normalize_rows(raw_data.get("PurchaseReceiptGIDetails", []))
+
+            # PurchaseReceiptGI is a custom PUT endpoint and does not honor
+            # OData $top/$skip. Apply the wizard pagination at receipt level
+            # after the response is received, while keeping every detail row
+            # belonging to the selected receipts.
+            receipt_order = []
+            seen_receipts = set()
+            for item in data:
+                receipt_nbr_value = self._val(item, "ReceiptNbr")
+                if receipt_nbr_value and receipt_nbr_value not in seen_receipts:
+                    seen_receipts.add(receipt_nbr_value)
+                    receipt_order.append(receipt_nbr_value)
+
+            selected_receipts = set(
+                receipt_order[offset:offset + limit] if limit else receipt_order[offset:]
+            )
+            data = [
+                item for item in data
+                if self._val(item, "ReceiptNbr") in selected_receipts
+            ]
+
             for row_number, item in enumerate(data, start=1):
                 receipt_nbr = self._val(item, "ReceiptNbr")
 

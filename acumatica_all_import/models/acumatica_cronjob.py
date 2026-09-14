@@ -25,17 +25,65 @@ class AcumaticaCronJob(models.Model):
         try:
             result = runner(batch_size=batch_size, fetch_skip=fetch_skip)
             if isinstance(result, dict):
+                self._update_live_scheduler_log(key, result)
                 return result
-            return self._cron_result(success=bool(result))
+            result = self._cron_result(success=bool(result))
+            self._update_live_scheduler_log(key, result)
+            return result
         except Exception as exc:
             self.env.cr.rollback()
             _logger.exception("Cron import %s skipped because of an error.", key)
-            return self._cron_result(
+            result = self._cron_result(
                 success=False,
                 records_errors=1,
                 records_skipped=1,
                 message=str(exc),
             )
+            self._update_live_scheduler_log(key, result)
+            return result
+
+    def _update_live_scheduler_log(self, key, result):
+        """Persist one completed data-type result to the scheduler's live log."""
+        log_id = self.env.context.get('api_scheduler_log_id')
+        if not log_id:
+            return
+        Log = self.env['api.scheduler.log'].sudo()
+        log = Log.browse(log_id).exists()
+        if not log:
+            return
+
+        values = result if isinstance(result, dict) else {}
+        detail = log.detail_ids.filtered(lambda item: item.acumatica_data == key)[:1]
+        detail_values = {
+            'data_type': log.scheduler_job_id.acumatica_data_type,
+            'acumatica_data': key,
+            'data_retrieved': max(values.get('data_retrieved', 0), 0),
+            'staging_created': max(
+                values.get('data_retrieved', 0)
+                if log.scheduler_job_id.process_phase in ('fetch', 'combined')
+                else 0,
+                0,
+            ),
+            'records_created': max(values.get('records_created', 0), 0),
+            'records_errors': max(values.get('records_errors', 0), 0),
+            'records_skipped': max(values.get('records_skipped', 0), 0),
+        }
+        if detail:
+            detail.write(detail_values)
+        else:
+            detail = self.env['api.scheduler.log.detail'].sudo().create(
+                dict(detail_values, scheduler_log_id=log.id)
+            )
+
+        details = log.detail_ids
+        log.write({
+            'data_retrieved': sum(details.mapped('data_retrieved')),
+            'staging_created': sum(details.mapped('staging_created')),
+            'records_created': sum(details.mapped('records_created')),
+            'records_errors': sum(details.mapped('records_errors')),
+            'records_skipped': sum(details.mapped('records_skipped')),
+        })
+        self.env.cr.commit()
 
     def _get_import_counts(self, model_name, line_ids, skipped_states=False):
         Line = self.env[model_name]
@@ -151,6 +199,147 @@ class AcumaticaCronJob(models.Model):
 
         return Line.browse(imported_ids)
 
+    def _run_master_import_only_job(self, batch_size=1000):
+        """Import master staging rows after the separate fetch phase completed."""
+        successful_types = self.env.context.get('acumatica_successful_master_types')
+        import_scheduler_code = self.env.context.get('acumatica_scheduler_code')
+        if successful_types:
+            definitions_filter = set(successful_types)
+        else:
+            definitions_filter = None
+
+        if import_scheduler_code and not successful_types:
+            fetch_job = self.env['api.scheduler.job'].search([
+                ('code', '=', 'acumatica_master_fetch'),
+            ], limit=1)
+            import_job = self.env['api.scheduler.job'].search([
+                ('code', '=', import_scheduler_code),
+            ], limit=1)
+            last_fetch = self.env['api.scheduler.log'].search([
+                ('scheduler_job_id', '=', fetch_job.id),
+                ('status', '=', 'success'),
+            ], order='execution_time desc, id desc', limit=1)
+            last_import = self.env['api.scheduler.log'].search([
+                ('scheduler_job_id', '=', import_job.id),
+                ('status', '=', 'success'),
+            ], order='execution_time desc, id desc', limit=1)
+            if not last_fetch or (
+                last_import and last_fetch.execution_time <= last_import.execution_time
+            ):
+                return {
+                    'master': self._cron_result(
+                        success=False,
+                        records_errors=1,
+                        message='Import ditahan: fetch master terakhir belum selesai atau belum berhasil.',
+                    )
+                }
+
+        definitions = [
+            ('customer', 'acumatica.customer.line'),
+            ('vendor', 'acumatica.vendor.line'),
+            ('uom', 'acumatica.uom.line'),
+            ('warehouse', 'acumatica.warehouse.line'),
+            ('stock_item', 'acumatica.stock.item.line'),
+            ('non_stock_item', 'acumatica.non.stock.item.line'),
+        ]
+        results = {}
+        for key, line_model in definitions:
+            if definitions_filter is not None and key not in definitions_filter:
+                continue
+            config = self._get_default_config_for_type(key)
+            if not config:
+                results[key] = self._cron_result(
+                    success=False,
+                    records_errors=1,
+                    message='No active %s config found.' % key,
+                )
+                self._update_live_scheduler_log(key, results[key])
+                continue
+
+            lines = self._get_importable_lines(line_model, config)
+            if not lines:
+                results[key] = self._cron_result()
+                self._update_live_scheduler_log(key, results[key])
+                continue
+
+            imported = self._import_master_lines_in_batches(
+                line_model,
+                config,
+                batch_size=batch_size,
+            )
+            imported_count, updated_count, error_count, skipped_count = self._get_import_counts(
+                line_model,
+                imported.ids,
+                skipped_states=['rejected'],
+            )
+            results[key] = self._cron_result(
+                data_retrieved=len(lines),
+                records_created=imported_count + updated_count,
+                records_errors=error_count,
+                records_skipped=skipped_count,
+            )
+            self._update_live_scheduler_log(key, results[key])
+        return results
+
+    def _run_transaction_import_only_job(self, batch_size=1000):
+        """Import only transaction types completed by the preceding fetch phase."""
+        successful_types = set(self.env.context.get('acumatica_successful_transaction_types') or [])
+        if not successful_types:
+            return {
+                'transaction': self._cron_result(
+                    success=False,
+                    records_errors=1,
+                    message='Import transaksi ditahan: tidak ada fetch transaksi yang berhasil.',
+                )
+            }
+
+        results = {}
+        for key, label, wizard_model, line_model, method in self._get_transaction_import_definitions():
+            if key not in successful_types:
+                continue
+            config = self._get_default_config_for_type(key)
+            if not config:
+                results[key] = self._cron_result(
+                    success=False,
+                    records_errors=1,
+                    message='No active %s config found.' % key,
+                )
+                self._update_live_scheduler_log(key, results[key])
+                continue
+
+            lines = self._get_importable_lines(line_model, config)
+            if not lines:
+                results[key] = self._cron_result()
+                self._update_live_scheduler_log(key, results[key])
+                continue
+            if not hasattr(lines, '_do_import'):
+                results[key] = self._cron_result(data_retrieved=len(lines))
+                self._update_live_scheduler_log(key, results[key])
+                continue
+
+            imported_count = updated_count = error_count = skipped_count = 0
+            for offset in range(0, len(lines), batch_size):
+                batch = lines[offset:offset + batch_size]
+                batch._do_import()
+                counts = self._get_import_counts(
+                    line_model,
+                    batch.ids,
+                    skipped_states=['rejected'],
+                )
+                imported_count += counts[0]
+                updated_count += counts[1]
+                error_count += counts[2]
+                skipped_count += counts[3]
+
+            results[key] = self._cron_result(
+                data_retrieved=len(lines),
+                records_created=imported_count + updated_count,
+                records_errors=error_count,
+                records_skipped=skipped_count,
+            )
+            self._update_live_scheduler_log(key, results[key])
+        return results
+
     def _run_generic_transaction_import_job(self, key, batch_size=1000, fetch_skip=0):
         definition = False
         for item in self._get_transaction_import_definitions():
@@ -179,6 +368,8 @@ class AcumaticaCronJob(models.Model):
             raise
 
         data_retrieved = wizard.total_fetched or 0
+        if self.env.context.get('acumatica_process_phase') == 'fetch':
+            return self._cron_result(data_retrieved=data_retrieved)
         lines = self._get_importable_lines(line_model, config)
         pending_count = len(lines)
         if not lines:
@@ -237,6 +428,8 @@ class AcumaticaCronJob(models.Model):
                 return self._cron_result()
             raise
         data_retrieved = wizard.total_fetched or 0
+        if self.env.context.get('acumatica_process_phase') == 'fetch':
+            return self._cron_result(data_retrieved=data_retrieved)
 
         lines = self.env['acumatica.customer.line'].search([
             ('config_id', '=', config.id),
@@ -305,6 +498,8 @@ class AcumaticaCronJob(models.Model):
                 return self._cron_result()
             raise
         data_retrieved = wizard.total_fetched or 0
+        if self.env.context.get('acumatica_process_phase') == 'fetch':
+            return self._cron_result(data_retrieved=data_retrieved)
 
         lines = self.env['acumatica.vendor.line'].search([
             ('config_id', '=', config.id),
@@ -373,6 +568,8 @@ class AcumaticaCronJob(models.Model):
                 return self._cron_result()
             raise
         data_retrieved = wizard.total_fetched or 0
+        if self.env.context.get('acumatica_process_phase') == 'fetch':
+            return self._cron_result(data_retrieved=data_retrieved)
 
         lines = self.env['acumatica.stock.item.line'].search([
             ('config_id', '=', config.id),
@@ -441,6 +638,8 @@ class AcumaticaCronJob(models.Model):
                 return self._cron_result()
             raise
         data_retrieved = wizard.total_fetched or 0
+        if self.env.context.get('acumatica_process_phase') == 'fetch':
+            return self._cron_result(data_retrieved=data_retrieved)
 
         lines = self.env['acumatica.non.stock.item.line'].search([
             ('config_id', '=', config.id),
@@ -510,6 +709,8 @@ class AcumaticaCronJob(models.Model):
                 return self._cron_result()
             raise
         data_retrieved = wizard.total_fetched or 0
+        if self.env.context.get('acumatica_process_phase') == 'fetch':
+            return self._cron_result(data_retrieved=data_retrieved)
 
         lines = self.env['acumatica.uom.line'].search([
             ('config_id', '=', config.id),
@@ -567,6 +768,8 @@ class AcumaticaCronJob(models.Model):
                 return self._cron_result()
             raise
         data_retrieved = wizard.total_fetched or 0
+        if self.env.context.get('acumatica_process_phase') == 'fetch':
+            return self._cron_result(data_retrieved=data_retrieved)
 
         lines = self.env['acumatica.warehouse.line'].search([
             ('config_id', '=', config.id),
@@ -614,6 +817,8 @@ class AcumaticaCronJob(models.Model):
                 return self._cron_result()
             raise
         data_retrieved = wizard.total_fetched or 0
+        if self.env.context.get('acumatica_process_phase') == 'fetch':
+            return self._cron_result(data_retrieved=data_retrieved)
 
         lines = self.env['acumatica.receipt.line'].search([
             ('config_id', '=', config.id),
@@ -683,6 +888,8 @@ class AcumaticaCronJob(models.Model):
                 return self._cron_result()
             raise
         data_retrieved = wizard.total_fetched or 0
+        if self.env.context.get('acumatica_process_phase') == 'fetch':
+            return self._cron_result(data_retrieved=data_retrieved)
 
         lines = self.env['acumatica.shipment.line'].search([
             ('config_id', '=', config.id),
@@ -711,20 +918,23 @@ class AcumaticaCronJob(models.Model):
 
     @api.model
     def _cron_import_master_data(self, batch_size=1000, fetch_skip=0):
-        """Run Master Data imports in dependency order."""
+        """Run master data in the configured fetch/import phase."""
         _logger.info(
             "START CRON IMPORT MASTER DATA; BATCH_SIZE=%s, FETCH_SKIP=%s",
             batch_size,
             fetch_skip,
         )
-        results = {
+        if self.env.context.get('acumatica_process_phase') == 'import':
+            results = self._run_master_import_only_job(batch_size=batch_size)
+        else:
+            results = {
             'customer': self._run_import_step('customer', self._run_customer_import_job, batch_size, fetch_skip),
             'vendor': self._run_import_step('vendor', self._run_vendor_import_job, batch_size, fetch_skip),
             'uom': self._run_import_step('uom', self._run_uom_import_job, batch_size, fetch_skip),
             'warehouse': self._run_import_step('warehouse', self._run_warehouse_import_job, batch_size, fetch_skip),
             'stock_item': self._run_import_step('stock_item', self._run_stock_item_import_job, batch_size, fetch_skip),
             'non_stock_item': self._run_import_step('non_stock_item', self._run_non_stock_item_import_job, batch_size, fetch_skip),
-        }
+            }
         _logger.info("FINISH CRON IMPORT MASTER DATA; RESULTS=%s", results)
         return results
 
@@ -736,17 +946,20 @@ class AcumaticaCronJob(models.Model):
             batch_size,
             fetch_skip,
         )
-        results = {}
-        for key, label, wizard_model, line_model, method in self._get_transaction_import_definitions():
-            results[key] = self._run_import_step(
-                key,
-                lambda batch_size, fetch_skip, import_key=key: self._run_generic_transaction_import_job(
-                    import_key,
-                    batch_size=batch_size,
-                    fetch_skip=fetch_skip,
-                ),
-                batch_size,
-                fetch_skip,
-            )
+        if self.env.context.get('acumatica_process_phase') == 'import':
+            results = self._run_transaction_import_only_job(batch_size=batch_size)
+        else:
+            results = {}
+            for key, label, wizard_model, line_model, method in self._get_transaction_import_definitions():
+                results[key] = self._run_import_step(
+                    key,
+                    lambda batch_size, fetch_skip, import_key=key: self._run_generic_transaction_import_job(
+                        import_key,
+                        batch_size=batch_size,
+                        fetch_skip=fetch_skip,
+                    ),
+                    batch_size,
+                    fetch_skip,
+                )
         _logger.info("FINISH CRON IMPORT TRANSACTION DATA; RESULTS=%s", results)
         return results
