@@ -137,6 +137,8 @@ class PutawayMoveLineWizard(models.TransientModel):
     def action_rollback(self):
         self.ensure_one()
         self.move_line_id.action_mark_putaway_unfinished()
-        # Keep the Putaway wizard open so the operator can continue editing
-        # the line after rolling it back to unfinished.
-        return True
+        return self.move_line_id.action_open_putaway_move_line_wizard()
+
+    def action_cancel(self):
+        self.ensure_one()
+        return self.move_line_id.move_id.action_open_move_putaway()

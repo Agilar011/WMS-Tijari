@@ -497,16 +497,17 @@ class AcumaticaInventoryIssueLine(models.Model):
                 error += len(issue_lines)
                 
         msg = f'Import selesai: {created} dokumen dibuat, {updated} dokumen diupdate, {error} line error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Delivery Order',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Delivery Order',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
     def _generate_disposal_scrap(self, first, source_location):
         Scrap = self.env["stock.scrap"]

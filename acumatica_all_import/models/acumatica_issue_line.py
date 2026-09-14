@@ -316,16 +316,17 @@ class AcumaticaIssueLine(models.Model):
                 error += len(issue_lines)
 
         msg = f'Import selesai: {imported} delivery dibuat, {updated} delivery diupdate, {error} line error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Delivery Order',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Delivery Order',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})

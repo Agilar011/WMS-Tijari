@@ -306,16 +306,17 @@ class AcumaticaVendorLine(models.Model):
                 error += 1
 
         msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag':  'display_notification',
-            'params': {
-                'title':   'Import Vendor',
-                'message': msg,
-                'type':    'success' if error == 0 else 'warning',
-                'sticky':  True,
-            },
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag':  'display_notification',
+        #     'params': {
+        #         'title':   'Import Vendor',
+        #         'message': msg,
+        #         'type':    'success' if error == 0 else 'warning',
+        #         'sticky':  True,
+        #     },
+        # }
 
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):

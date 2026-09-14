@@ -408,7 +408,15 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 header.write({field: value for field, value in header_vals.items() if field in Header._fields})
                 updated += 1
             else:
-                header = Header.create({field: value for field, value in header_vals.items() if field in Header._fields})
+                # Webhook staging is a system import.  Do not let mail.thread
+                # auto-subscribe the current API user (or log a creation
+                # message) here: mail.thread creates that follower with
+                # check_existing=False, which can violate the followers
+                # unique key when a delivery is retried/replayed.
+                header = Header.with_context(
+                    mail_create_nosubscribe=True,
+                    mail_create_nolog=True,
+                ).create({field: value for field, value in header_vals.items() if field in Header._fields})
                 created += 1
 
             header.component_ids.unlink()

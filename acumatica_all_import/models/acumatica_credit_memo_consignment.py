@@ -311,16 +311,17 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
 
         msg = f'Generate done: {created} credit memo consignment created, {updated} credit memo consignment updated, {error} credit memo consignment error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Generate Credit Memo Consignment',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Generate Credit Memo Consignment',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
                 
     def _find_warehouse_by_code(self, code):
         Warehouse = self.env['stock.location.acumatica']

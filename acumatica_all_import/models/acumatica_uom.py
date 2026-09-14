@@ -260,16 +260,17 @@ class AcumaticaUomLine(models.Model):
 
         # Notifikasi hasil
         msg = f'Import selesai: {created} dibuat, {updated} diperbarui, {skipped} dilewati, {error} error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import UoM',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import UoM',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }
 
     # ─── Action: Reset status ─────────────────────────
     def action_reset_pending(self):

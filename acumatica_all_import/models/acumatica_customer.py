@@ -273,16 +273,17 @@ class AcumaticaCustomerLine(models.Model):
             skipped,
             error,
         )
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Customer',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Customer',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }
 
     def _handle_acumatica_error(self, err_msg=False):
         AcumaticaError = self.env['acumatica.error.master']

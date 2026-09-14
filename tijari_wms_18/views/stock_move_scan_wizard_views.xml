@@ -149,9 +149,9 @@
 			                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
 			                                            </div>
 			                                        </div>
-			                                        <button name="action_open_move_pick"
+                                        <button name="action_open_move_pick"
 			                                            type="object"
-			                                            string="Open Pick"
+			                                            string="Pick Details"
 			                                            class="btn btn-primary btn-sm o_wms_operation_action"
 			                                            invisible="state == 'draft'"/>
 			                                    </div>
@@ -208,7 +208,7 @@
 		                            <field name="difference_quantity" string="Difference Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
 		                            <field name="product_uom" readonly="1" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
 		                            <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
-		                            <button name="action_open_move_pick"
+                                    <button name="action_open_move_pick"
 		                                type="object"
 		                                string="Pick Details"
                                         class="btn-primary"
@@ -247,9 +247,9 @@
 		                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
 		                                            </div>
 		                                        </div>
-		                                        <button name="action_open_move_pick"
+                                        <button name="action_open_move_pick"
 		                                            type="object"
-		                                            string="Open Pick"
+		                                            string="Pick Details"
 		                                            class="btn btn-primary btn-sm o_wms_operation_action"
 		                                            invisible="state == 'draft'"/>
 		                                    </div>
@@ -267,7 +267,7 @@
 		                            <field name="product_uom" readonly="1" options="{'no_open': True, 'no_create': True}" string="UoM" groups="uom.group_uom"/>
 		                            <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
 		                            <field name="difference_quantity" string="Difference Qty" readonly="1" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
-		                            <button name="action_open_move_pick"
+                                    <button name="action_open_move_pick"
 		                                type="object"
 		                                string="Pick Details"
                                         class="btn-primary"
@@ -343,7 +343,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Putaway"
-                                invisible="putaway_status == 'unfinished'"/>
+                                invisible="putaway_status == 'unfinished' or parent.state == 'done'"/>
 
                         </list>
                     </field>
@@ -379,7 +379,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Putaway"
-                                invisible="putaway_status == 'unfinished'"/>
+                                invisible="putaway_status == 'unfinished' or parent.state == 'done'"/>
                         </list>
                     </field>
                     <field name="putaway_move_ids" mode="kanban,list" readonly="1">
@@ -492,7 +492,7 @@
                             <button name="action_mark_putaway_unfinished"
                                 type="object"
                                 class="btn btn-danger btn-sm"
-                                invisible="putaway_status == 'unfinished'">
+                                invisible="putaway_status == 'unfinished' or parent.state == 'done'">
                                 <i class="fa fa-undo"/>
                             </button>
                             <field name="putaway_status"

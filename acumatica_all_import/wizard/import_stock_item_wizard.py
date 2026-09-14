@@ -597,13 +597,14 @@ class ImportStockItemWizard(models.TransientModel):
             remaining,
         )
 
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Batch Import Selesai',
-                'message': f'{processed} data diproses. Sisa: {remaining}',
-                'type': 'success',
-                'sticky': False,
-            },
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Batch Import Selesai',
+        #         'message': f'{processed} data diproses. Sisa: {remaining}',
+        #         'type': 'success',
+        #         'sticky': False,
+        #     },
+        # }
