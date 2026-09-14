@@ -1857,23 +1857,7 @@ class StockPicking(models.Model):
         return res
 
     def action_mark_todo_and_check_availability(self):
-        """Mobile-friendly single-tap replacement for "Mark as Todo" +
-        "Check Availability" on Pick operations (see the button-hiding
-        xpath in stock_picking_views.xml for the "Pick" condition).
-
-        Deliberately NOT a blind `self.action_assign()` call:
-        `action_assign` already confirms draft pickings internally, but
-        it also raises a "Nothing to check the availability for"
-        `UserError` when there is nothing left to reserve -- which
-        *would* incorrectly fire right after a plain "Mark as Todo" on a
-        picking that becomes fully assigned automatically during
-        confirm. Instead this re-checks `show_check_availability` (the
-        same computed field the core button's `invisible` attribute
-        relies on) *after* confirming, and only calls `action_assign()`
-        on pickings that genuinely still need it. Both core actions
-        (`action_confirm`/`action_assign`, including the overrides
-        above) are reused as-is, never reimplemented.
-        """
+        
         to_confirm = self.filtered(lambda picking: picking.state == 'draft')
         if to_confirm:
             to_confirm.action_confirm()
