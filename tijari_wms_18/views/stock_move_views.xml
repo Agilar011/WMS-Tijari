@@ -2763,8 +2763,8 @@
                 </group> -->
                 <field name="putaway_move_line_ids" mode="list,kanban">
                     <list editable="bottom" create="0" delete="0">
-                        <field name="product_id" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
-                        <field name="matching_lot_id" string="Lot/Serial Number" readonly="1"/>
+                        <field name="product_id" column_invisible="1" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="1"/>
                         <field name="adt_dest_location_id" column_invisible="1"/>
                         <field name="location_dest_id" column_invisible="1"/>
                         <field
