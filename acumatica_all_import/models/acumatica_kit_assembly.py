@@ -430,16 +430,17 @@ class AcumaticaKitAssembly(models.Model):
             f"Error : {error}"
         )
 
-        return {
-            "type": "ir.actions.client",
-            "tag": "display_notification",
-            "params": {
-                "title": "Import Kit Assembly",
-                "message": msg,
-                "type": "success" if error == 0 else "danger",
-                "sticky": True,
-            },
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     "type": "ir.actions.client",
+        #     "tag": "display_notification",
+        #     "params": {
+        #         "title": "Import Kit Assembly",
+        #         "message": msg,
+        #         "type": "success" if error == 0 else "danger",
+        #         "sticky": True,
+        #     },
+        # }
 
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):
@@ -1012,16 +1013,17 @@ class AcumaticaKitAssemblyLine(models.Model):
         #             print('created skipped cause location not found')
 
         msg = f'Import selesai: {created} receipt dibuat, {updated} receipt diupdate, {error} line error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Inventory Receipt',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Inventory Receipt',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):

@@ -510,16 +510,17 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 error += len(receipt_lines)
 
         msg = f'Import selesai: {created} receipt dibuat, {updated} receipt diupdate, {error} line error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Inventory Receipt',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Inventory Receipt',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
 
     def action_reset_pending(self):

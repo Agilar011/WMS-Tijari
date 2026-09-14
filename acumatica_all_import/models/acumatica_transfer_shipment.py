@@ -623,16 +623,17 @@ class AcumaticaTransferShipmentLine(models.Model):
                 error += 1
 
         msg = f'Generate done: {created} transfer shipment created, {updated} transfer shipment updated, {error} transfer shipment error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Generate Transfer Shipment',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Generate Transfer Shipment',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})

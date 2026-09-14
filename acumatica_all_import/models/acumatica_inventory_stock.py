@@ -469,13 +469,14 @@ class AcumaticaInventoryStockLine(models.Model):
 
                 error += 1
 
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Inventory Stock',
-                'message': f'Import selesai: {created} berhasil, {updated} diupdate, {error} error.',
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Inventory Stock',
+        #         'message': f'Import selesai: {created} berhasil, {updated} diupdate, {error} error.',
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }

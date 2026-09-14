@@ -919,11 +919,14 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='action_confirm']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- <xpath expr="//button[@name='action_confirm']" position="attributes">
                 <attribute name="invisible">state != 'draft' or 'Pick' in (picking_type_name or '')</attribute>
-            </xpath>
-            <xpath expr="//button[@name='action_assign']" position="attributes">
-                <attribute name="invisible">'Pick' in (picking_type_name or '')</attribute>
-            </xpath>
+            </xpath> -->
+            <!-- <xpath expr="//button[@name='action_assign']" position="attributes">
+                <attribute name="invisible">not show_check_availability or 'Pick' in (picking_type_name or '')</attribute>
+            </xpath> -->
 
             <xpath expr="//button[@name='action_assign']" position="after">
                 <button name="action_mark_todo_and_check_availability"
@@ -931,7 +934,7 @@
                         string="Mark As To Do"
                         class="oe_highlight"
                         groups="base.group_user"
-                        invisible="'Pick' not in (picking_type_name or '') or (state != 'draft')"
+                        invisible="state != 'draft' and not show_check_availability"
                         data-hotkey="q"/>
             </xpath>
 

@@ -37,7 +37,12 @@
                         class="btn-primary"
                         invisible="putaway_status == 'finished'"
                     />
-                    <button string="Cancel" special="cancel"/>
+                    <button
+                        name="action_cancel"
+                        string="Cancel"
+                        type="object"
+                        class="btn-secondary"
+                    />
                 </footer>
             </form>
         </field>

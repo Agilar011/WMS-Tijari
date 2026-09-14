@@ -631,7 +631,7 @@ class StockMove(models.Model):
             'res_id': self.id,
             'view_mode': 'form',
             'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_pick_view'
+                'tijari_wms_18.stock_move_pick_detail_view'
             ).id,
             'target': 'new',
         }
@@ -671,6 +671,16 @@ class StockMove(models.Model):
             ('lot_name', '!=', False),
         ],
     )
+
+    picker_progress_status = fields.Selection(
+            [
+                ('finished', 'Finished'),
+                ('unfinished', 'Unfinished'),
+            ],
+            string='Status',
+            compute='_compute_picker_progress_status',
+        )
+
     putaway_progress_status = fields.Selection(
         [
             ('finished', 'Finished'),
@@ -735,6 +745,23 @@ class StockMove(models.Model):
             move.allowed_putaway_product_ids = move._get_putaway_base_move_lines().product_id
 
     @api.depends(
+            'move_line_ids',
+            'move_line_ids.quantity',
+            'move_line_ids.confirmation_quantity',
+            'move_line_ids.putaway_status',
+            'move_line_ids.picker_status',
+            'move_line_ids.lot_id',
+            'move_line_ids.lot_name',
+    )
+    def _compute_picker_progress_status(self):
+        for move in self:
+            lines = move.move_line_ids
+            move.picker_progress_status = (
+                'finished' if lines and all(line.picker_status == 'finished' for line in lines)
+                else 'unfinished'
+            )
+
+    @api.depends(
         'move_line_ids',
         'move_line_ids.quantity',
         'move_line_ids.confirmation_quantity',
@@ -750,6 +777,7 @@ class StockMove(models.Model):
                 'finished' if lines and all(line.putaway_status == 'finished' for line in lines)
                 else 'unfinished'
             )
+            
 
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):
@@ -792,7 +820,7 @@ class StockMove(models.Model):
         for line in lines:
             line.action_mark_putaway_finished()
 
-        return True
+        return {'type': 'ir.actions.act_window_close'}
 
     def action_open_move_putaway(self):
         self.ensure_one()
@@ -895,6 +923,23 @@ class StockMove(models.Model):
         return res
 
     def create(self, vals):
+        # stock.picking.scheduled_date is computed from stock.move.date.  Odoo
+        # creates moves with date=Datetime.now() by default, which can therefore
+        # overwrite an imported transaction date after the picking is created.
+        # Apply the picking schedule to the move before the base create runs.
+        vals_list = vals if isinstance(vals, list) else [vals]
+        prepared_vals = []
+        for move_vals in vals_list:
+            if not isinstance(move_vals, dict):
+                prepared_vals.append(move_vals)
+                continue
+            if not move_vals.get('date') and move_vals.get('picking_id'):
+                picking = self.env['stock.picking'].browse(move_vals['picking_id'])
+                if picking.exists() and picking.scheduled_date:
+                    move_vals = dict(move_vals, date=picking.scheduled_date)
+            prepared_vals.append(move_vals)
+        vals = prepared_vals if isinstance(vals, list) else prepared_vals[0]
+
         res = super().create(vals)
         for line in res:
             if not line.adt_dest_location_id:
