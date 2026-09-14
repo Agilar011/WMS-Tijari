@@ -53,7 +53,8 @@
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state not in ['staged', 'error']"/>
                     <button name="action_reset_pending" type="object" string="Reset ke Staged" class="btn-secondary" invisible="import_state != 'error'"/>
-                    <button name="action_open_picking" type="object" string="Open Document"/>
+                    <button name="action_open_picking" type="object" string="Open Document"
+                            invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>

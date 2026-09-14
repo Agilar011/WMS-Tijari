@@ -274,8 +274,8 @@
                                 type="object"
                                 icon="fa-undo"
                                 class="btn-danger"
-                                title="Undo Picker"
-                                invisible="picker_status == 'unfinished'"
+                                title="Rollback"
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"
                                 column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
                         
                     </list>
@@ -373,6 +373,11 @@
                                 </div>
 
                                 <div class="d-flex gap-2 mt-2" invisible="'Pick' in (parent.picking_type_name or '') or parent.picking_type_name in ('Pack', 'Delivery Orders')">
+                                    <button name="action_open_picker_details"
+                                        type="object"
+                                        string="Pick Details"
+                                        class="btn-primary"
+                                        invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
                                     <button name="action_mark_picker_finished"
                                         type="object"
                                         string="Finish Picker"
@@ -380,9 +385,9 @@
                                         invisible="picker_status == 'finished'"/>
                                     <button name="action_mark_picker_unfinished"
                                         type="object"
-                                        string="Undo Picker"
+                                        string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="picker_status == 'unfinished'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -447,7 +452,7 @@
                                             type="object"
                                             class="btn btn-danger btn-sm o_wms_auto_save_before_action"
                                             string="Rollback"
-                                            invisible="picker_status == 'unfinished'">
+                                            invisible="picker_status == 'unfinished' or parent.state == 'done'">
                                         </button>
                                         <button name="action_delete_picker_line"
                                             type="object"
@@ -478,8 +483,8 @@
                                             type="object"
                                             icon="fa-undo"
                                             class="btn btn-danger btn-sm"
-                                            title="Undo Picker"
-                                            invisible="picker_status == 'unfinished'"/>
+                                            title="Rollback"
+                                            invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                         <field name="picker_status"
                                             decoration-success="picker_status == 'finished'"
                                             decoration-danger="picker_status == 'unfinished'"
@@ -517,8 +522,13 @@
                                 type="object"
                                 icon="fa-undo"
                                 class="btn-danger"
-                                title="Undo Picker"
-                                invisible="picker_status == 'unfinished'"/>
+                                title="Rollback"
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
+                        <button name="action_open_picker_details"
+                                type="object"
+                                string="Pick Details"
+                                class="btn-primary"
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                     </list>
                     <kanban class="o_kanban_mobile">
                         <field name="company_id" invisible="1" force_save="1"/>
@@ -542,6 +552,11 @@
                                     <field name="product_uom_id" readonly="1"/>
                                 </div>
                                 <div class="d-flex gap-2 mt-2">
+                                    <button name="action_open_picker_details"
+                                        type="object"
+                                        string="Pick Details"
+                                        class="btn-primary"
+                                        invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
                                     <button name="action_mark_picker_finished"
                                         type="object"
                                         string="Finish Picker"
@@ -549,9 +564,9 @@
                                         invisible="picker_status == 'finished'"/>
                                     <button name="action_mark_picker_unfinished"
                                         type="object"
-                                        string="Undo Picker"
+                                        string="Rollback"
                                         class="btn-danger flex-fill"
-                                        invisible="picker_status == 'unfinished'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -828,8 +843,8 @@
                                 type="object"
                                 icon="fa-undo"
                                 class="btn-danger"
-                                title="Undo Picker"
-                                invisible="picker_status == 'unfinished'"
+                                title="Rollback"
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"
                                 column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
                         
                     </list>
@@ -934,9 +949,9 @@
                                         invisible="picker_status == 'finished'"/>
                                     <button name="action_mark_picker_unfinished"
                                         type="object"
-                                        string="Undo Picker"
+                                        string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="picker_status == 'unfinished'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -1200,7 +1215,7 @@
                                             type="object"
                                             class="btn btn-danger btn-sm"
                                             string="Rollback"
-                                            invisible="putaway_status == 'unfinished'"/>
+                                            invisible="putaway_status == 'unfinished' or parent.state == 'done'"/>
                                         <field name="putaway_status"
                                             decoration-success="putaway_status == 'finished'"
                                             decoration-danger="putaway_status == 'unfinished'"
@@ -1224,25 +1239,23 @@
                 <group>
                     <field name="adt_dest_location_id" invisible="1"/>
                     <field name="picker_status" invisible="1"/>
-                    <field name="product_id" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
-
-                    <field
-                        name="confirmation_quantity"
-                        string="Qty Disimpan"
-                        readonly="picker_status == 'finished'"
-                    />
+                    <field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+                    <field name="lot_id" string="LOT Number" readonly="1"/>
+                    <field name="result_package_id" string="Packages" readonly="1"/>
+                    <field name="product_uom_qty" string="Total Qty" readonly="1"/>
+                    <field name="quantity" string="Qty Diterima" readonly="picker_status == 'finished'"/>
                 </group>
                 <footer>
                     <button
                         name="action_save_picker_details"
-                        string="Save &amp; Confirm"
+                        string="Confirm &amp; Save"
                         type="object"
                         class="btn-primary"
                         invisible="picker_status == 'finished'"
                     />
                     <button
                         name="action_cancel_picker_details"
-                        string="Cancel"
+                        string="Discard"
                         type="object"
                         class="btn-secondary"
                     />
@@ -1290,9 +1303,14 @@
                         string="Rollback"
                         type="object"
                         class="btn-danger"
-                        invisible="putaway_status != 'finished'"
+                        invisible="putaway_status != 'finished' or picking_state == 'done'"
                     />
-                    <button string="Cancel" special="cancel"/>
+                    <button
+                        name="action_cancel"
+                        string="Cancel"
+                        type="object"
+                        class="btn-secondary"
+                    />
                 </footer>
             </form>
         </field>

@@ -454,16 +454,17 @@ class AcumaticaInvoiceConsignment(models.Model):
 
         msg = f'Generate done: {created} invoice consignment created, {updated} invoice consignment updated, {error} invoice consignment error.'
         print(f"[SUMMARY SINKRONISASI] Created: {created}, Updated: {updated}, Error: {error}")
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Generate Invoice Consignment',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Generate Invoice Consignment',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
 
     def action_reset_pending(self):

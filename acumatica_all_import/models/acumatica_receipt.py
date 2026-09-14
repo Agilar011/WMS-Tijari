@@ -337,11 +337,12 @@ class AcumaticaReceiptLine(models.Model):
                 line_payloads=all_line_payloads,
             )
 
+        scheduled_date = receipt._parse_dt(receipt.scheduled_date)
         picking_vals = {
             'partner_id': vendor.id if vendor else False,
             'picking_type_id': picking_type.id,
             'adt_dest_location_id': dest_location.id if dest_location else False,
-            'scheduled_date': receipt._parse_dt(receipt.scheduled_date),
+            'scheduled_date': scheduled_date,
             'origin': origin,
             'note': receipt.note or False,
             'adt_receipt_nbr': receipt.receipt_nbr or False,
@@ -371,11 +372,11 @@ class AcumaticaReceiptLine(models.Model):
                     line_payloads=all_line_payloads
                 )
             picking.write(picking_vals)
-            self._handle_acumatica_update(receipt)
+            receipt._handle_acumatica_update(receipt)
             action_state = 'updated'
         else:
             picking = Picking.create(picking_vals)
-            self._handle_acumatica_error(
+            receipt._handle_acumatica_error(
                 receipt
             )
             action_state = 'created'
@@ -428,6 +429,7 @@ class AcumaticaReceiptLine(models.Model):
                     'product_id': product.id,
                     'product_uom_qty': qty,
                     'product_uom': uom.id if uom else product.uom_id.id,
+                    'date': scheduled_date,
                     'location_id': picking.location_id.id if picking else False,
                     'location_dest_id': adt_dest_location,
                     'warehouse_id': warehouse.id if warehouse else False,
@@ -566,16 +568,17 @@ class AcumaticaReceiptLine(models.Model):
                 continue
 
         msg = f'Generate done: {created} receipt created, {updated} receipt updated, {error} receipt error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Generate Inventory Receipt',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Generate Inventory Receipt',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})

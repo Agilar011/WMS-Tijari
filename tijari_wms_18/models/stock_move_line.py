@@ -1135,11 +1135,11 @@ class StockMoveLine(models.Model):
         if self.confirmation_quantity < self.quantity:
             raise ValidationError(_("Stored Qty tidak boleh kurang dari Picked Qty, silahkan input quantity yang sesuai"))
         self.write({'putaway_status': 'finished'})
-        return True
+        return {'type': 'ir.actions.act_window_close'}
 
     def action_mark_putaway_unfinished(self):
         self.write({'putaway_status': 'unfinished'})
-        return True
+        return self.move_id.action_open_move_putaway()
 
 
     def action_mark_picker_finished(self):
@@ -1148,7 +1148,7 @@ class StockMoveLine(models.Model):
         if self.quantity == 0:
             raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
         self.write({'picker_status': 'finished'})
-        return True
+        return {'type': 'ir.actions.act_window_close'}
 
     def action_save_picker_details(self):
         self.ensure_one()
@@ -1195,7 +1195,7 @@ class StockMoveLine(models.Model):
 
     def action_mark_picker_unfinished(self):
         self.write({'picker_status': 'unfinished'})
-        return True
+        return self.move_id.action_open_move_pick()
 
     def action_delete_picker_line(self):
         self.ensure_one()
