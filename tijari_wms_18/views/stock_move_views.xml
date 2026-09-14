@@ -275,7 +275,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Rollback"
-                                invisible="picker_status == 'unfinished' or parent.picking_id.state == 'done'"
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"
                                 column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
                         
                     </list>
@@ -387,7 +387,7 @@
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="picker_status == 'unfinished' or parent.picking_id.state == 'done'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -452,7 +452,7 @@
                                             type="object"
                                             class="btn btn-danger btn-sm o_wms_auto_save_before_action"
                                             string="Rollback"
-                                            invisible="picker_status == 'unfinished' or parent.picking_id.state == 'done'">
+                                            invisible="picker_status == 'unfinished' or parent.state == 'done'">
                                         </button>
                                         <button name="action_delete_picker_line"
                                             type="object"
@@ -484,7 +484,7 @@
                                             icon="fa-undo"
                                             class="btn btn-danger btn-sm"
                                             title="Rollback"
-                                            invisible="picker_status == 'unfinished' or parent.picking_id.state == 'done'"/>
+                                            invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                         <field name="picker_status"
                                             decoration-success="picker_status == 'finished'"
                                             decoration-danger="picker_status == 'unfinished'"
@@ -523,12 +523,12 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Rollback"
-                                invisible="picker_status == 'unfinished' or parent.picking_id.state == 'done'"/>
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                         <button name="action_open_picker_details"
                                 type="object"
                                 string="Pick Details"
                                 class="btn-primary"
-                                invisible="picker_status == 'unfinished' or parent.picking_id.state == 'done'"/>
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                     </list>
                     <kanban class="o_kanban_mobile">
                         <field name="company_id" invisible="1" force_save="1"/>
@@ -566,7 +566,7 @@
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger flex-fill"
-                                        invisible="picker_status == 'unfinished' or parent.picking_id.state == 'done'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -844,7 +844,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Rollback"
-                                invisible="picker_status == 'unfinished' or parent.picking_id.state == 'done'"
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"
                                 column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
                         
                     </list>
@@ -951,7 +951,7 @@
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="picker_status == 'unfinished' or parent.picking_id.state == 'done'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -1215,7 +1215,7 @@
                                             type="object"
                                             class="btn btn-danger btn-sm"
                                             string="Rollback"
-                                            invisible="putaway_status == 'unfinished' or parent.picking_id.state == 'done'"/>
+                                            invisible="putaway_status == 'unfinished' or parent.state == 'done'"/>
                                         <field name="putaway_status"
                                             decoration-success="putaway_status == 'finished'"
                                             decoration-danger="putaway_status == 'unfinished'"
@@ -1303,7 +1303,7 @@
                         string="Rollback"
                         type="object"
                         class="btn-danger"
-                        invisible="putaway_status != 'finished' or move_line_id.move_id.picking_id.state == 'done'"
+                        invisible="putaway_status != 'finished' or picking_state == 'done'"
                     />
                     <button
                         name="action_cancel"

@@ -49,6 +49,10 @@ class PutawayMoveLineWizard(models.TransientModel):
         related='move_line_id.putaway_status',
         readonly=True,
     )
+    picking_state = fields.Selection(
+        related='move_line_id.picking_id.state',
+        readonly=True,
+    )
 
     @api.model
     def default_get(self, fields_list):
