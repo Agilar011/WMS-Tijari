@@ -631,7 +631,7 @@ class StockMove(models.Model):
             'res_id': self.id,
             'view_mode': 'form',
             'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_pick_view'
+                'tijari_wms_18.stock_move_pick_detail_view'
             ).id,
             'target': 'new',
         }
@@ -671,6 +671,16 @@ class StockMove(models.Model):
             ('lot_name', '!=', False),
         ],
     )
+
+    picker_progress_status = fields.Selection(
+            [
+                ('finished', 'Finished'),
+                ('unfinished', 'Unfinished'),
+            ],
+            string='Status',
+            compute='_compute_picker_progress_status',
+        )
+
     putaway_progress_status = fields.Selection(
         [
             ('finished', 'Finished'),
@@ -735,6 +745,23 @@ class StockMove(models.Model):
             move.allowed_putaway_product_ids = move._get_putaway_base_move_lines().product_id
 
     @api.depends(
+            'move_line_ids',
+            'move_line_ids.quantity',
+            'move_line_ids.confirmation_quantity',
+            'move_line_ids.putaway_status',
+            'move_line_ids.picker_status',
+            'move_line_ids.lot_id',
+            'move_line_ids.lot_name',
+    )
+    def _compute_picker_progress_status(self):
+        for move in self:
+            lines = move.move_line_ids
+            move.picker_progress_status = (
+                'finished' if lines and all(line.picker_status == 'finished' for line in lines)
+                else 'unfinished'
+            )
+
+    @api.depends(
         'move_line_ids',
         'move_line_ids.quantity',
         'move_line_ids.confirmation_quantity',
@@ -750,6 +777,7 @@ class StockMove(models.Model):
                 'finished' if lines and all(line.putaway_status == 'finished' for line in lines)
                 else 'unfinished'
             )
+            
 
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):
