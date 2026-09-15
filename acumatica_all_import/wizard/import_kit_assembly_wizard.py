@@ -403,7 +403,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
             
             _logger.info(
                 'Berhasil ambil %s rows Kit Assembly dari Acumatica (skip=%s, top=%s)',
-                len(result), offset, limit,
+                len(result), limit,
             )
             return result
         finally:
