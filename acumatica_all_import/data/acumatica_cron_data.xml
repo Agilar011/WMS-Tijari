@@ -3,11 +3,12 @@
     <data>
         <record id="api_scheduler_master_data" model="api.scheduler.job">
             <field name="name">Acumatica: Master Data</field>
-            <field name="code">acumatica_master_data</field>
+            <field name="code">acumatica_master_fetch</field>
             <field name="description">Fetch and import Acumatica master data.</field>
             <field name="active">True</field>
             <field name="acumatica_import">True</field>
             <field name="acumatica_data_type">master</field>
+            <field name="process_phase">fetch</field>
             <field name="execution_interval">recurring</field>
             <field name="interval_value">1</field>
             <field name="interval_unit">days</field>
@@ -17,11 +18,12 @@
 
         <record id="api_scheduler_transaction_data" model="api.scheduler.job">
             <field name="name">Acumatica: Transaction Data</field>
-            <field name="code">acumatica_transaction_data</field>
-            <field name="description">Fetch and import Acumatica transaction</field>
+            <field name="code">acumatica_transaction_fetch</field>
+            <field name="description">Fetch Acumatica transaction data into staging.</field>
             <field name="active">True</field>
             <field name="acumatica_import">True</field>
             <field name="acumatica_data_type">transaction</field>
+            <field name="process_phase">fetch</field>
             <field name="execution_interval">recurring</field>
             <field name="interval_value">1</field>
             <field name="interval_unit">days</field>
@@ -35,7 +37,7 @@
         </function>
 
         <record id="ir_cron_acumatica_master_data_import" model="ir.cron">
-            <field name="name">Acumatica: Fetch and Import Master Data</field>
+            <field name="name">Acumatica: Fetch Master Data</field>
             <field name="model_id" ref="model_api_scheduler_job"/>
             <field name="state">code</field>
             <field name="code">model.browse(env.ref('acumatica_all_import.api_scheduler_master_data').id).run_from_cron()</field>
@@ -45,7 +47,7 @@
         </record>
 
         <record id="ir_cron_acumatica_transaction_data_import" model="ir.cron">
-            <field name="name">Acumatica: Fetch and Import Transaction Data</field>
+            <field name="name">Acumatica: Fetch Transaction Data</field>
             <field name="model_id" ref="model_api_scheduler_job"/>
             <field name="state">code</field>
             <field name="code">model.browse(env.ref('acumatica_all_import.api_scheduler_transaction_data').id).run_from_cron()</field>
@@ -60,6 +62,64 @@
 
         <record id="api_scheduler_transaction_data" model="api.scheduler.job">
             <field name="ir_cron_id" ref="ir_cron_acumatica_transaction_data_import"/>
+        </record>
+
+        <record id="api_scheduler_master_import" model="api.scheduler.job">
+            <field name="name">Acumatica: Import Master Data</field>
+            <field name="code">acumatica_master_import</field>
+            <field name="description">Import master staging data after the fetch job succeeds.</field>
+            <field name="active">True</field>
+            <field name="acumatica_import">True</field>
+            <field name="acumatica_data_type">master</field>
+            <field name="process_phase">import</field>
+            <field name="execution_interval">recurring</field>
+            <field name="interval_value">1</field>
+            <field name="interval_unit">days</field>
+            <field name="timezone">Asia/Jakarta</field>
+            <field name="do_not_overlap">True</field>
+        </record>
+
+        <record id="ir_cron_acumatica_master_import" model="ir.cron">
+            <field name="name">Acumatica: Import Master Data</field>
+            <field name="model_id" ref="model_api_scheduler_job"/>
+            <field name="state">code</field>
+            <field name="code">model.browse(env.ref('acumatica_all_import.api_scheduler_master_import').id).run_from_cron()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">False</field>
+        </record>
+
+        <record id="api_scheduler_master_import" model="api.scheduler.job">
+            <field name="ir_cron_id" ref="ir_cron_acumatica_master_import"/>
+        </record>
+
+        <record id="api_scheduler_transaction_import" model="api.scheduler.job">
+            <field name="name">Acumatica: Import Transaction Data</field>
+            <field name="code">acumatica_transaction_import</field>
+            <field name="description">Import transaction staging data after fetch completes.</field>
+            <field name="active">True</field>
+            <field name="acumatica_import">True</field>
+            <field name="acumatica_data_type">transaction</field>
+            <field name="process_phase">import</field>
+            <field name="execution_interval">manual</field>
+            <field name="interval_value">1</field>
+            <field name="interval_unit">days</field>
+            <field name="timezone">Asia/Jakarta</field>
+            <field name="do_not_overlap">True</field>
+        </record>
+
+        <record id="ir_cron_acumatica_transaction_import" model="ir.cron">
+            <field name="name">Acumatica: Import Transaction Data</field>
+            <field name="model_id" ref="model_api_scheduler_job"/>
+            <field name="state">code</field>
+            <field name="code">model.browse(env.ref('acumatica_all_import.api_scheduler_transaction_import').id).run_from_cron()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="active">False</field>
+        </record>
+
+        <record id="api_scheduler_transaction_import" model="api.scheduler.job">
+            <field name="ir_cron_id" ref="ir_cron_acumatica_transaction_import"/>
         </record>
     </data>
 </odoo>

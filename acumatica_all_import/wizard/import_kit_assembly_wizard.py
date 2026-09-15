@@ -289,7 +289,13 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     existing_assembly.write(header)
                     assembly = existing_assembly
                 else:
-                    assembly = staging_header.create(header)
+                    # This header is created by a system fetch, not by a user
+                    # composing a document.  Avoid mail.thread subscribing
+                    # the API user repeatedly when a fetch is retried/replayed.
+                    assembly = staging_header.with_context(
+                        mail_create_nosubscribe=True,
+                        mail_create_nolog=True,
+                    ).create(header)
                 print(f"Created staging header record with ID {assembly.id} for ReferenceNbr {header['reference_nbr']}")
 
                 stock_components = (item.get('KitAssemblyGIDetails'))
@@ -397,7 +403,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
             
             _logger.info(
                 'Berhasil ambil %s rows Kit Assembly dari Acumatica (skip=%s, top=%s)',
-                len(result), limit,
+                len(result), offset, limit,
             )
             return result
         finally:
