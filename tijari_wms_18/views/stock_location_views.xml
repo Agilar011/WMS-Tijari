@@ -70,6 +70,7 @@
                 </div>
                 <field name="is_location_mapping" />
                 <field name="is_consignment" />
+                <field name="location_owner" invisible="not is_consignment" />
                 <field name="sequence" />
             </xpath>
         </field>

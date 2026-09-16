@@ -156,7 +156,7 @@ class AcumaticaWarehouseLine(models.Model):
             'name': building_code,
             'location_id': parent.id,
             'usage': 'inventory',
-            'company_id': False,
+            'company_id': self.env.company.id,
         })
 
     def _generate_virtual_locations_for_existing_buildings(self):
@@ -243,26 +243,25 @@ class AcumaticaWarehouseLine(models.Model):
         return (line.receiving_location_id or '').strip().upper() == 'CONS'
 
     def _get_or_create_consignment_locations(self, line, warehouse=False):
-        warehouse_code = (line.warehouse_id or '').strip().upper()
-        # Untuk lokasi CONS, parent diturunkan dari BuildingID/WarehouseID.
-        # Contoh: WH33-CONS -> WH33 / CONS / WH33-CONS.
-        building_code = warehouse_code.split('-', 1)[0]
+        warehouse_id = (line.warehouse_id or '').strip().upper()
+        warehouse_code = (
+            warehouse_id.split('-', 1)[1].strip()
+            if '-' in warehouse_id
+            else warehouse_id
+        )
+        if not warehouse_code:
+            return self.env['stock.location'].browse()
         if (
             not warehouse_code
             or not self._receiving_location_is_consignment(line)
         ):
             return self.env['stock.location'].browse()
 
-        # Mode virtual untuk CONS tidak bergantung pada warehouse, termasuk WH33.
-        parent_location = False
-        if not line.generate_virtual_location:
-            warehouse = warehouse or self._search_warehouse(building_code)
-            parent_location = warehouse.view_location_id if warehouse else False
-        else:
-            parent_location = self._create_virtual_location_for_building(
-                building_code,
-                allow_wh33=True,
-            )
+        # Semua lokasi CONS memakai satu root virtual bersama.
+        # Contoh: WH09-C0342 -> Virtual Locations/Consignment/C0342.
+        parent_location = self.env.ref(
+            'stock.stock_location_locations_virtual', raise_if_not_found=False
+        )
 
         if not parent_location:
             return self.env['stock.location'].browse()
@@ -276,8 +275,19 @@ class AcumaticaWarehouseLine(models.Model):
             ], limit=1)
             has_consignment_field = 'is_consignment' in Location._fields
             if location:
+                write_vals = {}
                 if is_consignment and has_consignment_field and not location.is_consignment:
-                    location.write({'is_consignment': True})
+                    write_vals['is_consignment'] = True
+                if is_consignment and 'location_owner' in Location._fields:
+                    description = (line.description or '').strip()
+                    building_code = (
+                        line.building_id or warehouse_id
+                    ).strip().upper().split('-', 1)[0]
+                    write_vals['location_owner'] = description.replace(
+                        f'{building_code}-', '', 1
+                    ).strip()
+                if write_vals:
+                    location.write(write_vals)
                 return location
 
             vals = {
@@ -287,11 +297,21 @@ class AcumaticaWarehouseLine(models.Model):
             }
             if parent_location.company_id:
                 vals['company_id'] = parent_location.company_id.id
+            else:
+                vals['company_id'] = self.env.company.id
             if has_consignment_field:
                 vals['is_consignment'] = is_consignment
+                if is_consignment and 'location_owner' in Location._fields:
+                    description = (line.description or '').strip()
+                    building_code = (
+                        line.building_id or warehouse_id
+                    ).strip().upper().split('-', 1)[0]
+                    vals['location_owner'] = description.replace(
+                        f'{building_code}-', '', 1
+                    ).strip()
             return Location.create(vals)
 
-        cons_root = get_or_create_child(parent_location, 'CONS')
+        cons_root = get_or_create_child(parent_location, 'Consignment')
         return get_or_create_child(cons_root, warehouse_code, is_consignment=True)
 
     def _handle_acumatica_error(self, err_msg=False):
@@ -349,6 +369,9 @@ class AcumaticaWarehouseLine(models.Model):
         EXAMPLE: line.warehouse_id = WH33-FG & line.building_id = WH33, kalo WH33 udah ada, maka akan dibuat location WH33-FG dengan parent location WH33/Stock.
         """
         created = updated = error = 0
+        total = len(self)
+
+        print(f'[MASTER IMPORT][Warehouse] START total={total}', flush=True)
 
         for line in self:
             try:
@@ -585,6 +608,11 @@ class AcumaticaWarehouseLine(models.Model):
                 raise
 
         msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
+        print(
+            f'[MASTER IMPORT][Warehouse] FINISH total={total} '
+            f'created={created} updated={updated} error={error}',
+            flush=True,
+        )
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',

@@ -21,6 +21,10 @@ class StockPickingBatch(models.Model):
         'product.product',
         string='Product Name',
     )
+    putaway_scan_code = fields.Char(
+        string='Kode scan',
+        help='Bisa diisi dari scanner handheld atau diketik manual.',
+    )
     allowed_putaway_lot_ids = fields.Many2many(
         'stock.lot',
         compute='_compute_allowed_putaway_lot_ids',
@@ -412,6 +416,66 @@ class StockPickingBatch(models.Model):
             'lot_id': lot.id,
             'move_line_ids': move_lines.ids,
         }
+
+    def _get_putaway_scan_values(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        if not scanned_code:
+            raise ValidationError(_('Kode scan tidak boleh kosong.'))
+
+        move_lines = self._get_putaway_base_move_lines()
+        product = self._find_product_by_scan_code(scanned_code)
+        if product:
+            matching_lines = move_lines.filtered(
+                lambda line: line.product_id == product
+            )
+            if matching_lines:
+                lot = matching_lines.mapped('lot_id')[:1]
+                return {
+                    'values': {
+                        'putaway_product_id': product.id,
+                        'putaway_lot_id': lot.id,
+                    },
+                    'result': {
+                        'product_id': product.id,
+                        'display_name': product.display_name,
+                        'lot_id': lot.id,
+                        'move_line_ids': matching_lines.ids,
+                        'matched_by': 'product',
+                    },
+                }
+
+        product, matching_lines, lot = self._find_putaway_product_by_lot_scan_code(
+            scanned_code
+        )
+        return {
+            'values': {
+                'putaway_product_id': product.id,
+                'putaway_lot_id': lot.id,
+            },
+            'result': {
+                'product_id': product.id,
+                'display_name': product.display_name,
+                'lot_id': lot.id,
+                'move_line_ids': matching_lines.ids,
+                'matched_by': 'lot',
+            },
+        }
+
+    def action_apply_scanned_putaway_code(self, scanned_code):
+        self.ensure_one()
+        values = self._get_putaway_scan_values(scanned_code)
+        self.write(values['values'])
+        return values['result']
+
+    @api.onchange('putaway_scan_code')
+    def _onchange_putaway_scan_code(self):
+        for batch in self:
+            if not batch.putaway_scan_code:
+                continue
+            values = batch._get_putaway_scan_values(batch.putaway_scan_code)
+            batch.update(values['values'])
+            batch.putaway_scan_code = False
 
 class StockPickingToBatchInherit(models.TransientModel):
     _inherit = 'stock.picking.to.batch'

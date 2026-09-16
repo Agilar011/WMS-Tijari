@@ -163,7 +163,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     def _find_warehouse(self, line):
         Warehouse = self.env['stock.location.acumatica']
         warehouse = False
-        code = line.warehouse_code
+        code = line.warehouse_dest_code
         if code:
             warehouse = Warehouse.search([('code', '=', code)], limit=1)
             if warehouse:
@@ -177,8 +177,8 @@ class AcumaticaInventoryRecievedLine(models.Model):
     def _find_location_dest(self, line):
         Location = self.env['stock.location.acumatica']
         location = False
-        if line.warehouse_code:
-            location = Location.search([('code', '=', line.warehouse_code)], limit=1)
+        if line.warehouse_dest_code:
+            location = Location.search([('code', '=', line.warehouse_dest_code)], limit=1)
             if location:
                 if not location.odoo_location_id:
                     location = False
@@ -402,7 +402,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
         dest_location = receive._find_location_dest(receive)
         if not dest_location:
             error_messages.append(
-                f'Location with code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
         partner = False
@@ -444,11 +444,11 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 picking_type = PickingType.resolve_document_only_picking_type(
                     api_acumatica='inventory_received',
                     document_only=True,
-                    warehouse_code=receive.warehouse_code,
+                    warehouse_code=receive.warehouse_dest_code,
                 )
             elif code:
                 picking_type = PickingType.resolve_picking_type(
-                    warehouse_code=receive.warehouse_code,
+                    warehouse_code=receive.warehouse_dest_code,
                     code=code,
                     operation_category=operation_category,
                     api_acumatica='inventory_received',
@@ -459,7 +459,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 picking_type = PickingType.browse()
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
-            location_txt = f'Location code {receive.warehouse_code}'
+            location_txt = f'Location code {receive.warehouse_dest_code}'
             error_messages.append(
                 f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
             )

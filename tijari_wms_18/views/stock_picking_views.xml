@@ -793,6 +793,9 @@
                             <field name="scan_picker_product_button"
                                 widget="adt_scan_picker_product_button"
                                 nolabel="1"/>
+                            <field name="picker_scan_code"
+                                placeholder="Scan handheld atau ketik kode"
+                                help="Bisa barcode, SKU, atau lot."/>
                             
                             <field name="allowed_picker_product_ids" invisible="1"/>
                             <field name="allowed_picker_lot_ids" invisible="1"/>

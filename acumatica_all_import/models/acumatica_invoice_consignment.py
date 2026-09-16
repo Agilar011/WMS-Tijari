@@ -165,6 +165,28 @@ class AcumaticaInvoiceConsignment(models.Model):
         if not code:
             return Location.browse()
 
+        virtual_root = self.env.ref(
+            'stock.stock_location_locations_virtual', raise_if_not_found=False
+        )
+        if virtual_root:
+            consignment_root = Location.search([
+                ('name', '=', 'Consignment'),
+                ('location_id', '=', virtual_root.id),
+            ], limit=1)
+            consignment_code = (
+                code.split('-', 1)[1].strip()
+                if '-' in code
+                else code
+            )
+            if consignment_root and consignment_code:
+                location = Location.search([
+                    ('name', '=', consignment_code),
+                    ('location_id', '=', consignment_root.id),
+                    ('is_consignment', '=', True),
+                ], limit=1)
+                if location:
+                    return location
+
         mapping = Mapping.search([
             '|', ('code', '=', code), ('name', '=', code),
             ('active', '=', True),
@@ -204,13 +226,24 @@ class AcumaticaInvoiceConsignment(models.Model):
 
         return Location.browse()
 
-    def _get_invoice_consignment_virtual_location(self, warehouse_code):
-        building_code = (warehouse_code or '').strip().split('-', 1)[0].upper()
-        if not building_code:
-            return self.env['stock.location'].browse()
-        return self.env['acumatica.internal.transfer.service'].get_or_create_virtual_building_location(
-            building_code,
+    def _get_invoice_consignment_destination_location(self):
+        """Return the shared partner location for end-user consignment."""
+        location = self.env.ref(
+            'tijari_wms_18.stock_location_end_user_consignment',
+            raise_if_not_found=False,
         )
+        if location:
+            return location
+
+        partner_root = self.env.ref(
+            'stock.stock_location_locations_partner', raise_if_not_found=False
+        )
+        if not partner_root:
+            return self.env['stock.location'].browse()
+        return self.env['stock.location'].sudo().search([
+            ('name', '=', 'End User Consignment'),
+            ('location_id', '=', partner_root.id),
+        ], limit=1)
 
     def _find_uom(self, line, product=False):
         Uom = self.env['uom.uom']
@@ -307,10 +340,10 @@ class AcumaticaInvoiceConsignment(models.Model):
                             f'Location CONS tidak ditemukan untuk warehouse {warehouse_code or "-"}.'
                         )
 
-                    dest_location = self._get_invoice_consignment_virtual_location(warehouse_code)
+                    dest_location = self._get_invoice_consignment_destination_location()
                     if not dest_location:
                         raise UserError(
-                            f'Virtual location tidak ditemukan untuk warehouse {warehouse_code or "-"}.'
+                            'Location Partners/End User Consignment tidak ditemukan.'
                         )
 
                     origin = first.adt_ReferenceNbr or False
