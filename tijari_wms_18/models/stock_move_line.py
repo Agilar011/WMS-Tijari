@@ -3,6 +3,8 @@ from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import float_compare
 import logging
+import traceback
+
 _logger = logging.getLogger(__name__)
 
 class StockMoveLine(models.Model):
@@ -496,9 +498,9 @@ class StockMoveLine(models.Model):
             # )
 
             line.location_id = quant.location_id
-            # line.lot_id = quant.lot_id
-            line.package_id = quant.package_id
-            line.result_package_id = quant.package_id
+            line.lot_id = quant.lot_id
+            # line.package_id = quant.package_id
+            # line.result_package_id = quant.package_id
             line.owner_id = quant.owner_id
 
             line.lot_name = (
@@ -665,16 +667,16 @@ class StockMoveLine(models.Model):
 
         # self.quant_id = False
 
-        if self.lot_id and self.location_id:
+        # if self.lot_id and self.location_id:
 
-            quant = self.env["stock.quant"].search([
-                ("product_id", "=", self.product_id.id),
-                ("lot_id", "=", self.lot_id.id),
-                ("location_id", "=", self.location_id.id),
-                ("quantity", ">", 0),
-            ], limit=1)
+        #     quant = self.env["stock.quant"].search([
+        #         ("product_id", "=", self.product_id.id),
+        #         ("lot_id", "=", self.lot_id.id),
+        #         ("location_id", "=", self.location_id.id),
+        #         ("quantity", ">", 0),
+        #     ], limit=1)
 
-            self.quant_id = quant
+        #     self.quant_id = quant
 
         return {
             "domain": {
@@ -1462,8 +1464,8 @@ class StockMoveLine(models.Model):
         line_data = {
             'product_id': quant.product_id.id,
             'lot_id': quant.lot_id.id,
-            'package_id': quant.package_id.id,
-            'result_package_id': quant.package_id.id,
+            # 'package_id': quant.package_id.id,
+            # 'result_package_id': quant.package_id.id,
             'location_id': quant.location_id.id,
             'owner_id': quant.owner_id.id,
         }

@@ -690,6 +690,30 @@ class StockMove(models.Model):
         compute='_compute_putaway_progress_status',
     )
 
+    custom_css_js_stored = fields.Html(string="Custom CSS JS (Stored)", sanitize=False, compute='_get_custom_css_js_stored', stored=True)
+    
+    @api.depends('move_line_ids')
+    @api.onchange('move_line_ids')
+    def _get_custom_css_js_stored(self):
+        if len(self) > 1:
+            for record in self: record._get_custom_css_js_stored()
+            return
+        rules = ""
+        for index, line in enumerate(self.move_line_ids):
+            if not line.product_id and not line.lot_id and line.quantity == 0:
+                rules += """
+                    div[name=move_line_ids] tr[data-id]:nth-child(%s) {
+                        display: none;
+                    }
+                """ % (index + 1)
+        self.custom_css_js_stored = """
+        <div>
+        <style>
+            %s
+        </style>
+        </div>
+        """ % (rules)
+
     def _get_putaway_base_move_lines(self):
         self.ensure_one()
         return self.move_line_ids.filtered(

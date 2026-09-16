@@ -220,12 +220,34 @@
         <field name="arch" type="xml">
 
             <xpath expr="//field[@name='user_id']" position="replace">
-                <field name="pick_responsible_ids" widget="many2many_avatar_user"  groups="!tijari_wms_18.group_operator"/>
-                <field name="pick_responsible_ids" widget="many2many_avatar_user" readonly="1" groups="tijari_wms_18.group_operator"/>
-                <field name="pack_responsible_ids" widget="many2many_avatar_user"  readonly="not can_edit_pack_responsible_ids"/>
-                <field name="do_responsible_ids" widget="many2many_avatar_user"  />
-            </xpath>
 
+                <!-- Technical field -->
+                <field name="operation_type_name" invisible="1"/>
+
+                <!-- PICKER
+                    Receipt + Pick -->
+                <field name="pick_responsible_ids"
+                    widget="many2many_avatar_user"/>
+
+                <!-- PACKER
+                    Pick only -->
+                <field name="pack_responsible_ids"
+                    widget="many2many_avatar_user"
+                    invisible="operation_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+
+                <!-- LOADER
+                    Pick only -->
+                <field name="do_responsible_ids"
+                    widget="many2many_avatar_user"
+                    invisible="operation_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+
+                <!-- PUTAWAY
+                    Receipt only -->
+                <field name="putaway_responsible_ids"
+                    widget="many2many_avatar_user"
+                    invisible="operation_type_name not in ['Receipts', 'Receipt Internal']"/>
+
+            </xpath>
 
         </field>
     </record>

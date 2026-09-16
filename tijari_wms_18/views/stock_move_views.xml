@@ -174,6 +174,7 @@
 
                     </div>
                 </div>
+                <field name="custom_css_js_stored" nolabel="1" options="{'sandboxedPreview': false, 'cssReadonlyAssetId': false}"/>
                 <button name="action_add_picker_line"
                     type="object"
                     string="Add Line"
@@ -702,6 +703,7 @@
                         'copy_previous_picker_location': True
                     }"
                     mode="list,kanban"
+                    widget="sml_x2_many"
                     groups="tijari_wms_18.group_operator"
                     invisible="'Pack' not in (picking_type_name or '')">
                     <list editable="bottom" delete="0">

@@ -480,6 +480,11 @@ class StockPickingBatch(models.Model):
 class StockPickingToBatchInherit(models.TransientModel):
     _inherit = 'stock.picking.to.batch'
 
+    operation_type_name = fields.Char(
+            string='Operation Type',
+            readonly=True,
+        )
+
     pick_responsible_ids = fields.Many2many(
         comodel_name="res.users",
         relation="stock_picking_to_batch_pick_responsible_rel",
@@ -507,42 +512,66 @@ class StockPickingToBatchInherit(models.TransientModel):
         domain=[("share", "=", False)],
     )
 
-    can_edit_pack_responsible_ids = fields.Boolean(
-        string="Can Edit Pack Responsible",
-        compute="_compute_can_edit_pack_responsible_ids",
-        help="Technical field driving the view: only a user who is themself "
-             "listed in this transfer's Penanggungjawab Pick may edit "
-             "Penanggungjawab Pack here.",
+    putaway_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_to_batch_putaway_responsible_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Assigned Putaway",
+        domain=[("share", "=", False)],
     )
 
-    def _compute_can_edit_pack_responsible_ids(self):
-        current_user = self.env.user
-        for picking in self:
-            picking.can_edit_pack_responsible_ids = current_user in picking.pick_responsible_ids
+    @api.model
+    def default_get(self, fields_list):
+        vals = super().default_get(fields_list)
 
-    @api.onchange(
-        "pick_responsible_ids",
-        "pack_responsible_ids",
-        "do_responsible_ids",
-    )
-    def _onchange_responsible_ids(self):
-        for wizard in self:
-            missing_do = (
-                wizard.pick_responsible_ids
-                - wizard.do_responsible_ids
-            )
+        active_ids = self.env.context.get('active_ids', [])
+        pickings = self.env['stock.picking'].browse(active_ids).exists()
 
-            if missing_do:
-                wizard.do_responsible_ids = (
-                    wizard.do_responsible_ids | missing_do
-                )
+        if not pickings:
+            return vals
+
+        operation_types = pickings.mapped('picking_type_id')
+
+        if len(operation_types) == 1:
+            vals['operation_type_name'] = operation_types.name
+        else:
+            vals['operation_type_name'] = False
+
+        return vals
 
     def attach_pickings(self):
         self.ensure_one()
 
         pickings = self.env['stock.picking'].browse(
-            self.env.context.get('active_ids')
-        )
+            self.env.context.get('active_ids', [])
+        ).exists()
+
+        if not pickings:
+            raise UserError(
+                _("Tidak ada transfer yang dipilih untuk dimasukkan ke batch.")
+            )
+
+        # Operation Type harus sama
+        operation_types = pickings.mapped('picking_type_id')
+
+        if len(operation_types) > 1:
+            operation_type_names = ", ".join(
+                operation_types.mapped('name')
+            )
+
+            raise UserError(
+                _(
+                    "Transfer yang dipilih memiliki Operation Type yang berbeda.\n\n"
+                    "Operation Type yang ditemukan:\n%s\n\n"
+                    "Silakan pilih transfer dengan Operation Type yang sama "
+                    "untuk membuat batch."
+                )
+                % operation_type_names
+            )
+
+        operation_type = operation_types[:1]
+        self.operation_type_name = operation_type.name
 
         if self.mode == 'new':
             company = pickings.company_id
@@ -555,46 +584,35 @@ class StockPickingToBatchInherit(models.TransientModel):
             batch = self.env['stock.picking.batch'].create({
                 'user_id': self.user_id.id,
                 'company_id': company.id,
-                'picking_type_id': pickings[0].picking_type_id.id,
+                'picking_type_id': operation_type.id,
                 'description': self.description,
             })
         else:
             batch = self.batch_id
 
-        # Pick responsible is also Loader responsible.
-        missing_do = (
-            self.pick_responsible_ids
-            - self.do_responsible_ids
-        )
-
-        do_responsible_ids = (
-            self.do_responsible_ids
-            | missing_do
-        )
-
-        # All responsible users.
-        responsible_users = (
-            self.pick_responsible_ids
-            | self.pack_responsible_ids
-            | do_responsible_ids
-        )
-
+        # Assign responsible users exactly as selected in the wizard.
         pickings.with_context(
             tijari_responsible_sync=True
         ).write({
             'batch_id': batch.id,
+
             'pick_responsible_ids': [
                 (6, 0, self.pick_responsible_ids.ids)
             ],
+
             'pack_responsible_ids': [
                 (6, 0, self.pack_responsible_ids.ids)
             ],
+
             'do_responsible_ids': [
                 (6, 0, self.do_responsible_ids.ids)
             ],
+
+            'putaway_responsible_ids': [
+                (6, 0, self.putaway_responsible_ids.ids)
+            ],
         })
 
-        # you have to set some pickings to batch before confirm it.
         if self.mode == 'new' and not self.is_create_draft:
             batch.action_confirm()
 

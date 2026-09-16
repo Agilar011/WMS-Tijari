@@ -74,7 +74,10 @@ class StockPicking(models.Model):
         column2="user_id",
         string="Responsible Users",
         domain=[("share", "=", False)],
+        compute="_compute_user_ids",
+        store=True,
     )
+
 
     pick_responsible_ids = fields.Many2many(
         comodel_name="res.users",
@@ -100,16 +103,24 @@ class StockPicking(models.Model):
         string="Assigned Loader",
     )
 
+    putaway_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_putaway_responsible_rel",
+        column1="picking_id",
+        column2="user_id",
+        string="Assigned Putaway",
+        domain=[("share", "=", False)],
+    )
+
     @api.model
     def _get_responsible_carry_over_fields(self):
         """Fields that describe "who is responsible" for this transfer.
 
-        Kept in one place because two different mechanisms need the exact
-        same field list to stay in sync:
-        - the pick -> do "mirror" rule (assigning a Pick responsible also
-          assigns them as a DO responsible), and
-        - carrying these fields forward/backward across chained transfers
-          (Pick -> Pack -> Delivery Order) so users don't re-enter them.
+            Kept in one place because they are carried forward to the
+            next transfer(s) in the chain (e.g. Pick -> Pack -> Delivery Order).
+
+            Putaway is intentionally excluded because it is assigned
+            independently on the receiving/putaway process.
         """
         return [
             'pick_responsible_ids',
@@ -118,40 +129,38 @@ class StockPicking(models.Model):
             'user_ids',
         ]
 
-    @api.onchange(
+    @api.onchange('pick_responsible_ids')
+    def _onchange_pick_responsible_ids(self):
+        for picking in self:
+            if 'Pick' not in (picking.picking_type_name or '') :
+                continue
+
+            old_picker_ids = set(picking._origin.pick_responsible_ids.ids)
+            new_picker_ids = set(picking.pick_responsible_ids.ids)
+            packer_ids = set(picking.pack_responsible_ids.ids)
+
+            # Picker ditambah → Packer ikut tambah
+            packer_ids.update(new_picker_ids - old_picker_ids)
+
+            # Picker dihapus → Packer ikut hapus
+            packer_ids.difference_update(old_picker_ids - new_picker_ids)
+
+            picking.pack_responsible_ids = [(6, 0, list(packer_ids))]
+
+    @api.depends(
         "pick_responsible_ids",
         "pack_responsible_ids",
         "do_responsible_ids",
+        "putaway_responsible_ids",
     )
-    def _onchange_responsible_ids(self):
+    def _compute_user_ids(self):
         for picking in self:
-            # Requirement: assigning a Pick responsible also assigns them as
-            # a DO responsible (additive, never removes someone already set
-            # on do_responsible_ids that isn't in pick_responsible_ids).
-            missing_do = picking.pick_responsible_ids - picking.do_responsible_ids
-            if missing_do:
-                picking.do_responsible_ids = picking.do_responsible_ids | missing_do
-
-            responsible_users = (
+            picking.user_ids = (
                 picking.pick_responsible_ids
                 | picking.pack_responsible_ids
                 | picking.do_responsible_ids
+                | picking.putaway_responsible_ids
             )
-
-            picking.user_ids = [(6, 0, responsible_users.ids)]
-
-    can_edit_pack_responsible_ids = fields.Boolean(
-        string="Can Edit Pack Responsible",
-        compute="_compute_can_edit_pack_responsible_ids",
-        help="Technical field driving the view: only a user who is themself "
-             "listed in this transfer's Penanggungjawab Pick may edit "
-             "Penanggungjawab Pack here.",
-    )
-
-    def _compute_can_edit_pack_responsible_ids(self):
-        current_user = self.env.user
-        for picking in self:
-            picking.can_edit_pack_responsible_ids = current_user in picking.pick_responsible_ids
 
     all_moves_picked = fields.Boolean(
         compute='_compute_all_moves_picked',
@@ -344,28 +353,14 @@ class StockPicking(models.Model):
             }
             for picking in self
         }
-        if (
-            'pick_responsible_ids' in vals
-            and not self.env.context.get('tijari_responsible_sync')
-            and self.env.user.has_group('tijari_wms_18.group_operator')
-        ):
-            raise UserError(_(
-                "Hanya user non-operator yang dapat mengisi/mengubah Penanggungjawab Pick."
-            ))
-
-        if (
-            'pack_responsible_ids' in vals
-            and not self.env.context.get('tijari_responsible_sync')
-        ):
-            current_user = self.env.user
-            not_allowed = self.filtered(lambda p: current_user not in p.pick_responsible_ids)
-            if not_allowed:
-                raise UserError(_(
-                    "Hanya user yang terdaftar di Penanggungjawab Pick pada transfer "
-                    "ini yang dapat mengisi/mengubah Penanggungjawab Pack. Anda belum "
-                    "terdaftar sebagai Penanggungjawab Pick pada: %s",
-                    ", ".join(not_allowed.mapped('name')),
-                ))
+        # if (
+        #     'pick_responsible_ids' in vals
+        #     and not self.env.context.get('tijari_responsible_sync')
+        #     and self.env.user.has_group('tijari_wms_18.group_operator')
+        # ):
+        #     raise UserError(_(
+        #         "Hanya user non-operator yang dapat mengisi/mengubah Penanggungjawab Pick."
+        #     ))
 
         result = super().write(vals)
         if import_audit_fields and not self.env.context.get('skip_acumatica_import_log'):
@@ -426,13 +421,7 @@ class StockPicking(models.Model):
             and 'user_ids' not in vals
         ):
             self._sync_user_ids_from_user_id()
-        if 'pick_responsible_ids' in vals:
-            self._sync_do_responsible_from_pick()
-        if (
-            'user_ids' not in vals
-            and {'pick_responsible_ids', 'pack_responsible_ids', 'do_responsible_ids'} & set(vals)
-        ):
-            self._sync_user_ids_from_responsible()
+        
         if self._get_responsible_carry_over_fields_set() & set(vals):
             self._propagate_responsible_to_next_transfers()
         if 'adt_is_document_only' not in vals and ({'origin', 'adt_type'} & set(vals)):
@@ -452,33 +441,6 @@ class StockPicking(models.Model):
     @api.model
     def _get_responsible_carry_over_fields_set(self):
         return set(self._get_responsible_carry_over_fields())
-
-    def _sync_do_responsible_from_pick(self):
-        """Requirement: assigning Pick responsibles also assigns them as DO
-        responsibles (additive - never removes an existing DO responsible
-        that wasn't part of pick_responsible_ids)."""
-        for picking in self:
-            missing = picking.pick_responsible_ids - picking.do_responsible_ids
-            if missing:
-                picking.with_context(tijari_responsible_sync=True).write({
-                    'do_responsible_ids': [(4, user.id) for user in missing],
-                })
-
-    def _sync_user_ids_from_responsible(self):
-        """Keep user_ids as the union of pick/pack/do responsible for writes
-        that don't go through the web client (the onchange only fires there).
-        Mirrors _onchange_responsible_ids so API/automation writes end up
-        with the same result a form save would produce."""
-        for picking in self:
-            responsible_users = (
-                picking.pick_responsible_ids
-                | picking.pack_responsible_ids
-                | picking.do_responsible_ids
-            )
-            if set(responsible_users.ids) != set(picking.user_ids.ids):
-                picking.with_context(tijari_responsible_sync=True).write({
-                    'user_ids': [(6, 0, responsible_users.ids)],
-                })
 
     def _propagate_responsible_to_next_transfers(self):
         """Carry pick/pack/do responsible + user_ids forward onto the next
@@ -1064,13 +1026,7 @@ class StockPicking(models.Model):
             description = picking.adt_type or ""
             if 'user_ids' not in vals:
                 picking._sync_user_ids_from_user_id()
-            if 'pick_responsible_ids' in vals:
-                picking._sync_do_responsible_from_pick()
-            if (
-                'user_ids' not in vals
-                and {'pick_responsible_ids', 'pack_responsible_ids', 'do_responsible_ids'} & set(vals)
-            ):
-                picking._sync_user_ids_from_responsible()
+            
             if self._get_responsible_carry_over_fields_set() & set(vals):
                 picking._propagate_responsible_to_next_transfers()
 
