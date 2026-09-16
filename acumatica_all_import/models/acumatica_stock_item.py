@@ -584,6 +584,7 @@ class AcumaticaStockItemLine(models.Model):
         from odoo.tools import split_every
 
         BATCH_SIZE = 1000
+        total = len(self)
         created = 0
         updated = 0
         error = 0
@@ -594,6 +595,12 @@ class AcumaticaStockItemLine(models.Model):
             'mail_create_nosubscribe': True,
         }
         Product = self.env['product.template'].with_context(**ctx)
+        ProductVariant = self.env['product.product'].with_context(**ctx)
+
+        print(
+            f'[MASTER IMPORT][Stock Item] START total={total} batch_size={BATCH_SIZE}',
+            flush=True,
+        )
 
         # =====================================================
         # CACHE UOM
@@ -636,11 +643,17 @@ class AcumaticaStockItemLine(models.Model):
         # Proses data per chunk untuk menghindari memory error jika datanya sangat besar
         for chunk in split_every(BATCH_SIZE, self):
             chunk_ids = [line.id for line in chunk]
+            print(
+                f'[MASTER IMPORT][Stock Item] BATCH start={chunk_ids[0] if chunk_ids else "-"} '
+                f'end={chunk_ids[-1] if chunk_ids else "-"} count={len(chunk)}',
+                flush=True,
+            )
             try:
                 
                 create_vals = []
                 update_params = []
                 barcode_updates = []
+                variant_updates = []
                 sku_insert_params = []
                 staging_success = []
                 staging_error = []
@@ -758,6 +771,15 @@ class AcumaticaStockItemLine(models.Model):
                             # terbaru dari Acumatica dan harus menghapus barcode
                             # lama pada product.
                             barcode_updates.append((existing['id'], line.barcode or False))
+                            # InventoryID dan barcode juga merupakan data
+                            # variant. Jangan hanya mengubah template karena
+                            # product.product menyimpan nilai operasionalnya.
+                            variant_updates.append((
+                                existing['id'],
+                                line.inventory_id or False,
+                                line.barcode or False,
+                                line.external_id or False,
+                            ))
 
                             # SKU changed
                             if existing['default_code'] != line.inventory_id:
@@ -923,6 +945,22 @@ class AcumaticaStockItemLine(models.Model):
                 for product_id, barcode in barcode_updates:
                     Product.browse(product_id).write({'barcode': barcode})
 
+                # Sinkronkan variant secara eksplisit. Stock Item selalu
+                # dibuat sebagai satu variant; fallback ke variant pertama
+                # menjaga flow tetap aman untuk template lama yang memiliki
+                # lebih dari satu variant.
+                for product_id, default_code, barcode, external_id in variant_updates:
+                    template = Product.browse(product_id)
+                    variant = template.product_variant_id
+                    if not variant:
+                        variant = template.product_variant_ids[:1]
+                    if variant:
+                        ProductVariant.browse(variant.id).write({
+                            'default_code': default_code,
+                            'barcode': barcode,
+                            'adt_external_id': external_id,
+                        })
+
                 # =============================================
                 # BULK SKU HISTORY
                 # =============================================
@@ -1006,6 +1044,11 @@ class AcumaticaStockItemLine(models.Model):
                 self.env.cr.commit()
 
         msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
+        print(
+            f'[MASTER IMPORT][Stock Item] FINISH total={total} '
+            f'created={created} updated={updated} error={error}',
+            flush=True,
+        )
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',

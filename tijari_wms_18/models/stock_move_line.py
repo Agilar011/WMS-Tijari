@@ -1000,6 +1000,8 @@ class StockMoveLine(models.Model):
         }
 
     def action_open_putaway_wizard(self):
+        if not self.exists():
+            return {'type': 'ir.actions.client', 'tag': 'reload'}
         self.ensure_one()
         wizard = self.env['putaway.move.line.wizard'].create(
             self._prepare_putaway_move_line_wizard_values()
@@ -1469,6 +1471,8 @@ class StockMoveLine(models.Model):
         return line_data
 
     def action_open_putaway_move_line_wizard(self):
+        if not self.exists():
+            return {'type': 'ir.actions.client', 'tag': 'reload'}
         self.ensure_one()
         wizard = self.env['putaway.move.line.wizard'].create(
             self._prepare_putaway_move_line_wizard_values()

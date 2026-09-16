@@ -170,6 +170,33 @@ class AcumaticaNonStockItemLine(models.Model):
             'is_current': True,
         })
 
+    def _sync_product_variant(self, product, vals):
+        """Sinkronkan field variant yang didefinisikan di product.product."""
+        variant = product.product_variant_id or product.product_variant_ids[:1]
+        if not variant:
+            return
+
+        variant_fields = (
+            'default_code',
+            'adt_external_id',
+            'adt_note',
+            'adt_base_unit',
+            'adt_is_a_kit',
+            'adt_is_kit',
+            'adt_note_id',
+            'adt_posting_class',
+            'adt_price_class',
+            'adt_purchase_unit',
+            'adt_sales_unit',
+            'adt_volume_uom',
+            'adt_weight_uom',
+        )
+        variant.write({
+            field: vals[field]
+            for field in variant_fields
+            if field in vals
+        })
+
     # ─── Import Actions ──────────────────────────────
     def action_import_this(self):
         self.ensure_one()
@@ -308,6 +335,9 @@ class AcumaticaNonStockItemLine(models.Model):
     
     def _do_import(self):
         created = updated = error = 0
+        total = len(self)
+
+        print(f'[MASTER IMPORT][Non-Stock Item] START total={total}', flush=True)
 
         for line in self:
             try:
@@ -370,6 +400,7 @@ class AcumaticaNonStockItemLine(models.Model):
                         vals,
                     )       
                     existing.write(vals)
+                    self._sync_product_variant(existing, vals)
                     line._sync_sku_history(
                         existing,
                         old_sku=old_sku,
@@ -437,6 +468,11 @@ class AcumaticaNonStockItemLine(models.Model):
                 error += 1
 
         msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
+        print(
+            f'[MASTER IMPORT][Non-Stock Item] FINISH total={total} '
+            f'created={created} updated={updated} error={error}',
+            flush=True,
+        )
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',

@@ -182,21 +182,21 @@ class ImportReceiptWizard(models.TransientModel):
             # OData $top/$skip. Apply the wizard pagination at receipt level
             # after the response is received, while keeping every detail row
             # belonging to the selected receipts.
-            receipt_order = []
-            seen_receipts = set()
-            for item in data:
-                receipt_nbr_value = self._val(item, "ReceiptNbr")
-                if receipt_nbr_value and receipt_nbr_value not in seen_receipts:
-                    seen_receipts.add(receipt_nbr_value)
-                    receipt_order.append(receipt_nbr_value)
+            # receipt_order = []
+            # seen_receipts = set()
+            # for item in data:
+            #     receipt_nbr_value = self._val(item, "ReceiptNbr")
+            #     if receipt_nbr_value and receipt_nbr_value not in seen_receipts:
+            #         seen_receipts.add(receipt_nbr_value)
+            #         receipt_order.append(receipt_nbr_value)
 
-            selected_receipts = set(
-                receipt_order[offset:offset + limit] if limit else receipt_order[offset:]
-            )
-            data = [
-                item for item in data
-                if self._val(item, "ReceiptNbr") in selected_receipts
-            ]
+            # selected_receipts = set(
+            #     receipt_order[offset:offset + limit] if limit else receipt_order[offset:]
+            # )
+            # data = [
+            #     item for item in data
+            #     if self._val(item, "ReceiptNbr") in selected_receipts
+            # ]
 
             for row_number, item in enumerate(data, start=1):
                 receipt_nbr = self._val(item, "ReceiptNbr")

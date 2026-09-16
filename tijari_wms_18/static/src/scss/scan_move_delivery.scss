@@ -44,3 +44,38 @@
         display: none !important;
     }
 }
+
+.o_wms_picker_scan_controls {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+.o_wms_picker_camera_button {
+    min-height: 42px;
+    white-space: nowrap;
+}
+
+.o_wms_picker_code_input {
+    width: 560px;
+    max-width: 100%;
+}
+
+.o_wms_picker_code_input .form-control,
+.o_wms_picker_code_input .btn {
+    min-height: 38px;
+}
+
+@media (max-width: 575px) {
+    .o_wms_picker_scan_controls {
+        align-items: stretch;
+    }
+
+    .o_wms_picker_camera_button,
+    .o_wms_picker_code_input {
+        width: 100%;
+    }
+}

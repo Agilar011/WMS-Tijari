@@ -167,6 +167,10 @@ class StockPicking(models.Model):
     )
     putaway_product_id = fields.Many2one(
         'product.product', string="Product Name")
+    putaway_scan_code = fields.Char(
+        string="Kode scan",
+        help="Bisa diisi dari scanner handheld atau diketik manual.",
+    )
     allowed_putaway_lot_ids = fields.Many2many(
         'stock.lot',
         compute='_compute_allowed_putaway_lot_ids',
@@ -208,6 +212,10 @@ class StockPicking(models.Model):
     picker_product_id = fields.Many2one(
         'product.product',
         string="Product Name",
+    )
+    picker_scan_code = fields.Char(
+        string="Kode scan",
+        help="Bisa diisi dari scanner handheld atau diketik manual.",
     )
     allowed_picker_lot_ids = fields.Many2many(
         'stock.lot',
@@ -1531,6 +1539,66 @@ class StockPicking(models.Model):
             'move_line_ids': move_lines.ids,
         }
 
+    def _get_putaway_scan_values(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        if not scanned_code:
+            raise ValidationError(_("Kode scan tidak boleh kosong."))
+
+        move_lines = self._get_putaway_base_move_lines()
+        product = self._find_product_by_scan_code(scanned_code)
+        if product:
+            matching_lines = move_lines.filtered(
+                lambda line: line.product_id == product
+            )
+            if matching_lines:
+                lot = self._get_lots_from_move_lines(
+                    matching_lines, matching_lines.product_id
+                )[:1]
+                return {
+                    'values': {
+                        'putaway_product_id': product.id,
+                        'putaway_lot_id': lot.id,
+                    },
+                    'result': {
+                        'product_id': product.id,
+                        'display_name': product.display_name,
+                        'lot_id': lot.id,
+                        'move_line_ids': matching_lines.ids,
+                    },
+                }
+
+        product, matching_lines, lot = self._find_putaway_product_by_lot_scan_code(
+            scanned_code
+        )
+        return {
+            'values': {
+                'putaway_product_id': product.id,
+                'putaway_lot_id': lot.id,
+            },
+            'result': {
+                'product_id': product.id,
+                'display_name': product.display_name,
+                'lot_id': lot.id,
+                'move_line_ids': matching_lines.ids,
+            },
+        }
+
+    def action_apply_scanned_putaway_code(self, scanned_code):
+        self.ensure_one()
+        values = self._get_putaway_scan_values(scanned_code)
+        self.write(values['values'])
+        return values['result']
+
+    @api.onchange('putaway_scan_code')
+    def _onchange_putaway_scan_code(self):
+        for picking in self:
+            if not picking.putaway_scan_code:
+                continue
+            values = picking._get_putaway_scan_values(picking.putaway_scan_code)
+            picking.update(values['values'])
+            picking.putaway_scan_code = False
+
     def action_apply_scanned_picker_product_by_lot(self, scanned_code):
         self.ensure_one()
         scanned_code = (scanned_code or '').strip()
@@ -1571,6 +1639,67 @@ class StockPicking(models.Model):
             'display_name': product.display_name,
             'move_ids': picker_moves.ids,
         }
+
+    def action_apply_scanned_picker_code(self, scanned_code):
+        """Apply a generic scanner input that may identify a product or a lot."""
+        self.ensure_one()
+        values = self._get_picker_scan_values(scanned_code)
+        self.write(values['values'])
+        return values['result']
+
+    def _get_picker_scan_values(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        if not scanned_code:
+            raise ValidationError(_("Kode scan tidak boleh kosong."))
+
+        picker_moves = self._get_picker_base_moves()
+        product = self._find_product_by_scan_code(scanned_code)
+        if product:
+            matching_moves = picker_moves.filtered(
+                lambda move: move.product_id == product
+            )
+            if matching_moves:
+                lot = matching_moves.lot_ids[:1] or matching_moves.move_line_ids.lot_id[:1]
+                return {
+                    'values': {
+                        'picker_product_id': product.id,
+                        'picker_lot_id': lot.id,
+                    },
+                    'result': {
+                        'product_id': product.id,
+                        'display_name': product.display_name,
+                        'lot_id': lot.id,
+                        'move_ids': matching_moves.ids,
+                        'matched_by': 'product',
+                    },
+                }
+
+        product, matching_moves, lot = self._find_picker_product_by_lot_scan_code(
+            scanned_code
+        )
+        return {
+            'values': {
+                'picker_product_id': product.id,
+                'picker_lot_id': lot.id,
+            },
+            'result': {
+                'product_id': product.id,
+                'display_name': product.display_name,
+                'lot_id': lot.id,
+                'move_ids': matching_moves.ids,
+                'matched_by': 'lot',
+            },
+        }
+
+    @api.onchange('picker_scan_code')
+    def _onchange_picker_scan_code(self):
+        for picking in self:
+            if not picking.picker_scan_code:
+                continue
+            values = picking._get_picker_scan_values(picking.picker_scan_code)
+            picking.update(values['values'])
+            picking.picker_scan_code = False
 
     def action_apply_scanned_package(self, scanned_code):
         self.ensure_one()

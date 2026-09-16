@@ -48,8 +48,11 @@
                 <page string="Putaway" name="page_putaway" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
                     <group>
                         <field name="scan_product_button"
-                            widget="adt_scan_product_button"
+                            widget="adt_scan_putaway_product_button"
                             nolabel="1"/>
+                        <field name="putaway_scan_code"
+                            placeholder="Scan handheld atau ketik kode"
+                            help="Bisa barcode, SKU, atau lot."/>
                         <field name="scan_product_by_lot_button"
                             widget="adt_scan_product_by_lot_button"
                             invisible="1"
