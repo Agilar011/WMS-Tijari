@@ -710,10 +710,11 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
         # print(type(warehouse_code))
         type = False
+        document_only = self._bool_val(header, 'DocumentOnly')
 
         document_only_type = PickingType.resolve_document_only_picking_type(
             api_acumatica='inventory_issue',
-            document_only=self._bool_val(header, 'DocumentOnly'),
+            document_only=document_only,
             warehouse_code=warehouse_code,
         )
         if document_only_type:

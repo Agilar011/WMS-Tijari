@@ -117,7 +117,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         cache_key = (
             header.get('transfer_type'),
             header.get('document_only'),
-            header.get('warehouse_code'),
+            header.get('warehouse_dest_code'),
         )
 
         if cache_key in picking_type_cache:
@@ -126,7 +126,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         mapped_type = self.config_id._resolve_inventory_receive_picking_type(
             transfer_type=header.get('transfer_type'),
             document_only=header.get('document_only'),
-            warehouse_code=header.get('warehouse_code'),
+            warehouse_code=header.get('warehouse_dest_code'),
         )
 
         if mapped_type:
@@ -134,7 +134,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             return mapped_type
 
         location = Location.search(
-            [('code', '=', header['warehouse_code'])],
+            [('code', '=', header['warehouse_dest_code'])],
             limit=1,
         )
 
@@ -308,7 +308,8 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                     details = [item]
 
                 transfer_type = self._val(item, 'TransType')
-                line_warehouse = self._val(item, 'LineWarehouse') or self._val(item, 'LineWarehouseID')
+                line_warehouse = self._val(item, 'WarehouseID') or self._val(item, 'LineWarehouseID')
+                line_to_warehouse = self._val(item, 'ToWarehouseID') or self._val(item, 'LineToWarehouseID')
                 if self._is_transfer_in_type(transfer_type):
                     warehouse_code = (
                         self._val(item, 'FromWarehouseID')
@@ -323,7 +324,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                     )
                 else:
                     warehouse_code = line_warehouse
-                    warehouse_dest_code = warehouse_code
+                    warehouse_dest_code = line_to_warehouse
                 header_id = ref or item.get('id', '')
 
                 if header_id not in headers_seen:

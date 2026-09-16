@@ -363,9 +363,17 @@ class AcumaticaInventoryStockLine(models.Model):
         created = 0
         updated = 0
         error = 0
+        total = len(self)
+
+        print(f'[MASTER IMPORT][Inventory Stock] START total={total}', flush=True)
 
         for line in self:
             try:
+                print(
+                    f'[MASTER IMPORT][Inventory Stock] PROCESS line_id={line.id} '
+                    f'item={line.inventory_id or "-"} warehouse={line.warehouse_code or "-"}',
+                    flush=True,
+                )
                 product = line._find_product()
                 location = line._find_location()
                 if not product:
@@ -435,6 +443,11 @@ class AcumaticaInventoryStockLine(models.Model):
                     'import_message': message,
                     'odoo_on_hand': new_qty,
                 })
+                print(
+                    f'[MASTER IMPORT][Inventory Stock] RESULT line_id={line.id} '
+                    f'state={action_state} message={message}',
+                    flush=True,
+                )
                 # Recompute the stored comparison fields after the quant adjustment,
                 # so the list immediately shows the new Match/Unmatch state.
                 line._compute_stock_snapshot()
@@ -443,6 +456,10 @@ class AcumaticaInventoryStockLine(models.Model):
                     'inventory_stock',
                 )
             except Exception as e:
+                print(
+                    f'[MASTER IMPORT][Inventory Stock] ERROR line_id={line.id}: {e}',
+                    flush=True,
+                )
                 _logger.exception('Error import Inventory Stock line %s', line.id)
                 self.env['acumatica.error.transaction']._handle_acumatica_error(
                     line,
@@ -468,6 +485,12 @@ class AcumaticaInventoryStockLine(models.Model):
                 })
 
                 error += 1
+
+        print(
+            f'[MASTER IMPORT][Inventory Stock] FINISH total={total} '
+            f'created={created} updated={updated} error={error}',
+            flush=True,
+        )
 
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {

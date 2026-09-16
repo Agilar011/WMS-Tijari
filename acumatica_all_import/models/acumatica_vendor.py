@@ -181,6 +181,9 @@ class AcumaticaVendorLine(models.Model):
           VendorClass  → adt_class
         """
         created = updated = error = 0
+        total = len(self)
+
+        print(f'[MASTER IMPORT][Vendor] START total={total}', flush=True)
 
         STATUS_MAP = {
             'active':   'Active',
@@ -306,6 +309,11 @@ class AcumaticaVendorLine(models.Model):
                 error += 1
 
         msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
+        print(
+            f'[MASTER IMPORT][Vendor] FINISH total={total} '
+            f'created={created} updated={updated} error={error}',
+            flush=True,
+        )
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',

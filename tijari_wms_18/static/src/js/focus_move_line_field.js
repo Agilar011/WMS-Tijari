@@ -648,12 +648,12 @@ async function scanQrWithZxing(title) {
     }
 }
 
-async function callScannedCodeMethod({ orm, notification, resModel, resId, methodName, title }) {
+async function callScannedCodeMethod({ orm, notification, resModel, resId, methodName, title, scannedCode }) {
     if (!orm || !resModel || !resId || !methodName) {
         return { ok: false, result: null };
     }
 
-    const scannedCode = await scanCodeWithNotification(notification, title);
+    scannedCode = scannedCode || await scanCodeWithNotification(notification, title);
     if (!scannedCode) {
         return { ok: false, result: null };
     }
@@ -938,13 +938,20 @@ class ProductScanButton extends Component {
 }
 
 class PickerProductScanButton extends ProductScanButton {
+    static template = "tijari.PickerProductScanButton";
+
     get applyMethodName() {
-        return "action_apply_scanned_picker_product";
+        return "action_apply_scanned_picker_code";
     }
 
     get applyByLotMethodName() {
         return "action_apply_scanned_picker_product_by_lot";
     }
+
+    get scanTitle() {
+        return "Scan Kode";
+    }
+
 }
 
 class ProductByLotScanButton extends ProductScanButton {
@@ -956,6 +963,18 @@ class ProductByLotScanButton extends ProductScanButton {
 
     get scanTitle() {
         return "Scan Lot QR Code";
+    }
+}
+
+class PutawayProductScanButton extends ProductScanButton {
+    static template = "tijari.PickerProductScanButton";
+
+    get applyMethodName() {
+        return "action_apply_scanned_putaway_code";
+    }
+
+    get scanTitle() {
+        return "Scan Kode Putaway";
     }
 }
 
@@ -1055,6 +1074,9 @@ registry.category("fields").add("adt_scan_package_form_button", {
 });
 registry.category("fields").add("adt_scan_product_button", {
     component: ProductScanButton,
+});
+registry.category("fields").add("adt_scan_putaway_product_button", {
+    component: PutawayProductScanButton,
 });
 registry.category("fields").add("adt_scan_product_by_lot_button", {
     component: ProductByLotScanButton,

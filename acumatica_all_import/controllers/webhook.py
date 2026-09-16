@@ -168,7 +168,10 @@ class AcumaticaWebhookController(http.Controller):
             Line = self._env()[model_name].sudo()
             imported = Line.search_count([
                 ("id", "in", line_ids),
-                ("import_state", "in", ("imported", "updated", "skipped")),
+                # Master staging models (including Stock Item) use
+                # ``created``/``updated`` for successful document imports.
+                # Keep the legacy states for transaction models as well.
+                ("import_state", "in", ("created", "updated", "imported", "skipped")),
             ])
             errors += Line.search_count([
                 ("id", "in", line_ids),
