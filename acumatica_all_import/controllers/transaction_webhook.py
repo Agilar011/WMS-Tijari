@@ -146,8 +146,9 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         if picking_type:
             return picking_type
 
-        # Backward-compat: gunakan Pick standar warehouse bila resolver kosong.
-        return warehouse.pick_type_id or PickingType.search([
+        # Backward-compat: gunakan Pick standar warehouse bila resolver kosong,
+        # tetapi tetap validasi kategorinya agar tidak berubah menjadi Delivery.
+        return (warehouse.pick_type_id if warehouse.pick_type_id.operation_category == "pick" else False) or PickingType.search([
             ("warehouse_id", "=", warehouse.id),
             ("code", "=", "internal"),
             ("name", "ilike", "Pick"),
@@ -860,13 +861,16 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
     def _inventory_receipt_header_vals(self, item, row_number):
         vals = self._inventory_receipt_base_header_vals(item, row_number)
         transfer_type = self._first_value(item, "TransferType", "TransType", "transfer_type")
-        transfer_type_key = str(transfer_type or "").strip().lower().replace("-", "_").replace(" ", "_")
-        picking_code = "internal" if transfer_type_key in ("transfer_in", "transfer_receipt") else "incoming"
-        picking_type = self._search_picking_type(
-            vals.get("warehouse_code"),
-            picking_code,
+        config = self._env()["acumatica.config"].sudo()._get_default_config_for_type(
+            "inventory_received"
+        )
+        picking_type = config._resolve_inventory_receive_picking_type(
+            transfer_type=transfer_type,
             document_only=vals.get("document_only"),
-            api_acumatica="inventory_receipt",
+            warehouse_code=(
+                vals.get("warehouse_dest_code")
+                or vals.get("warehouse_code")
+            ),
         )
         vals["transfer_type"] = transfer_type
         vals["picking_type_id"] = picking_type.id if picking_type else False

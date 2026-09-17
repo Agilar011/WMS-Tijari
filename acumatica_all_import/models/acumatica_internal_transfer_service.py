@@ -298,6 +298,14 @@ class AcumaticaInternalTransferService(models.AbstractModel):
 
     def create_order_move(self, order, product, qty, uom=False, name=False, description=False, extra_vals=False):
         Move = self.env['stock.move']
+        if not order.location_id:
+            raise UserError(
+                f'Source location untuk internal transfer {order.display_name} belum ditemukan.'
+            )
+        if not order.location_dest_id:
+            raise UserError(
+                f'Destination location untuk internal transfer {order.display_name} belum ditemukan.'
+            )
         vals = {
             'name': name or product.display_name,
             'product_id': product.id,

@@ -598,6 +598,9 @@
                         <button name="action_assign" type="object" string="Check Availability"/>
                     </header>
                     <field name="adt_type" string="Tipe Transaksi"/>
+                    <field name="internal_transfer_leg" string="Tipe Transfer" widget="badge"
+                        decoration-info="internal_transfer_leg == 'receipt'"
+                        decoration-warning="internal_transfer_leg == 'delivery'"/>
                     <field name="origin" string="No. Dokumen" decoration-bf="1" readonly="state in ['cancel', 'done']"/>
                     <field name="location_id" optional="hide"
                         options="{'no_create': True}"
@@ -647,6 +650,9 @@
                         readonly="state == 'done'"/>
                     <field name="company_id" optional="hide" groups="base.group_multi_company"/>
                     <field name="adt_type" string="Tipe Transaksi"/>
+                    <field name="internal_transfer_leg" string="Tipe Transfer" widget="badge"
+                        decoration-info="internal_transfer_leg == 'receipt'"
+                        decoration-warning="internal_transfer_leg == 'delivery'"/>
                     <field name="adt_is_document_only" optional="hide"/>
                     <field name="partner_id" string="Supplier / Customer" readonly="state in ['cancel', 'done']"/>
                     <field name="scheduled_date" widget="remaining_days"

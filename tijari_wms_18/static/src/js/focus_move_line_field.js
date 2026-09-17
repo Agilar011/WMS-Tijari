@@ -2,7 +2,8 @@
 
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
-import { Component } from "@odoo/owl";
+import { CharField } from "@web/views/fields/char/char_field";
+import { Component, useEffect } from "@odoo/owl";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 
 const ZXING_BROWSER_CDN_URLS = [
@@ -978,6 +979,61 @@ class PutawayProductScanButton extends ProductScanButton {
     }
 }
 
+/**
+ * Handheld scanners normally finish their input with Enter.  CharField's
+ * standard handler commits on Enter, but the move-line onchange can be easy
+ * to miss while the row is being edited.  Capture Enter here so the value is
+ * committed immediately and the onchange result is rendered in the same row.
+ */
+class HandheldScanCodeField extends CharField {
+    setup() {
+        super.setup();
+        this.notification = useService("notification");
+        useEffect(
+            (inputEl) => {
+                if (!inputEl) {
+                    return;
+                }
+
+                const onKeydown = async (ev) => {
+                    if (ev.key !== "Enter" && ev.code !== "Enter") {
+                        return;
+                    }
+
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    ev.stopImmediatePropagation();
+
+                    const value = (inputEl.value || "").trim();
+                    if (!value) {
+                        return;
+                    }
+
+                    try {
+                        await this.props.record.update({
+                            [this.props.name]: value,
+                        });
+                        // The onchange clears the transient field in the
+                        // record. Clear the active input too, because the
+                        // standard CharField keeps the scanner value while
+                        // it is marked dirty during the async update.
+                        inputEl.value = "";
+                    } catch (error) {
+                        this.notification.add(
+                            error?.data?.message || error?.message || "Kode scan tidak dapat diproses.",
+                            { title: "Scan handheld gagal", type: "danger" }
+                        );
+                    }
+                };
+
+                inputEl.addEventListener("keydown", onKeydown, true);
+                return () => inputEl.removeEventListener("keydown", onKeydown, true);
+            },
+            () => [this.input.el]
+        );
+    }
+}
+
 class PickerProductByLotScanButton extends ProductByLotScanButton {
     get applyMethodName() {
         return "action_apply_scanned_picker_product_by_lot";
@@ -1083,6 +1139,9 @@ registry.category("fields").add("adt_scan_product_by_lot_button", {
 });
 registry.category("fields").add("adt_scan_picker_product_button", {
     component: PickerProductScanButton,
+});
+registry.category("fields").add("adt_handheld_scan_code", {
+    component: HandheldScanCodeField,
 });
 registry.category("fields").add("adt_scan_picker_product_by_lot_button", {
     component: PickerProductByLotScanButton,

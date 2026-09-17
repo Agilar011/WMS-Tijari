@@ -241,7 +241,12 @@ class AcumaticaConfig(models.Model):
     def _normalize_inventory_receive_type(self, value):
         if not value:
             return 'inventory_receive'
-        return str(value).strip().lower().replace('-', '_').replace(' ', '_')
+        normalized = str(value).strip().lower().replace('-', '_').replace(' ', '_')
+        # Acumatica/webhook legacy payloads may call Transfer In
+        # ``transfer_receipt``. Both must use the internal receive operation.
+        return {
+            'transfer_receipt': 'transfer_in',
+        }.get(normalized, normalized)
 
     def _get_config_picking_type(self):
         self.ensure_one()
