@@ -2507,19 +2507,56 @@ class StockPicking(models.Model):
         ).create({})
 
         for line in wizard.product_return_moves:
-
             move = line.move_id
-
             actual = move.shipped_qty
-
             planned = move.quantity
-
             line.quantity = max(planned - actual, 0)
 
-        result = wizard.action_create_returns()
+        result = wizard.with_context(
+            return_from_actual_qty=True
+        ).action_create_returns()
 
         return result
 
+    def _create_return(self):
+        for return_move in self.product_return_moves.move_id:
+            return_move.move_dest_ids.filtered(
+                lambda m: m.state not in ('done', 'cancel')
+            )._do_unreserve()
+
+        new_picking = self.picking_id.copy(
+            self._prepare_picking_default_values()
+        )
+
+        new_picking.user_id = False
+
+        new_picking.message_post_with_source(
+            'mail.message_origin_link',
+            render_values={
+                'self': new_picking,
+                'origin': self.picking_id,
+            },
+            subtype_xmlid='mail.mt_note',
+        )
+
+        returned_lines = False
+
+        for return_line in self.product_return_moves:
+            if return_line._process_line(new_picking):
+                returned_lines = True
+
+        if not returned_lines:
+            raise UserError(
+                _("Please specify at least one non-zero quantity.")
+            )
+
+        # Hanya return dari _generate_return_from_actual_qty
+        # yang langsung tetap draft.
+        if not self.env.context.get('return_from_actual_qty'):
+            new_picking.action_confirm()
+            new_picking.action_assign()
+
+        return new_picking
 
     def _check_putaway_status_requirements(self):
         self.ensure_one()
