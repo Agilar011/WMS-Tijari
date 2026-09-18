@@ -11,6 +11,7 @@
                 <filter name="tijari_pack" string="Pack" domain="[('operation_category', '=', 'pack')]"/>
                 <filter name="tijari_internal_intra" string="Internal Transfer - Intra" domain="[('internal_transfer_order_id.transaction_type', '=', 'intra_warehouse')]"/>
                 <filter name="tijari_internal_inter" string="Internal Transfer - Inter" domain="[('internal_transfer_order_id.transaction_type', '=', 'inter_warehouse')]"/>
+                <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', '=', 'Internal Transfers')]"/>
                 <filter name="tijari_document_only" string="Document Only" domain="[('adt_is_document_only', '=', True)]"/>
                 <separator/>
             </xpath>
@@ -598,9 +599,6 @@
                         <button name="action_assign" type="object" string="Check Availability"/>
                     </header>
                     <field name="adt_type" string="Tipe Transaksi"/>
-                    <field name="internal_transfer_leg" string="Tipe Transfer" widget="badge"
-                        decoration-info="internal_transfer_leg == 'receipt'"
-                        decoration-warning="internal_transfer_leg == 'delivery'"/>
                     <field name="origin" string="No. Dokumen" decoration-bf="1" readonly="state in ['cancel', 'done']"/>
                     <field name="location_id" optional="hide"
                         options="{'no_create': True}"
@@ -628,6 +626,21 @@
                     <field name="user_ids" widget="many2many_avatar_user" optional="show"/>
                     <field name="batch_id" string="Batch" optional="hide"/>
                 </list>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_tree_internal_transfer_order_columns" model="ir.ui.view">
+        <field name="name">stock.picking.list.internal.transfer.order.columns</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock_picking_tree_transaction_columns"/>
+        <field name="mode">primary</field>
+        <field name="priority" eval="1210"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/field[@name='adt_type']" position="after">
+                <field name="internal_transfer_leg" string="Tipe Transfer" widget="badge"
+                    decoration-info="internal_transfer_leg == 'receipt'"
+                    decoration-warning="internal_transfer_leg == 'delivery'"/>
             </xpath>
         </field>
     </record>

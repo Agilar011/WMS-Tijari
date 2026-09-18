@@ -146,8 +146,8 @@ class AcumaticaStockItemLine(models.Model):
         )
         self.env.cr.execute(query_product, params_product)
         product_id = self.env.cr.fetchone()[0]
-        if line.barcode:
-            self.env['product.template'].browse(product_id).write({'barcode': line.barcode})
+        # if line.barcode:
+        #     self.env['product.template'].browse(product_id).write({'barcode': line.barcode})
         query_staging = """
             UPDATE acumatica_stock_item_line
             SET import_state = %s, 
@@ -205,12 +205,12 @@ class AcumaticaStockItemLine(models.Model):
         )
         self.env.cr.execute(query_product, params_product)
         result = self.env.cr.fetchone()
-        if result:
+        # if result:
             # Barcode kosong dari staging berarti barcode di Acumatica sudah
             # dihapus, jadi barcode product juga harus dikosongkan.
-            self.env['product.template'].browse(result[0]).write({
-                'barcode': line.barcode or False,
-            })
+            # self.env['product.template'].browse(result[0]).write({
+            #     'barcode': line.barcode or False,
+            # })
         if not result:
             # Tidak ada perubahan data, skip update
             query_staging = """
@@ -703,7 +703,7 @@ class AcumaticaStockItemLine(models.Model):
                             'is_storable': True,
                             'tracking' : 'lot',
                             'default_code': line.inventory_id or False,
-                            'barcode': line.barcode or False,
+                            # 'barcode': line.barcode or False,
                             'type': self.ITEM_TYPE_MAP.get(
                                 (line.item_type or '').lower(),
                                 'consu'
@@ -777,7 +777,7 @@ class AcumaticaStockItemLine(models.Model):
                             variant_updates.append((
                                 existing['id'],
                                 line.inventory_id or False,
-                                line.barcode or False,
+                                # line.barcode or False,
                                 line.external_id or False,
                             ))
 
@@ -942,14 +942,14 @@ class AcumaticaStockItemLine(models.Model):
                 # product.template.barcode is a computed/inverse field in
                 # Odoo 18; it has no column on product_template. Use ORM so
                 # the inverse writes the barcode to the product variant.
-                for product_id, barcode in barcode_updates:
-                    Product.browse(product_id).write({'barcode': barcode})
+                # for product_id, barcode in barcode_updates:
+                #     Product.browse(product_id).write({'barcode': barcode})
 
                 # Sinkronkan variant secara eksplisit. Stock Item selalu
                 # dibuat sebagai satu variant; fallback ke variant pertama
                 # menjaga flow tetap aman untuk template lama yang memiliki
                 # lebih dari satu variant.
-                for product_id, default_code, barcode, external_id in variant_updates:
+                for product_id, default_code, external_id in variant_updates:
                     template = Product.browse(product_id)
                     variant = template.product_variant_id
                     if not variant:
@@ -957,7 +957,7 @@ class AcumaticaStockItemLine(models.Model):
                     if variant:
                         ProductVariant.browse(variant.id).write({
                             'default_code': default_code,
-                            'barcode': barcode,
+                            # 'barcode': barcode,
                             'adt_external_id': external_id,
                         })
 

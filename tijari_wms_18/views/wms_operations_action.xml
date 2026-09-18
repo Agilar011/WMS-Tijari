@@ -196,6 +196,7 @@
         <field name="name">Internal Transfer - Intra</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,kanban,form</field>
+        <field name="view_id" ref="stock_picking_tree_internal_transfer_order_columns"/>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_internal_intra': 1}</field>
     </record>
@@ -204,6 +205,7 @@
         <field name="name">Internal Transfer - Inter</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,kanban,form</field>
+        <field name="view_id" ref="stock_picking_tree_internal_transfer_order_columns"/>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_internal_inter': 1}</field>
     </record>

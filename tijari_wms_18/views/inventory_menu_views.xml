@@ -6,7 +6,19 @@
     </record>
 
     <record id="stock.int_picking" model="ir.ui.menu">
-        <field name="active" eval="False" />
+        <field name="active" eval="True" />
+    </record>
+
+    <!-- Keep Odoo's native Internal Transfers menu, but restrict it to the
+         standard picking type instead of every internal operation. -->
+    <record id="stock.action_picking_tree_internal" model="ir.actions.act_window">
+        <field name="domain">[]</field>
+        <field name="context">{
+            'contact_display': 'partner_address',
+            'restricted_picking_type_code': 'internal',
+            'search_default_internal': 1,
+            'search_default_tijari_internal_transfer': 1
+        }</field>
     </record>
 
     <menuitem

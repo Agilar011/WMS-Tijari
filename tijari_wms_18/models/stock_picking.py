@@ -1180,6 +1180,19 @@ class StockPicking(models.Model):
 
         marked_as_todo = self.filtered(lambda picking: picking.state == 'draft')
         res = super().action_confirm()
+
+        # Manufacturing component moves already carry the authoritative
+        # mapped destination. Copy that exact value to the picking after the
+        # moves have been assigned to it; do not derive it from picking type
+        # defaults or from location_dest_id.
+        for picking in self:
+            component_locations = picking.move_ids.filtered(
+                lambda move: move.raw_material_production_id
+                and move.adt_dest_location_id
+            ).mapped('adt_dest_location_id')
+            if len(component_locations) == 1:
+                picking.adt_dest_location_id = component_locations
+
         self._adt_apply_dest_location_to_move_lines()
         self._remove_qty_move_line()
 

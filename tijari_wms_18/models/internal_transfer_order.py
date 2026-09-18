@@ -986,6 +986,13 @@ class InternalTransferOrder(models.Model):
         )
         action['domain'] = [('id', 'in', pickings.ids)]
         action['context'] = {'create': False}
+        action['views'] = [
+            (self.env.ref(
+                'tijari_wms_18.stock_picking_tree_internal_transfer_order_columns'
+            ).id, 'list'),
+            (False, 'kanban'),
+            (False, 'form'),
+        ]
         return action
 
 
