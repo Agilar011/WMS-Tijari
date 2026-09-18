@@ -172,7 +172,8 @@ class AcumaticaKitAssembly(models.Model):
                             f"Warehouse tidak ditemukan: {header.warehouse}"
                         )
 
-                    warehouse_record = warehouse.odoo_location_id.warehouse_id
+                    location_record = warehouse.odoo_location_id
+                    warehouse_record = location_record.warehouse_id
 
                     if not warehouse_record:
                         raise ValueError(
@@ -313,6 +314,7 @@ class AcumaticaKitAssembly(models.Model):
                                     'product_uom': component_product.product_tmpl_id.uom_id.id,
 
                                     "location_id": picking_type.default_location_src_id.id,
+                                    "adt_dest_location_id": location_record.id if location_record else False,
                                     "location_dest_id": picking_type.default_location_dest_id.id,
 
                                     "picking_type_id": picking_type.id,
@@ -851,6 +853,7 @@ class AcumaticaKitAssemblyLine(models.Model):
                             'product_uom': component_product.uom_id.id,
                             'location_id': picking_type.default_location_src_id.id,
                             'location_dest_id': picking_type.default_location_dest_id.id,
+                            'adt_dest_location_id': picking_type.default_location_dest_id.id,
                             'picking_type_id': picking_type.id,
                             'warehouse_id': manufacturing.warehouse_id.id,
                             'raw_material_production_id': manufacturing.id,
