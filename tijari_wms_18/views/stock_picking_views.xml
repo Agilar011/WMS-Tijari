@@ -1097,6 +1097,10 @@
                         <field name="note" nolabel="1"/>
                     </group>
 
+                    <group name="description_note" string="Description">
+                        <field name="desc_note" nolabel="1"/>
+                    </group>
+
                     <group name="BA Notes" string="BA Notes">
                         <field name="note_ba" nolabel="1"/>
                     </group>

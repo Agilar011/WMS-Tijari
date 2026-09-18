@@ -25,13 +25,24 @@
             </xpath>
             <xpath expr="//page[@name='miscellaneous']" position="after">
                 <page name="note" string="Notes">
-                    <group>
+                    <group name="transaction_note" string="Transaction Note">
                         <field name="catatan" nolabel="1"/>
+                    </group>
+
+                    <group name="desc_note" string="Description">
+                        <field name="desc_note" nolabel="1"/>
                     </group>
                 </page>
             </xpath>
             <xpath expr="//field[@name='move_raw_ids']/list/field[@name='quantity']" position="after">
                 <field name="difference_quantity"/>
+            </xpath>
+            <xpath expr="//field[@name='move_raw_ids']/list/field[@name='group_id']" position="after">
+                <button
+                    name="action_open_note_wizard"
+                    type="object"
+                    icon="fa-sticky-note"
+                    title="Note"/>
             </xpath>
         </field>
     </record>

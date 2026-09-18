@@ -185,6 +185,12 @@
                         icon="fa-print"
                         invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"
                         title="Print Lot"/>
+                    <button
+                        name="action_open_note_wizard"
+                        type="object"
+                        icon="fa-sticky-note"
+                        title="Note"
+                    />
                     <button name="action_open_move_pick"
                         type="object"
                         string="To Process"
