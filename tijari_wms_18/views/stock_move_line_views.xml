@@ -249,6 +249,20 @@
                     </group>
 
                     <group invisible="'Pick' not in (parent.picking_type_name or '')">
+                        <label
+                            for="handheld_scan_code"
+                            string="Kode Scan Handheld"
+                        />
+                        <field
+                            name="handheld_scan_code"
+                            widget="adt_handheld_scan_code"
+                            placeholder="Scan handheld: lot atau lokasi"
+                            nolabel="1"
+                            class="fw-bold fs-6"
+                        />
+                    </group>
+
+                    <group invisible="'Pick' not in (parent.picking_type_name or '')">
                         <label 
                             for="matching_lot_id" 
                             string="Confirm LOT"

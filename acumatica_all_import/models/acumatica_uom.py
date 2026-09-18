@@ -133,6 +133,9 @@ class AcumaticaUomLine(models.Model):
           - Description → uom.uom.name di dalam kategori Unit
         """
         created = updated = skipped = error = 0
+        total = len(self)
+
+        print(f'[MASTER IMPORT][UoM] START total={total}', flush=True)
 
         for line in self:
             try:
@@ -257,6 +260,12 @@ class AcumaticaUomLine(models.Model):
                 )
 
                 error += 1
+
+        print(
+            f'[MASTER IMPORT][UoM] FINISH total={total} '
+            f'created={created} updated={updated} skipped={skipped} error={error}',
+            flush=True,
+        )
 
         # Notifikasi hasil
         msg = f'Import selesai: {created} dibuat, {updated} diperbarui, {skipped} dilewati, {error} error.'

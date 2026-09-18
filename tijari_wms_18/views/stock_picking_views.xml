@@ -598,6 +598,9 @@
                         <button name="action_assign" type="object" string="Check Availability"/>
                     </header>
                     <field name="adt_type" string="Tipe Transaksi"/>
+                    <field name="internal_transfer_leg" string="Tipe Transfer" widget="badge"
+                        decoration-info="internal_transfer_leg == 'receipt'"
+                        decoration-warning="internal_transfer_leg == 'delivery'"/>
                     <field name="origin" string="No. Dokumen" decoration-bf="1" readonly="state in ['cancel', 'done']"/>
                     <field name="location_id" optional="hide"
                         options="{'no_create': True}"
@@ -621,7 +624,7 @@
                         decoration-info="state == 'assigned'"
                         decoration-muted="state == 'draft'"
                         decoration-success="state == 'done'"
-                        decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned', 'waiting_response', 'return_shipment')"/>
+                        decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"/>
                     <field name="user_ids" widget="many2many_avatar_user" optional="show"/>
                     <field name="batch_id" string="Batch" optional="hide"/>
                 </list>
@@ -647,6 +650,9 @@
                         readonly="state == 'done'"/>
                     <field name="company_id" optional="hide" groups="base.group_multi_company"/>
                     <field name="adt_type" string="Tipe Transaksi"/>
+                    <field name="internal_transfer_leg" string="Tipe Transfer" widget="badge"
+                        decoration-info="internal_transfer_leg == 'receipt'"
+                        decoration-warning="internal_transfer_leg == 'delivery'"/>
                     <field name="adt_is_document_only" optional="hide"/>
                     <field name="partner_id" string="Supplier / Customer" readonly="state in ['cancel', 'done']"/>
                     <field name="scheduled_date" widget="remaining_days"
@@ -793,6 +799,9 @@
                             <field name="scan_picker_product_button"
                                 widget="adt_scan_picker_product_button"
                                 nolabel="1"/>
+                            <field name="picker_scan_code"
+                                placeholder="Scan handheld atau ketik kode"
+                                help="Bisa barcode, SKU, atau lot."/>
                             
                             <field name="allowed_picker_product_ids" invisible="1"/>
                             <field name="allowed_picker_lot_ids" invisible="1"/>
@@ -1086,6 +1095,10 @@
                 <page name="Notes" string="Notes">
                     <group name="Transaction Notes" string="Transaction Notes">
                         <field name="note" nolabel="1"/>
+                    </group>
+
+                    <group name="description_note" string="Description">
+                        <field name="desc_note" nolabel="1"/>
                     </group>
 
                     <group name="BA Notes" string="BA Notes">

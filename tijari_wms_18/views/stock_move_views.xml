@@ -68,14 +68,13 @@
 
         <field name="arch" type="xml">
 
-            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='product_id']"
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']"
                    position="after">
                 <button
                     name="action_open_note_wizard"
                     type="object"
                     icon="fa-sticky-note"
                     title="Note"
-                    invisible="1"
                     />
 
             </xpath>
@@ -89,11 +88,11 @@
                         icon="fa-print"
                         invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"
                         title="Print Lot"/>
-                    <button
+                    <!-- <button
                         name="action_open_note_wizard"
                         type="object"
                         icon="fa-sticky-note"
-                        title="Note"/>
+                        title="Note"/> -->
                     <button name="action_open_move_pick"
                         type="object"
                         string="Open Pick"
@@ -206,6 +205,12 @@
                                 widget="adt_scan_location_button"
                                 string="Scan Location"
                                 readonly="1"
+                                invisible="matching == 'match'"
+                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="handheld_scan_code"
+                                widget="adt_handheld_scan_code"
+                                string="Kode Scan Handheld"
+                                placeholder="Scan handheld: lot atau lokasi"
                                 invisible="matching == 'match'"
                                 column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="adt_dest_location_id" column_invisible="1"/>
@@ -1045,6 +1050,12 @@
                                 widget="adt_scan_location_button"
                                 string="Scan Location"
                                 readonly="1"
+                                invisible="matching == 'match'"
+                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="handheld_scan_code"
+                                widget="adt_handheld_scan_code"
+                                string="Kode Scan Handheld"
+                                placeholder="Scan handheld: lot atau lokasi"
                                 invisible="matching == 'match'"
                                 column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="adt_dest_location_id" column_invisible="1"/>
@@ -2893,6 +2904,11 @@
                         widget="adt_scan_location_text_button"
                         string=" "
                         readonly="1"
+                        invisible="putaway_status == 'finished'"
+                    />
+                    <field
+                        name="handheld_location_code"
+                        placeholder="Scan handheld atau ketik kode lokasi"
                         invisible="putaway_status == 'finished'"
                     />
                     <field name="adt_dest_location_id" invisible="1"/>

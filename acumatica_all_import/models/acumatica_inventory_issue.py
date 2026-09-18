@@ -250,6 +250,12 @@ class AcumaticaInventoryIssueLine(models.Model):
                     
                 is_disposal = first._is_disposal()
                 picking_type = first._adt_reresolve_picking_type()
+                # Persist the resolved operation on staging as well.  Older
+                # records may have been created before the resolver could
+                # populate picking_type_id; reresolve otherwise only returns
+                # the type for document generation and leaves the UI blank.
+                if not first.picking_type_id and picking_type:
+                    first.write({'picking_type_id': picking_type.id})
                 if not picking_type and not is_disposal:
                     raise UserError('Picking type Delivery Order tidak ditemukan.')
 

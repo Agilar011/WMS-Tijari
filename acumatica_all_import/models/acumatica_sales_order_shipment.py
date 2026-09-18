@@ -246,7 +246,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'scheduled_date': ship_date,
                         'adt_type' : "Sales Order Shipment",
                         'adt_order_type': shipment.adt_OrderType or False,
-                        'transaction_type' : 'outbound'
+                        'transaction_type' : 'outbound',
+                        'desc_note' : shipment.adt_Description,
                     }
 
                     shipment_location_id = shipment.adt_WarehouseID
@@ -340,7 +341,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                             'adt_line_description': item.adt_LineDescription or item.description,
                             'adt_dest_location_id' : product_location.id if product_location else picking_type.default_location_src_id.id,
                             'adt_dest_location' : shipment.adt_WarehouseID,
-                            'transaction_type' : 'outbound'
+                            'transaction_type' : 'outbound',
+                            'product_note': item.adt_LineNote or False,
                         }
                         adt_dest_location_id =  Move.create(move_vals)
                         print(f"mapped location: {adt_dest_location_id.id}")
@@ -407,20 +409,33 @@ class AcumaticaShipmentGIStaging(models.Model):
 
 
     def _get_or_create_consignment_location(
-        self, source_location=False, customer_code=False, cons_location_code=False
+        self, source_location=False, warehouse_code=False
     ):
+        """Prepare the shared locations used by SO Shipment Consignment.
+
+        Consignment stock is grouped below the virtual root by warehouse, while
+        the generated transfer is delivered to one shared end-user location
+        below Odoo's partner root.
+        """
         Location = self.env['stock.location']
         if not source_location:
             raise UserError('Source location wajib diisi untuk membuat lokasi consignment.')
 
-        customer_code = (customer_code or '').strip() or 'Unknown Customer'
-        cons_location_code = (cons_location_code or '').strip() or 'Consignment'
+        warehouse_code = (warehouse_code or '').strip()
+        if not warehouse_code:
+            raise UserError('WarehouseID wajib diisi untuk membuat lokasi consignment.')
+        warehouse_code = (
+            warehouse_code.split('-', 1)[1].strip()
+            if '-' in warehouse_code
+            else warehouse_code
+        )
 
         def get_or_create_child(parent, name, is_consignment=False):
             location = Location.search([
                 ('location_id', '=', parent.id),
                 ('name', '=', name),
             ], limit=1)
+            has_consignment_field = 'is_consignment' in Location._fields
             vals = {
                 'name': name,
                 'usage': 'internal',
@@ -428,29 +443,29 @@ class AcumaticaShipmentGIStaging(models.Model):
             }
             if source_location.company_id:
                 vals['company_id'] = source_location.company_id.id
-            if 'is_consignment' in Location._fields:
+            else:
+                vals['company_id'] = self.env.company.id
+            if has_consignment_field:
                 vals['is_consignment'] = is_consignment
             if location:
                 write_vals = {}
-                if is_consignment and not location.is_consignment:
+                if is_consignment and has_consignment_field and not location.is_consignment:
                     write_vals['is_consignment'] = True
                 if write_vals:
                     location.write(write_vals)
                 return location
             return Location.create(vals)
 
-        warehouse_root = source_location
-        warehouse = self.env['stock.warehouse'].search([]).filtered(
-            lambda wh: source_location.parent_path.startswith(wh.view_location_id.parent_path)
-        )[:1]
-        if warehouse:
-            warehouse_root = warehouse.view_location_id
+        virtual_root = self.env.ref(
+            'stock.stock_location_locations_virtual', raise_if_not_found=False
+        )
+        if not virtual_root:
+            raise UserError('Root location Virtual Locations belum tersedia.')
 
-        cons_root = get_or_create_child(warehouse_root, 'CONS')
-        customer_location = get_or_create_child(cons_root, customer_code)
+        consignment_root = get_or_create_child(virtual_root, 'Consignment')
         return get_or_create_child(
-            customer_location,
-            cons_location_code,
+            consignment_root,
+            warehouse_code,
             is_consignment=True,
         )
 
@@ -483,8 +498,7 @@ class AcumaticaShipmentGIStaging(models.Model):
 
         destination_location = self._get_or_create_consignment_location(
             source_location,
-            shipment.adt_CustomerID,
-            shipment.adt_ToWarehouseID or shipment.adt_LocationID or shipment.adt_LocationName,
+            shipment.adt_WarehouseID,
         )
         transit_location = self._get_or_create_transit_location()
 

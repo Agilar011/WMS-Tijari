@@ -112,6 +112,8 @@ class StockPicking(models.Model):
         domain=[("share", "=", False)],
     )
 
+    can_edit_pack_responsible_ids = fields.Boolean(string='can edit')
+
     @api.model
     def _get_responsible_carry_over_fields(self):
         """Fields that describe "who is responsible" for this transfer.
@@ -176,6 +178,10 @@ class StockPicking(models.Model):
     )
     putaway_product_id = fields.Many2one(
         'product.product', string="Product Name")
+    putaway_scan_code = fields.Char(
+        string="Kode scan",
+        help="Bisa diisi dari scanner handheld atau diketik manual.",
+    )
     allowed_putaway_lot_ids = fields.Many2many(
         'stock.lot',
         compute='_compute_allowed_putaway_lot_ids',
@@ -217,6 +223,10 @@ class StockPicking(models.Model):
     picker_product_id = fields.Many2one(
         'product.product',
         string="Product Name",
+    )
+    picker_scan_code = fields.Char(
+        string="Kode scan",
+        help="Bisa diisi dari scanner handheld atau diketik manual.",
     )
     allowed_picker_lot_ids = fields.Many2many(
         'stock.lot',
@@ -1238,6 +1248,7 @@ class StockPicking(models.Model):
         string="Mapped Location",
     )
     note_ba = fields.Text(string="Notes For Official Report")
+    desc_note = fields.Char(string="Description")
     picking_type_name = fields.Char(string="Picking Type Name", related="picking_type_id.name", store=True)
 
     @api.onchange('internal_transfer_adt_dest_location_id')
@@ -1487,6 +1498,66 @@ class StockPicking(models.Model):
             'move_line_ids': move_lines.ids,
         }
 
+    def _get_putaway_scan_values(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        if not scanned_code:
+            raise ValidationError(_("Kode scan tidak boleh kosong."))
+
+        move_lines = self._get_putaway_base_move_lines()
+        product = self._find_product_by_scan_code(scanned_code)
+        if product:
+            matching_lines = move_lines.filtered(
+                lambda line: line.product_id == product
+            )
+            if matching_lines:
+                lot = self._get_lots_from_move_lines(
+                    matching_lines, matching_lines.product_id
+                )[:1]
+                return {
+                    'values': {
+                        'putaway_product_id': product.id,
+                        'putaway_lot_id': lot.id,
+                    },
+                    'result': {
+                        'product_id': product.id,
+                        'display_name': product.display_name,
+                        'lot_id': lot.id,
+                        'move_line_ids': matching_lines.ids,
+                    },
+                }
+
+        product, matching_lines, lot = self._find_putaway_product_by_lot_scan_code(
+            scanned_code
+        )
+        return {
+            'values': {
+                'putaway_product_id': product.id,
+                'putaway_lot_id': lot.id,
+            },
+            'result': {
+                'product_id': product.id,
+                'display_name': product.display_name,
+                'lot_id': lot.id,
+                'move_line_ids': matching_lines.ids,
+            },
+        }
+
+    def action_apply_scanned_putaway_code(self, scanned_code):
+        self.ensure_one()
+        values = self._get_putaway_scan_values(scanned_code)
+        self.write(values['values'])
+        return values['result']
+
+    @api.onchange('putaway_scan_code')
+    def _onchange_putaway_scan_code(self):
+        for picking in self:
+            if not picking.putaway_scan_code:
+                continue
+            values = picking._get_putaway_scan_values(picking.putaway_scan_code)
+            picking.update(values['values'])
+            picking.putaway_scan_code = False
+
     def action_apply_scanned_picker_product_by_lot(self, scanned_code):
         self.ensure_one()
         scanned_code = (scanned_code or '').strip()
@@ -1527,6 +1598,67 @@ class StockPicking(models.Model):
             'display_name': product.display_name,
             'move_ids': picker_moves.ids,
         }
+
+    def action_apply_scanned_picker_code(self, scanned_code):
+        """Apply a generic scanner input that may identify a product or a lot."""
+        self.ensure_one()
+        values = self._get_picker_scan_values(scanned_code)
+        self.write(values['values'])
+        return values['result']
+
+    def _get_picker_scan_values(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        if not scanned_code:
+            raise ValidationError(_("Kode scan tidak boleh kosong."))
+
+        picker_moves = self._get_picker_base_moves()
+        product = self._find_product_by_scan_code(scanned_code)
+        if product:
+            matching_moves = picker_moves.filtered(
+                lambda move: move.product_id == product
+            )
+            if matching_moves:
+                lot = matching_moves.lot_ids[:1] or matching_moves.move_line_ids.lot_id[:1]
+                return {
+                    'values': {
+                        'picker_product_id': product.id,
+                        'picker_lot_id': lot.id,
+                    },
+                    'result': {
+                        'product_id': product.id,
+                        'display_name': product.display_name,
+                        'lot_id': lot.id,
+                        'move_ids': matching_moves.ids,
+                        'matched_by': 'product',
+                    },
+                }
+
+        product, matching_moves, lot = self._find_picker_product_by_lot_scan_code(
+            scanned_code
+        )
+        return {
+            'values': {
+                'picker_product_id': product.id,
+                'picker_lot_id': lot.id,
+            },
+            'result': {
+                'product_id': product.id,
+                'display_name': product.display_name,
+                'lot_id': lot.id,
+                'move_ids': matching_moves.ids,
+                'matched_by': 'lot',
+            },
+        }
+
+    @api.onchange('picker_scan_code')
+    def _onchange_picker_scan_code(self):
+        for picking in self:
+            if not picking.picker_scan_code:
+                continue
+            values = picking._get_picker_scan_values(picking.picker_scan_code)
+            picking.update(values['values'])
+            picking.picker_scan_code = False
 
     def action_apply_scanned_package(self, scanned_code):
         self.ensure_one()
@@ -2376,19 +2508,56 @@ class StockPicking(models.Model):
         ).create({})
 
         for line in wizard.product_return_moves:
-
             move = line.move_id
-
             actual = move.shipped_qty
-
             planned = move.quantity
-
             line.quantity = max(planned - actual, 0)
 
-        result = wizard.action_create_returns()
+        result = wizard.with_context(
+            return_from_actual_qty=True
+        ).action_create_returns()
 
         return result
 
+    def _create_return(self):
+        for return_move in self.product_return_moves.move_id:
+            return_move.move_dest_ids.filtered(
+                lambda m: m.state not in ('done', 'cancel')
+            )._do_unreserve()
+
+        new_picking = self.picking_id.copy(
+            self._prepare_picking_default_values()
+        )
+
+        new_picking.user_id = False
+
+        new_picking.message_post_with_source(
+            'mail.message_origin_link',
+            render_values={
+                'self': new_picking,
+                'origin': self.picking_id,
+            },
+            subtype_xmlid='mail.mt_note',
+        )
+
+        returned_lines = False
+
+        for return_line in self.product_return_moves:
+            if return_line._process_line(new_picking):
+                returned_lines = True
+
+        if not returned_lines:
+            raise UserError(
+                _("Please specify at least one non-zero quantity.")
+            )
+
+        # Hanya return dari _generate_return_from_actual_qty
+        # yang langsung tetap draft.
+        if not self.env.context.get('return_from_actual_qty'):
+            new_picking.action_confirm()
+            new_picking.action_assign()
+
+        return new_picking
 
     def _check_putaway_status_requirements(self):
         self.ensure_one()

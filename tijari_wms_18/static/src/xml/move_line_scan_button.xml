@@ -62,6 +62,18 @@
         </button>
     </t>
 
+    <t t-name="tijari.PickerProductScanButton" owl="1">
+        <div class="o_wms_picker_scan_controls">
+            <button type="button"
+                    class="btn btn-primary o_wms_picker_camera_button"
+                    t-on-click="onProductClick"
+                    title="Scan dengan kamera">
+                <i class="fa fa-barcode me-1"/>
+                Scan Kamera
+            </button>
+        </div>
+    </t>
+
     <t t-name="tijari.PackageScanButton" owl="1">
         <button t-on-click="onClick"
                 type="button"

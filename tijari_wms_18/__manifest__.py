@@ -26,6 +26,7 @@
         'security/groups.xml',
         'security/ir.model.access.csv',
         'data/document_only_picking_type_data.xml',
+        'data/stock_location_consignment_data.xml',
         'data/ir.sequence.xml',
         'data/api_data_hub_dashboard.xml',
         'wizard/generate_package_wizard_views.xml',

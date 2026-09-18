@@ -273,6 +273,11 @@ class AcumaticaCustomerLine(models.Model):
             skipped,
             error,
         )
+        print(
+            f'[MASTER IMPORT][Customer] FINISH total={total} '
+            f'created={created} updated={updated} skipped={skipped} error={error}',
+            flush=True,
+        )
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',
