@@ -246,7 +246,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'scheduled_date': ship_date,
                         'adt_type' : "Sales Order Shipment",
                         'adt_order_type': shipment.adt_OrderType or False,
-                        'transaction_type' : 'outbound'
+                        'transaction_type' : 'outbound',
+                        'desc_note' : shipment.adt_Description,
                     }
 
                     shipment_location_id = shipment.adt_WarehouseID
@@ -340,7 +341,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                             'adt_line_description': item.adt_LineDescription or item.description,
                             'adt_dest_location_id' : product_location.id if product_location else picking_type.default_location_src_id.id,
                             'adt_dest_location' : shipment.adt_WarehouseID,
-                            'transaction_type' : 'outbound'
+                            'transaction_type' : 'outbound',
+                            'product_note': item.adt_LineNote or False,
                         }
                         adt_dest_location_id =  Move.create(move_vals)
                         print(f"mapped location: {adt_dest_location_id.id}")
