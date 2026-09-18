@@ -728,7 +728,10 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
         if location and location.odoo_building_id:
             warehouse = location.odoo_building_id
-            type = warehouse.pick_type_id or PickingType.search([
+            # Inventory Issue selalu menjadi langkah Pick. Jangan gunakan
+            # config default atau operation type internal generik karena bisa
+            # mengarahkan Toko Pegang DO ke Delivery/transfer yang salah.
+            type = PickingType.search([
                 ('warehouse_id', '=', warehouse.id),
                 ('code', '=', 'internal'),
                 ('operation_category', '=', 'pick'),
@@ -740,18 +743,13 @@ class ImportInventoryIssueWizard(models.TransientModel):
             if type:
                 return type, warehouse_code
 
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
-            return config_picking_type, warehouse_code
-
-        if location and location.odoo_building_id:
-            type = PickingType.resolve_picking_type(
-                warehouse_code=warehouse_code,
-                code='internal',
-                operation_category='internal',
-                api_acumatica='inventory_issue',
-                transaction_key='inventory_issue',
-                required=False,
-            )
+        type = PickingType.resolve_picking_type(
+            warehouse_code=warehouse_code,
+            code='internal',
+            operation_category='pick',
+            api_acumatica='inventory_issue',
+            transaction_key='inventory_issue',
+            required=False,
+        )
 
         return type, warehouse_code

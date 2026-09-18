@@ -208,6 +208,12 @@
                                 readonly="1"
                                 invisible="matching == 'match'"
                                 column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="handheld_scan_code"
+                                widget="adt_handheld_scan_code"
+                                string="Kode Scan Handheld"
+                                placeholder="Scan handheld: lot atau lokasi"
+                                invisible="matching == 'match'"
+                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="adt_dest_location_id" column_invisible="1"/>
                         <field name="allowed_matching_lot_ids" column_invisible="1"/>
                         <field name="product_uom_category_id" column_invisible="1"/>
@@ -1045,6 +1051,12 @@
                                 widget="adt_scan_location_button"
                                 string="Scan Location"
                                 readonly="1"
+                                invisible="matching == 'match'"
+                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="handheld_scan_code"
+                                widget="adt_handheld_scan_code"
+                                string="Kode Scan Handheld"
+                                placeholder="Scan handheld: lot atau lokasi"
                                 invisible="matching == 'match'"
                                 column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="adt_dest_location_id" column_invisible="1"/>

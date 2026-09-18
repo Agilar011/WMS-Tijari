@@ -33,6 +33,11 @@ class StockMoveLine(models.Model):
         help='Scanned / input location code for confirmation.',
         store=True
     )
+    handheld_scan_code = fields.Char(
+        string='Kode Scan Handheld',
+        help='Masukkan kode lot atau lokasi dari scanner handheld atau ketik manual.',
+        store=False,
+    )
     confirmation_lot_code = fields.Char(
         string='Confirmation Lot Code',
         help='Scanned / input lot code for confirmation.',
@@ -1258,6 +1263,86 @@ class StockMoveLine(models.Model):
 
             wizard.matching_loc_dest_id = location.id
 
+    @api.onchange('handheld_scan_code')
+    def _onchange_handheld_scan_code(self):
+        for line in self:
+            values = line._get_handheld_scan_values(line.handheld_scan_code)
+            if not values:
+                continue
+            line.update(values)
+            line.handheld_scan_code = False
+
+    def _get_handheld_scan_values(self, scanned_code):
+        self.ensure_one()
+        code = (scanned_code or '').strip()
+        if not code:
+            return {}
+
+        lot = self._find_lot_by_scan_code(code)
+        # Resolve an exact lot match before trying locations.  The allowed
+        # lot relation can be temporarily stale while an editable move line
+        # is being changed; treating a valid lot as a location then produces
+        # the misleading "lot atau lokasi tidak terdaftar" error.
+        if lot:
+            values = {
+                'confirmation_lot_code': code,
+                'matching_lot_id': lot.id,
+            }
+        else:
+            location = self._find_loc_by_scan_code(code)
+            if not location:
+                raise ValidationError(_('Kode lot atau lokasi tidak terdaftar.'))
+            values = {'confirmation_location_code': code}
+            if self.picking_type_name in ('Receipts', 'Receipt Internal'):
+                values.update({
+                    'location_putaway_id': location.id,
+                    'location_dest_id': location.id,
+                })
+            else:
+                values['matching_loc_dest_id'] = location.id
+
+        if self.picking_type_name not in ('Receipts', 'Receipt Internal'):
+            matching_lot = values.get('matching_lot_id', self.matching_lot_id.id)
+            matching_location = values.get(
+                'matching_loc_dest_id', self.matching_loc_dest_id.id
+            )
+            if matching_lot and matching_location:
+                expected_location = self.source_location_id or self.location_id
+                expected_lot = self.product_lot_id or self.lot_id
+                values['matching'] = (
+                    'match'
+                    if expected_location.id == matching_location
+                    and expected_lot.id == matching_lot
+                    else 'not_match'
+                )
+                values['second_matching'] = (
+                    'Match' if values['matching'] == 'match' else 'Not Match'
+                )
+        return values
+
+    def action_apply_handheld_scan_code(self, scanned_code):
+        self.ensure_one()
+        values = self._get_handheld_scan_values(scanned_code)
+        if not values:
+            return {}
+        self.write(values)
+        return {
+            'id': self.id,
+            'handheld_scan_code': False,
+            **{
+                field_name: values[field_name]
+                for field_name in (
+                    'confirmation_lot_code',
+                    'matching_lot_id',
+                    'confirmation_location_code',
+                    'matching_loc_dest_id',
+                    'matching',
+                    'second_matching',
+                )
+                if field_name in values
+            },
+        }
+
     def _find_lot_by_scan_code(self, lot_code):
         Lot = self.env['stock.lot']
         lot_code = (lot_code or '').strip()
@@ -1288,6 +1373,28 @@ class StockMoveLine(models.Model):
             if field_name not in Loc._fields:
                 continue
             loc = Loc.search([(field_name, '=', location_code)], limit=1)
+            if loc:
+                return loc
+
+        # Some handhelds scan the location display name, for example
+        # ``WH33/Finish Good (FG)``, instead of unique_code/barcode.
+        name_search_result = Loc.with_context(
+            show_location_short_name=True,
+        ).name_search(
+            name=location_code,
+            operator='=',
+            limit=1,
+        )
+        if name_search_result:
+            return Loc.browse(name_search_result[0][0])
+
+        # The mobile display format may be ``WAREHOUSE/LOCATION NAME``.
+        if '/' in location_code:
+            warehouse_code, location_name = location_code.split('/', 1)
+            loc = Loc.search([
+                ('name', '=', location_name),
+                ('warehouse_id.code', '=', warehouse_code),
+            ], limit=1)
             if loc:
                 return loc
 

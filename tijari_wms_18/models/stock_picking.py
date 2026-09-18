@@ -112,6 +112,8 @@ class StockPicking(models.Model):
         domain=[("share", "=", False)],
     )
 
+    can_edit_pack_responsible_ids = fields.Boolean(string='can edit')
+
     @api.model
     def _get_responsible_carry_over_fields(self):
         """Fields that describe "who is responsible" for this transfer.

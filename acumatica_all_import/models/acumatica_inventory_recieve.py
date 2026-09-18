@@ -273,6 +273,18 @@ class AcumaticaInventoryRecievedLine(models.Model):
 
         source_location = transfer_info['source_location']
         destination_location = transfer_info['destination_location']
+        if not source_location:
+            raise InventoryImportError(
+                f'Source location untuk warehouse {source_code or "-"} '
+                'tidak ditemukan atau belum dimapping di WMS | '
+                'WMS Dependency : MAPPING WAREHOUSE.'
+            )
+        if not destination_location:
+            raise InventoryImportError(
+                f'Destination location untuk warehouse {destination_code or "-"} '
+                'tidak ditemukan atau belum dimapping di WMS | '
+                'WMS Dependency : MAPPING WAREHOUSE.'
+            )
         primary_external_ref = receive.reference_nbr or receive.transfer_nbr
         order, action_state = TransferService.prepare_order(
             primary_external_ref,
@@ -290,6 +302,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
 
         for receive_line in receive.product_line_ids:
             move_vals = {}
+            line_payload = receive_line.read()[0] if receive_line.exists() else {}
             try:
                 product = receive._find_product(receive_line)
                 if not product:
@@ -321,6 +334,21 @@ class AcumaticaInventoryRecievedLine(models.Model):
 
                 qty = receive._parse_float(receive_line.product_uom_qty)
                 line_destination = receive._find_line_location_dest(receive_line) or destination_location
+                if not line_destination:
+                    error_messages.append(
+                        f'Destination location untuk line {receive_line.line_nbr or "-"} '
+                        f'dengan warehouse {receive_line.warehouse_dest_code or destination_code or "-"} '
+                        'tidak ditemukan atau belum dimapping di WMS | '
+                        'WMS Dependency : MAPPING WAREHOUSE.'
+                    )
+                    error_line_payloads.append({
+                        'inventory_id': receive_line.inventory_id or False,
+                        'product_name': receive_line.line_description or False,
+                        'qty': qty,
+                        'uom': receive_line.uom_code or False,
+                        'payload': line_payload,
+                    })
+                    continue
                 move_vals = {
                     'adt_inventory_id': receive_line.inventory_id or False,
                     'adt_line_nbr': receive_line.line_nbr or False,
@@ -347,14 +375,10 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 raise
             except Exception as line_error:
                 _logger.exception("Error import transfer in line %s", receive_line.id)
-                error_messages.append(str(line_error))
-                error_line_payloads.append({
-                    'inventory_id': receive_line.inventory_id or False,
-                    'product_name': receive_line.line_description or False,
-                    'qty': receive._parse_float(receive_line.product_uom_qty),
-                    'uom': receive_line.uom_code or False,
-                    'payload': move_vals if move_vals else (receive_line.read()[0] if receive_line.exists() else {}),
-                })
+                # A database error aborts the current PostgreSQL transaction.
+                # Do not continue with the next line; let the outer savepoint
+                # roll back the order and persist the original error cleanly.
+                raise
 
         if error_messages:
             raise InventoryImportError(
@@ -427,7 +451,10 @@ class AcumaticaInventoryRecievedLine(models.Model):
             picking_type = receive.config_id._resolve_inventory_receive_picking_type(
                 transfer_type=receive.transfer_type,
                 document_only=receive.document_only,
-                warehouse_code=receive.warehouse_code,
+                warehouse_code=(
+                    receive.warehouse_dest_code
+                    or receive.warehouse_code
+                ),
             )
         else:
             type_key = (receive.transfer_type or 'inventory_receive').strip().lower().replace('-', '_').replace(' ', '_')
@@ -457,6 +484,8 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 )
             else:
                 picking_type = PickingType.browse()
+        if not receive.picking_type_id and picking_type:
+            receive.write({'picking_type_id': picking_type.id})
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
             location_txt = f'Location code {receive.warehouse_dest_code}'
