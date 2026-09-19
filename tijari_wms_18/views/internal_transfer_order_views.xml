@@ -105,6 +105,12 @@
                                     <field name="lot_ids" widget="many2many_tags"
                                         string="Lot/Serial Number"
                                         groups="stock.group_production_lot"/>
+                                    <button
+                                        name="action_open_note_wizard"
+                                        type="object"
+                                        icon="fa-sticky-note"
+                                        title="Note"
+                                    />
                                     <field name="product_note" optional="hide"/>
                                     <field name="adt_type" string="Tipe Transaksi" optional="hide"/>
                                     <field name="adt_transfer_order_number" optional="hide"/>
@@ -117,7 +123,9 @@
                                 readonly="1"/>
                         </page>
                         <page string="Notes" name="page_notes">
-                            <field name="note" nolabel="1"/>
+                            <group name="transaction_notes" string="Transaction Notes">
+                                <field name="note" nolabel="1"/>
+                            </group>
                         </page>
                     </notebook>
                 </sheet>

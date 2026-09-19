@@ -369,6 +369,8 @@ class AcumaticaInvoiceConsignment(models.Model):
                         'adt_type': first.adt_Type or False,
                         'adt_is_document_only': True,
                         'adt_external_id': first.adt_id or False,
+                        'desc_note': first.description or False,
+
                     }
                     
                     vals = {k: v for k, v in vals.items() if k in Picking._fields}

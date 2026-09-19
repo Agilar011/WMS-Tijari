@@ -14,6 +14,15 @@ class IrUiMenu(models.Model):
 
         # Guest tidak boleh melihat menu apa pun
         if guest_group and guest_group in self.env.user.groups_id:
+            discuss_menu = self.env.ref(
+                "mail.menu_root",
+                raise_if_not_found=False,
+            )
+
+            if discuss_menu:
+                return {discuss_menu.id}
+
             return set()
+
 
         return visible_menu_ids

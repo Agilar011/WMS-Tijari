@@ -68,14 +68,13 @@
 
         <field name="arch" type="xml">
 
-            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='product_id']"
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']"
                    position="after">
                 <button
                     name="action_open_note_wizard"
                     type="object"
                     icon="fa-sticky-note"
                     title="Note"
-                    invisible="1"
                     />
 
             </xpath>
@@ -89,11 +88,11 @@
                         icon="fa-print"
                         invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"
                         title="Print Lot"/>
-                    <button
+                    <!-- <button
                         name="action_open_note_wizard"
                         type="object"
                         icon="fa-sticky-note"
-                        title="Note"/>
+                        title="Note"/> -->
                     <button name="action_open_move_pick"
                         type="object"
                         string="Open Pick"

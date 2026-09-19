@@ -1262,6 +1262,7 @@ class StockPicking(models.Model):
         string="Mapped Location",
     )
     note_ba = fields.Text(string="Notes For Official Report")
+    desc_note = fields.Char(string="Description")
     picking_type_name = fields.Char(string="Picking Type Name", related="picking_type_id.name", store=True)
 
     @api.onchange('internal_transfer_adt_dest_location_id')

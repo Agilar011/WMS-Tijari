@@ -516,6 +516,8 @@ class AcumaticaInventoryRecievedLine(models.Model):
             'adt_type': receive.transfer_type or False,
             'adt_external_ref': receive.external_ref or False,
             'adt_change_item_ref_nbr': receive.change_item_ref_nbr or False,
+
+            'desc_note': receive.description or False,
         }
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 

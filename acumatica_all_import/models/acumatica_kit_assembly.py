@@ -234,6 +234,8 @@ class AcumaticaKitAssembly(models.Model):
                             'location_src_id': picking_type.default_location_src_id.id,
                             'location_dest_id': picking_type.default_location_dest_id.id,
                             'company_id': warehouse_record.company_id.id,
+                            'catatan': header.note_header,
+                            'desc_note': header.description,
                         })
                         manufacturing.move_raw_ids.unlink()
                         action_state = 'updated'
@@ -260,6 +262,8 @@ class AcumaticaKitAssembly(models.Model):
                                 picking_type.default_location_dest_id.id
                             ),
                             "company_id": warehouse_record.company_id.id,
+                            'catatan': header.note_header,
+                            'desc_note': header.description,
                         })
                         action_state = 'created'
 
@@ -317,6 +321,7 @@ class AcumaticaKitAssembly(models.Model):
                                     "warehouse_id": manufacturing.warehouse_id.id,
 
                                     "raw_material_production_id": manufacturing.id,
+                                    "product_note": component.line_note,
                                 },
                             )
                         )
@@ -817,7 +822,10 @@ class AcumaticaKitAssemblyLine(models.Model):
                         'location_src_id': picking_type.default_location_src_id.id,
                         'location_dest_id': picking_type.default_location_dest_id.id,
                         'company_id': warehouse.company_id.id,
+                        'catatan': header.note_header,
+                        'desc_note': header.description,
                     }
+                    print(f"vals ke sini: {vals}")
                     manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)], limit=1)
                     if manufacturing_check:
                         if manufacturing_check.state not in ('draft', 'cancel'):
@@ -849,6 +857,7 @@ class AcumaticaKitAssemblyLine(models.Model):
                             'picking_type_id': picking_type.id,
                             'warehouse_id': manufacturing.warehouse_id.id,
                             'raw_material_production_id': manufacturing.id,
+                            'product_note': item.line_note,
                         })
                     if raw_move_vals:
                         Move.create(raw_move_vals)
