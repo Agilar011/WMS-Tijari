@@ -618,7 +618,6 @@ class StockPicking(models.Model):
                 lambda line: (
                     line.quantity > 0
                     and (line.lot_id or line.lot_name)
-                    and line.picker_status == 'finished'
                 )
             )
 
@@ -1194,7 +1193,9 @@ class StockPicking(models.Model):
                 picking.adt_dest_location_id = component_locations
 
         self._adt_apply_dest_location_to_move_lines()
-        self._remove_qty_move_line()
+        self.filtered(
+            lambda picking: picking.picking_type_id.name == 'Receipts'
+        )._remove_qty_move_line()
 
         # Transfer IN: ketika Receipt Internal di-Mark as Todo, otomatis
         # proses leg delivery yang menjadi pasangan transfer-nya.

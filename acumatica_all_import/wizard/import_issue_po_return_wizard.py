@@ -573,13 +573,9 @@ class ImportReceiptWizard(models.TransientModel):
         if document_only is None:
             document_only = self._bool_val(header, 'DocumentOnly')
 
-        document_only_type = PickingType.resolve_document_only_picking_type(
-            api_acumatica='issue_po_return',
-            document_only=document_only,
-            warehouse_code=warehouse_code or self._val(header, 'Warehouse'),
-        )
-        if document_only_type:
-            return document_only_type
+        # PO Return moet altijd via Pick starten.  Een eventueel
+        # DocumentOnly=true uit payload mag deze transactie niet naar DDO
+        # routeren.
 
         config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
 
@@ -597,7 +593,14 @@ class ImportReceiptWizard(models.TransientModel):
 
         if location and location.odoo_building_id:
             warehouse = location.odoo_building_id
-            pick_type = warehouse.pick_type_id or PickingType.search([
+            configured_pick_type = warehouse.pick_type_id.filtered(
+                lambda picking_type: (
+                    picking_type.active
+                    and picking_type.code == 'internal'
+                    and picking_type.operation_category == 'pick'
+                )
+            )
+            pick_type = configured_pick_type or PickingType.search([
                 ('warehouse_id', '=', warehouse.id),
                 ('code', '=', 'internal'),
                 ('operation_category', '=', 'pick'),
@@ -609,7 +612,14 @@ class ImportReceiptWizard(models.TransientModel):
             if pick_type:
                 return pick_type
 
-        return config_picking_type or PickingType.browse()
+        if (
+            config_picking_type
+            and config_picking_type.active
+            and config_picking_type.code == 'internal'
+            and config_picking_type.operation_category == 'pick'
+        ):
+            return config_picking_type
+        return PickingType.browse()
 
     def _normalize_rows(self, payload):
         print("="*80)

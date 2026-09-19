@@ -1139,7 +1139,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Picker"
-                                invisible="picker_status == 'unfinished'"
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"
                                 column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
                         
                     </list>
@@ -1246,7 +1246,7 @@
                                         type="object"
                                         string="Undo Picker"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="picker_status == 'unfinished'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -1311,7 +1311,7 @@
                                             type="object"
                                             class="btn btn-danger btn-sm o_wms_auto_save_before_action"
                                             string="Rollback"
-                                            invisible="picker_status == 'unfinished'">
+                                            invisible="picker_status == 'unfinished' or parent.state == 'done'">
                                         </button>
                                         <button name="action_delete_picker_line"
                                             type="object"
@@ -1944,7 +1944,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Picker"
-                                invisible="picker_status == 'unfinished'"
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"
                                 column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
                         
                     </list>
@@ -2051,7 +2051,7 @@
                                         type="object"
                                         string="Undo Picker"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="picker_status == 'unfinished'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -2116,7 +2116,7 @@
                                             type="object"
                                             class="btn btn-danger btn-sm o_wms_auto_save_before_action"
                                             string="Rollback"
-                                            invisible="picker_status == 'unfinished'">
+                                            invisible="picker_status == 'unfinished' or parent.state == 'done'">
                                         </button>
                                         <button name="action_delete_picker_line"
                                             type="object"
@@ -2158,7 +2158,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Picker"
-                                invisible="picker_status == 'unfinished'"/>
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                     </list>
                     <kanban class="o_kanban_mobile">
                         <field name="company_id" invisible="1" force_save="1"/>
@@ -2191,7 +2191,7 @@
                                         type="object"
                                         string="Undo Picker"
                                         class="btn-danger flex-fill"
-                                        invisible="picker_status == 'unfinished'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -2469,7 +2469,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Picker"
-                                invisible="picker_status == 'unfinished'"
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"
                                 column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
                         
                     </list>
@@ -2576,7 +2576,7 @@
                                         type="object"
                                         string="Undo Picker"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="picker_status == 'unfinished'"/>
+                                        invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                                 </div>
                             </t>
                         </templates>
@@ -2804,6 +2804,12 @@
                             title="Mark Putaway Finished"
                             class="btn-success"
                             invisible="putaway_status == 'finished'"/>
+                        <button name="action_mark_putaway_unfinished"
+                            type="object"
+                            icon="fa-undo"
+                            title="Rollback Putaway"
+                            class="btn-danger"
+                            invisible="putaway_status == 'unfinished' or parent.state == 'done'"/>
                     </list>
                     <kanban class="o_wms_putaway_kanban" create="0" edit="0" delete="0" can_open="0">
                         <field name="product_id" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>

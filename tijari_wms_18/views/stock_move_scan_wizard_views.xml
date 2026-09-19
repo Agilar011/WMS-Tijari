@@ -409,7 +409,10 @@
                             <field name="quantity" string="Qty Diterima" readonly="1"/>
                             <field name="confirmation_quantity" string="Qty Disimpan" readonly="1"/>
                             <field name="product_uom" string="Unit" readonly="1" groups="uom.group_uom"/>
-                            <field name="putaway_progress_status" string="Status" widget="badge"/>
+                            <field name="putaway_progress_status" string="Status"
+                                decoration-success="putaway_progress_status == 'finished'"
+                                decoration-danger="putaway_progress_status == 'unfinished'"
+                                widget="badge"/>
                             <button name="action_open_move_putaway"
                                 type="object"
                                 string="Putaway Details"
@@ -421,7 +424,10 @@
                             <field name="quantity"/>
                             <field name="confirmation_quantity"/>
                             <field name="product_uom"/>
-                            <field name="putaway_progress_status"/>
+                            <field name="putaway_progress_status"
+                                decoration-success="putaway_progress_status == 'finished'"
+                                decoration-danger="putaway_progress_status == 'unfinished'"
+                                widget="badge"/>
                             <templates>
                                 <t t-name="card">
                                     <div class="o_wms_operation_card">
