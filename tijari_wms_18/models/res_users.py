@@ -82,6 +82,7 @@ class ResGroups(models.Model):
         ], limit=1)
         if xmlid and xmlid.model == "res.groups" and self.browse(xmlid.res_id).exists():
             self.browse(xmlid.res_id).sudo().write({
+                "name": "Warehouse Operator",
                 "implied_ids": [(4, self.env.ref("stock.group_stock_user").id)],
             })
             self.env["res.users"].sudo().search([
@@ -93,14 +94,15 @@ class ResGroups(models.Model):
 
         group = self.sudo().search([
             ("category_id", "=", category.id),
-            ("name", "=", "Operator"),
-        ], limit=1)
+            ("name", "in", ["Warehouse Operator", "Operator"]),
+        ], order="id", limit=1)
         if not group:
             group = self.sudo().create({
-                "name": "Operator",
+                "name": "Warehouse Operator",
                 "category_id": category.id,
             })
         group.write({
+            "name": "Warehouse Operator",
             "implied_ids": [(4, self.env.ref("stock.group_stock_user").id)],
         })
 

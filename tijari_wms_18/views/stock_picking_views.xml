@@ -813,6 +813,7 @@
                                 widget="adt_scan_picker_product_button"
                                 nolabel="1"/>
                             <field name="picker_scan_code"
+                                widget="adt_handheld_scan_code"
                                 placeholder="Scan handheld atau ketik kode"
                                 help="Bisa barcode, SKU, atau lot."/>
                             
