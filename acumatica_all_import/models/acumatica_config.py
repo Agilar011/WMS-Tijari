@@ -258,12 +258,13 @@ class AcumaticaConfig(models.Model):
         type_key = self._normalize_inventory_receive_type(transfer_type)
         domain_by_type = {
             'transfer_in': ('internal', 'receive'),
-            'change_item': ('incoming', 'receive'),
-            'change_item_discontinue': ('incoming', 'receive'),
-            'toko_pegang_do': ('incoming', 'receive'),
+
             'inventory_receive': ('incoming', 'receive'),
             'inventory_received': ('incoming', 'receive'),
             'inventory_receipt': ('incoming', 'receive'),
+            'change_item': ('incoming', 'receive'),
+            'change_item_discontinue': ('incoming', 'receive'),
+            'toko_pegang_do': ('incoming', 'receive'),
         }
         code, operation_category = domain_by_type.get(type_key, (False, False))
 
