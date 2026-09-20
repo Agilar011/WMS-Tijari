@@ -710,7 +710,31 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
         # print(type(warehouse_code))
         type = False
+        trans_type = self._coalesce_val(header, 'TransType', 'trans_type')
+        is_toko_pegang_do = (trans_type or '').strip().casefold() == 'toko pegang do'
         document_only = self._bool_val(header, 'DocumentOnly')
+
+        if is_toko_pegang_do:
+            location = Location.search([
+                ('code', '=', warehouse_code)
+            ], limit=1)
+            warehouse = location.odoo_building_id if location else False
+            if warehouse:
+                type = warehouse.pick_type_id
+                if not type or not type.active or type.code != 'internal':
+                    type = PickingType.search([
+                        ('warehouse_id', '=', warehouse.id),
+                        ('active', '=', True),
+                        ('code', '=', 'internal'),
+                        ('operation_category', '=', 'pick'),
+                    ], limit=1) or PickingType.search([
+                        ('warehouse_id', '=', warehouse.id),
+                        ('active', '=', True),
+                        ('code', '=', 'internal'),
+                        ('name', 'ilike', 'Pick'),
+                    ], limit=1)
+            if type:
+                return type, warehouse_code
 
         document_only_type = PickingType.resolve_document_only_picking_type(
             api_acumatica='inventory_issue',
