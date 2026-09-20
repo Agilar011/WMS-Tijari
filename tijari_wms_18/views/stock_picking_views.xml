@@ -389,7 +389,7 @@
                     </field>
                     <field name="id" invisible="1"/>
                     <!-- <field name="package_level_ids" context="{'default_location_id': location_id, 'default_location_dest_id': location_dest_id, 'default_company_id': company_id}" invisible="not picking_type_entire_packs" readonly="state == 'done'" /> -->
-                    <button class="btn-secondary float-end" name="action_put_in_pack" type="object" string="Put in Pack" invisible="picking_type_name != 'Receipt'" groups="stock.group_tracking_lot" data-hotkey="shift+g"/>
+                    <button class="btn-secondary float-end" name="action_put_in_pack" type="object" string="Put in Pack" invisible="picking_type_name != 'Receipts'" groups="stock.group_tracking_lot" data-hotkey="shift+g"/>
                 </page>
 
                 <page string="Packed Item Details"
@@ -427,7 +427,7 @@
                             string="Put in Pack"
                             class="btn-secondary"
                             groups="stock.group_tracking_lot"
-                            invisible="picking_type_name != 'Receipt'"
+                            invisible="picking_type_name != 'Receipts'"
                             data-hotkey="shift+g"/>
 
                 </page>
@@ -608,8 +608,8 @@
                     <field name="adt_is_document_only" optional="hide"/>
                     <field name="partner_id" readonly="state in ['cancel', 'done']" string="Supplier/Customer"/>
                     <field name="adt_total_qty" string="Total Qty"/>
-                    <field name="scheduled_date" widget="remaining_days"
-                        readonly="state in ['cancel', 'done']" optional="hide"/>
+                    <field name="scheduled_date" string="Schedule Date" widget="remaining_days"
+                        readonly="state in ['cancel', 'done']" optional="show"/>
                     <field name="state" widget="badge"
                         decoration-danger="state == 'cancel'"
                         decoration-info="state == 'assigned'"
@@ -813,6 +813,7 @@
                                 widget="adt_scan_picker_product_button"
                                 nolabel="1"/>
                             <field name="picker_scan_code"
+                                widget="adt_handheld_scan_code"
                                 placeholder="Scan handheld atau ketik kode"
                                 help="Bisa barcode, SKU, atau lot."/>
                             
@@ -1270,7 +1271,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='action_put_in_pack']" position="attributes">
-                <attribute name="invisible">picking_type_name != 'Receipt'</attribute>
+                <attribute name="invisible">picking_type_name != 'Receipts'</attribute>
             </xpath>
 
         </field>
@@ -1283,7 +1284,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='action_put_in_pack']" position="attributes">
-                <attribute name="invisible">context.get('picking_type_name') != 'Receipt'</attribute>
+                <attribute name="invisible">context.get('picking_type_name') != 'Receipts'</attribute>
             </xpath>
 
         </field>
@@ -1296,7 +1297,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='action_put_in_pack']" position="attributes">
-                <attribute name="invisible">picking_type_name != 'Receipt'</attribute>
+                <attribute name="invisible">picking_type_name != 'Receipts'</attribute>
             </xpath>
 
         </field>

@@ -662,8 +662,7 @@ class StockMove(models.Model):
         'move_id',
         string='Putaway Move Lines',
         domain=[
-            '&', '&', '&',
-            ('picker_status', '=', 'finished'),
+            '&', '&',
             ('quantity', '>', 0),
             ('state', '!=', 'cancel'),
             '|',
@@ -720,7 +719,6 @@ class StockMove(models.Model):
             lambda line: (
                 (line.lot_id or line.lot_name)
                 and line.quantity > 0
-                and line.picker_status == 'finished'
                 and line.state != 'cancel'
             )
         )

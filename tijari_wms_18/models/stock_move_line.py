@@ -1203,6 +1203,10 @@ class StockMoveLine(models.Model):
         }
 
     def action_mark_picker_unfinished(self):
+        if self.putaway_status == 'finished':
+            raise ValidationError(_(
+                "Picker tidak dapat di-rollback karena proses Putaway telah selesai."
+            ))
         self.write({'picker_status': 'unfinished'})
         return self.move_id.action_open_move_pick()
 
@@ -1212,6 +1216,17 @@ class StockMoveLine(models.Model):
         move = self.move_id
         if self.state == 'done' or move.state in ('done', 'cancel'):
             raise ValidationError(_("Line yang sudah Done atau Cancelled tidak boleh dihapus."))
+
+        if self.picking_id.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+            if self.putaway_status == 'finished':
+                raise ValidationError(_(
+                    "Penerimaan barang tidak dapat dihapus karena proses penyimpanan telah selesai"
+                ))
+            if self.putaway_status == 'unfinished':
+                raise ValidationError(_(
+                    "Apakah Anda yakin ingin menghapus data penerimaan ini? "
+                    "Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Putaway"
+                ))
 
         self.unlink()
 

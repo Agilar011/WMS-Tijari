@@ -209,6 +209,24 @@ class AcumaticaIssuePoReturnLine(models.Model):
             uom = product.uom_id
         return uom
 
+    def _adt_reresolve_picking_type(self):
+        """PO Return selalu dimulai dari operation Pick, bukan DDO."""
+        self.ensure_one()
+        if (
+            self.picking_type_id
+            and self.picking_type_id.code == 'internal'
+            and self.picking_type_id.operation_category == 'pick'
+        ):
+            return self.picking_type_id
+
+        wizard_name, args, kwargs = self._adt_picking_type_wizard_call()
+        wizard = self.env[wizard_name]
+        vals = {'config_id': self.config_id.id} if self.config_id else {}
+        picking_type = wizard.new(vals)._search_picking_type(*args, **kwargs)
+        if isinstance(picking_type, tuple):
+            picking_type = picking_type[0]
+        return picking_type or self.env['stock.picking.type']
+
     def action_import_selected(self):
         lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:

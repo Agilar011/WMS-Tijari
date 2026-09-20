@@ -72,6 +72,14 @@
                         </group>
                     </group>
                     <notebook>
+                        <page string="Transfer" name="page_transfers">
+                            <field name="picking_ids" widget="many2many" mode="list,kanban"
+                                context="{
+                                    'form_view_ref': 'stock_picking_batch.view_picking_form_inherited',
+                                    'list_view_ref': 'tijari_wms_18.stock_picking_batch_transaction_tree_columns'
+                                }"
+                                readonly="1"/>
+                        </page>
                         <page string="Operation" name="page_operations">
                             <field name="move_ids"
                                 invisible="picking_count != 0"
@@ -112,14 +120,6 @@
                             <field name="generated_move_ids"
                                 invisible="picking_count == 0"
                                 context="{'list_view_ref': 'stock_picking_batch.view_picking_move_tree_inherited'}"
-                                readonly="1"/>
-                        </page>
-                        <page string="Transfer" name="page_transfers">
-                            <field name="picking_ids" widget="many2many" mode="list,kanban"
-                                context="{
-                                    'form_view_ref': 'stock_picking_batch.view_picking_form_inherited',
-                                    'list_view_ref': 'tijari_wms_18.stock_picking_batch_transaction_tree_columns'
-                                }"
                                 readonly="1"/>
                         </page>
                         <page string="Notes" name="page_notes">
