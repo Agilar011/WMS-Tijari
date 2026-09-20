@@ -44,6 +44,7 @@
           'views/acumatica_webhook_key_config_views.xml',
           'views/acumatica_webhook_log_views.xml',
           'views/acumatica_all_import_wizard_views.xml',
+          'views/access_menu_security.xml',
           ],
  'assets': {
      'web.assets_backend': [

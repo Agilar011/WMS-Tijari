@@ -103,6 +103,18 @@ class AcumaticaWebhookController(http.Controller):
 
     def _float_value(self, item, *keys):
         value = self._first_value(item, *keys)
+        if isinstance(value, str):
+            value = value.strip()
+            if "," in value and "." in value:
+                # Accept both common decimal formats:
+                # 1.234,56 and 1,234.56.
+                if value.rfind(",") > value.rfind("."):
+                    value = value.replace(".", "").replace(",", ".")
+                else:
+                    value = value.replace(",", "")
+            elif "," in value:
+                # Acumatica commonly sends decimal values like "1,000000".
+                value = value.replace(",", ".")
         try:
             return float(value or 0.0)
         except (TypeError, ValueError):

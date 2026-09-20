@@ -62,8 +62,6 @@ class StockPickingType(models.Model):
             'issue_change_item': 'direct_delivery_order',
             'inventory_issue': 'direct_delivery_order',
             'issue_change_item_discontinue': 'direct_delivery_order',
-            'issue_po_return': 'direct_delivery_order',
-            'po_return': 'direct_delivery_order',
             'transfer_one_step': 'direct_delivery_order',
             'transfer_two_step': 'direct_delivery_order',
             'credit_memo_consignment': 'direct_delivery_order',

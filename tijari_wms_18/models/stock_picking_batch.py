@@ -77,7 +77,6 @@ class StockPickingBatch(models.Model):
             lambda line: (
                 (line.lot_id or line.lot_name)
                 and line.quantity > 0
-                and line.picker_status == 'finished'
             )
         )
 

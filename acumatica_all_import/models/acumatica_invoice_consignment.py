@@ -353,6 +353,10 @@ class AcumaticaInvoiceConsignment(models.Model):
                         'picking_type_id': picking_type.id,
                         'location_id': source_location.id,
                         'location_dest_id': dest_location.id,
+                        # Keep the Invoice Consignment destination when the
+                        # document-only picking flow reapplies operation-type
+                        # defaults during create/validate.
+                        'adt_dest_location_id': dest_location.id,
                         'scheduled_date': self._parse_dt(first.adt_Date),
                         'origin': origin,
                         'note': first.adt_note or False,

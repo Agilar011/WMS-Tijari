@@ -285,7 +285,7 @@
                     </group>
 
                     <!-- Pick From -->
-                    <group invisible="'Pack' in (parent.picking_type_name or '')">
+                    <group invisible="('Pack' in (parent.picking_type_name or '')) or ('Receipts' in (parent.picking_type_name or ''))">
                         <label for="location_id" string="Pick From"/>
                         <field name="location_id"
                             widget="location_short_many2one"
@@ -333,22 +333,27 @@
                         <label 
                             for="quantity" 
                             string="Saran Qty"
-                            invisible="'Pack' in (parent.picking_type_name or '')"/>
+                            invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <label 
                             for="quantity" 
                             string="Quantity"
                             invisible="'Pack' not in (parent.picking_type_name or '')"/>
+                        <label 
+                            for="quantity" 
+                            string="Qty Diterima"
+                            invisible="'Receipts' not in (parent.picking_type_name or '')"/>
                         <div class="o_row">
                             <field name="quantity"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 class="fw-bold fs-6"
-                                invisible="'Pack' in (parent.picking_type_name or '')"/>
+                                invisible="'Pick' not in (parent.picking_type_name or '')"/>
                             <field name="quantity"
                                 nolabel="1"
+                                force_save="1"
                                 class="fw-bold fs-6"
-                                invisible="'Pack' not in (parent.picking_type_name or '')"/>
+                                invisible="'Pack' not in (parent.picking_type_name or '') or 'Receipts' not in (parent.picking_type_name or '')"/>
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"
@@ -359,7 +364,7 @@
                     </group>
 
                     <!-- Qty Diambil -->
-                    <group invisible="'Pack' in (parent.picking_type_name or '')">
+                    <group invisible="('Pack' in (parent.picking_type_name or '')) or ('Receipts' in (parent.picking_type_name or ''))">
                         <label for="confirmation_quantity" string="Qty Diambil"/>
                         <div class="o_row">
                             <field name="confirmation_quantity"
