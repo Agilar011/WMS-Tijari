@@ -155,8 +155,8 @@ class AcumaticaInventoryRecievedLine(models.Model):
             product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
             if not product:
                 product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
-        if not product and line.line_description:
-            product = Product.search([('name', '=', line.line_description)], limit=1)
+        # if not product and line.line_description:
+        #     product = Product.search([('name', '=', line.line_description)], limit=1)
 
         return product
 
@@ -547,7 +547,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     )
                     error_line_payloads.append({
                         'inventory_id': receive_line.inventory_id or False,
-                        'product_name': receive_line.description or False,
+                        'product_name': receive_line.line_description or False,
                         'qty': receive._parse_float(receive_line.product_uom_qty),
                         'uom': receive_line.uom_code or False,
                         'payload': receive_line.read()[0] if receive_line.exists() else {},
@@ -561,7 +561,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     )
                     error_line_payloads.append({
                         'inventory_id': receive_line.inventory_id or False,
-                        'product_name': receive_line.description or False,
+                        'product_name': receive_line.line_description or False,
                         'qty': receive._parse_float(receive_line.product_uom_qty),
                         'uom': receive_line.uom_code or False,
                         'payload': receive_line.read()[0] if receive_line.exists() else {},

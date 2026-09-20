@@ -478,7 +478,7 @@ class ImportReceiptWizard(models.TransientModel):
             'line_nbr': self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr'),
             'location_code': self._val(detail, 'LineLocation') or '',
             'order_qty': self._val(detail, 'LineOrderedQty') or '',
-            'product_uom_qty': self._val(detail, 'LineQuantity') or self._val(detail, 'LineReceiptQty') or '',
+            'product_uom_qty': self._val(detail, 'LineReceiptQty') or '',
             'uom_code': self._val(detail, 'LineUOM') or '',
             'warehouse_code': self._val(detail, 'LineWarehouse') or self._val(detail, 'LineWarehouseID') or '',
             'line_warehouse_name': self._val(detail, 'LineWarehouseName') or '',
@@ -573,9 +573,13 @@ class ImportReceiptWizard(models.TransientModel):
         if document_only is None:
             document_only = self._bool_val(header, 'DocumentOnly')
 
-        # PO Return moet altijd via Pick starten.  Een eventueel
-        # DocumentOnly=true uit payload mag deze transactie niet naar DDO
-        # routeren.
+        document_only_type = PickingType.resolve_document_only_picking_type(
+            api_acumatica='issue_po_return',
+            document_only=document_only,
+            warehouse_code=warehouse_code or self._val(header, 'Warehouse'),
+        )
+        if document_only_type:
+            return document_only_type
 
         config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
 
@@ -593,14 +597,7 @@ class ImportReceiptWizard(models.TransientModel):
 
         if location and location.odoo_building_id:
             warehouse = location.odoo_building_id
-            configured_pick_type = warehouse.pick_type_id.filtered(
-                lambda picking_type: (
-                    picking_type.active
-                    and picking_type.code == 'internal'
-                    and picking_type.operation_category == 'pick'
-                )
-            )
-            pick_type = configured_pick_type or PickingType.search([
+            pick_type = warehouse.pick_type_id or PickingType.search([
                 ('warehouse_id', '=', warehouse.id),
                 ('code', '=', 'internal'),
                 ('operation_category', '=', 'pick'),
@@ -612,14 +609,7 @@ class ImportReceiptWizard(models.TransientModel):
             if pick_type:
                 return pick_type
 
-        if (
-            config_picking_type
-            and config_picking_type.active
-            and config_picking_type.code == 'internal'
-            and config_picking_type.operation_category == 'pick'
-        ):
-            return config_picking_type
-        return PickingType.browse()
+        return config_picking_type or PickingType.browse()
 
     def _normalize_rows(self, payload):
         print("="*80)
