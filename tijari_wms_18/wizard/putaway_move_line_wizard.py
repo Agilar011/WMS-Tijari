@@ -105,6 +105,7 @@ class PutawayMoveLineWizard(models.TransientModel):
             location = wizard.move_line_id._find_loc_by_scan_code(code)
             if not location:
                 raise ValidationError(_('Kode lokasi tidak terdaftar.'))
+            wizard.move_line_id._check_putaway_location_mapping(location)
 
             wizard.update({
                 'confirmation_location_code': code,
@@ -114,6 +115,9 @@ class PutawayMoveLineWizard(models.TransientModel):
 
     def _prepare_move_line_values(self):
         self.ensure_one()
+        move_line = self._existing_move_line()
+        if self.location_putaway_id and move_line:
+            move_line._check_putaway_location_mapping(self.location_putaway_id)
         values = {
             'confirmation_quantity': self.confirmation_quantity,
         }
@@ -150,6 +154,7 @@ class PutawayMoveLineWizard(models.TransientModel):
         location = move_line._find_loc_by_scan_code(scanned_code)
         if not location:
             raise ValidationError(_('Barcode tidak terdaftar.'))
+        move_line._check_putaway_location_mapping(location)
 
         self.write({
             'confirmation_location_code': scanned_code,

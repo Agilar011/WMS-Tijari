@@ -133,6 +133,11 @@ class StockMove(models.Model):
         store=True,
     )
 
+    remaining_picker_quantity = fields.Float(
+        string='Sisa Qty Pick',
+        compute='_compute_remaining_picker_quantity',
+    )
+
     confirmation_quantity = fields.Float(
         string='Confirmation Qty',
         compute='_compute_confirmation_quantity',
@@ -360,6 +365,11 @@ class StockMove(models.Model):
             else:
                 difference = move.product_uom_qty - move.quantity
             move.difference_quantity = difference if difference > 0 else 0.0
+
+    @api.depends('product_uom_qty', 'quantity')
+    def _compute_remaining_picker_quantity(self):
+        for move in self:
+            move.remaining_picker_quantity = move.product_uom_qty - move.quantity
 
 
 
@@ -661,14 +671,6 @@ class StockMove(models.Model):
         'stock.move.line',
         'move_id',
         string='Putaway Move Lines',
-        domain=[
-            '&', '&',
-            ('quantity', '>', 0),
-            ('state', '!=', 'cancel'),
-            '|',
-            ('lot_id', '!=', False),
-            ('lot_name', '!=', False),
-        ],
     )
 
     picker_progress_status = fields.Selection(
@@ -687,6 +689,18 @@ class StockMove(models.Model):
         ],
         string='Putaway Status',
         compute='_compute_putaway_progress_status',
+    )
+
+    picker_sequence = fields.Integer(
+        string='Picker Sequence',
+        compute='_compute_wms_status_sequence',
+        store=True,
+    )
+
+    putaway_sequence = fields.Integer(
+        string='Putaway Sequence',
+        compute='_compute_wms_status_sequence',
+        store=True,
     )
 
     custom_css_js_stored = fields.Html(string="Custom CSS JS (Stored)", sanitize=False, compute='_get_custom_css_js_stored', stored=True)
@@ -759,6 +773,7 @@ class StockMove(models.Model):
         'move_line_ids.lot_id',
         'move_line_ids.lot_name',
         'move_line_ids.quantity',
+        'move_line_ids.confirmation_quantity',
         'move_line_ids.picker_status',
         'move_line_ids.state',
     )
@@ -799,6 +814,27 @@ class StockMove(models.Model):
                 'finished' if lines and all(line.putaway_status == 'finished' for line in lines)
                 else 'unfinished'
             )
+
+    @api.depends(
+        'move_line_ids.picker_status',
+        'move_line_ids.putaway_status',
+        'move_line_ids.quantity',
+        'move_line_ids.confirmation_quantity',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+    )
+    def _compute_wms_status_sequence(self):
+        for move in self:
+            picker_statuses = set(move.move_line_ids.mapped('picker_status'))
+            move.picker_sequence = 0 if (
+                not picker_statuses or 'unfinished' in picker_statuses
+            ) else 1
+
+            putaway_lines = move._get_putaway_base_move_lines()
+            putaway_statuses = set(putaway_lines.mapped('putaway_status'))
+            move.putaway_sequence = 0 if (
+                not putaway_statuses or 'unfinished' in putaway_statuses
+            ) else 1
             
 
     @api.onchange('putaway_product_id')

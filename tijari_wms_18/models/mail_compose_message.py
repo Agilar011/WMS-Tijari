@@ -35,7 +35,16 @@ class MailComposeMessage(models.TransientModel):
         for composer in self:
             if composer.model != "stock.picking":
                 continue
-            composer.subject = "Berita Acara Penerimaan Barang"
+            picking = self.env[composer.model].browse(
+                composer._evaluate_res_ids()[:1]
+            )
+            document_type = picking.adt_type or ""
+            document_number = picking.origin or picking.name
+            composer.subject = (
+                f"Berita Acara Penerimaan Barang - {document_type} - {document_number}"
+                if document_number
+                else "Berita Acara Penerimaan Barang"
+            )
 
     @api.depends(
         "composition_mode", "model", "parent_id", "res_domain",

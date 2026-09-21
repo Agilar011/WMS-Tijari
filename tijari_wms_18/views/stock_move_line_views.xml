@@ -70,6 +70,7 @@
                     force_save="1"/>
                 <field name="matching" column_invisible="1" force_save="1" />
                 <field name="picker_status" column_invisible="1" force_save="1" />
+                <field name="putaway_status" column_invisible="1" force_save="1" />
 
                 <field 
                     name="second_matching"
@@ -353,7 +354,7 @@
                                 nolabel="1"
                                 force_save="1"
                                 class="fw-bold fs-6"
-                                invisible="'Pack' not in (parent.picking_type_name or '') or 'Receipts' not in (parent.picking_type_name or '')"/>
+                                invisible="'Pack' not in (parent.picking_type_name or '') and 'Receipts' not in (parent.picking_type_name or '')"/>
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"

@@ -112,7 +112,34 @@ class StockPicking(models.Model):
         domain=[("share", "=", False)],
     )
 
+    show_picker_page = fields.Boolean(
+        compute="_compute_show_picker_page",
+    )
+    show_putaway_page = fields.Boolean(
+        compute="_compute_show_putaway_page",
+    )
+
     can_edit_pack_responsible_ids = fields.Boolean(string='can edit')
+
+    @api.depends("pick_responsible_ids")
+    def _compute_show_picker_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group("tijari_wms_18.group_operator")
+        for picking in self:
+            picking.show_picker_page = (
+                not is_warehouse_operator
+                or user in picking.pick_responsible_ids
+            )
+
+    @api.depends("putaway_responsible_ids")
+    def _compute_show_putaway_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group("tijari_wms_18.group_operator")
+        for picking in self:
+            picking.show_putaway_page = (
+                not is_warehouse_operator
+                or user in picking.putaway_responsible_ids
+            )
 
     @api.model
     def _get_responsible_carry_over_fields(self):
@@ -621,6 +648,28 @@ class StockPicking(models.Model):
                 )
             )
 
+    def _get_putaway_moves(self):
+        self.ensure_one()
+
+        moves = self.move_ids_without_package.filtered(
+            lambda move: move.state != 'cancel' and move.product_id
+        )
+        if self.putaway_product_id:
+            moves = moves.filtered(
+                lambda move: move.product_id == self.putaway_product_id
+            )
+        if self.putaway_lot_id:
+            moves = moves.filtered(
+                lambda move: any(
+                    line.lot_id == self.putaway_lot_id
+                    or line.lot_name == self.putaway_lot_id.name
+                    for line in move.move_line_ids
+                )
+            )
+        return moves.sorted(
+            key=lambda move: (move.putaway_sequence, move._origin.id or 0)
+        )
+
     def _get_putaway_move_lines(self):
         self.ensure_one()
 
@@ -634,7 +683,12 @@ class StockPicking(models.Model):
                 lambda line: line.lot_id == self.putaway_lot_id or line.lot_name == self.putaway_lot_id.name
             )
 
-        return move_lines
+        return move_lines.sorted(
+            key=lambda line: (
+                line.putaway_status != 'unfinished',
+                line._origin.id or 0,
+            )
+        )
 
     def _get_putaway_move_lines_for_product(self, product):
         self.ensure_one()
@@ -644,7 +698,12 @@ class StockPicking(models.Model):
             move_lines = move_lines.filtered(
                 lambda line: line.product_id == product and line.quantity > 0
             )
-        return move_lines
+        return move_lines.sorted(
+            key=lambda line: (
+                line.putaway_status != 'unfinished',
+                line._origin.id or 0,
+            )
+        )
 
     def _get_lots_from_move_lines(self, move_lines, products=False):
         lots = move_lines.lot_id
@@ -688,7 +747,9 @@ class StockPicking(models.Model):
                 lambda move: move.product_id == self.picker_product_id
             )
 
-        return moves
+        return moves.sorted(
+            key=lambda move: (move.picker_sequence, move._origin.id or 0)
+        )
 
     def _get_picker_lots(self):
         self.ensure_one()
@@ -719,6 +780,7 @@ class StockPicking(models.Model):
         'move_line_ids.product_id',
         'move_line_ids.lot_id',
         'move_line_ids.quantity',
+        'move_line_ids.confirmation_quantity',
         'move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_product_ids(self):
@@ -733,6 +795,7 @@ class StockPicking(models.Model):
         'move_line_ids.lot_id',
         'move_line_ids.lot_name',
         'move_line_ids.quantity',
+        'move_line_ids.confirmation_quantity',
         'move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_lot_ids(self):
@@ -769,6 +832,9 @@ class StockPicking(models.Model):
         'move_ids_without_package.quantity',
         'move_ids_without_package.product_uom',
         'move_ids_without_package.state',
+        'move_ids_without_package.move_line_ids.picker_status',
+        'move_ids_without_package.move_line_ids.quantity',
+        'move_ids_without_package.move_line_ids.state',
     )
     def _compute_picker_progress_status(self):
         for picking in self:
@@ -776,9 +842,18 @@ class StockPicking(models.Model):
             demand_qty = sum(moves.mapped('product_uom_qty'))
             picked_qty = sum(moves.mapped('quantity'))
             rounding = moves[:1].product_uom.rounding if moves else 0.01
+            move_lines = moves.mapped('move_line_ids').filtered(
+                lambda line: line.state != 'cancel' and line.quantity > 0
+            )
+            all_lines_finished = bool(move_lines) and all(
+                line.picker_status == 'finished'
+                for line in move_lines
+            )
             picking.picker_progress_status = (
                 'finished'
-                if moves and float_compare(picked_qty, demand_qty, precision_rounding=rounding) == 0
+                if moves
+                and all_lines_finished
+                and float_compare(picked_qty, demand_qty, precision_rounding=rounding) == 0
                 else 'unfinished'
             )
 
@@ -788,6 +863,7 @@ class StockPicking(models.Model):
         'move_line_ids',
         'move_line_ids.product_id',
         'move_line_ids.lot_id',
+        'move_line_ids.putaway_status',
         'move_line_ids.picker_status',
     )
     def _compute_putaway_values(self):
@@ -798,18 +874,22 @@ class StockPicking(models.Model):
     @api.depends(
         'putaway_product_id',
         'putaway_lot_id',
+        'move_ids_without_package',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.state',
         'move_line_ids',
         'move_line_ids.move_id',
         'move_line_ids.product_id',
         'move_line_ids.lot_id',
         'move_line_ids.lot_name',
         'move_line_ids.quantity',
+        'move_line_ids.confirmation_quantity',
         'move_line_ids.picker_status',
         'move_line_ids.state',
     )
     def _compute_putaway_move_ids(self):
         for picking in self:
-            picking.putaway_move_ids = picking._get_putaway_move_lines().mapped('move_id')
+            picking.putaway_move_ids = picking._get_putaway_moves()
 
     @api.depends(
         'putaway_product_id',
@@ -817,6 +897,7 @@ class StockPicking(models.Model):
         'move_line_ids.product_id',
         'move_line_ids.quantity',
         'move_line_ids.confirmation_quantity',
+        'move_line_ids.putaway_status',
         'move_line_ids.picker_status',
         'move_line_ids.product_uom_id',
     )
@@ -826,9 +907,14 @@ class StockPicking(models.Model):
             picked_qty = sum(move_lines.mapped('quantity'))
             confirmation_qty = sum(move_lines.mapped('confirmation_quantity'))
             rounding = move_lines[:1].product_uom_id.rounding if move_lines else 0.01
+            all_lines_finished = bool(move_lines) and all(
+                line.putaway_status == 'finished'
+                for line in move_lines
+            )
             picking.putaway_progress_status = (
                 'finished'
-                if move_lines and float_compare(confirmation_qty, picked_qty, precision_rounding=rounding) == 0
+                if all_lines_finished
+                and float_compare(confirmation_qty, picked_qty, precision_rounding=rounding) == 0
                 else 'unfinished'
             )
 
@@ -1058,6 +1144,9 @@ class StockPicking(models.Model):
             return super().action_put_in_pack(
                 move_lines_to_pack=move_lines_to_pack
             )
+
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+            self._check_putaway_status_requirements()
 
         move_line_ids = self._package_move_lines(
             move_lines_to_pack=move_lines_to_pack
@@ -1298,7 +1387,7 @@ class StockPicking(models.Model):
         pdf_base64 = base64.b64encode(pdf_content)
 
         attachment_new = self.env['ir.attachment'].sudo().create({
-            'name': f"Picking {self.name}.pdf",
+            'name': f"{self.origin or self.name}.pdf",
             'datas': pdf_base64.decode('utf-8'),
             'res_model': 'stock.picking',
             'res_id': self.id,
@@ -1417,13 +1506,22 @@ class StockPicking(models.Model):
         return action
 
     def _find_product_by_scan_code(self, scan_code):
-        Product = self.env['product.product']
+        product, _matched_by = self._find_product_scan_match(scan_code)
+        return product
 
-        return Product.search([
-            '|',
-            ('barcode', '=', scan_code),
-            ('default_code', '=', scan_code),
-        ], limit=1)
+    def _find_product_scan_match(self, scan_code):
+        Product = self.env['product.product']
+        scan_code = (scan_code or '').strip()
+
+        product = Product.search([('barcode', '=', scan_code)], limit=1)
+        if product:
+            return product, _('Barcode')
+
+        product = Product.search([('default_code', '=', scan_code)], limit=1)
+        if product:
+            return product, _('SKU')
+
+        return Product.browse(), False
 
     def _find_putaway_product_by_lot_scan_code(self, scan_code):
         self.ensure_one()
@@ -1439,8 +1537,14 @@ class StockPicking(models.Model):
 
         if not move_lines:
             if lots:
-                raise ValidationError(_("Lot hasil scan tidak ada di dokumen ini."))
-            raise ValidationError(_("Lot tidak ditemukan untuk kode scan: %s") % scan_code)
+                raise ValidationError(
+                    _("Lot %s ditemukan, tetapi tidak ada di dokumen ini.")
+                    % scan_code
+                )
+            raise ValidationError(
+                _("Kode %s tidak ditemukan sebagai Barcode, SKU, atau Lot.")
+                % scan_code
+            )
 
         products = move_lines.product_id
         if len(products) > 1:
@@ -1467,8 +1571,14 @@ class StockPicking(models.Model):
 
         if not moves:
             if lots:
-                raise ValidationError(_("Lot hasil scan tidak ada di dokumen ini."))
-            raise ValidationError(_("Lot tidak ditemukan untuk kode scan: %s") % scan_code)
+                raise ValidationError(
+                    _("Lot %s ditemukan, tetapi tidak ada di dokumen ini.")
+                    % scan_code
+                )
+            raise ValidationError(
+                _("Kode %s tidak ditemukan sebagai Barcode, SKU, atau Lot.")
+                % scan_code
+            )
 
         products = moves.product_id
         if len(products) > 1:
@@ -1519,7 +1629,7 @@ class StockPicking(models.Model):
             raise ValidationError(_("Kode scan tidak boleh kosong."))
 
         move_lines = self._get_putaway_base_move_lines()
-        product = self._find_product_by_scan_code(scanned_code)
+        product, matched_by = self._find_product_scan_match(scanned_code)
         if product:
             matching_lines = move_lines.filtered(
                 lambda line: line.product_id == product
@@ -1540,6 +1650,12 @@ class StockPicking(models.Model):
                         'move_line_ids': matching_lines.ids,
                     },
                 }
+            raise ValidationError(
+                _(
+                    "%s %s dikenali sebagai Product %s, tetapi product tersebut "
+                    "tidak ada di dokumen ini."
+                ) % (matched_by, scanned_code, product.display_name)
+            )
 
         product, matching_lines, lot = self._find_putaway_product_by_lot_scan_code(
             scanned_code
@@ -1627,7 +1743,7 @@ class StockPicking(models.Model):
             raise ValidationError(_("Kode scan tidak boleh kosong."))
 
         picker_moves = self._get_picker_base_moves()
-        product = self._find_product_by_scan_code(scanned_code)
+        product, matched_by = self._find_product_scan_match(scanned_code)
         if product:
             matching_moves = picker_moves.filtered(
                 lambda move: move.product_id == product
@@ -1647,6 +1763,12 @@ class StockPicking(models.Model):
                         'matched_by': 'product',
                     },
                 }
+            raise ValidationError(
+                _(
+                    "%s %s dikenali sebagai Product %s, tetapi product tersebut "
+                    "tidak ada di dokumen ini."
+                ) % (matched_by, scanned_code, product.display_name)
+            )
 
         product, matching_moves, lot = self._find_picker_product_by_lot_scan_code(
             scanned_code
@@ -1940,6 +2062,21 @@ class StockPicking(models.Model):
         res = super().action_assign()
 
         for picking in self:
+            if picking.picking_type_id.name == 'Receipts':
+                for move in picking.move_ids:
+                    active_lines = move.move_line_ids.filtered(
+                        lambda line: line.state not in ('done', 'cancel')
+                    )
+                    if len(active_lines) > 1:
+                        # A Receipt uses one working line per stock move.
+                        active_lines[1:].unlink()
+
+                # Check Availability must not prefill the received quantity.
+                # The actual receipt quantity is entered by the warehouse user.
+                picking.move_line_ids.filtered(
+                    lambda line: line.state not in ('done', 'cancel')
+                ).write({'quantity': 0.0})
+
             for move in picking.move_ids:
                 for line in move.move_line_ids:
                     print(line)
