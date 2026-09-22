@@ -249,7 +249,7 @@
                             domain="[('id', 'in', available_lot_ids)]"/>
                     </group>
 
-                    <group invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
+                    <group invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '') and 'Storage' not in (parent.picking_type_name or '')">
                         <label
                             for="handheld_scan_code"
                             string="Kode Scan Handheld"

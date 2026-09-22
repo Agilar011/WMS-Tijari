@@ -678,22 +678,39 @@ class InternalTransferOrder(models.Model):
 
     def _get_order_adt_dest_location(self):
         self.ensure_one()
-        if self.transfer_type == 'transfer_in':
+        if (
+            self.transaction_type == 'intra_warehouse'
+            or self.transfer_type == 'transfer_in'
+        ):
             return self.location_dest_id
         return self.location_id
 
+    def _get_picking_adt_dest_location(self, leg):
+        self.ensure_one()
+        if self.transaction_type == 'intra_warehouse':
+            return self.location_dest_id if leg == 'receipt' else self.location_id
+        return self._get_order_adt_dest_location()
+
     def _sync_order_adt_dest_location(self):
         for order in self:
-            dest_location = order._get_order_adt_dest_location()
-            vals = {
-                'adt_dest_location_id': dest_location.id if dest_location else False,
-            }
-            order.move_ids.write(vals)
+            order_dest_location = order._get_order_adt_dest_location()
+            order.move_ids.write({
+                'adt_dest_location_id': (
+                    order_dest_location.id if order_dest_location else False
+                ),
+            })
             pickings = order._get_related_pickings().filtered(
                 lambda picking: picking.state not in ('done', 'cancel')
             )
-            pickings.write(vals)
-            pickings.move_ids.write(vals)
+            for picking in pickings:
+                dest_location = order._get_picking_adt_dest_location(
+                    picking.internal_transfer_leg
+                )
+                vals = {
+                    'adt_dest_location_id': dest_location.id if dest_location else False,
+                }
+                picking.write(vals)
+                picking.move_ids.write(vals)
 
     def _get_picking_external_ref(self, leg):
         self.ensure_one()
@@ -736,7 +753,7 @@ class InternalTransferOrder(models.Model):
         partner = self._get_picking_partner(leg)
         if partner:
             vals['partner_id'] = partner.id
-        dest_location = self._get_order_adt_dest_location()
+        dest_location = self._get_picking_adt_dest_location(leg)
         if dest_location:
             vals['adt_dest_location_id'] = dest_location.id
         return vals
@@ -887,6 +904,12 @@ class InternalTransferOrder(models.Model):
         if not picking:
             return
 
+        # The explicit Pick -> Storage link can be added after Pick has
+        # already been confirmed. Recompute the dependent move first so a
+        # completed Pick releases Storage from ``waiting``.
+        picking.move_ids.filtered(
+            lambda move: move.state not in ('done', 'cancel')
+        )._recompute_state()
         if picking.state == 'draft':
             picking.action_confirm()
         if picking.move_ids.filtered(lambda move: move.state not in ('done', 'cancel')):
@@ -969,7 +992,7 @@ class InternalTransferOrder(models.Model):
             vals['picking_type_id'] = picking_type.id
         partner = self._get_picking_partner(leg)
         vals['partner_id'] = partner.id if partner else False
-        dest_location = self._get_order_adt_dest_location()
+        dest_location = self._get_picking_adt_dest_location(leg)
         vals['adt_dest_location_id'] = dest_location.id if dest_location else False
         next_picking.write(vals)
         if next_picking.adt_dest_location_id:
@@ -985,7 +1008,24 @@ class InternalTransferOrder(models.Model):
     def _generate_next_staged_picking(self, done_picking):
         self.ensure_one()
         if self.transaction_type == 'intra_warehouse':
-            return False
+            if done_picking.internal_transfer_leg != 'pick':
+                return False
+
+            storage_picking = self.picking_ids.filtered(
+                lambda picking: (
+                    picking.internal_transfer_leg == 'receipt'
+                    and picking.state != 'cancel'
+                )
+            )[:1]
+            if not storage_picking:
+                return False
+
+            # The Storage picking is generated together with Pick, but it
+            # must only become actionable after Pick is completed. Linking
+            # the moves here also gives Storage access to the picked lots.
+            self._link_picking_moves(done_picking, storage_picking)
+            self._set_staged_picking_ready(storage_picking)
+            return storage_picking
 
         existing_legs = set(self.picking_ids.mapped('internal_transfer_leg'))
         operational_warehouse = self._get_operational_warehouse()
@@ -1340,7 +1380,7 @@ class StockPicking(models.Model):
         quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
         receipt_pickings = self.filtered(
             lambda item: item.internal_transfer_order_id
-            and item.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage')
+            and item.picking_type_id.name in ('Receipts', 'Receipt Internal')
             and item.state not in ('done', 'cancel')
         )
         for picking in receipt_pickings:
@@ -1390,6 +1430,7 @@ class StockPicking(models.Model):
         quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
         for picking in self.filtered(
             lambda item: item.internal_transfer_order_id
+            and item.picking_type_id.name != 'Storage'
             and item.state not in ('done', 'cancel')
         ):
             for move in picking.move_ids.filtered(lambda item: item.state not in ('done', 'cancel')):

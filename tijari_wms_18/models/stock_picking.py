@@ -2173,6 +2173,8 @@ class StockPicking(models.Model):
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
             if picking.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage'):
+                if picking.picking_type_id.name == 'Storage':
+                    picking._check_storage_pick_completed()
                 picking._check_putaway_status_requirements()
                 picking._check_picker_status_requirements()
 
@@ -2809,6 +2811,24 @@ class StockPicking(models.Model):
             "Semua move line putaway harus memiliki status 'Finished'.\n"
             "Move line yang belum finish:\n%s"
         ) % lines)
+
+    def _check_storage_pick_completed(self):
+        self.ensure_one()
+        order = self.internal_transfer_order_id
+        if not (
+            order
+            and order.transaction_type == 'intra_warehouse'
+            and self.internal_transfer_leg == 'receipt'
+        ):
+            return
+
+        pickings = order._get_related_pickings().filtered(
+            lambda picking: picking.internal_transfer_leg == 'pick'
+        )
+        if not pickings or any(picking.state != 'done' for picking in pickings):
+            raise UserError(_(
+                "Storage belum bisa diproses sebelum Pick selesai."
+            ))
 
     def _check_picker_status_requirements(self):
         self.ensure_one()

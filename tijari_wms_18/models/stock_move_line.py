@@ -1011,7 +1011,9 @@ class StockMoveLine(models.Model):
 
     def action_prepare_scan_lot(self):
         self.ensure_one()
-        if not self.lot_id:
+        if self.picking_type_name == 'Storage':
+            self._check_storage_pick_completed()
+        elif not self.lot_id:
             raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
         return {
             'type': 'ir.actions.client',
@@ -1025,7 +1027,9 @@ class StockMoveLine(models.Model):
 
     def action_prepare_scan_location(self):
         self.ensure_one()
-        if not self.lot_id:
+        if self.picking_type_name == 'Storage':
+            self._check_storage_pick_completed()
+        elif not self.lot_id:
             raise ValidationError("Lot kosong, Silahkan generate lot terlebih dahulu")
         return {
             'type': 'ir.actions.client',
@@ -1121,6 +1125,14 @@ class StockMoveLine(models.Model):
                     'matching': matching,
                     'second_matching': 'Match' if matching == 'match' else 'Not Match',
                 })
+            elif picking_type_name == 'Storage' and field_name in (
+                'confirmation_lot_code', 'matching_lot_id'
+            ):
+                matching = 'match' if line._is_storage_lot_match(line.matching_lot_id) else 'not_match'
+                line.write({
+                    'matching': matching,
+                    'second_matching': 'Match' if matching == 'match' else 'Not Match',
+                })
 
             elif line.move_id.raw_material_production_id:
                 line.matching = line._get_matching_status_mo()
@@ -1152,6 +1164,12 @@ class StockMoveLine(models.Model):
                     line.location_dest_id.id,
                     line.location_dest_id.name,
                 ] if line.location_dest_id else False
+                result['matching'] = line.matching
+                result['matching_label'] = matching_labels.get(line.matching, line.matching or '')
+                result['matching_lot_id'] = [
+                    line.matching_lot_id.id,
+                    line.matching_lot_id.display_name,
+                ] if line.matching_lot_id else False
             else:
                 result['matching'] = line.matching
                 result['matching_label'] = matching_labels.get(line.matching, line.matching or '')
@@ -1175,6 +1193,32 @@ class StockMoveLine(models.Model):
         return result
 
     def action_mark_putaway_finished(self):
+        if self.picking_type_name == 'Storage':
+            self._check_storage_pick_completed()
+            if self.product_id.tracking != 'none':
+                expected_lots = self._get_storage_expected_lots()
+                confirmed_lot = self.matching_lot_id
+                if not confirmed_lot and self.confirmation_lot_code:
+                    confirmed_lot = self._find_lot_by_scan_code(
+                        self.confirmation_lot_code
+                    )
+                if not confirmed_lot or not expected_lots:
+                    self.write({
+                        'matching': 'not_match',
+                        'second_matching': 'Not Match',
+                    })
+                    raise ValidationError(_(
+                        "Lot Storage belum dikonfirmasi atau lot Pick tidak ditemukan."
+                    ))
+                if confirmed_lot not in expected_lots:
+                    self.write({
+                        'matching': 'not_match',
+                        'second_matching': 'Not Match',
+                    })
+                    raise ValidationError(_(
+                        "Lot %(lot)s tidak sesuai dengan lot yang dikirim dari Pick."
+                    ) % {'lot': confirmed_lot.display_name})
+
         if self.picking_type_name in ('Receipts', 'Receipt Internal', 'Storage') and self.location_putaway_id:
             self._check_putaway_location_mapping(self.location_putaway_id)
         if not self.location_putaway_id and self.confirmation_quantity == 0:
@@ -1187,7 +1231,15 @@ class StockMoveLine(models.Model):
             raise ValidationError(_("Stored Qty tidak boleh lebih besar dari Picked Qty, silahkan input quantity yang sesuai"))
         if self.confirmation_quantity < self.quantity:
             raise ValidationError(_("Stored Qty tidak boleh kurang dari Picked Qty, silahkan input quantity yang sesuai"))
-        self.write({'putaway_status': 'finished'})
+        vals = {'putaway_status': 'finished'}
+        if self.picking_type_name == 'Storage':
+            vals.update({
+                'matching': 'match',
+                'second_matching': 'Match',
+            })
+            if self.matching_lot_id and not self.lot_id:
+                vals['lot_id'] = self.matching_lot_id.id
+        self.write(vals)
         return {'type': 'ir.actions.act_window_close'}
 
     def action_mark_putaway_unfinished(self):
@@ -1463,6 +1515,9 @@ class StockMoveLine(models.Model):
         if not code:
             return {}
 
+        if self.picking_type_name == 'Storage':
+            self._check_storage_pick_completed()
+
         if self.picking_type_name in ('Pack', 'Pack Internal'):
             package = self._find_package_by_scan_code(code)
             if not package:
@@ -1492,6 +1547,11 @@ class StockMoveLine(models.Model):
                 'confirmation_lot_code': code,
                 'matching_lot_id': lot.id,
             }
+            if self.picking_type_name == 'Storage':
+                values.update({
+                    'matching': 'match' if self._is_storage_lot_match(lot) else 'not_match',
+                    'second_matching': 'Match' if self._is_storage_lot_match(lot) else 'Not Match',
+                })
         else:
             location = self._find_loc_by_scan_code(code)
             if not location:
@@ -1561,7 +1621,7 @@ class StockMoveLine(models.Model):
 
     def _check_putaway_location_mapping(self, location):
         self.ensure_one()
-        mapping = self.adt_dest_location_id
+        mapping = self.adt_dest_location_id or self.move_id.location_dest_id
         if not mapping:
             raise ValidationError(_(
                 "Location Mapping belum diatur untuk product %(product)s."
@@ -1581,6 +1641,41 @@ class StockMoveLine(models.Model):
                 'mapping': mapping.name,
             })
 
+    def _check_storage_pick_completed(self):
+        picking = self.picking_id
+        if picking and hasattr(picking, '_check_storage_pick_completed'):
+            picking._check_storage_pick_completed()
+
+    def _get_storage_expected_lots(self):
+        self.ensure_one()
+        lots = self.lot_id
+
+        source_moves = self.move_id.move_orig_ids
+        if source_moves:
+            lots |= source_moves.move_line_ids.filtered(
+                lambda line: line.product_id == self.product_id and line.lot_id
+            ).mapped('lot_id')
+
+        order = self.picking_id.internal_transfer_order_id
+        if order:
+            pickings = order._get_related_pickings().filtered(
+                lambda picking: (
+                    picking.internal_transfer_leg == 'pick'
+                    and picking.state == 'done'
+                )
+            )
+            lots |= pickings.move_line_ids.filtered(
+                lambda line: line.product_id == self.product_id and line.lot_id
+            ).mapped('lot_id')
+        return lots
+
+    def _is_storage_lot_match(self, lot):
+        self.ensure_one()
+        expected_lots = self._get_storage_expected_lots()
+        if not expected_lots:
+            return self.product_id.tracking == 'none' and not lot
+        return bool(lot and lot in expected_lots)
+
     @api.onchange('confirmation_lot_code')
     def _onchange_confirmation_lot_code(self):
         print('def _onchange_confirmation_lot_code(self)')
@@ -1590,8 +1685,16 @@ class StockMoveLine(models.Model):
             if not lot:
                 wizard.matching_lot_id = False
                 wizard.matching = 'not_match'
+                continue
 
             wizard.matching_lot_id = lot.id
+            if wizard.picking_type_name == 'Storage':
+                wizard.matching = (
+                    'match' if wizard._is_storage_lot_match(lot) else 'not_match'
+                )
+                wizard.second_matching = (
+                    'Match' if wizard.matching == 'match' else 'Not Match'
+                )
     def _find_loc_by_scan_code(self, location_code):
         Loc = self.env['stock.location']
         location_code = (location_code or '').strip()
