@@ -2136,17 +2136,19 @@ class StockPicking(models.Model):
                 continue
             # Pick harus diblokir sebelum validasi standar Odoo memproses
             # perpindahan stok apabila masih ada line yang belum Match.
-            if picking.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components'):
+            if "Pick" in (picking.picking_type_id.name or ""):
                 picking._check_validate_requirements()
                 picking._check_pick_quantity_vs_demand()
                 picking._check_pick_confirmation_quantity()
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
+            if picking.picking_type_id.name in ('Delivery Orders'):
+                picking._check_delivery_quantity_vs_demand()
             if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
                 picking._check_putaway_status_requirements()
                 picking._check_picker_status_requirements()
 
-            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal'):
+            if picking.picking_type_id.name not in ('Pick', 'Pick Interal', 'Pick Components' 'Receipts', 'Receipt Internal'):
                 print(f"Run validate all except pick and receipt")
                 # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
                 for move in picking.move_ids:
@@ -2213,17 +2215,19 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-            if "Pick" in rec.picking_type_name:
+            if "Pick" in (rec.picking_type_name or ""):
                 for move in rec.move_ids:
                     confirmation_qty = move.confirmation_quantity
 
+                    move.quantity_shadow = move.quantity
+                    move.quantity = confirmation_qty
                     for dest_move in move.move_dest_ids:
                         dest_move.write({
                             'product_uom_qty': confirmation_qty,
                             'quantity': confirmation_qty
                         })
             
-            elif 'Pack' in rec.picking_type_name:
+            elif 'Pack' in (rec.picking_type_name or ""):
                 for move in rec.move_ids:
                     for dest_move in move.move_dest_ids:
                         packaged_qty = sum(
@@ -2340,6 +2344,44 @@ class StockPicking(models.Model):
                         line.quantity,
                         line.confirmation_quantity,
                     ))
+
+    def _check_delivery_quantity_vs_demand(self):
+        for picking in self:
+            has_discrepancy = False
+            for move in picking.move_ids.filtered(lambda item: item.state != 'cancel'):
+                diff_qty = move.product_uom_qty - move.so_confirmation_quantity
+                demand_qty = move.product_uom_qty
+                delivered_qty = move.so_confirmation_quantity
+                rounding = move.product_uom.rounding if move.product_uom else 0.01
+                comparison = float_compare(
+                    delivered_qty,
+                    demand_qty,
+                    precision_rounding=rounding,
+                )
+                if comparison > 0:
+                    raise UserError(
+                        _(
+                            "Product: %s\n"
+                            "Lot: %s\n"
+                            "Qty Dikirim: %s\n"
+                            "Total Qty: %s\n\n"
+                            "Qty Dikirim melebihi Total Qty."
+                        ) % (
+                            move.product_id.display_name,
+                            move.lot_ids.name or "-",
+                            delivered_qty,
+                            demand_qty,
+                        )
+                    )
+                
+                if not float_is_zero(
+                    diff_qty,
+                    precision_rounding=rounding,
+                ):
+                    has_discrepancy = True
+
+            picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
+
     
     def _check_putaway_quantity_vs_demand(self):
         for picking in self:

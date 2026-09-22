@@ -115,6 +115,12 @@ class StockMove(models.Model):
 
     # temp_float = fields.Float(string="Confirmation Quantity")
     so_confirmation_quantity = fields.Float(string="Confirmation Quantity")
+    mo_confirmation_quantity = fields.Float(
+            string='Qty Digunakan',
+            compute='_compute_mo_confirmation_quantity',
+            store=True,
+        )
+    quantity_shadow = fields.Float('Qty')
     
     remaining_package_qty = fields.Float(
         compute="_compute_remaining_package_qty",
@@ -158,30 +164,53 @@ class StockMove(models.Model):
         ('unfinished', 'Unfinished'),
     ], string='Status', default='unfinished')
 
-    def action_mark_check_finished(self):
-        if self.so_confirmation_quantity == 0:
-            raise ValidationError(_("Confirmation Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
-        
-        comparison = self._validate_before_mark_finished()
-        if comparison > 0:
-            raise UserError("Confirmed Qty tidak boleh melebihi Remaining Package Qty")
+    status_mo_check = fields.Selection([
+        ('finished', 'Finished'),
+        ('unfinished', 'Unfinished'),
+    ], string='Status', compute="_compute_status_mo_check")
 
-        if comparison < 0:
-            diff = self.remaining_package_qty - self.so_confirmation_quantity
-            move_line = self.move_line_ids.filtered(
-                lambda x: not x.result_package_id and x.quantity == self.remaining_package_qty
+    @api.depends('move_line_ids.mo_status')
+    def _compute_status_mo_check(self):
+        for move in self:
+            lines = move.move_line_ids
+            move.status_mo_check = (
+                'finished' if lines and all(line.mo_status == 'finished' for line in lines)
+                else 'unfinished'
             )
 
-            rounding = self.product_uom.rounding if self.product_uom else 0.01
-            for line in move_line:
-                comparison = float_compare(
-                    line.quantity,
-                    diff,
-                    precision_rounding=rounding,
-                )
-                if comparison > 0:
-                    line.quantity -= diff
-                    break
+    status_pick_check = fields.Selection([
+        ('finished', 'Finished'),
+        ('unfinished', 'Unfinished'),
+    ], string='Status', compute="_compute_status_pick_check")
+
+    @api.depends('move_line_ids.pick_status')
+    def _compute_status_pick_check(self):
+        for move in self:
+            lines = move.move_line_ids
+            move.status_pick_check = (
+                'finished' if lines and all(line.pick_status == 'finished' for line in lines)
+                else 'unfinished'
+            )
+
+    def action_mark_check_finished(self):
+        self._validate_before_mark_finished()
+
+        # if comparison < 0:
+        #     diff = self.remaining_package_qty - self.so_confirmation_quantity
+        #     move_line = self.move_line_ids.filtered(
+        #         lambda x: not x.result_package_id and x.quantity == self.remaining_package_qty
+        #     )
+
+        #     rounding = self.product_uom.rounding if self.product_uom else 0.01
+        #     for line in move_line:
+        #         comparison = float_compare(
+        #             line.quantity,
+        #             diff,
+        #             precision_rounding=rounding,
+        #         )
+        #         if comparison > 0:
+        #             line.quantity -= diff
+        #             break
 
         self.write({'status_check': 'finished'})
         return True
@@ -205,11 +234,13 @@ class StockMove(models.Model):
             confirmation_quantity,
             precision_rounding=rounding,
         ):
-            raise UserError(f"Product {self.product_id.display_name} confirmation quantity can not be zero")
+            raise UserError(f"Qty Dikirim produk {self.product_id.display_name} tidak boleh 0.")
+
+        if comparison > 0:
+            raise UserError("Qty Dikirim tidak boleh melebihi Qty Unpack")
 
         return comparison
             
-
     def _update_reserved_quantity_vals(
         self,
         need,
@@ -353,7 +384,7 @@ class StockMove(models.Model):
 
         return move_line_vals, taken_quantity
     
-    @api.depends('product_uom_qty', 'quantity', 'picking_type_name', 'confirmation_quantity')
+    @api.depends('product_uom_qty', 'quantity', 'quantity_shadow', 'picking_type_name', 'confirmation_quantity', 'mo_confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
             if move.picking_type_name in ['Receipts', 'Receipt Internal']:
@@ -361,9 +392,15 @@ class StockMove(models.Model):
                 difference = move.product_uom_qty - total_confirmation_quantity
             elif move.picking_type_name in ['Pick', 'Pick Internal', 'Pick Components']:
                 total_confirmation_quantity = move.confirmation_quantity
-                difference = move.quantity - total_confirmation_quantity
+                total_qty = move.quantity_shadow if move.quantity_shadow > 0.0 else move.quantity
+                difference = total_qty - total_confirmation_quantity
             else:
-                difference = move.product_uom_qty - move.quantity
+                if move.raw_material_production_id:
+                    total_confirmation_quantity = move.mo_confirmation_quantity
+                    total_qty = move.quantity
+                    difference = total_qty - total_confirmation_quantity
+                else:
+                    difference = move.product_uom_qty - move.quantity
             move.difference_quantity = difference if difference > 0 else 0.0
 
     @api.depends('product_uom_qty', 'quantity')
@@ -378,6 +415,12 @@ class StockMove(models.Model):
         for move in self:
             total_confirmation_quantity = sum(move.move_line_ids.mapped('confirmation_quantity'))
             move.confirmation_quantity = total_confirmation_quantity if total_confirmation_quantity > 0 else 0.0
+    
+    @api.depends('move_line_ids.mo_confirmation_quantity')
+    def _compute_mo_confirmation_quantity(self):
+        for move in self:
+            total_mo_confirmation_quantity = sum(move.move_line_ids.mapped('mo_confirmation_quantity'))
+            move.mo_confirmation_quantity = total_mo_confirmation_quantity if total_mo_confirmation_quantity > 0 else 0.0
 
     def action_generate_lot(self):
         for move in self:
@@ -396,7 +439,7 @@ class StockMove(models.Model):
                     "warning": {
                         "title": _("Invalid Quantity"),
                         "message": _(
-                            "The total quantity (%s) cannot exceed the demand (%s)."
+                            "Quantoty (%s) tidak boleh melebihi demand (%s)."
                         ) % (total_qty, move.product_uom_qty),
                     }
                 }
@@ -642,6 +685,21 @@ class StockMove(models.Model):
             'view_mode': 'form',
             'view_id': self.env.ref(
                 'tijari_wms_18.stock_move_pick_detail_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_open_move_mo(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_mo_view'
             ).id,
             'target': 'new',
         }
@@ -957,12 +1015,18 @@ class StockMove(models.Model):
         }        
 
     def _action_confirm(self, merge=True, merge_into=False):
+        _logger.warning("=== CUSTOM _action_confirm ===")
+        _logger.warning("SELF: %s", self.ids)
+
         moves_no_merge = self.filtered(
             lambda m: m.picking_id
             and m.picking_id.adt_type == "Receipt"
         )
 
         moves_normal = self - moves_no_merge
+
+        _logger.warning("MOVES NO MERGE: %s", moves_no_merge.ids)
+        _logger.warning("MOVES NORMAL: %s", moves_normal.ids)
 
         res = self.browse()
 
@@ -977,7 +1041,7 @@ class StockMove(models.Model):
                 merge=False,
                 merge_into=False
             )
-
+        _logger.warning("RESULT: %s", res.ids)
         return res
 
     def create(self, vals):
@@ -1003,10 +1067,11 @@ class StockMove(models.Model):
             if not line.adt_dest_location_id:
                 if line.picking_id.adt_dest_location_id:
                     line.adt_dest_location_id = line.picking_id.adt_dest_location_id
-                elif line.picking_id.picking_type_name in ['Pick']:
-                    line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_src_id
+                elif "Pick" in (line.picking_id.picking_type_name or "") or "Pick" in (line.picking_type_id.name or ""):
+                    line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_src_id if line.picking_id else line.picking_type_id.default_location_src_id
                 else:
                     line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_dest_id
+
         res.mapped('picking_id')._sync_adt_quantities_from_moves()
 
         return res

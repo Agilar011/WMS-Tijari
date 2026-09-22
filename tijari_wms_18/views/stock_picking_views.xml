@@ -177,7 +177,7 @@
 
             <xpath expr="//field[@name='date_done']" position="after">
                 <field name="shipment_information"
-                    invisible="picking_type_name not in ['Delivery Orders']"
+                    invisible="picking_type_name not in ('Delivery Orders') or adt_type not in ('Sales Order Shipment', 'SO Consignment')"
                     decoration-success="shipment_information == 'full_shipment'"
                     decoration-warning="shipment_information == 'partial'"
                     decoration-danger="shipment_information == 'canceled'"/>
@@ -317,7 +317,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Package"
-                                invisible="status_check != 'finished'"/>
+                                invisible="status_check != 'finished' or state not in ['confirmed', 'assigned']"/>
                             <field name="lot_ids" widget="many2many_tags"
                                 readonly="has_tracking != 'serial'"
                                 column_invisible="parent.state == 'draft'"
@@ -381,7 +381,7 @@
                                             type="object"
                                             string="Rollback"
                                             class="btn-danger o_wms_auto_save_before_action"
-                                            invisible="status_check == 'unfinished' or state in ('done', 'cancel')"/>
+                                            invisible="status_check == 'unfinished' or state not in ['confirmed', 'assigned']"/>
                                     </div>
                                 </t>
                             </templates>
@@ -746,7 +746,8 @@
                                 <field name="forecast_availability" string="Forecast" optional="hide"
                                     column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
                                 <field name="product_qty" readonly="1" column_invisible="True"/>
-                                <field name="quantity" string="Saran Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                                <field name="quantity_shadow" string="Saran Qty" column_invisible="parent.state != 'done'" decoration-danger="product_uom_qty and quantity_shadow > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                                <field name="quantity" string="Saran Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state in ('draft','done')" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                                 <field name="confirmation_quantity" string="Qty Diambil" force_save='1' />
                                 <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
                                 <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
@@ -764,6 +765,16 @@
                                     domain="[('product_id','=',product_id)]"
                                     string="LOT Number"
                                 />
+                                <field name="status_pick_check"
+                                    widget="badge"
+                                    decoration-success="status_pick_check == 'finished'"
+                                    decoration-danger="status_pick_check == 'unfinished'" />
+                                <button
+                                    name="action_open_note_wizard"
+                                    type="object"
+                                    icon="fa-sticky-note"
+                                    title="Note"
+                                />
                                 <button
                                     name="action_open_move_pick"
                                     type="object"
@@ -778,6 +789,10 @@
                                         <div class="o_wms_operation_card">
                                             <div class="o_wms_operation_product">
                                                 <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                                <field name="status_pick_check"
+                                                    widget="badge"
+                                                    decoration-success="status_pick_check == 'finished'"
+                                                    decoration-danger="status_pick_check == 'unfinished'" />
                                             </div>
                                             <br/>
                                             <div>
@@ -893,6 +908,12 @@
                                     context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
                                     domain="[('product_id','=',product_id)]"
                                     string="LOT Number"
+                                />
+                                <button
+                                    name="action_open_note_wizard"
+                                    type="object"
+                                    icon="fa-sticky-note"
+                                    title="Note"
                                 />
                                 <button
                                     name="action_open_move_pick"
