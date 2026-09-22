@@ -69,7 +69,7 @@
                             string="Rollback"
                             type="object"
                             class="btn-danger"
-                            invisible="status_check != 'finished' or state in ['done', 'cancel']"/>
+                            invisible="status_check != 'finished' or state not in ['confirmed', 'assigned']"/>
 
                     <button string="Close"
                             special="cancel"
