@@ -481,7 +481,8 @@ class WmsApiController(http.Controller):
 
         data = {
             'type': receipt.adt_type or '',
-            'date': format_tanggal_indo(receipt.scheduled_date),
+            'tgl': format_tanggal_indo(receipt.scheduled_date),
+            'date': format_tanggal_indo(receipt.create_date.date()) if receipt.create_date else '',
             'no': receipt.origin or '',
             'vendor': receipt.partner_id.name or '',
             'warehouse': receipt.picking_type_id.name or '',
@@ -566,7 +567,7 @@ class WmsApiController(http.Controller):
             'product_code': lot.product_id.default_code if lot.product_id.default_code else "",
             'ref': lot.ref if lot.ref else "",
             'docs': "",
-            'date': format_tanggal_indo(fields.Date.today()),
+            'date': format_tanggal_indo(lot.create_date.date()) if lot.create_date else '',
             'qrcode': (lot.qr_code_image.decode('utf-8') if lot.qr_code_image else blank_image),
         #     'detail': []
         }
