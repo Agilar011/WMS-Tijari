@@ -2,8 +2,10 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.tools import float_compare
+from odoo.tools.float_utils import float_is_zero
 import logging
 import traceback
+
 
 _logger = logging.getLogger(__name__)
 
@@ -60,6 +62,7 @@ class StockMoveLine(models.Model):
             ('not_match', 'Not Match')
         ],
         store=True,
+        default="not_match"
     )
     putaway_status = fields.Selection(
         [
@@ -104,6 +107,7 @@ class StockMoveLine(models.Model):
         readonly=True,
     )
     confirmation_quantity = fields.Float(string='Confirmation Qty')
+    mo_confirmation_quantity = fields.Float(string='Qty Digunakan')
 
     picking_code = fields.Selection(
         related='picking_id.picking_type_code',
@@ -199,6 +203,24 @@ class StockMoveLine(models.Model):
         related="move_id.owner_id",
         store=True,
         readonly=True,
+    )
+
+    mo_status = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished')
+        ],
+        string='MO Status',
+        default='unfinished',
+    )
+
+    pick_status = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished')
+        ],
+        string='Pick Status',
+        default='unfinished',
     )
 
     @api.depends(
@@ -1100,6 +1122,12 @@ class StockMoveLine(models.Model):
                     'second_matching': 'Match' if matching == 'match' else 'Not Match',
                 })
 
+            elif line.move_id.raw_material_production_id:
+                line.matching = line._get_matching_status_mo()
+                line.second_matching = (
+                    'Match' if line.matching == 'match' else 'Not Match'
+                )
+
             matching_labels = dict(line._fields['matching'].selection)
             status_labels = dict(line._fields['putaway_status'].selection)
             result = {
@@ -1295,6 +1323,108 @@ class StockMoveLine(models.Model):
             'target': 'new',
         }
 
+
+    def action_mark_check_pick_finished(self):
+        self._validate_before_mark_pick_finished()
+        if self.matching == 'not_match':
+            self._check_matching_status_pick()
+
+        self.write({'pick_status': 'finished'})
+        return True
+
+    def action_mark_check_pick_unfinished(self):
+        self.write({'pick_status': 'unfinished'})
+        return True
+
+    def _validate_before_mark_pick_finished(self):
+        confirmation_quantity = self.confirmation_quantity
+        quantity = self.quantity
+
+        rounding = self.product_uom_id.rounding if self.product_uom_id else 0.01
+        comparison = float_compare(
+            confirmation_quantity,
+            quantity,
+            precision_rounding=rounding,
+        )
+
+        if float_is_zero(
+            confirmation_quantity,
+            precision_rounding=rounding,
+        ):
+            raise UserError(f"Qty Diambil lot {self.lot_id.name} tidak boleh 0.")
+
+        if comparison > 0:
+            raise UserError("Qty Diambil tidak boleh melebihi Saran Qty")
+
+        return comparison
+            
+    def _check_matching_status_pick(self):
+        expected_location = self.source_location_id or self.location_id
+        if not self.matching_loc_dest_id:
+            raise UserError(f"Pastikan melakukan konfirmasi lokasi pada lot {self.lot_id.name}")
+        if self.matching_loc_dest_id != expected_location:
+            raise UserError(
+                _(
+                    "Lot: %s\n"
+                    "Expected Location: %s\n"
+                    "Confirmation Location: %s\n\n"
+                    "Confirmation Location tidak sesuai dengan Expected Location."
+                ) % (
+                    self.lot_id.name or "-",
+                    expected_location.name,
+                    self.matching_loc_dest_id.name,
+                )
+            )
+
+        expected_lot = self.product_lot_id or self.lot_id
+        if not self.matching_lot_id:
+            raise UserError(f"Pastikan melakukan konfirmasi lot {self.lot_id.name}")
+        if self.matching_lot_id != expected_lot:
+            raise UserError(
+                _(
+                    "Expected Lot: %s\n"
+                    "Confirmation Lot: %s\n"
+                    "Confirmation Lot tidak sesuai dengan Expected Lot."
+                ) % (
+                    expected_lot.name,
+                    self.matching_lot_id.name,
+                )
+            )
+
+    def action_mark_check_finished_mo(self):
+        self._validate_before_mark_finished_mo()
+        # match_status = self._get_matching_status_mo()   
+        if self.matching == 'not_match':
+            raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
+
+        self.write({
+            'mo_status': 'finished'
+        })
+        return True
+
+    def action_mark_check_unfinished_mo(self):
+        self.write({'mo_status': 'unfinished'})
+        return True
+
+    def _validate_before_mark_finished_mo(self):
+        confirmation_quantity = self.mo_confirmation_quantity
+        quantity = self.quantity
+
+        rounding = self.product_uom_id.rounding if self.product_uom_id else 0.01
+        comparison = float_compare(
+            confirmation_quantity,
+            quantity,
+            precision_rounding=rounding,
+        )
+
+        if float_is_zero(
+            confirmation_quantity,
+            precision_rounding=rounding,
+        ):
+            raise UserError(f"Qty Digunakan Lot {self.lot_id.name} tidak boleh 0.")
+
+        if comparison > 0:
+            raise UserError("Qty Digunakan tidak boleh melebihi Quantity")  
 
     @api.onchange('location_putaway_id')
     def _onchange_location_putaway_id(self):
@@ -1605,8 +1735,7 @@ class StockMoveLine(models.Model):
                     'Match' if line.matching == 'match' else 'Not Match'
                 )
                 
-                
-            
+                 
     @api.onchange('auto_input_code')
     def _compute_auto_input_code(self):
         print('def _compute_auto_input_code(self)')

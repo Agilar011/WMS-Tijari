@@ -41,6 +41,63 @@ class WMSMRPProduction(models.Model):
             "name": name,
         }
 
+    def action_confirm(self):
+        res = super().action_confirm()
+
+        for production in self:
+            if production.origin:
+                production.picking_ids.write({
+                    "origin": production.origin,
+                })
+        
+        return res
+
+    # def action_confirm(self):
+    #     print("========== BEFORE CONFIRM ==========")
+    #     for production in self:
+    #         print("MO:", production.name)
+    #         print("State:", production.state)
+    #         print("Picking Type:", production.picking_type_id)
+    #         print("Raw Moves:", production.move_raw_ids)
+    #         print("Raw Moves State:", production.move_raw_ids.mapped("state"))
+    #         print("Raw Moves Picking Type:", production.move_raw_ids.mapped("picking_type_id"))
+    #         print("Finished Moves:", production.move_finished_ids)
+    #         print("Existing Pickings:", production.picking_ids)
+
+    #     res = super().action_confirm()
+
+    #     print("========== AFTER CONFIRM ==========")
+    #     for production in self:
+    #         print("MO:", production.name)
+    #         print("State:", production.state)
+    #         print("Raw Moves:", production.move_raw_ids)
+    #         print("Raw Moves State:", production.move_raw_ids.mapped("state"))
+    #         print("Raw Moves Picking Type:", production.move_raw_ids.mapped("picking_type_id"))
+    #         print("Pickings:", production.picking_ids)
+
+    #     raise ValidationError("STOPPP")
+    #     return res
+
+    def button_mark_done(self):
+        for production in self:
+            unfinished_moves = production.move_raw_ids.filtered(
+                lambda move: move.status_mo_check != 'finished'
+            )
+
+            if unfinished_moves:
+                details = "\n".join(
+                    f"- {move.product_id.display_name}: {move.status_mo_check or 'Belum ada status'}"
+                    for move in unfinished_moves
+                )
+
+                raise UserError(
+                    "Tidak dapat menyelesaikan Manufacturing Order.\n\n"
+                    "Raw Materials berikut belum memiliki status 'Finished':\n"
+                    f"{details}"
+                )
+
+        return super().button_mark_done()
+
     def action_print_hasil_manufacturing(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
