@@ -355,7 +355,10 @@ class AcumaticaTransferShipmentLine(models.Model):
                 'inter_warehouse',
                 shipment._parse_dt(shipment.scheduled_date),
                 shipment.note or shipment.description or False,
+                description=shipment.description or False,
                 transfer_type='transfer_out',
+                adt_transaction_type=shipment.shipment_type or shipment.operation or False,
+                document_only=shipment.document_only,
             )
 
             for shipment_line in shipment.shipment_line_ids:

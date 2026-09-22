@@ -31,7 +31,7 @@
                         type="object"
                         string="Validate Lot"
                         class="btn-warning"
-                        invisible="not display_assign_serial or picking_type_name in ['Receipts', 'Receipt Internal']"/>
+                        invisible="not display_assign_serial or picking_type_name in ['Receipts', 'Receipt Internal', 'Storage']"/>
                 </span>
             </xpath>
 
@@ -79,14 +79,14 @@
 
             </xpath>
 
-            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']">
                     <field name="adt_type" column_invisible="1"/>
                     <field name="owner_id" column_invisible="parent.adt_type != 'Toko Pegang DO'"/>
                     <!-- <field name="adt_dest_location_id" string="Final Location"/> -->
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
-                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']"
                         title="Print Lot"/>
                     <!-- <button
                         name="action_open_note_wizard"
@@ -110,9 +110,9 @@
             </xpath>
 
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='quantity']" position="replace">
-                <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
+                <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']"/>
                 <field name="confirmation_quantity" string="Qty Diambil" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
                 <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
             </xpath>
@@ -215,9 +215,9 @@
                         <field name="handheld_scan_code"
                                 widget="adt_handheld_scan_code"
                                 string="Kode Scan Handheld"
-                                placeholder="Scan handheld: lot atau lokasi"
-                                invisible="matching == 'match'"
-                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                                placeholder="Scan handheld: lot, lokasi, atau package"
+                                invisible="matching == 'match' and 'Pick' in (parent.picking_type_name or '')"
+                                column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')"/>
                         <field name="adt_dest_location_id" column_invisible="1"/>
                         <field name="allowed_matching_lot_ids" column_invisible="1"/>
                         <field name="product_uom_category_id" column_invisible="1"/>
@@ -1097,9 +1097,9 @@
                         <field name="handheld_scan_code"
                                 widget="adt_handheld_scan_code"
                                 string="Kode Scan Handheld"
-                                placeholder="Scan handheld: lot atau lokasi"
-                                invisible="matching == 'match'"
-                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                                placeholder="Scan handheld: lot, lokasi, atau package"
+                                invisible="matching == 'match' and 'Pick' in (parent.picking_type_name or '')"
+                                column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')"/>
                         <field name="adt_dest_location_id" column_invisible="1"/>
                         <field name="allowed_matching_lot_ids" column_invisible="1"/>
                         <field name="product_uom_category_id" column_invisible="1"/>

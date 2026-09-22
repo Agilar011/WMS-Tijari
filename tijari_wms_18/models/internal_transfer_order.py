@@ -47,8 +47,6 @@ class InternalTransferOrder(models.Model):
         selection=[
             ('inter_warehouse', 'Inter Warehouse'),
             ('intra_warehouse', 'Intra Warehouse'),
-            ('consignment', 'Consignment'),
-            ('vendor_return', 'Vendor Return'),
         ],
         string='Transaction Type',
         default='inter_warehouse',
@@ -58,14 +56,45 @@ class InternalTransferOrder(models.Model):
         selection=[
             ('transfer_in', 'Transfer IN'),
             ('transfer_out', 'Transfer OUT'),
+            ('intra_group_transfer', 'Intra Group Transfer'),
+            ('inter_group_transfer', 'Inter Group Transfer'),
         ],
         string='Transfer Type',
         default='transfer_out',
         tracking=True,
     )
+    inter_transfer_type = fields.Selection(
+        selection=[
+            ('transfer_in', 'Transfer IN'),
+            ('transfer_out', 'Transfer OUT'),
+        ],
+        string='Transfer Type',
+        compute='_compute_transfer_type_ui',
+        inverse='_inverse_inter_transfer_type',
+    )
+    intra_transfer_type = fields.Selection(
+        selection=[
+            ('intra_group_transfer', 'Intra Group Transfer'),
+            ('inter_group_transfer', 'Inter Group Transfer'),
+        ],
+        string='Transfer Type',
+        compute='_compute_transfer_type_ui',
+        inverse='_inverse_intra_transfer_type',
+    )
     adt_order_type = fields.Char(
         string='Order Type (Acumatica)',
         tracking=True,
+    )
+    adt_transaction_type = fields.Char(
+        string='Transaction Type (API)',
+        tracking=True,
+        copy=False,
+    )
+    document_only = fields.Boolean(
+        string='Document Only',
+        default=False,
+        tracking=True,
+        copy=False,
     )
     partner_id = fields.Many2one(
         comodel_name='res.partner',
@@ -81,6 +110,24 @@ class InternalTransferOrder(models.Model):
         comodel_name='stock.location',
         string='Destination Location',
         tracking=True,
+    )
+    location_group_id = fields.Many2one(
+        comodel_name='stock.location',
+        string='Location Group',
+        domain=[('is_location_mapping', '=', True)],
+        tracking=True,
+    )
+    intra_location_id = fields.Many2one(
+        comodel_name='stock.location',
+        string='Source Location',
+        compute='_compute_intra_locations_ui',
+        inverse='_inverse_intra_location_id',
+    )
+    intra_location_dest_id = fields.Many2one(
+        comodel_name='stock.location',
+        string='Destination Location',
+        compute='_compute_intra_locations_ui',
+        inverse='_inverse_intra_location_dest_id',
     )
     transit_location_id = fields.Many2one(
         comodel_name='stock.location',
@@ -128,6 +175,64 @@ class InternalTransferOrder(models.Model):
         compute='_compute_picking_count',
     )
     note = fields.Text(string='Notes')
+    description = fields.Text(string='Description')
+
+    @api.depends(
+        'transaction_type',
+        'location_group_id',
+        'location_id',
+        'location_dest_id',
+    )
+    def _compute_intra_locations_ui(self):
+        for order in self:
+            group = order.location_group_id
+            is_intra = order.transaction_type == 'intra_warehouse'
+            order.intra_location_id = (
+                order.location_id
+                if is_intra and order._location_belongs_to(order.location_id, group)
+                else False
+            )
+            order.intra_location_dest_id = (
+                order.location_dest_id
+                if is_intra and order._location_belongs_to(order.location_dest_id, group)
+                else False
+            )
+
+    def _inverse_intra_location_id(self):
+        for order in self:
+            order.location_id = order.intra_location_id
+
+    def _inverse_intra_location_dest_id(self):
+        for order in self:
+            order.location_dest_id = order.intra_location_dest_id
+
+    @api.depends('transaction_type', 'transfer_type')
+    def _compute_transfer_type_ui(self):
+        inter_values = {'transfer_in', 'transfer_out'}
+        intra_values = {'intra_group_transfer', 'inter_group_transfer'}
+        for order in self:
+            order.inter_transfer_type = (
+                order.transfer_type
+                if order.transaction_type == 'inter_warehouse'
+                and order.transfer_type in inter_values
+                else False
+            )
+            order.intra_transfer_type = (
+                order.transfer_type
+                if order.transaction_type == 'intra_warehouse'
+                and order.transfer_type in intra_values
+                else False
+            )
+
+    def _inverse_inter_transfer_type(self):
+        for order in self:
+            if order.inter_transfer_type:
+                order.transfer_type = order.inter_transfer_type
+
+    def _inverse_intra_transfer_type(self):
+        for order in self:
+            if order.intra_transfer_type:
+                order.transfer_type = order.intra_transfer_type
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -142,8 +247,20 @@ class InternalTransferOrder(models.Model):
         # masih draft. Satu picking yang sudah confirmed/assigned/done/cancel
         # membuat header dan pasangan transfer tidak boleh diubah lagi.
         editable_vals = set(vals) - {'state', 'picking_ids'}
+        protected_ready_vals = {
+            'transaction_type',
+            'transfer_type',
+            'location_group_id',
+            'location_id',
+            'location_dest_id',
+        }
         if editable_vals:
             for order in self:
+                if order.state == 'ready' and editable_vals & protected_ready_vals:
+                    raise ValidationError(_(
+                        'Internal Transfer Order %s sudah Ready dan tidak dapat '
+                        'mengubah tipe atau lokasi transfer.'
+                    ) % order.display_name)
                 related_pickings = order._get_related_pickings()
                 blocked_picking = related_pickings.filtered(
                     lambda picking: picking.state != 'draft'
@@ -165,6 +282,17 @@ class InternalTransferOrder(models.Model):
                     picking.write({
                         'origin': picking_ref,
                         'adt_external_ref': picking_ref,
+                    })
+        if editable_vals & {'note', 'description'}:
+            for order in self:
+                draft_pickings = order._get_related_pickings().filtered(
+                    lambda item: item.state == 'draft'
+                )
+                if draft_pickings:
+                    draft_pickings.write({
+                        'note': order.note or False,
+                        'desc_note': order.description or False,
+                        'adt_description': order.description or False,
                     })
         return result
 
@@ -195,12 +323,63 @@ class InternalTransferOrder(models.Model):
             lambda picking: picking.internal_transfer_leg == 'receipt'
         )[:1]
 
-    @api.onchange('location_id', 'location_dest_id')
+    @api.onchange(
+        'location_id',
+        'location_dest_id',
+        'intra_location_id',
+        'intra_location_dest_id',
+    )
     def _onchange_locations(self):
         for order in self:
             for move in order.move_ids:
                 move.location_id = order.location_id
                 move.location_dest_id = order.location_dest_id
+
+    @api.onchange('transaction_type', 'location_group_id')
+    def _onchange_intra_location_group(self):
+        for order in self:
+            if order.transaction_type != 'intra_warehouse':
+                order.location_group_id = False
+                continue
+            if order.state == 'ready':
+                continue
+            if not order.location_group_id:
+                order.location_id = False
+                order.location_dest_id = False
+                continue
+            if not order._location_belongs_to(order.location_id, order.location_group_id):
+                order.location_id = False
+            if not order._location_belongs_to(
+                order.location_dest_id,
+                order.location_group_id,
+            ):
+                order.location_dest_id = False
+
+    @api.constrains(
+        'transaction_type',
+        'location_group_id',
+        'location_id',
+        'location_dest_id',
+    )
+    def _check_intra_location_group(self):
+        for order in self:
+            if order.transaction_type != 'intra_warehouse':
+                continue
+            if not order.location_group_id:
+                # Existing API-created intra orders are kept compatible until
+                # the Data Hub mapping is migrated to populate this field.
+                continue
+            invalid_locations = (order.location_id | order.location_dest_id).filtered(
+                lambda location: not order._location_belongs_to(
+                    location,
+                    order.location_group_id,
+                )
+            )
+            if invalid_locations:
+                raise ValidationError(_(
+                    'Source dan Destination Location harus berada di bawah '
+                    'Location Group yang dipilih.'
+                ))
 
     def _location_belongs_to(self, location, parent_location):
         if not location or not parent_location:
@@ -250,11 +429,30 @@ class InternalTransferOrder(models.Model):
         self.ensure_one()
         operational_warehouse = self._get_operational_warehouse()
         receipt_warehouse = self._get_receipt_warehouse()
+        if leg == 'receipt':
+            if self.transaction_type == 'intra_warehouse':
+                return self._get_required_picking_type(
+                    'Storage',
+                    'internal',
+                    warehouse=receipt_warehouse,
+                )
+            if self.transfer_type == 'transfer_in':
+                return self._get_required_picking_type(
+                    ('Receipts', 'Receipt Internal'),
+                    'receive',
+                    warehouse=receipt_warehouse,
+                    code=('incoming', 'internal'),
+                )
+            return self._get_transfer_out_direct_receipt_picking_type()
+
         leg_configs = {
-            'pick': ('Pick Internal', 'pick', operational_warehouse),
-            'pack': ('Pack Internal', 'pack', operational_warehouse),
-            'delivery': ('Transfer Internal', 'internal', operational_warehouse),
-            'receipt': ('Receipt Internal', 'receive', receipt_warehouse),
+            'pick': (('Pick', 'Pick Internal'), 'pick', operational_warehouse),
+            'pack': (('Pack', 'Pack Internal'), 'pack', operational_warehouse),
+            'delivery': (
+                ('Internal Transfer', 'Internal Transfers', 'Transfer Internal'),
+                'internal',
+                operational_warehouse,
+            ),
         }
         config = leg_configs.get(leg)
         if not config:
@@ -303,9 +501,10 @@ class InternalTransferOrder(models.Model):
     def _get_receipt_internal_picking_type(self):
         self.ensure_one()
         return self._get_required_picking_type(
-            'Receipt Internal',
+            ('Receipts', 'Receipt Internal'),
             'receive',
             warehouse=self._get_receipt_warehouse(),
+            code=('incoming', 'internal'),
         )
 
     def _get_vendor_return_receipt_picking_type(self):
@@ -377,29 +576,46 @@ class InternalTransferOrder(models.Model):
             required=True,
         )
 
-    def _get_required_picking_type(self, name, operation_category=False, warehouse=False):
+    def _get_required_picking_type(
+        self,
+        name,
+        operation_category=False,
+        warehouse=False,
+        code='internal',
+    ):
         self.ensure_one()
         warehouse = warehouse or self._get_operational_warehouse()
-        domain = [
-            ('code', '=', 'internal'),
-            ('name', '=', name),
-        ]
-        if warehouse:
-            domain.append(('warehouse_id', '=', warehouse.id))
-        category_domain = list(domain)
-        if operation_category:
-            category_domain.append(('operation_category', '=', operation_category))
-        picking_type = self.env['stock.picking.type'].search(category_domain, limit=1)
-        if not picking_type and operation_category:
-            picking_type = self.env['stock.picking.type'].search(domain, limit=1)
-        if not picking_type:
-            warehouse_label = warehouse.display_name if warehouse else '-'
-            raise ValidationError(
-                'Operation type %s belum dikonfigurasi untuk warehouse %s. '
-                'Aktifkan Internal Transfer di konfigurasi warehouse tersebut.'
-                % (name, warehouse_label)
-            )
-        return picking_type
+        names = (name,) if isinstance(name, str) else tuple(name)
+        codes = (code,) if isinstance(code, str) else tuple(code)
+        for current_code in codes:
+            for current_name in names:
+                domain = [
+                    ('code', '=', current_code),
+                    ('name', '=', current_name),
+                ]
+                if warehouse:
+                    domain.append(('warehouse_id', '=', warehouse.id))
+                category_domain = list(domain)
+                if operation_category:
+                    category_domain.append(('operation_category', '=', operation_category))
+                picking_type = self.env['stock.picking.type'].search(
+                    category_domain,
+                    limit=1,
+                )
+                if not picking_type and operation_category:
+                    picking_type = self.env['stock.picking.type'].search(
+                        domain,
+                        limit=1,
+                    )
+                if picking_type:
+                    return picking_type
+
+        warehouse_label = warehouse.display_name if warehouse else '-'
+        raise ValidationError(
+            'Operation type %s belum dikonfigurasi untuk warehouse %s. '
+            'Aktifkan operation type yang sesuai di konfigurasi warehouse tersebut.'
+            % (', '.join(names), warehouse_label)
+        )
 
     def _get_or_create_transit_location(self):
         transit_location = self.transit_location_id or self.env['stock.location'].search([
@@ -512,7 +728,10 @@ class InternalTransferOrder(models.Model):
             'internal_transfer_order_id': self.id,
             'internal_transfer_leg': leg,
             'internal_transfer_sequence': self._get_transfer_leg_sequence(leg),
-            'adt_is_document_only': bool(picking_type.is_document_only_api),
+            'adt_is_document_only': bool(self.document_only),
+            'note': self.note or False,
+            'desc_note': self.description or False,
+            'adt_description': self.description or False,
         }
         partner = self._get_picking_partner(leg)
         if partner:
@@ -544,11 +763,7 @@ class InternalTransferOrder(models.Model):
 
     def _get_picking_adt_type(self):
         self.ensure_one()
-        if self.transaction_type == 'consignment':
-            return 'Shipment Consignment'
-        if self.transaction_type == 'vendor_return':
-            return 'Vendor Return'
-        return 'Internal Transfer'
+        return self.adt_transaction_type or False
 
     def _get_move_mapped_location_name(self, leg):
         self.ensure_one()
@@ -595,6 +810,11 @@ class InternalTransferOrder(models.Model):
     def _copy_move_to_picking(self, source_move, picking, location, location_dest):
         vals = {
             'name': source_move.name or source_move.product_id.display_name,
+            'description_picking': (
+                source_move.description_picking
+                or source_move.name
+                or source_move.product_id.display_name
+            ),
             'product_id': source_move.product_id.id,
             'product_uom_qty': source_move.product_uom_qty,
             'product_uom': source_move.product_uom.id,
@@ -737,6 +957,9 @@ class InternalTransferOrder(models.Model):
             'internal_transfer_order_id': self.id,
             'internal_transfer_leg': leg,
             'internal_transfer_sequence': self._get_transfer_leg_sequence(leg),
+            'note': self.note or False,
+            'desc_note': self.description or False,
+            'adt_description': self.description or False,
         }
         picking_type = self._get_internal_picking_type_for_leg(leg)
         if picking_type:
@@ -773,7 +996,7 @@ class InternalTransferOrder(models.Model):
             loading_dock = self._get_or_create_loading_dock_location(operational_warehouse)
             pack_picking = self._create_transfer_picking(
                 self._get_required_picking_type(
-                    'Pack Internal',
+                    ('Pack', 'Pack Internal'),
                     'pack',
                     warehouse=operational_warehouse,
                 ),
@@ -805,7 +1028,7 @@ class InternalTransferOrder(models.Model):
                 self.transit_location_id = transit_location
             delivery_picking = self._create_transfer_picking(
                 self._get_required_picking_type(
-                    'Transfer Internal',
+                    ('Internal Transfer', 'Internal Transfers', 'Transfer Internal'),
                     'internal',
                     warehouse=operational_warehouse,
                 ),
@@ -861,14 +1084,14 @@ class InternalTransferOrder(models.Model):
                 ]
             elif order.transaction_type == 'intra_warehouse':
                 receipt_picking_type = order._get_required_picking_type(
-                    'Receipt Internal',
-                    'receive',
+                    'Storage',
+                    'internal',
                     warehouse=receipt_warehouse,
                 )
                 picking_specs = [
                     (
                         order._get_required_picking_type(
-                            'Pick Internal',
+                            ('Pick', 'Pick Internal'),
                             'pick',
                             warehouse=operational_warehouse,
                         ),
@@ -881,15 +1104,16 @@ class InternalTransferOrder(models.Model):
                         receipt_picking_type,
                         transit_location,
                         order.location_dest_id,
-                        'Transfer IN',
+                        'Storage',
                         'receipt',
                     ),
                 ]
             elif order.transfer_type == 'transfer_in':
                 receipt_picking_type = order._get_required_picking_type(
-                    'Receipt Internal',
+                    ('Receipts', 'Receipt Internal'),
                     'receive',
                     warehouse=receipt_warehouse,
+                    code=('incoming', 'internal'),
                 )
                 picking_specs = [
                     (
@@ -913,7 +1137,7 @@ class InternalTransferOrder(models.Model):
                 picking_specs = [
                     (
                         order._get_required_picking_type(
-                            'Pick Internal',
+                            ('Pick', 'Pick Internal'),
                             'pick',
                             warehouse=operational_warehouse,
                         ),
@@ -1113,7 +1337,7 @@ class StockPicking(models.Model):
         quantity_field = 'quantity' if 'quantity' in MoveLine._fields else 'qty_done'
         receipt_pickings = self.filtered(
             lambda item: item.internal_transfer_order_id
-            and item.picking_type_id.name in ('Receipts', 'Receipt Internal')
+            and item.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage')
             and item.state not in ('done', 'cancel')
         )
         for picking in receipt_pickings:

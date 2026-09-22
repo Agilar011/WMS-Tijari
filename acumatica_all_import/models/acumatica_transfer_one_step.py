@@ -261,11 +261,11 @@ class AcumaticaTransferOneStepLine(models.Model):
                     created += 1
 
                 transfer_service = self.env['acumatica.internal.transfer.service']
-                transfer_info = transfer_service.classify_transfer_out_to_virtual(
-                    first.from_warehouse_code,
-                    first.to_warehouse_code,
-                    'FromWarehouseID',
-                    'ToWarehouseID',
+                transfer_info = transfer_service.classify_intra_by_location_mapping(
+                    first.from_location_code,
+                    first.to_location_code,
+                    'FromLocationID',
+                    'ToLocationID',
                     check_same_location_mapping=True,
                 )
                 source_location = transfer_info['source_location']
@@ -284,13 +284,20 @@ class AcumaticaTransferOneStepLine(models.Model):
                 if order:
                     order.write({
                         'transaction_type': transfer_info['transaction_type'],
-                        'transfer_type': 'transfer_out',
+                        'transfer_type': transfer_info['transfer_type'],
+                        'adt_transaction_type': first.transfer_type or first.trans_type or False,
+                        'document_only': bool(first.document_only),
+                        'location_group_id': (
+                            transfer_info['location_group'].id
+                            if transfer_info.get('location_group') else False
+                        ),
                         'location_id': source_location.id,
                         'location_dest_id': destination_location.id,
                         'transit_location_id': transfer_service.get_or_create_transit_location().id,
                         'schedule_date': self._parse_dt(first.scheduled_date),
                         'validation_policy': 'validate_all',
                         'note': first.note or False,
+                        'description': first.description or False,
                         'state': 'draft',
                     })
                 else:
@@ -301,6 +308,11 @@ class AcumaticaTransferOneStepLine(models.Model):
                         transfer_info['transaction_type'],
                         self._parse_dt(first.scheduled_date),
                         first.note or False,
+                        description=first.description or False,
+                        transfer_type=transfer_info['transfer_type'],
+                        location_group=transfer_info.get('location_group'),
+                        adt_transaction_type=first.transfer_type or first.trans_type or False,
+                        document_only=first.document_only,
                     )
 
                 transfer_lines = self.env['acumatica.transfer.one.step.product'].search([

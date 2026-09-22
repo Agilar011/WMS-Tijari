@@ -402,6 +402,10 @@
                                 nolabel="1"
                                 invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']"/>
                             <field name="available_package_ids" invisible='1' />
+                            <field name="package_scan_code"
+                                widget="adt_handheld_scan_code"
+                                placeholder="Scan handheld atau ketik kode package"
+                                invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']"/>
                             <field name="scanned_package_id"
                                 placeholder="Scan a QR code or select a package..."
                                 domain="[('id', 'in', available_package_ids)]"
@@ -908,7 +912,7 @@
                                     title="Open Putaway"
                                     icon="fa-archive"
                                     class="btn-link"
-                                    invisible="not parent.show_putaway_page or parent.picking_type_name not in ['Receipts', 'Receipt Internal']"
+                    invisible="not parent.show_putaway_page or parent.picking_type_name not in ['Receipts', 'Receipt Internal']"
                                 />
                             </list>
                             <kanban class="o_kanban_mobile">

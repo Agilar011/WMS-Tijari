@@ -302,6 +302,12 @@ class StockPicking(models.Model):
         string="Package Number",
     )
 
+    package_scan_code = fields.Char(
+        string="Kode Scan Package",
+        help="Masukkan kode package dari scanner handheld atau ketik manual.",
+        store=False,
+    )
+
     filtered_package_level_id = fields.Many2one(
         'stock.package_level',
         string='Filtered Package Level',
@@ -322,6 +328,15 @@ class StockPicking(models.Model):
 
             if package_level:
                 picking.filtered_package_level_id = package_level
+
+    @api.onchange('package_scan_code')
+    def _onchange_package_scan_code(self):
+        for picking in self:
+            if not picking.package_scan_code:
+                continue
+            values = picking._get_scanned_package_values(picking.package_scan_code)
+            picking.update(values['values'])
+            picking.package_scan_code = False
 
     scan_package_button = fields.Boolean(string="Scan Package")
 
@@ -1145,7 +1160,7 @@ class StockPicking(models.Model):
                 move_lines_to_pack=move_lines_to_pack
             )
 
-        if self.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage'):
             self._check_putaway_status_requirements()
 
         move_line_ids = self._package_move_lines(
@@ -1283,10 +1298,10 @@ class StockPicking(models.Model):
 
         self._adt_apply_dest_location_to_move_lines()
         self.filtered(
-            lambda picking: picking.picking_type_id.name == 'Receipts'
+            lambda picking: picking.picking_type_id.name in ('Receipts', 'Storage')
         )._remove_qty_move_line()
 
-        # Transfer IN: ketika Receipt Internal di-Mark as Todo, otomatis
+        # Transfer IN: ketika receipt di-Mark as Todo, otomatis
         # proses leg delivery yang menjadi pasangan transfer-nya.
         transfer_in_receipts = marked_as_todo.filtered(
             lambda picking: (
@@ -1294,7 +1309,6 @@ class StockPicking(models.Model):
                 and picking.internal_transfer_order_id
                 and picking.internal_transfer_order_id.transfer_type == 'transfer_in'
                 and picking.internal_transfer_leg == 'receipt'
-                and picking.picking_type_id.name == 'Receipt Internal'
             )
         )
         for receipt in transfer_in_receipts:
@@ -1799,25 +1813,11 @@ class StockPicking(models.Model):
     def action_apply_scanned_package(self, scanned_code):
         self.ensure_one()
 
-        scanned_code = (scanned_code or '').strip()
+        values = self._get_scanned_package_values(scanned_code)
+        package = values['package']
+        package_level = values['package_level']
 
-        package = self.available_package_ids.filtered(
-            lambda available_package: available_package.name == scanned_code
-        )[:1]
-
-        if not package:
-            raise ValidationError(
-                "Package tidak ditemukan untuk kode scan: %s" % scanned_code
-            )
-
-        package_level = self.package_level_ids.filtered(
-            lambda package_level: package_level.package_id == package
-        )[:1]
-
-        self.write({
-            "scanned_package_id": package.id,
-            "filtered_package_level_id": package_level.id or False,
-        })
+        self.write(values['values'])
 
         wizard = False
 
@@ -1842,6 +1842,32 @@ class StockPicking(models.Model):
             "package_level_id": package_level.id or False,
             "package_detail_wizard_id": wizard.id if wizard else False,
             "display_name": package.display_name,
+        }
+
+    def _get_scanned_package_values(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+
+        package = self.available_package_ids.filtered(
+            lambda available_package: available_package.name == scanned_code
+        )[:1]
+
+        if not package:
+            raise ValidationError(
+                "Package tidak ditemukan untuk kode scan: %s" % scanned_code
+            )
+
+        package_level = self.package_level_ids.filtered(
+            lambda package_level: package_level.package_id == package
+        )[:1]
+
+        return {
+            'values': {
+                "scanned_package_id": package.id,
+                "filtered_package_level_id": package_level.id or False,
+            },
+            'package': package,
+            'package_level': package_level,
         }
     
     def action_mark_as_done(self):
@@ -2120,7 +2146,7 @@ class StockPicking(models.Model):
 
     def button_validate(self):
         document_only_pickings = self.filtered(
-            lambda picking: picking.adt_is_document_only or picking.picking_type_id.is_document_only_api
+            lambda picking: picking.adt_is_document_only
         )
         for picking in document_only_pickings.filtered(lambda item: item.state not in ('done', 'cancel')):
             picking._adt_preserve_document_only_destination()
@@ -2132,7 +2158,11 @@ class StockPicking(models.Model):
             picking._set_document_only_done_quantities()
 
         for picking in self:
-            if picking.adt_is_document_only or picking.picking_type_id.is_document_only_api:
+            if picking.adt_type == 'Toko Pegang DO':
+                if not picking.owner_id:
+                    raise UserError(_("Owner is required for Toko Pegang DO."))
+
+            if picking.adt_is_document_only:
                 continue
             # Pick harus diblokir sebelum validasi standar Odoo memproses
             # perpindahan stok apabila masih ada line yang belum Match.
@@ -2142,11 +2172,11 @@ class StockPicking(models.Model):
                 picking._check_pick_confirmation_quantity()
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
-            if picking.picking_type_id.name in ('Receipts', 'Receipt Internal'):
+            if picking.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage'):
                 picking._check_putaway_status_requirements()
                 picking._check_picker_status_requirements()
 
-            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal'):
+            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal', 'Storage'):
                 print(f"Run validate all except pick and receipt")
                 # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
                 for move in picking.move_ids:
@@ -2175,11 +2205,11 @@ class StockPicking(models.Model):
 
         for rec in self:
 
-            is_document_only = rec.adt_is_document_only or rec.picking_type_id.is_document_only_api
+            is_document_only = rec.adt_is_document_only
             if is_document_only:
                 continue
             print(rec.picking_type_id.name)
-            is_receipt_putaway = rec.picking_type_id.name in ('Receipts', 'Receipt Internal')
+            is_receipt_putaway = rec.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage')
             for line in rec.move_line_ids:
                 print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
                 if not is_receipt_putaway:
@@ -2343,7 +2373,7 @@ class StockPicking(models.Model):
     
     def _check_putaway_quantity_vs_demand(self):
         for picking in self:
-            if picking.picking_type_id.name not in ('Receipts', 'Receipt Internal'):
+            if picking.picking_type_id.name not in ('Receipts', 'Receipt Internal', 'Storage'):
                 continue
 
             has_discrepancy = False
@@ -2379,7 +2409,7 @@ class StockPicking(models.Model):
     def _check_validate_requirements(self):
         self.ensure_one()
         _logger.info("Check Validate on = %s", self.id)
-        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Internal Transfers'):
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage', 'Internal Transfers'):
             return self._check_putaway_status_requirements() and self._check_picker_status_requirements()
 
         if self.picking_type_name not in ['Pick', 'Pick Internal']:

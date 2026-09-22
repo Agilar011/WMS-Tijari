@@ -50,6 +50,104 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             return mapping
         return self._find_location_mapping(code, label)
 
+    def _get_location_mapping_group(self, mapping, label):
+        """Return the configured mapping group for an Acumatica location.
+
+        API intra-warehouse transfers are resolved from the explicit
+        ``stock.location.acumatica`` records for the source and destination
+        codes.  We do not search for arbitrary child locations; the parent
+        chain is only used to identify the configured Odoo mapping group.
+        """
+        location = mapping.odoo_location_id if mapping else False
+        if not location:
+            raise UserError(
+                f'{label} mapping belum punya Odoo location: '
+                f'{mapping.code if mapping else "-"}'
+            )
+
+        current = location
+        while current:
+            if current.is_location_mapping:
+                return current
+            current = current.location_id
+
+        raise UserError(
+            f'{label} Odoo location {location.display_name} belum memiliki '
+            'parent mapping dengan is_location_mapping=True.'
+        )
+
+    def classify_intra_by_location_mapping(
+        self,
+        from_code,
+        to_code,
+        from_label='FromLocationID',
+        to_label='ToLocationID',
+        check_same_location_mapping=False,
+    ):
+        """Classify a one-step transfer from explicit location mappings.
+
+        The source and destination codes are looked up directly in
+        ``stock.location.acumatica``.  The transaction is always intra
+        warehouse; its transfer type is based on the resolved mapping groups.
+        """
+        from_mapping = self._find_location_mapping(
+            from_code,
+            from_label,
+            required=True,
+            require_odoo_location=True,
+        )
+        to_mapping = self._find_location_mapping(
+            to_code,
+            to_label,
+            required=True,
+            require_odoo_location=True,
+        )
+
+        source_location = from_mapping.odoo_location_id
+        destination_location = to_mapping.odoo_location_id
+        if check_same_location_mapping and source_location == destination_location:
+            return {
+                'status': 'skip',
+                'message': f'Skipped: {from_label} dan {to_label} map ke Odoo location yang sama.',
+                'from_mapping': from_mapping,
+                'to_mapping': to_mapping,
+                'source_location': source_location,
+                'destination_location': destination_location,
+                'location_group': False,
+                'transaction_type': False,
+                'transfer_type': False,
+            }
+
+        from_building = self._get_building_code(from_mapping, from_code)
+        to_building = self._get_building_code(to_mapping, to_code)
+        if from_building and to_building and from_building != to_building:
+            raise UserError(
+                f'{from_label} ({from_code}) dan {to_label} ({to_code}) '
+                'berasal dari building berbeda; Transfer 1 Step hanya untuk intra warehouse.'
+            )
+
+        from_group = self._get_location_mapping_group(from_mapping, from_label)
+        to_group = self._get_location_mapping_group(to_mapping, to_label)
+        transfer_type = (
+            'intra_group_transfer'
+            if from_group == to_group
+            else 'inter_group_transfer'
+        )
+
+        return {
+            'status': 'import',
+            'message': False,
+            'from_mapping': from_mapping,
+            'to_mapping': to_mapping,
+            'source_location': source_location,
+            'destination_location': destination_location,
+            'location_group': from_group if from_group == to_group else False,
+            'source_location_group': from_group,
+            'destination_location_group': to_group,
+            'transaction_type': 'intra_warehouse',
+            'transfer_type': transfer_type,
+        }
+
     def classify(
         self,
         from_code,
@@ -258,9 +356,13 @@ class AcumaticaInternalTransferService(models.AbstractModel):
         transaction_type,
         schedule_date=False,
         note=False,
+        description=False,
         transfer_type='transfer_out',
         external_ref_in=False,
         external_ref_out=False,
+        location_group=False,
+        adt_transaction_type=False,
+        document_only=False,
     ):
         InternalTransferOrder = self.env['internal.transfer.order']
         order = InternalTransferOrder.search([('external_ref', '=', external_ref)], limit=1)
@@ -276,7 +378,12 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             'schedule_date': schedule_date or fields.Datetime.now(),
             'validation_policy': 'validate_all',
             'note': note or False,
+            'description': description or False,
+            'adt_transaction_type': adt_transaction_type or False,
+            'document_only': bool(document_only),
         }
+        if location_group and 'location_group_id' in InternalTransferOrder._fields:
+            vals['location_group_id'] = location_group.id
         if order:
             related_pickings = order._get_related_pickings()
             blocked_picking = related_pickings.filtered(

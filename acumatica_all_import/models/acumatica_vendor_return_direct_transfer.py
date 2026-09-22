@@ -127,7 +127,24 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         return True
 
     def _get_vendor_return_base_location(self, first, picking_type):
-        return picking_type.default_location_src_id
+        Location = self.env['stock.location']
+        warehouse_code = (first.adt_FromWarehouseID or '').strip()
+        normalized_code = (
+            warehouse_code.split('-', 1)[1].strip()
+            if '-' in warehouse_code
+            else warehouse_code
+        )
+        source_location = Location.search([
+            ('name', 'in', list({warehouse_code, normalized_code} - {''})),
+            ('is_consignment', '=', True),
+            ('location_id.name', '=', 'Consignment'),
+        ], limit=1)
+        if not source_location:
+            raise UserError(
+                f'Lokasi consignment tidak ditemukan untuk FromWarehouseID '
+                f'{first.adt_FromWarehouseID or "-"}.'
+            )
+        return source_location
 
     def _get_vendor_return_source_location(self, first, picking_type):
         base_location = self._get_vendor_return_base_location(first, picking_type)
@@ -139,10 +156,23 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         return base_location
 
     def _get_vendor_return_destination_location(self, first, picking_type):
-        destination_warehouse = self._find_warehouse_by_code(first.adt_ToWarehouseID)
-        if destination_warehouse and destination_warehouse.lot_stock_id:
-            return destination_warehouse.lot_stock_id
-        return picking_type.default_location_dest_id
+        warehouse_code = (first.adt_ToWarehouseID or '').strip()
+        mapping = self.env['stock.location.acumatica'].search([
+            ('code', '=', warehouse_code),
+            ('is_active', '=', True),
+        ], limit=1)
+        if not mapping:
+            raise UserError(
+                f'Mapping ToWarehouseID tidak ditemukan di '
+                f'stock.location.acumatica: {first.adt_ToWarehouseID or "-"}.'
+            )
+        if not mapping.odoo_location_id:
+            raise UserError(
+                f'Lokasi Odoo untuk ToWarehouseID '
+                f'{first.adt_ToWarehouseID or "-"} belum diisi pada '
+                'stock.location.acumatica.'
+            )
+        return mapping.odoo_location_id
 
     # =========================================================================
     # CORE PROCESS FUNCTIONS FOR DIRECT TRANSFER IMPORT
@@ -216,10 +246,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         origin,
                         source_location,
                         dest_location,
-                        'vendor_return',
+                        'inter_warehouse',
                         self._parse_dt(first.adt_Date),
                         first.adt_note or False,
-                        transfer_type='transfer_out',
+                        description=first.adt_Description or False,
+                        transfer_type='transfer_in',
+                        adt_transaction_type='Vendor Return',
+                        document_only=first.adt_DocumentOnly,
                     )
 
                     for line in to_create_move_lines:
@@ -246,7 +279,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             'adt_transfer_order_line_number': line.adt_LineNumber or line.adt_rowNumber or False,
                             'adt_transfer_order_type': first.adt_TransferType or first.adt_ReturnType or False,
                             'adt_quantity': qty,
-                            'adt_type': 'PO Return',
+                            'adt_type': 'Vendor Return',
                             'transaction_type': 'internal',
                         })
 
@@ -352,8 +385,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     def action_open_picking(self):
         self.ensure_one()
         if self.odoo_internal_transfer_order_id:
-            if self.odoo_internal_transfer_order_id.picking_count:
-                return self.odoo_internal_transfer_order_id.action_view_pickings()
             return {
                 'type': 'ir.actions.act_window',
                 'res_model': 'internal.transfer.order',

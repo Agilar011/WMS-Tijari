@@ -356,7 +356,7 @@ class StockMove(models.Model):
     @api.depends('product_uom_qty', 'quantity', 'picking_type_name', 'confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
-            if move.picking_type_name in ['Receipts', 'Receipt Internal']:
+            if move.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage']:
                 total_confirmation_quantity = move.confirmation_quantity
                 difference = move.product_uom_qty - total_confirmation_quantity
             elif move.picking_type_name in ['Pick', 'Pick Internal', 'Pick Components']:
@@ -1033,7 +1033,7 @@ class StockMove(models.Model):
         picking = self.picking_id
         base_dest_location = (
             picking.adt_dest_location_id
-            if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Direct Receipt']
+            if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Direct Receipt']
             else self.adt_dest_location_id
         )
 

@@ -469,6 +469,65 @@ class AcumaticaShipmentGIStaging(models.Model):
             is_consignment=True,
         )
 
+    def _get_consignment_source_location(self, warehouse_code):
+        """Resolve the Shipment Consignment source through Acumatica mapping."""
+        Mapping = self.env['stock.location.acumatica']
+        code = (warehouse_code or '').strip()
+        if not code:
+            raise UserError('WarehouseID source kosong.')
+
+        mapping = Mapping.search([
+            ('code', '=', code),
+            ('is_active', '=', True),
+        ], limit=1)
+        if not mapping:
+            mapping = Mapping.search([
+                ('name', '=', code),
+                ('is_active', '=', True),
+            ], limit=1)
+        if not mapping:
+            raise UserError(
+                f'Mapping lokasi source tidak ditemukan untuk WarehouseID: {code}.'
+            )
+        if not mapping.odoo_location_id:
+            raise UserError(
+                f'Mapping lokasi source belum punya Odoo location: {code}.'
+            )
+        return mapping.odoo_location_id
+
+    def _find_consignment_destination_location(self, warehouse_code):
+        """Find an existing consignment location for ToWarehouseID."""
+        Location = self.env['stock.location']
+        code = (warehouse_code or '').strip()
+        normalized_code = (
+            code.split('-', 1)[1].strip()
+            if '-' in code
+            else code
+        )
+        names = list({code, normalized_code} - {''})
+        locations = Location.search([
+            ('name', 'in', names),
+            ('is_consignment', '=', True),
+        ], order='id')
+
+        def is_consignment_branch(location):
+            current = location.location_id
+            while current:
+                if (current.name or '').strip().upper() in {'CONS', 'CONSIGNMENT'}:
+                    return True
+                current = current.location_id
+            return False
+
+        destination = locations.filtered(is_consignment_branch)[:1]
+        if not destination:
+            destination = locations[:1]
+        if not destination:
+            raise UserError(
+                f'Lokasi consignment tidak ditemukan untuk ToWarehouseID: '
+                f'{code or "-"}.'
+            )
+        return destination
+
     def _get_or_create_transit_location(self):
         Location = self.env['stock.location']
         transit_location = Location.search([('usage', '=', 'transit')], limit=1)
@@ -484,11 +543,9 @@ class AcumaticaShipmentGIStaging(models.Model):
         Move = self.env['stock.move']
         Product = self.env['product.product']
 
-        source_location = self._find_warehouse_product(shipment.adt_WarehouseID)
-        if not source_location:
-            raise UserError(
-                f"Source location mapping WarehouseID {shipment.adt_WarehouseID or '-'} tidak ditemukan."
-            )
+        source_location = self._get_consignment_source_location(
+            shipment.adt_WarehouseID,
+        )
 
         partner = self._find_partner(shipment.adt_CustomerID)
         if not partner:
@@ -496,9 +553,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                 f"Customer {shipment.adt_CustomerID or '-'} tidak ditemukan di Odoo."
             )
 
-        destination_location = self._get_or_create_consignment_location(
-            source_location,
-            shipment.adt_WarehouseID,
+        destination_location = self._find_consignment_destination_location(
+            shipment.adt_ToWarehouseID,
         )
         transit_location = self._get_or_create_transit_location()
 
@@ -512,6 +568,12 @@ class AcumaticaShipmentGIStaging(models.Model):
         shipment_weight = shipment.adt_ShipmentWeight
         shipment_volume = shipment.adt_ShipmentVolume
         shipment_city = shipment.adt_City
+        order_type = (shipment.adt_OrderType or '').strip().upper()
+        adt_transaction_type = (
+            'Shipment Consignment'
+            if order_type == 'CO'
+            else shipment.adt_OrderType or False
+        )
         # shipment_country = self._find_loginext_country(shipment.adt_CountryName)
         shipment_postal_code = shipment.adt_PostalCode
         shipment_street = shipment.adt_AddressLine
@@ -530,8 +592,10 @@ class AcumaticaShipmentGIStaging(models.Model):
                 )
             order.move_ids.unlink()
             order.write({
-                'transaction_type': 'consignment',
+                'transaction_type': 'inter_warehouse',
                 'transfer_type': 'transfer_out',
+                'adt_transaction_type': adt_transaction_type,
+                'document_only': bool(shipment.adt_DocumentOnly),
                 'adt_order_type': shipment.adt_OrderType or False,
                 'partner_id': partner.id,
                 'location_id': source_location.id,
@@ -540,6 +604,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'schedule_date': ship_date,
                 'validation_policy': 'validate_all',
                 'note': shipment.adt_note or shipment.adt_NoteHeader or False,
+                'description': shipment.adt_Description or False,
                 'state': 'draft',
             })
             action_state = 'updated'
@@ -547,8 +612,10 @@ class AcumaticaShipmentGIStaging(models.Model):
         else:
             order = InternalTransferOrder.create({
                 'external_ref': shipment.adt_ShipmentNbr,
-                'transaction_type': 'consignment',
+                'transaction_type': 'inter_warehouse',
                 'transfer_type': 'transfer_out',
+                'adt_transaction_type': adt_transaction_type,
+                'document_only': bool(shipment.adt_DocumentOnly),
                 'adt_order_type': shipment.adt_OrderType or False,
                 'partner_id': partner.id,
                 'location_id': source_location.id,
@@ -557,6 +624,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'schedule_date': ship_date,
                 'validation_policy': 'validate_all',
                 'note': shipment.adt_note or shipment.adt_NoteHeader or False,
+                'description': shipment.adt_Description or False,
             })
             action_state = 'created'
 
