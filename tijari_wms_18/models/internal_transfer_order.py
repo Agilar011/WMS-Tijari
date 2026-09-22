@@ -763,7 +763,10 @@ class InternalTransferOrder(models.Model):
 
     def _get_picking_adt_type(self):
         self.ensure_one()
-        return self.adt_transaction_type or False
+        # Manual ITO records do not carry an Acumatica transaction type.
+        # Keep API-provided values unchanged, but label generated documents
+        # from a manual order consistently as Internal Transfer.
+        return self.adt_transaction_type or 'Internal Transfer'
 
     def _get_move_mapped_location_name(self, leg):
         self.ensure_one()
@@ -830,7 +833,7 @@ class InternalTransferOrder(models.Model):
             'adt_from_location_code': source_move.adt_from_location_code,
             'adt_to_location_code': source_move.adt_to_location_code,
             'adt_quantity': source_move.adt_quantity,
-            'adt_type': source_move.adt_type,
+            'adt_type': source_move.adt_type or self._get_picking_adt_type(),
             'product_note': source_move.product_note,
             'adt_dest_location': self._get_move_mapped_location_name(
                 picking.internal_transfer_leg
