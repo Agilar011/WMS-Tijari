@@ -9,7 +9,7 @@
                 <label for="adt_internal_transfer_enabled"/>
                 <div class="o_row">
                     <field name="adt_internal_transfer_enabled" nolabel="1"/>
-                    <span>Pick, Pack, Transfer, then Receipt (3 steps)</span>
+                    <span>Pick, Pack, Internal Transfer, then Receipts</span>
                 </div>
                 <label for="adt_document_only_enabled"/>
                 <div class="o_row">

@@ -37,7 +37,7 @@
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload" invisible="import_state != 'staged'"/>
-                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
             </list>
         </field>
     </record>
@@ -51,7 +51,7 @@
             <form string="Detail Data Direct Transfer Staging">
                 <header>
                     <button name="action_import_this" string="Import" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
-                    <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
+                    <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                     <button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/>
                     <!-- Diperbaiki: Ditambahkan statusbar_visible agar memunculkan titik status -->
                     <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
@@ -106,6 +106,7 @@
                     <group string="Status Integrasi Odoo">
                         <field name="import_message" widget="text"/>
                         <field name="odoo_picking_id"/>
+                        <field name="odoo_internal_transfer_order_id"/>
                         <field name="sync_date"/>
                     </group>
                 </sheet>

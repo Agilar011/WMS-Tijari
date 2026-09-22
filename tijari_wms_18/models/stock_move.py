@@ -387,7 +387,7 @@ class StockMove(models.Model):
     @api.depends('product_uom_qty', 'quantity', 'quantity_shadow', 'picking_type_name', 'confirmation_quantity', 'mo_confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
-            if move.picking_type_name in ['Receipts', 'Receipt Internal']:
+            if move.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage']:
                 total_confirmation_quantity = move.confirmation_quantity
                 difference = move.product_uom_qty - total_confirmation_quantity
             elif move.picking_type_name in ['Pick', 'Pick Internal', 'Pick Components']:
@@ -942,7 +942,7 @@ class StockMove(models.Model):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': _('Putaway'),
+            'name': _('Stock move') if self.picking_type_name == 'Storage' else _('Putaway'),
             'res_model': 'stock.move',
             'res_id': self.id,
             'view_mode': 'form',
@@ -1096,9 +1096,22 @@ class StockMove(models.Model):
         self.ensure_one()
 
         picking = self.picking_id
+        if (
+            picking
+            and picking.picking_type_name in (
+                'Pick', 'Pick Internal', 'Pick Components'
+            )
+            and picking.internal_transfer_order_id
+            and picking.internal_transfer_order_id.transaction_type == 'intra_warehouse'
+        ):
+            # Pick uses adt_dest_location_id as the source-location
+            # confirmation reference. It must not overwrite the physical
+            # move destination (the intra-warehouse transit location).
+            return False
+
         base_dest_location = (
             picking.adt_dest_location_id
-            if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Direct Receipt']
+            if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Direct Receipt']
             else self.adt_dest_location_id
         )
 
@@ -1112,6 +1125,24 @@ class StockMove(models.Model):
         )
 
         return putaway_location or base_dest_location
+
+    def _skip_push(self):
+        """Keep intra-warehouse ITO on its explicit Pick -> Storage chain.
+
+        The Pick move uses the shared inter-warehouse transit location as its
+        physical destination.  Odoo would normally interpret that as a push
+        rule trigger and create an extra Receipts picking.  Intra-warehouse
+        ITO already has its Storage move linked explicitly, so the generic
+        push chain must not add another operation.  Other picking flows keep
+        the standard Odoo behavior.
+        """
+        intra_ito_pick = self.filtered(lambda move: (
+            move.picking_id
+            and move.picking_id.internal_transfer_order_id
+            and move.picking_id.internal_transfer_order_id.transaction_type == 'intra_warehouse'
+            and move.picking_id.internal_transfer_leg == 'pick'
+        ))
+        return super()._skip_push() or bool(intra_ito_pick)
 
 
 class StockMoveScanWizard(models.TransientModel):

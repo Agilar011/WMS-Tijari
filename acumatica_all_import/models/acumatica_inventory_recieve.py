@@ -293,9 +293,12 @@ class AcumaticaInventoryRecievedLine(models.Model):
             transfer_info['transaction_type'],
             schedule_date=receive._parse_dt(receive.scheduled_date),
             note=receive.note or False,
+            description=receive.description or False,
             transfer_type='transfer_in',
             external_ref_in=receive.reference_nbr,
             external_ref_out=receive.transfer_nbr,
+            adt_transaction_type=receive.transfer_type or receive.doc_type or False,
+            document_only=receive.document_only,
         )
 
         order.write({'validation_policy': 'validate_all'})

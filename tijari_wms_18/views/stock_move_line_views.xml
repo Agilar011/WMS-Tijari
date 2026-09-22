@@ -18,7 +18,7 @@
                     name="lot_id" 
                     string="Lot" 
                     domain="[('id', 'in', available_lot_ids)]" 
-                    column_invisible="parent.picking_type_name not in ['Pack', 'Pack Internal', 'Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Manufacturing']" 
+                    column_invisible="parent.picking_type_name not in ['Pack', 'Pack Internal', 'Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal', 'Manufacturing']"
                     force_save='1'/>
                 <!-- <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/> -->
                 <!-- <field name="quant_id" optional="hide"/> -->
@@ -29,7 +29,7 @@
                     context="{'show_location_short_name': True}" 
                     widget="location_short_many2one"
                     string="Pick From" 
-                    column_invisible="parent.picking_type_name not in ['Pack','Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Manufacturing']" 
+                    column_invisible="parent.picking_type_name not in ['Pack','Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal', 'Manufacturing']"
                     force_save="1"/>
                 <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
                 <field name="temp_lot_ids" optional="hide" column_invisible="1"/>
@@ -41,7 +41,7 @@
 
             <!-- Hide From To defaul_odoo for outbound- pick -->
             <xpath expr="//field[@name='quant_id']" position="replace">
-                <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="parent.picking_type_name in ['Pack', 'Pick', 'Pick Internal', 'Pack Internal', 'Receipts', 'Receipt Internal', 'Pick Components', 'Internal Transfers', 'Manufacturing']"/>
+                <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="parent.picking_type_name in ['Pack', 'Pick', 'Pick Internal', 'Pack Internal', 'Receipts', 'Receipt Internal', 'Storage', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal', 'Manufacturing']"/>
             </xpath>
 
             <xpath expr="//field[@name='result_package_id'][not(@column_invisible)]" position="attributes">
@@ -62,11 +62,11 @@
                 <field name="picking_id" optional="hide" />
                 <field 
                     name="matching_lot_id" 
-                    column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Manufacturing']" 
+                    column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal', 'Manufacturing']"
                     force_save="1"/>
                 <field 
                     name="matching_loc_dest_id" 
-                    column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers']" 
+                    column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal']"
                     force_save="1"/>
                 <field name="matching" column_invisible="1" force_save="1" />
                 <field name="picker_status" column_invisible="1" force_save="1" />
@@ -76,7 +76,7 @@
                     name="second_matching"
                     decoration-success="second_matching == 'Match'"
                     decoration-danger="second_matching == 'Not Match'" 
-                    column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Manufacturing']" 
+                    column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal', 'Manufacturing']"
                     readonly="1" 
                     force_save="1"/>
 
@@ -88,14 +88,14 @@
                         widget="adt_scan_lot_button"
                         readonly="1"
                         invisible="matching == 'match'"
-                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Internal Transfers', 'Manufacturing']"/>
+                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal', 'Manufacturing']"/>
 
                 <field name="confirmation_location_code"
                         string=""
                         widget="adt_scan_location_button"
                         readonly="1"
                         invisible="matching == 'match'"
-                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
+                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal']"/>
                 <!-- <field name="second_matching" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" /> -->
                 <!-- <field name="third_matching" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" /> -->
             </xpath>
@@ -172,12 +172,12 @@
                     string="Quantity"
                     readonly="state in ('done', 'cancel') and is_locked"
                     force_save="1"
-                    column_invisible="context.get('picking_type_name') not in ['Receipts', 'Receipt Internal']"/>
+                    column_invisible="context.get('picking_type_name') not in ['Receipts', 'Receipt Internal', 'Storage']"/>
                 <field name="quantity"
                     string="Quantity"
                     readonly="state in ('done', 'cancel') and is_locked"
                     force_save="1"
-                    column_invisible="context.get('picking_type_name') in ['Receipts', 'Receipt Internal']"/>
+                    column_invisible="context.get('picking_type_name') in ['Receipts', 'Receipt Internal', 'Storage']"/>
             </xpath>
 
         </field>
@@ -249,7 +249,7 @@
                             domain="[('id', 'in', available_lot_ids)]"/>
                     </group>
 
-                    <group invisible="'Pick' not in (parent.picking_type_name or '')">
+                    <group invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '') and 'Storage' not in (parent.picking_type_name or '')">
                         <label
                             for="handheld_scan_code"
                             string="Kode Scan Handheld"
@@ -257,7 +257,7 @@
                         <field
                             name="handheld_scan_code"
                             widget="adt_handheld_scan_code"
-                            placeholder="Scan handheld: lot atau lokasi"
+                            placeholder="Scan handheld: lot, lokasi, atau package"
                             nolabel="1"
                             class="fw-bold fs-6"
                         />
