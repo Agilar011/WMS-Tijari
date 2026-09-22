@@ -9,6 +9,8 @@
 
             <xpath expr="//field[@name='picking_type_code']" position="after">
                 <field name="picking_type_name" invisible="1"/>
+                <field name="show_picker_page" invisible="1"/>
+                <field name="show_putaway_page" invisible="1"/>
             </xpath>
 
             <xpath expr="//div[@name='button_box']" position="inside">
@@ -32,6 +34,10 @@
                 <xpath expr="//page[@name='page_operations']" position="move"/>
             </xpath>
 
+            <xpath expr="//page[@name='page_operations']" position="attributes">
+                <attribute name="invisible">picking_type_name in ['Pick', 'Pick Internal', 'Pick Components'] and not show_picker_page</attribute>
+            </xpath>
+
             <xpath expr="//page[@name='page_transfers']" position="attributes">
                 <attribute name="string">Transaksi</attribute>
             </xpath>
@@ -45,7 +51,7 @@
             </xpath>
 
             <xpath expr="//page[@name='page_operations']" position="after">
-                <page string="Putaway" name="page_putaway" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
+                <page string="Putaway" name="page_putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal']">
                     <group>
                         <field name="scan_product_button"
                             widget="adt_scan_putaway_product_button"

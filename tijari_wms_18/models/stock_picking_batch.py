@@ -45,6 +45,34 @@ class StockPickingBatch(models.Model):
         related='picking_type_id.name',
         store=False,
     )
+    show_picker_page = fields.Boolean(
+        compute='_compute_show_picker_page',
+    )
+    show_putaway_page = fields.Boolean(
+        compute='_compute_show_putaway_page',
+    )
+
+    @api.depends('picking_ids.pick_responsible_ids')
+    def _compute_show_picker_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        for batch in self:
+            assigned_users = batch.picking_ids.mapped('pick_responsible_ids')
+            batch.show_picker_page = (
+                not is_warehouse_operator
+                or user in assigned_users
+            )
+
+    @api.depends('picking_ids.putaway_responsible_ids')
+    def _compute_show_putaway_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        for batch in self:
+            assigned_users = batch.picking_ids.mapped('putaway_responsible_ids')
+            batch.show_putaway_page = (
+                not is_warehouse_operator
+                or user in assigned_users
+            )
 
     def _sync_responsible_users(self):
         for picking in self:
@@ -77,6 +105,10 @@ class StockPickingBatch(models.Model):
             lambda line: (
                 (line.lot_id or line.lot_name)
                 and line.quantity > 0
+                and (
+                    line.picker_status == 'finished'
+                    or line.confirmation_quantity > 0
+                )
             )
         )
 
@@ -93,7 +125,12 @@ class StockPickingBatch(models.Model):
                 lambda line: line.lot_id == self.putaway_lot_id or line.lot_name == self.putaway_lot_id.name
             )
 
-        return move_lines
+        return move_lines.sorted(
+            key=lambda line: (
+                line.putaway_status != 'unfinished',
+                line._origin.id or 0,
+            )
+        )
 
     def _get_putaway_move_lines_for_product(self, product):
         self.ensure_one()
@@ -137,6 +174,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.product_id',
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.confirmation_quantity',
         'move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_product_ids(self):
@@ -152,6 +190,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.lot_name',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.confirmation_quantity',
         'move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_lot_ids(self):
@@ -166,6 +205,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.product_id',
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.confirmation_quantity',
         'move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_move_line_ids(self):
@@ -180,6 +220,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.product_id',
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.confirmation_quantity',
         'move_ids.move_line_ids.picker_status',
     )
     def _compute_putaway_values(self):
@@ -347,13 +388,22 @@ class StockPickingBatch(models.Model):
         return super().action_done()
 
     def _find_product_by_scan_code(self, scan_code):
-        Product = self.env['product.product']
+        product, _matched_by = self._find_product_scan_match(scan_code)
+        return product
 
-        return Product.search([
-            '|',
-            ('barcode', '=', scan_code),
-            ('default_code', '=', scan_code),
-        ], limit=1)
+    def _find_product_scan_match(self, scan_code):
+        Product = self.env['product.product']
+        scan_code = (scan_code or '').strip()
+
+        product = Product.search([('barcode', '=', scan_code)], limit=1)
+        if product:
+            return product, _('Barcode')
+
+        product = Product.search([('default_code', '=', scan_code)], limit=1)
+        if product:
+            return product, _('SKU')
+
+        return Product.browse(), False
 
     def _find_putaway_product_by_lot_scan_code(self, scan_code):
         self.ensure_one()
@@ -369,8 +419,14 @@ class StockPickingBatch(models.Model):
 
         if not move_lines:
             if lots:
-                raise ValidationError(_('Lot hasil scan tidak ada di dokumen ini.'))
-            raise ValidationError(_('Lot tidak ditemukan untuk kode scan: %s') % scan_code)
+                raise ValidationError(
+                    _('Lot %s ditemukan, tetapi tidak ada di dokumen ini.')
+                    % scan_code
+                )
+            raise ValidationError(
+                _('Kode %s tidak ditemukan sebagai Barcode, SKU, atau Lot.')
+                % scan_code
+            )
 
         products = move_lines.product_id
         if len(products) > 1:
@@ -423,7 +479,7 @@ class StockPickingBatch(models.Model):
             raise ValidationError(_('Kode scan tidak boleh kosong.'))
 
         move_lines = self._get_putaway_base_move_lines()
-        product = self._find_product_by_scan_code(scanned_code)
+        product, matched_by = self._find_product_scan_match(scanned_code)
         if product:
             matching_lines = move_lines.filtered(
                 lambda line: line.product_id == product
@@ -443,6 +499,12 @@ class StockPickingBatch(models.Model):
                         'matched_by': 'product',
                     },
                 }
+            raise ValidationError(
+                _(
+                    '%s %s dikenali sebagai Product %s, tetapi product tersebut '
+                    'tidak ada di dokumen ini.'
+                ) % (matched_by, scanned_code, product.display_name)
+            )
 
         product, matching_lines, lot = self._find_putaway_product_by_lot_scan_code(
             scanned_code

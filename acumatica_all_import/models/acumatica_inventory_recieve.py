@@ -555,6 +555,12 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     continue
 
                 uom = receive._find_uom(receive_line, product)
+                dest_location = receive._find_location_dest(receive_line)
+                if not dest_location:
+                    error_messages.append(
+                        f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                    )
+
                 if product and not uom:
                     error_messages.append(
                         f'UOM with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER UOM.'
@@ -584,7 +590,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     'adt_line_nbr': receive_line.line_nbr or False,
                     'adt_uom_code': receive_line.uom_code or False,
                     'adt_warehouse_dest_code': receive_line.warehouse_dest_code or False,
-                    'adt_dest_location_id': picking.adt_dest_location_id.id if picking else False,
+                    'adt_dest_location_id': dest_location.id if dest_location else picking.adt_dest_location_id.id if picking else False,
                 }
 
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}

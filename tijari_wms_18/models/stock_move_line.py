@@ -377,6 +377,15 @@ class StockMoveLine(models.Model):
         return res
 
     def unlink(self):
+        finished_putaway_lines = self.filtered(
+            lambda line: line.putaway_status == 'finished'
+        )
+        if finished_putaway_lines:
+            raise ValidationError(_(
+                "Data tidak bisa dihapus karena Putaway sudah Finished. "
+                "Rollback Putaway terlebih dahulu."
+            ))
+
         pickings = self.mapped('picking_id')
         res = super().unlink()
         pickings._sync_adt_quantities_from_moves()
@@ -1054,6 +1063,11 @@ class StockMoveLine(models.Model):
                 location = line._find_loc_by_scan_code(scanned_code)
                 if not location:
                     raise ValidationError(_("Barcode tidak terdaftar."))
+                if (
+                    picking_type_name in ('Receipts', 'Receipt Internal')
+                    and field_name == 'confirmation_location_code'
+                ):
+                    line._check_putaway_location_mapping(location)
                 if field_name == 'confirmation_location_code':
                     vals['confirmation_location_code'] = scanned_code
                 if picking_type_name in ['Receipts', 'Receipt Internal'] and field_name == 'confirmation_location_code':
@@ -1133,6 +1147,8 @@ class StockMoveLine(models.Model):
         return result
 
     def action_mark_putaway_finished(self):
+        if self.picking_type_name in ('Receipts', 'Receipt Internal') and self.location_putaway_id:
+            self._check_putaway_location_mapping(self.location_putaway_id)
         if not self.location_putaway_id and self.confirmation_quantity == 0:
             raise ValidationError(_("Location putaway dan Quantity tidak boleh kosong, silahkan input location putaway dan quantity terlebih dahulu"))
         if self.confirmation_quantity == 0:
@@ -1152,6 +1168,7 @@ class StockMoveLine(models.Model):
 
 
     def action_mark_picker_finished(self):
+        self._check_picker_quantity_vs_demand()
         if not self.lot_id:
             raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
         if self.quantity == 0:
@@ -1159,9 +1176,35 @@ class StockMoveLine(models.Model):
         self.write({'picker_status': 'finished'})
         return {'type': 'ir.actions.act_window_close'}
 
+    def _check_picker_quantity_vs_demand(self):
+        for line in self:
+            move = line.move_id
+            if not move:
+                continue
+
+            total_picker_qty = sum(move.move_line_ids.mapped('quantity'))
+            demand_qty = move.product_uom_qty
+            rounding = move.product_uom.rounding if move.product_uom else 0.01
+            if float_compare(
+                total_picker_qty,
+                demand_qty,
+                precision_rounding=rounding,
+            ) > 0:
+                raise ValidationError(_(
+                    "Qty Picker tidak boleh lebih besar dari Total Qty.\n"
+                    "Product: %(product)s\n"
+                    "Qty Picker: %(picked)s\n"
+                    "Total Qty: %(demand)s"
+                ) % {
+                    'product': move.product_id.display_name,
+                    'picked': total_picker_qty,
+                    'demand': demand_qty,
+                })
+
     def action_save_picker_details(self):
         self.ensure_one()
 
+        self._check_picker_quantity_vs_demand()
         if not self.lot_id:
             raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
         if self.quantity == 0:
@@ -1222,11 +1265,6 @@ class StockMoveLine(models.Model):
                 raise ValidationError(_(
                     "Penerimaan barang tidak dapat dihapus karena proses penyimpanan telah selesai"
                 ))
-            if self.putaway_status == 'unfinished':
-                raise ValidationError(_(
-                    "Apakah Anda yakin ingin menghapus data penerimaan ini? "
-                    "Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Putaway"
-                ))
 
         self.unlink()
 
@@ -1237,7 +1275,7 @@ class StockMoveLine(models.Model):
             'res_id': move.id,
             'view_mode': 'form',
             'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_pick_view'
+                'tijari_wms_18.stock_move_pick_detail_view'
             ).id,
             'target': 'new',
         }
@@ -1275,6 +1313,8 @@ class StockMoveLine(models.Model):
                 wizard.matching_loc_dest_id = False
                 wizard.matching = 'not_match'
 
+            if location and wizard.picking_type_name in ('Receipts', 'Receipt Internal'):
+                wizard._check_putaway_location_mapping(location)
 
             wizard.matching_loc_dest_id = location.id
 
@@ -1307,6 +1347,8 @@ class StockMoveLine(models.Model):
             location = self._find_loc_by_scan_code(code)
             if not location:
                 raise ValidationError(_('Kode lot atau lokasi tidak terdaftar.'))
+            if self.picking_type_name in ('Receipts', 'Receipt Internal'):
+                self._check_putaway_location_mapping(location)
             values = {'confirmation_location_code': code}
             if self.picking_type_name in ('Receipts', 'Receipt Internal'):
                 values.update({
@@ -1365,6 +1407,28 @@ class StockMoveLine(models.Model):
             return Lot.browse()
 
         return Lot.search([('name', '=', lot_code)], limit=1)
+
+    def _check_putaway_location_mapping(self, location):
+        self.ensure_one()
+        mapping = self.adt_dest_location_id
+        if not mapping:
+            raise ValidationError(_(
+                "Location Mapping belum diatur untuk product %(product)s."
+            ) % {
+                'product': self.product_id.display_name,
+            })
+
+        is_allowed = bool(self.env['stock.location'].search_count([
+            ('id', '=', location.id),
+            ('id', 'child_of', mapping.id),
+        ]))
+        if not is_allowed:
+            raise ValidationError(_(
+                "Lokasi %(location)s berada di luar Location Mapping %(mapping)s."
+            ) % {
+                'location': location.name,
+                'mapping': mapping.name,
+            })
 
     @api.onchange('confirmation_lot_code')
     def _onchange_confirmation_lot_code(self):

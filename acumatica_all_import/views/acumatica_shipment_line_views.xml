@@ -39,6 +39,7 @@
         <field name="arch" type="xml">
             <list string="Data SO Return" multi_edit="1">
                 <field name="shipment_nbr"/>
+                <field name="document_only"/>
                 <field name="shipment_type"/>
                 <field name="warehouse_code" string="Warehouse"/>
                 <field name="partner_code"/>
@@ -73,6 +74,7 @@
                     <group string="Header">
                         <group>
                             <field name="external_id"/>
+                            <field name="document_only"/>
                             <field name="row_number"/>
                             <field name="shipment_nbr"/>
                             <field name="picking_type_id" />
