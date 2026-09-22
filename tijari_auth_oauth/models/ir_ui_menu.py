@@ -14,15 +14,32 @@ class IrUiMenu(models.Model):
 
         # Guest tidak boleh melihat menu apa pun
         if guest_group and guest_group in self.env.user.groups_id:
+            allowed_menu_ids = set()
+
+            # Discuss
             discuss_menu = self.env.ref(
                 "mail.menu_root",
                 raise_if_not_found=False,
             )
-
             if discuss_menu:
-                return {discuss_menu.id}
+                allowed_menu_ids.update(
+                    self.search([
+                        ("id", "child_of", discuss_menu.id),
+                    ]).ids
+                )
 
-            return set()
+            # Dashboard
+            dashboard_menu = self.env.ref(
+                "board.menu_root",
+                raise_if_not_found=False,
+            )
+            if dashboard_menu:
+                allowed_menu_ids.update(
+                    self.search([
+                        ("id", "child_of", dashboard_menu.id),
+                    ]).ids
+                )
 
+            return allowed_menu_ids
 
         return visible_menu_ids
