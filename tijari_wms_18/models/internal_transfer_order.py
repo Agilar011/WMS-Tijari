@@ -1063,6 +1063,11 @@ class InternalTransferOrder(models.Model):
                 )[:1]
                 self._link_picking_moves(route_picking, receipt_picking)
                 self._set_staged_picking_ready(route_picking)
+                # Keep the Pack -> Internal Transfer dependency explicit.
+                # A downstream picking can be confirmed/assigned while the
+                # previous move is already done; re-linking here guarantees
+                # that Odoo exposes it as the Pack's Next Transfer.
+                self._link_picking_moves(done_picking, route_picking)
                 return route_picking
 
             loading_dock = self._get_or_create_loading_dock_location(operational_warehouse)
@@ -1086,6 +1091,10 @@ class InternalTransferOrder(models.Model):
             )[:1]
             self._link_picking_moves(delivery_picking, receipt_picking)
             self._set_staged_picking_ready(delivery_picking)
+            # The Next Transfer smart button is driven by move_dest_ids.  Do
+            # this after the delivery is staged so Pack remains linked even
+            # when the downstream move is assigned immediately.
+            self._link_picking_moves(done_picking, delivery_picking)
             return delivery_picking
         return False
 
@@ -1294,12 +1303,24 @@ class StockPicking(models.Model):
         string='Internal Transfer Leg',
         copy=False,
     )
+    is_ito_internal_transfer = fields.Boolean(
+        string='ITO Internal Transfer',
+        compute='_compute_is_ito_internal_transfer',
+    )
     internal_transfer_sequence = fields.Integer(
         string='Internal Transfer Sequence',
         default=99,
         copy=False,
         index=True,
     )
+
+    @api.depends('internal_transfer_order_id', 'internal_transfer_leg')
+    def _compute_is_ito_internal_transfer(self):
+        for picking in self:
+            picking.is_ito_internal_transfer = bool(
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_leg == 'delivery'
+            )
 
     def _get_receipt_done_line_dest_location(self, done_line, move):
         scanned_location = self.env['stock.location']

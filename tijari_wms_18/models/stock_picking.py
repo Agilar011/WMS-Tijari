@@ -1371,7 +1371,7 @@ class StockPicking(models.Model):
     @api.onchange('internal_transfer_adt_dest_location_id')
     def _onchange_internal_transfer_adt_dest_location_id(self):
         for picking in self:
-            if picking.picking_type_name != 'Internal Transfers':
+            if not picking.is_ito_internal_transfer:
                 continue
             location = picking.internal_transfer_adt_dest_location_id
             picking.location_id = location
@@ -2172,7 +2172,10 @@ class StockPicking(models.Model):
                 picking._check_pick_confirmation_quantity()
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
-            if picking.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage'):
+            if (
+                picking.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage')
+                and not picking.is_ito_internal_transfer
+            ):
                 if picking.picking_type_id.name == 'Storage':
                     picking._check_storage_pick_completed()
                 picking._check_putaway_status_requirements()
@@ -2211,7 +2214,10 @@ class StockPicking(models.Model):
             if is_document_only:
                 continue
             print(rec.picking_type_id.name)
-            is_receipt_putaway = rec.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage')
+            is_receipt_putaway = (
+                rec.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage')
+                and not rec.is_ito_internal_transfer
+            )
             for line in rec.move_line_ids:
                 print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
                 if not is_receipt_putaway:
@@ -2451,6 +2457,11 @@ class StockPicking(models.Model):
     def _check_validate_requirements(self):
         self.ensure_one()
         _logger.info("Check Validate on = %s", self.id)
+        # The ITO delivery leg replaces the old Delivery Order. It is an
+        # internal stock move, not a receiving/putaway operation, regardless
+        # of whether the configured operation type still has a legacy name.
+        if self.is_ito_internal_transfer:
+            return
         if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage', 'Internal Transfers'):
             return self._check_putaway_status_requirements() and self._check_picker_status_requirements()
 

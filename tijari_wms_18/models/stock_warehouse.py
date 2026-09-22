@@ -171,6 +171,7 @@ class StockWarehouse(models.Model):
             ('name', 'in', [
                 'Pick',
                 'Pack',
+                'Internal Transfer',
                 'Internal Transfers',
                 'Receipts',
                 'Pick Internal',
@@ -274,6 +275,17 @@ class StockWarehouse(models.Model):
             ('name', '=', name),
             ('code', '=', code),
         ], limit=1)
+        if not picking_type and name == 'Internal Transfer':
+            # Reuse the operation type created by the previous SOP naming.
+            # This is a label migration only; routes, rules, and existing
+            # pickings keep the same operation type record and ID.
+            picking_type = PickingType.search([
+                ('warehouse_id', '=', self.id),
+                ('name', 'in', ['Internal Transfers', 'Transfer Internal']),
+                ('code', '=', code),
+            ], order='id', limit=1)
+            if picking_type:
+                picking_type.name = name
         created = False
         if not picking_type:
             max_sequence = PickingType.search_read(
@@ -346,7 +358,7 @@ class StockWarehouse(models.Model):
         )
         transfer_type = self._adt_get_or_create_picking_type(
             'adt_transfer_internal_type_id',
-            'Internal Transfers',
+            'Internal Transfer',
             'INT',
             'internal',
             'internal',

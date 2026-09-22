@@ -1119,7 +1119,10 @@ class StockMoveLine(models.Model):
                 vals['result_package_id'] = package.id
 
             line.write(vals)
-            if picking_type_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
+            if (
+                picking_type_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal')
+                or line.picking_id.is_ito_internal_transfer
+            ):
                 matching = line._get_matching_status()
                 line.write({
                     'matching': matching,
@@ -1804,7 +1807,10 @@ class StockMoveLine(models.Model):
         if not self.matching_lot_id or not self.matching_loc_dest_id:
             return 'not_match'
 
-        if picking_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
+        if (
+            picking_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal')
+            or self.picking_id.is_ito_internal_transfer
+        ):
             expected_location = self.source_location_id or self.location_id
             expected_lot = self.product_lot_id or self.lot_id
         elif picking_name in ('Receipts', 'Receipt Internal', 'Storage'):
@@ -1840,7 +1846,10 @@ class StockMoveLine(models.Model):
     def _compute_matching(self):
         for line in self:
             if line.picking_id:
-                if line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers'):
+                if (
+                    line.picking_id.picking_type_id.name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal')
+                    or line.picking_id.is_ito_internal_transfer
+                ):
                     line.matching = line._get_matching_status()
                     line.second_matching = (
                         'Match' if line.matching == 'match' else 'Not Match'
