@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <search>
                 <field name="name"/>
+                <field name="code"/>
 
                 <filter
                     name="is_error"
@@ -71,6 +72,7 @@
                 <field name="is_location_mapping" />
                 <field name="is_consignment" />
                 <field name="location_owner" invisible="not is_consignment" />
+                <field name="is_document_only" />
                 <field name="sequence" />
             </xpath>
         </field>

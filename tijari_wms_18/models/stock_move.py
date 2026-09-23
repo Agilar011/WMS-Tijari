@@ -115,6 +115,12 @@ class StockMove(models.Model):
 
     # temp_float = fields.Float(string="Confirmation Quantity")
     so_confirmation_quantity = fields.Float(string="Confirmation Quantity")
+    mo_confirmation_quantity = fields.Float(
+            string='Qty Digunakan',
+            compute='_compute_mo_confirmation_quantity',
+            store=True,
+        )
+    quantity_shadow = fields.Float('Qty')
     
     remaining_package_qty = fields.Float(
         compute="_compute_remaining_package_qty",
@@ -131,6 +137,11 @@ class StockMove(models.Model):
         string='Difference Qty',
         compute='_compute_difference_quantity',
         store=True,
+    )
+
+    remaining_picker_quantity = fields.Float(
+        string='Sisa Qty Pick',
+        compute='_compute_remaining_picker_quantity',
     )
 
     confirmation_quantity = fields.Float(
@@ -153,30 +164,53 @@ class StockMove(models.Model):
         ('unfinished', 'Unfinished'),
     ], string='Status', default='unfinished')
 
-    def action_mark_check_finished(self):
-        if self.so_confirmation_quantity == 0:
-            raise ValidationError(_("Confirmation Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
-        
-        comparison = self._validate_before_mark_finished()
-        if comparison > 0:
-            raise UserError("Confirmed Qty tidak boleh melebihi Remaining Package Qty")
+    status_mo_check = fields.Selection([
+        ('finished', 'Finished'),
+        ('unfinished', 'Unfinished'),
+    ], string='Status', compute="_compute_status_mo_check")
 
-        if comparison < 0:
-            diff = self.remaining_package_qty - self.so_confirmation_quantity
-            move_line = self.move_line_ids.filtered(
-                lambda x: not x.result_package_id and x.quantity == self.remaining_package_qty
+    @api.depends('move_line_ids.mo_status')
+    def _compute_status_mo_check(self):
+        for move in self:
+            lines = move.move_line_ids
+            move.status_mo_check = (
+                'finished' if lines and all(line.mo_status == 'finished' for line in lines)
+                else 'unfinished'
             )
 
-            rounding = self.product_uom.rounding if self.product_uom else 0.01
-            for line in move_line:
-                comparison = float_compare(
-                    line.quantity,
-                    diff,
-                    precision_rounding=rounding,
-                )
-                if comparison > 0:
-                    line.quantity -= diff
-                    break
+    status_pick_check = fields.Selection([
+        ('finished', 'Finished'),
+        ('unfinished', 'Unfinished'),
+    ], string='Status', compute="_compute_status_pick_check")
+
+    @api.depends('move_line_ids.pick_status')
+    def _compute_status_pick_check(self):
+        for move in self:
+            lines = move.move_line_ids
+            move.status_pick_check = (
+                'finished' if lines and all(line.pick_status == 'finished' for line in lines)
+                else 'unfinished'
+            )
+
+    def action_mark_check_finished(self):
+        self._validate_before_mark_finished()
+
+        # if comparison < 0:
+        #     diff = self.remaining_package_qty - self.so_confirmation_quantity
+        #     move_line = self.move_line_ids.filtered(
+        #         lambda x: not x.result_package_id and x.quantity == self.remaining_package_qty
+        #     )
+
+        #     rounding = self.product_uom.rounding if self.product_uom else 0.01
+        #     for line in move_line:
+        #         comparison = float_compare(
+        #             line.quantity,
+        #             diff,
+        #             precision_rounding=rounding,
+        #         )
+        #         if comparison > 0:
+        #             line.quantity -= diff
+        #             break
 
         self.write({'status_check': 'finished'})
         return True
@@ -200,11 +234,13 @@ class StockMove(models.Model):
             confirmation_quantity,
             precision_rounding=rounding,
         ):
-            raise UserError(f"Product {self.product_id.display_name} confirmation quantity can not be zero")
+            raise UserError(f"Qty Dikirim produk {self.product_id.display_name} tidak boleh 0.")
+
+        if comparison > 0:
+            raise UserError("Qty Dikirim tidak boleh melebihi Qty Unpack")
 
         return comparison
             
-
     def _update_reserved_quantity_vals(
         self,
         need,
@@ -348,18 +384,29 @@ class StockMove(models.Model):
 
         return move_line_vals, taken_quantity
     
-    @api.depends('product_uom_qty', 'quantity', 'picking_type_name', 'confirmation_quantity')
+    @api.depends('product_uom_qty', 'quantity', 'quantity_shadow', 'picking_type_name', 'confirmation_quantity', 'mo_confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
-            if move.picking_type_name in ['Receipts', 'Receipt Internal']:
+            if move.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage']:
                 total_confirmation_quantity = move.confirmation_quantity
                 difference = move.product_uom_qty - total_confirmation_quantity
             elif move.picking_type_name in ['Pick', 'Pick Internal', 'Pick Components']:
                 total_confirmation_quantity = move.confirmation_quantity
-                difference = move.quantity - total_confirmation_quantity
+                total_qty = move.quantity_shadow if move.quantity_shadow > 0.0 else move.quantity
+                difference = total_qty - total_confirmation_quantity
             else:
-                difference = move.product_uom_qty - move.quantity
+                if move.raw_material_production_id:
+                    total_confirmation_quantity = move.mo_confirmation_quantity
+                    total_qty = move.quantity
+                    difference = total_qty - total_confirmation_quantity
+                else:
+                    difference = move.product_uom_qty - move.quantity
             move.difference_quantity = difference if difference > 0 else 0.0
+
+    @api.depends('product_uom_qty', 'quantity')
+    def _compute_remaining_picker_quantity(self):
+        for move in self:
+            move.remaining_picker_quantity = move.product_uom_qty - move.quantity
 
 
 
@@ -368,6 +415,12 @@ class StockMove(models.Model):
         for move in self:
             total_confirmation_quantity = sum(move.move_line_ids.mapped('confirmation_quantity'))
             move.confirmation_quantity = total_confirmation_quantity if total_confirmation_quantity > 0 else 0.0
+    
+    @api.depends('move_line_ids.mo_confirmation_quantity')
+    def _compute_mo_confirmation_quantity(self):
+        for move in self:
+            total_mo_confirmation_quantity = sum(move.move_line_ids.mapped('mo_confirmation_quantity'))
+            move.mo_confirmation_quantity = total_mo_confirmation_quantity if total_mo_confirmation_quantity > 0 else 0.0
 
     def action_generate_lot(self):
         for move in self:
@@ -386,7 +439,7 @@ class StockMove(models.Model):
                     "warning": {
                         "title": _("Invalid Quantity"),
                         "message": _(
-                            "The total quantity (%s) cannot exceed the demand (%s)."
+                            "Quantoty (%s) tidak boleh melebihi demand (%s)."
                         ) % (total_qty, move.product_uom_qty),
                     }
                 }
@@ -636,6 +689,21 @@ class StockMove(models.Model):
             'target': 'new',
         }
 
+    def action_open_move_mo(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_mo_view'
+            ).id,
+            'target': 'new',
+        }
+
     # Putaway flow scoped to the current stock move. The existing picking and
     # batch Putaway flows continue to use their stock.move.line collections.
     putaway_scan_product_button = fields.Boolean(string='Scan Product')
@@ -661,14 +729,6 @@ class StockMove(models.Model):
         'stock.move.line',
         'move_id',
         string='Putaway Move Lines',
-        domain=[
-            '&', '&',
-            ('quantity', '>', 0),
-            ('state', '!=', 'cancel'),
-            '|',
-            ('lot_id', '!=', False),
-            ('lot_name', '!=', False),
-        ],
     )
 
     picker_progress_status = fields.Selection(
@@ -687,6 +747,18 @@ class StockMove(models.Model):
         ],
         string='Putaway Status',
         compute='_compute_putaway_progress_status',
+    )
+
+    picker_sequence = fields.Integer(
+        string='Picker Sequence',
+        compute='_compute_wms_status_sequence',
+        store=True,
+    )
+
+    putaway_sequence = fields.Integer(
+        string='Putaway Sequence',
+        compute='_compute_wms_status_sequence',
+        store=True,
     )
 
     custom_css_js_stored = fields.Html(string="Custom CSS JS (Stored)", sanitize=False, compute='_get_custom_css_js_stored', stored=True)
@@ -759,6 +831,7 @@ class StockMove(models.Model):
         'move_line_ids.lot_id',
         'move_line_ids.lot_name',
         'move_line_ids.quantity',
+        'move_line_ids.confirmation_quantity',
         'move_line_ids.picker_status',
         'move_line_ids.state',
     )
@@ -799,6 +872,27 @@ class StockMove(models.Model):
                 'finished' if lines and all(line.putaway_status == 'finished' for line in lines)
                 else 'unfinished'
             )
+
+    @api.depends(
+        'move_line_ids.picker_status',
+        'move_line_ids.putaway_status',
+        'move_line_ids.quantity',
+        'move_line_ids.confirmation_quantity',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+    )
+    def _compute_wms_status_sequence(self):
+        for move in self:
+            picker_statuses = set(move.move_line_ids.mapped('picker_status'))
+            move.picker_sequence = 0 if (
+                not picker_statuses or 'unfinished' in picker_statuses
+            ) else 1
+
+            putaway_lines = move._get_putaway_base_move_lines()
+            putaway_statuses = set(putaway_lines.mapped('putaway_status'))
+            move.putaway_sequence = 0 if (
+                not putaway_statuses or 'unfinished' in putaway_statuses
+            ) else 1
             
 
     @api.onchange('putaway_product_id')
@@ -848,7 +942,7 @@ class StockMove(models.Model):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': _('Putaway'),
+            'name': _('Stock move') if self.picking_type_name == 'Storage' else _('Putaway'),
             'res_model': 'stock.move',
             'res_id': self.id,
             'view_mode': 'form',
@@ -921,12 +1015,18 @@ class StockMove(models.Model):
         }        
 
     def _action_confirm(self, merge=True, merge_into=False):
+        _logger.warning("=== CUSTOM _action_confirm ===")
+        _logger.warning("SELF: %s", self.ids)
+
         moves_no_merge = self.filtered(
             lambda m: m.picking_id
             and m.picking_id.adt_type == "Receipt"
         )
 
         moves_normal = self - moves_no_merge
+
+        _logger.warning("MOVES NO MERGE: %s", moves_no_merge.ids)
+        _logger.warning("MOVES NORMAL: %s", moves_normal.ids)
 
         res = self.browse()
 
@@ -941,7 +1041,7 @@ class StockMove(models.Model):
                 merge=False,
                 merge_into=False
             )
-
+        _logger.warning("RESULT: %s", res.ids)
         return res
 
     def create(self, vals):
@@ -967,10 +1067,11 @@ class StockMove(models.Model):
             if not line.adt_dest_location_id:
                 if line.picking_id.adt_dest_location_id:
                     line.adt_dest_location_id = line.picking_id.adt_dest_location_id
-                elif line.picking_id.picking_type_name in ['Pick']:
-                    line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_src_id
+                elif "Pick" in (line.picking_id.picking_type_name or "") or "Pick" in (line.picking_type_id.name or ""):
+                    line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_src_id if line.picking_id else line.picking_type_id.default_location_src_id
                 else:
                     line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_dest_id
+
         res.mapped('picking_id')._sync_adt_quantities_from_moves()
 
         return res
@@ -995,9 +1096,22 @@ class StockMove(models.Model):
         self.ensure_one()
 
         picking = self.picking_id
+        if (
+            picking
+            and picking.picking_type_name in (
+                'Pick', 'Pick Internal', 'Pick Components'
+            )
+            and picking.internal_transfer_order_id
+            and picking.internal_transfer_order_id.transaction_type == 'intra_warehouse'
+        ):
+            # Pick uses adt_dest_location_id as the source-location
+            # confirmation reference. It must not overwrite the physical
+            # move destination (the intra-warehouse transit location).
+            return False
+
         base_dest_location = (
             picking.adt_dest_location_id
-            if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Direct Receipt']
+            if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Direct Receipt']
             else self.adt_dest_location_id
         )
 
@@ -1011,6 +1125,24 @@ class StockMove(models.Model):
         )
 
         return putaway_location or base_dest_location
+
+    def _skip_push(self):
+        """Keep intra-warehouse ITO on its explicit Pick -> Storage chain.
+
+        The Pick move uses the shared inter-warehouse transit location as its
+        physical destination.  Odoo would normally interpret that as a push
+        rule trigger and create an extra Receipts picking.  Intra-warehouse
+        ITO already has its Storage move linked explicitly, so the generic
+        push chain must not add another operation.  Other picking flows keep
+        the standard Odoo behavior.
+        """
+        intra_ito_pick = self.filtered(lambda move: (
+            move.picking_id
+            and move.picking_id.internal_transfer_order_id
+            and move.picking_id.internal_transfer_order_id.transaction_type == 'intra_warehouse'
+            and move.picking_id.internal_transfer_leg == 'pick'
+        ))
+        return super()._skip_push() or bool(intra_ito_pick)
 
 
 class StockMoveScanWizard(models.TransientModel):

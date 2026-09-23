@@ -54,7 +54,7 @@
                 <field name="import_message"/>
                 <field name="lastmodifieddatetime" string="Last Modified"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
-                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>            </list>
+                <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>            </list>
         </field>
     </record>
 
@@ -65,12 +65,13 @@
             <form string="Data SO Shipment">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged'"/>
-                    <button name="action_open_picking" type="object" string="Open Document" class="btn-secondary" invisible="not odoo_picking_id"/>
+                    <button name="action_open_picking" type="object" string="Open Document" class="btn-secondary" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                     <button name="action_reset_pending" type="object" string="Reset Staged" class="btn-secondary" invisible="import_state != 'error'"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>
                     <field name="odoo_picking_id" invisible="1"/>
+                    <field name="odoo_internal_transfer_order_id" invisible="1"/>
 
                     <div class="oe_title">
                         <h1><field name="adt_ShipmentNbr"/></h1>
@@ -183,7 +184,7 @@
         <field name="name">Data SO Shipment</field>
         <field name="res_model">acumatica.shipment.gi.staging</field>
         <field name="view_mode">list,form</field>
-        <field name="domain">[('adt_OrderType', '!=', 'CO')]</field>
+        <field name="domain"></field>
         <field name="search_view_id"/>
     </record>
 

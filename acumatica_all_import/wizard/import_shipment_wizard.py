@@ -272,6 +272,7 @@ class ImportShipmentWizard(models.TransientModel):
                         'partner_code': self._val(item, 'CustomerID'),
                         'partner_name': self._val(item, 'CustomerName'),
                         'description': self._val(item, 'Description'),
+                        'document_only': self._val(item, 'DocumentOnly'),
                         'fob_point': self._val(item, 'FOBPoint'),
                         'fob_point_description': self._val(item, 'FOBPointDescription'),
                         'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),

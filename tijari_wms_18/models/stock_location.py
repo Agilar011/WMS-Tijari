@@ -15,6 +15,7 @@ class StockLocation(models.Model):
     unique_code = fields.Char(string='Unique Code', help='A unique code for the location')
     is_location_mapping = fields.Boolean(string="Parent Mapping Location")
     is_consignment = fields.Boolean(string="Consignment Location")
+    is_document_only = fields.Boolean(string="Document Only Location")
     location_owner = fields.Char(string="Location Owner")
 
     @api.depends(

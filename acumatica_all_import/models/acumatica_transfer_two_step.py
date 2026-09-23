@@ -240,6 +240,10 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     transfer_info['transaction_type'],
                     self._parse_dt(first.scheduled_date),
                     first.note or False,
+                    description=first.description or False,
+                    transfer_type='transfer_out',
+                    adt_transaction_type=first.transfer_type or first.trans_type or False,
+                    document_only=first.document_only,
                 )
 
                 to_create_move = self.env['acumatica.transfer.two.step.line.product'].search([('header_id', '=', first.id)])

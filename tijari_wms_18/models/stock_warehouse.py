@@ -11,7 +11,7 @@ class StockWarehouse(models.Model):
         string='Internal Transfer',
         help=(
             'Create warehouse operation types for Internal Transfer: '
-            'Pick Internal, Pack Internal, Transfer Internal, and Receipt Internal.'
+            'Pick, Pack, Internal Transfers, and Receipts.'
         ),
     )
     adt_document_only_enabled = fields.Boolean(
@@ -25,31 +25,31 @@ class StockWarehouse(models.Model):
         string='SOP Aditya',
         help=(
             'Apply SOP Aditya: incoming 1 step, outgoing 3 steps, '
-            'internal transfer active, document-only active, and configure '
-            'Receipt, Pick, Pack, and Delivery operation types.'
+            'internal transfer active, document-only active, and use '
+            'standard Pick, Pack, Internal Transfers, and Receipts operation types.'
         ),
     )
     adt_pick_internal_type_id = fields.Many2one(
         'stock.picking.type',
-        string='Pick Internal Type',
+        string='Pick Type',
         check_company=True,
         copy=False,
     )
     adt_pack_internal_type_id = fields.Many2one(
         'stock.picking.type',
-        string='Pack Internal Type',
+        string='Pack Type',
         check_company=True,
         copy=False,
     )
     adt_transfer_internal_type_id = fields.Many2one(
         'stock.picking.type',
-        string='Transfer Internal Type',
+        string='Internal Transfer Type',
         check_company=True,
         copy=False,
     )
     adt_receipt_internal_type_id = fields.Many2one(
         'stock.picking.type',
-        string='Receipt Internal Type',
+        string='Receipt Type',
         check_company=True,
         copy=False,
     )
@@ -169,6 +169,11 @@ class StockWarehouse(models.Model):
         return self.env['stock.picking.type'].with_context(active_test=False).search([
             ('warehouse_id', '=', self.id),
             ('name', 'in', [
+                'Pick',
+                'Pack',
+                'Internal Transfer',
+                'Internal Transfers',
+                'Receipts',
                 'Pick Internal',
                 'Pack Internal',
                 'Transfer Internal',
@@ -261,11 +266,27 @@ class StockWarehouse(models.Model):
     ):
         self.ensure_one()
         PickingType = self.env['stock.picking.type'].with_context(active_test=False)
-        picking_type = self[field_name] or PickingType.search([
+        # Resolve the requested standard operation type first.  The warehouse
+        # pointer may still reference a legacy * Internal type from an older
+        # configuration; retaining that pointer here would prevent SOP
+        # migration from ever selecting Pick/Pack/Internal Transfers/Receipts.
+        picking_type = PickingType.search([
             ('warehouse_id', '=', self.id),
             ('name', '=', name),
             ('code', '=', code),
         ], limit=1)
+        if not picking_type and name == 'Internal Transfer':
+            # Reuse the operation type created by the previous SOP naming.
+            # This is a label migration only; routes, rules, and existing
+            # pickings keep the same operation type record and ID.
+            picking_type = PickingType.search([
+                ('warehouse_id', '=', self.id),
+                ('name', 'in', ['Internal Transfers', 'Transfer Internal']),
+                ('code', '=', code),
+            ], order='id', limit=1)
+            if picking_type:
+                picking_type.name = name
+        created = False
         if not picking_type:
             max_sequence = PickingType.search_read(
                 [('sequence', '!=', False)],
@@ -285,6 +306,7 @@ class StockWarehouse(models.Model):
                 'use_create_lots': False,
                 'use_existing_lots': code == 'internal',
             })
+            created = True
 
         vals = {
             'active': self.active,
@@ -294,9 +316,9 @@ class StockWarehouse(models.Model):
             'is_api_config': is_api_config,
             'company_id': self.company_id.id,
         }
-        if location_src:
+        if location_src and (created or not picking_type.default_location_src_id):
             vals['default_location_src_id'] = location_src.id
-        if location_dest:
+        if location_dest and (created or not picking_type.default_location_dest_id):
             vals['default_location_dest_id'] = location_dest.id
         picking_type.write(vals)
         return picking_type
@@ -316,8 +338,8 @@ class StockWarehouse(models.Model):
 
         pick_type = self._adt_get_or_create_picking_type(
             'adt_pick_internal_type_id',
-            'Pick Internal',
-            'PICKINT',
+            'Pick',
+            'PICK',
             'internal',
             'pick',
             self.lot_stock_id,
@@ -326,8 +348,8 @@ class StockWarehouse(models.Model):
         )
         pack_type = self._adt_get_or_create_picking_type(
             'adt_pack_internal_type_id',
-            'Pack Internal',
-            'PACKINT',
+            'Pack',
+            'PACK',
             'internal',
             'pack',
             packing_zone,
@@ -336,8 +358,8 @@ class StockWarehouse(models.Model):
         )
         transfer_type = self._adt_get_or_create_picking_type(
             'adt_transfer_internal_type_id',
-            'Transfer Internal',
-            'TRINT',
+            'Internal Transfer',
+            'INT',
             'internal',
             'internal',
             loading_dock,
@@ -347,9 +369,9 @@ class StockWarehouse(models.Model):
         )
         receipt_type = self._adt_get_or_create_picking_type(
             'adt_receipt_internal_type_id',
-            'Receipt Internal',
-            'RCPTINT',
-            'internal',
+            'Receipts',
+            'RECEIPT',
+            'incoming',
             'receive',
             transit_location or self.lot_stock_id,
             self.lot_stock_id,
@@ -385,7 +407,7 @@ class StockWarehouse(models.Model):
         self.ensure_one()
         route = self.adt_internal_transfer_route_id
         route_vals = {
-            'name': '%s: Internal Transfer (3 steps)' % self.name,
+            'name': '%s: Inter Warehouse' % self.name,
             'active': self.active,
             'warehouse_selectable': True,
             'product_selectable': False,
@@ -421,6 +443,8 @@ class StockWarehouse(models.Model):
             (self.adt_direct_receipt_type_id | self.adt_direct_delivery_type_id).write({'active': False})
             return
 
+        document_only_location = self._adt_get_or_create_document_only_location()
+
         direct_receipt = self._adt_get_or_create_picking_type(
             'adt_direct_receipt_type_id',
             'Direct Receipt',
@@ -428,7 +452,7 @@ class StockWarehouse(models.Model):
             'incoming',
             'receive',
             False,
-            self.lot_stock_id,
+            document_only_location,
             is_document_only=True,
             is_api_config=True,
         )
@@ -438,12 +462,48 @@ class StockWarehouse(models.Model):
             'DDO',
             'outgoing',
             'delivery',
-            self.lot_stock_id,
+            document_only_location,
             False,
             is_document_only=True,
             is_api_config=True,
         )
+        direct_receipt.write({
+            'default_location_dest_id': document_only_location.id,
+        })
+        direct_delivery.write({
+            'default_location_src_id': document_only_location.id,
+        })
         self.with_context(skip_adt_shipment_sync=True).write({
             'adt_direct_receipt_type_id': direct_receipt.id,
             'adt_direct_delivery_type_id': direct_delivery.id,
         })
+
+    def _adt_get_or_create_document_only_location(self):
+        self.ensure_one()
+        parent_location = self.view_location_id
+        if not parent_location:
+            raise UserError(_(
+                'Warehouse %s belum memiliki Parent Location untuk membuat '
+                'lokasi Document Only.'
+            ) % self.display_name)
+
+        Location = self.env['stock.location']
+        location = Location.search([
+            ('location_id', '=', parent_location.id),
+            ('name', '=', 'Document Only'),
+        ], limit=1)
+        vals = {
+            'name': 'Document Only',
+            'location_id': parent_location.id,
+            'usage': 'internal',
+            'company_id': self.company_id.id,
+            'is_document_only': True,
+        }
+        if location:
+            location.write({
+                'usage': 'internal',
+                'company_id': self.company_id.id,
+                'is_document_only': True,
+            })
+            return location
+        return Location.create(vals)

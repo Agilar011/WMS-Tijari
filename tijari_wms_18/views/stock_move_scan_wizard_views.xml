@@ -98,8 +98,12 @@
 	        <field name="model">stock.picking</field>
 	        <field name="inherit_id" ref="stock.view_picking_form"/>
 	        <field name="arch" type="xml">
+	            <xpath expr="//page[@name='operations']" position="before">
+	                <field name="internal_transfer_order_id" invisible="1"/>
+	                <field name="is_ito_internal_transfer" invisible="1"/>
+	            </xpath>
 	            <xpath expr="//page[@name='operations']" position="after">
-	                <page string="Picker" name="page_picker" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
+                <page string="Picker" name="page_picker" invisible="not show_picker_page or picking_type_name not in ['Receipts', 'Receipt Internal']">
 	                    <group>
                             <field name="scan_picker_product_button"
                                     widget="adt_scan_picker_product_button"
@@ -119,20 +123,27 @@
 	                        
 	                    </group>
 							<field name="picker_move_ids" groups="!tijari_wms_18.group_operator" mode="kanban,list">
-								<kanban class="o_wms_picker_kanban" create="0" delete="0" can_open="0">
+								<kanban class="o_wms_picker_kanban" create="0" delete="0" can_open="0" default_order="picker_sequence asc, id">
 									<field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
+									<field name="picker_sequence" invisible="1"/>
 									<field name="product_uom_qty"/>
 									<field name="quantity"/>
 									<field name="confirmation_quantity"/>
 									<field name="product_uom"/>
+									<field name="description_picking"/>
+									<field name="picker_progress_status"/>
 									<field name="state"/>
 									<templates>
 										<t t-name="card">
 											<div class="o_wms_operation_card">
-												<div class="o_wms_operation_product">
-													<field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
-												</div>
-												<div>
+																																<div class="o_wms_operation_product">
+																																	<field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+																																</div>
+																																<div class="text-muted" invisible="not description_picking">
+																																	<strong>Description: </strong>
+																																	<field name="description_picking"/>
+																																</div>
+																<div>
 													<div>
 														<strong>Total Qty: </strong>
 														<field name="product_uom_qty"/>
@@ -149,16 +160,22 @@
 														<field name="product_uom" groups="uom.group_uom" class="ms-1"/>
 													</div>
 												</div>
-												<button name="action_open_move_pick"
-													type="object"
-													string="Pick Details"
-													class="btn btn-primary btn-sm o_wms_operation_action"
-													invisible="state == 'draft'"/>
+                                        <div class="o_wms_operation_actions">
+                                        <button name="action_open_move_pick"
+		                                            type="object"
+		                                            string="Pick Details"
+		                                            class="btn btn-primary btn-sm o_wms_operation_action"
+		                                            invisible="state == 'draft'"/>
+                                            <field name="picker_progress_status"
+                                                decoration-success="picker_progress_status == 'finished'"
+                                                decoration-danger="picker_progress_status == 'unfinished'"
+                                                widget="badge"/>
+                                        </div>
 											</div>
 										</t>
 									</templates>
 								</kanban>
-								<list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" create="0" delete="0" edit="0">
+								<list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" create="0" delete="0" edit="0" default_order="picker_sequence asc, id">
 									<field name="company_id" column_invisible="True"/>
 									<field name="picking_id" column_invisible="True"/>
 									<field name="name" column_invisible="True"/>
@@ -178,12 +195,13 @@
 									<field name="is_storable" column_invisible="True"/>
 									<field name="has_tracking" column_invisible="True"/>
 									<field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
-									<field name="lot_ids" widget="many2many_tags"
-										string="Lot/Serial Numbers"
-										groups="stock.group_production_lot"/>
+									<field name="picker_sequence" column_invisible="True"/>
+																		<field name="description_picking" string="Description" optional="show"/>
+																		<field name="lot_ids" widget="many2many_tags"
+																			string="Lot/Serial Numbers"
+																			groups="stock.group_production_lot"/>
 									<field name="location_final_id" column_invisible="True" groups="stock.group_stock_multi_locations"/>
-									<field name="description_picking" column_invisible="True"/>
-									<field name="date" column_invisible="True"/>
+										<field name="date" column_invisible="True"/>
 									<field name="date_deadline" column_invisible="True"/>
 									<field name="is_quantity_done_editable" column_invisible="True"/>
 									<field name="show_quant" column_invisible="True"/>
@@ -223,19 +241,26 @@
 								</list>
 							</field>
 		                    <field name="picker_move_ids" groups="tijari_wms_18.group_operator" mode="kanban,list">
-		                        <kanban class="o_wms_picker_kanban" create="0" delete="0" can_open="0">
+		                        <kanban class="o_wms_picker_kanban" create="0" delete="0" can_open="0" default_order="picker_sequence asc, id">
 		                            <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
+		                            <field name="picker_sequence" invisible="1"/>
 		                            <field name="product_uom_qty"/>
 		                            <field name="quantity"/>
 		                            <field name="confirmation_quantity"/>
 		                            <field name="product_uom"/>
+		                            <field name="description_picking"/>
+		                            <field name="picker_progress_status"/>
 		                            <field name="state"/>
 		                            <templates>
 		                                <t t-name="card">
 		                                    <div class="o_wms_operation_card">
-		                                        <div class="o_wms_operation_product">
-		                                            <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
-		                                        </div>
+																																<div class="o_wms_operation_product">
+																																					<field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+																																				</div>
+																																				<div class="text-muted" invisible="not description_picking">
+																																					<strong>Description: </strong>
+																																					<field name="description_picking"/>
+																																				</div>
 		                                        <div>
 		                                            <div>
 		                                                <strong>Total Qty: </strong>
@@ -253,24 +278,32 @@
 		                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
 		                                            </div>
 		                                        </div>
-                                        <button name="action_open_move_pick"
+	                                        <div class="o_wms_operation_actions">
+	                                        <button name="action_open_move_pick"
 		                                            type="object"
 		                                            string="Pick Details"
 		                                            class="btn btn-primary btn-sm o_wms_operation_action"
 		                                            invisible="state == 'draft'"/>
+		                                    <field name="picker_progress_status"
+		                                        decoration-success="picker_progress_status == 'finished'"
+		                                        decoration-danger="picker_progress_status == 'unfinished'"
+		                                        widget="badge"/>
+	                                        </div>
 		                                    </div>
 		                                </t>
 		                            </templates>
 		                        </kanban>
-		                        <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" create="0" delete="0" edit="0">
+		                        <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" create="0" delete="0" edit="0" default_order="picker_sequence asc, id">
 		                            <field name="state" column_invisible="True"/>
 		                            <field name="is_locked" column_invisible="True"/>
 		                            <field name="scrapped" column_invisible="True"/>
 		                            <field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
-									<field name="lot_ids" widget="many2many_tags"
-										string="Lot/Serial Numbers"
-										groups="stock.group_production_lot"/>
-		                            <field name="product_uom_qty" string="Total Qty" readonly="1"/>
+		                            <field name="picker_sequence" column_invisible="True"/>
+											<field name="description_picking" string="Description" optional="show"/>
+											<field name="lot_ids" widget="many2many_tags"
+												string="Lot/Serial Numbers"
+												groups="stock.group_production_lot"/>
+											<field name="product_uom_qty" string="Total Qty" readonly="1"/>
 		                            <field name="quantity" string="Qty Diterima" readonly="1" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
 		                            <field name="confirmation_quantity" string="Qty Disimpan" readonly="1"/>
 		                            <field name="product_uom" readonly="1" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
@@ -292,7 +325,7 @@
 		                    </field>
 		                </page>
 
-	                <page string="Putaway" invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Internal Transfers']">
+                <page string="Putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Internal Transfers'] or is_ito_internal_transfer">
 	                    <group>
                         <field name="scan_product_button"
                             widget="adt_scan_putaway_product_button"
@@ -325,6 +358,14 @@
                         <list editable="bottom" create="0" delete="0" link="0">
                             <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}" readonly="1"/>
                             <field name="location_dest_id" column_invisible="1"/>
+                            <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
+                            <field name="matching_lot_id" string="Scanned Lot" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
+                            <field name="confirmation_lot_code"
+                                widget="adt_scan_lot_button"
+                                string=" "
+                                readonly="1"
+                                invisible="putaway_status == 'finished'"
+                                column_invisible="parent.picking_type_name != 'Storage'"/>
                             <field name="location_putaway_id"
                                 string="Store To"
                                 readonly="putaway_status == 'finished'"
@@ -332,7 +373,8 @@
                                 context="{'show_location_short_name': True}"
 																widget="location_short_many2one"
                                 domain="[('id', 'child_of', adt_dest_location_id)]"/>
-                            <field name="quantity" string="Qty Diterima" readonly="1"/>
+                            <field name="quantity" string="Qty Diterima" readonly="1" column_invisible="parent.picking_type_name == 'Storage'"/>
+                            <field name="quantity" string="Qty Dipindah" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
                             <field name="confirmation_quantity" string="Qty Disimpan" readonly="putaway_status == 'finished'" force_save="1"/>
                             <field name="product_uom_id" readonly="1" string="UoM" invisible="1"/>
                             <field name="matching" column_invisible="1" force_save="1"/>
@@ -371,7 +413,15 @@
                             <field name="location_dest_id" column_invisible="1"/>
                             <field name="putaway_status" column_invisible="1"/>
                             <field name="adt_dest_location_id" column_invisible="1"/>
-														<field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+															<field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+                            <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
+                            <field name="matching_lot_id" string="Scanned Lot" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
+                            <field name="confirmation_lot_code"
+                                widget="adt_scan_lot_button"
+                                string=" "
+                                readonly="1"
+                                invisible="putaway_status == 'finished'"
+                                column_invisible="parent.picking_type_name != 'Storage'"/>
                             <field name="location_putaway_id"
                                 string="Store To"
                                 readonly="putaway_status == 'finished'"
@@ -383,7 +433,8 @@
                                 string=" "
                                 readonly="1"
                                 invisible="putaway_status == 'finished'"/>
-                            <field name="quantity" string="Qty Diterima" readonly="1"/>
+                            <field name="quantity" string="Qty Diterima" readonly="1" column_invisible="parent.picking_type_name == 'Storage'"/>
+                            <field name="quantity" string="Qty Dipindah" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
                             <field name="confirmation_quantity" string="Qty Disimpan" readonly="putaway_status == 'finished'" force_save="1"/>
                             <field name="product_uom_id" readonly="1" string="UoM"/>
                             <button name="action_mark_putaway_finished"
@@ -402,8 +453,10 @@
                         </list>
                     </field>
                     <field name="putaway_move_ids" mode="kanban,list" readonly="1">
-                        <list create="0" edit="0" delete="0">
+                        <list create="0" edit="0" delete="0" default_order="putaway_sequence asc, id">
                             <field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+                            <field name="putaway_sequence" column_invisible="True"/>
+                            <field name="description_picking" string="Description" optional="show"/>
 							<field name="lot_ids" widget="many2many_tags"
                                         string="Lot/Serial Numbers"
 		                                groups="stock.group_production_lot"/>
@@ -420,8 +473,10 @@
                                 string="Putaway Details"
                                 class="btn-primary"/>
                         </list>
-                        <kanban class="o_wms_putaway_move_kanban" create="0" edit="0" delete="0" can_open="0">
+                        <kanban class="o_wms_putaway_move_kanban" create="0" edit="0" delete="0" can_open="0" default_order="putaway_sequence asc, id">
                             <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
+                            <field name="putaway_sequence" invisible="1"/>
+                            <field name="description_picking"/>
                             <field name="product_uom_qty"/>
                             <field name="quantity"/>
                             <field name="confirmation_quantity"/>
@@ -435,6 +490,10 @@
                                     <div class="o_wms_operation_card">
                                         <div class="o_wms_operation_product">
                                             <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                        </div>
+                                        <div class="text-muted" invisible="not description_picking">
+                                            <strong>Description: </strong>
+                                            <field name="description_picking"/>
                                         </div>
                                         <div class="o_wms_move_pick_quantities">
                                             <div>

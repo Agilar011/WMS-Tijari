@@ -305,9 +305,12 @@ class AcumaticaTransferLine(models.Model):
             transfer_info['transaction_type'],
             schedule_date=receipt._parse_dt(receipt.scheduled_date),
             note=receipt.note or False,
+            description=receipt.description or False,
             transfer_type='transfer_in',
             external_ref_in=origin,
             external_ref_out=','.join(transfer_shipment_numbers),
+            adt_transaction_type=receipt.receipt_type or receipt.transfer_order_type or False,
+            document_only=receipt.document_only,
         )
         order.write({'validation_policy': 'validate_all'})
 

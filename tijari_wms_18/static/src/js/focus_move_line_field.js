@@ -678,6 +678,25 @@ function getResultUpdates(result, fieldNames) {
     return updates;
 }
 
+function getRecordResultUpdates(record, result, fieldNames) {
+    const updates = getResultUpdates(result, fieldNames);
+    const fields = record?.fields;
+
+    // A move line can be rendered by several different x2many subviews
+    // (regular stock operations, MRP operations, and the WMS detail views).
+    // The scan RPC returns the complete result for the line, but a given
+    // subview may not load every returned field. Passing such a field to
+    // record.update() makes Odoo's x2many preprocessing dereference an
+    // undefined field definition.
+    if (!fields) {
+        return {};
+    }
+
+    return Object.fromEntries(
+        Object.entries(updates).filter(([fieldName]) => hasOwn(fields, fieldName))
+    );
+}
+
 async function scanQrToMoveLineField(env, action) {
     const params = action.params || {};
     const fieldName = params.field_name;
@@ -813,7 +832,11 @@ class MoveLineScanButton extends Component {
                 "action_apply_scanned_field",
                 [[moveLineId], this.fieldName, scannedCode]
             );
-            const updates = getResultUpdates(result, MOVE_LINE_RECORD_UPDATE_FIELDS);
+            const updates = getRecordResultUpdates(
+                this.props.record,
+                result,
+                MOVE_LINE_RECORD_UPDATE_FIELDS
+            );
             if (Object.keys(updates).length) {
                 await this.props.record.update(updates);
             }
