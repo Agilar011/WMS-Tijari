@@ -1173,7 +1173,7 @@ class WmsApiController(http.Controller):
         execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
-                'reportUnitUri': '/Odoo/ADITYA/warehouse_pick',
+                'reportUnitUri': '/Odoo/ADITYA/warehouse_pack',
                 'outputFormat': 'pdf',
                 'parameters': {
                     'reportParameter': [{
