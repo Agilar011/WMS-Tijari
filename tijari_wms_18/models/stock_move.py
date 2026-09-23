@@ -1072,6 +1072,9 @@ class StockMove(models.Model):
                 else:
                     line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_dest_id
 
+        res.mapped('picking_id').filtered(
+            lambda picking: picking.adt_is_document_only
+        )._adt_preserve_document_only_destination()
         res.mapped('picking_id')._sync_adt_quantities_from_moves()
 
         return res

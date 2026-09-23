@@ -511,7 +511,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         if not grouped:
             raise UserError(_("No valid ShipmentNbr found in payload."))
 
-        created = updated = product_lines = 0
+        created = updated = product_lines = imported = errors = 0
         header_ids = []
         for shipment_nbr, document_records in grouped.items():
             first_index, first_item = document_records[0]
@@ -543,14 +543,18 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 Line.create(line_vals)
                 product_lines += len(line_vals)
             header_ids.append(header.id)
+            if header.action_update_stock_picking():
+                imported += 1
+            else:
+                errors += 1
 
         return {
             "transaction_type": "shipment_completed",
             "model": "acumatica.shipment.completed.staging",
             "created": created,
             "updated": updated,
-            "imported": 0,
-            "errors": 0,
+            "imported": imported,
+            "errors": errors,
             "header_ids": header_ids,
             "product_lines": product_lines,
         }

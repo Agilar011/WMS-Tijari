@@ -102,6 +102,7 @@
                             <field name="status"/>
                             <field name="return_type"/>
                             <field name="transfer_type"/>
+                            <field name="document_only"/>
                             <field name="trans_type"/>
                             <field name="total_qty"/>
                             <field name="is_hold"/>
