@@ -79,6 +79,7 @@
                             <field name="header_location_code"/>
                             <field name="status"/>
                             <field name="receipt_type"/>
+                            <field name="document_only"/>
                             <field name="actual_qty"/>
                             <field name="total_qty"/>
                             <field name="is_hold"/>

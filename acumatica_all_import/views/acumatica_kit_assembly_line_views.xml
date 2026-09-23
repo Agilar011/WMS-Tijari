@@ -18,6 +18,7 @@
             <list string="Data Manufacturing Order">
                 <!-- <field name="selected" widget="boolean_toggle"/> -->
                 <field name="reference_nbr"/>
+                <field name="document_only"/>
                 <!-- <field name="line_nbr"/> -->
                 <field name="inventory_id" optional="show"/>
                 <field name="description"/>
@@ -68,6 +69,7 @@
                             <field name="building_id"/>
                             <field name="status"/>
                             <field name="type"/>
+                            <field name="document_only"/>
                             <field name="reason_code"/>
                             <field name="post_period"/>
                             <field name="date"/>

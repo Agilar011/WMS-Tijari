@@ -420,6 +420,9 @@ class AcumaticaShipmentLine(models.Model):
                 line_payloads=all_line_payloads,
             )
 
+        if shipment.document_only:
+            picking.action_validate_document_only_import(force=True)
+
         shipment.write({
             'import_state': action_state,
             'import_message': 'success',

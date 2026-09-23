@@ -93,7 +93,7 @@
                 <field name="wms_state"
                     widget="statusbar"
                     statusbar_visible="draft,assigned,waiting_response,done"
-                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']"    
+                    invisible="(picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment')"
                 />
             </xpath>
 
@@ -107,7 +107,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders']"/>
+                    invisible="adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders'] or internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment'"/>
 
             </xpath>            
 
@@ -134,6 +134,12 @@
                     type="object"
                     class="btn-primary"
                     invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+
+                <button name="action_get_shipment_completed_staging"
+                    string="Complete Shipment"
+                    type="object"
+                    class="btn-primary"
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment') or wms_state != 'waiting_response'"/>
 
                 <!-- <button name="action_fetch_actual_qty"
                 string="Get Full Shipment Data"
@@ -177,7 +183,7 @@
 
             <xpath expr="//field[@name='date_done']" position="after">
                 <field name="shipment_information"
-                    invisible="picking_type_name not in ('Delivery Orders') or adt_type not in ('Sales Order Shipment', 'SO Consignment')"
+                    invisible="(picking_type_name not in ('Delivery Orders') or adt_type not in ('Sales Order Shipment', 'SO Consignment')) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment')"
                     decoration-success="shipment_information == 'full_shipment'"
                     decoration-warning="shipment_information == 'partial'"
                     decoration-danger="shipment_information == 'canceled'"/>
@@ -422,7 +428,13 @@
                             'default_company_id': company_id,
                         }"
                         readonly="state == 'done'"
-                        invisible="not picking_type_entire_packs"/>
+                        invisible="not picking_type_entire_packs and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment')"/>
+
+                    <button name="action_refresh_consignment_transfer_out"
+                            type="object"
+                            string="Refresh from Pack"
+                            class="btn-primary"
+                            invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment') or state in ['done', 'cancel']"/>
 
                     <div class="mt16"/>
 
@@ -462,21 +474,12 @@
 
             <xpath expr="//field[@name='location_id'][@groups='stock.group_stock_multi_locations']"
                 position="replace">
-                <field name="internal_transfer_adt_dest_location_id"
-                    string="Final Location"
-                    domain="[('is_location_mapping', '=', True)]"
-                    invisible="not is_ito_internal_transfer"/>
                 <field name="location_id"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
-                    invisible="picking_type_code == 'incoming' or is_ito_internal_transfer"
-                    readonly="state == 'done'"/>
-                <field name="location_id"
-                    options="{'no_create': True}"
-                    groups="stock.group_stock_multi_locations"
-                    invisible="not is_ito_internal_transfer"
+                    invisible="picking_type_code == 'incoming'"
                     readonly="state == 'done'"
-                    domain="[('id', 'child_of', internal_transfer_adt_dest_location_id)]"/>
+                    />
             </xpath>
 
             <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']"
@@ -488,7 +491,7 @@
                     string="Gudang Tujuan"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
-                    invisible="(picking_type_code == 'internal' and operation_category == 'put') or is_ito_internal_transfer"
+                    invisible="picking_type_code == 'internal' and operation_category == 'put'"
                     readonly="state == 'done'"/>
 
                 <!-- Custom domain -->
@@ -496,18 +499,9 @@
                     string="Gudang Tujuan"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
-                    invisible="picking_type_code != 'internal' or operation_category != 'put' or is_ito_internal_transfer"
+                    invisible="picking_type_code != 'internal' or operation_category != 'put'"
                     readonly="state == 'done'"
                     domain="[('id', 'child_of', adt_dest_location_id)]"/>
-
-                <!-- Internal Transfer header domain -->
-                <field name="location_dest_id"
-                    string="Gudang Tujuan"
-                    options="{'no_create': True}"
-                    groups="stock.group_stock_multi_locations"
-                    invisible="not is_ito_internal_transfer"
-                    readonly="state == 'done'"
-                    domain="[('id', 'child_of', internal_transfer_adt_dest_location_id)]"/>
             </xpath>
 
             <xpath expr="//field[@name='owner_id']" position="attributes">
@@ -536,7 +530,7 @@
                 <field name="internal_transfer_order_id" invisible="1"/>
                 <field name="internal_transfer_leg" invisible="1"/>
                 <field name="is_ito_internal_transfer" invisible="1"/>
-                <field name="adt_dest_location_id" string="Final Location" invisible="'Receipt' in (picking_type_name or '') or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal'] or is_ito_internal_transfer"/>
+                <field name="adt_dest_location_id" string="Final Location" invisible="internal_transfer_order_id or 'Receipt' in (picking_type_name or '') or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal'] or is_ito_internal_transfer"/>
                 <field name="all_moves_picked" invisible="1"/>
                 <field name="show_picker_page" invisible="1"/>
                 <field name="show_putaway_page" invisible="1"/>
