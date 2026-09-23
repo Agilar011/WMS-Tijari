@@ -31,6 +31,7 @@
                 <field name="adt_ReferenceNbr" string="Reference Number"/>
                 <field name="adt_Type" string="Type"/>
                 <field name="adt_ConsignmentType" string="Consignment Type"/>
+                <field name="adt_DocumentOnly" string="Document Only"/>
                 <!-- <field name="id" string="ID"/> -->
                 <field name="adt_CustomerID" string="Customer Code"/>
                 <!-- <field name="odoo_picking_id" string="Delivery Order"/> -->
@@ -88,7 +89,7 @@
                             <field name="adt_Type"/>
                             <field name="adt_ConsignmentType"/>
                             <!-- <field name="adt_post_period"/> -->
-                            <!-- <field name="adt_document_only"/> -->
+                            <field name="adt_DocumentOnly" string="Document Only"/>
                         </group>
                     </group>
                     <notebook>

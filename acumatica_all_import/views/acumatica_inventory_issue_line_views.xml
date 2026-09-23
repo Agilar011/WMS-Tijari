@@ -93,6 +93,7 @@
                             <field name="shipment_nbr"/>
                             <field name="transfer_nbr"/>
                             <field name="trans_type"/>
+                            <field name="document_only"/>
                             <field name="doc_type"/>
                             <field name="actual_qty"/>
                             <field name="total_qty"/>

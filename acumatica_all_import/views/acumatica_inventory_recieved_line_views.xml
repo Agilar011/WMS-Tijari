@@ -67,6 +67,7 @@
                             <field name="scheduled_date"/>
                             <field name="description"/>
                             <field name="doc_type"/>
+                            <field name="document_only"/>
                             <field name="actual_qty"/>
                             <field name="acumatica_write_date"/>
                             <field name="post_period"/>

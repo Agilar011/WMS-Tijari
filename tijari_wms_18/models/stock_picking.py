@@ -582,38 +582,85 @@ class StockPicking(models.Model):
         for picking in self:
             if not picking.adt_is_document_only:
                 continue
-            if picking.picking_type_id.is_document_only_api:
-                continue
+            if not picking.picking_type_id.is_document_only_api:
+                operation = picking._get_document_only_operation()
+                if operation:
+                    warehouse = (
+                        picking.picking_type_id.warehouse_id
+                        or picking.location_dest_id.warehouse_id
+                        or picking.location_id.warehouse_id
+                    )
+                    document_only_type = PickingType.resolve_document_only_picking_type(
+                        target_operation_type=operation,
+                        document_only=True,
+                        warehouse_code=warehouse.code if warehouse else False,
+                    )
+                    if document_only_type and document_only_type != picking.picking_type_id:
+                        picking.with_context(
+                            skip_document_only_picking_type_sync=True,
+                            skip_document_only_sync=True,
+                        ).sudo().write({
+                            'picking_type_id': document_only_type.id,
+                        })
+            picking._adt_preserve_document_only_destination()
 
-            operation = picking._get_document_only_operation()
-            if not operation:
-                continue
+    def _adt_get_document_only_destination(self):
+        self.ensure_one()
+        Location = self.env['stock.location'].sudo()
+        warehouse = (
+            self.picking_type_id.warehouse_id
+            or self.location_id.warehouse_id
+            or self.location_dest_id.warehouse_id
+        )
+        domain = [
+            ('name', '=', 'Document Only'),
+            ('is_document_only', '=', True),
+            ('usage', '=', 'internal'),
+        ]
+        if warehouse:
+            domain.append(('warehouse_id', '=', warehouse.id))
+            location = Location.search(domain, order='id', limit=1)
+        else:
+            domain.extend([
+                ('company_id', 'in', [self.company_id.id, False]),
+            ])
+            locations = Location.search(domain, order='id', limit=2)
+            if len(locations) > 1:
+                raise UserError(_(
+                    'Picking %s tidak terhubung ke warehouse dan memiliki lebih '
+                    'dari satu lokasi Document Only. Hubungkan operation type '
+                    'ke warehouse agar lokasi tujuan dapat ditentukan.'
+                ) % self.display_name)
+            location = locations[:1]
 
-            warehouse = picking.picking_type_id.warehouse_id or picking.location_dest_id.warehouse_id or picking.location_id.warehouse_id
-            document_only_type = PickingType.resolve_document_only_picking_type(
-                target_operation_type=operation,
-                document_only=True,
-                warehouse_code=warehouse.code if warehouse else False,
-            )
-            if document_only_type and document_only_type != picking.picking_type_id:
-                picking.with_context(skip_document_only_picking_type_sync=True).sudo().write({
-                    'picking_type_id': document_only_type.id,
-                })
+        if not location:
+            warehouse_name = warehouse.display_name if warehouse else self.company_id.display_name
+            raise UserError(_(
+                'Lokasi tujuan Document Only dengan flag is_document_only '
+                'tidak ditemukan untuk %s.'
+            ) % (warehouse_name or self.display_name))
+        return location
 
     def _adt_preserve_document_only_destination(self):
         for picking in self:
-            if not picking.adt_dest_location_id:
+            if not picking.adt_is_document_only:
                 continue
-            if picking.location_dest_id != picking.adt_dest_location_id:
-                picking.with_context(skip_document_only_sync=True).sudo().write({
-                    'location_dest_id': picking.adt_dest_location_id.id,
-                })
-            picking.move_ids.sudo().write({
-                'location_dest_id': picking.adt_dest_location_id.id,
-                'adt_dest_location_id': picking.adt_dest_location_id.id,
+            document_only_location = picking._adt_get_document_only_destination()
+            picking.with_context(
+                skip_document_only_sync=True,
+                skip_document_only_picking_type_sync=True,
+            ).sudo().write({
+                'location_dest_id': document_only_location.id,
+                'adt_dest_location_id': document_only_location.id,
+            })
+            picking.move_ids.sudo().with_context(
+                skip_document_only_sync=True,
+            ).write({
+                'location_dest_id': document_only_location.id,
+                'adt_dest_location_id': document_only_location.id,
             })
             picking.move_line_ids.sudo().write({
-                'location_dest_id': picking.adt_dest_location_id.id,
+                'location_dest_id': document_only_location.id,
             })
 
 
@@ -784,10 +831,19 @@ class StockPicking(models.Model):
 
         return lots
 
-    @api.depends("state")
+    @api.depends("state", "adt_type", "internal_transfer_order_id", "internal_transfer_leg")
     def _compute_wms_state(self):
         for picking in self:
-            if picking.state != "done" or picking.adt_type != "Sales Order Shipment":
+            is_waiting_shipment = (
+                picking.adt_type == "Sales Order Shipment"
+                or (
+                    picking.internal_transfer_order_id
+                    and picking.adt_type == "Shipment Consignment"
+                    and picking.internal_transfer_leg == "delivery"
+                    and picking.picking_type_id.code == "internal"
+                )
+            )
+            if picking.state != "done" or not is_waiting_shipment:
                 picking.wms_state = picking.state
 
     @api.depends(
@@ -1360,23 +1416,17 @@ class StockPicking(models.Model):
         domain="[('usage', '=', 'internal')]",
         string="Mapped Location",
     )
+    # Compatibility for database custom views that still reference the former
+    # Internal Transfer Final Location field. It no longer drives locations.
     internal_transfer_adt_dest_location_id = fields.Many2one(
         "stock.location",
-        string="Mapped Location",
+        string="Mapped Location (Legacy)",
+        readonly=True,
+        copy=False,
     )
     note_ba = fields.Text(string="Notes For Official Report")
     desc_note = fields.Char(string="Description")
     picking_type_name = fields.Char(string="Picking Type Name", related="picking_type_id.name", store=True)
-
-    @api.onchange('internal_transfer_adt_dest_location_id')
-    def _onchange_internal_transfer_adt_dest_location_id(self):
-        for picking in self:
-            if not picking.is_ito_internal_transfer:
-                continue
-            location = picking.internal_transfer_adt_dest_location_id
-            picking.location_id = location
-            picking.location_dest_id = location
-            picking.adt_dest_location_id = location
 
     def _allow_custom_push_destination(self):
         self.ensure_one()
@@ -2085,6 +2135,18 @@ class StockPicking(models.Model):
     def action_assign(self):
         _logger.info(">>> action_assign CALLED %s", self.ids)
 
+        consignment_transfer_pickings = self.filtered(
+            lambda picking: (
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_order_id.adt_transaction_type == 'Shipment Consignment'
+                and picking.internal_transfer_leg == 'delivery'
+                and picking.picking_type_id.code == 'internal'
+                and picking.state not in ('done', 'cancel')
+            )
+        )
+        for picking in consignment_transfer_pickings:
+            picking.internal_transfer_order_id._prepare_consignment_transfer_out(picking)
+
         res = super().action_assign()
 
         for picking in self:
@@ -2119,6 +2181,11 @@ class StockPicking(models.Model):
                             'product_lot_id': line.lot_id.id,
                         })
 
+        for picking in consignment_transfer_pickings:
+            picking.internal_transfer_order_id._sync_consignment_transfer_package_levels(
+                picking
+            )
+
         return res
 
     def action_mark_todo_and_check_availability(self):
@@ -2138,11 +2205,29 @@ class StockPicking(models.Model):
 
         if self.shipment_information == "full_shipment":
             self.wms_state = "done"
+            if (
+                self.internal_transfer_order_id
+                and self.internal_transfer_order_id.adt_transaction_type == 'Shipment Consignment'
+                and self.internal_transfer_leg == 'delivery'
+                and self.picking_type_id.code == 'internal'
+            ):
+                self.internal_transfer_order_id.action_auto_validate_transfer_out_receipt(
+                    shipment_picking=self,
+                )
             return
 
         self._generate_return_from_actual_qty()
 
         self.wms_state = "return_shipment"
+        if (
+            self.internal_transfer_order_id
+            and self.internal_transfer_order_id.adt_transaction_type == 'Shipment Consignment'
+            and self.internal_transfer_leg == 'delivery'
+            and self.picking_type_id.code == 'internal'
+        ):
+            self.internal_transfer_order_id.action_auto_validate_transfer_out_receipt(
+                shipment_picking=self,
+            )
 
     def button_validate(self):
         document_only_pickings = self.filtered(
@@ -2277,6 +2362,15 @@ class StockPicking(models.Model):
                         })
                                     
             if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
+                rec.wms_state = 'waiting_response'
+
+            if (
+                rec.internal_transfer_order_id
+                and rec.internal_transfer_leg == 'delivery'
+                and rec.adt_type == 'Shipment Consignment'
+                and rec.picking_type_id.code == 'internal'
+                and rec.state == 'done'
+            ):
                 rec.wms_state = 'waiting_response'
 
             if (
