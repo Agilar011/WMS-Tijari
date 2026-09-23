@@ -12,6 +12,7 @@
                 <field name="external_ref_out" optional="hide"/>
                 <field name="transaction_type"/>
                 <field name="transfer_type"/>
+                <field name="adt_transaction_type" optional="hide"/>
                 <field name="location_id"/>
                 <field name="location_dest_id"/>
                 <field name="schedule_date"/>
@@ -59,6 +60,7 @@
                         <group>
                             <field name="transaction_type"/>
                             <field name="transfer_type" invisible="1"/>
+                            <field name="adt_transaction_type" string="Tipe Transaksi (API)" readonly="1"/>
                             <field name="inter_transfer_type"
                                 invisible="transaction_type != 'inter_warehouse'"/>
                             <field name="intra_transfer_type"

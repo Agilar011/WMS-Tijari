@@ -24,3 +24,4 @@ from . import import_invoice_consignment_wizard
 from . import import_direct_transfer_wizard
 from . import import_vendor_return_direct_transfer_wizard
 from . import import_credit_memo_consignment_wizard
+from . import import_shipment_transfer_completed_wizard

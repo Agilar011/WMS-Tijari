@@ -77,19 +77,20 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     def write(self, vals):
         result = super().write(vals)
         if 'picking_type_id' not in vals and {'adt_FromWarehouseID', 'adt_DocumentOnly'} & set(vals):
-            self._fill_vendor_return_picking_type()
+            self._fill_vendor_return_picking_type(force=True)
         return result
 
-    def _resolve_vendor_return_picking_type(self, warehouse_code=False):
+    def _resolve_vendor_return_picking_type(self, warehouse_code=False, document_only=False):
         PickingType = self.env['stock.picking.type'].sudo()
-        picking_type = PickingType.resolve_document_only_picking_type(
-            target_operation_type='direct_delivery_order',
-            api_acumatica='vendor_return',
-            document_only=True,
-            warehouse_code=warehouse_code,
-        )
-        if picking_type:
-            return picking_type
+        if document_only:
+            picking_type = PickingType.resolve_document_only_picking_type(
+                target_operation_type='direct_delivery_order',
+                api_acumatica='vendor_return',
+                document_only=True,
+                warehouse_code=warehouse_code,
+            )
+            if picking_type:
+                return picking_type
 
         warehouse = self._find_warehouse_by_code(warehouse_code)
         picking_type = PickingType.resolve_picking_type(
@@ -110,11 +111,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
             ('active', '=', True),
         ], limit=1)
 
-    def _fill_vendor_return_picking_type(self):
+    def _fill_vendor_return_picking_type(self, force=False):
         for rec in self:
-            if rec.picking_type_id:
+            if rec.picking_type_id and not force:
                 continue
-            picking_type = rec._resolve_vendor_return_picking_type(rec.adt_FromWarehouseID)
+            picking_type = rec._resolve_vendor_return_picking_type(
+                rec.adt_FromWarehouseID, rec.adt_DocumentOnly
+            )
             if picking_type:
                 rec.picking_type_id = picking_type.id
         return True
@@ -229,7 +232,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     print(f"[DIRECT TRANSFER] Processing Document: {origin}")
 
                     # Tentukan jenis operasi picking (Operation Type)
-                    first._fill_vendor_return_picking_type()
+                    first._fill_vendor_return_picking_type(force=True)
                     picking_type = first._adt_reresolve_picking_type()
                     if not picking_type:
                         raise UserError(f"Picking type (Operation Type) belum diatur pada header staging ID {first.id}.")

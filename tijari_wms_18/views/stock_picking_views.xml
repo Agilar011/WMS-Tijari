@@ -36,7 +36,7 @@
                         string="Search Document"
                         class="btn-primary"
                         display="always"
-                        invisible="not context.get('tijari_my_worklist')"/>
+                        invisible="1"/>
                 </header>
             </xpath>
             <xpath expr="//templates/t[@t-name='card']//field[@name='name']" position="replace">
@@ -78,7 +78,7 @@
                     string="Search Document"
                     class="btn-primary"
                     display="always"
-                    invisible="not context.get('tijari_my_worklist')"/>
+                    invisible="1"/>
             </xpath>
         </field>
     </record>
@@ -93,7 +93,7 @@
                 <field name="wms_state"
                     widget="statusbar"
                     statusbar_visible="draft,assigned,waiting_response,done"
-                    invisible="(picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment')"
+                    invisible="(picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment'])"
                 />
             </xpath>
 
@@ -107,7 +107,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders'] or internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment'"/>
+                    invisible="adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders'] or internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment']"/>
 
             </xpath>            
 
@@ -139,7 +139,7 @@
                     string="Complete Shipment"
                     type="object"
                     class="btn-primary"
-                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment') or wms_state != 'waiting_response'"/>
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ('Shipment Consignment', 'Transfer Shipment')) or wms_state != 'waiting_response'"/>
 
                 <!-- <button name="action_fetch_actual_qty"
                 string="Get Full Shipment Data"
@@ -183,7 +183,7 @@
 
             <xpath expr="//field[@name='date_done']" position="after">
                 <field name="shipment_information"
-                    invisible="(picking_type_name not in ('Delivery Orders') or adt_type not in ('Sales Order Shipment', 'SO Consignment')) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment')"
+                    invisible="(picking_type_name not in ('Delivery Orders') or adt_type not in ('Sales Order Shipment', 'SO Consignment')) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ('Shipment Consignment', 'Transfer Shipment'))"
                     decoration-success="shipment_information == 'full_shipment'"
                     decoration-warning="shipment_information == 'partial'"
                     decoration-danger="shipment_information == 'canceled'"/>
@@ -693,7 +693,7 @@
                 <xpath expr="//page[@name='operations']" position="attributes">
                     <attribute name="invisible">'Pick' in (picking_type_name or '')</attribute>
                 </xpath>
-                <xpath expr="//page[@name='operations']" position="after">
+            <xpath expr="//page[@name='operations']" position="after">
                     <page string="Operations" name="page_picker_operation" invisible="not show_picker_page or 'Pick' not in (picking_type_name or '')">
                         <field name="move_ids_without_package"
                             mode="list,kanban"
@@ -1009,6 +1009,11 @@
                         groups="base.group_user"
                         invisible="state not in ('draft','waiting')"
                         data-hotkey="q"/>
+            </xpath>
+
+            <!-- Keep Description visible in the main Operations table. -->
+            <xpath expr="//page[@name='operations']//field[@name='description_picking']" position="attributes">
+                <attribute name="optional"/>
             </xpath>
 
         </field>

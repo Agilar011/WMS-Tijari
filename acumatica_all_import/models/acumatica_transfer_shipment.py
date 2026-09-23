@@ -357,7 +357,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                 shipment.note or shipment.description or False,
                 description=shipment.description or False,
                 transfer_type='transfer_out',
-                adt_transaction_type=shipment.shipment_type or shipment.operation or False,
+                adt_transaction_type='Transfer Shipment',
                 document_only=shipment.document_only,
             )
 

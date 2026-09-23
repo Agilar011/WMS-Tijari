@@ -509,7 +509,20 @@ class InternalTransferOrder(models.Model):
 
     def _get_vendor_return_receipt_picking_type(self):
         self.ensure_one()
-        warehouse = self._get_source_warehouse()
+        warehouse = self._get_receipt_warehouse()
+        warehouse_code = warehouse.code if warehouse else False
+        PickingType = self.env['stock.picking.type']
+
+        if self.document_only:
+            picking_type = PickingType.resolve_document_only_picking_type(
+                target_operation_type='direct_receipt',
+                api_acumatica='vendor_return',
+                document_only=True,
+                warehouse_code=warehouse_code,
+            )
+            if picking_type:
+                return picking_type
+
         domain = [
             ('code', '=', 'internal'),
             ('name', '=', 'Receipt Internal'),
@@ -520,12 +533,14 @@ class InternalTransferOrder(models.Model):
         if picking_type:
             return picking_type
 
-        warehouse_code = warehouse.code if warehouse else False
-        picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
-            target_operation_type='direct_receipt',
-            api_acumatica='vendor_return',
-            document_only=True,
+        picking_type = PickingType.resolve_picking_type(
+            warehouse=warehouse,
             warehouse_code=warehouse_code,
+            code='incoming',
+            operation_category='receive',
+            api_acumatica='vendor_return',
+            transaction_key='vendor_return',
+            required=False,
         )
         if picking_type:
             return picking_type
@@ -544,6 +559,16 @@ class InternalTransferOrder(models.Model):
         self.ensure_one()
         warehouse = self._get_source_warehouse()
         warehouse_code = warehouse.code if warehouse else False
+        if not self.document_only:
+            return self.env['stock.picking.type'].resolve_picking_type(
+                warehouse=warehouse,
+                warehouse_code=warehouse_code,
+                code='outgoing',
+                operation_category='delivery',
+                api_acumatica='vendor_return',
+                transaction_key='vendor_return',
+                required=True,
+            )
         return self.env['stock.picking.type'].resolve_document_only_picking_type(
             target_operation_type='direct_delivery_order',
             api_acumatica='vendor_return',
@@ -556,6 +581,25 @@ class InternalTransferOrder(models.Model):
         self.ensure_one()
         warehouse = self._get_operational_warehouse()
         warehouse_code = warehouse.code if warehouse else False
+        is_vendor_return = (
+            (self.adt_transaction_type or '').strip().lower() == 'vendor return'
+            or any(
+                (move.adt_type or '').strip().lower()
+                in ('vendor return', 'vendor return document')
+                for move in self.move_ids
+            )
+        )
+        if is_vendor_return and not self.document_only:
+            source_warehouse = self._get_source_warehouse()
+            return self.env['stock.picking.type'].resolve_picking_type(
+                warehouse=source_warehouse,
+                warehouse_code=source_warehouse.code if source_warehouse else False,
+                code='outgoing',
+                operation_category='delivery',
+                api_acumatica='vendor_return',
+                transaction_key='vendor_return',
+                required=True,
+            )
         return self.env['stock.picking.type'].resolve_document_only_picking_type(
             target_operation_type='direct_delivery_order',
             api_acumatica='transfer_in',
@@ -741,7 +785,7 @@ class InternalTransferOrder(models.Model):
             'origin': picking_external_ref,
             'location_id': location.id,
             'location_dest_id': location_dest.id,
-            'adt_type': self._get_picking_adt_type(),
+            'adt_type': self._get_picking_adt_type_for_leg(leg),
             'adt_order_type': self.adt_order_type or False,
             'adt_external_ref': picking_external_ref,
             'internal_transfer_order_id': self.id,
@@ -786,6 +830,12 @@ class InternalTransferOrder(models.Model):
         # Keep API-provided values unchanged, but label generated documents
         # from a manual order consistently as Internal Transfer.
         return self.adt_transaction_type or 'Internal Transfer'
+
+    def _get_picking_adt_type_for_leg(self, leg):
+        self.ensure_one()
+        if self.transfer_type == 'transfer_in' and self.adt_transaction_type == 'SOTR':
+            return 'SOTR' if leg == 'receipt' else 'Transfer Shipment'
+        return self._get_picking_adt_type()
 
     def _get_move_mapped_location_name(self, leg):
         self.ensure_one()
@@ -1044,7 +1094,7 @@ class InternalTransferOrder(models.Model):
     def _set_consignment_receipt_shipped_quantities(self, receipt_picking, shipment_picking):
         self.ensure_one()
         if not (
-            self.adt_transaction_type == 'Shipment Consignment'
+            self.adt_transaction_type in ('Shipment Consignment', 'Transfer Shipment')
             and shipment_picking.internal_transfer_order_id == self
             and shipment_picking.internal_transfer_leg == 'delivery'
             and shipment_picking.shipment_information in ('full_shipment', 'partial')
@@ -1126,7 +1176,7 @@ class InternalTransferOrder(models.Model):
 
         vals = {
             'origin': self._get_picking_external_ref(leg),
-            'adt_type': self._get_picking_adt_type(),
+            'adt_type': self._get_picking_adt_type_for_leg(leg),
             'adt_order_type': self.adt_order_type or False,
             'adt_external_ref': self._get_picking_external_ref(leg),
             'internal_transfer_order_id': self.id,
@@ -1854,7 +1904,10 @@ class StockPicking(models.Model):
                     )
                     and not (
                         picking.internal_transfer_leg == 'delivery'
-                        and order.adt_transaction_type == 'Shipment Consignment'
+                        and order.adt_transaction_type in (
+                            'Shipment Consignment',
+                            'Transfer Shipment',
+                        )
                         and picking.picking_type_id.code == 'internal'
                     )
                 ):

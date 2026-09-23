@@ -157,6 +157,19 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
                 'shipment_nbr'
             ],
         },
+        'shipment_transfer_completed': {
+            'label': 'Shipment Transfer Completed',
+            'wizard_model': 'import.shipment.transfer.completed.wizard',
+            'line_model': 'acumatica.shipment.transfer.completed.staging',
+            'result_name': 'Hasil Import Shipment Transfer Completed',
+            'staging_name': 'Data Shipment Transfer Completed Acumatica',
+            'extra_fields': [
+                'warehouse_value',
+                'start_date',
+                'end_date',
+                'shipment_nbr'
+            ],
+        },
         'so_transfer': {
             'label': 'Transfer (In/SOTR)',
             'wizard_model': 'import.transfer.wizard',
@@ -252,6 +265,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'invoice_consignment',
         'credit_memo_consignment',
         'shipment_completed',
+        'shipment_transfer_completed',
         'kit_assembly',
         # 'issue_change_item',
         'vendor_return_direct_transfer',

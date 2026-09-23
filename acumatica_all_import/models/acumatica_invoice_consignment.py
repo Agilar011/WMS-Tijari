@@ -437,6 +437,10 @@ class AcumaticaInvoiceConsignment(models.Model):
                     if moves_to_create:
                         Move.create(moves_to_create)
 
+                    # Invoice Consignment dibuat sebagai transaksi Document Only.
+                    # Validasi setelah seluruh move tersedia agar picking impor
+                    # diproses otomatis melalui guard stok Document Only.
+                    picking.action_validate_document_only_import(force=True)
 
                     # Tulis status sukses ke tabel staging kustom
                     first.write({

@@ -439,7 +439,7 @@ class StockMove(models.Model):
                     "warning": {
                         "title": _("Invalid Quantity"),
                         "message": _(
-                            "Quantoty (%s) tidak boleh melebihi demand (%s)."
+                            "Quantity (%s) tidak boleh melebihi demand (%s)."
                         ) % (total_qty, move.product_uom_qty),
                     }
                 }
@@ -1136,8 +1136,9 @@ class StockMove(models.Model):
         physical destination.  Odoo would normally interpret that as a push
         rule trigger and create an extra Receipts picking.  Intra-warehouse
         ITO already has its Storage move linked explicitly, so the generic
-        push chain must not add another operation.  Other picking flows keep
-        the standard Odoo behavior.
+        push chain must not add another operation. Document Only pickings are
+        also complete single-document flows and must not spawn a push-rule
+        picking. Other picking flows keep the standard Odoo behavior.
         """
         intra_ito_pick = self.filtered(lambda move: (
             move.picking_id
@@ -1145,7 +1146,14 @@ class StockMove(models.Model):
             and move.picking_id.internal_transfer_order_id.transaction_type == 'intra_warehouse'
             and move.picking_id.internal_transfer_leg == 'pick'
         ))
-        return super()._skip_push() or bool(intra_ito_pick)
+        document_only_moves = self.filtered(
+            lambda move: move.picking_id and move.picking_id.adt_is_document_only
+        )
+        return (
+            super()._skip_push()
+            or bool(intra_ito_pick)
+            or bool(document_only_moves)
+        )
 
 
 class StockMoveScanWizard(models.TransientModel):

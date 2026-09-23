@@ -242,7 +242,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     first.note or False,
                     description=first.description or False,
                     transfer_type='transfer_out',
-                    adt_transaction_type=first.transfer_type or first.trans_type or False,
+                    adt_transaction_type='Transfer 2 Step',
                     document_only=first.document_only,
                 )
 
@@ -265,7 +265,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         'adt_transfer_order_line_number': line.adt_LineNumber or False,
                         'adt_transfer_order_type': first.transfer_type or False,
                         'adt_quantity': qty,
-                        'adt_type': first.transfer_type or 'Transfer Two Step',
+                        'adt_type': 'Transfer 2 Step',
                     })
 
                 transfer_service.set_order_ready(order)

@@ -286,8 +286,15 @@
         parent="menu_acumatica_all_import_staging_root"
         sequence="20"/>
     <menuitem id="menu_acumatica_all_import_staging_so_shipment" name="SO Shipment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_so_shipment_line" sequence="10"/>
+    <record id="action_acumatica_shipment_transfer_completed_staging" model="ir.actions.act_window">
+        <field name="name">Shipment Transfer Completed</field>
+        <field name="res_model">acumatica.shipment.transfer.completed.staging</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html"><p class="o_view_nocontent_smiling_face">Belum ada data Shipment Transfer Completed.</p><p>Gunakan Unified Import dengan konfigurasi Shipment Transfer Completed untuk mengambil data Acumatica.</p></field>
+    </record>
     <menuitem id="menu_acumatica_all_import_staging_shipment_completed" name="Shipment Completed" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_shipment_completed_staging" sequence="11"/>
     <!-- <menuitem id="menu_acumatica_all_import_staging_issue_change_item" name="Issue : Change Item" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_line" sequence="30"/> -->
+    <menuitem id="menu_acumatica_all_import_staging_shipment_transfer_completed" name="Shipment Transfer Completed" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_shipment_transfer_completed_staging" sequence="12"/>
     <menuitem id="menu_acumatica_all_import_staging_inventory_issue" name="Inventory Issue" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inventory_issue_line" sequence="40"/>
     <menuitem id="menu_acumatica_all_import_staging_issue_po_return" name="PO Return" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_po_return_line" sequence="50"/>
     <menuitem id="menu_acumatica_all_import_staging_invoice_consignment" name="Invoice Consignment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_invoice_consignment" sequence="80"/>
@@ -299,6 +306,7 @@
         <!-- <menuitem id="menu_acumatica_all_import_staging_direct_transfer" name="Direct Transfer" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_direct_transfer" sequence="20"/> -->
         <menuitem id="menu_acumatica_all_import_staging_so_shipment_co" active="False" name="SO Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_so_shipment_consignment_line" sequence="10"/>
         <menuitem id="menu_acumatica_all_import_staging_vendor_return_direct_transfer" name="Return Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_vendor_return_acumatica_direct_transfer" sequence="30"/>
+        <menuitem id="menu_acumatica_all_import_staging_vendor_return_document" name="Return Consignment Document" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_direct_transfer" sequence="35"/>
         <menuitem id="menu_acumatica_all_import_staging_credit_memo_consignment" name="Credit Memo Consignment" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_credit_memo_consignment" sequence="40"/>
         <menuitem id="menu_acumatica_all_import_staging_transfer_one_step" name="Transfer 1 Step" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_one_step_line" sequence="50"/>
         <menuitem id="menu_acumatica_all_import_staging_transfer_two_step" name="Transfer 2 Step" parent="menu_acumatica_all_import_staging_internal" action="action_acumatica_transfer_two_step_line" sequence="60"/>

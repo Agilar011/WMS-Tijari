@@ -97,6 +97,7 @@ class AcumaticaConfig(models.Model):
             ('shipment_so', 'SO Return'),
             ('so_shipment', 'SO Shipment'),
             ('shipment_completed', 'Shipment Completed'),
+            ('shipment_transfer_completed', 'Shipment Transfer Completed'),
             ('transfer_shipment', 'Transfer (Out/Shipment)'),
             ('issue_change_item', 'Issue Change Item'),
             ('inventory_issue', 'Inventory Issue'),
@@ -119,6 +120,13 @@ class AcumaticaConfig(models.Model):
 
         ], string='Config Type', required=True, default='uom',
     )
+
+    @api.onchange('config_type')
+    def _onchange_config_type_shipment_transfer_completed(self):
+        for record in self:
+            if record.config_type == 'shipment_transfer_completed':
+                record.endpoint_name = 'ShipmentTransferCompletedGI'
+                record.odata_expand = 'ShipmentTransferCompletedGIDetails'
 
     @api.model
     def _get_default_config_for_type(self, config_type):
