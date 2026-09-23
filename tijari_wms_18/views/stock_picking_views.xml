@@ -1015,6 +1015,18 @@
                         groups="base.group_user"
                         invisible="state not in ('draft','waiting')"
                         data-hotkey="q"/>
+                        
+                <button name="action_print_warehouse_pack"
+                    string="Print Pack"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
+                
+                <button name="action_print_warehouse_pick"
+                    string="Print Pick"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_name not in ['Pick', 'Pick Internal']"/>
             </xpath>
 
         </field>

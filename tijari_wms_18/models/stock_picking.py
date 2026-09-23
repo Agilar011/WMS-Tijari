@@ -1438,6 +1438,20 @@ class StockPicking(models.Model):
         action['target'] = 'new'
         return action
 
+    def action_print_warehouse_pick(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/warehouse_pick?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
+
+    def action_print_warehouse_pack(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/warehouse_pack?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
+
     def do_print_picking(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
