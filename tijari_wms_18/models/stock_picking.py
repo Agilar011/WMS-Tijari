@@ -32,7 +32,7 @@ class StockPicking(models.Model):
     adt_header_location_code = fields.Char(string='Header Location (Acumatica)')
     adt_post_period = fields.Char(string='Post Period (Acumatica)')
     adt_status = fields.Char(string='Status (Acumatica)')
-    adt_total_qty = fields.Float(string='Total Qty (Acumatica)')
+    adt_total_qty = fields.Float(string='Qty Total (Acumatica)')
     
     adt_type = fields.Char(string='Type (Acumatica)')
     
@@ -906,18 +906,28 @@ class StockPicking(models.Model):
 
         return lots
 
-    @api.depends("state", "adt_type", "internal_transfer_order_id", "internal_transfer_leg")
+    @api.depends(
+        "state",
+        "adt_type",
+        "internal_transfer_order_id",
+        "internal_transfer_leg",
+        "picking_type_id",
+    )
     def _compute_wms_state(self):
         for picking in self:
             is_waiting_shipment = (
-                picking.adt_type == "Sales Order Shipment"
+                picking.adt_type in ("Sales Order Shipment", "SO Shipment")
                 or (
                     picking.internal_transfer_order_id
-                    and picking.adt_type in ("Shipment Consignment", "Transfer Shipment")
+                    and picking.adt_type in (
+                        "Shipment Consignment",
+                        "Transfer Shipment",
+                    )
                     and picking.internal_transfer_leg == "delivery"
                     and picking.picking_type_id.code == "internal"
                 )
             )
+
             if picking.state != "done" or not is_waiting_shipment:
                 picking.wms_state = picking.state
 
@@ -2395,8 +2405,13 @@ class StockPicking(models.Model):
                 picking._check_validate_requirements()
                 picking._check_pick_quantity_vs_demand()
                 picking._check_pick_confirmation_quantity()
+
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
+
+            if picking.picking_type_id.name in ('Delivery Orders'):
+                picking._check_validate_delivery_requirements()
+            
             if (
                 picking.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage')
                 and not picking.is_ito_internal_transfer
@@ -2634,8 +2649,8 @@ class StockPicking(models.Model):
                             "Product: %s\n"
                             "Lot: %s\n"
                             "Qty Dikirim: %s\n"
-                            "Total Qty: %s\n\n"
-                            "Qty Dikirim melebihi Total Qty."
+                            "Qty Total: %s\n\n"
+                            "Qty Dikirim melebihi Qty Total."
                         ) % (
                             move.product_id.display_name,
                             move.lot_ids.name or "-",
@@ -2714,6 +2729,10 @@ class StockPicking(models.Model):
             lambda line: line.matching != "match"
         )
 
+        unfinished_move_lines = active_moves.move_line_ids.filtered(
+            lambda line: line.pick_status != "finished"
+        )
+
         error_messages = []
 
         if unpicked_moves:
@@ -2753,8 +2772,81 @@ class StockPicking(models.Model):
                 % lines
             )
 
+        if unfinished_move_lines:
+            lines = "\n".join(
+                "- %s | Lot/Serial: %s | Status: %s"
+                % (
+                    line.product_id.display_name,
+                    line.lot_id.name or line.lot_name or "-",
+                    dict(line._fields["pick_status"].selection).get(
+                        line.pick_status,
+                        line.pick_status or "-"
+                    ),
+                )
+                for line in unfinished_move_lines
+            )
+
+            error_messages.append(
+                (
+                    "Pastikan semua status barang Finished "
+                    "\n"
+                    "Detail produk yang belum Finished:\n%s"
+                )
+                % lines
+            )
+        
+
         if error_messages:
             raise UserError("\n\n".join(error_messages))
+
+    def _check_validate_delivery_requirements(self):
+        self.ensure_one()
+
+        active_moves = self.move_ids.filtered(
+            lambda move: move.state != "cancel"
+        )
+
+        unfinished_unpacked_items = active_moves.filtered(
+            lambda move: move.status_check != "finished"
+        )
+
+        unfinished_packed_items = self.package_level_ids.filtered(
+            lambda line: line.status != "finished"
+        )
+
+        error_messages = []
+
+        if unfinished_unpacked_items:
+            products = "\n".join(
+                f"- {move.product_id.display_name}"
+                for move in unfinished_unpacked_items
+            )
+
+            error_messages.append(
+                (
+                    "Pastikan semua status item unpacked sudah 'Finished'.\n"
+                    "Unpacked item yang belum divalidasi:\n%s"
+                )
+                % products
+            )
+
+        if unfinished_packed_items:
+            packages = "\n".join(
+                f"- {line.package_id.name}"
+                for line in unfinished_packed_items
+            )
+
+            error_messages.append(
+                (
+                    "Pastikan semua status package sudah 'Finished'.\n"
+                    "Package belum divalidasi:\n%s"
+                )
+                % packages
+            )
+
+        if error_messages:
+            raise UserError("\n\n".join(error_messages))
+    
 
     def _get_acumatica_config(self):
 
@@ -2997,6 +3089,8 @@ class StockPicking(models.Model):
             self._prepare_picking_default_values()
         )
 
+        new_picking.name = f"Return of {self.picking_id.origin or self.picking_id.name}"
+
         new_picking.user_id = False
 
         new_picking.message_post_with_source(
@@ -3016,7 +3110,7 @@ class StockPicking(models.Model):
 
         if not returned_lines:
             raise UserError(
-                _("Please specify at least one non-zero quantity.")
+                _("Tidak boleh ada quantity nol.")
             )
 
         # Hanya return dari _generate_return_from_actual_qty
@@ -3261,7 +3355,7 @@ class StockPickingAcumaticaError(models.Model):
     location_dest = fields.Char(string='Destination Location')
     scheduled_date = fields.Datetime(string='Scheduled Date')
     origin = fields.Char(string='Source Document')
-    adt_total_qty = fields.Float(string='Total Qty (Acumatica)')
+    adt_total_qty = fields.Float(string='Qty Total (Acumatica)')
     adt_actual_qty = fields.Float(string='Actual Qty (Acumatica)')
     state = fields.Selection([
         ('new', 'New'),

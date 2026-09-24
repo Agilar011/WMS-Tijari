@@ -19,7 +19,7 @@
                         context="{'tijari_stock_picking_product_code_only': True}"/>
                     
                     <label for="product_uom_qty"
-                        string="Total Qty"/>
+                        string="Qty Total"/>
                     <div>
                         <field name="product_uom_qty"
                             readonly="state != 'draft'"

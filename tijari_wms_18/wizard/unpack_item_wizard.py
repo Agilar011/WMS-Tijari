@@ -17,7 +17,7 @@ class MoveUnpackItemWizard(models.TransientModel):
             ('unfinished', 'Unfinished'),
         ], string='Status', default='unfinished', related='move_id.status_check')
 
-    product_uom_qty = fields.Float('Total Qty', related='move_id.product_uom_qty')
+    product_uom_qty = fields.Float('Qty Total', related='move_id.product_uom_qty')
     remaining_package_qty = fields.Float('Qty Unpack', related='move_id.remaining_package_qty')
     so_confirmation_quantity = fields.Float('Qty Dikirim')
 

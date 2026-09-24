@@ -254,18 +254,23 @@ class StockMove(models.Model):
 
         if not lot_id:
             lot_id = self.env["stock.lot"]
+
         if not package_id:
             package_id = self.env["stock.quant.package"]
+
         if not owner_id:
             owner_id = self.env["res.partner"]
 
         # ======================================================
         # CUSTOM : TOKO PEGANG DO
         # ======================================================
-        if (
-            self.picking_id.adt_type == "Toko Pegang DO"
-        ):
-            owner_id = self.owner_id
+        if self.picking_id.adt_type == "Toko Pegang DO":
+            if not self.picking_id.owner_id:
+                raise UserError(
+                    _("Owner is required for Toko Pegang DO.")
+                )
+
+            owner_id = self.picking_id.owner_id
         # ======================================================
 
         quants = self.env["stock.quant"]._get_reserve_quantity(
