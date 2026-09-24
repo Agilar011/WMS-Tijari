@@ -1020,7 +1020,10 @@ class StockMove(models.Model):
 
         moves_no_merge = self.filtered(
             lambda m: m.picking_id
-            and m.picking_id.adt_type == "Receipt"
+            and (
+                m.picking_id.adt_type == "Receipt"
+                or m.picking_id.internal_transfer_order_id
+            )
         )
 
         moves_normal = self - moves_no_merge

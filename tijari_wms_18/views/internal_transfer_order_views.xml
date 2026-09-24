@@ -104,7 +104,7 @@
                         </page>
                         <page string="Operation" name="page_operations">
                             <field name="move_ids"
-                                invisible="picking_count != 0"
+                                readonly="picking_count != 0"
                                 context="{
                                     'default_internal_transfer_order_id': id,
                                     'default_location_id': location_id,
@@ -139,10 +139,6 @@
                                     <field name="adt_transfer_order_line_number" optional="hide"/>
                                 </list>
                             </field>
-                            <field name="generated_move_ids"
-                                invisible="picking_count == 0"
-                                context="{'list_view_ref': 'stock_picking_batch.view_picking_move_tree_inherited'}"
-                                readonly="1"/>
                         </page>
                         <page string="Notes" name="page_notes">
                             <group name="description" string="Description">
