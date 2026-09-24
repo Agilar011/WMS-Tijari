@@ -439,7 +439,7 @@ class StockMove(models.Model):
                     "warning": {
                         "title": _("Invalid Quantity"),
                         "message": _(
-                            "Quantoty (%s) tidak boleh melebihi demand (%s)."
+                            "Quantity (%s) tidak boleh melebihi demand (%s)."
                         ) % (total_qty, move.product_uom_qty),
                     }
                 }
@@ -1020,7 +1020,10 @@ class StockMove(models.Model):
 
         moves_no_merge = self.filtered(
             lambda m: m.picking_id
-            and m.picking_id.adt_type == "Receipt"
+            and (
+                m.picking_id.adt_type == "Receipt"
+                or m.picking_id.internal_transfer_order_id
+            )
         )
 
         moves_normal = self - moves_no_merge
@@ -1055,6 +1058,20 @@ class StockMove(models.Model):
             if not isinstance(move_vals, dict):
                 prepared_vals.append(move_vals)
                 continue
+            # Lines entered on an ITO are not yet attached to a picking. Keep
+            # their locations aligned with the ITO header even if the web
+            # client did not send the one2many context defaults.
+            ito_id = move_vals.get('internal_transfer_order_id')
+            if ito_id and not move_vals.get('picking_id'):
+                order = self.env['internal.transfer.order'].browse(ito_id).exists()
+                if order:
+                    if not move_vals.get('location_id') and order.location_id:
+                        move_vals = dict(move_vals, location_id=order.location_id.id)
+                    if not move_vals.get('location_dest_id') and order.location_dest_id:
+                        move_vals = dict(
+                            move_vals,
+                            location_dest_id=order.location_dest_id.id,
+                        )
             if not move_vals.get('date') and move_vals.get('picking_id'):
                 picking = self.env['stock.picking'].browse(move_vals['picking_id'])
                 if picking.exists() and picking.scheduled_date:
@@ -1136,8 +1153,9 @@ class StockMove(models.Model):
         physical destination.  Odoo would normally interpret that as a push
         rule trigger and create an extra Receipts picking.  Intra-warehouse
         ITO already has its Storage move linked explicitly, so the generic
-        push chain must not add another operation.  Other picking flows keep
-        the standard Odoo behavior.
+        push chain must not add another operation. Document Only pickings are
+        also complete single-document flows and must not spawn a push-rule
+        picking. Other picking flows keep the standard Odoo behavior.
         """
         intra_ito_pick = self.filtered(lambda move: (
             move.picking_id
@@ -1145,7 +1163,14 @@ class StockMove(models.Model):
             and move.picking_id.internal_transfer_order_id.transaction_type == 'intra_warehouse'
             and move.picking_id.internal_transfer_leg == 'pick'
         ))
-        return super()._skip_push() or bool(intra_ito_pick)
+        document_only_moves = self.filtered(
+            lambda move: move.picking_id and move.picking_id.adt_is_document_only
+        )
+        return (
+            super()._skip_push()
+            or bool(intra_ito_pick)
+            or bool(document_only_moves)
+        )
 
 
 class StockMoveScanWizard(models.TransientModel):

@@ -211,7 +211,7 @@
                                 string="Scan Location"
                                 readonly="1"
                                 invisible="matching == 'match'"
-                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                                column_invisible="1"/>
                         <field name="handheld_scan_code"
                                 widget="adt_handheld_scan_code"
                                 string="Kode Scan Handheld"
@@ -236,7 +236,7 @@
                                 string="Scan Lot"
                                 readonly="1"
                                 invisible="matching == 'match'"
-                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                                column_invisible="1"/>
                         <field name="lot_name" readonly="1" force_save="1" column_invisible="1"/>
                         <field 
                             name="location_dest_id" 
@@ -1093,7 +1093,7 @@
                                 string="Scan Location"
                                 readonly="1"
                                 invisible="matching == 'match'"
-                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                                column_invisible="1"/>
                         <field name="handheld_scan_code"
                                 widget="adt_handheld_scan_code"
                                 string="Kode Scan Handheld"
@@ -1118,7 +1118,7 @@
                                 string="Scan Lot"
                                 readonly="1"
                                 invisible="matching == 'match'"
-                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                                column_invisible="1"/>
                         <field name="lot_name" readonly="1" force_save="1" column_invisible="1"/>
                         <field 
                             name="location_dest_id" 
@@ -1148,7 +1148,7 @@
                                 widget="adt_scan_result_package_button"
                                 string="Scan Package"
                                 readonly="1"
-                                column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
+                                column_invisible="1"/>
 
                         <field name="quantity" string="Qty Diterima" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="quantity" string="Quantity" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>

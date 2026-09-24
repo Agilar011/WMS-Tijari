@@ -12,6 +12,7 @@
                 <field name="external_ref_out" optional="hide"/>
                 <field name="transaction_type"/>
                 <field name="transfer_type"/>
+                <field name="adt_transaction_type" optional="hide"/>
                 <field name="location_id"/>
                 <field name="location_dest_id"/>
                 <field name="schedule_date"/>
@@ -59,13 +60,14 @@
                         <group>
                             <field name="transaction_type"/>
                             <field name="transfer_type" invisible="1"/>
+                            <field name="adt_transaction_type" string="Tipe Transaksi (API)" readonly="1"/>
                             <field name="inter_transfer_type"
                                 invisible="transaction_type != 'inter_warehouse'"/>
                             <field name="intra_transfer_type"
                                 invisible="transaction_type != 'intra_warehouse'"/>
                             <field name="location_group_id"
-                                invisible="transaction_type != 'intra_warehouse'"
-                                required="transaction_type == 'intra_warehouse'"
+                                invisible="transaction_type != 'intra_warehouse' or intra_transfer_type == 'inter_group_transfer'"
+                                required="transaction_type == 'intra_warehouse' and intra_transfer_type != 'inter_group_transfer'"
                                 readonly="state == 'ready'"
                                 options="{'no_create': True}"/>
                             <field name="external_ref" invisible="1"/>
@@ -79,14 +81,14 @@
                             <field name="intra_location_id"
                                 invisible="transaction_type != 'intra_warehouse'"
                                 readonly="state == 'ready'"
-                                domain="[('id', 'child_of', location_group_id)]"/>
+                                domain="[('is_location_mapping', '=', True)] if intra_transfer_type == 'inter_group_transfer' else [('id', 'child_of', location_group_id)]"/>
                             <field name="location_dest_id"
                                 invisible="transaction_type == 'intra_warehouse'"
                                 readonly="state == 'ready'"/>
                             <field name="intra_location_dest_id"
                                 invisible="transaction_type != 'intra_warehouse'"
                                 readonly="state == 'ready'"
-                                domain="[('id', 'child_of', location_group_id)]"/>
+                                domain="[('is_location_mapping', '=', True)] if intra_transfer_type == 'inter_group_transfer' else [('id', 'child_of', location_group_id)]"/>
                             <field name="transit_location_id"/>
                             <field name="schedule_date"/>
                         </group>
@@ -102,7 +104,7 @@
                         </page>
                         <page string="Operation" name="page_operations">
                             <field name="move_ids"
-                                invisible="picking_count != 0"
+                                readonly="picking_count != 0"
                                 context="{
                                     'default_internal_transfer_order_id': id,
                                     'default_location_id': location_id,
@@ -137,10 +139,6 @@
                                     <field name="adt_transfer_order_line_number" optional="hide"/>
                                 </list>
                             </field>
-                            <field name="generated_move_ids"
-                                invisible="picking_count == 0"
-                                context="{'list_view_ref': 'stock_picking_batch.view_picking_move_tree_inherited'}"
-                                readonly="1"/>
                         </page>
                         <page string="Notes" name="page_notes">
                             <group name="description" string="Description">

@@ -571,6 +571,8 @@ class StockPicking(models.Model):
             return 'direct_delivery_order'
 
         adt_type = (self.adt_type or '').strip().lower()
+        if 'po return' in adt_type:
+            return 'direct_delivery_order'
         if any(token in adt_type for token in ('receipt', 'transfer in', 'return')):
             return 'direct_receipt'
         if any(token in adt_type for token in ('issue', 'shipment', 'delivery', 'transfer out')):
@@ -646,6 +648,25 @@ class StockPicking(models.Model):
             if not picking.adt_is_document_only:
                 continue
             document_only_location = picking._adt_get_document_only_destination()
+            if picking._is_document_only_outbound():
+                # Inventory Issue is outbound: Document Only is the source.
+                # Keep the configured destination so stock actually leaves
+                # the Document Only location.
+                picking.with_context(
+                    skip_document_only_sync=True,
+                    skip_document_only_picking_type_sync=True,
+                ).sudo().write({
+                    'location_id': document_only_location.id,
+                })
+                picking.move_ids.sudo().with_context(
+                    skip_document_only_sync=True,
+                ).write({
+                    'location_id': document_only_location.id,
+                })
+                picking.move_line_ids.sudo().write({
+                    'location_id': document_only_location.id,
+                })
+                continue
             picking.with_context(
                 skip_document_only_sync=True,
                 skip_document_only_picking_type_sync=True,
@@ -662,6 +683,60 @@ class StockPicking(models.Model):
             picking.move_line_ids.sudo().write({
                 'location_dest_id': document_only_location.id,
             })
+
+    def _is_document_only_outbound(self):
+        self.ensure_one()
+        adt_type = (self.adt_type or '').strip().lower()
+        return (
+            self.picking_type_id.code == 'outgoing'
+            or any(token in adt_type for token in (
+                'issue', 'shipment', 'delivery', 'transfer out',
+            ))
+        )
+
+    def _check_document_only_outbound_stock(self):
+        self.ensure_one()
+        if not self.adt_is_document_only or not self._is_document_only_outbound():
+            return True
+
+        source_location = self._adt_get_document_only_destination()
+        Quant = self.env['stock.quant'].sudo()
+        moves = self.move_ids.filtered(lambda move: move.state not in ('done', 'cancel'))
+        for product in moves.mapped('product_id'):
+            product_moves = moves.filtered(lambda move: move.product_id == product)
+            required = sum(product_moves.mapped('product_qty'))
+            available = Quant._get_available_quantity(
+                product,
+                source_location,
+                strict=False,
+            )
+            # Quant availability excludes this picking's own reservations.
+            # Count only unpicked reservation lines; automatic validation can
+            # prefill picked quantities, which are not proof that stock exists.
+            for line in product_moves.mapped('move_line_ids').filtered(
+                lambda item: not item.picked and item.location_id == source_location
+            ):
+                available += line.product_uom_id._compute_quantity(
+                    line.quantity,
+                    product.uom_id,
+                )
+            if float_compare(
+                available,
+                required,
+                precision_rounding=product.uom_id.rounding,
+            ) < 0:
+                raise UserError(_(
+                    'Stok Document Only tidak cukup untuk outbound %s. '
+                    'Produk %s: perlu %s %s, tersedia %s %s.'
+                ) % (
+                    self.display_name,
+                    product.display_name,
+                    format(required, '.2f'),
+                    product.uom_id.display_name,
+                    format(available, '.2f'),
+                    product.uom_id.display_name,
+                ))
+        return True
 
 
     wms_state = fields.Selection(
@@ -838,7 +913,7 @@ class StockPicking(models.Model):
                 picking.adt_type == "Sales Order Shipment"
                 or (
                     picking.internal_transfer_order_id
-                    and picking.adt_type == "Shipment Consignment"
+                    and picking.adt_type in ("Shipment Consignment", "Transfer Shipment")
                     and picking.internal_transfer_leg == "delivery"
                     and picking.picking_type_id.code == "internal"
                 )
@@ -2171,7 +2246,35 @@ class StockPicking(models.Model):
         res = super().action_assign()
 
         for picking in self:
-            if picking.picking_type_id.name == 'Receipts':
+            is_transfer_in_receipt = bool(
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_order_id.transfer_type == 'transfer_in'
+                and picking.internal_transfer_leg == 'receipt'
+            )
+            if picking.picking_type_id.name == 'Receipts' or is_transfer_in_receipt:
+                if is_transfer_in_receipt:
+                    move_lines_to_create = []
+                    for move in picking.move_ids.filtered(
+                        lambda item: item.state not in ('done', 'cancel')
+                        and not item.move_line_ids.filtered(
+                            lambda line: line.state not in ('done', 'cancel')
+                        )
+                    ):
+                        move_lines_to_create.append({
+                            'company_id': picking.company_id.id,
+                            'picking_id': picking.id,
+                            'move_id': move.id,
+                            'product_id': move.product_id.id,
+                            'product_uom_id': move.product_uom.id,
+                            'location_id': move.location_id.id,
+                            'location_dest_id': move.location_dest_id.id,
+                            'source_location_id': move.location_id.id,
+                            'quantity': 0.0,
+                            'picked': False,
+                        })
+                    if move_lines_to_create:
+                        self.env['stock.move.line'].create(move_lines_to_create)
+
                 for move in picking.move_ids:
                     active_lines = move.move_line_ids.filtered(
                         lambda line: line.state not in ('done', 'cancel')
@@ -2228,7 +2331,7 @@ class StockPicking(models.Model):
             self.wms_state = "done"
             if (
                 self.internal_transfer_order_id
-                and self.internal_transfer_order_id.adt_transaction_type == 'Shipment Consignment'
+                and self.internal_transfer_order_id.adt_transaction_type in ('Shipment Consignment', 'Transfer Shipment')
                 and self.internal_transfer_leg == 'delivery'
                 and self.picking_type_id.code == 'internal'
             ):
@@ -2237,12 +2340,27 @@ class StockPicking(models.Model):
                 )
             return
 
+        is_transfer_shipment_ito_delivery = bool(
+            self.internal_transfer_order_id
+            and self.internal_transfer_order_id.adt_transaction_type == 'Transfer Shipment'
+            and self.internal_transfer_leg == 'delivery'
+            and self.picking_type_id.code == 'internal'
+        )
+        if is_transfer_shipment_ito_delivery:
+            # Transfer Shipment uses the reported shipped quantity to complete
+            # its receipt; a short shipment does not create a return picking.
+            self.wms_state = "done"
+            self.internal_transfer_order_id.action_auto_validate_transfer_out_receipt(
+                shipment_picking=self,
+            )
+            return
+
         self._generate_return_from_actual_qty()
 
         self.wms_state = "return_shipment"
         if (
             self.internal_transfer_order_id
-            and self.internal_transfer_order_id.adt_transaction_type == 'Shipment Consignment'
+            and self.internal_transfer_order_id.adt_transaction_type in ('Shipment Consignment', 'Transfer Shipment')
             and self.internal_transfer_leg == 'delivery'
             and self.picking_type_id.code == 'internal'
         ):
@@ -2256,6 +2374,7 @@ class StockPicking(models.Model):
         )
         for picking in document_only_pickings.filtered(lambda item: item.state not in ('done', 'cancel')):
             picking._adt_preserve_document_only_destination()
+            picking._check_document_only_outbound_stock()
             if picking.state == 'draft':
                 picking.action_confirm()
             if picking.state in ('confirmed', 'waiting', 'assigned'):
@@ -2388,7 +2507,7 @@ class StockPicking(models.Model):
             if (
                 rec.internal_transfer_order_id
                 and rec.internal_transfer_leg == 'delivery'
-                and rec.adt_type == 'Shipment Consignment'
+                and rec.adt_type in ('Shipment Consignment', 'Transfer Shipment')
                 and rec.picking_type_id.code == 'internal'
                 and rec.state == 'done'
             ):

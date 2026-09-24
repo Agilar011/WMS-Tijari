@@ -22,6 +22,7 @@
           'views/acumatica_shipment_line_views.xml',
           'views/acumatica_so_shipment_line_views.xml',
           'views/acumatica_shipment_completed_views.xml',
+          'views/acumatica_shipment_transfer_completed_views.xml',
           'views/acumatica_uom_import_views.xml',
           'views/acumatica_transfer_line_views.xml',
           'views/acumatica_transfer_one_step_line_views.xml',

@@ -41,3 +41,5 @@ from . import api_dashboard
 from . import acumatica_error_master
 from . import acumatica_error_transaction
 from . import acumatica_webhook_error_service
+
+from . import acumatica_shipment_transfer_completed
