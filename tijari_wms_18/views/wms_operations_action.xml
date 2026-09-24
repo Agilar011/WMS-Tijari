@@ -1,6 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <!-- Keep Document Only pickings out of Odoo's standard Transfers menus.
+         The picking flag is the primary marker; picking-type and location
+         flags also catch records whose picking flag was not synchronized. -->
+    <record id="stock.action_picking_tree_incoming" model="ir.actions.act_window">
+        <field name="domain">[
+            ('adt_is_document_only', '=', False),
+            ('picking_type_id.is_document_only_api', '=', False),
+        ]</field>
+    </record>
+
+    <record id="stock.action_picking_tree_outgoing" model="ir.actions.act_window">
+        <field name="domain">[
+            ('adt_is_document_only', '=', False),
+            ('picking_type_id.is_document_only_api', '=', False),
+        ]</field>
+    </record>
+
     <record id="action_wms_operations_purchase_receipts" model="ir.actions.act_window">
         <field name="name">Purchase Receipts</field>
         <field name="res_model">stock.picking</field>
