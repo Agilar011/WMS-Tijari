@@ -2241,17 +2241,35 @@ class StockPicking(models.Model):
     def action_assign(self):
         _logger.info(">>> action_assign CALLED %s", self.ids)
 
-        consignment_transfer_pickings = self.filtered(
+        transfer_out_pickings = self.filtered(
             lambda picking: (
                 picking.internal_transfer_order_id
-                and picking.internal_transfer_order_id.adt_transaction_type == 'Shipment Consignment'
+                and picking.internal_transfer_order_id.transfer_type == 'transfer_out'
                 and picking.internal_transfer_leg == 'delivery'
                 and picking.picking_type_id.code == 'internal'
                 and picking.state not in ('done', 'cancel')
             )
         )
-        for picking in consignment_transfer_pickings:
-            picking.internal_transfer_order_id._prepare_consignment_transfer_out(picking)
+        package_transfer_pickings = self.filtered(
+            lambda picking: (
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_leg == 'delivery'
+                and picking.picking_type_id.code == 'internal'
+                and picking.state not in ('done', 'cancel')
+            )
+        )
+        transfer_in_receipt_pickings = self.filtered(
+            lambda picking: (
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_order_id.transfer_type == 'transfer_in'
+                and picking.internal_transfer_leg == 'receipt'
+                and picking.state not in ('done', 'cancel')
+            )
+        )
+        for picking in transfer_out_pickings:
+            picking.internal_transfer_order_id._prepare_transfer_out_delivery(picking)
+        for picking in transfer_in_receipt_pickings:
+            picking.internal_transfer_order_id._prepare_transfer_in_receipt(picking)
 
         res = super().action_assign()
 
@@ -2315,8 +2333,8 @@ class StockPicking(models.Model):
                             'product_lot_id': line.lot_id.id,
                         })
 
-        for picking in consignment_transfer_pickings:
-            picking.internal_transfer_order_id._sync_consignment_transfer_package_levels(
+        for picking in package_transfer_pickings:
+            picking.internal_transfer_order_id._sync_transfer_package_levels(
                 picking
             )
 

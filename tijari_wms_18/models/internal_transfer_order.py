@@ -575,16 +575,6 @@ class InternalTransferOrder(models.Model):
             if picking_type:
                 return picking_type
 
-        domain = [
-            ('code', '=', 'internal'),
-            ('name', '=', 'Receipt Internal'),
-        ]
-        if warehouse:
-            domain.append(('warehouse_id', '=', warehouse.id))
-        picking_type = self.env['stock.picking.type'].search(domain, limit=1)
-        if picking_type:
-            return picking_type
-
         picking_type = PickingType.resolve_picking_type(
             warehouse=warehouse,
             warehouse_code=warehouse_code,
@@ -597,7 +587,12 @@ class InternalTransferOrder(models.Model):
         if picking_type:
             return picking_type
 
-        incoming_domain = [('code', '=', 'incoming')]
+        incoming_domain = [
+            ('code', '=', 'incoming'),
+            ('operation_category', '=', 'receive'),
+            ('active', '=', True),
+            ('is_document_only_api', '=', False),
+        ]
         if warehouse:
             incoming_domain.append(('warehouse_id', '=', warehouse.id))
         picking_type = self.env['stock.picking.type'].search(incoming_domain, limit=1)
@@ -609,7 +604,33 @@ class InternalTransferOrder(models.Model):
 
     def _get_vendor_return_direct_delivery_picking_type(self):
         self.ensure_one()
-        warehouse = self._get_source_warehouse()
+        # Vendor Return source locations can be under a Consignment branch
+        # outside the warehouse's stock/view location hierarchy. For the
+        # transfer_in flow, the destination identifies the operational
+        # warehouse that owns the Direct Delivery operation type.
+        warehouse = self._get_source_warehouse() or self._get_operational_warehouse()
+        if not warehouse:
+            # Consignment locations may live under Virtual Locations and thus
+            # have no stock.warehouse ancestor. Their Acumatica code is kept
+            # on the consignment leaf (for example WH33-C0017); resolve that
+            # code through stock.location.acumatica to its owning building.
+            location = self.location_id
+            while location and not warehouse:
+                warehouse = self.env['stock.picking.type']._adt_find_warehouse(
+                    location.name
+                )
+                if not warehouse and location.name:
+                    mappings = self.env['stock.location.acumatica'].search([
+                        ('is_active', '=', True),
+                        ('odoo_building_id', '!=', False),
+                    ]).filtered(
+                        lambda mapping: (mapping.code or '').endswith(
+                            '-%s' % location.name
+                        )
+                    )
+                    if len(mappings) == 1:
+                        warehouse = mappings.odoo_building_id
+                location = location.location_id
         warehouse_code = warehouse.code if warehouse else False
         if not self.document_only:
             return self.env['stock.picking.type'].resolve_picking_type(
@@ -642,7 +663,11 @@ class InternalTransferOrder(models.Model):
             )
         )
         if is_vendor_return and not self.document_only:
-            source_warehouse = self._get_source_warehouse()
+            # The Vendor Return source is a consignment location under
+            # Virtual Locations, so it often has no stock.warehouse ancestor.
+            # For a transfer_in order, resolve its delivery operation from the
+            # mapped destination warehouse when the source cannot identify it.
+            source_warehouse = self._get_source_warehouse() or warehouse
             return self.env['stock.picking.type'].resolve_picking_type(
                 warehouse=source_warehouse,
                 warehouse_code=source_warehouse.code if source_warehouse else False,
@@ -1021,10 +1046,10 @@ class InternalTransferOrder(models.Model):
         if picking.move_ids.filtered(lambda move: move.state not in ('done', 'cancel')):
             picking.action_assign()
 
-    def _prepare_consignment_transfer_out(self, picking):
+    def _prepare_transfer_out_delivery(self, picking):
         self.ensure_one()
         if not (
-            self.adt_transaction_type == 'Shipment Consignment'
+            self.transfer_type == 'transfer_out'
             and picking.internal_transfer_leg == 'delivery'
             and picking.picking_type_id.code == 'internal'
             and picking.state not in ('done', 'cancel')
@@ -1042,15 +1067,11 @@ class InternalTransferOrder(models.Model):
         if not self.transit_location_id:
             self.transit_location_id = transit_location
         source_location = pack_picking.location_dest_id
-        if (
-            picking.location_id == source_location
-            and picking.location_dest_id == transit_location
-            and all(
-                move.location_id == source_location
-                and move.location_dest_id == transit_location
-                for move in picking.move_ids
-            )
-        ):
+        if (picking.location_id == source_location
+                and picking.location_dest_id == transit_location
+                and all(move.location_id == source_location
+                        and move.location_dest_id == transit_location
+                        for move in picking.move_ids)):
             return False
 
         if picking.state == 'assigned':
@@ -1067,11 +1088,38 @@ class InternalTransferOrder(models.Model):
         })
         return True
 
-    def _sync_consignment_transfer_package_levels(self, picking):
+    def _prepare_transfer_in_receipt(self, picking):
         self.ensure_one()
         if not (
-            self.adt_transaction_type == 'Shipment Consignment'
-            and picking.internal_transfer_leg == 'delivery'
+            self.transfer_type == 'transfer_in'
+            and picking.internal_transfer_leg == 'receipt'
+            and picking.state not in ('done', 'cancel')
+        ):
+            return False
+
+        transit_location = self.transit_location_id or self._get_or_create_transit_location()
+        if not self.transit_location_id:
+            self.transit_location_id = transit_location
+
+        active_moves = picking.move_ids.filtered(
+            lambda move: move.state not in ('done', 'cancel')
+        )
+        if (
+            picking.location_id == transit_location
+            and all(move.location_id == transit_location for move in active_moves)
+        ):
+            return False
+
+        if picking.state == 'assigned':
+            picking.do_unreserve()
+        picking.write({'location_id': transit_location.id})
+        active_moves.write({'location_id': transit_location.id})
+        return True
+
+    def _sync_transfer_package_levels(self, picking):
+        self.ensure_one()
+        if not (
+            picking.internal_transfer_leg == 'delivery'
             and picking.picking_type_id.code == 'internal'
         ):
             return
@@ -1238,7 +1286,7 @@ class InternalTransferOrder(models.Model):
             'desc_note': self.description or False,
             'adt_description': self.description or False,
         }
-        if leg == 'delivery' and self.adt_transaction_type == 'Shipment Consignment':
+        if leg == 'delivery' and self.transfer_type == 'transfer_out':
             source_location = done_picking.location_dest_id
             transit_location = self._get_or_create_transit_location()
             if not self.transit_location_id:
@@ -1263,7 +1311,7 @@ class InternalTransferOrder(models.Model):
         dest_location = self._get_picking_adt_dest_location(leg)
         vals['adt_dest_location_id'] = dest_location.id if dest_location else False
         next_picking.write(vals)
-        if leg == 'delivery' and self.adt_transaction_type == 'Shipment Consignment':
+        if leg == 'delivery' and self.transfer_type == 'transfer_out':
             next_picking.move_ids.write({
                 'location_id': source_location.id,
                 'location_dest_id': transit_location.id,
@@ -1338,7 +1386,7 @@ class InternalTransferOrder(models.Model):
                     'delivery',
                 )
             if route_picking:
-                self._prepare_consignment_transfer_out(route_picking)
+                self._prepare_transfer_out_delivery(route_picking)
                 receipt_picking = self.picking_ids.filtered(
                     lambda picking: picking.internal_transfer_leg == 'receipt'
                 )[:1]
@@ -1357,7 +1405,7 @@ class InternalTransferOrder(models.Model):
                 self.transit_location_id = transit_location
             source_location = (
                 done_picking.location_dest_id
-                if self.adt_transaction_type == 'Shipment Consignment'
+                if self.transfer_type == 'transfer_out'
                 else loading_dock
             )
             delivery_picking = self._create_transfer_picking(
@@ -1402,7 +1450,54 @@ class InternalTransferOrder(models.Model):
             operational_warehouse = order._get_operational_warehouse()
             receipt_warehouse = order._get_receipt_warehouse()
 
-            if order.transaction_type == 'vendor_return':
+            transaction_api = (order.adt_transaction_type or '').strip().lower().replace('_', ' ')
+            is_one_step_same_location = (
+                order.transaction_type == 'intra_warehouse'
+                and order.location_id == order.location_dest_id
+                and (
+                    transaction_api in ('1-step', '1 step', 'transfer one step')
+                    or any(
+                        'transfer one step' in (move.adt_type or '').strip().lower()
+                        for move in order.move_ids
+                    )
+                )
+            )
+
+            if is_one_step_same_location:
+                warehouse = order._get_operational_warehouse()
+                warehouse_code = warehouse.code if warehouse else False
+                PickingType = self.env['stock.picking.type']
+                direct_delivery_type = PickingType.resolve_document_only_picking_type(
+                    target_operation_type='direct_delivery_order',
+                    api_acumatica='transfer_one_step',
+                    document_only=True,
+                    warehouse_code=warehouse_code,
+                    required=True,
+                )
+                direct_receipt_type = PickingType.resolve_document_only_picking_type(
+                    target_operation_type='direct_receipt',
+                    api_acumatica='transfer_one_step',
+                    document_only=True,
+                    warehouse_code=warehouse_code,
+                    required=True,
+                )
+                picking_specs = [
+                    (
+                        direct_delivery_type,
+                        order.location_id,
+                        order.location_id,
+                        'Direct Delivery',
+                        'delivery',
+                    ),
+                    (
+                        direct_receipt_type,
+                        order.location_dest_id,
+                        order.location_dest_id,
+                        'Direct Receipt',
+                        'receipt',
+                    ),
+                ]
+            elif order.transaction_type == 'vendor_return':
                 receipt_picking_type = order._get_vendor_return_receipt_picking_type()
                 picking_specs = [
                     (
@@ -1820,7 +1915,7 @@ class StockPicking(models.Model):
 
         for picking in self:
             order = picking.internal_transfer_order_id
-            if not order._prepare_consignment_transfer_out(picking):
+            if not order._prepare_transfer_out_delivery(picking):
                 pack_picking = order._get_related_pickings().filtered(
                     lambda item: item.internal_transfer_leg == 'pack'
                     and item.state == 'done'
@@ -1888,18 +1983,26 @@ class StockPicking(models.Model):
             lambda picking: picking.internal_transfer_order_id
             and picking.state not in ('done', 'cancel')
         )
-        consignment_transfer_pickings_to_reassign = self.env['stock.picking']
+        internal_transfer_pickings_to_reassign = self.env['stock.picking']
         for picking in internal_transfer_pickings.filtered(
             lambda item: (
-                item.adt_type == 'Shipment Consignment'
+                item.internal_transfer_order_id.transfer_type == 'transfer_out'
                 and item.internal_transfer_leg == 'delivery'
                 and item.picking_type_id.code == 'internal'
             )
         ):
-            if picking.internal_transfer_order_id._prepare_consignment_transfer_out(picking):
-                consignment_transfer_pickings_to_reassign |= picking
-        if consignment_transfer_pickings_to_reassign:
-            consignment_transfer_pickings_to_reassign.action_assign()
+            if picking.internal_transfer_order_id._prepare_transfer_out_delivery(picking):
+                internal_transfer_pickings_to_reassign |= picking
+        for picking in internal_transfer_pickings.filtered(
+            lambda item: (
+                item.internal_transfer_order_id.transfer_type == 'transfer_in'
+                and item.internal_transfer_leg == 'receipt'
+            )
+        ):
+            if picking.internal_transfer_order_id._prepare_transfer_in_receipt(picking):
+                internal_transfer_pickings_to_reassign |= picking
+        if internal_transfer_pickings_to_reassign:
+            internal_transfer_pickings_to_reassign.action_assign()
         # internal_transfer_pickings.action_assign()
         internal_transfer_pickings._set_receipt_done_quantities()
 
