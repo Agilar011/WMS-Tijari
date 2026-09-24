@@ -475,9 +475,10 @@
             <xpath expr="//field[@name='location_id'][@groups='stock.group_stock_multi_locations']"
                 position="replace">
                 <field name="location_id"
+                    string="Source Location"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
-                    invisible="picking_type_code == 'incoming'"
+                    invisible="picking_type_code == 'incoming' and not internal_transfer_order_id"
                     readonly="state == 'done'"
                     />
             </xpath>

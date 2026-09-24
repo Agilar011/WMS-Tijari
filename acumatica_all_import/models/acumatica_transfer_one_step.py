@@ -80,6 +80,9 @@ class AcumaticaTransferOneStepLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+    can_rebuild_same_location_transfer = fields.Boolean(
+        compute='_compute_can_rebuild_same_location_transfer',
+    )
     picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
 
     @api.depends('reference_nbr')
@@ -89,6 +92,38 @@ class AcumaticaTransferOneStepLine(models.Model):
             rec.exists_in_odoo = bool(
                 rec.reference_nbr
                 and InternalTransferOrder.search_count([('external_ref', '=', rec.reference_nbr)])
+            )
+
+    @api.depends(
+        'import_state',
+        'odoo_internal_transfer_order_id',
+        'odoo_internal_transfer_order_id.state',
+        'odoo_internal_transfer_order_id.transaction_type',
+        'odoo_internal_transfer_order_id.location_id',
+        'odoo_internal_transfer_order_id.location_dest_id',
+        'odoo_internal_transfer_order_id.picking_ids',
+        'odoo_internal_transfer_order_id.adt_transaction_type',
+        'odoo_internal_transfer_order_id.move_ids.adt_type',
+    )
+    def _compute_can_rebuild_same_location_transfer(self):
+        for line in self:
+            order = line.odoo_internal_transfer_order_id
+            api_type = (order.adt_transaction_type or '').strip().lower().replace('_', ' ') if order else ''
+            is_one_step = (
+                api_type in ('1-step', '1 step', 'transfer one step')
+                or any(
+                    'transfer one step' in (move.adt_type or '').strip().lower()
+                    for move in order.move_ids
+                )
+            ) if order else False
+            line.can_rebuild_same_location_transfer = bool(
+                line.import_state in ('created', 'updated')
+                and order
+                and order.state == 'done'
+                and not order.picking_ids
+                and order.transaction_type == 'intra_warehouse'
+                and order.location_id == order.location_dest_id
+                and is_one_step
             )
 
     @staticmethod
@@ -197,6 +232,7 @@ class AcumaticaTransferOneStepLine(models.Model):
         lines = self.filtered(
             lambda l: (
                 l.import_state in ['staged', 'error']
+                or l.can_rebuild_same_location_transfer
                 or (
                     l.import_state in ['created', 'updated']
                     and not l.odoo_picking_id
@@ -241,7 +277,24 @@ class AcumaticaTransferOneStepLine(models.Model):
                     ('external_ref', '=', origin),
                 ], limit=1)
                 if existing_order:
-                    if existing_order.state not in ('draft', 'cancel'):
+                    existing_api_type = (
+                        (existing_order.adt_transaction_type or '')
+                        .strip().lower().replace('_', ' ')
+                    )
+                    legacy_same_location_done = (
+                        existing_order.state == 'done'
+                        and not existing_order.picking_ids
+                        and existing_order.transaction_type == 'intra_warehouse'
+                        and existing_order.location_id == existing_order.location_dest_id
+                        and (
+                            existing_api_type in ('1-step', '1 step', 'transfer one step')
+                            or any(
+                                'transfer one step' in (move.adt_type or '').strip().lower()
+                                for move in existing_order.move_ids
+                            )
+                        )
+                    )
+                    if existing_order.state not in ('draft', 'cancel') and not legacy_same_location_done:
                         raise UserError(
                             f'Transfer {reference_nbr} sudah ada di Odoo dengan state '
                             f'{existing_order.state}, tidak bisa diupdate.'
@@ -251,6 +304,8 @@ class AcumaticaTransferOneStepLine(models.Model):
                             f'Transfer {reference_nbr} sudah memiliki picking, tidak bisa diupdate.'
                         )
                     existing_order.move_ids.unlink()
+                    if legacy_same_location_done:
+                        existing_order.write({'state': 'draft'})
                     order = existing_order
                     action_state = 'updated'
                     updated += 1
@@ -262,24 +317,15 @@ class AcumaticaTransferOneStepLine(models.Model):
 
                 transfer_service = self.env['acumatica.internal.transfer.service']
                 transfer_info = transfer_service.classify_intra_by_location_mapping(
-                    first.from_location_code,
-                    first.to_location_code,
-                    'FromLocationID',
-                    'ToLocationID',
-                    check_same_location_mapping=True,
+                    first.from_warehouse_code,
+                    first.to_warehouse_code,
+                    'WarehouseID',
+                    'ToWarehouseID',
+                    check_same_location_mapping=False,
                 )
                 source_location = transfer_info['source_location']
                 destination_location = transfer_info['destination_location']
-
-                if transfer_info['status'] == 'skip':
-                    receipt_lines.write({
-                        'import_state': 'updated',
-                        'import_message': 'success',
-                    })
-                    self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=reference_nbr)
-                    skipped += len(receipt_lines)
-                    self.env.cr.execute('RELEASE SAVEPOINT import_transfer_one_step_doc')
-                    continue
+                same_odoo_location = source_location == destination_location
 
                 if order:
                     order.write({
@@ -360,7 +406,15 @@ class AcumaticaTransferOneStepLine(models.Model):
                         _logger.exception('Error import transfer one step line %s', line.id)
                         raise UserError(str(line_e))
 
-                transfer_service.set_order_ready(order)
+                if same_odoo_location:
+                    # Keep both direct operation documents at the mapped location.
+                    # This pair has no net stock effect and completes the ITO only
+                    # after both pickings have been validated.
+                    order.write({'document_only': False})
+                    transfer_service.set_order_ready(order)
+                    order._auto_validate_pickings_by_leg(('delivery', 'receipt'))
+                else:
+                    transfer_service.set_order_ready(order)
                 receipt_lines.write({
                     'import_state': action_state,
                     'import_message': 'success',

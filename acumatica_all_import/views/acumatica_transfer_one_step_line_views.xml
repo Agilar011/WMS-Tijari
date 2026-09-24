@@ -33,12 +33,13 @@
                     decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                     decoration-muted="import_state == 'staged'"
                     decoration-danger="import_state == 'error'"/>
+                <field name="can_rebuild_same_location_transfer" column_invisible="1"/>
 
                 <button name="action_import_this"
                         string="Import"
                         type="object"
                         icon="fa-upload"
-                        invisible="import_state != 'staged'"/>
+                        invisible="import_state != 'staged' and not can_rebuild_same_location_transfer"/>
 
                 <button name="action_open_picking"
                         string="Open Document"
@@ -60,7 +61,7 @@
                             string="Import Baris Ini"
                             type="object"
                             class="btn-primary"
-                            invisible="import_state != 'staged'"/>
+                            invisible="import_state != 'staged' and not can_rebuild_same_location_transfer"/>
                     <button name="action_reset_pending"
                             string="Reset ke Staged"
                             type="object"
@@ -75,6 +76,7 @@
                     <field name="import_state"
                         widget="statusbar"
                         statusbar_visible="staged,created,updated,rejected,error"/>
+                    <field name="can_rebuild_same_location_transfer" invisible="1"/>
                 </header>
 
                 <sheet>

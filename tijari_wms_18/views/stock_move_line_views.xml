@@ -501,7 +501,7 @@
                     </group>
 
                     <!-- Confirm Location -->
-                    <group invisible="1">
+                    <group>
                         <label 
                             for="matching_loc_dest_id" 
                             string="Confirm Location"
@@ -555,9 +555,9 @@
 
                     <!-- Qty Digunakan -->
                     <group>
-                        <label for="mo_confirmation_quantity" string="Qty Digunakan"/>
+                        <label for="confirmation_quantity" string="Qty Digunakan"/>
                         <div class="o_row">
-                            <field name="mo_confirmation_quantity"
+                            <field name="confirmation_quantity"
                                 nolabel="1"
                                 class="fw-bold fs-6"/>
                             <field name="product_uom_id"
@@ -568,6 +568,14 @@
                                 groups="uom.group_uom"/>
                         </div>
                     </group>
+
+                    <button name="action_mark_check_pick_finished"
+                        type="object"
+                        icon="fa-check"
+                        class="btn-success o_wms_auto_save_before_action"
+                        title="Finish Picking"
+                        invisible="pick_status == 'finished'"
+                        column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
 
                 </sheet>
             </xpath>
