@@ -1055,6 +1055,20 @@ class StockMove(models.Model):
             if not isinstance(move_vals, dict):
                 prepared_vals.append(move_vals)
                 continue
+            # Lines entered on an ITO are not yet attached to a picking. Keep
+            # their locations aligned with the ITO header even if the web
+            # client did not send the one2many context defaults.
+            ito_id = move_vals.get('internal_transfer_order_id')
+            if ito_id and not move_vals.get('picking_id'):
+                order = self.env['internal.transfer.order'].browse(ito_id).exists()
+                if order:
+                    if not move_vals.get('location_id') and order.location_id:
+                        move_vals = dict(move_vals, location_id=order.location_id.id)
+                    if not move_vals.get('location_dest_id') and order.location_dest_id:
+                        move_vals = dict(
+                            move_vals,
+                            location_dest_id=order.location_dest_id.id,
+                        )
             if not move_vals.get('date') and move_vals.get('picking_id'):
                 picking = self.env['stock.picking'].browse(move_vals['picking_id'])
                 if picking.exists() and picking.scheduled_date:

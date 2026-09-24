@@ -66,8 +66,8 @@
                             <field name="intra_transfer_type"
                                 invisible="transaction_type != 'intra_warehouse'"/>
                             <field name="location_group_id"
-                                invisible="transaction_type != 'intra_warehouse'"
-                                required="transaction_type == 'intra_warehouse'"
+                                invisible="transaction_type != 'intra_warehouse' or intra_transfer_type == 'inter_group_transfer'"
+                                required="transaction_type == 'intra_warehouse' and intra_transfer_type != 'inter_group_transfer'"
                                 readonly="state == 'ready'"
                                 options="{'no_create': True}"/>
                             <field name="external_ref" invisible="1"/>
@@ -81,14 +81,14 @@
                             <field name="intra_location_id"
                                 invisible="transaction_type != 'intra_warehouse'"
                                 readonly="state == 'ready'"
-                                domain="[('id', 'child_of', location_group_id)]"/>
+                                domain="[('is_location_mapping', '=', True)] if intra_transfer_type == 'inter_group_transfer' else [('id', 'child_of', location_group_id)]"/>
                             <field name="location_dest_id"
                                 invisible="transaction_type == 'intra_warehouse'"
                                 readonly="state == 'ready'"/>
                             <field name="intra_location_dest_id"
                                 invisible="transaction_type != 'intra_warehouse'"
                                 readonly="state == 'ready'"
-                                domain="[('id', 'child_of', location_group_id)]"/>
+                                domain="[('is_location_mapping', '=', True)] if intra_transfer_type == 'inter_group_transfer' else [('id', 'child_of', location_group_id)]"/>
                             <field name="transit_location_id"/>
                             <field name="schedule_date"/>
                         </group>

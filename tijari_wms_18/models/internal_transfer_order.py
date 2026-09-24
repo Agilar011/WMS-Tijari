@@ -179,6 +179,8 @@ class InternalTransferOrder(models.Model):
 
     @api.depends(
         'transaction_type',
+        'transfer_type',
+        'intra_transfer_type',
         'location_group_id',
         'location_id',
         'location_dest_id',
@@ -187,14 +189,21 @@ class InternalTransferOrder(models.Model):
         for order in self:
             group = order.location_group_id
             is_intra = order.transaction_type == 'intra_warehouse'
+            is_inter_group = (
+                is_intra and order.transfer_type == 'inter_group_transfer'
+            )
             order.intra_location_id = (
                 order.location_id
-                if is_intra and order._location_belongs_to(order.location_id, group)
+                if is_inter_group or (
+                    is_intra and order._location_belongs_to(order.location_id, group)
+                )
                 else False
             )
             order.intra_location_dest_id = (
                 order.location_dest_id
-                if is_intra and order._location_belongs_to(order.location_dest_id, group)
+                if is_inter_group or (
+                    is_intra and order._location_belongs_to(order.location_dest_id, group)
+                )
                 else False
             )
 
@@ -236,6 +245,43 @@ class InternalTransferOrder(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        # A new ITO and its Operations rows are created in one ORM call. In
+        # that path, stock.move.create() can run before the child move has a
+        # persisted internal_transfer_order_id, so copy the header locations
+        # into the x2many create commands first.
+        prepared_vals_list = []
+        for vals in vals_list:
+            vals = dict(vals)
+            source_location_id = (
+                vals.get('location_id') or vals.get('intra_location_id')
+            )
+            destination_location_id = (
+                vals.get('location_dest_id') or vals.get('intra_location_dest_id')
+            )
+            move_commands = vals.get('move_ids')
+            if move_commands and (source_location_id or destination_location_id):
+                prepared_commands = []
+                for command in move_commands:
+                    if (
+                        isinstance(command, (tuple, list))
+                        and len(command) >= 3
+                        and command[0] == 0
+                        and isinstance(command[2], dict)
+                    ):
+                        move_vals = dict(command[2])
+                        if not move_vals.get('location_id') and source_location_id:
+                            move_vals['location_id'] = source_location_id
+                        if (
+                            not move_vals.get('location_dest_id')
+                            and destination_location_id
+                        ):
+                            move_vals['location_dest_id'] = destination_location_id
+                        command = (command[0], command[1], move_vals)
+                    prepared_commands.append(command)
+                vals['move_ids'] = prepared_commands
+            prepared_vals_list.append(vals)
+
+        vals_list = prepared_vals_list
         orders = super().create(vals_list)
         for order in orders:
             if order.name == 'New':
@@ -335,10 +381,13 @@ class InternalTransferOrder(models.Model):
                 move.location_id = order.location_id
                 move.location_dest_id = order.location_dest_id
 
-    @api.onchange('transaction_type', 'location_group_id')
+    @api.onchange('transaction_type', 'transfer_type', 'intra_transfer_type', 'location_group_id')
     def _onchange_intra_location_group(self):
         for order in self:
             if order.transaction_type != 'intra_warehouse':
+                order.location_group_id = False
+                continue
+            if order.transfer_type == 'inter_group_transfer':
                 order.location_group_id = False
                 continue
             if order.state == 'ready':
@@ -357,6 +406,7 @@ class InternalTransferOrder(models.Model):
 
     @api.constrains(
         'transaction_type',
+        'transfer_type',
         'location_group_id',
         'location_id',
         'location_dest_id',
@@ -364,6 +414,8 @@ class InternalTransferOrder(models.Model):
     def _check_intra_location_group(self):
         for order in self:
             if order.transaction_type != 'intra_warehouse':
+                continue
+            if order.transfer_type == 'inter_group_transfer':
                 continue
             if not order.location_group_id:
                 # Existing API-created intra orders are kept compatible until
@@ -1516,6 +1568,15 @@ class StockMove(models.Model):
         index=True,
         copy=False,
     )
+
+    @api.onchange('product_id', 'internal_transfer_order_id')
+    def _onchange_internal_transfer_order_locations(self):
+        for move in self.filtered(
+            lambda item: item.internal_transfer_order_id and not item.picking_id
+        ):
+            order = move.internal_transfer_order_id
+            move.location_id = order.location_id
+            move.location_dest_id = order.location_dest_id
 
 
 class StockPicking(models.Model):
