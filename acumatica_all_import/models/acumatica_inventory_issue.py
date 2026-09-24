@@ -46,7 +46,7 @@ class AcumaticaInventoryIssueLine(models.Model):
     document_only = fields.Boolean(string='Document Only')
     status = fields.Char(string='Status')
     actual_qty = fields.Char(string='Control Qty')
-    total_qty = fields.Char(string='Total Qty')
+    total_qty = fields.Char(string='Qty Total')
     actual_amount = fields.Char(string='Control Amount')
     total_amount = fields.Char(string='Total Amount')
     post_period = fields.Char(string='Post Period')

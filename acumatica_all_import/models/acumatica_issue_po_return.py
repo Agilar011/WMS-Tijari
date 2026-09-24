@@ -51,7 +51,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
     status = fields.Char(string='Status')
     receipt_type = fields.Char(string='Type')
     actual_qty = fields.Char(string='Control Qty')
-    total_qty = fields.Char(string='Total Qty')
+    total_qty = fields.Char(string='Qty Total')
     is_hold = fields.Char(string='Hold')
     document_only = fields.Boolean(string='Document Only')
     inventory_ref = fields.Char(string='Inventory Ref Nbr')
@@ -210,8 +210,15 @@ class AcumaticaIssuePoReturnLine(models.Model):
         return uom
 
     def _adt_reresolve_picking_type(self):
-        """PO Return selalu dimulai dari operation Pick, bukan DDO."""
+        """Document Only PO Return uses DDO; normal PO Return starts at Pick."""
         self.ensure_one()
+        if self.document_only:
+            return self.env['stock.picking.type'].resolve_document_only_picking_type(
+                api_acumatica='issue_po_return',
+                document_only=True,
+                warehouse_code=self.warehouse_code,
+                required=True,
+            )
         if (
             self.picking_type_id
             and self.picking_type_id.code == 'internal'

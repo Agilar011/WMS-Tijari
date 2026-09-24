@@ -78,7 +78,7 @@ class AcumaticaTransferLine(models.Model):
     status = fields.Char(string='Status')
     receipt_type = fields.Char(string='Type')
     actual_qty = fields.Char(string='Control Qty')
-    total_qty = fields.Char(string='Total Qty')
+    total_qty = fields.Char(string='Qty Total')
     is_hold = fields.Char(string='Hold')
     document_only = fields.Boolean(string='Document Only')
     inventory_ref = fields.Char(string='Inventory Ref Nbr')
@@ -309,7 +309,9 @@ class AcumaticaTransferLine(models.Model):
             transfer_type='transfer_in',
             external_ref_in=origin,
             external_ref_out=','.join(transfer_shipment_numbers),
-            adt_transaction_type=receipt.receipt_type or receipt.transfer_order_type or False,
+            # Keep the internal transfer's API identity explicit so each
+            # generated picking can receive the correct SOTR leg type.
+            adt_transaction_type='SOTR',
             document_only=receipt.document_only,
         )
         order.write({'validation_policy': 'validate_all'})

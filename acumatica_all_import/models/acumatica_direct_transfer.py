@@ -185,14 +185,17 @@ class AcumaticaDirectTransferStaging(models.Model):
                         description=first.adt_Description or False,
                         transfer_type='transfer_in',
                         external_ref_in=origin,
-                        adt_transaction_type=(
+                        adt_transaction_type='Vendor Return Document',
+                        document_only=True,
+                    )
+                    order.write({
+                        'adt_order_type': (
                             first.adt_TransferType
                             or first.adt_TransType
                             or first.adt_ReturnType
                             or False
                         ),
-                        document_only=True,
-                    )
+                    })
 
                     for line in to_create_move_lines:
                         product = self._find_product_by_code(line.adt_InventoryID)

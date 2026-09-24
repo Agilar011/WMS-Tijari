@@ -36,7 +36,7 @@ class StockMoveLine(models.Model):
         store=True
     )
     handheld_scan_code = fields.Char(
-        string='Kode Scan Handheld',
+        string='Scan Handheld',
         help='Masukkan kode lot, lokasi, atau package dari scanner handheld atau ketik manual.',
         store=False,
     )
@@ -1274,10 +1274,10 @@ class StockMoveLine(models.Model):
                 precision_rounding=rounding,
             ) > 0:
                 raise ValidationError(_(
-                    "Qty Picker tidak boleh lebih besar dari Total Qty.\n"
+                    "Qty Picker tidak boleh lebih besar dari Qty Total.\n"
                     "Product: %(product)s\n"
                     "Qty Picker: %(picked)s\n"
-                    "Total Qty: %(demand)s"
+                    "Qty Total: %(demand)s"
                 ) % {
                     'product': move.product_id.display_name,
                     'picked': total_picker_qty,
@@ -1811,7 +1811,8 @@ class StockMoveLine(models.Model):
             picking_name in ('Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal')
             or self.picking_id.is_ito_internal_transfer
         ):
-            expected_location = self.source_location_id or self.location_id
+            # expected_location = self.source_location_id or self.location_id
+            expected_location = self.location_id
             expected_lot = self.product_lot_id or self.lot_id
         elif picking_name in ('Receipts', 'Receipt Internal', 'Storage'):
             expected_location = self.location_dest_id

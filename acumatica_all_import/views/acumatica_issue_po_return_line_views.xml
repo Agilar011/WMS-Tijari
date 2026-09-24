@@ -89,34 +89,6 @@
                             <field name="branch_warehouse"/>
                             <field name="note"/>
                         </group>
-                        <group string="Detail Line">
-                            <field name="line_nbr"/>
-                            <field name="line_inventory_name"/>
-                            <field name="line_location_name"/>
-                            <field name="line_note_id"/>
-                            <field name="line_warehouse"/>
-                            <field name="line_warehouse_name"/>
-                            <field name="inventory_id"/>
-                            <field name="transaction_description"/>
-                            <field name="description"/>
-                            <field name="line_type"/>
-                            <field name="location_dest_code"/>
-                            <field name="open_qty"/>
-                            <field name="order_qty"/>
-                            <field name="po_line_number"/>
-                            <field name="po_number"/>
-                            <field name="po_type"/>
-                            <field name="po_receipt_line_number"/>
-                            <field name="po_receipt_number"/>
-                            <field name="product_uom_qty"/>
-                            <field name="uom_code"/>
-                            <field name="warehouse_dest_code"/>
-                            <field name="transfer_order_line_number"/>
-                            <field name="transfer_order_number"/>
-                            <field name="transfer_order_type"/>
-                            <field name="transfer_shipment_number"/>
-                            <field name="line_note"/>
-                        </group>
                     </group>
                     <notebook name="Details">
                         <page string="All Shipment Lines" name="all_shipment_lines">

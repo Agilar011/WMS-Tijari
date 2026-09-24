@@ -58,7 +58,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     acumatica_write_date = fields.Char(string='Last Modified')
     post_period = fields.Char(string='Post Period')
     status = fields.Char(string='Status')
-    total_qty = fields.Char(string='Total Qty')
+    total_qty = fields.Char(string='Qty Total')
     warehouse_code = fields.Char(string='Warehouse')
     warehouse_dest_code = fields.Char(string='Warehouse Dest')
     transfer_type = fields.Char(string='Transfer Type')

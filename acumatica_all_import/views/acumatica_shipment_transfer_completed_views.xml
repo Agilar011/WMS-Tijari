@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="acumatica_shipment_transfer_completed_staging_view_list" model="ir.ui.view">
+        <field name="name">acumatica.shipment.transfer.completed.staging.view.list</field>
+        <field name="model">acumatica.shipment.transfer.completed.staging</field>
+        <field name="arch" type="xml"><list>
+            <field name="selected" widget="boolean_toggle"/>
+            <field name="shipment_nbr"/><field name="ship_date"/><field name="shipment_type"/>
+            <field name="status"/><field name="building_id"/><field name="customer_name"/>
+            <field name="to_warehouse_id"/><field name="shipment_qty"/><field name="import_state"/>
+            <field name="sync_date"/><field name="config_id"/>
+        </list></field>
+    </record>
+    <record id="acumatica_shipment_transfer_completed_staging_view_form" model="ir.ui.view">
+        <field name="name">acumatica.shipment.transfer.completed.staging.form</field>
+        <field name="model">acumatica.shipment.transfer.completed.staging</field>
+        <field name="arch" type="xml"><form string="Shipment Transfer Completed">
+            <header><button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/><field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/></header>
+            <sheet><div class="oe_title"><h1><field name="shipment_nbr"/></h1></div>
+                <group><group string="Shipment"><field name="shipment_nbr"/><field name="ship_date"/><field name="shipment_type"/><field name="status"/><field name="inventory_nbr"/></group>
+                    <group string="Shipment Information"><field name="shipment_qty"/><field name="shipment_volume"/><field name="shipment_weight"/><field name="building_id"/><field name="site_id_description"/><field name="to_warehouse_id"/></group></group>
+                <group string="Location and Customer"><field name="location_id"/><field name="location_name"/><field name="customer_name"/><field name="note_header"/><field name="note_header_id"/></group>
+                <notebook><page string="Details"><field name="line_ids"><list><field name="line_nbr"/><field name="line_description"/><field name="line_location"/><field name="line_quantity"/><field name="line_uom"/><field name="line_note"/><field name="line_note_id"/></list></field></page>
+                    <page string="Import"><group><field name="acumatica_id"/><field name="row_number"/><field name="config_id"/><field name="sync_date"/><field name="import_message"/><field name="note"/></group></page></notebook>
+            </sheet><chatter/></form></field>
+    </record>
+</odoo>
