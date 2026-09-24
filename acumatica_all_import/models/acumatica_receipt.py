@@ -76,7 +76,7 @@ class AcumaticaReceiptLine(models.Model):
     status = fields.Char(string='Status')
     receipt_type = fields.Char(string='Type')
     actual_qty = fields.Char(string='Control Qty')
-    total_qty = fields.Char(string='Total Qty')
+    total_qty = fields.Char(string='Qty Total')
     is_hold = fields.Char(string='Hold')
     document_only = fields.Boolean(string='Document Only')
     inventory_ref = fields.Char(string='Inventory Ref Nbr')

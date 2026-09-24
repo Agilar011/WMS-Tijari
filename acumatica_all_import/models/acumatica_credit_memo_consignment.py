@@ -64,7 +64,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_Type = fields.Char(string="Acumatica Type")
 
     total_qty = fields.Float(
-        string="Total Qty (Lines)", 
+        string="Qty Total (Lines)", 
         compute="_compute_total_qty", 
         store=True
     )
