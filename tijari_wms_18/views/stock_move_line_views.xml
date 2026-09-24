@@ -188,6 +188,7 @@
         <field name="name">stock.move.line.form.inherit.tijari</field>
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock.view_move_line_form"/>
+
         <field name="arch" type="xml">
 
             <xpath expr="//sheet" position="replace">
@@ -202,34 +203,70 @@
                     <field name="tracking" invisible="1"/>
                     <field name="available_lot_ids" invisible="1"/>
                     <field name="adt_dest_location_id" invisible="1"/>
-                    <field name="allowed_matching_lot_ids" invisible='1' />
+                    <field name="allowed_matching_lot_ids" invisible="1"/>
                     <field name="matching" invisible="1"/>
+                    <field name="is_manufacturing" invisible="1"/>
 
+
+                    <!-- ===================================================== -->
                     <!-- Scan Buttons -->
-                    <div class="row mb-3 g-2">
+                    <!-- ===================================================== -->
+
+                    <div class="row mb-3 g-2"
+                        invisible="is_manufacturing">
+
                         <div class="col-6 d-flex justify-content-center">
+
                             <field name="confirmation_location_code"
                                 widget="adt_scan_location_form_button"
                                 readonly="1"
                                 invisible="matching == 'match' or 'Pick' not in (parent.picking_type_name or '')"/>
-                            
+
                             <field name="confirmation_package_code"
                                 widget="adt_scan_package_form_button"
                                 readonly="1"
                                 invisible="state in ('done', 'cancel') or 'Pack' not in (parent.picking_type_name or '')"/>
+
                         </div>
 
                         <div class="col-6 d-flex justify-content-center">
+
                             <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_form_button"
                                 readonly="1"
                                 invisible="matching == 'match' or 'Pick' not in (parent.picking_type_name or '')"/>
+
                         </div>
+
                     </div>
 
+
+                    <!-- ===================================================== -->
+                    <!-- Manufacturing Scan -->
+                    <!-- ===================================================== -->
+
+                    <div class="row mb-3 g-2"
+                        invisible="not is_manufacturing">
+
+                        <div class="col-6 d-flex justify-content-center">
+
+                            <field name="confirmation_lot_code"
+                                widget="adt_scan_lot_form_button"
+                                readonly="1"
+                                invisible="matching == 'match'"/>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- ===================================================== -->
                     <!-- Product -->
+                    <!-- ===================================================== -->
+
                     <group>
                         <label for="product_id" string="Product"/>
+
                         <field name="product_id"
                             readonly="1"
                             force_save="1"
@@ -238,57 +275,130 @@
                             class="fw-bold fs-6"/>
                     </group>
 
+
+                    <!-- ===================================================== -->
                     <!-- LOT Number -->
+                    <!-- ===================================================== -->
+
                     <group groups="stock.group_production_lot"
                         invisible="not lot_id">
+
                         <label for="lot_id" string="LOT Number"/>
+
                         <field name="lot_id"
                             readonly="1"
                             force_save="1"
                             nolabel="1"
                             class="fw-bold fs-6"
                             domain="[('id', 'in', available_lot_ids)]"/>
+
                     </group>
 
-                    <group invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '') and 'Storage' not in (parent.picking_type_name or '')">
-                        <label
-                            for="handheld_scan_code"
-                            string="Scan Handheld"
-                        />
-                        <field
-                            name="handheld_scan_code"
+
+                    <!-- ===================================================== -->
+                    <!-- Handheld Scan - Normal Operation -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or (
+                        'Pick' not in (parent.picking_type_name or '')
+                        and 'Pack' not in (parent.picking_type_name or '')
+                        and 'Storage' not in (parent.picking_type_name or '')
+                    )">
+
+                        <label for="handheld_scan_code"
+                            string="Scan Handheld"/>
+
+                        <field name="handheld_scan_code"
                             widget="adt_handheld_scan_code"
                             placeholder="Scan handheld: lot, lokasi, atau package"
                             nolabel="1"
-                            class="fw-bold fs-6"
-                        />
+                            class="fw-bold fs-6"/>
+
                     </group>
 
-                    <group invisible="'Pick' not in (parent.picking_type_name or '')">
-                        <label 
-                            for="matching_lot_id" 
-                            string="Confirm LOT"
-                            />
+
+                    <!-- ===================================================== -->
+                    <!-- Handheld Scan - Manufacturing -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="not is_manufacturing">
+
+                        <label for="handheld_scan_code"
+                            string="Scan Handheld"/>
+
+                        <field name="handheld_scan_code"
+                            widget="adt_handheld_scan_code"
+                            placeholder="Scan handheld: lot atau lokasi"
+                            nolabel="1"
+                            class="fw-bold fs-6"/>
+
+                    </group>
+
+
+                    <!-- ===================================================== -->
+                    <!-- Confirm LOT - Normal Pick -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or 'Pick' not in (parent.picking_type_name or '')">
+
+                        <label for="matching_lot_id"
+                            string="Confirm LOT"/>
+
                         <field name="matching_lot_id"
                             force_save="1"
                             nolabel="1"
                             domain="[('id', 'in', allowed_matching_lot_ids)]"
-                            class="fw-bold fs-6"
-                            />
+                            class="fw-bold fs-6"/>
+
                     </group>
 
-                    <group invisible="'Pack' not in (parent.picking_type_name or '')">
-                        <label for="result_package_id" string="Packages"/>
+
+                    <!-- ===================================================== -->
+                    <!-- Confirm LOT - Manufacturing -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="not is_manufacturing">
+
+                        <label for="matching_lot_id"
+                            string="Confirm LOT"/>
+
+                        <field name="matching_lot_id"
+                            force_save="1"
+                            nolabel="1"
+                            domain="[('id', 'in', allowed_matching_lot_ids)]"
+                            class="fw-bold fs-6"/>
+
+                    </group>
+
+
+                    <!-- ===================================================== -->
+                    <!-- Package - Normal Pack -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or 'Pack' not in (parent.picking_type_name or '')">
+
+                        <label for="result_package_id"
+                            string="Packages"/>
+
                         <field name="result_package_id"
                             force_save="1"
                             nolabel="1"
-                            class="fw-bold fs-6"
                             domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"/>
+
                     </group>
 
+
+                    <!-- ===================================================== -->
                     <!-- Pick From -->
-                    <group invisible="('Pack' in (parent.picking_type_name or '')) or ('Receipts' in (parent.picking_type_name or ''))">
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or (
+                        'Pack' in (parent.picking_type_name or '')
+                        or 'Receipts' in (parent.picking_type_name or '')
+                    )">
+
                         <label for="location_id" string="Pick From"/>
+
                         <field name="location_id"
                             widget="location_short_many2one"
                             readonly="1"
@@ -296,278 +406,225 @@
                             nolabel="1"
                             context="{'show_location_short_name': True}"
                             class="fw-bold fs-6"/>
+
                     </group>
 
-                    <!-- Confirm Location -->
-                    <group invisible="'Pick' not in (parent.picking_type_name or '')">
-                        <label 
-                            for="matching_loc_dest_id" 
-                            string="Confirm Location"
-                            />
+
+                    <!-- ===================================================== -->
+                    <!-- Manufacturing Pick From -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="not is_manufacturing">
+
+                        <label for="location_id" string="Pick From"/>
+
+                        <field name="location_id"
+                            widget="location_short_many2one"
+                            readonly="1"
+                            force_save="1"
+                            nolabel="1"
+                            context="{'show_location_short_name': True}"
+                            class="fw-bold fs-6"/>
+
+                    </group>
+
+
+                    <!-- ===================================================== -->
+                    <!-- Confirm Location - Normal Pick -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or 'Pick' not in (parent.picking_type_name or '')">
+
+                        <label for="matching_loc_dest_id"
+                            string="Confirm Location"/>
+
                         <field name="matching_loc_dest_id"
                             force_save="1"
                             nolabel="1"
                             domain="[('id', 'child_of', adt_dest_location_id)]"
-                            class="fw-bold fs-6"
-                            />
+                            class="fw-bold fs-6"/>
+
                     </group>
 
-                    <!-- Qty Total -->
-                    <group invisible="'Pack' in (parent.picking_type_name or '')">
-                        <label for="product_uom_qty" string="Qty Total"/>
+
+                    <!-- ===================================================== -->
+                    <!-- Qty Total - Normal -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or 'Pack' in (parent.picking_type_name or '')">
+
+                        <label for="product_uom_qty"
+                            string="Qty Total"/>
+
                         <div class="o_row">
+
                             <field name="product_uom_qty"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 class="fw-bold fs-6"/>
+
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 options="{'no_create': True}"
                                 groups="uom.group_uom"/>
+
                         </div>
+
                     </group>
 
-                    <!-- Saran Qty -->
-                    <group>
-                        <label 
-                            for="quantity" 
+
+                    <!-- ===================================================== -->
+                    <!-- Saran Qty / Quantity / Qty Diterima -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing">
+
+                        <label for="quantity"
                             string="Saran Qty"
                             invisible="'Pick' not in (parent.picking_type_name or '')"/>
-                        <label 
-                            for="quantity" 
+
+                        <label for="quantity"
                             string="Quantity"
                             invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <label 
-                            for="quantity" 
+
+                        <label for="quantity"
                             string="Qty Diterima"
                             invisible="'Receipts' not in (parent.picking_type_name or '')"/>
+
                         <div class="o_row">
+
                             <field name="quantity"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 class="fw-bold fs-6"
                                 invisible="'Pick' not in (parent.picking_type_name or '')"/>
+
                             <field name="quantity"
                                 nolabel="1"
                                 force_save="1"
                                 class="fw-bold fs-6"
                                 invisible="'Pack' not in (parent.picking_type_name or '') and 'Receipts' not in (parent.picking_type_name or '')"/>
+
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 options="{'no_create': True}"
                                 groups="uom.group_uom"/>
+
                         </div>
+
                     </group>
 
-                    <!-- Qty Diambil -->
-                    <group invisible="('Pack' in (parent.picking_type_name or '')) or ('Receipts' in (parent.picking_type_name or ''))">
-                        <label for="confirmation_quantity" string="Qty Diambil"/>
+
+                    <!-- ===================================================== -->
+                    <!-- Qty Diambil - Normal -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or (
+                        'Pack' in (parent.picking_type_name or '')
+                        or 'Receipts' in (parent.picking_type_name or '')
+                    )">
+
+                        <label for="confirmation_quantity"
+                            string="Qty Diambil"/>
+
                         <div class="o_row">
+
                             <field name="confirmation_quantity"
                                 nolabel="1"
                                 class="fw-bold fs-6"/>
+
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 options="{'no_create': True}"
                                 groups="uom.group_uom"/>
+
                         </div>
+
                     </group>
 
-                </sheet>
-            </xpath>
 
-        </field>
-    </record>
+                    <!-- ===================================================== -->
+                    <!-- MANUFACTURING -->
+                    <!-- ===================================================== -->
 
-    <record id="view_move_line_manufacturing_form_inherit_tijari" model="ir.ui.view">
-        <field name="name">stock.move.line.manufacturing.form.inherit.tijari</field>
-        <field name="model">stock.move.line</field>
-        <field name="inherit_id" ref="stock.view_move_line_form"/>
-        <field name="arch" type="xml">
+                    <group invisible="not is_manufacturing">
 
-            <xpath expr="//sheet" position="replace">
-                <sheet>
+                        <label for="product_uom_qty"
+                            string="To Consume"/>
 
-                    <!-- Technical fields -->
-                    <field name="company_id" invisible="1"/>
-                    <field name="picking_id" invisible="1"/>
-                    <field name="location_dest_id" invisible="1"/>
-                    <field name="package_id" invisible="1"/>
-                    <field name="product_uom_category_id" invisible="1"/>
-                    <field name="tracking" invisible="1"/>
-                    <field name="available_lot_ids" invisible="1"/>
-                    <field name="adt_dest_location_id" invisible="1"/>
-                    <field name="allowed_matching_lot_ids" invisible='1' />
-                    <field name="matching" invisible="1"/>
-
-                    <!-- Scan Buttons -->
-                    <div class="row mb-3 g-2">
-                        <!-- <div class="col-6 d-flex justify-content-center">
-                            <field name="confirmation_location_code"
-                                widget="adt_scan_location_form_button"
-                                readonly="1"
-                                invisible="matching == 'match' or 'Pick' not in (parent.picking_type_name or '')"/>
-                            
-                            <field name="confirmation_package_code"
-                                widget="adt_scan_package_form_button"
-                                readonly="1"
-                                invisible="state in ('done', 'cancel') or 'Pack' not in (parent.picking_type_name or '')"/>
-                        </div> -->
-
-                        <div class="col-6 d-flex justify-content-center">
-                            <field name="confirmation_lot_code"
-                                widget="adt_scan_lot_form_button"
-                                readonly="1"
-                                invisible="matching == 'match'"/>
-                        </div>
-                    </div>
-
-                    <!-- Product -->
-                    <group>
-                        <label for="product_id" string="Product"/>
-                        <field name="product_id"
-                            readonly="1"
-                            force_save="1"
-                            nolabel="1"
-                            context="{'tijari_stock_picking_product_code_only': True}"
-                            class="fw-bold fs-6"/>
-                    </group>
-
-                    <!-- LOT Number -->
-                    <group groups="stock.group_production_lot"
-                        invisible="not lot_id">
-                        <label for="lot_id" string="LOT Number"/>
-                        <field name="lot_id"
-                            readonly="1"
-                            force_save="1"
-                            nolabel="1"
-                            class="fw-bold fs-6"
-                            domain="[('id', 'in', available_lot_ids)]"/>
-                    </group>
-
-                    <group>
-                        <label
-                            for="handheld_scan_code"
-                            string="Scan Handheld"
-                        />
-                        <field
-                            name="handheld_scan_code"
-                            widget="adt_handheld_scan_code"
-                            placeholder="Scan handheld: lot atau lokasi"
-                            nolabel="1"
-                            class="fw-bold fs-6"
-                        />
-                    </group>
-
-                    <group>
-                        <label 
-                            for="matching_lot_id" 
-                            string="Confirm LOT"
-                            />
-                        <field name="matching_lot_id"
-                            force_save="1"
-                            nolabel="1"
-                            domain="[('id', 'in', allowed_matching_lot_ids)]"
-                            class="fw-bold fs-6"
-                            />
-                    </group>
-
-                    <group>
-                        <label for="result_package_id" string="Packages"/>
-                        <field name="result_package_id"
-                            force_save="1"
-                            nolabel="1"
-                            class="fw-bold fs-6"
-                            domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"/>
-                    </group>
-
-                    <!-- Pick From -->
-                    <group>
-                        <label for="location_id" string="Pick From"/>
-                        <field name="location_id"
-                            widget="location_short_many2one"
-                            readonly="1"
-                            force_save="1"
-                            nolabel="1"
-                            context="{'show_location_short_name': True}"
-                            class="fw-bold fs-6"/>
-                    </group>
-
-                    <!-- Confirm Location -->
-                    <group invisible="1">
-                        <label 
-                            for="matching_loc_dest_id" 
-                            string="Confirm Location"
-                            />
-                        <field name="matching_loc_dest_id"
-                            force_save="1"
-                            nolabel="1"
-                            domain="[('id', 'child_of', adt_dest_location_id)]"
-                            class="fw-bold fs-6"
-                            />
-                    </group>
-
-                    <!-- To Consume -->
-                    <group>
-                        <label for="product_uom_qty" string="To Consume"/>
                         <div class="o_row">
+
                             <field name="product_uom_qty"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 class="fw-bold fs-6"/>
+
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 options="{'no_create': True}"
                                 groups="uom.group_uom"/>
+
                         </div>
+
                     </group>
 
-                    <!-- Qty Target -->
-                    <group>
-                        <label 
-                            for="quantity" 
+
+                    <group invisible="not is_manufacturing">
+
+                        <label for="quantity"
                             string="Qty Target"/>
-                        
+
                         <div class="o_row">
+
                             <field name="quantity"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 class="fw-bold fs-6"/>
+
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 options="{'no_create': True}"
                                 groups="uom.group_uom"/>
+
                         </div>
+
                     </group>
 
-                    <!-- Qty Digunakan -->
-                    <group>
-                        <label for="mo_confirmation_quantity" string="Qty Digunakan"/>
+
+                    <group invisible="not is_manufacturing">
+
+                        <label for="mo_confirmation_quantity"
+                            string="Qty Digunakan"/>
+
                         <div class="o_row">
+
                             <field name="mo_confirmation_quantity"
                                 nolabel="1"
                                 class="fw-bold fs-6"/>
+
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"
                                 nolabel="1"
                                 options="{'no_create': True}"
                                 groups="uom.group_uom"/>
+
                         </div>
+
                     </group>
 
                 </sheet>
