@@ -2102,7 +2102,7 @@
                 <field name="move_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
-                        'form_view_ref': 'tijari_wms_18.view_move_line_manufacturing_form_inherit_tijari',
+                        'form_view_ref': 'stock.view_move_line_mobile_form',
                         'default_move_id': id,
                         'default_product_id': product_id,
                         'default_location_id': location_id,
@@ -2169,7 +2169,7 @@
                                 invisible="mo_status == 'unfinished' or parent.state not in ['confirmed']"/>
                         
                     </list>
-                    <kanban class="o_kanban_mobile" context="{'form_view_ref': 'tijari_wms_18.view_move_line_manufacturing_form_inherit_tijari'}">
+                    <kanban class="o_kanban_mobile">
                         <field name="company_id" invisible="1" force_save="1"/>
                         <field name="move_id" invisible="1" force_save="1"/>
                         <field name="allowed_matching_lot_ids" invisible="1"/>

@@ -223,6 +223,21 @@ class StockMoveLine(models.Model):
         default='unfinished',
     )
 
+    is_manufacturing = fields.Boolean(
+        compute="_compute_is_manufacturing",
+    )
+
+    @api.depends(
+        "move_id.raw_material_production_id",
+        "move_id.production_id",
+    )
+    def _compute_is_manufacturing(self):
+        for line in self:
+            line.is_manufacturing = bool(
+                line.move_id.raw_material_production_id
+                or line.move_id.production_id
+            )
+
     @api.depends(
         "move_id",
         "move_id.move_line_ids.lot_id",
