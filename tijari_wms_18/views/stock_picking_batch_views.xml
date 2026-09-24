@@ -181,7 +181,7 @@
                     <field name="batch_adt_type" string="Tipe Transaksi"/>
                     <field name="batch_origin" string="No. Transaksi"/>
                     <field name="product_id" required="1" context="{'tijari_stock_picking_product_code_only': True}" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0"/>
-                    <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
+                    <field name="product_uom_qty" string="Qty Total" readonly="not is_initial_demand_editable"/>
                     <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable"/>
                     <field name="confirmation_quantity" string="Qty Disimpan"/>
                     <field name="product_uom" readonly="state != 'draft' and id" options="{'no_open': True, 'no_create': True}" string="UoM" groups="uom.group_uom"/>

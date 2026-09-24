@@ -35,7 +35,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
     return_type = fields.Char(string='Return Type')
     transfer_type = fields.Char(string='Transfer Type')
     trans_type = fields.Char(string='Trans Type')
-    total_qty = fields.Char(string='Total Qty')
+    total_qty = fields.Char(string='Qty Total')
     is_hold = fields.Char(string='Hold')
     post_period = fields.Char(string='Post Period')
     acumatica_write_date = fields.Char(string='Last Modified')

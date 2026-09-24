@@ -55,6 +55,7 @@
                         ('is_empty', '=', True)
                     ]
                 </attribute>
+                <attribute name="column_invisible">parent.picking_type_name != "Pack"</attribute>
             </xpath>
             
            <xpath expr="//field[last()]" position="after">
@@ -252,7 +253,7 @@
                     <group invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '') and 'Storage' not in (parent.picking_type_name or '')">
                         <label
                             for="handheld_scan_code"
-                            string="Kode Scan Handheld"
+                            string="Scan Handheld"
                         />
                         <field
                             name="handheld_scan_code"
@@ -311,9 +312,9 @@
                             />
                     </group>
 
-                    <!-- Total Qty -->
+                    <!-- Qty Total -->
                     <group invisible="'Pack' in (parent.picking_type_name or '')">
-                        <label for="product_uom_qty" string="Total Qty"/>
+                        <label for="product_uom_qty" string="Qty Total"/>
                         <div class="o_row">
                             <field name="product_uom_qty"
                                 readonly="1"
@@ -455,7 +456,7 @@
                     <group>
                         <label
                             for="handheld_scan_code"
-                            string="Kode Scan Handheld"
+                            string="Scan Handheld"
                         />
                         <field
                             name="handheld_scan_code"

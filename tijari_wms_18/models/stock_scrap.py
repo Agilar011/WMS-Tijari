@@ -341,19 +341,16 @@ class StockScrapLine(models.Model):
     product_id = fields.Many2one(
         "product.product",
         required=True,
-        readonly=True,
     )
 
     product_uom_id = fields.Many2one(
         "uom.uom",
-        readonly=True,
         string="UoM"
     )
 
     demand_qty = fields.Float(
         string="Scrap Demand",
         digits="Product Unit of Measure",
-        readonly=True,
     )
 
     available_qty = fields.Float(
