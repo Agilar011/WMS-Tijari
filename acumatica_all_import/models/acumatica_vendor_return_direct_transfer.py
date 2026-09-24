@@ -10,11 +10,19 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     _order = 'id desc'
 
     def _adt_picking_type_wizard_call(self):
-        if not self.adt_FromWarehouseID:
+        warehouse_code = (
+            self.adt_FromWarehouseID if self.adt_DocumentOnly
+            else self.adt_ToWarehouseID
+        )
+        if not warehouse_code:
             return False
         return (
             'import.vendor.return.direct.transfer.wizard',
-            ({'adt_FromWarehouseID': self.adt_FromWarehouseID, 'adt_DocumentOnly': self.adt_DocumentOnly},),
+            ({
+                'adt_FromWarehouseID': self.adt_FromWarehouseID,
+                'adt_ToWarehouseID': self.adt_ToWarehouseID,
+                'adt_DocumentOnly': self.adt_DocumentOnly,
+            },),
             {},
         )
 
@@ -76,7 +84,9 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
     def write(self, vals):
         result = super().write(vals)
-        if 'picking_type_id' not in vals and {'adt_FromWarehouseID', 'adt_DocumentOnly'} & set(vals):
+        if 'picking_type_id' not in vals and {
+            'adt_FromWarehouseID', 'adt_ToWarehouseID', 'adt_DocumentOnly'
+        } & set(vals):
             self._fill_vendor_return_picking_type(force=True)
         return result
 
@@ -96,30 +106,33 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         picking_type = PickingType.resolve_picking_type(
             warehouse=warehouse,
             warehouse_code=warehouse_code,
-            code='outgoing',
-            operation_category='delivery',
+            code='incoming',
+            operation_category='receive',
             api_acumatica='vendor_return',
             transaction_key='vendor_return',
             required=False,
         )
-        if picking_type:
-            return picking_type
-
-        return PickingType.search([
-            ('code', '=', 'outgoing'),
-            ('operation_category', '=', 'delivery'),
-            ('active', '=', True),
-        ], limit=1)
+        # Never fall back globally: a receipt type must belong to the
+        # destination warehouse of this Vendor Return.
+        return picking_type or PickingType.browse()
 
     def _fill_vendor_return_picking_type(self, force=False):
         for rec in self:
             if rec.picking_type_id and not force:
                 continue
+            warehouse_code = (
+                rec.adt_FromWarehouseID if rec.adt_DocumentOnly
+                else rec.adt_ToWarehouseID
+            )
             picking_type = rec._resolve_vendor_return_picking_type(
-                rec.adt_FromWarehouseID, rec.adt_DocumentOnly
+                warehouse_code, rec.adt_DocumentOnly
             )
             if picking_type:
                 rec.picking_type_id = picking_type.id
+            elif force:
+                # Clear stale/global operation types so reresolution cannot
+                # reuse a Document Only type from an unrelated warehouse.
+                rec.picking_type_id = False
         return True
 
     def action_reset_pending(self):
@@ -137,11 +150,23 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
             if '-' in warehouse_code
             else warehouse_code
         )
-        source_location = Location.search([
-            ('name', 'in', list({warehouse_code, normalized_code} - {''})),
+        location_domain = [
             ('is_consignment', '=', True),
             ('location_id.name', '=', 'Consignment'),
-        ], limit=1)
+        ]
+        # Prefer the full Acumatica WarehouseID so identical suffixes in
+        # different buildings cannot resolve to the wrong consignment bin.
+        source_location = Location.search(
+            location_domain + [('name', '=', warehouse_code)],
+            limit=1,
+        )
+        if not source_location and normalized_code and normalized_code != warehouse_code:
+            # Keep compatibility with existing consignment locations whose
+            # names were stored without the building prefix.
+            source_location = Location.search(
+                location_domain + [('name', '=', normalized_code)],
+                limit=1,
+            )
         if not source_location:
             raise UserError(
                 f'Lokasi consignment tidak ditemukan untuk FromWarehouseID '

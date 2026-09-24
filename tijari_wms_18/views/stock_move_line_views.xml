@@ -627,6 +627,14 @@
 
                     </group>
 
+                    <button name="action_mark_check_pick_finished"
+                        type="object"
+                        icon="fa-check"
+                        class="btn-success o_wms_auto_save_before_action"
+                        title="Finish Picking"
+                        invisible="pick_status == 'finished'"
+                        column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+
                 </sheet>
             </xpath>
 

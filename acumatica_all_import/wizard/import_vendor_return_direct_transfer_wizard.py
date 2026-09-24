@@ -113,44 +113,34 @@ class ImportDirectTransferWizard(models.TransientModel):
 
 
     def _search_picking_type(self, header):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
-            return config_picking_type
-
         PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
-        type = False
+        document_only = bool(header.get('adt_DocumentOnly'))
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
 
-        if header.get('adt_DocumentOnly'):
-            document_only_type = PickingType.resolve_document_only_picking_type(
+        if document_only:
+            if config_picking_type:
+                return config_picking_type
+            return PickingType.resolve_document_only_picking_type(
                 target_operation_type='direct_delivery_order',
                 api_acumatica='vendor_return',
                 document_only=True,
                 warehouse_code=header.get('adt_FromWarehouseID'),
-            )
-            if document_only_type:
-                return document_only_type
-
-        print(f"Warehouse: {header['adt_FromWarehouseID']}")
-
-        location = Location.search([
-            ('code', '=', header['adt_FromWarehouseID'])
-        ])
-
-            
-        if location:
-            type = PickingType.resolve_picking_type(
-                warehouse_code=header['adt_FromWarehouseID'],
-                code='outgoing',
-                operation_category='delivery',
-                api_acumatica='vendor_return',
-                transaction_key='vendor_return_direct_transfer',
                 required=False,
             )
 
-            print(f"Type: {type}")
-
-        return type if type else None
+        # Vendor Return (Return Transfer) is received into the internal
+        # transfer order, so resolve the receipt against its destination.
+        warehouse_code = header.get('adt_ToWarehouseID')
+        warehouse = PickingType._adt_find_warehouse(warehouse_code)
+        return PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse_code,
+            code='incoming',
+            operation_category='receive',
+            api_acumatica='vendor_return',
+            transaction_key='vendor_return_direct_transfer',
+            required=False,
+        )
 
     def fetch_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
         self.ensure_one()

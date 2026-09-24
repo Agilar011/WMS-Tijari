@@ -1036,6 +1036,16 @@ class HandheldScanCodeField extends CharField {
                         await this.props.record.update({
                             [this.props.name]: value,
                         });
+                        if (
+                            this.props.name === "package_scan_code" &&
+                            this.props.record.resModel === "stock.picking" &&
+                            !this.props.record.isNew
+                        ) {
+                            const saved = await this.props.record.save();
+                            if (saved) {
+                                await this.props.record.load();
+                            }
+                        }
                         // The onchange clears the transient field in the
                         // record. Clear the active input too, because the
                         // standard CharField keeps the scanner value while
