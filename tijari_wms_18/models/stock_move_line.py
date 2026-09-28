@@ -1400,11 +1400,11 @@ class StockMoveLine(models.Model):
             self._check_matching_status_pick()
 
         self.write({'pick_status': 'finished'})
-        return True
+        return {'type': 'ir.actions.act_window_close'}
 
     def action_mark_check_pick_unfinished(self):
         self.write({'pick_status': 'unfinished'})
-        return True
+        return self.move_id.action_open_move_pick()
 
     def _validate_before_mark_pick_finished(self):
         confirmation_quantity = self.confirmation_quantity
@@ -1470,11 +1470,11 @@ class StockMoveLine(models.Model):
         self.write({
             'mo_status': 'finished'
         })
-        return True
+        return {'type': 'ir.actions.act_window_close'}
 
     def action_mark_check_unfinished_mo(self):
         self.write({'mo_status': 'unfinished'})
-        return True
+        return self.move_id.action_open_move_pick()
 
     def _validate_before_mark_finished_mo(self):
         confirmation_quantity = self.mo_confirmation_quantity
@@ -1794,7 +1794,20 @@ class StockMoveLine(models.Model):
             if move.production_id:
                 continue
 
-            if move.picking_id.picking_type_id.name in ("Receipts", "Receipt Internal", "Storage"):
+            if move.picking_id.picking_type_id.name == "Storage":
+                # Storage is the putaway leg. Picker status belongs to the
+                # preceding operation and must not make a fully stored move
+                # look unpicked to Odoo's backorder check.
+                move.picked = bool(
+                    move.move_line_ids
+                    and all(
+                        line.putaway_status == "finished"
+                        for line in move.move_line_ids
+                    )
+                )
+                continue
+
+            if move.picking_id.picking_type_id.name in ("Receipts", "Receipt Internal"):
                 move.picked = bool(
                     move.move_line_ids
                     and all(

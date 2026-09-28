@@ -12,6 +12,13 @@
                     type="object"
                     class="btn-primary"
                 />
+                <button
+                    name="action_send_approval_request_email"
+                    string="Send Approval Email"
+                    type="object"
+                    class="btn-secondary"
+                    invisible="state != 'wait_approval'"
+                />
             </xpath>
             <xpath expr="//field[@name='approval_state']" position="after">
                 <field name="status_ba"/>

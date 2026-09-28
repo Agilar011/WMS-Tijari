@@ -1,4 +1,4 @@
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
 
@@ -67,5 +67,11 @@ class MailComposeMessage(models.TransientModel):
         ):
             raise ValidationError(
                 "Pilih minimal satu partner pada penerima email terlebih dahulu."
+            )
+        if self.env.context.get("tijari_inventory_approval_email") and any(
+            not composer.partner_ids for composer in self
+        ):
+            raise ValidationError(
+                _("Pilih minimal satu penerima email sebelum mengirim permintaan approval.")
             )
         return super().action_send_mail()

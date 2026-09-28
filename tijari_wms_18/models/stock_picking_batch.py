@@ -48,6 +48,9 @@ class StockPickingBatch(models.Model):
     show_picker_page = fields.Boolean(
         compute='_compute_show_picker_page',
     )
+    show_packer_page = fields.Boolean(
+        compute='_compute_show_packer_page',
+    )
     show_putaway_page = fields.Boolean(
         compute='_compute_show_putaway_page',
     )
@@ -59,6 +62,17 @@ class StockPickingBatch(models.Model):
         for batch in self:
             assigned_users = batch.picking_ids.mapped('pick_responsible_ids')
             batch.show_picker_page = (
+                not is_warehouse_operator
+                or user in assigned_users
+            )
+
+    @api.depends('picking_ids.pack_responsible_ids')
+    def _compute_show_packer_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        for batch in self:
+            assigned_users = batch.picking_ids.mapped('pack_responsible_ids')
+            batch.show_packer_page = (
                 not is_warehouse_operator
                 or user in assigned_users
             )
