@@ -83,6 +83,7 @@ class AcumaticaInternalTransferService(models.AbstractModel):
         from_label='FromLocationID',
         to_label='ToLocationID',
         check_same_location_mapping=False,
+        allow_ungrouped_destination=False,
     ):
         """Classify a one-step transfer from explicit location mappings.
 
@@ -99,12 +100,41 @@ class AcumaticaInternalTransferService(models.AbstractModel):
         to_mapping = self._find_location_mapping(
             to_code,
             to_label,
-            required=True,
-            require_odoo_location=True,
+            required=not allow_ungrouped_destination,
+            require_odoo_location=not allow_ungrouped_destination,
         )
 
+        ungrouped_destination = False
+        if allow_ungrouped_destination and (
+            not to_mapping or not to_mapping.odoo_location_id
+        ):
+            # An Acumatica location record may be deliberately left without
+            # grouping. In that case route it to the destination building's
+            # virtual location only when the mapping explicitly says so.
+            Mapping = self.env['stock.location.acumatica']
+            clean_code = (to_code or '').strip()
+            if not to_mapping and clean_code:
+                to_mapping = Mapping.search([
+                    '|', ('code', '=', clean_code), ('name', '=', clean_code),
+                ], limit=1)
+            if not to_mapping or not to_mapping.is_ungropping:
+                raise UserError(
+                    f'{to_label} ({clean_code or "-"}) tidak aktif atau belum di-grouping. '
+                    'Jika lokasi ini bukan lokasi grouping, isi field "Tidak Digrouping" '
+                    '(is_ungropping) pada mapping lokasi Acumatica.'
+                )
+            ungrouped_destination = True
+
         source_location = from_mapping.odoo_location_id
-        destination_location = to_mapping.odoo_location_id
+        destination_location = (
+            self.get_virtual_destination_location(to_mapping, to_code)
+            if ungrouped_destination
+            else to_mapping.odoo_location_id
+        )
+        if not destination_location:
+            raise UserError(
+                f'{to_label} ({to_code or "-"}) tidak memiliki destination virtual location.'
+            )
         if check_same_location_mapping and source_location == destination_location:
             return {
                 'status': 'skip',
@@ -127,7 +157,10 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             )
 
         from_group = self._get_location_mapping_group(from_mapping, from_label)
-        to_group = self._get_location_mapping_group(to_mapping, to_label)
+        to_group = (
+            False if ungrouped_destination
+            else self._get_location_mapping_group(to_mapping, to_label)
+        )
         transfer_type = (
             'intra_group_transfer'
             if from_group == to_group
