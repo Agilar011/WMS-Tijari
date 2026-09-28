@@ -115,6 +115,11 @@ class StockPicking(models.Model):
     show_picker_page = fields.Boolean(
         compute="_compute_show_picker_page",
     )
+
+    show_packer_page = fields.Boolean(
+        compute='_compute_show_packer_page',
+    )
+    
     show_putaway_page = fields.Boolean(
         compute="_compute_show_putaway_page",
     )
@@ -129,6 +134,16 @@ class StockPicking(models.Model):
             picking.show_picker_page = (
                 not is_warehouse_operator
                 or user in picking.pick_responsible_ids
+            )
+
+    @api.depends('pack_responsible_ids')
+    def _compute_show_packer_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        for picking in self:
+            picking.show_packer_page = (
+                not is_warehouse_operator
+                or user in picking.pack_responsible_ids
             )
 
     @api.depends("putaway_responsible_ids")
@@ -2612,7 +2627,19 @@ class StockPicking(models.Model):
                         dest_move.write({
                             "unpack_quantity": dest_move.quantity - packaged_qty
                         })
-                                    
+
+            if rec.picking_type_name in ("Delivery Orders"):
+                for move in rec.move_ids:
+                    confirmation_qty = move.so_confirmation_quantity
+
+                    move.quantity_shadow = move.quantity
+                    move.quantity = confirmation_qty
+                    # for dest_move in move.move_dest_ids:
+                    #     dest_move.write({
+                    #         'product_uom_qty': confirmation_qty,
+                    #         'quantity': confirmation_qty
+                    #     })
+
             if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
                 rec.wms_state = 'waiting_response'
 
@@ -2906,11 +2933,11 @@ class StockPicking(models.Model):
         )
 
         unfinished_unpacked_items = active_moves.filtered(
-            lambda move: move.status_check != "finished"
+            lambda move: move.remaining_package_qty != 0 and move.status_check != "finished"
         )
 
         unfinished_packed_items = self.package_level_ids.filtered(
-            lambda line: line.status != "finished"
+            lambda line:  line.status != "finished"
         )
 
         error_messages = []
