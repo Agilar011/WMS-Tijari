@@ -206,6 +206,7 @@
                     <field name="allowed_matching_lot_ids" invisible="1"/>
                     <field name="matching" invisible="1"/>
                     <field name="is_manufacturing" invisible="1"/>
+                    <field name="picking_type_name" invisible="1"/>
 
 
                     <!-- ===================================================== -->
@@ -300,9 +301,9 @@
                     <!-- ===================================================== -->
 
                     <group invisible="is_manufacturing or (
-                        'Pick' not in (parent.picking_type_name or '')
-                        and 'Pack' not in (parent.picking_type_name or '')
-                        and 'Storage' not in (parent.picking_type_name or '')
+                        'Pick' not in (picking_type_name or '')
+                        and 'Pack' not in (picking_type_name or '')
+                        and 'Storage' not in (picking_type_name or '')
                     )">
 
                         <label for="handheld_scan_code"
@@ -312,6 +313,34 @@
                             widget="adt_handheld_scan_code"
                             placeholder="Scan handheld: lot, lokasi, atau package"
                             nolabel="1"
+                            class="fw-bold fs-6"/>
+
+                    </group>
+
+
+                    <!-- Storage confirmations are shown in the shared form
+                         used by both administrators and Group Operation. -->
+                    <group invisible="is_manufacturing or picking_type_name != 'Storage'">
+
+                        <label for="matching_lot_id" string="Confirmation Lot"/>
+
+                        <field name="matching_lot_id"
+                            force_save="1"
+                            nolabel="1"
+                            domain="[('id', 'in', allowed_matching_lot_ids)]"
+                            class="fw-bold fs-6"/>
+
+                    </group>
+
+                    <group invisible="is_manufacturing or picking_type_name != 'Storage'">
+
+                        <label for="location_putaway_id" string="Confirmation Location"/>
+
+                        <field name="location_putaway_id"
+                            force_save="1"
+                            nolabel="1"
+                            domain="[('id', 'child_of', adt_dest_location_id)]"
+                            context="{'show_location_short_name': True}"
                             class="fw-bold fs-6"/>
 
                     </group>
@@ -626,14 +655,6 @@
                         </div>
 
                     </group>
-
-                    <button name="action_mark_check_pick_finished"
-                        type="object"
-                        icon="fa-check"
-                        class="btn-success o_wms_auto_save_before_action"
-                        title="Finish Picking"
-                        invisible="pick_status == 'finished'"
-                        column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
 
                 </sheet>
             </xpath>

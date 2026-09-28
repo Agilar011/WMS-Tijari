@@ -70,7 +70,7 @@ class StockLocationAcumatica(models.Model):
     is_active = fields.Boolean(string='Is Active')
     is_error = fields.Boolean(string='Is Error')
     error_message = fields.Char(string='Error Message', readonly=True)
-
+    is_ungropping = fields.Boolean(string='Tidak Digrouping', default=False)
 
     @api.onchange('odoo_location_id')
     def _onchange_odoo_location_id(self):

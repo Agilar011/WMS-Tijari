@@ -1794,7 +1794,20 @@ class StockMoveLine(models.Model):
             if move.production_id:
                 continue
 
-            if move.picking_id.picking_type_id.name in ("Receipts", "Receipt Internal", "Storage"):
+            if move.picking_id.picking_type_id.name == "Storage":
+                # Storage is the putaway leg. Picker status belongs to the
+                # preceding operation and must not make a fully stored move
+                # look unpicked to Odoo's backorder check.
+                move.picked = bool(
+                    move.move_line_ids
+                    and all(
+                        line.putaway_status == "finished"
+                        for line in move.move_line_ids
+                    )
+                )
+                continue
+
+            if move.picking_id.picking_type_id.name in ("Receipts", "Receipt Internal"):
                 move.picked = bool(
                     move.move_line_ids
                     and all(

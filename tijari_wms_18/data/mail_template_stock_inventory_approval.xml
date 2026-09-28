@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="email_template_stock_inventory_approval_request" model="mail.template">
+        <field name="name">Inventory Adjustment: Approval Request</field>
+        <field name="model_id" ref="stock_inventory.model_stock_inventory"/>
+        <field name="subject">Permintaan Approval Inventory Adjustment - {{ object.name }}</field>
+        <field name="email_to">{{ object.current_approver_id.partner_id.email or '' }}</field>
+        <field name="body_html" type="html">
+            <div>
+                <p>Yth. <t t-out="object.current_approver_id.name or 'Approver'"/>,</p>
+                <p>Mohon review dan berikan persetujuan untuk Inventory Adjustment berikut:</p>
+                <ul>
+                    <li><strong>Seri Dokumen:</strong> <t t-out="object.name"/></li>
+                    <li><strong>Referensi:</strong> <t t-out="object.acumatica_ref_doc or '-'"/></li>
+                    <li><strong>Tanggal:</strong> <t t-out="object.date"/></li>
+                </ul>
+                <p>Silakan buka dokumen di Odoo untuk memeriksa detail dan memproses approval.</p>
+                <p>Terima kasih.</p>
+            </div>
+        </field>
+    </record>
+</odoo>

@@ -663,18 +663,15 @@ class InternalTransferOrder(models.Model):
             )
         )
         if is_vendor_return and not self.document_only:
-            # The Vendor Return source is a consignment location under
-            # Virtual Locations, so it often has no stock.warehouse ancestor.
-            # For a transfer_in order, resolve its delivery operation from the
-            # mapped destination warehouse when the source cannot identify it.
-            source_warehouse = self._get_source_warehouse() or warehouse
-            return self.env['stock.picking.type'].resolve_picking_type(
-                warehouse=source_warehouse,
-                warehouse_code=source_warehouse.code if source_warehouse else False,
-                code='outgoing',
-                operation_category='delivery',
+            # Vendor Return's transfer-out leg must use Direct Delivery Order.
+            # The consignment source can sit outside the warehouse hierarchy,
+            # so resolve the operation type from the operational/destination
+            # warehouse for this transfer_in flow.
+            return self.env['stock.picking.type'].resolve_document_only_picking_type(
+                target_operation_type='direct_delivery_order',
                 api_acumatica='vendor_return',
-                transaction_key='vendor_return',
+                document_only=True,
+                warehouse_code=warehouse_code,
                 required=True,
             )
         return self.env['stock.picking.type'].resolve_document_only_picking_type(
@@ -1603,13 +1600,62 @@ class InternalTransferOrder(models.Model):
         return True
 
     def action_ready(self):
+        orders_to_generate = self.filtered(
+            lambda order: not order._get_related_pickings()
+        )
+        for order in orders_to_generate.filtered(
+            lambda item: item.transaction_type == 'intra_warehouse'
+        ):
+            order._check_intra_source_products_available()
+
         self._sync_order_adt_dest_location()
-        orders_to_generate = self.filtered(lambda order: not order._get_related_pickings())
         if orders_to_generate:
             orders_to_generate.action_generate_internal_pickings()
         existing_orders = self - orders_to_generate
         if existing_orders:
             existing_orders.write({'state': 'ready'})
+        return True
+
+    def _check_intra_source_products_available(self):
+        self.ensure_one()
+        if self.transaction_type != 'intra_warehouse' or not self.location_id:
+            return True
+
+        products = self.move_ids.filtered(
+            lambda move: move.state != 'cancel' and move.product_id
+        ).mapped('product_id')
+        if not products:
+            return True
+
+        quants = self.env['stock.quant'].search([
+            ('product_id', 'in', products.ids),
+            ('location_id', 'child_of', self.location_id.id),
+        ])
+        available_by_product = {}
+        for quant in quants:
+            available_by_product[quant.product_id.id] = (
+                available_by_product.get(quant.product_id.id, 0.0)
+                + quant.available_quantity
+            )
+
+        unavailable_products = products.filtered(
+            lambda product: float_compare(
+                available_by_product.get(product.id, 0.0),
+                0.0,
+                precision_rounding=product.uom_id.rounding,
+            ) <= 0
+        )
+        if unavailable_products:
+            product_names = '\n'.join(
+                f'- {product.display_name}' for product in unavailable_products
+            )
+            raise UserError(_(
+                'Produk berikut tidak memiliki stok tersedia di Source Location '
+                '"%(location)s":\n%(products)s'
+            ) % {
+                'location': self.location_id.display_name,
+                'products': product_names,
+            })
         return True
 
     def action_done(self):
