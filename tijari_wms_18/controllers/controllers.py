@@ -70,17 +70,31 @@ def generate_stok_opname_pdf(stock):
     """Generate the same Berita Acara PDF used by the stock opname print route."""
     stock = stock.sudo()
     blank_image = create_blank_image()
-    lines = stock.env['stock.quant'].sudo().search([
+
+    domain = [
         ('location_id', 'in', stock.location_ids.ids),
-    ])
+        ('inventory_diff_quantity', '>', 0),
+    ]
+
+    if 'inventory_id' in stock.env['stock.quant']._fields:
+        domain.append(('inventory_id', '=', stock.id))
+    elif 'stock_inventory_id' in stock.env['stock.quant']._fields:
+        domain.append(('stock_inventory_id', '=', stock.id))
+
+    lines = stock.env['stock.quant'].sudo().search(domain)
+
+    if not lines and hasattr(stock, 'quant_ids') and stock.quant_ids:
+        lines = stock.quant_ids.filtered(lambda q: q.inventory_diff_quantity > 0)
+
+
     warehouse = stock.env['stock.warehouse'].sudo().search([
-        ('lot_stock_id', 'in', stock.location_ids.ids),
+        ('lot_stock_id', 'in', stock.location_ids.ids)
     ], limit=1)
 
     data = {
         'warehouse_id': warehouse.name or '',
-        'date': format_tanggal_indo(stock.date),
-        'lok': stock.location_ids.complete_name or '',
+        'date': format_tanggal_indo(stock.date) if hasattr(stock, 'date') and stock.date else '',
+        'lok': ", ".join(stock.location_ids.mapped('complete_name')) if stock.location_ids else '',
         'note': stock.notes or '',
         'created_by': stock.responsible_id.name or '',
         'ttd_created_by': (
@@ -91,26 +105,22 @@ def generate_stok_opname_pdf(stock):
         'detail': [],
     }
     for line in lines:
-        is_counted = line.inventory_quantity_set
+        diff = float(line.inventory_diff_quantity or 0)
         system_qty = float(line.quantity or 0)
-        qty2 = float(line.inventory_quantity or 0) if is_counted else 0.0
-        diff = float(line.inventory_diff_quantity or 0) if is_counted else 0.0
-        diff_text = str(int(diff)) if diff.is_integer() else str(diff)
-        formatted_diff = (
-            f"<style forecolor='red'>{diff_text}</style>" if diff != 0 else diff_text
-        )
-        data['detail'].append({
+        qty2 = float(line.inventory_quantity or 0)
+        obj = {
             'name': line.product_id.display_name or '',
             'uom': line.product_uom_id.name or '',
             'system_qty': system_qty,
             'qty2': qty2,
-            'diff': formatted_diff,
-            'ket': '',
-        })
+            'diff': diff,
+            'ket': ''
+        }
+        data['detail'].append(obj)
 
-    import requests
-    from lxml import etree
-
+    data = json.dumps(data)
+    usrnm = 'jasperadmin'
+    psswd = 't1j4r1s0lut10n'
     execution = requests.post(
         'http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
         auth=('jasperadmin', 't1j4r1s0lut10n'),
@@ -876,8 +886,22 @@ class WmsApiController(http.Controller):
 
     @http.route('/print/stok_opname', type='http', auth='user')
     def PrintStokOpname(self, id, **kw):
+        blank_image = create_blank_image()
         stock = request.env['stock.inventory'].sudo().browse(int(id))
-        lines = request.env['stock.quant'].sudo().search([('location_id', 'in', stock.location_ids.ids),])
+        domain = [
+            ('location_id', 'in', stock.location_ids.ids),
+            ('inventory_diff_quantity', '>', 0),
+        ]
+
+        if 'inventory_id' in request.env['stock.quant']._fields:
+            domain.append(('inventory_id', '=', stock.id))
+        elif 'stock_inventory_id' in request.env['stock.quant']._fields:
+            domain.append(('stock_inventory_id', '=', stock.id))
+
+        lines = request.env['stock.quant'].sudo().search(domain)
+
+        if not lines and hasattr(stock, 'quant_ids') and stock.quant_ids:
+            lines = stock.quant_ids.filtered(lambda q: q.inventory_diff_quantity > 0)
         
         warehouse = request.env['stock.warehouse'].sudo().search([
             ('lot_stock_id', 'in', stock.location_ids.ids)
@@ -886,7 +910,7 @@ class WmsApiController(http.Controller):
         data = {
             'warehouse_id': warehouse.name or '',
             'date': format_tanggal_indo(stock.date),
-            'lok': stock.location_ids.complete_name or '',
+            'lok': ", ".join(stock.location_ids.mapped('complete_name')) if stock.location_ids else '',
             'note': stock.notes or '',
             'created_by': stock.responsible_id.name or '',
             'ttd_created_by': (stock.responsible_id.partner_id.digital_signature.decode('utf-8') if stock.responsible_id.partner_id.digital_signature else blank_image),
@@ -894,11 +918,9 @@ class WmsApiController(http.Controller):
 
             'detail': []
         }
+
         for line in lines:
             diff = float(line.inventory_diff_quantity or 0)
-
-            if diff <= 0:
-                continue
 
             system_qty = float(line.quantity or 0)
             qty2 = float(line.inventory_quantity or 0)
@@ -908,7 +930,7 @@ class WmsApiController(http.Controller):
                 'uom': line.product_uom_id.name or '',
                 'system_qty': system_qty,
                 'qty2': qty2,
-                'diff': diff,  
+                'diff': diff,
                 'ket': ''
             }
             data['detail'].append(obj)
@@ -933,17 +955,18 @@ class WmsApiController(http.Controller):
         xml = etree.XML(execution.content)
 
         try:
-            pdf_content = generate_stok_opname_pdf(stock)
-            return request.make_response(
-                pdf_content,
-                [('Content-Type', 'application/pdf'),
-                 ('Content-Disposition', 'inline; filename=stok_opname.pdf;')],
-            )
-        except Exception:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "Stok Opname.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
             import traceback
-            return request.make_response(json.dumps({
-                'msg': traceback.format_exc(),
-            }), [('Content-Type', 'application/json')], status=500)
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
 
     @http.route('/print/stok_scrab', type='http', auth='user')
     def PrintStokScrab(self, id, **kw):
