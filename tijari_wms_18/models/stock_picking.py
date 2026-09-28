@@ -2628,17 +2628,17 @@ class StockPicking(models.Model):
                             "unpack_quantity": dest_move.quantity - packaged_qty
                         })
 
-            if rec.picking_type_name in ("Delivery Orders"):
-                for move in rec.move_ids:
-                    confirmation_qty = move.so_confirmation_quantity
+            # if rec.picking_type_name in ("Delivery Orders"):
+            #     for move in rec.move_ids:
+            #         confirmation_qty = move.so_confirmation_quantity
 
-                    move.quantity_shadow = move.quantity
-                    move.quantity = confirmation_qty
-                    # for dest_move in move.move_dest_ids:
-                    #     dest_move.write({
-                    #         'product_uom_qty': confirmation_qty,
-                    #         'quantity': confirmation_qty
-                    #     })
+            #         move.quantity_shadow = move.quantity
+            #         move.quantity = confirmation_qty
+            #         for dest_move in move.move_dest_ids:
+            #             dest_move.write({
+            #                 'product_uom_qty': confirmation_qty,
+            #                 'quantity': confirmation_qty
+            #             })
 
             if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
                 rec.wms_state = 'waiting_response'
