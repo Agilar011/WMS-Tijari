@@ -8,6 +8,7 @@
 
             <!-- First row of detailed stock_move_line outbound - pick -->
             <xpath expr="//field[@name='quant_id']" position="before">
+                <field name="picking_type_name" column_invisible="1" />
                 <!-- <field name="id" string="Line ID" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/> -->
                 <!-- <field name="id" string="Line ID" optional="hide"/> -->
                 <!-- <field name="adt_owner_id" string="Owner" column_invisible="0"/> -->
@@ -221,12 +222,12 @@
                             <field name="confirmation_location_code"
                                 widget="adt_scan_location_form_button"
                                 readonly="1"
-                                invisible="matching == 'match' or 'Pick' not in (parent.picking_type_name or '')"/>
+                                invisible="matching == 'match' or 'Pick' not in (picking_type_name or '')"/>
 
                             <field name="confirmation_package_code"
                                 widget="adt_scan_package_form_button"
                                 readonly="1"
-                                invisible="state in ('done', 'cancel') or 'Pack' not in (parent.picking_type_name or '')"/>
+                                invisible="state in ('done', 'cancel') or 'Pack' not in (picking_type_name or '')"/>
 
                         </div>
 
@@ -235,7 +236,7 @@
                             <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_form_button"
                                 readonly="1"
-                                invisible="matching == 'match' or 'Pick' not in (parent.picking_type_name or '')"/>
+                                invisible="matching == 'match' or 'Pick' not in (picking_type_name or '')"/>
 
                         </div>
 

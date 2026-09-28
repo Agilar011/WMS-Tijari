@@ -124,20 +124,6 @@
                 <field name="status_mo_check"
                     decoration-success="status_mo_check == 'finished'"
                     decoration-danger="status_mo_check == 'unfinished'" widget="badge" />
-
-                <!-- <button name="action_mark_check_finished_mo"
-                    type="object"
-                    icon="fa-check"
-                    class="btn-success"
-                    title="Finish"
-                    invisible="status_check == 'finished'"/> -->
-
-                <!-- <button name="action_mark_check_unfinished_mo"
-                    type="object"
-                    icon="fa-undo"
-                    class="btn-danger"
-                    title="Rollback"
-                    invisible="status_check != 'finished' or state not in ['confirmed', 'assigned']"/> -->
                 
                 <button
                     name="action_open_note_wizard"
