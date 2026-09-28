@@ -827,23 +827,20 @@ class WmsApiController(http.Controller):
             'detail': []
         }
         for line in lines:
-            is_counted = line.inventory_quantity_set
+            diff = float(line.inventory_diff_quantity or 0)
+
+            if diff <= 0:
+                continue
+
             system_qty = float(line.quantity or 0)
-            qty2 = float(line.inventory_quantity or 0) if is_counted else 0.0
-            diff = float(line.inventory_diff_quantity or 0) if is_counted else 0.0
+            qty2 = float(line.inventory_quantity or 0)
 
-            diff_text = str(int(diff)) if diff.is_integer() else str(diff)
-
-            if diff != 0:
-                formatted_diff = f"<style forecolor='red'>{diff_text}</style>"
-            else:
-                formatted_diff = diff_text
             obj = {
                 'name': line.product_id.display_name or '',
                 'uom': line.product_uom_id.name or '',
                 'system_qty': system_qty,
                 'qty2': qty2,
-                'diff': formatted_diff,
+                'diff': diff,  
                 'ket': ''
             }
             data['detail'].append(obj)
