@@ -763,6 +763,15 @@ class StockPicking(models.Model):
         # ('full_return', 'Canceled'),
     ], string='Informasi TMS', help='Status shipment yang akan dikirimkan dari TMS.')
 
+    attachment_ids = fields.Many2many(
+        'ir.attachment',
+        'stock_picking_shipment_attachment_rel',
+        'picking_id',
+        'attachment_id',
+        string='Shipment Attachments',
+        copy=False,
+    )
+
     status_ba = fields.Selection([
         ('conform', 'Confirmed'),
         ('discrepancy', 'Discrepancy'),],
@@ -1509,9 +1518,72 @@ class StockPicking(models.Model):
         readonly=True,
         copy=False,
     )
+    internal_transfer_destination_location_id = fields.Many2one(
+        'stock.location',
+        string='Lokasi Tujuan',
+        related='internal_transfer_order_id.location_dest_id',
+        readonly=True,
+    )
+    show_internal_transfer_destination_location = fields.Boolean(
+        compute='_compute_show_internal_transfer_destination_location',
+    )
     note_ba = fields.Text(string="Notes For Official Report")
     desc_note = fields.Char(string="Description")
     picking_type_name = fields.Char(string="Picking Type Name", related="picking_type_id.name", store=True)
+
+    @api.depends(
+        'internal_transfer_order_id',
+        'internal_transfer_order_id.transfer_type',
+        'internal_transfer_order_id.transaction_type',
+        'internal_transfer_order_id.adt_transaction_type',
+        'internal_transfer_order_id.location_id',
+        'internal_transfer_order_id.location_dest_id',
+        'internal_transfer_order_id.move_ids.adt_type',
+        'internal_transfer_leg',
+        'picking_type_id.code',
+    )
+    def _compute_show_internal_transfer_destination_location(self):
+        for picking in self:
+            order = picking.internal_transfer_order_id
+            if not order:
+                picking.show_internal_transfer_destination_location = False
+                continue
+
+            transaction_api = (
+                (order.adt_transaction_type or '')
+                .strip()
+                .lower()
+                .replace('_', ' ')
+            )
+            is_one_step_same_location = (
+                order.transaction_type == 'intra_warehouse'
+                and order.location_id == order.location_dest_id
+                and (
+                    transaction_api in ('1-step', '1 step', 'transfer one step')
+                    or any(
+                        'transfer one step' in (move.adt_type or '').strip().lower()
+                        for move in order.move_ids
+                    )
+                )
+            )
+            auto_validated = (
+                (order.transfer_type == 'transfer_in'
+                 and picking.internal_transfer_leg == 'delivery')
+                or (order.transfer_type == 'transfer_out'
+                    and picking.internal_transfer_leg == 'receipt')
+                or (
+                    picking.internal_transfer_leg == 'receipt'
+                    and order.adt_transaction_type in (
+                        'Shipment Consignment', 'Transfer Shipment',
+                    )
+                    and picking.picking_type_id.code == 'internal'
+                )
+                or (
+                    is_one_step_same_location
+                    and picking.internal_transfer_leg in ('delivery', 'receipt')
+                )
+            )
+            picking.show_internal_transfer_destination_location = not auto_validated
 
     def _allow_custom_push_destination(self):
         self.ensure_one()
@@ -2429,13 +2501,19 @@ class StockPicking(models.Model):
 
             if picking.picking_type_id.name in ('Delivery Orders'):
                 picking._check_validate_delivery_requirements()
+
+            # Storage validation only depends on putaway completion. It does
+            # not use the receipt/picker status checks.
+            if picking.picking_type_id.name == 'Storage':
+                picking._check_putaway_status_requirements()
+                # Refresh Odoo's picked quantity flag from the Storage
+                # putaway status before its standard backorder check runs.
+                picking.move_line_ids._update_move_picked()
             
             if (
-                picking.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage')
+                picking.picking_type_id.name in ('Receipts', 'Receipt Internal')
                 and not picking.is_ito_internal_transfer
             ):
-                if picking.picking_type_id.name == 'Storage':
-                    picking._check_storage_pick_completed()
                 picking._check_putaway_status_requirements()
                 picking._check_picker_status_requirements()
 
@@ -2486,7 +2564,8 @@ class StockPicking(models.Model):
                 
             if is_receipt_putaway:
                 rec._check_putaway_status_requirements()
-                rec._check_picker_status_requirements()
+                if rec.picking_type_id.name != 'Storage':
+                    rec._check_picker_status_requirements()
             else:
                 rec._check_validate_requirements()
             operation_category = rec.picking_type_id.operation_category
@@ -2729,7 +2808,9 @@ class StockPicking(models.Model):
         # of whether the configured operation type still has a legacy name.
         if self.is_ito_internal_transfer:
             return
-        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage', 'Internal Transfers'):
+        if self.picking_type_id.name == 'Storage':
+            return self._check_putaway_status_requirements()
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Internal Transfers'):
             return self._check_putaway_status_requirements() and self._check_picker_status_requirements()
 
         if self.picking_type_name not in ['Pick', 'Pick Internal']:
@@ -3003,6 +3084,119 @@ class StockPicking(models.Model):
         staging_data.is_used = True
 
         self.action_confirm_shipment()   
+
+    def action_get_transfer_shipment_completed_staging(self):
+        self.ensure_one()
+        if self.adt_type != 'Transfer Shipment':
+            raise UserError(_('Shipment Transfer Completed staging hanya tersedia untuk Transfer Shipment.'))
+
+        staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
+            [('shipment_nbr', '=', self.origin)], limit=1,
+        )
+        if not staging_data:
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Gagal Melakukan Update',
+                    'message': f'Staging shipment {self.origin} tidak ditemukan.',
+                    'type': 'warning',
+                    'sticky': False,
+                }
+            }
+
+        staging_data_line = staging_data.line_ids
+        for move in self.move_ids:
+            # In transfer staging, Inventory Number is stored on the header;
+            # detail lines carry the quantities.
+            staging_lines_for_product = (
+                staging_data_line
+                if staging_data.inventory_nbr == move.product_id.default_code
+                else staging_data_line.browse()
+            )
+            staging_qty = sum(staging_lines_for_product.mapped('line_quantity'))
+
+            if not staging_qty:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Gagal Melakukan Update',
+                        'message': f'Quantity {move.product_id.display_name} yang diupdate tidak memiliki quantity',
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+
+            if float_compare(
+                staging_qty,
+                move.quantity,
+                precision_rounding=move.product_uom.rounding,
+            ) != 0:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'Gagal Melakukan Update',
+                        'message': f'Quantity staging {staging_qty} untuk {move.product_id.display_name} harus sama dengan quantity dokumen {move.quantity}. Gunakan Complete Shipment Manually dan lampirkan dokumen pendukung untuk melanjutkan.',
+                        'type': 'warning',
+                        'sticky': False,
+                    }
+                }
+
+            move.shipped_qty = staging_qty
+
+        self.shipment_information = 'full_shipment'
+        self.action_confirm_shipment()
+
+    def action_confirm_shipment_manually(self):
+        self.ensure_one()
+        if not (
+            self.internal_transfer_order_id
+            and self.internal_transfer_leg == 'delivery'
+            and self.picking_type_id.code == 'internal'
+            and self.adt_type == 'Transfer Shipment'
+            and self.wms_state == 'waiting_response'
+        ):
+            raise UserError(_('Manual shipment completion is only available for a Transfer Shipment ITO delivery waiting for shipment.'))
+
+        staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
+            [('shipment_nbr', '=', self.origin)], limit=1,
+        )
+        has_staging_quantity_difference = not staging_data
+        for move in self.move_ids:
+            staging_lines = (
+                staging_data.line_ids
+                if staging_data and staging_data.inventory_nbr == move.product_id.default_code
+                else self.env['acumatica.shipment.transfer.completed.staging.line'].browse()
+            )
+            staging_qty = sum(staging_lines.mapped('line_quantity'))
+            if not staging_qty or float_compare(
+                staging_qty,
+                move.quantity,
+                precision_rounding=move.product_uom.rounding,
+            ) != 0:
+                has_staging_quantity_difference = True
+                break
+
+        if has_staging_quantity_difference and not self.attachment_ids:
+            raise UserError(_(
+                'Lampiran wajib diisi karena quantity staging berbeda dari quantity dokumen.'
+            ))
+
+        all_match = True
+        for move in self.move_ids:
+            if move.shipped_qty < 0:
+                raise UserError(_('Shipped Qty tidak boleh kurang dari nol.'))
+            if float_compare(
+                move.shipped_qty,
+                move.quantity,
+                precision_rounding=move.product_uom.rounding,
+            ) != 0:
+                all_match = False
+
+        self.shipment_information = 'full_shipment' if all_match else 'partial'
+        return self.action_confirm_shipment()
 
     def action_fetch_actual_qty(self):
         self.ensure_one()

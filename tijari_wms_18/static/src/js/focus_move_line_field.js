@@ -1011,7 +1011,9 @@ class PutawayProductScanButton extends ProductScanButton {
 class HandheldScanCodeField extends CharField {
     setup() {
         super.setup();
+        this.orm = useService("orm");
         this.notification = useService("notification");
+        this.action = useService("action");
         useEffect(
             (inputEl) => {
                 if (!inputEl) {
@@ -1044,6 +1046,41 @@ class HandheldScanCodeField extends CharField {
                             const saved = await this.props.record.save();
                             if (saved) {
                                 await this.props.record.load();
+                                const applyResult = await callScannedCodeMethod({
+                                    orm: this.orm,
+                                    notification: this.notification,
+                                    resModel: "stock.picking",
+                                    resId: this.props.record.resId,
+                                    methodName: "action_apply_scanned_package",
+                                    title: "Scan Package",
+                                    scannedCode: value,
+                                });
+                                if (applyResult.ok) {
+                                    await reloadRecordSafely(
+                                        this.props.record,
+                                        this.notification
+                                    );
+                                    const wizardId = applyResult.result?.package_detail_wizard_id;
+                                    if (wizardId) {
+                                        await this.action.doAction(
+                                            {
+                                                type: "ir.actions.act_window",
+                                                res_model: "package.level.detail.wizard",
+                                                res_id: wizardId,
+                                                views: [[false, "form"]],
+                                                target: "new",
+                                            },
+                                            {
+                                                onClose: async () => {
+                                                    await reloadRecordSafely(
+                                                        this.props.record,
+                                                        this.notification
+                                                    );
+                                                },
+                                            }
+                                        );
+                                    }
+                                }
                             }
                         }
                         // The onchange clears the transient field in the

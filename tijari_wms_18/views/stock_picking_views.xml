@@ -135,11 +135,17 @@
                     class="btn-primary"
                     invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
 
-                <button name="action_get_shipment_completed_staging"
+                <button name="action_get_transfer_shipment_completed_staging"
                     string="Complete Shipment"
                     type="object"
                     class="btn-primary"
-                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ('Shipment Consignment', 'Transfer Shipment')) or wms_state != 'waiting_response'"/>
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response'"/>
+
+                <button name="action_confirm_shipment_manually"
+                    string="Complete Shipment Manually"
+                    type="object"
+                    class="btn-secondary"
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response'"/>
 
                 <!-- <button name="action_fetch_actual_qty"
                 string="Get Full Shipment Data"
@@ -187,6 +193,9 @@
                     decoration-success="shipment_information == 'full_shipment'"
                     decoration-warning="shipment_information == 'partial'"
                     decoration-danger="shipment_information == 'canceled'"/>
+                <field name="attachment_ids"
+                    widget="many2many_binary"
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment')"/>
             </xpath>
 
             <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']" position="replace">
@@ -505,6 +514,12 @@
                     domain="[('id', 'child_of', adt_dest_location_id)]"/>
             </xpath>
 
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="internal_transfer_destination_location_id"
+                    string="Lokasi Tujuan"
+                    invisible="not show_internal_transfer_destination_location"/>
+            </xpath>
+
             <xpath expr="//field[@name='owner_id']" position="attributes">
                 <attribute name="string">Pemilik Stock</attribute>
                 <attribute name="invisible">adt_type != 'Toko Pegang DO'</attribute>
@@ -530,6 +545,7 @@
                 <field name="status_ba"/>
                 <field name="internal_transfer_order_id" invisible="1"/>
                 <field name="internal_transfer_leg" invisible="1"/>
+                <field name="show_internal_transfer_destination_location" invisible="1"/>
                 <field name="is_ito_internal_transfer" invisible="1"/>
                 <field name="adt_dest_location_id" string="Final Location" invisible="internal_transfer_order_id or 'Receipt' in (picking_type_name or '') or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal'] or is_ito_internal_transfer"/>
                 <field name="all_moves_picked" invisible="1"/>
