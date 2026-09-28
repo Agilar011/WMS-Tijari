@@ -60,7 +60,13 @@
                         <group>
                             <field name="transaction_type"/>
                             <field name="transfer_type" invisible="1"/>
-                            <field name="adt_transaction_type" string="Tipe Transaksi (API)" readonly="1"/>
+                            <field name="adt_transaction_type" string="Tipe Transaksi (API)" readonly="1"
+                                invisible="transaction_type == 'intra_warehouse' and intra_transfer_type == 'intra_group_transfer'"/>
+                            <field name="partner_id"
+                                string="Warehouse Partner"
+                                invisible="transaction_type != 'inter_warehouse'"
+                                readonly="1"
+                                options="{'no_create': True, 'no_open': True}"/>
                             <field name="inter_transfer_type"
                                 invisible="transaction_type != 'inter_warehouse'"/>
                             <field name="intra_transfer_type"
@@ -71,12 +77,19 @@
                                 readonly="state == 'ready'"
                                 options="{'no_create': True}"/>
                             <field name="external_ref" invisible="1"/>
-                            <field name="external_ref_in"/>
-                            <field name="external_ref_out"/>
+                            <field name="available_source_product_ids" invisible="1"/>
+                            <field name="external_ref_in"
+                                invisible="transaction_type == 'intra_warehouse' and intra_transfer_type == 'intra_group_transfer'"/>
+                            <field name="external_ref_out"
+                                invisible="transaction_type == 'intra_warehouse' and intra_transfer_type == 'intra_group_transfer'"/>
                         </group>
                         <group>
                             <field name="location_id"
                                 invisible="transaction_type == 'intra_warehouse'"
+                                readonly="state == 'ready'"/>
+                            <field name="source_location_scan_code"
+                                widget="adt_handheld_scan_code"
+                                invisible="transaction_type != 'intra_warehouse' or intra_transfer_type != 'intra_group_transfer'"
                                 readonly="state == 'ready'"/>
                             <field name="intra_location_id"
                                 invisible="transaction_type != 'intra_warehouse'"
@@ -84,6 +97,10 @@
                                 domain="[('is_location_mapping', '=', True)] if intra_transfer_type == 'inter_group_transfer' else [('id', 'child_of', location_group_id)]"/>
                             <field name="location_dest_id"
                                 invisible="transaction_type == 'intra_warehouse'"
+                                readonly="state == 'ready'"/>
+                            <field name="destination_location_scan_code"
+                                widget="adt_handheld_scan_code"
+                                invisible="transaction_type != 'intra_warehouse' or intra_transfer_type != 'intra_group_transfer'"
                                 readonly="state == 'ready'"/>
                             <field name="intra_location_dest_id"
                                 invisible="transaction_type != 'intra_warehouse'"
@@ -104,8 +121,10 @@
                         </page>
                         <page string="Operation" name="page_operations">
                             <field name="move_ids"
+                                mode="list,kanban"
                                 readonly="picking_count != 0"
                                 context="{
+                                    'form_view_ref': 'tijari_wms_18.internal_transfer_order_move_form',
                                     'default_internal_transfer_order_id': id,
                                     'default_location_id': location_id,
                                     'default_location_dest_id': location_dest_id,
@@ -118,26 +137,57 @@
                                     <field name="location_id" column_invisible="1"/>
                                     <field name="location_dest_id" column_invisible="1"/>
                                     <field name="product_uom_category_id" column_invisible="1"/>
-                                    <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}" required="1"/>
+                                    <field name="internal_transfer_order_id" column_invisible="1"/>
+                                    <field name="internal_transfer_product_scan_code"
+                                        widget="adt_handheld_scan_code"
+                                        string="Scan Product"
+                                        placeholder="Scan barcode / product code"
+                                        groups="tijari_wms_18.group_operator"/>
+                                    <field name="product_id"
+                                        context="{'tijari_stock_picking_product_code_only': True}"
+                                        domain="[('id', 'in', parent.available_source_product_ids)] if parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer' else []"
+                                        required="1"/>
                                     <field name="product_uom_qty" string="Demand"/>
-                                    <field name="quantity" string="Qty"/>
                                     <field name="product_uom" string="UoM"
                                         groups="uom.group_uom"
                                         options="{'no_open': True, 'no_create': True}"/>
                                     <field name="lot_ids" widget="many2many_tags"
                                         string="Lot/Serial Number"
                                         groups="stock.group_production_lot"/>
-                                    <button
-                                        name="action_open_note_wizard"
-                                        type="object"
-                                        icon="fa-sticky-note"
-                                        title="Note"
-                                    />
-                                    <field name="product_note" optional="hide"/>
-                                    <field name="adt_type" string="Tipe Transaksi" optional="hide"/>
-                                    <field name="adt_transfer_order_number" optional="hide"/>
-                                    <field name="adt_transfer_order_line_number" optional="hide"/>
                                 </list>
+                                <kanban>
+                                    <field name="product_id"/>
+                                    <field name="internal_transfer_product_scan_code"
+                                        groups="tijari_wms_18.group_operator"/>
+                                    <field name="product_uom_qty"/>
+                                    <field name="product_uom" groups="uom.group_uom"/>
+                                    <field name="lot_ids" groups="stock.group_production_lot"/>
+                                    <templates>
+                                        <t t-name="card">
+                                            <div class="oe_kanban_global_click">
+                                                <div class="fw-bold fs-5">
+                                                    <field name="product_id"/>
+                                                </div>
+                                                <div class="mt-2">
+                                                    <field name="internal_transfer_product_scan_code"
+                                                        widget="adt_handheld_scan_code"
+                                                        placeholder="Scan barcode / product code"
+                                                        groups="tijari_wms_18.group_operator"/>
+                                                </div>
+                                                <div class="mt-2">
+                                                    <span class="text-muted">Demand: </span>
+                                                    <field name="product_uom_qty"/>
+                                                    <field name="product_uom" groups="uom.group_uom"/>
+                                                </div>
+                                                <div class="mt-2" groups="stock.group_production_lot">
+                                                    <span class="text-muted">Lot/Serial: </span>
+                                                    <field name="lot_ids" widget="many2many_tags"
+                                                        groups="stock.group_production_lot"/>
+                                                </div>
+                                            </div>
+                                        </t>
+                                    </templates>
+                                </kanban>
                             </field>
                         </page>
                         <page string="Notes" name="page_notes">
@@ -151,6 +201,46 @@
                     </notebook>
                 </sheet>
                 <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <!-- Compact operation editor used only by the ITO move_ids field. -->
+    <record id="internal_transfer_order_move_form" model="ir.ui.view">
+        <field name="name">internal.transfer.order.move.form</field>
+        <field name="model">stock.move</field>
+        <field name="arch" type="xml">
+            <form string="Operation">
+                <sheet>
+                    <field name="company_id" invisible="1"/>
+                    <field name="state" invisible="1"/>
+                    <field name="name" invisible="1"/>
+                    <field name="location_id" invisible="1"/>
+                    <field name="location_dest_id" invisible="1"/>
+                    <field name="product_uom_category_id" invisible="1"/>
+                    <field name="internal_transfer_order_id" invisible="1"/>
+                    <group>
+                        <field name="internal_transfer_product_scan_code"
+                            widget="adt_handheld_scan_code"
+                            string="Scan Product"
+                            placeholder="Scan barcode / product code"
+                            groups="tijari_wms_18.group_operator"/>
+                        <field name="product_id"
+                            context="{'tijari_stock_picking_product_code_only': True}"
+                            domain="[('id', 'in', internal_transfer_order_id.available_source_product_ids)] if internal_transfer_order_id.transaction_type == 'intra_warehouse' and internal_transfer_order_id.intra_transfer_type == 'intra_group_transfer' else []"
+                            required="1"/>
+                        <label for="product_uom_qty" string="Demand"/>
+                        <div class="o_row">
+                            <field name="product_uom_qty"/>
+                            <field name="product_uom" string="UoM"
+                                groups="uom.group_uom"
+                                options="{'no_open': True, 'no_create': True}"/>
+                        </div>
+                        <field name="lot_ids" widget="many2many_tags"
+                            string="Lot/Serial Number"
+                            groups="stock.group_production_lot"/>
+                    </group>
+                </sheet>
             </form>
         </field>
     </record>

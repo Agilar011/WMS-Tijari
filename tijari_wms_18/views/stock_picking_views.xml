@@ -141,6 +141,12 @@
                     class="btn-primary"
                     invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response'"/>
 
+                <button name="action_get_shipment_completed_staging"
+                    string="Complete Shipment"
+                    type="object"
+                    class="btn-primary"
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment') or wms_state != 'waiting_response'"/>
+
                 <button name="action_confirm_shipment_manually"
                     string="Complete Shipment Manually"
                     type="object"

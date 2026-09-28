@@ -117,6 +117,21 @@ class InternalTransferOrder(models.Model):
         domain=[('is_location_mapping', '=', True)],
         tracking=True,
     )
+    source_location_scan_code = fields.Char(
+        string='Kode Scan Handheld Source',
+        store=False,
+        help='Scan barcode, unique code, atau nama Source Location.',
+    )
+    destination_location_scan_code = fields.Char(
+        string='Kode Scan Handheld Destination',
+        store=False,
+        help='Scan barcode, unique code, atau nama Destination Location.',
+    )
+    available_source_product_ids = fields.Many2many(
+        comodel_name='product.product',
+        string='Products Available at Source Location',
+        compute='_compute_available_source_product_ids',
+    )
     intra_location_id = fields.Many2one(
         comodel_name='stock.location',
         string='Source Location',
@@ -214,6 +229,170 @@ class InternalTransferOrder(models.Model):
     def _inverse_intra_location_dest_id(self):
         for order in self:
             order.location_dest_id = order.intra_location_dest_id
+
+    @api.onchange('source_location_scan_code')
+    def _onchange_source_location_scan_code(self):
+        for order in self:
+            code = (order.source_location_scan_code or '').strip()
+            if not code:
+                continue
+            order.intra_location_id = order._find_intra_group_location_by_scan_code(
+                code
+            )
+            order.source_location_scan_code = False
+
+    @api.onchange('destination_location_scan_code')
+    def _onchange_destination_location_scan_code(self):
+        for order in self:
+            code = (order.destination_location_scan_code or '').strip()
+            if not code:
+                continue
+            order.intra_location_dest_id = (
+                order._find_intra_group_location_by_scan_code(code)
+            )
+            order.destination_location_scan_code = False
+
+    def _find_intra_group_location_by_scan_code(self, code):
+        self.ensure_one()
+        if (
+            self.transaction_type != 'intra_warehouse'
+            or self.transfer_type != 'intra_group_transfer'
+        ):
+            raise ValidationError(
+                'Scan lokasi hanya tersedia untuk Intra Group Transfer.'
+            )
+        if not self.location_group_id:
+            raise ValidationError('Pilih Location Group sebelum scan lokasi.')
+
+        Location = self.env['stock.location']
+        base_domain = [('id', 'child_of', self.location_group_id.id)]
+        for field_name in ('barcode', 'unique_code', 'complete_name', 'name'):
+            matches = Location.search(
+                base_domain + [(field_name, '=', code)],
+            )
+            if len(matches) > 1:
+                raise ValidationError(_(
+                    'Kode scan "%(code)s" cocok dengan beberapa lokasi di '
+                    'Location Group %(group)s.'
+                ) % {
+                    'code': code,
+                    'group': self.location_group_id.display_name,
+                })
+            if matches:
+                return matches
+        raise ValidationError(_(
+            'Lokasi dengan barcode, unique code, atau nama "%(code)s" tidak '
+            'ditemukan di Location Group %(group)s.'
+        ) % {
+            'code': code,
+            'group': self.location_group_id.display_name,
+        })
+
+    @api.onchange('transaction_type', 'transfer_type', 'location_id', 'location_dest_id')
+    def _onchange_inter_warehouse_partner(self):
+        for order in self:
+            if (
+                order.transaction_type == 'inter_warehouse'
+                and order.adt_transaction_type != 'Shipment Consignment'
+                and order.adt_transaction_type != 'Vendor Return'
+            ):
+                order.partner_id = order._get_inter_warehouse_partner()
+
+    def _get_inter_warehouse_partner(self, side=False):
+        self.ensure_one()
+        if self.transaction_type != 'inter_warehouse':
+            return self.env['res.partner']
+
+        if self.adt_transaction_type in ('Shipment Consignment', 'Vendor Return'):
+            return self.partner_id
+
+        if not side:
+            if self.transfer_type == 'transfer_out':
+                side = 'destination'
+            elif self.transfer_type == 'transfer_in':
+                side = 'source'
+            else:
+                return self.env['res.partner']
+        if side not in ('source', 'destination'):
+            return self.env['res.partner']
+
+        location = (
+            self.location_id if side == 'source' else self.location_dest_id
+        )
+        if not location:
+            return self.env['res.partner']
+
+        virtual_root = self.env.ref(
+            'stock.stock_location_locations_virtual', raise_if_not_found=False
+        )
+        warehouse = (
+            self._get_source_warehouse()
+            if side == 'source'
+            else self._get_destination_warehouse()
+        )
+        is_virtual_location = bool(
+            virtual_root and self._location_belongs_to(location, virtual_root)
+        )
+        if virtual_root and not is_virtual_location and warehouse:
+            virtual_location = self.env['stock.location'].search([
+                ('name', '=', warehouse.code),
+                ('location_id', '=', virtual_root.id),
+            ], limit=1)
+            if virtual_location:
+                location = virtual_location
+                is_virtual_location = True
+
+        partner_name = (
+            location.name if is_virtual_location else
+            (warehouse.code if warehouse else location.name)
+        )
+        if not partner_name:
+            return self.env['res.partner']
+        return self.env['res.partner'].search([
+            ('name', '=', partner_name),
+            ('partner_type', '=', 'warehouse'),
+        ], limit=1)
+
+    @api.depends('transaction_type', 'location_id')
+    def _compute_available_source_product_ids(self):
+        for order in self:
+            order.available_source_product_ids = order._get_available_source_products(
+                order.location_id
+            )
+
+    @api.onchange(
+        'transaction_type', 'intra_transfer_type', 'location_id', 'intra_location_id'
+    )
+    def _onchange_available_source_product_ids(self):
+        for order in self:
+            location = (
+                order.intra_location_id
+                if order.transaction_type == 'intra_warehouse'
+                else order.location_id
+            )
+            order.available_source_product_ids = order._get_available_source_products(
+                location
+            )
+
+    def _get_available_source_products(self, location):
+        self.ensure_one()
+        if self.transaction_type != 'intra_warehouse' or not location:
+            return self.env['product.product']
+
+        quants = self.env['stock.quant'].search([
+            ('location_id', 'child_of', location.id),
+        ])
+        available_by_product = {}
+        for quant in quants:
+            available_by_product[quant.product_id.id] = (
+                available_by_product.get(quant.product_id.id, 0.0)
+                + quant.available_quantity
+            )
+        return self.env['product.product'].browse([
+            product_id
+            for product_id, available_qty in available_by_product.items()
+            if available_qty > 0
+        ])
 
     @api.depends('transaction_type', 'transfer_type')
     def _compute_transfer_type_ui(self):
@@ -949,6 +1128,16 @@ class InternalTransferOrder(models.Model):
 
     def _get_picking_partner(self, leg):
         self.ensure_one()
+        if self.adt_transaction_type == 'Shipment Consignment':
+            return self.partner_id
+        if (
+            self.transaction_type == 'inter_warehouse'
+            and self.adt_transaction_type != 'Vendor Return'
+        ):
+            side = 'source' if leg == 'receipt' else 'destination'
+            return self._get_inter_warehouse_partner(side)
+        if self.adt_transaction_type == 'Vendor Return':
+            return self.env['res.partner']
         if self.transaction_type not in ('consignment', 'vendor_return'):
             return self.env['res.partner']
         if leg == 'receipt':
@@ -1438,6 +1627,11 @@ class InternalTransferOrder(models.Model):
                 raise ValidationError(
                     'Source Location dan Destination Location harus diisi.'
                 )
+            if (
+                order.transaction_type == 'inter_warehouse'
+                and order.adt_transaction_type != 'Vendor Return'
+            ):
+                order.partner_id = order._get_inter_warehouse_partner()
             transit_location = order._get_or_create_transit_location()
             if not order.transit_location_id:
                 order.transit_location_id = transit_location
@@ -1702,6 +1896,12 @@ class InternalTransferOrder(models.Model):
 class StockMove(models.Model):
     _inherit = 'stock.move'
 
+    internal_transfer_product_scan_code = fields.Char(
+        string='Scan Product',
+        store=False,
+        help='Scan barcode or internal reference to select the operation product.',
+    )
+
     internal_transfer_order_id = fields.Many2one(
         comodel_name='internal.transfer.order',
         string='Internal Transfer Order',
@@ -1718,6 +1918,33 @@ class StockMove(models.Model):
             order = move.internal_transfer_order_id
             move.location_id = order.location_id
             move.location_dest_id = order.location_dest_id
+
+    @api.onchange('internal_transfer_product_scan_code')
+    def _onchange_internal_transfer_product_scan_code(self):
+        Product = self.env['product.product']
+        for move in self:
+            code = (move.internal_transfer_product_scan_code or '').strip()
+            if not code:
+                continue
+            product = Product.search([
+                '|', ('barcode', '=', code), ('default_code', '=', code),
+            ], limit=1)
+            if not product:
+                raise ValidationError(
+                    _('Product tidak ditemukan untuk kode scan: %s') % code
+                )
+
+            order = move.internal_transfer_order_id
+            if order.transaction_type == 'intra_warehouse':
+                source_location = order.intra_location_id or order.location_id
+                available_products = order._get_available_source_products(source_location)
+                if product not in available_products:
+                    raise ValidationError(
+                        _('Product hasil scan tidak tersedia di Source Location.')
+                    )
+
+            move.product_id = product
+            move.internal_transfer_product_scan_code = False
 
 
 class StockPicking(models.Model):

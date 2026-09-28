@@ -209,11 +209,17 @@ class AcumaticaWarehouseLine(models.Model):
 
     def _create_partner(self, line):
         Partner = self.env['res.partner']
-        wh_address = Partner.search([('name', '=', line.building_id)], limit=1)
+        partner_name = (
+            (line.building_id or '').strip().upper()
+            or (line.warehouse_id or '').strip().upper().split('-', 1)[0]
+        )
+        if not partner_name:
+            return Partner.browse()
+        wh_address = Partner.search([('name', '=', partner_name)], limit=1)
         if not wh_address:
             company = self.env.company.partner_id
             wh_address = Partner.create({
-                'name': line.building_id,
+                'name': partner_name,
                 'partner_type': 'warehouse',
                 'type': 'other',
                 'company_type': 'person',
@@ -412,6 +418,7 @@ class AcumaticaWarehouseLine(models.Model):
                     virtual_building = self._create_virtual_location_for_building(
                         building_code
                     )
+                    self._create_partner(line)
 
                 if (
                     use_virtual_building and building_code
