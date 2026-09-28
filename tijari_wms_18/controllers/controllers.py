@@ -877,6 +877,61 @@ class WmsApiController(http.Controller):
     @http.route('/print/stok_opname', type='http', auth='user')
     def PrintStokOpname(self, id, **kw):
         stock = request.env['stock.inventory'].sudo().browse(int(id))
+        lines = request.env['stock.quant'].sudo().search([('location_id', 'in', stock.location_ids.ids),])
+        
+        warehouse = request.env['stock.warehouse'].sudo().search([
+            ('lot_stock_id', 'in', stock.location_ids.ids)
+        ], limit=1)
+
+        data = {
+            'warehouse_id': warehouse.name or '',
+            'date': format_tanggal_indo(stock.date),
+            'lok': stock.location_ids.complete_name or '',
+            'note': stock.notes or '',
+            'created_by': stock.responsible_id.name or '',
+            'ttd_created_by': (stock.responsible_id.partner_id.digital_signature.decode('utf-8') if stock.responsible_id.partner_id.digital_signature else blank_image),
+            'status_ba': dict(stock._fields['status_ba'].selection).get(stock.status_ba, ''),
+
+            'detail': []
+        }
+        for line in lines:
+            diff = float(line.inventory_diff_quantity or 0)
+
+            if diff <= 0:
+                continue
+
+            system_qty = float(line.quantity or 0)
+            qty2 = float(line.inventory_quantity or 0)
+
+            obj = {
+                'name': line.product_id.display_name or '',
+                'uom': line.product_uom_id.name or '',
+                'system_qty': system_qty,
+                'qty2': qty2,
+                'diff': diff,  
+                'ket': ''
+            }
+            data['detail'].append(obj)
+        data = json.dumps(data)
+
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_STOCK_OPNAME',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
         try:
             pdf_content = generate_stok_opname_pdf(stock)
             return request.make_response(
