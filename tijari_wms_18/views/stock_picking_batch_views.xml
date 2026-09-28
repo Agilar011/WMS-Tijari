@@ -9,6 +9,8 @@
 
             <xpath expr="//field[@name='picking_type_code']" position="after">
                 <field name="picking_type_name" invisible="1"/>
+                <field name="show_picker_page" invisible="1"/>
+                <field name="show_putaway_page" invisible="1"/>
             </xpath>
 
             <xpath expr="//div[@name='button_box']" position="inside">
@@ -32,6 +34,10 @@
                 <xpath expr="//page[@name='page_operations']" position="move"/>
             </xpath>
 
+            <xpath expr="//page[@name='page_operations']" position="attributes">
+                <attribute name="invisible">picking_type_name in ['Pick', 'Pick Internal', 'Pick Components'] and not show_picker_page</attribute>
+            </xpath>
+
             <xpath expr="//page[@name='page_transfers']" position="attributes">
                 <attribute name="string">Transaksi</attribute>
             </xpath>
@@ -40,12 +46,20 @@
                 <attribute name="string">Transaksi</attribute>
             </xpath>
 
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
             <xpath expr="//page[@name='page_operations']" position="after">
-                <page string="Putaway" name="page_putaway" invisible="picking_type_name not in ['Receipts', 'Receipt Internal']">
+                <page string="Putaway" name="page_putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']">
                     <group>
                         <field name="scan_product_button"
-                            widget="adt_scan_product_button"
+                            widget="adt_scan_putaway_product_button"
                             nolabel="1"/>
+                        <field name="putaway_scan_code"
+                            widget="adt_handheld_scan_code"
+                            placeholder="Scan handheld atau ketik kode"
+                            help="Bisa barcode, SKU, atau lot."/>
                         <field name="scan_product_by_lot_button"
                             widget="adt_scan_product_by_lot_button"
                             invisible="1"
@@ -167,7 +181,7 @@
                     <field name="batch_adt_type" string="Tipe Transaksi"/>
                     <field name="batch_origin" string="No. Transaksi"/>
                     <field name="product_id" required="1" context="{'tijari_stock_picking_product_code_only': True}" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0"/>
-                    <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
+                    <field name="product_uom_qty" string="Qty Total" readonly="not is_initial_demand_editable"/>
                     <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable"/>
                     <field name="confirmation_quantity" string="Qty Disimpan"/>
                     <field name="product_uom" readonly="state != 'draft' and id" options="{'no_open': True, 'no_create': True}" string="UoM" groups="uom.group_uom"/>
@@ -176,19 +190,78 @@
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
-                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']"
                         title="Print Lot"/>
+                    <button
+                        name="action_open_note_wizard"
+                        type="object"
+                        icon="fa-sticky-note"
+                        title="Note"
+                    />
                     <button name="action_open_move_pick"
                         type="object"
                         string="To Process"
                         title="Open Picker"
-                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal'] or state == 'draft'"/>
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage'] or state == 'draft'"/>
                     <button name="action_open_move_lines"
                         type="object"
                         icon="fa-list"
                         title="Open Move Lines"/>
                 </list>
             </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_batch_list_inherit_tijari" model="ir.ui.view">
+        <field name="name">stock.picking.batch.list.inherit.tijari</field>
+        <field name="model">stock.picking.batch</field>
+        <field name="inherit_id" ref="stock_picking_batch.stock_picking_batch_tree"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='user_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+
+        </field>
+    </record>
+
+    <record id="stock_picking_batch_to_form_inherit_tijari" model="ir.ui.view">
+        <field name="name">stock.picking.to.batch.form.inherit.tijari</field>
+        <field name="model">stock.picking.to.batch</field>
+        <field name="inherit_id" ref="stock_picking_batch.stock_picking_to_batch_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='user_id']" position="replace">
+
+                <!-- Technical field -->
+                <field name="operation_type_name" invisible="1"/>
+
+                <!-- PICKER
+                    Receipt + Pick -->
+                <field name="pick_responsible_ids"
+                    widget="many2many_avatar_user"/>
+
+                <!-- PACKER
+                    Pick only -->
+                <field name="pack_responsible_ids"
+                    widget="many2many_avatar_user"
+                    invisible="operation_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+
+                <!-- LOADER
+                    Pick only -->
+                <field name="do_responsible_ids"
+                    widget="many2many_avatar_user"
+                    invisible="operation_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+
+                <!-- PUTAWAY
+                    Receipt only -->
+                <field name="putaway_responsible_ids"
+                    widget="many2many_avatar_user"
+                    invisible="operation_type_name not in ['Receipts', 'Receipt Internal', 'Storage']"/>
+
+            </xpath>
+
         </field>
     </record>
 

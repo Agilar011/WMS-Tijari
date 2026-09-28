@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="stock.out_picking" model="ir.ui.menu">
+        <field name="sequence">25</field>
+    </record>
+
+    <record id="stock.int_picking" model="ir.ui.menu">
+        <field name="active" eval="True" />
+    </record>
+
+    <!-- Keep Odoo's native Internal Transfers menu, but restrict it to the
+         standard picking type instead of every internal operation. -->
+    <record id="stock.action_picking_tree_internal" model="ir.actions.act_window">
+        <field name="domain">[]</field>
+        <field name="context">{
+            'contact_display': 'partner_address',
+            'restricted_picking_type_code': 'internal',
+            'search_default_internal': 1,
+            'search_default_tijari_internal_transfer': 1
+        }</field>
+    </record>
+
+    <menuitem
+        id="menu_operations_productions"
+        name="Productions"
+        parent="stock.menu_stock_warehouse_mgmt"
+        sequence="1"
+    />
+        <record id="mrp.mrp_operation_picking" model="ir.ui.menu">
+            <field name="parent_id" ref="menu_operations_productions"/>
+            <field name="sequence">1</field>
+        </record>
+
+    <record id="stock_picking_batch.menu_stock_jobs" model="ir.ui.menu">
+        <field name="sequence">2</field>
+    </record>
+
+    <record id="stock.menu_stock_adjustments" model="ir.ui.menu">
+        <field name="name">Inventory Control</field>
+            <field name="sequence">3</field>
+    </record>
+        <record id="stock.menu_stock_scrap" model="ir.ui.menu">
+            <field name="name">Disposal Item</field>
+            <field name="sequence">98</field>
+        </record>
+
+    <record id="stock.menu_stock_procurement" model="ir.ui.menu">
+        <field name="active" eval="False" />
+    </record>
+
+    <record id="stock.menu_procurement_compute" model="ir.ui.menu">
+        <field name="active" eval="False" />
+    </record>
+
+    <menuitem
+        id="menu_operations_others"
+        name="Others"
+        parent="stock.menu_stock_warehouse_mgmt"
+        sequence="4"
+    /> 
+        <menuitem id="menu_operations_others_document_only"
+            name="Document Only Operations"
+            parent="menu_operations_others"
+            sequence="1"
+            action="action_stock_operations_document_only"/>
+        <menuitem id="menu_operations_others_so_consignment_receipts"
+            name="Consignment Overview"
+            parent="menu_operations_others"
+            sequence="2"
+            action="action_wms_operations_so_consignment_receipts"/>
+
+
+</odoo>

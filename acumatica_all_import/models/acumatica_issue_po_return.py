@@ -11,56 +11,81 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaIssuePoReturnLine(models.Model):
     _name = 'acumatica.issue.po.return.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Inventory Receipt dari Acumatica'
     _order = 'receipt_nbr asc, line_nbr asc, id asc'
+
+    def _adt_picking_type_wizard_call(self):
+        return (
+            'import.issue.po.return.wizard',
+            ({'warehouse_code': self.warehouse_code, 'document_only': self.document_only},),
+            {},
+        )
+
     product_line_ids = fields.One2many('acumatica.issue.po.return.product', 'receipt_line_id', string='Lines')
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
-    line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Header Acumatica')
+    line_external_id = fields.Char(string='UUID Line Acumatica')
 
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
 
-    receipt_nbr = fields.Char(string='Receipt Number', readonly=True, index=True)
-    vendor_code = fields.Char(string='VendorID', readonly=True)
-    partner_ref = fields.Char(string='Vendor Ref', readonly=True)
-    scheduled_date = fields.Char(string='Date', readonly=True)
-    warehouse_code = fields.Char(string='Warehouse', readonly=True)
-    header_location_code = fields.Char(string='Header Location', readonly=True)
-    status = fields.Char(string='Status', readonly=True)
-    receipt_type = fields.Char(string='Type', readonly=True)
-    actual_qty = fields.Char(string='Control Qty', readonly=True)
-    total_qty = fields.Char(string='Total Qty', readonly=True)
-    is_hold = fields.Char(string='Hold', readonly=True)
-    document_only = fields.Boolean(string='Document Only', readonly=True)
-    inventory_ref = fields.Char(string='Inventory Ref Nbr', readonly=True)
-    post_period = fields.Char(string='Post Period', readonly=True)
-    acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
-    note = fields.Text(string='Header Note', readonly=True)
-    branch_warehouse = fields.Char(string='Branch', readonly=True)
+    receipt_nbr = fields.Char(string='Receipt Number', index=True)
+    building_code = fields.Char(string='Building ID')
+    change_item_ref_nbr = fields.Char(string='Change Item Ref Nbr')
+    customer_id = fields.Char(string='Customer ID')
+    customer_location_id = fields.Char(string='Customer Location ID')
+    customer_location_name = fields.Char(string='Customer Location Name')
+    customer_name = fields.Char(string='Customer Name')
+    doc_type = fields.Char(string='Doc Type')
+    external_ref = fields.Char(string='External Ref')
+    note_header_id = fields.Char(string='Note Header ID')
+    shipment_nbr = fields.Char(string='Shipment Nbr')
+    transfer_nbr = fields.Char(string='Transfer Nbr')
+    trans_type = fields.Char(string='Trans Type')
+    vendor_code = fields.Char(string='VendorID')
+    partner_ref = fields.Char(string='Vendor Ref')
+    scheduled_date = fields.Char(string='Date')
+    warehouse_code = fields.Char(string='Warehouse')
+    header_location_code = fields.Char(string='Header Location')
+    status = fields.Char(string='Status')
+    receipt_type = fields.Char(string='Type')
+    actual_qty = fields.Char(string='Control Qty')
+    total_qty = fields.Char(string='Qty Total')
+    is_hold = fields.Char(string='Hold')
+    document_only = fields.Boolean(string='Document Only')
+    inventory_ref = fields.Char(string='Inventory Ref Nbr')
+    post_period = fields.Char(string='Post Period')
+    acumatica_write_date = fields.Char(string='Last Modified')
+    note = fields.Text(string='Header Note')
+    branch_warehouse = fields.Char(string='Branch')
 
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)
-    description = fields.Char(string='Description', readonly=True)
-    transaction_description = fields.Char(string='Transaction Description', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    line_type = fields.Char(string='Line Type', readonly=True)
-    location_dest_code = fields.Char(string='Location', readonly=True)
-    open_qty = fields.Char(string='Open Qty', readonly=True)
-    order_qty = fields.Char(string='Ordered Qty', readonly=True)
-    po_line_number = fields.Char(string='PO Line Nbr', readonly=True)
-    po_number = fields.Char(string='PO Number', readonly=True)
-    po_type = fields.Char(string='PO Type', readonly=True)
-    po_receipt_line_number = fields.Char(string='PO Receipt Line Nbr', readonly=True)
-    po_receipt_number = fields.Char(string='PO Receipt Nbr', readonly=True)
-    product_uom_qty = fields.Char(string='Receipt Qty', readonly=True)
-    transfer_order_line_number = fields.Char(string='Transfer Order Line Nbr', readonly=True)
-    transfer_order_number = fields.Char(string='Transfer Order Nbr', readonly=True)
-    transfer_order_type = fields.Char(string='Transfer Order Type', readonly=True)
-    transfer_shipment_number = fields.Char(string='Transfer Shipment Nbr', readonly=True)
-    uom_code = fields.Char(string='UOM', readonly=True)
-    warehouse_dest_code = fields.Char(string='Warehouse Dest', readonly=True)
-    line_note = fields.Text(string='Line Note', readonly=True)
+    line_nbr = fields.Char(string='Line Nbr')
+    description = fields.Char(string='Description')
+    transaction_description = fields.Char(string='Transaction Description')
+    line_inventory_name = fields.Char(string='Line Inventory Name')
+    line_location_name = fields.Char(string='Line Location Name')
+    line_note_id = fields.Char(string='Line Note ID')
+    line_warehouse = fields.Char(string='Line Warehouse')
+    line_warehouse_name = fields.Char(string='Line Warehouse Name')
+    inventory_id = fields.Char(string='InventoryID')
+    line_type = fields.Char(string='Line Type')
+    location_dest_code = fields.Char(string='Location')
+    open_qty = fields.Char(string='Open Qty')
+    order_qty = fields.Char(string='Ordered Qty')
+    po_line_number = fields.Char(string='PO Line Nbr')
+    po_number = fields.Char(string='PO Number')
+    po_type = fields.Char(string='PO Type')
+    po_receipt_line_number = fields.Char(string='PO Receipt Line Nbr')
+    po_receipt_number = fields.Char(string='PO Receipt Nbr')
+    product_uom_qty = fields.Char(string='Receipt Qty')
+    transfer_order_line_number = fields.Char(string='Transfer Order Line Nbr')
+    transfer_order_number = fields.Char(string='Transfer Order Nbr')
+    transfer_order_type = fields.Char(string='Transfer Order Type')
+    transfer_shipment_number = fields.Char(string='Transfer Shipment Nbr')
+    uom_code = fields.Char(string='UOM')
+    warehouse_dest_code = fields.Char(string='Warehouse Dest')
+    line_note = fields.Text(string='Line Note')
 
     import_state = fields.Selection([
         ('staged', 'Staged'),
@@ -68,13 +93,13 @@ class AcumaticaIssuePoReturnLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    ], string='Status', default='staged', tracking=True)
+    import_message = fields.Char(string='Generation Message', tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -97,6 +122,13 @@ class AcumaticaIssuePoReturnLine(models.Model):
     def _parse_int(value):
         try:
             return int(value or 0)
+        except Exception:
+            return 0.0
+
+    @staticmethod
+    def _parse_qty(value):
+        try:
+            return float(value or 0.0)
         except Exception:
             return 0.0
 
@@ -177,6 +209,31 @@ class AcumaticaIssuePoReturnLine(models.Model):
             uom = product.uom_id
         return uom
 
+    def _adt_reresolve_picking_type(self):
+        """Document Only PO Return uses DDO; normal PO Return starts at Pick."""
+        self.ensure_one()
+        if self.document_only:
+            return self.env['stock.picking.type'].resolve_document_only_picking_type(
+                api_acumatica='issue_po_return',
+                document_only=True,
+                warehouse_code=self.warehouse_code,
+                required=True,
+            )
+        if (
+            self.picking_type_id
+            and self.picking_type_id.code == 'internal'
+            and self.picking_type_id.operation_category == 'pick'
+        ):
+            return self.picking_type_id
+
+        wizard_name, args, kwargs = self._adt_picking_type_wizard_call()
+        wizard = self.env[wizard_name]
+        vals = {'config_id': self.config_id.id} if self.config_id else {}
+        picking_type = wizard.new(vals)._search_picking_type(*args, **kwargs)
+        if isinstance(picking_type, tuple):
+            picking_type = picking_type[0]
+        return picking_type or self.env['stock.picking.type']
+
     def action_import_selected(self):
         lines = self.filtered(lambda l: l.selected and l.import_state in ['staged', 'error'])
         if not lines:
@@ -246,7 +303,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     if not warehouse:
                         raise UserError(f'Warehouse tidak ditemukan untuk code: {first.warehouse_code or "-"}')
 
-                    picking_type = first.picking_type_id
+                    picking_type = first._adt_reresolve_picking_type()
                     if not picking_type:
                         raise UserError('Picking type Pick tidak ditemukan.')
 
@@ -287,7 +344,8 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         'adt_post_period': first.post_period or False,
                         'adt_status': first.status or False,
                         'adt_total_qty': self._parse_int(first.total_qty) if hasattr(first, 'total_qty') else 0,
-                        'adt_type': first.receipt_type or False,
+                        # 'adt_type': first.receipt_type or False,
+                        'adt_type': "PO Return",
                         'adt_warehouse_code': first.warehouse_code or False,
                         'adt_external_id': first.external_id or False,
                         'api_acumatica': 'issue_po_return',
@@ -301,7 +359,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     picking = Picking.search([('origin', '=', origin)], limit=1)
 
                     if picking:
-                        if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                        if picking.state != 'draft':
                             raise UserError(f'Receipt {receipt_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
                         picking.write(vals)
                         action_state = 'updated'
@@ -343,7 +401,12 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             raise UserError(f'Product tidak ditemukan untuk InventoryID: {item.inventory_id or "-"}')
 
                         uom = product.uom_id
-                        qty = self._parse_int(item.product_uom_qty) if hasattr(item, 'product_uom_qty') else float(item.product_uom_qty or 0.0)
+                        # Some PO Return payloads provide only Ordered Qty.
+                        qty = self._parse_qty(item.product_uom_qty)
+                        if not qty:
+                            qty = self._parse_qty(
+                                item.order_qty or item.receipt_line_id.order_qty
+                            )
 
                         move_vals = {
                             # PERBAIKAN: Hapus kata 'item.description' yang memicu AttributeError
@@ -468,53 +531,50 @@ class AcumaticaIssuePoReturnProduct(models.Model):
 
     line_external_id = fields.Char(
         string='Line External ID',
-        readonly=True,
         index=True,
     )
 
     line_note = fields.Text(
         string='Line Note',
-        readonly=True,
     )
 
     branch_warehouse = fields.Char(
         string='Branch',
-        readonly=True,
     )
 
     line_description = fields.Char(
         string='Description',
-        readonly=True,
     )
+
+    line_inventory_name = fields.Char(string='Line Inventory Name')
+    line_location_name = fields.Char(string='Line Location Name')
+    line_note_id = fields.Char(string='Line Note ID')
+    line_warehouse_name = fields.Char(string='Line Warehouse Name')
 
     inventory_id = fields.Char(
         string='Inventory ID',
-        readonly=True,
         index=True,
     )
 
     line_nbr = fields.Integer(
         string='Line Number',
-        readonly=True,
     )
 
     location_code = fields.Char(
         string='Location',
-        readonly=True,
     )
 
     product_uom_qty = fields.Float(
         string='Quantity',
         digits=(16, 4),
-        readonly=True,
     )
+
+    order_qty = fields.Char(string='Ordered Qty')
 
     uom_code = fields.Char(
         string='UOM',
-        readonly=True,
     )
 
     warehouse_code = fields.Char(
         string='Warehouse',
-        readonly=True,
     )

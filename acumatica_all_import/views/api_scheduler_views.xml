@@ -10,6 +10,7 @@
                 <field name="active"/>
                 <field name="acumatica_import"/>
                 <field name="acumatica_data_type"/>
+                <field name="process_phase"/>
                 <field name="execution_interval"/>
                 <field name="interval_value"/>
                 <field name="interval_unit"/>
@@ -39,6 +40,7 @@
                             <field name="active"/>
                             <field name="acumatica_import"/>
                             <field name="acumatica_data_type" invisible="not acumatica_import" required="acumatica_import"/>
+                            <field name="process_phase" invisible="not acumatica_import"/>
                             <field name="is_running" readonly="1"/>
                             <field name="ir_cron_id" readonly="1"/>
                         </group>
@@ -60,7 +62,7 @@
                         </page>
                         <page string="Log Activity">
                             <field name="log_ids" readonly="1">
-                                <list create="false" edit="false" delete="false" decoration-success="status == 'success'" decoration-danger="status == 'failed'" class="o_list_table_auto_layout">
+                                <list create="false" edit="false" delete="false" decoration-success="status == 'success'" decoration-danger="status == 'failed'" decoration-warning="status == 'running'" class="o_list_table_auto_layout">
                                     <field name="execution_time"/>
                                     <field name="duration"/>
                                     <field name="data_retrieved"/>
@@ -99,7 +101,7 @@
         <field name="name">api.scheduler.log.list</field>
         <field name="model">api.scheduler.log</field>
         <field name="arch" type="xml">
-            <list create="false" edit="false" delete="false" decoration-success="status == 'success'" decoration-danger="status == 'failed'">
+                <list create="false" edit="false" delete="false" decoration-success="status == 'success'" decoration-danger="status == 'failed'" decoration-warning="status == 'running'">
                 <field name="scheduler_job_id"/>
                 <field name="execution_time"/>
                 <field name="duration"/>
@@ -115,7 +117,7 @@
     </record>
 
     <record id="action_api_scheduler_job" model="ir.actions.act_window">
-        <field name="name">API Scheduler</field>
+        <field name="name">Schedulers</field>
         <field name="res_model">api.scheduler.job</field>
         <field name="view_mode">list,form</field>
     </record>

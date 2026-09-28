@@ -13,29 +13,29 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaInventoryStockLine(models.Model):
     _name = 'acumatica.inventory.stock.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Inventory Stock dari Acumatica'
     _order = 'warehouse_code asc, inventory_id asc, id asc'
 
-    external_id = fields.Char(string='UUID Header Acumatica', readonly=True, index=True)
-    row_number = fields.Integer(string='No', readonly=True)
-    line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True, index=True)
-    line_row_number = fields.Integer(string='Line No', readonly=True)
+    external_id = fields.Char(string='UUID Header Acumatica', index=True)
+    row_number = fields.Integer(string='No')
+    line_external_id = fields.Char(string='UUID Line Acumatica', index=True)
+    line_row_number = fields.Integer(string='Line No')
 
-    warehouse_code = fields.Char(string='Warehouse Code', readonly=True, index=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True, index=True)
-    description = fields.Char(string='Description', readonly=True)
-    branch = fields.Char(string='Branch', readonly=True)
-    item_status = fields.Char(string='Item Status', readonly=True)
-    kode_barang_dan_jasa = fields.Char(string='Kode Barang dan Jasa', readonly=True)
-    product_group = fields.Char(string='Product Group', readonly=True)
-    available = fields.Float(string='Available (API)', readonly=True)
-    on_hand_acumatica = fields.Float(string='On Hand Acumatica', readonly=True)
-    note = fields.Text(string='Note', readonly=True)
-    last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True, index=True)
+    warehouse_code = fields.Char(string='Warehouse Code', index=True)
+    inventory_id = fields.Char(string='InventoryID', index=True)
+    description = fields.Char(string='Description')
+    branch = fields.Char(string='Branch')
+    item_status = fields.Char(string='Item Status')
+    kode_barang_dan_jasa = fields.Char(string='Kode Barang dan Jasa')
+    product_group = fields.Char(string='Product Group')
+    available = fields.Float(string='Available (API)')
+    on_hand_acumatica = fields.Float(string='On Hand Acumatica')
+    note = fields.Text(string='Note')
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime', index=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     selected = fields.Boolean(string='Pilih', default=True)
     import_state = fields.Selection([
@@ -44,22 +44,20 @@ class AcumaticaInventoryStockLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status Import', default='staged', readonly=True)
-    import_message = fields.Char(string='Generation Message', readonly=True)
+    ], string='Status Import', default='staged')
+    import_message = fields.Char(string='Generation Message')
 
     odoo_product_id = fields.Many2one(
         'product.product',
         string='Product',
         compute='_compute_stock_snapshot',
         store=True,
-        readonly=True,
     )
     odoo_location_id = fields.Many2one(
         'stock.location',
         string='Location',
         compute='_compute_stock_snapshot',
         store=True,
-        readonly=True,
     )
     location_mapping_id = fields.Many2one(
         'stock.location.acumatica',
@@ -82,7 +80,7 @@ class AcumaticaInventoryStockLine(models.Model):
         compute='_compute_stock_snapshot',
         store=True,
     )
-    odoo_on_hand = fields.Float(string='On Hand Odoo', readonly=True)
+    odoo_on_hand = fields.Float(string='On Hand Odoo')
     stock_difference = fields.Float(
         string='Difference',
         compute='_compute_stock_snapshot',
@@ -97,7 +95,10 @@ class AcumaticaInventoryStockLine(models.Model):
     ], string='Match Status', compute='_compute_stock_snapshot', store=True)
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_stock_snapshot', store=True)
-    acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
+    # Inventory Stock errors are logged by acumatica.error.transaction.
+    # Keep this comodel aligned with _handle_acumatica_error(), otherwise a
+    # missing product/location raises a second RPC error while saving the log.
+    acumatica_err_id = fields.Many2one('acumatica.error.transaction', string='Error ID')
 
     def _get_mapped_location(self):
         """Return the main Odoo location configured for the Acumatica warehouse."""
@@ -270,7 +271,9 @@ class AcumaticaInventoryStockLine(models.Model):
 
             old_value = record[field_name]
 
-            # Normalisasi nilai
+            if field.type == 'many2one':
+                old_value = old_value.id if old_value else False
+                
             old_value = old_value or False
             new_value = new_value or False
 
@@ -346,7 +349,10 @@ class AcumaticaInventoryStockLine(models.Model):
                 escape(record.display_name),
             )
 
-        self.message_post(
+        self.with_context(
+            mail_create_nosubscribe=True,
+            mail_post_autofollow=False,
+        ).message_post(
             body=body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
@@ -357,9 +363,17 @@ class AcumaticaInventoryStockLine(models.Model):
         created = 0
         updated = 0
         error = 0
+        total = len(self)
+
+        print(f'[MASTER IMPORT][Inventory Stock] START total={total}', flush=True)
 
         for line in self:
             try:
+                print(
+                    f'[MASTER IMPORT][Inventory Stock] PROCESS line_id={line.id} '
+                    f'item={line.inventory_id or "-"} warehouse={line.warehouse_code or "-"}',
+                    flush=True,
+                )
                 product = line._find_product()
                 location = line._find_location()
                 if not product:
@@ -429,6 +443,11 @@ class AcumaticaInventoryStockLine(models.Model):
                     'import_message': message,
                     'odoo_on_hand': new_qty,
                 })
+                print(
+                    f'[MASTER IMPORT][Inventory Stock] RESULT line_id={line.id} '
+                    f'state={action_state} message={message}',
+                    flush=True,
+                )
                 # Recompute the stored comparison fields after the quant adjustment,
                 # so the list immediately shows the new Match/Unmatch state.
                 line._compute_stock_snapshot()
@@ -437,6 +456,10 @@ class AcumaticaInventoryStockLine(models.Model):
                     'inventory_stock',
                 )
             except Exception as e:
+                print(
+                    f'[MASTER IMPORT][Inventory Stock] ERROR line_id={line.id}: {e}',
+                    flush=True,
+                )
                 _logger.exception('Error import Inventory Stock line %s', line.id)
                 self.env['acumatica.error.transaction']._handle_acumatica_error(
                     line,
@@ -463,13 +486,20 @@ class AcumaticaInventoryStockLine(models.Model):
 
                 error += 1
 
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Inventory Stock',
-                'message': f'Import selesai: {created} berhasil, {updated} diupdate, {error} error.',
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        print(
+            f'[MASTER IMPORT][Inventory Stock] FINISH total={total} '
+            f'created={created} updated={updated} error={error}',
+            flush=True,
+        )
+
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Inventory Stock',
+        #         'message': f'Import selesai: {created} berhasil, {updated} diupdate, {error} error.',
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }

@@ -10,8 +10,8 @@ class AcumaticaUomLine(models.Model):
     """
     Tabel staging: hasil tarikan data UoM dari Acumatica
     Mapping:
-      - UnitID     → uom.category (nama kategori)
-      - Description → uom.uom (nama satuan)
+      - UnitID      → uom.uom.code
+      - Description → uom.uom.name
     """
     _name = 'acumatica.uom.line'
     _inherit = ['mail.thread', 'mail.activity.mixin']
@@ -19,22 +19,24 @@ class AcumaticaUomLine(models.Model):
     _order = 'row_number asc, unit_id asc'
 
     # ─── Data dari Acumatica ─────────────────────────
-    row_number  = fields.Integer(string='No', readonly=True)
-    unit_id = fields.Char(string='UnitID (→ Kategori)', required=True, readonly=True)
-    description = fields.Char(string='Description (→ Nama UoM)', readonly=True)
-    external_id = fields.Char(string='UUID Acumatica', readonly=True)
+    row_number  = fields.Integer(string='No')
+    unit_id = fields.Char(string='UnitID (→ Code)', required=True)
+    description = fields.Char(string='Description (→ Nama UoM)')
+    external_id = fields.Char(string='UUID Acumatica')
+    last_modified_datetime = fields.Char(string='Last Modified')
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
         ('staged',  'Staged'),
         ('created', 'Created'),
+        ('updated', 'Updated'),
         ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='staged', readonly=True)
+    ], string='Status', default='staged')
 
-    import_message = fields.Char(string='Generation Message', readonly=True)
-    odoo_uom_id = fields.Many2one('uom.uom', string='Document Reference', readonly=True)
-    odoo_categ_id = fields.Many2one('uom.category', string='Document Reference', readonly=True)
+    import_message = fields.Char(string='Generation Message')
+    odoo_uom_id = fields.Many2one('uom.uom', string='Document Reference')
+    odoo_categ_id = fields.Many2one('uom.category', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
@@ -42,10 +44,9 @@ class AcumaticaUomLine(models.Model):
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
 
     def _clean_uom_value(self, value):
@@ -61,6 +62,16 @@ class AcumaticaUomLine(models.Model):
             domain.append(('category_id', '=', category.id))
         return self.env['uom.uom'].search(domain, limit=1)
 
+    def _find_uom_by_code(self, code, category=False):
+        code = self._clean_uom_value(code)
+        if not code:
+            return self.env['uom.uom'].browse()
+
+        domain = [('code', '=ilike', code)]
+        if category:
+            domain.append(('category_id', '=', category.id))
+        return self.env['uom.uom'].search(domain, limit=1)
+
     # ─── Computed: sudah ada di Odoo? ────────────────
     exists_in_odoo = fields.Boolean(
         string='Sudah Ada di Odoo',
@@ -68,10 +79,13 @@ class AcumaticaUomLine(models.Model):
         store=False,
     )
 
-    @api.depends('description')
+    @api.depends('unit_id', 'description')
     def _compute_exists_in_odoo(self):
         for rec in self:
-            rec.exists_in_odoo = bool(rec._find_uom_by_name(rec.description))
+            rec.exists_in_odoo = bool(
+                rec._find_uom_by_code(rec.unit_id)
+                or rec._find_uom_by_name(rec.description)
+            )
 
     # ─── Action: Import baris yang dipilih ───────────
     def action_import_selected(self):
@@ -115,10 +129,13 @@ class AcumaticaUomLine(models.Model):
     def _do_import(self):
         """
         Logika import:
-          - UnitID     → cari/buat uom.category
-          - Description → cari/buat uom.uom di dalam kategori tersebut
+          - UnitID      → uom.uom.code
+          - Description → uom.uom.name di dalam kategori Unit
         """
-        created = skipped = error = 0
+        created = updated = skipped = error = 0
+        total = len(self)
+
+        print(f'[MASTER IMPORT][UoM] START total={total}', flush=True)
 
         for line in self:
             try:
@@ -151,10 +168,36 @@ class AcumaticaUomLine(models.Model):
                     uom_categ = self.env['uom.category'].create({'name': 'Unit'})
                     _logger.info("Kategori UoM baru dibuat: %s", 'Unit')
 
-                # ── 2. Cek apakah uom.uom (Description) sudah ada ──
-                existing = line._find_uom_by_name(uom_name)
+                # ── 2. Cari berdasarkan Code, lalu fallback ke nama lama ──
+                uom_code = line._clean_uom_value(line.unit_id)
+                existing = line._find_uom_by_code(uom_code)
+                if not existing:
+                    existing = line._find_uom_by_name(uom_name)
 
                 if existing:
+                    old_name = existing.name
+                    code_changed = bool(uom_code and existing.code != uom_code)
+                    name_changed = existing.name != uom_name
+                    if code_changed or name_changed:
+                        existing.write({
+                            'code': uom_code or existing.code,
+                            'name': uom_name,
+                        })
+                        line.write({
+                            'import_state': 'updated',
+                            'import_message': f'Diperbarui: {old_name} → {uom_name} (Code: {uom_code or existing.code})',
+                            'odoo_uom_id': existing.id,
+                            'odoo_categ_id': existing.category_id.id,
+                        })
+                        line._handle_acumatica_error()
+                        line._log_import_result(
+                            'updated',
+                            f'Data {existing.display_name} berhasil diperbarui berdasarkan UnitID/Code.',
+                            existing,
+                            False,
+                        )
+                        updated += 1
+                        continue
                     line.write({
                         'import_state':   'rejected',
                         'import_message': f'Sudah ada: {existing.name} (kategori: {existing.category_id.name})',
@@ -172,6 +215,7 @@ class AcumaticaUomLine(models.Model):
 
                     # ── 3. Buat uom.uom baru ──
                     new_uom = self.env['uom.uom'].create({
+                        'code':        uom_code,
                         'name':        uom_name,
                         'category_id': uom_categ.id,
                         'uom_type':    'smaller' if has_reference else 'reference',
@@ -217,18 +261,25 @@ class AcumaticaUomLine(models.Model):
 
                 error += 1
 
+        print(
+            f'[MASTER IMPORT][UoM] FINISH total={total} '
+            f'created={created} updated={updated} skipped={skipped} error={error}',
+            flush=True,
+        )
+
         # Notifikasi hasil
-        msg = f'Import selesai: {created} berhasil, {skipped} dilewati, {error} error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import UoM',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            }
-        }
+        msg = f'Import selesai: {created} dibuat, {updated} diperbarui, {skipped} dilewati, {error} error.'
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import UoM',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     }
+        # }
 
     # ─── Action: Reset status ─────────────────────────
     def action_reset_pending(self):
@@ -299,7 +350,10 @@ class AcumaticaUomLine(models.Model):
                 escape(record.display_name),
             )
 
-        self.message_post(
+        self.with_context(
+            mail_create_nosubscribe=True,
+            mail_post_autofollow=False,
+        ).message_post(
             body=body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',

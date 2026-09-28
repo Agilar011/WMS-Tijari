@@ -3,7 +3,7 @@
     <t t-name="tijari.MoveLineScanButton" owl="1">
         <button t-on-click="onClick"
                 type="button"
-                class="btn btn-secondary btn-sm oe_inline"
+                class="btn btn-secondary btn-sm oe_inline d-none"
                 t-att-title="title">
             <i t-att-class="iconClass"/>
         </button>
@@ -12,7 +12,7 @@
     <t t-name="tijari.MoveLineScanFormButton" owl="1">
         <button t-on-click="onClick"
                 type="button"
-                class="btn btn-secondary btn-sm oe_inline">
+                class="btn btn-secondary btn-sm oe_inline d-none">
             <i t-att-class="iconClass" class="me-1"/>
             <t t-esc="label"/>
         </button>
@@ -21,14 +21,14 @@
     <t t-name="tijari.MoveLineScanTextButton" owl="1">
         <button t-on-click="onClick"
                 type="button"
-                class="btn btn-secondary btn-sm oe_inline"
+                class="btn btn-secondary btn-sm oe_inline d-none"
                 t-att-title="title">
             Scan Location
         </button>
     </t>
 
     <t t-name="tijari.ProductScanButton" owl="1">
-        <div class="btn-group o_wms_scan_dropdown">
+        <div class="btn-group o_wms_scan_dropdown d-none">
             <button type="button"
                     class="btn btn-primary dropdown-toggle"
                     data-bs-toggle="dropdown"
@@ -55,17 +55,29 @@
     <t t-name="tijari.ProductByLotScanButton" owl="1">
         <button t-on-click="onClick"
                 type="button"
-                class="btn btn-primary oe_inline"
+                class="btn btn-primary oe_inline d-none"
                 title="Scan Product By Lot">
             <i class="fa fa-barcode me-1"/>
             Scan Product By Lot
         </button>
     </t>
 
+    <t t-name="tijari.PickerProductScanButton" owl="1">
+        <div class="o_wms_picker_scan_controls d-none">
+            <button type="button"
+                    class="btn btn-primary o_wms_picker_camera_button"
+                    t-on-click="onProductClick"
+                    title="Scan dengan kamera">
+                <i class="fa fa-barcode me-1"/>
+                Scan Kamera
+            </button>
+        </div>
+    </t>
+
     <t t-name="tijari.PackageScanButton" owl="1">
         <button t-on-click="onClick"
                 type="button"
-                class="btn btn-primary oe_inline o_wms_scan_package_button"
+                class="btn btn-primary oe_inline o_wms_scan_package_button d-none"
                 title="Scan Package">
             <i class="fa fa-barcode me-1"/>
             Scan Package

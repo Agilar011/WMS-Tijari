@@ -110,34 +110,57 @@ class ImportInventoryRecievedWizard(models.TransientModel):
         except Exception:
             return False
 
-    def _search_picking_type(self, header):
+    def _search_picking_type(self, header, picking_type_cache):
         PickingType = self.env['stock.picking.type']
         Location = self.env['stock.location.acumatica']
-        type = False
+
+        cache_key = (
+            header.get('transfer_type'),
+            header.get('document_only'),
+            header.get('warehouse_dest_code'),
+        )
+
+        if cache_key in picking_type_cache:
+            return picking_type_cache[cache_key]
 
         mapped_type = self.config_id._resolve_inventory_receive_picking_type(
             transfer_type=header.get('transfer_type'),
             document_only=header.get('document_only'),
-            warehouse_code=header.get('warehouse_code'),
+            warehouse_code=header.get('warehouse_dest_code'),
         )
+
         if mapped_type:
+            picking_type_cache[cache_key] = mapped_type
             return mapped_type
 
-        location = Location.search([
-            ('code', '=', header['warehouse_code'])
-        ])
+        location = Location.search(
+            [('code', '=', header['warehouse_dest_code'])],
+            limit=1,
+        )
+
+        picking_type = False
+
         if location:
-            type_key = str(header.get('transfer_type') or '').strip().lower().replace('-', '_').replace(' ', '_')
-            type = PickingType.resolve_picking_type(
-                warehouse_code=header.get('building_code'),
-                code='internal' if type_key == 'transfer_in' else 'incoming',
-                operation_category='receive',
-                api_acumatica='inventory_received',
-                transaction_key=type_key,
-                required=False,
+            picking_type = PickingType.search(
+                [
+                    (
+                        'warehouse_id',
+                        '=',
+                        location.odoo_building_id.id
+                        if location.odoo_building_id
+                        else False,
+                    ),
+                    ('code', '=', 'incoming'),
+                    ('is_default_api', '=', True),
+                ],
+                limit=1,
             )
 
-        return type if type else None
+        result = picking_type or False
+
+        picking_type_cache[cache_key] = result
+
+        return result        
 
     def _coalesce_val(self, item, *keys):
         for key in keys:
@@ -168,7 +191,15 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             'transfer_receipt',
         )
 
-    def _build_inventory_receipt_header(self, row_number, item, header_id, warehouse_code, warehouse_dest_code=False):
+    def _build_inventory_receipt_header(
+        self,
+        row_number,
+        item,
+        header_id,
+        warehouse_code,
+        warehouse_dest_code=False,
+        picking_type_cache=None,
+    ):
         transfer_type = self._val(item, 'TransType')
         header = {
             'external_id': self._val(item, 'id'),
@@ -186,6 +217,9 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             'document_only': self._bool_val(item, 'DocumentOnly'),
             'external_ref': self._val(item, 'ExternalRef'),
             'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+            'customer_location_id': self._val(item, 'CustomerLocationID'),
+            'customer_location_name': self._val(item, 'CustomerLocationName'),
+            'customer_name': self._val(item, 'CustomerName'),
             'location_code': str(self._val(item, 'Location')),
             'post_period': str(self._val(item, 'PostPeriod')),
             'reference_nbr': self._val(item, 'ReferenceNbr'),
@@ -199,7 +233,15 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             'warehouse_code': warehouse_code,
             'warehouse_dest_code': warehouse_dest_code or warehouse_code,
         }
-        picking_type = self._search_picking_type(header)
+
+        if picking_type_cache is None:
+            picking_type_cache = {}
+
+        picking_type = self._search_picking_type(
+            header,
+            picking_type_cache,
+        )
+
         header['picking_type_id'] = picking_type.id if picking_type else None
         return header
 
@@ -224,6 +266,8 @@ class ImportInventoryRecievedWizard(models.TransientModel):
     def fetch_inventory_recieved_data(self):
         self.ensure_one()
         session = self.config_id._do_login()
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {}
@@ -232,12 +276,27 @@ class ImportInventoryRecievedWizard(models.TransientModel):
 
             response = session.put(endpoint, params=params, json={"TransType": {"value": ""}}, timeout=300)
             if response.status_code != 200:
-                raise UserError(f'Gagal fetch data Inventory Receipt (HTTP {response.status_code}): {response.text}')
+
+                last_error = (
+                    f'Gagal fetch data Inventory Receipt '
+                    f'(HTTP {response.status_code}): '
+                    f'{response.text}'
+                )
+
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="inventory receipt",
+                    error=last_error,
+                    error_type="http",
+                )
+                
+                raise UserError(last_error)
 
             raw_data = response.json()
             result = []
             detail_result = []
             headers_seen = set()
+            picking_type_cache = {}
 
             data = self._normalize_rows(raw_data)
             if not data and isinstance(raw_data, dict):
@@ -249,7 +308,8 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                     details = [item]
 
                 transfer_type = self._val(item, 'TransType')
-                line_warehouse = self._val(item, 'LineWarehouse') or self._val(item, 'LineWarehouseID')
+                line_warehouse = self._val(item, 'WarehouseID') or self._val(item, 'LineWarehouseID')
+                line_to_warehouse = self._val(item, 'ToWarehouseID') or self._val(item, 'LineToWarehouseID')
                 if self._is_transfer_in_type(transfer_type):
                     warehouse_code = (
                         self._val(item, 'FromWarehouseID')
@@ -264,11 +324,20 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                     )
                 else:
                     warehouse_code = line_warehouse
-                    warehouse_dest_code = warehouse_code
+                    warehouse_dest_code = line_to_warehouse
                 header_id = ref or item.get('id', '')
 
                 if header_id not in headers_seen:
-                    result.append(self._build_inventory_receipt_header(row_number, item, header_id, warehouse_code, warehouse_dest_code))
+                    result.append(
+                        self._build_inventory_receipt_header(
+                            row_number,
+                            item,
+                            header_id,
+                            warehouse_code,
+                            warehouse_dest_code,
+                            picking_type_cache=picking_type_cache,
+                        )
+                    )
                     headers_seen.add(header_id)
 
                 for detail in details:
@@ -284,39 +353,47 @@ class ImportInventoryRecievedWizard(models.TransientModel):
 
     def _validate_staging_against_picking(self, header_list, line_list):
         Picking = self.env['stock.picking']
-        lines_to_create = []
         sync_data = fields.Datetime.now()
+        existing_receipts = {
+            receipt.reference_nbr: receipt
+            for receipt in self.env['acumatica.inventory.recieved.line'].search([
+                ('reference_nbr', 'in', [item.get('reference_nbr') for item in header_list]),
+                ('config_id', '=', self.config_id.id),
+            ])
+        }
+        ProductLine = self.env['acumatica.inventory.recieved.product.line']
+
         for item in header_list:
-            
             reference_nbr = item.get('reference_nbr')
-            exists = Picking.search_read(
-                domain=[('origin', '=', reference_nbr)],
-                fields=['id', 'origin'],
-                limit=1
-            )
-            lines_to_create.append({
+            picking = Picking.search([('origin', '=', reference_nbr)], limit=1)
+            values = {
                 **item,
-                'odoo_picking_id' : exists[0]['id'] if exists else False,
+                'odoo_picking_id': picking.id if picking else False,
                 'config_id': self.config_id.id,
                 'import_state': 'staged',
-                'import_message': f'{reference_nbr}: Sudah ada → akan diupdate' if exists else '',
+                'import_message': f'{reference_nbr}: Sudah ada → akan diupdate' if picking else '',
                 'selected': True,
                 'sync_date': sync_data,
-            })
+            }
+            receipt = existing_receipts.get(reference_nbr)
+            if receipt:
+                if (
+                    not values.get('acumatica_write_date')
+                    or receipt.acumatica_write_date == values['acumatica_write_date']
+                ):
+                    continue
+                receipt.write(values)
+            else:
+                receipt = self.env['acumatica.inventory.recieved.line'].create(values)
 
-        if lines_to_create:
-            # Lakukan pengecekan terlebih dahulu untuk filter data yg diperlukan
-            unchanged, to_update, to_create = self._search_inventory_lines(lines_to_create)
-            # Lanjut untuk mengolah data dari masing masing variabel yg telah di filter sebelumnya
-            self._update_inventory_lines(to_update)
-
-            inventory = self._create_inventory_lines(to_create)
-            line_update, line_create = self.filter_product_line(line_list, to_update, to_create)
-            if line_update:
-                self._update_inventory_lines_product(line_update, to_update)
-
-            if line_create:
-                self._create_inventory_lines_product(line_create, inventory)
+            receipt.product_line_ids.unlink()
+            product_values = [
+                {**line, 'inventory_line_id': receipt.id}
+                for line in line_list
+                if line.get('header_external_id') in (receipt.external_id, receipt.reference_nbr)
+            ]
+            if product_values:
+                ProductLine.create(product_values)
 
     def _search_inventory_lines(self, data):
         if not data:
@@ -347,14 +424,18 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                 to_create.append(vals)
                 continue
 
-
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == self._parse_dt(vals['acumatica_write_date']):
+            if (
+                not vals.get('acumatica_write_date')
+                or existing.acumatica_write_date == vals['acumatica_write_date']
+            ):
                 unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+                continue
+
+
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

@@ -195,6 +195,8 @@ class ImportCustomerWizard(models.TransientModel):
         }
 
     def _check_last_modified_staging(self, item):
+        if not item.get('last_modified_datetime'):
+            return
         Staging = self.env['acumatica.customer.line']
         existing = Staging.search([
             ('b_account_id', '=', item['b_account_id']),
@@ -218,8 +220,11 @@ class ImportCustomerWizard(models.TransientModel):
         max_retry = 3
         retry_delay = 30
         last_error = None
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
+            
             # ==============================================
             # PARAMS
             # ==============================================
@@ -271,6 +276,14 @@ class ImportCustomerWizard(models.TransientModel):
                             f'(HTTP {response.status_code}): '
                             f'{response.text}'
                         )
+
+                        if attempt == max_retry:
+                            AcumaticaErrorService.send_error(
+                                webhook_type="fetch",
+                                webhook_name="customer",
+                                error=last_error,
+                                error_type="http",
+                            )
 
                         _logger.error(last_error)
 
@@ -477,7 +490,17 @@ class ImportCustomerWizard(models.TransientModel):
                         str(e)
                     )
 
+                    if attempt == max_retry:
+                        AcumaticaErrorService.send_error(
+                            webhook_type="fetch",
+                            webhook_name="customer",
+                            error=last_error,
+                            error_type="connection",
+                        )
+
                     _logger.error(last_error)
+
+
 
                 # ==============================================
                 # TIMEOUT ERROR
@@ -497,6 +520,14 @@ class ImportCustomerWizard(models.TransientModel):
                         str(e)
                     )
 
+                    if attempt == max_retry:
+                        AcumaticaErrorService.send_error(
+                            webhook_type="fetch",
+                            webhook_name="customer",
+                            error=last_error,
+                            error_type="timeout",
+                        )
+
                     _logger.error(last_error)
 
                 # ==============================================
@@ -511,6 +542,14 @@ class ImportCustomerWizard(models.TransientModel):
                         '%s',
                         last_error,
                     )
+
+                    if attempt == max_retry:
+                        AcumaticaErrorService.send_error(
+                            webhook_type="fetch",
+                            webhook_name="customer",
+                            error=last_error,
+                            error_type="unknown",
+                        )
 
                     _logger.exception(e)
 

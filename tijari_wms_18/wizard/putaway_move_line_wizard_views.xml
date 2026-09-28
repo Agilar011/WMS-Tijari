@@ -14,6 +14,11 @@
                         readonly="1"
                         invisible="putaway_status == 'finished'"
                     />
+                    <field
+                        name="handheld_location_code"
+                        placeholder="Scan handheld atau ketik kode lokasi"
+                        invisible="putaway_status == 'finished'"
+                    />
                     <field name="move_line_id" invisible="1"/>
                     <field name="adt_dest_location_id" invisible="1"/>
                     <field name="putaway_status" invisible="1"/>
@@ -37,7 +42,12 @@
                         class="btn-primary"
                         invisible="putaway_status == 'finished'"
                     />
-                    <button string="Cancel" special="cancel"/>
+                    <button
+                        name="action_cancel"
+                        string="Cancel"
+                        type="object"
+                        class="btn-secondary"
+                    />
                 </footer>
             </form>
         </field>

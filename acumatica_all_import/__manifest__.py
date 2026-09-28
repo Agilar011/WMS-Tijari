@@ -8,6 +8,7 @@
           'views/acumatica_all_import_menu.xml',
           'data/api_dashboard_data.xml',
           'data/acumatica_cron_data.xml',
+          'data/ir_config_parameter.xml',
           'views/acumatica_config_views.xml',
           'views/acumatica_transaction_type_views.xml',
           'views/api_scheduler_views.xml',
@@ -21,6 +22,7 @@
           'views/acumatica_shipment_line_views.xml',
           'views/acumatica_so_shipment_line_views.xml',
           'views/acumatica_shipment_completed_views.xml',
+          'views/acumatica_shipment_transfer_completed_views.xml',
           'views/acumatica_uom_import_views.xml',
           'views/acumatica_transfer_line_views.xml',
           'views/acumatica_transfer_one_step_line_views.xml',
@@ -39,9 +41,11 @@
           'views/acumatica_direct_transfer_staging_views.xml',
           'views/acumatica_vendor_return_direct_transfer_staging_views.xml',
           'views/acumatica_credit_memo_consignment_staging_views.xml',
+          'views/acumatica_transaction_chatter_views.xml',
           'views/acumatica_webhook_key_config_views.xml',
           'views/acumatica_webhook_log_views.xml',
           'views/acumatica_all_import_wizard_views.xml',
+          'views/access_menu_security.xml',
           ],
  'assets': {
      'web.assets_backend': [

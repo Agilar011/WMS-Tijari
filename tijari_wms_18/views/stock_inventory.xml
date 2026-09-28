@@ -11,17 +11,23 @@
                     string="Print"
                     type="object"
                     class="btn-primary"
+                    invisible="state not in ['in_progress', 'wait_approval']"
+                />
+                <button
+                    name="action_send_approval_request_email"
+                    string="Send Approval Email"
+                    type="object"
+                    class="btn-secondary"
+                    invisible="state != 'wait_approval'"
                 />
             </xpath>
             <xpath expr="//field[@name='approval_state']" position="after">
                 <field name="status_ba"/>
             </xpath>
-            <xpath expr="//page[@name='approval_info']" position="after">
-                <page name="notes" string="Notes">
-                    <group>
-                        <field name="notes" nolabel="1"/>
-                    </group>
-                </page>
+            <!-- The loaded parent view has no notebook; keep this field on the
+                 stable approval-state anchor instead of relying on a tab. -->
+            <xpath expr="//field[@name='approval_state']" position="after">
+                <field name="notes" string="Notes" nolabel="1"/>
             </xpath>
         </field>
     </record>

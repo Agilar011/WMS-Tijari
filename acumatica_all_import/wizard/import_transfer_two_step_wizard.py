@@ -121,13 +121,15 @@ class ImportTransferTwoStepWizard(models.TransientModel):
                 to_create.append(vals)
                 continue
 
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals['acumatica_write_date']:
+            incoming_last_modified = vals.get('acumatica_write_date')
+            if not incoming_last_modified or existing.acumatica_write_date == incoming_last_modified:
                 unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+                continue
+
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 
@@ -214,7 +216,7 @@ class ImportTransferTwoStepWizard(models.TransientModel):
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
 
-            response = session.put(endpoint, params=params, json={"TransferType": {"value": "2 Step"}}, timeout=300)
+            response = session.put(endpoint, params=params, json={"TransferType": {"value": "2-Step"}}, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Transfer Order (HTTP {response.status_code}): {response.text}')
 

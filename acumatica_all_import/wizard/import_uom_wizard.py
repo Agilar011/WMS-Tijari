@@ -171,6 +171,7 @@ class ImportUomWizard(models.TransientModel):
                     'description': item.get("Description", {}).get("value", "") or "",
                     'external_id': item.get("id", "") or "",
                     'row_number': item.get("rowNumber", 0),
+                    'last_modified_datetime': item.get("LastModifiedDateTime", {}).get("value", "") or "",
                 })
 
             UomLine = self.env['acumatica.uom.line']
@@ -186,16 +187,17 @@ class ImportUomWizard(models.TransientModel):
                     continue
                 seen_keys.add(key)
 
+                # UnitID adalah business key utama untuk mendeteksi update.
                 existing = UomLine.browse()
-                if external_id:
-                    existing = UomLine.search([
-                        ('config_id', '=', self.config_id.id),
-                        ('external_id', '=', external_id),
-                    ], limit=1)
-                if not existing and unit_id:
+                if unit_id:
                     existing = UomLine.search([
                         ('config_id', '=', self.config_id.id),
                         ('unit_id', '=', unit_id),
+                    ], limit=1)
+                if not existing and external_id:
+                    existing = UomLine.search([
+                        ('config_id', '=', self.config_id.id),
+                        ('external_id', '=', external_id),
                     ], limit=1)
 
                 vals = {
@@ -204,11 +206,21 @@ class ImportUomWizard(models.TransientModel):
                     'external_id': external_id,
                     'unit_id': unit_id,
                     'description': item['description'],
+                    'last_modified_datetime': item['last_modified_datetime'],
                     'selected': True,
                     'sync_date': fields.Datetime.now(),
                 }
                 if existing:
+                    incoming_last_modified = vals.get('last_modified_datetime')
+                    if not incoming_last_modified or existing.last_modified_datetime == incoming_last_modified:
+                        continue
+                    changed = any(existing[field] != vals[field] for field in ('unit_id', 'description', 'external_id', 'row_number', 'last_modified_datetime'))
                     existing.write(vals)
+                    if changed:
+                        existing.write({
+                            'import_state': 'staged',
+                            'import_message': False,
+                        })
                 else:
                     vals.update({
                         'import_state': 'staged',

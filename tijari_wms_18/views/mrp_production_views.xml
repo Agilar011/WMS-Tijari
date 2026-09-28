@@ -6,6 +6,19 @@
         <field name="model">mrp.production</field>
         <field name="inherit_id" ref="mrp.mrp_production_form_view"/>
         <field name="arch" type="xml">
+
+            <xpath expr="//div/h1/field[@name='name']" position="replace">
+                <field name="origin" />
+            </xpath>
+
+            <xpath expr="//label[@name='bom_label']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//div[@name='bom_div']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
             <xpath expr="//field[@name='picking_type_id']" position="after">
                 <field name="picking_type_name" invisible='1' />
             </xpath>    
@@ -13,6 +26,110 @@
             <xpath expr="//field[@name='move_raw_ids']/list/field[@name='picked']" position="attributes">
                 <attribute name="optional">hide</attribute>
                 <attribute name="force_save">1</attribute>
+            </xpath>
+
+            <xpath expr="//header" position="inside">
+                <button
+                    name="action_print_hasil_manufacturing"
+                    string="Print"
+                    type="object"
+                    class="btn-primary"
+                />
+            </xpath>
+
+            <xpath expr="//field[@name='user_id']" position="before">
+                <field name="name" string="Seri Dokumen" />
+            </xpath>
+
+            <xpath expr="//page[@name='miscellaneous']" position="after">
+                <page name="note" string="Notes">
+                    <group name="transaction_note" string="Transaction Note">
+                        <field name="catatan" nolabel="1"/>
+                    </group>
+
+                    <group name="desc_note" string="Description">
+                        <field name="desc_note" nolabel="1"/>
+                    </group>
+                </page>
+            </xpath>
+
+            <xpath expr="//page[@name='miscellaneous']/group/group/field[@name='origin']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='move_raw_ids']" position="attributes">
+                <attribute name="context">{
+                    'default_date': date_start, 
+                    'default_date_deadline': date_start, 
+                    'default_location_id': location_src_id, 
+                    'default_location_dest_id': production_location_id, 
+                    'default_warehouse_id': warehouse_id, 
+                    'default_state': 'draft', 
+                    'default_raw_material_production_id': id, 
+                    'default_picking_type_id': picking_type_id, 
+                    'default_company_id': company_id, 
+                    'form_view_ref': 'tijari_wms_18.stock_move_mo_view',
+                    'active_mo_id': id
+                }</attribute>
+                <attribute name="mode">list,kanban</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='move_raw_ids']/list" position="after">
+                <kanban class="o_kanban_mobile">
+                    <templates>
+                        <t t-name="card">
+                            <div class="o_wms_operation_card">
+                                <div class="o_wms_operation_product">
+                                    <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                </div>
+                                <br/>
+                                <div>
+                                    <div>
+                                        <strong>To Consume: </strong>
+                                        <field name="product_uom_qty"/>
+                                        <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                    </div>
+                                    <div>
+                                        <strong>Qty Target: </strong>
+                                        <field name="quantity"/>
+                                        <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                    </div>
+                                    <div>
+                                        <strong>Qty Digunakan: </strong>
+                                        <field name="mo_confirmation_quantity"/>
+                                        <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                    </div>
+                                </div>
+                                <br/>
+                                <button name="action_open_move_mo"
+                                    type="object"
+                                    string="Open Detail"
+                                    class="btn btn-primary btn-sm o_wms_operation_action"
+                                />
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </xpath>
+
+            <xpath expr="//field[@name='move_raw_ids']/list/field[@name='quantity']" position="attributes">
+                <attribute name="string">Qty Target</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='move_raw_ids']/list/field[@name='quantity']" position="after">
+                <field name="mo_confirmation_quantity"/>
+                <field name="difference_quantity"/>
+            </xpath>
+            <xpath expr="//field[@name='move_raw_ids']/list/field[@name='group_id']" position="after">
+                <field name="status_mo_check"
+                    decoration-success="status_mo_check == 'finished'"
+                    decoration-danger="status_mo_check == 'unfinished'" widget="badge" />
+                
+                <button
+                    name="action_open_note_wizard"
+                    type="object"
+                    icon="fa-sticky-note"
+                    title="Note"/>
             </xpath>
         </field>
     </record>

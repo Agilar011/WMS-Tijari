@@ -42,6 +42,30 @@ class ImportTransferShipmentWizard(models.TransientModel):
         return value or ''
 
     @staticmethod
+    def _last_modified_value(item):
+        """Keep Acumatica's original LastModified value in the Char staging field."""
+        candidates = (
+            'LastModifiedDateTime',
+            'LastModifiedOn',
+            'adt_LastModifiedDateTime',
+            'last_modified_datetime',
+        )
+        for key in candidates:
+            value = ImportTransferShipmentWizard._val(item, key)
+            if value not in (False, None, ''):
+                return str(value)
+
+        # Tolerate payloads whose serializer changes only the key casing.
+        candidate_keys = {key.lower() for key in candidates}
+        for key, value in item.items():
+            if key.lower() in candidate_keys:
+                if isinstance(value, dict):
+                    value = value.get('value', '')
+                if value not in (False, None, ''):
+                    return str(value)
+        return ''
+
+    @staticmethod
     def _bool_value(value):
         if isinstance(value, dict):
             value = value.get('value')
@@ -139,7 +163,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
                         'is_hold': self._val(item, 'Hold'),
                         'is_insurance': self._val(item, 'Insurance'),
                         'document_only': self._bool_val(item, 'DocumentOnly'),
-                        'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+                        'acumatica_write_date': self._last_modified_value(item),
                         'header_location_code': self._val(item, 'LocationID'),
                         'location_name': self._val(item, 'LocationName'),
                         'operation': self._val(item, 'Operation'),
@@ -253,15 +277,10 @@ class ImportTransferShipmentWizard(models.TransientModel):
 
             print(f"vals staging: {vals}")
             existing = existing_map.get(origin)
-            if (
-                existing
-                and vals.get('acumatica_write_date')
-                and existing.acumatica_write_date == vals.get('acumatica_write_date')
-            ):
-                existing_keys.add(origin)
-                continue
-
             if existing:
+                incoming_last_modified = vals.get('acumatica_write_date')
+                if not incoming_last_modified or existing.acumatica_write_date == incoming_last_modified:
+                    continue
                 existing.shipment_line_ids.unlink()
                 existing.write(vals)
                 created_shipment = existing

@@ -51,17 +51,16 @@ class AcumaticaStockItemLine(models.Model):
         ('error', 'Error'),
     ], string='Status', default='staged')
 
-    import_message = fields.Char(string='Generation Message', readonly=True)
-    odoo_product_id  = fields.Many2one('product.template', string='Document Reference', readonly=True)
+    import_message = fields.Char(string='Generation Message')
+    odoo_product_id  = fields.Many2one('product.template', string='Document Reference')
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ─── Helpers ─────────────────────────────────────
     @staticmethod
@@ -147,8 +146,8 @@ class AcumaticaStockItemLine(models.Model):
         )
         self.env.cr.execute(query_product, params_product)
         product_id = self.env.cr.fetchone()[0]
-        if line.barcode:
-            self.env['product.template'].browse(product_id).write({'barcode': line.barcode})
+        # if line.barcode:
+        #     self.env['product.template'].browse(product_id).write({'barcode': line.barcode})
         query_staging = """
             UPDATE acumatica_stock_item_line
             SET import_state = %s, 
@@ -206,8 +205,12 @@ class AcumaticaStockItemLine(models.Model):
         )
         self.env.cr.execute(query_product, params_product)
         result = self.env.cr.fetchone()
-        if result and line.barcode:
-            self.env['product.template'].browse(result[0]).write({'barcode': line.barcode})
+        # if result:
+            # Barcode kosong dari staging berarti barcode di Acumatica sudah
+            # dihapus, jadi barcode product juga harus dikosongkan.
+            # self.env['product.template'].browse(result[0]).write({
+            #     'barcode': line.barcode or False,
+            # })
         if not result:
             # Tidak ada perubahan data, skip update
             query_staging = """
@@ -484,7 +487,9 @@ class AcumaticaStockItemLine(models.Model):
 
             old_value = record[field_name]
 
-            # Normalisasi nilai
+            if field.type == 'many2one':
+                old_value = old_value.id if old_value else False
+                
             old_value = old_value or False
             new_value = new_value or False
 
@@ -565,7 +570,10 @@ class AcumaticaStockItemLine(models.Model):
                 escape(record.display_name),
             )
 
-        self.message_post(
+        self.with_context(
+            mail_create_nosubscribe=True,
+            mail_post_autofollow=False,
+        ).message_post(
             body=body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
@@ -576,6 +584,7 @@ class AcumaticaStockItemLine(models.Model):
         from odoo.tools import split_every
 
         BATCH_SIZE = 1000
+        total = len(self)
         created = 0
         updated = 0
         error = 0
@@ -586,6 +595,12 @@ class AcumaticaStockItemLine(models.Model):
             'mail_create_nosubscribe': True,
         }
         Product = self.env['product.template'].with_context(**ctx)
+        ProductVariant = self.env['product.product'].with_context(**ctx)
+
+        print(
+            f'[MASTER IMPORT][Stock Item] START total={total} batch_size={BATCH_SIZE}',
+            flush=True,
+        )
 
         # =====================================================
         # CACHE UOM
@@ -628,11 +643,17 @@ class AcumaticaStockItemLine(models.Model):
         # Proses data per chunk untuk menghindari memory error jika datanya sangat besar
         for chunk in split_every(BATCH_SIZE, self):
             chunk_ids = [line.id for line in chunk]
+            print(
+                f'[MASTER IMPORT][Stock Item] BATCH start={chunk_ids[0] if chunk_ids else "-"} '
+                f'end={chunk_ids[-1] if chunk_ids else "-"} count={len(chunk)}',
+                flush=True,
+            )
             try:
                 
                 create_vals = []
                 update_params = []
                 barcode_updates = []
+                variant_updates = []
                 sku_insert_params = []
                 staging_success = []
                 staging_error = []
@@ -682,7 +703,7 @@ class AcumaticaStockItemLine(models.Model):
                             'is_storable': True,
                             'tracking' : 'lot',
                             'default_code': line.inventory_id or False,
-                            'barcode': line.barcode or False,
+                            # 'barcode': line.barcode or False,
                             'type': self.ITEM_TYPE_MAP.get(
                                 (line.item_type or '').lower(),
                                 'consu'
@@ -746,8 +767,19 @@ class AcumaticaStockItemLine(models.Model):
                                 ),
                                 existing['id']
                             ))
-                            if line.barcode:
-                                barcode_updates.append((existing['id'], line.barcode))
+                            # Nilai kosong bukan berarti "skip": itu snapshot
+                            # terbaru dari Acumatica dan harus menghapus barcode
+                            # lama pada product.
+                            barcode_updates.append((existing['id'], line.barcode or False))
+                            # InventoryID dan barcode juga merupakan data
+                            # variant. Jangan hanya mengubah template karena
+                            # product.product menyimpan nilai operasionalnya.
+                            variant_updates.append((
+                                existing['id'],
+                                line.inventory_id or False,
+                                # line.barcode or False,
+                                line.external_id or False,
+                            ))
 
                             # SKU changed
                             if existing['default_code'] != line.inventory_id:
@@ -849,12 +881,18 @@ class AcumaticaStockItemLine(models.Model):
                                 'acumatica.stock.item.line'
                             ].browse(line_id).exists()
                             acu_product._handle_acumatica_error()
-                            acu_product._log_import_result(
-                                'created',
-                                f'Data {product.display_name} berhasil dibuat.',
-                                product,
-                                False,
-                            )
+                            try:
+                                acu_product._log_import_result(
+                                    'created',
+                                    f'Data {product.display_name} berhasil dibuat.',
+                                    product,
+                                    False
+                                )
+                            except Exception:
+                                _logger.exception(
+                                    "Failed to create chatter log for stock item line %s",
+                                    acu_product.id,
+                                )
 
                             sku_insert_params.append((
                                 product.id,
@@ -904,8 +942,24 @@ class AcumaticaStockItemLine(models.Model):
                 # product.template.barcode is a computed/inverse field in
                 # Odoo 18; it has no column on product_template. Use ORM so
                 # the inverse writes the barcode to the product variant.
-                for product_id, barcode in barcode_updates:
-                    Product.browse(product_id).write({'barcode': barcode})
+                # for product_id, barcode in barcode_updates:
+                #     Product.browse(product_id).write({'barcode': barcode})
+
+                # Sinkronkan variant secara eksplisit. Stock Item selalu
+                # dibuat sebagai satu variant; fallback ke variant pertama
+                # menjaga flow tetap aman untuk template lama yang memiliki
+                # lebih dari satu variant.
+                for product_id, default_code, external_id in variant_updates:
+                    template = Product.browse(product_id)
+                    variant = template.product_variant_id
+                    if not variant:
+                        variant = template.product_variant_ids[:1]
+                    if variant:
+                        ProductVariant.browse(variant.id).write({
+                            'default_code': default_code,
+                            # 'barcode': barcode,
+                            'adt_external_id': external_id,
+                        })
 
                 # =============================================
                 # BULK SKU HISTORY
@@ -990,16 +1044,22 @@ class AcumaticaStockItemLine(models.Model):
                 self.env.cr.commit()
 
         msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Stock Item',
-                'message': msg,
-                'type': 'success' if error == 0 else 'warning',
-                'sticky': True,
-            },
-        }
+        print(
+            f'[MASTER IMPORT][Stock Item] FINISH total={total} '
+            f'created={created} updated={updated} error={error}',
+            flush=True,
+        )
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Stock Item',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'warning',
+        #         'sticky': True,
+        #     },
+        # }
 
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):

@@ -11,6 +11,7 @@
                 <filter name="tijari_pack" string="Pack" domain="[('operation_category', '=', 'pack')]"/>
                 <filter name="tijari_internal_intra" string="Internal Transfer - Intra" domain="[('internal_transfer_order_id.transaction_type', '=', 'intra_warehouse')]"/>
                 <filter name="tijari_internal_inter" string="Internal Transfer - Inter" domain="[('internal_transfer_order_id.transaction_type', '=', 'inter_warehouse')]"/>
+                <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', 'in', ['Internal Transfer', 'Internal Transfers', 'Transfer Internal'])]"/>
                 <filter name="tijari_document_only" string="Document Only" domain="[('adt_is_document_only', '=', True)]"/>
                 <separator/>
             </xpath>
@@ -35,7 +36,7 @@
                         string="Search Document"
                         class="btn-primary"
                         display="always"
-                        invisible="not context.get('tijari_my_worklist')"/>
+                        invisible="1"/>
                 </header>
             </xpath>
             <xpath expr="//templates/t[@t-name='card']//field[@name='name']" position="replace">
@@ -54,7 +55,7 @@
                         <field name="adt_type"/>
                     </div>
                     <div>
-                        <span class="fw-semibold">Total Qty: </span>
+                        <span class="fw-semibold">Qty Total: </span>
                         <field name="adt_total_qty"/>
                     </div>
                 </div>
@@ -77,7 +78,7 @@
                     string="Search Document"
                     class="btn-primary"
                     display="always"
-                    invisible="not context.get('tijari_my_worklist')"/>
+                    invisible="1"/>
             </xpath>
         </field>
     </record>
@@ -92,7 +93,7 @@
                 <field name="wms_state"
                     widget="statusbar"
                     statusbar_visible="draft,assigned,waiting_response,done"
-                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']"    
+                    invisible="(picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment'])"
                 />
             </xpath>
 
@@ -106,7 +107,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders']"/>
+                    invisible="adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders'] or internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment']"/>
 
             </xpath>            
 
@@ -133,6 +134,18 @@
                     type="object"
                     class="btn-primary"
                     invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+
+                <button name="action_get_transfer_shipment_completed_staging"
+                    string="Complete Shipment"
+                    type="object"
+                    class="btn-primary"
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response'"/>
+
+                <button name="action_confirm_shipment_manually"
+                    string="Complete Shipment Manually"
+                    type="object"
+                    class="btn-secondary"
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response'"/>
 
                 <!-- <button name="action_fetch_actual_qty"
                 string="Get Full Shipment Data"
@@ -176,10 +189,13 @@
 
             <xpath expr="//field[@name='date_done']" position="after">
                 <field name="shipment_information"
-                    invisible="picking_type_name not in ['Delivery Orders']"
+                    invisible="(picking_type_name not in ('Delivery Orders') or adt_type not in ('Sales Order Shipment', 'SO Consignment')) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ('Shipment Consignment', 'Transfer Shipment'))"
                     decoration-success="shipment_information == 'full_shipment'"
                     decoration-warning="shipment_information == 'partial'"
                     decoration-danger="shipment_information == 'canceled'"/>
+                <field name="attachment_ids"
+                    widget="many2many_binary"
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment')"/>
             </xpath>
 
             <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']" position="replace">
@@ -189,19 +205,45 @@
             <xpath expr="//page[@name='extra']" position="inside">
                 <group>
                     <group name="responsible_info" string="Responsible Information">
-                        <field name="pick_responsible_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done']" groups="!tijari_wms_18.group_operator"/>
-                        <field name="pick_responsible_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="1" groups="tijari_wms_18.group_operator"/>
-                        <field name="can_edit_pack_responsible_ids" invisible="1"/>
-                        <field name="pack_responsible_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done'] or not can_edit_pack_responsible_ids"/>
-                        <field name="do_responsible_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done']"/>
-                        <field name="user_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="state in ['cancel', 'done']"/>
+                        <!-- PICKER
+                            Receipt + Pick -->
+                        <field 
+                            name="pick_responsible_ids"
+                            widget="many2many_avatar_user"
+                            readonly="state in ('cancel','done')"/>
+
+                        <!-- PACKER
+                            Pick only -->
+                        <field 
+                            name="pack_responsible_ids"
+                            widget="many2many_avatar_user"
+                            readonly="state in ('cancel','done')"
+                            invisible="picking_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+
+                        <!-- LOADER
+                            Pick only -->
+                        <field 
+                            name="do_responsible_ids"
+                            widget="many2many_avatar_user"
+                            readonly="state in ('cancel','done')"
+                            invisible="picking_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+
+                        <!-- PUTAWAY
+                            Receipt only -->
+                        <field 
+                            name="putaway_responsible_ids"
+                            widget="many2many_avatar_user"
+                            readonly="state in ('cancel','done')"
+                            invisible="'Receipt' not in (picking_type_name or '')"/>
+                        
+                        <field name="user_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="1" force_save="1"/>
                     </group>
                 </group>
             </xpath>
 
             <xpath expr="//notebook/page[@name='operations']" position="after">
 
-                <page string="Unpacked Item Details" name="detail_product" invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']">
+                <page string="Unpacked Item Details" name="detail_product" invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer">
                     <field name="move_ids_without_package" mode="list,kanban"
                         widget="picker_move_one2many"
                         context="{
@@ -244,7 +286,7 @@
                             <field name="product_default_code" string="Product" column_invisible="parent.state == 'draft'"/>
                             <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0" force_save="1" column_invisible="parent.state != 'draft'"/>
                             <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
-                            <field name="description_picking" string="Description" optional="hide"/>
+                            <field name="description_picking" string="Description" optional="show"/>
                             <field name="date" optional="hide"/>
                             <field name="date_deadline" optional="hide"/>
                             <field name="is_quantity_done_editable" column_invisible="True"/>
@@ -257,7 +299,7 @@
                             <field name="product_packaging_id" string="Packaging" optional="hide" groups="product.group_stock_packaging"
                                 context="{'default_product_id': product_id}"
                                 readonly="not product_id"/>
-                            <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
+                            <field name="product_uom_qty" string="Qty Total" readonly="not is_initial_demand_editable"/>
                             <field name="remaining_package_qty" string="Remaining Product" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders']"/>
                             <field name="remaining_package_qty" string="Qty Unpack" readonly="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
                             <!-- <field name="unpack_quantity" force_save="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']" /> -->
@@ -270,8 +312,8 @@
                                 column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
                             <field name="product_qty" readonly="1" column_invisible="True"/>
                             <!-- <field name="temp_float" string="Confirmed Quantity"/> -->
-                            <field name="so_confirmation_quantity" string="Confirmed Quantity" column_invisible="parent.picking_type_name not in ['Transfer Internal']"/>
-                            <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
+                            <field name="so_confirmation_quantity" string="Confirmed Quantity" column_invisible="not parent.is_ito_internal_transfer"/>
+                            <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="parent.picking_type_name not in ['Delivery Orders']" readonly="state in ('done', 'cancel') or status_check == 'finished'"/>
                             <field name="quantity" string="Qty Diterima" optional="hide" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                             <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
                             <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
@@ -290,7 +332,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Package"
-                                invisible="status_check != 'finished'"/>
+                                invisible="status_check != 'finished' or state not in ['confirmed', 'assigned']"/>
                             <field name="lot_ids" widget="many2many_tags"
                                 readonly="has_tracking != 'serial'"
                                 column_invisible="parent.state == 'draft'"
@@ -328,7 +370,7 @@
                                     <br/>
 
                                     <div class="d-flex align-items-center gap-1">
-                                        <strong>Total Qty: </strong>
+                                        <strong>Qty Total: </strong>
                                         <field name="product_uom_qty"/>
                                         <field name="product_uom"/>
                                     </div>
@@ -341,8 +383,8 @@
 
                                     <div class="d-flex align-items-center gap-1">
                                         <strong>Qty Dikirim: </strong>
-                                        <field name="so_confirmation_quantity"/>
-                                        <field name="product_uom"/>
+                                        <field name="so_confirmation_quantity" readonly="state in ('done', 'cancel') or status_check == 'finished'"/>
+                                        <field name="product_uom" readonly="state in ('done', 'cancel') or status_check == 'finished'"/>
                                     </div>
 
                                     <div class="d-flex gap-2 mt-2">
@@ -354,7 +396,7 @@
                                             type="object"
                                             string="Rollback"
                                             class="btn-danger o_wms_auto_save_before_action"
-                                            invisible="status_check == 'unfinished' or state in ('done', 'cancel')"/>
+                                            invisible="status_check == 'unfinished' or state not in ['confirmed', 'assigned']"/>
                                     </div>
                                 </t>
                             </templates>
@@ -362,19 +404,23 @@
                     </field>
                     <field name="id" invisible="1"/>
                     <!-- <field name="package_level_ids" context="{'default_location_id': location_id, 'default_location_dest_id': location_dest_id, 'default_company_id': company_id}" invisible="not picking_type_entire_packs" readonly="state == 'done'" /> -->
-                    <button class="btn-secondary float-end" name="action_put_in_pack" type="object" string="Put in Pack" invisible="1" groups="stock.group_tracking_lot" data-hotkey="shift+g"/>
+                    <button class="btn-secondary float-end" name="action_put_in_pack" type="object" string="Put in Pack" invisible="picking_type_name != 'Receipts'" groups="stock.group_tracking_lot" data-hotkey="shift+g"/>
                 </page>
 
                 <page string="Packed Item Details"
-                    invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']">
+                    invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer">
 
                     <group>
                         <group>
                             <field name="scan_package_button"
                                 widget="adt_scan_package_button"
                                 nolabel="1"
-                                invisible="picking_type_name not in ['Delivery Orders', 'Transfer Internal']"/>
+                                invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
                             <field name="available_package_ids" invisible='1' />
+                            <field name="package_scan_code"
+                                widget="adt_handheld_scan_code"
+                                placeholder="Scan handheld atau ketik kode package"
+                                invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
                             <field name="scanned_package_id"
                                 placeholder="Scan a QR code or select a package..."
                                 domain="[('id', 'in', available_package_ids)]"
@@ -391,7 +437,13 @@
                             'default_company_id': company_id,
                         }"
                         readonly="state == 'done'"
-                        invisible="not picking_type_entire_packs"/>
+                        invisible="not picking_type_entire_packs and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment')"/>
+
+                    <button name="action_refresh_consignment_transfer_out"
+                            type="object"
+                            string="Refresh from Pack"
+                            class="btn-primary"
+                            invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment') or state in ['done', 'cancel']"/>
 
                     <div class="mt16"/>
 
@@ -400,7 +452,7 @@
                             string="Put in Pack"
                             class="btn-secondary"
                             groups="stock.group_tracking_lot"
-                            invisible="1"
+                            invisible="picking_type_name != 'Receipts'"
                             data-hotkey="shift+g"/>
 
                 </page>
@@ -431,21 +483,13 @@
 
             <xpath expr="//field[@name='location_id'][@groups='stock.group_stock_multi_locations']"
                 position="replace">
-                <field name="internal_transfer_adt_dest_location_id"
-                    string="Final Location"
-                    domain="[('is_location_mapping', '=', True)]"
-                    invisible="picking_type_name != 'Internal Transfers'"/>
                 <field name="location_id"
+                    string="Source Location"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
-                    invisible="picking_type_code == 'incoming' or picking_type_name == 'Internal Transfers'"
-                    readonly="state == 'done'"/>
-                <field name="location_id"
-                    options="{'no_create': True}"
-                    groups="stock.group_stock_multi_locations"
-                    invisible="picking_type_name != 'Internal Transfers'"
+                    invisible="picking_type_code == 'incoming' and not internal_transfer_order_id"
                     readonly="state == 'done'"
-                    domain="[('id', 'child_of', internal_transfer_adt_dest_location_id)]"/>
+                    />
             </xpath>
 
             <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']"
@@ -457,7 +501,7 @@
                     string="Gudang Tujuan"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
-                    invisible="(picking_type_code == 'internal' and operation_category == 'put') or picking_type_name == 'Internal Transfers'"
+                    invisible="picking_type_code == 'internal' and operation_category == 'put'"
                     readonly="state == 'done'"/>
 
                 <!-- Custom domain -->
@@ -465,29 +509,48 @@
                     string="Gudang Tujuan"
                     options="{'no_create': True}"
                     groups="stock.group_stock_multi_locations"
-                    invisible="picking_type_code != 'internal' or operation_category != 'put' or picking_type_name == 'Internal Transfers'"
+                    invisible="picking_type_code != 'internal' or operation_category != 'put'"
                     readonly="state == 'done'"
                     domain="[('id', 'child_of', adt_dest_location_id)]"/>
+            </xpath>
 
-                <!-- Internal Transfer header domain -->
-                <field name="location_dest_id"
-                    string="Gudang Tujuan"
-                    options="{'no_create': True}"
-                    groups="stock.group_stock_multi_locations"
-                    invisible="picking_type_name != 'Internal Transfers'"
-                    readonly="state == 'done'"
-                    domain="[('id', 'child_of', internal_transfer_adt_dest_location_id)]"/>
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="internal_transfer_destination_location_id"
+                    string="Lokasi Tujuan"
+                    invisible="not show_internal_transfer_destination_location"/>
+            </xpath>
 
+            <xpath expr="//field[@name='owner_id']" position="attributes">
+                <attribute name="string">Pemilik Stock</attribute>
+                <attribute name="invisible">adt_type != 'Toko Pegang DO'</attribute>
             </xpath>
 
             <xpath expr="//field[@name='origin']" position="after">
                 <!-- <field name="adt_type" readonly="1"/> -->
                 <field name="adt_is_document_only" invisible="1"/>
-                <field name="adt_total_qty" string="Total Qty"/>
-                <field name="adt_actual_qty" string="Total Penerimaan"/>
+                <field name="adt_total_qty" string="Qty Total"/>
+                <field name="adt_actual_qty" string="Qty Dipenuhi"/>
+                <field name="adt_change_item_ref_nbr"
+                       string="Change Item Ref. Nbr"
+                       invisible="adt_type != 'Change Item'"
+                       readonly="1"/>
+                <field name="adt_order_type"
+                       string="Order Type"
+                       invisible="adt_type not in ['Sales Order Shipment', 'SO Shipment']"
+                       readonly="1"/>
+                <field name="adt_order_nbr"
+                       string="Order Nbr"
+                       invisible="adt_type != 'SO Return'"
+                       readonly="1"/>
                 <field name="status_ba"/>
-                <field name="adt_dest_location_id" string="Final Location" invisible="adt_type == 'Receipt' or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers']"/>
+                <field name="internal_transfer_order_id" invisible="1"/>
+                <field name="internal_transfer_leg" invisible="1"/>
+                <field name="show_internal_transfer_destination_location" invisible="1"/>
+                <field name="is_ito_internal_transfer" invisible="1"/>
+                <field name="adt_dest_location_id" string="Final Location" invisible="internal_transfer_order_id or 'Receipt' in (picking_type_name or '') or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal'] or is_ito_internal_transfer"/>
                 <field name="all_moves_picked" invisible="1"/>
+                <field name="show_picker_page" invisible="1"/>
+                <field name="show_putaway_page" invisible="1"/>
             </xpath>
 
             <xpath expr="//label[@for='partner_id'][@invisible=&quot;picking_type_code != 'incoming'&quot;]" position="attributes">
@@ -564,18 +627,40 @@
                     <field name="company_id" optional="hide" groups="base.group_multi_company"/>
                     <field name="adt_is_document_only" optional="hide"/>
                     <field name="partner_id" readonly="state in ['cancel', 'done']" string="Supplier/Customer"/>
-                    <field name="adt_total_qty" string="Total Qty"/>
-                    <field name="scheduled_date" widget="remaining_days"
-                        readonly="state in ['cancel', 'done']" optional="hide"/>
+                    <field name="adt_total_qty" string="Qty Total"/>
+                    <field name="scheduled_date" string="Schedule Date" widget="remaining_days"
+                        readonly="state in ['cancel', 'done']" optional="show"/>
                     <field name="state" widget="badge"
                         decoration-danger="state == 'cancel'"
                         decoration-info="state == 'assigned'"
                         decoration-muted="state == 'draft'"
                         decoration-success="state == 'done'"
-                        decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"/>
+                        decoration-warning="state not in ('draft', 'cancel', 'done', 'assigned')"
+                        column_invisible="1"/>
+                    <field name="wms_state" string="Status" widget="badge"
+                        decoration-danger="wms_state == 'cancel'"
+                        decoration-info="wms_state == 'assigned'"
+                        decoration-muted="wms_state == 'draft'"
+                        decoration-success="wms_state in ('done', 'return_shipment')"
+                        decoration-warning="wms_state in ('waiting', 'waiting_response')"/>
                     <field name="user_ids" widget="many2many_avatar_user" optional="show"/>
                     <field name="batch_id" string="Batch" optional="hide"/>
                 </list>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_tree_internal_transfer_order_columns" model="ir.ui.view">
+        <field name="name">stock.picking.list.internal.transfer.order.columns</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock_picking_tree_transaction_columns"/>
+        <field name="mode">primary</field>
+        <field name="priority" eval="1210"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/field[@name='adt_type']" position="after">
+                <field name="internal_transfer_leg" string="Tipe Transfer" widget="badge"
+                    decoration-info="internal_transfer_leg == 'receipt'"
+                    decoration-warning="internal_transfer_leg == 'delivery'"/>
             </xpath>
         </field>
     </record>
@@ -598,6 +683,9 @@
                         readonly="state == 'done'"/>
                     <field name="company_id" optional="hide" groups="base.group_multi_company"/>
                     <field name="adt_type" string="Tipe Transaksi"/>
+                    <field name="internal_transfer_leg" string="Tipe Transfer" widget="badge"
+                        decoration-info="internal_transfer_leg == 'receipt'"
+                        decoration-warning="internal_transfer_leg == 'delivery'"/>
                     <field name="adt_is_document_only" optional="hide"/>
                     <field name="partner_id" string="Supplier / Customer" readonly="state in ['cancel', 'done']"/>
                     <field name="scheduled_date" widget="remaining_days"
@@ -622,259 +710,378 @@
                 <xpath expr="//page[@name='operations']" position="attributes">
                     <attribute name="invisible">'Pick' in (picking_type_name or '')</attribute>
                 </xpath>
-                <xpath expr="//page[@name='operations']" position="after">
-                    <page string="Operations" name="page_picker_operation" invisible="'Pick' not in (picking_type_name or '')">
-                        <field name="move_ids_without_package"
-                            mode="list,kanban"
-                            readonly='0'
-                            context="{
-                                'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
-                            }"
-                        >
-                            <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" editable="bottom">
-                                <field name="company_id" column_invisible="True"/>
-                                <field name="picking_id" column_invisible="True"/>
-                                <field name="name" column_invisible="True"/>
-                                <field name="state" readonly="0" column_invisible="True"/>
-                                <field name="picking_type_id" column_invisible="True"/>
-                                <field name="move_line_ids" column_invisible="True"/>
-                                <field name="location_id" column_invisible="True"/>
-                                <field name="location_dest_id" column_invisible="True"/>
-                                <field name="partner_id" column_invisible="True" readonly="state == 'done'"/>
-                                <field name="scrapped" column_invisible="True"/>
-                                <field name="picking_code" column_invisible="True"/>
-                                <field name="show_details_visible" column_invisible="True"/>
-                                <field name="additional" column_invisible="True"/>
-                                <field name="move_lines_count" column_invisible="True"/>
-                                <field name="is_locked" column_invisible="True"/>
-                                <field name="product_uom_category_id" column_invisible="True"/>
-                                <field name="is_storable" column_invisible="True"/>
-                                <field name="has_tracking" column_invisible="True"/>
-                                <field name="product_default_code" string="Product"/>
-                                <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="0" force_save="1" column_invisible="True"/>
-                                <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
-                                <field name="description_picking" string="Description" optional="hide"/>
-                                <field name="date" optional="hide"/>
-                                <field name="date_deadline" optional="hide"/>
-                                <field name="is_quantity_done_editable" column_invisible="True"/>
-                                <field name="show_quant" column_invisible="True"/>
-                                <field name="show_lots_text" column_invisible="True"/>
-                                <field name="show_lots_m2o" column_invisible="True"/>
-                                <field name="is_initial_demand_editable" column_invisible="True"/>
-                                <field name="display_import_lot" column_invisible="True"/>
-                                <field name="picking_type_entire_packs" column_invisible="True"/>
-                                <field name="product_packaging_id" groups="product.group_stock_packaging"
-                                    context="{'default_product_id': product_id}"
-                                    readonly="not product_id"
-                                    column_invisible="True"/>
-                                <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
-                                <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
-                                    invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
-                                <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
-                                    invisible="not product_id or product_uom_qty == 0 or quantity &gt; 0 or forecast_availability &gt; 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
-                                <field name="forecast_expected_date" column_invisible="True"/>
-                                <field name="forecast_availability" string="Forecast" optional="hide"
-                                    column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
-                                <field name="product_qty" readonly="1" column_invisible="True"/>
-                                <field name="quantity" string="Saran Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                                <field name="confirmation_quantity" string="Qty Diambil" force_save='1' />
-                                <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
-                                <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
-                                <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
-                                <field name="adt_dest_location_id" string="Final Location" column_invisible="True"/>
-                                <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
-                                <field name="lot_ids" widget="many2many_tags"
-                                    readonly="has_tracking != 'serial'"
-                                    column_invisible="parent.state == 'draft'"
-                                    groups="stock.group_production_lot"
-                                    invisible="not show_details_visible or has_tracking == 'none'"
-                                    optional="show"
-                                    options="{'create': [('parent.use_create_lots', '=', True)]}"
-                                    context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
-                                    domain="[('product_id','=',product_id)]"
-                                    string="LOT Number"
-                                />
-                                <button
-                                    name="action_open_move_pick"
-                                    type="object"
-                                    title="Open Move"
-                                    icon="fa-list"
-                                    class="btn-link"
-                                />
-                            </list>
-                            <kanban class="o_kanban_mobile">
-                                <templates>
-                                    <t t-name="card">
-                                        <div class="o_wms_operation_card">
-                                            <div class="o_wms_operation_product">
-                                                <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
-                                            </div>
-                                            <br/>
-                                            <div>
-                                                <div>
-                                                    <strong>Total Qty: </strong>
-                                                    <field name="product_uom_qty"/>
-                                                    <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
-                                                </div>
-                                                <div>
-                                                    <strong>Saran Qty: </strong>
-                                                    <field name="quantity"/>
-                                                    <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
-                                                </div>
-                                                <div>
-                                                    <strong>Qty Diambil: </strong>
-                                                    <field name="confirmation_quantity"/>
-                                                    <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
-                                                </div>
-                                            </div>
-                                            <br/>
-                                            <button name="action_open_move_pick"
-                                                type="object"
-                                                string="Pick Detail"
-                                                class="btn btn-primary btn-sm o_wms_operation_action"
-                                            />
+            <xpath expr="//page[@name='operations']" position="after">
+                <page string="Operations" name="page_picker_operation" invisible="not show_picker_page or 'Pick' not in (picking_type_name or '')">
+                    <field name="move_ids_without_package"
+                        mode="list,kanban"
+                        readonly='0'
+                        context="{
+                            'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
+                        }"
+                    >
+                        <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" editable="bottom">
+                            <field name="company_id" column_invisible="True"/>
+                            <field name="picking_id" column_invisible="True"/>
+                            <field name="name" column_invisible="True"/>
+                            <field name="state" readonly="0" column_invisible="True"/>
+                            <field name="picking_type_id" column_invisible="True"/>
+                            <field name="move_line_ids" column_invisible="True"/>
+                            <field name="location_id" column_invisible="True"/>
+                            <field name="location_dest_id" column_invisible="True"/>
+                            <field name="partner_id" column_invisible="True" readonly="state == 'done'"/>
+                            <field name="scrapped" column_invisible="True"/>
+                            <field name="picking_code" column_invisible="True"/>
+                            <field name="show_details_visible" column_invisible="True"/>
+                            <field name="additional" column_invisible="True"/>
+                            <field name="move_lines_count" column_invisible="True"/>
+                            <field name="is_locked" column_invisible="True"/>
+                            <field name="product_uom_category_id" column_invisible="True"/>
+                            <field name="is_storable" column_invisible="True"/>
+                            <field name="has_tracking" column_invisible="True"/>
+                            <field name="product_default_code" string="Product"/>
+                            <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="0" force_save="1" column_invisible="True"/>
+                            <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
+                            <field name="description_picking" string="Description" optional="show"/>
+                            <field name="date" optional="hide"/>
+                            <field name="date_deadline" optional="hide"/>
+                            <field name="is_quantity_done_editable" column_invisible="True"/>
+                            <field name="show_quant" column_invisible="True"/>
+                            <field name="show_lots_text" column_invisible="True"/>
+                            <field name="show_lots_m2o" column_invisible="True"/>
+                            <field name="is_initial_demand_editable" column_invisible="True"/>
+                            <field name="display_import_lot" column_invisible="True"/>
+                            <field name="picking_type_entire_packs" column_invisible="True"/>
+                            <field name="product_packaging_id" groups="product.group_stock_packaging"
+                                context="{'default_product_id': product_id}"
+                                readonly="not product_id"
+                                column_invisible="True"/>
+                            <field name="product_uom_qty" string="Qty Total" readonly="not is_initial_demand_editable"/>
+                            <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
+                                invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                            <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
+                                invisible="not product_id or product_uom_qty == 0 or quantity &gt; 0 or forecast_availability &gt; 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                            <field name="forecast_expected_date" column_invisible="True"/>
+                            <field name="forecast_availability" string="Forecast" optional="hide"
+                                column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
+                            <field name="product_qty" readonly="1" column_invisible="True"/>
+                            <!-- <field name="quantity_shadow" string="Saran Qty" column_invisible="parent.state != 'done'" decoration-danger="product_uom_qty and quantity_shadow > product_uom_qty and parent.state not in ['done', 'cancel']"/> -->
+                            <!-- <field name="quantity" string="Saran Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state in ('draft','done')" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/> -->
+                            <field name="quantity_shadow" string="Saran Qty" optional="hide" decoration-danger="product_uom_qty and quantity_shadow > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                            <field name="quantity" string="Saran Qty" readonly="not is_quantity_done_editable" optional="hide" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                            <field name="confirmation_quantity" string="Qty Diambil" force_save='1' />
+                            <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
+                            <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
+                            <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
+                            <field name="adt_dest_location_id" string="Final Location" column_invisible="True"/>
+                            <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
+                            <field name="lot_ids" widget="many2many_tags"
+                                readonly="has_tracking != 'serial'"
+                                column_invisible="parent.state == 'draft'"
+                                groups="stock.group_production_lot"
+                                invisible="not show_details_visible or has_tracking == 'none'"
+                                optional="show"
+                                options="{'create': [('parent.use_create_lots', '=', True)]}"
+                                context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
+                                domain="[('product_id','=',product_id)]"
+                                string="LOT Number"
+                            />
+                            <field name="status_pick_check"
+                                widget="badge"
+                                decoration-success="status_pick_check == 'finished'"
+                                decoration-danger="status_pick_check == 'unfinished'" />
+                            <button
+                                name="action_open_note_wizard"
+                                type="object"
+                                icon="fa-sticky-note"
+                                title="Note"
+                            />
+                            <button
+                                name="action_open_move_pick"
+                                type="object"
+                                title="Open Move"
+                                icon="fa-list"
+                                class="btn-link"
+                            />
+                        </list>
+                        <kanban class="o_kanban_mobile">
+                            <templates>
+                                <t t-name="card">
+                                    <div class="o_wms_operation_card">
+                                        <div class="o_wms_operation_product">
+                                            <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                            <field name="status_pick_check"
+                                                widget="badge"
+                                                decoration-success="status_pick_check == 'finished'"
+                                                decoration-danger="status_pick_check == 'unfinished'" />
                                         </div>
-                                    </t>
-                                </templates>
-                            </kanban>
-                        </field>
-                    </page>
-                    <page string="Picker" name="page_picker" invisible="'Pick' not in (picking_type_name or '')">
-                        <group>
-                            <field name="scan_picker_product_button"
-                                widget="adt_scan_picker_product_button"
-                                nolabel="1"/>
-                            
-                            <field name="allowed_picker_product_ids" invisible="1"/>
-                            <field name="allowed_picker_lot_ids" invisible="1"/>
-                            <field name="picker_product_id" domain="[('id', 'in', allowed_picker_product_ids)]"/>
-                            <field name="picker_lot_id" domain="[('id', 'in', allowed_picker_lot_ids)]"/>
-                        </group>
-                        <field name="filtered_move_ids"
-                            mode="list,kanban"
-                            readonly='0'
-                            context="{
-                                'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
-                            }"
-                        >
-                            <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves">
-                                <field name="company_id" column_invisible="True"/>
-                                <field name="picking_id" column_invisible="True"/>
-                                <field name="name" column_invisible="True"/>
-                                <field name="state" readonly="0" column_invisible="True"/>
-                                <field name="picking_type_id" column_invisible="True"/>
-                                <field name="move_line_ids" column_invisible="True"/>
-                                <field name="location_id" column_invisible="True"/>
-                                <field name="location_dest_id" column_invisible="True"/>
-                                <field name="partner_id" column_invisible="True" readonly="state == 'done'"/>
-                                <field name="scrapped" column_invisible="True"/>
-                                <field name="picking_code" column_invisible="True"/>
-                                <field name="show_details_visible" column_invisible="True"/>
-                                <field name="additional" column_invisible="True"/>
-                                <field name="move_lines_count" column_invisible="True"/>
-                                <field name="is_locked" column_invisible="True"/>
-                                <field name="product_uom_category_id" column_invisible="True"/>
-                                <field name="is_storable" column_invisible="True"/>
-                                <field name="has_tracking" column_invisible="True"/>
-                                <field name="product_default_code" string="Product"/>
-                                <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0" force_save="1" column_invisible="True"/>
-                                <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
-                                <field name="description_picking" string="Description" optional="hide"/>
-                                <field name="date" optional="hide"/>
-                                <field name="date_deadline" optional="hide"/>
-                                <field name="is_quantity_done_editable" column_invisible="True"/>
-                                <field name="show_quant" column_invisible="True"/>
-                                <field name="show_lots_text" column_invisible="True"/>
-                                <field name="show_lots_m2o" column_invisible="True"/>
-                                <field name="is_initial_demand_editable" column_invisible="True"/>
-                                <field name="display_import_lot" column_invisible="True"/>
-                                <field name="picking_type_entire_packs" column_invisible="True"/>
-                                <field name="product_packaging_id" groups="product.group_stock_packaging"
-                                    context="{'default_product_id': product_id}"
-                                    readonly="not product_id"
-                                    column_invisible="True"/>
-                                <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
-                                <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
-                                    invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
-                                <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
-                                    invisible="not product_id or product_uom_qty == 0 or quantity &gt; 0 or forecast_availability &gt; 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
-                                <field name="forecast_expected_date" column_invisible="True"/>
-                                <field name="forecast_availability" string="Forecast" optional="hide"
-                                    column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
-                                <field name="product_qty" readonly="1" column_invisible="True"/>
-                                <field name="quantity" string="Saran Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                                <field name="confirmation_quantity" string="Qty Diambil" force_save='1' />
-                                <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
-                                <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
-                                <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
-                                <field name="adt_dest_location_id" string="Final Location" column_invisible="True"/>
-                                <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
-                                <field name="lot_ids" widget="many2many_tags"
-                                    readonly="has_tracking != 'serial'"
-                                    column_invisible="parent.state == 'draft'"
-                                    groups="stock.group_production_lot"
-                                    invisible="not show_details_visible or has_tracking == 'none'"
-                                    optional="show"
-                                    options="{'create': [('parent.use_create_lots', '=', True)]}"
-                                    context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
-                                    domain="[('product_id','=',product_id)]"
-                                    string="LOT Number"
-                                />
-                                <button
-                                    name="action_open_move_pick"
-                                    type="object"
-                                    title="Open Move"
-                                    icon="fa-list"
-                                    class="btn-link"
-                                />
-                                <button
-                                    name="action_open_move_putaway"
-                                    type="object"
-                                    string="Open Putaway"
-                                    title="Open Putaway"
-                                    icon="fa-archive"
-                                    class="btn-link"
-                                    invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"
-                                />
-                            </list>
-                            <kanban class="o_kanban_mobile">
-                                <templates>
-                                    <t t-name="card">
-                                        <div class="o_wms_operation_card">
-                                            <div class="o_wms_operation_product">
-                                                <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
-                                            </div>
-                                            <br/>
+                                        <br/>
+                                        <div>
                                             <div>
-                                                <div>
-                                                    <strong>Total Qty: </strong>
-                                                    <field name="product_uom_qty"/>
-                                                    <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
-                                                </div>
-                                                <div>
-                                                    <strong>Saran Qty: </strong>
-                                                    <field name="quantity"/>
-                                                    <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
-                                                </div>
-                                                <div>
-                                                    <strong>Qty Diambil: </strong>
-                                                    <field name="confirmation_quantity"/>
-                                                    <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
-                                                </div>
+                                                <strong>Qty Total: </strong>
+                                                <field name="product_uom_qty"/>
+                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
                                             </div>
-                                            <br/>
-                                            <button name="action_open_move_pick"
-                                                type="object"
-                                                string="Pick Detail"
-                                                class="btn btn-primary btn-sm o_wms_operation_action"
-                                            />
+                                            <div>
+                                                <strong>Saran Qty: </strong>
+                                                <field name="quantity"/>
+                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                            </div>
+                                            <div>
+                                                <strong>Qty Diambil: </strong>
+                                                <field name="confirmation_quantity"/>
+                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                            </div>
                                         </div>
-                                    </t>
-                                </templates>
-                            </kanban>
-                        </field>
-                    </page>
-                </xpath>
+                                        <br/>
+                                        <button name="action_open_move_pick"
+                                            type="object"
+                                            string="Pick Detail"
+                                            class="btn btn-primary btn-sm o_wms_operation_action"
+                                        />
+                                    </div>
+                                </t>
+                            </templates>
+                        </kanban>
+                    </field>
+                </page>
+                <page string="Picker" name="page_picker" invisible="not show_picker_page or 'Pick' not in (picking_type_name or '')">
+                    <group>
+                        <field name="scan_picker_product_button"
+                            widget="adt_scan_picker_product_button"
+                            nolabel="1"/>
+                        <field name="picker_scan_code"
+                            widget="adt_handheld_scan_code"
+                            placeholder="Scan handheld atau ketik kode"
+                            help="Bisa barcode, SKU, atau lot."/>
+                        
+                        <field name="allowed_picker_product_ids" invisible="1"/>
+                        <field name="allowed_picker_lot_ids" invisible="1"/>
+                        <field name="picker_product_id" domain="[('id', 'in', allowed_picker_product_ids)]"/>
+                        <field name="picker_lot_id" domain="[('id', 'in', allowed_picker_lot_ids)]"/>
+                    </group>
+                    <field name="filtered_move_ids"
+                        mode="list,kanban"
+                        readonly='0'
+                        context="{
+                            'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
+                        }"
+                    >
+                        <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves">
+                            <field name="company_id" column_invisible="True"/>
+                            <field name="picking_id" column_invisible="True"/>
+                            <field name="name" column_invisible="True"/>
+                            <field name="state" readonly="0" column_invisible="True"/>
+                            <field name="picking_type_id" column_invisible="True"/>
+                            <field name="move_line_ids" column_invisible="True"/>
+                            <field name="location_id" column_invisible="True"/>
+                            <field name="location_dest_id" column_invisible="True"/>
+                            <field name="partner_id" column_invisible="True" readonly="state == 'done'"/>
+                            <field name="scrapped" column_invisible="True"/>
+                            <field name="picking_code" column_invisible="True"/>
+                            <field name="show_details_visible" column_invisible="True"/>
+                            <field name="additional" column_invisible="True"/>
+                            <field name="move_lines_count" column_invisible="True"/>
+                            <field name="is_locked" column_invisible="True"/>
+                            <field name="product_uom_category_id" column_invisible="True"/>
+                            <field name="is_storable" column_invisible="True"/>
+                            <field name="has_tracking" column_invisible="True"/>
+                            <field name="product_default_code" string="Product"/>
+                            <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0" force_save="1" column_invisible="True"/>
+                            <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
+                            <field name="description_picking" string="Description" optional="show"/>
+                            <field name="date" optional="hide"/>
+                            <field name="date_deadline" optional="hide"/>
+                            <field name="is_quantity_done_editable" column_invisible="True"/>
+                            <field name="show_quant" column_invisible="True"/>
+                            <field name="show_lots_text" column_invisible="True"/>
+                            <field name="show_lots_m2o" column_invisible="True"/>
+                            <field name="is_initial_demand_editable" column_invisible="True"/>
+                            <field name="display_import_lot" column_invisible="True"/>
+                            <field name="picking_type_entire_packs" column_invisible="True"/>
+                            <field name="product_packaging_id" groups="product.group_stock_packaging"
+                                context="{'default_product_id': product_id}"
+                                readonly="not product_id"
+                                column_invisible="True"/>
+                            <field name="product_uom_qty" string="Qty Total" readonly="not is_initial_demand_editable"/>
+                            <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
+                                invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                            <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
+                                invisible="not product_id or product_uom_qty == 0 or quantity &gt; 0 or forecast_availability &gt; 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                            <field name="forecast_expected_date" column_invisible="True"/>
+                            <field name="forecast_availability" string="Forecast" optional="hide"
+                                column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
+                            <field name="product_qty" readonly="1" column_invisible="True"/>
+                            <field name="quantity" string="Saran Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                            <field name="confirmation_quantity" string="Qty Diambil" force_save='1' />
+                            <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
+                            <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
+                            <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
+                            <field name="adt_dest_location_id" string="Final Location" column_invisible="True"/>
+                            <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
+                            <field name="lot_ids" widget="many2many_tags"
+                                readonly="has_tracking != 'serial'"
+                                column_invisible="parent.state == 'draft'"
+                                groups="stock.group_production_lot"
+                                invisible="not show_details_visible or has_tracking == 'none'"
+                                optional="show"
+                                options="{'create': [('parent.use_create_lots', '=', True)]}"
+                                context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
+                                domain="[('product_id','=',product_id)]"
+                                string="LOT Number"
+                            />
+                            <button
+                                name="action_open_note_wizard"
+                                type="object"
+                                icon="fa-sticky-note"
+                                title="Note"
+                            />
+                            <button
+                                name="action_open_move_pick"
+                                type="object"
+                                title="Open Move"
+                                icon="fa-list"
+                                class="btn-link"
+                            />
+                            <button
+                                name="action_open_move_putaway"
+                                type="object"
+                                string="Open Putaway"
+                                title="Open Putaway"
+                                icon="fa-archive"
+                                class="btn-link"
+                                invisible="not parent.show_putaway_page or parent.picking_type_name not in ['Receipts', 'Receipt Internal']"
+                            />
+                        </list>
+                        <kanban class="o_kanban_mobile">
+                            <templates>
+                                <t t-name="card">
+                                    <div class="o_wms_operation_card">
+                                        <div class="o_wms_operation_product">
+                                            <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                        </div>
+                                        <br/>
+                                        <div>
+                                            <div>
+                                                <strong>Qty Total: </strong>
+                                                <field name="product_uom_qty"/>
+                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                            </div>
+                                            <div>
+                                                <strong>Saran Qty: </strong>
+                                                <field name="quantity"/>
+                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                            </div>
+                                            <div>
+                                                <strong>Qty Diambil: </strong>
+                                                <field name="confirmation_quantity"/>
+                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                            </div>
+                                        </div>
+                                        <br/>
+                                        <button name="action_open_move_pick"
+                                            type="object"
+                                            string="Pick Detail"
+                                            class="btn btn-primary btn-sm o_wms_operation_action"
+                                        />
+                                    </div>
+                                </t>
+                            </templates>
+                        </kanban>
+                    </field>
+                </page>
+                <page string="Packer" name="page_packer_operation" invisible="not show_packer_page or 'Pack' not in (picking_type_name or '')">
+                    <field name="move_ids_without_package"
+                        mode="list,kanban"
+                        widget="stock_move_one2many"
+                        readonly="state == 'done' and is_locked" 
+                        context="{
+                            'default_company_id': company_id, 
+                            'default_date': scheduled_date, 
+                            'default_date_deadline': date_deadline, 
+                            'picking_type_code': picking_type_code, 
+                            'default_picking_id': id, 
+                            'form_view_ref': 'stock.view_stock_move_operations', 
+                            'address_in_id': partner_id, 'default_picking_type_id': picking_type_id, 
+                            'default_location_id': location_id, 
+                            'default_location_dest_id': location_dest_id, 
+                            'default_partner_id': partner_id}" 
+                        add-label="Add a Product"
+                    >
+                        <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" editable="bottom">
+                            <field name="company_id" column_invisible="True"/>
+                            <field name="picking_id" column_invisible="True"/>
+                            <field name="name" column_invisible="True"/>
+                            <field name="state" readonly="0" column_invisible="True"/>
+                            <field name="picking_type_id" column_invisible="True"/>
+                            <field name="move_line_ids" column_invisible="True"/>
+                            <field name="location_id" column_invisible="True"/>
+                            <field name="location_dest_id" column_invisible="True"/>
+                            <field name="partner_id" column_invisible="True" readonly="state == 'done'"/>
+                            <field name="scrapped" column_invisible="True"/>
+                            <field name="picking_code" column_invisible="True"/>
+                            <field name="show_details_visible" column_invisible="True"/>
+                            <field name="additional" column_invisible="True"/>
+                            <field name="move_lines_count" column_invisible="True"/>
+                            <field name="is_locked" column_invisible="True"/>
+                            <field name="product_uom_category_id" column_invisible="True"/>
+                            <field name="is_storable" column_invisible="True"/>
+                            <field name="has_tracking" column_invisible="True"/>
+                            <field name="product_default_code" string="Product"/>
+                            <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="0" force_save="1" column_invisible="True"/>
+                            <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
+                            <field name="description_picking" string="Description" optional="show"/>
+                            <field name="date" optional="hide"/>
+                            <field name="date_deadline" optional="hide"/>
+                            <field name="is_quantity_done_editable" column_invisible="True"/>
+                            <field name="show_quant" column_invisible="True"/>
+                            <field name="show_lots_text" column_invisible="True"/>
+                            <field name="show_lots_m2o" column_invisible="True"/>
+                            <field name="is_initial_demand_editable" column_invisible="True"/>
+                            <field name="display_import_lot" column_invisible="True"/>
+                            <field name="picking_type_entire_packs" column_invisible="True"/>
+                            <field name="product_packaging_id" groups="product.group_stock_packaging"
+                                context="{'default_product_id': product_id}"
+                                readonly="not product_id"
+                                column_invisible="True"/>
+                            <field name="product_uom_qty" string="Qty Total" readonly="not is_initial_demand_editable"/>
+                            <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
+                                invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                            <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
+                                invisible="not product_id or product_uom_qty == 0 or quantity &gt; 0 or forecast_availability &gt; 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
+                            <field name="forecast_expected_date" column_invisible="True"/>
+                            <field name="forecast_availability" string="Forecast" optional="hide"
+                                column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
+                            <field name="product_qty" readonly="1" column_invisible="True"/>
+                            <!-- <field name="quantity_shadow" string="Saran Qty" column_invisible="parent.state != 'done'" decoration-danger="product_uom_qty and quantity_shadow > product_uom_qty and parent.state not in ['done', 'cancel']"/> -->
+                            <!-- <field name="quantity" string="Saran Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state in ('draft','done')" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/> -->
+                            <field name="quantity_shadow" string="Saran Qty" optional="hide" decoration-danger="product_uom_qty and quantity_shadow > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                            <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                            <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
+                            <field name="adt_dest_location_id" string="Final Location" column_invisible="True"/>
+                            <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
+                            <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
+                            <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
+                            <field name="lot_ids" widget="many2many_tags"
+                                readonly="has_tracking != 'serial'"
+                                column_invisible="parent.state == 'draft'"
+                                groups="stock.group_production_lot"
+                                invisible="not show_details_visible or has_tracking == 'none'"
+                                optional="hide"
+                                options="{'create': [('parent.use_create_lots', '=', True)]}"
+                                context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
+                                domain="[('product_id','=',product_id)]"
+                                string="LOT Number"
+                            />
+                            <button
+                                name="action_open_note_wizard"
+                                type="object"
+                                icon="fa-sticky-note"
+                                title="Note"
+                            />
+                        </list>
+                    </field>
+                </page>
+            </xpath>
 
         </field>
     </record>
@@ -896,11 +1103,14 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='action_confirm']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+            <!-- <xpath expr="//button[@name='action_confirm']" position="attributes">
                 <attribute name="invisible">state != 'draft' or 'Pick' in (picking_type_name or '')</attribute>
-            </xpath>
-            <xpath expr="//button[@name='action_assign']" position="attributes">
+            </xpath> -->
+            <!-- <xpath expr="//button[@name='action_assign']" position="attributes">
                 <attribute name="invisible">not show_check_availability or 'Pick' in (picking_type_name or '')</attribute>
-            </xpath>
+            </xpath> -->
 
             <xpath expr="//button[@name='action_assign']" position="after">
                 <button name="action_mark_todo_and_check_availability"
@@ -908,8 +1118,32 @@
                         string="Mark As To Do"
                         class="oe_highlight"
                         groups="base.group_user"
-                        invisible="'Pick' not in (picking_type_name or '') or (state != 'draft' and not show_check_availability)"
+                        invisible="state not in ('draft','waiting')"
                         data-hotkey="q"/>
+
+                <button name="action_print_warehouse_pack"
+                    string="Print Pack"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
+                
+                <button name="action_print_warehouse_pick"
+                    string="Print Pick"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_name not in ['Pick', 'Pick Internal']"/>
+                
+                <button name="action_print_warehouse_transfer"
+                    string="Print Transfer"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_name not in ['Transfer', 'Transfer Internal']"/>
+
+            </xpath>
+
+            <!-- Keep Description visible in the main Operations table. -->
+            <xpath expr="//page[@name='operations']//field[@name='description_picking']" position="attributes">
+                <attribute name="optional"/>
             </xpath>
 
         </field>
@@ -931,7 +1165,8 @@
         id="custom_logs_menu"
         name="Logs"
         parent="stock.menu_stock_root"
-        sequence="101"/>
+        sequence="101"
+        active="False"/>
 
     <menuitem
         id="menu_stock_picking_acumatica_error"
@@ -1033,6 +1268,10 @@
                 <page name="Notes" string="Notes">
                     <group name="Transaction Notes" string="Transaction Notes">
                         <field name="note" nolabel="1"/>
+                    </group>
+
+                    <group name="description_note" string="Description">
+                        <field name="desc_note" nolabel="1"/>
                     </group>
 
                     <group name="BA Notes" string="BA Notes">
@@ -1184,6 +1423,17 @@
         </field>
     </record>
 
+    <record id="view_stock_picking_hide_operations_for_operator" model="ir.ui.view">
+        <field name="name">stock.picking.form.hide.operations.for.operator</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.view_picking_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='operations']" position="attributes">
+                <attribute name="groups">!tijari_wms_18.group_operator</attribute>
+            </xpath>
+        </field>
+    </record>
+
     <record id="view_stock_picking_hide_put_in_pack" model="ir.ui.view">
         <field name="name">stock.picking.form.hide.put.in.pack</field>
         <field name="model">stock.picking</field>
@@ -1191,7 +1441,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='action_put_in_pack']" position="attributes">
-                <attribute name="invisible">1</attribute>
+                <attribute name="invisible">picking_type_name != 'Receipts'</attribute>
             </xpath>
 
         </field>
@@ -1204,7 +1454,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='action_put_in_pack']" position="attributes">
-                <attribute name="invisible">1</attribute>
+                <attribute name="invisible">context.get('picking_type_name') != 'Receipts'</attribute>
             </xpath>
 
         </field>
@@ -1217,9 +1467,23 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='action_put_in_pack']" position="attributes">
-                <attribute name="invisible">1</attribute>
+                <attribute name="invisible">picking_type_name != 'Receipts'</attribute>
             </xpath>
 
+        </field>
+</record>
+
+    <record id="email_template_stock_picking_custom" model="mail.template">
+        <field name="name">Email Berita Acara Penerimaan Barang</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+        <field name="subject">Berita Acara Penerimaan Barang - {{ object.adt_type or '' }} - {{ object.origin or object.name }}</field>
+        <field name="email_layout_xmlid">tijari_wms_18.email_layout_picking_plain</field>
+        <field name="body_html" type="html">
+            <div>
+                <p>Yth. Bapak/Ibu,</p>
+                <p>Berikut kami lampirkan dokumen Berita Acara Penerimaan Barang untuk dapat diperiksa dan ditindaklanjuti.</p>
+                <p>Terima kasih.</p>
+            </div>
         </field>
     </record>
 

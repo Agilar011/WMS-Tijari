@@ -10,29 +10,40 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaInvoiceConsignment(models.Model):
     _name = 'acumatica.invoice.consignment.staging'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Inventory Receipt dari Acumatica'
     _order = 'adt_ReferenceNbr asc, adt_rowNumber asc, id asc'
 
-    adt_id = fields.Char(string="Acumatica id", readonly=True)
-    adt_rowNumber = fields.Char(string="Acumatica rowNumber", readonly=True)
-    adt_note = fields.Char(string="Acumatica note", readonly=True)
-    adt_ConsignmentType = fields.Char(string="Acumatica ConsignmentType", readonly=True)
-    adt_CreatedDateTime = fields.Char(string="Acumatica CreatedDateTime", readonly=True)
-    adt_CustomerID = fields.Char(string="Acumatica CustomerID", readonly=True)
-    adt_CustomerName = fields.Char(string="Acumatica CustomerName", readonly=True)
-    adt_CustomerOrder = fields.Char(string="Acumatica CustomerOrder", readonly=True)
-    adt_Date = fields.Char(string="Acumatica Date", readonly=True)
-    adt_Description = fields.Char(string="Acumatica Description", readonly=True)
-    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly", readonly=True)
-    adt_DueDate = fields.Char(string="Acumatica DueDate", readonly=True)
-    adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime", readonly=True)
-    adt_LocationID = fields.Char(string="Acumatica LocationID", readonly=True)
-    adt_LocationName = fields.Char(string="Acumatica LocationName", readonly=True)
-    adt_OrigRefNbr = fields.Char(string="Acumatica OrigRefNbr", readonly=True)
-    adt_ReferenceNbr = fields.Char(string="Acumatica ReferenceNbr", readonly=True)
-    adt_Status = fields.Char(string="Acumatica Status", readonly=True)
-    adt_Type = fields.Char(string="Acumatica Type", readonly=True)
+    def _adt_picking_type_wizard_call(self):
+        line = self.env['acumatica.invoice.consignment.staging.line'].search(
+            [('receipt_line_id', '=', self.id)], limit=1,
+        )
+        if not line.adt_Warehouse:
+            return False
+        return ('import.invoice.consignment.wizard', (line.adt_Warehouse,), {})
+
+    adt_id = fields.Char(string="Acumatica id")
+    adt_rowNumber = fields.Char(string="Acumatica rowNumber")
+    adt_note = fields.Char(string="Acumatica note")
+    adt_ConsignmentType = fields.Char(string="Acumatica ConsignmentType")
+    adt_CreatedDateTime = fields.Char(string="Acumatica CreatedDateTime")
+    adt_CustomerID = fields.Char(string="Acumatica CustomerID")
+    adt_CustomerName = fields.Char(string="Acumatica CustomerName")
+    adt_CustomerOrder = fields.Char(string="Acumatica CustomerOrder")
+    adt_Date = fields.Char(string="Acumatica Date")
+    adt_BuildingID = fields.Char(string="Acumatica BuildingID")
+    adt_Description = fields.Char(string="Acumatica Description")
+    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly")
+    adt_DueDate = fields.Char(string="Acumatica DueDate")
+    adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime")
+    adt_LocationID = fields.Char(string="Acumatica LocationID")
+    adt_LocationName = fields.Char(string="Acumatica LocationName")
+    adt_NoteHeaderID = fields.Char(string="Acumatica NoteHeaderID")
+    adt_NoteID = fields.Char(string="Acumatica NoteID")
+    adt_OrigRefNbr = fields.Char(string="Acumatica OrigRefNbr")
+    adt_ReferenceNbr = fields.Char(string="Acumatica ReferenceNbr")
+    adt_Status = fields.Char(string="Acumatica Status")
+    adt_Type = fields.Char(string="Acumatica Type")
 
     product_line_ids = fields.One2many('acumatica.invoice.consignment.staging.line', 'receipt_line_id', string='Lines')
 
@@ -45,13 +56,13 @@ class AcumaticaInvoiceConsignment(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    ], string='Status', default='staged', tracking=True)
+    import_message = fields.Char(string='Generation Message', tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -146,6 +157,94 @@ class AcumaticaInvoiceConsignment(models.Model):
             location = warehouse.lot_stock_id
         return location
 
+    def _find_consignment_location(self, warehouse_code):
+        """Cari lokasi sumber CONS untuk Invoice Consignment."""
+        Location = self.env['stock.location'].sudo()
+        Mapping = self.env['stock.location.acumatica'].sudo()
+        code = (warehouse_code or '').strip()
+        if not code:
+            return Location.browse()
+
+        virtual_root = self.env.ref(
+            'stock.stock_location_locations_virtual', raise_if_not_found=False
+        )
+        if virtual_root:
+            consignment_root = Location.search([
+                ('name', '=', 'Consignment'),
+                ('location_id', '=', virtual_root.id),
+            ], limit=1)
+            consignment_code = (
+                code.split('-', 1)[1].strip()
+                if '-' in code
+                else code
+            )
+            if consignment_root and consignment_code:
+                location = Location.search([
+                    ('name', '=', consignment_code),
+                    ('location_id', '=', consignment_root.id),
+                    ('is_consignment', '=', True),
+                ], limit=1)
+                if location:
+                    return location
+
+        mapping = Mapping.search([
+            '|', ('code', '=', code), ('name', '=', code),
+            ('active', '=', True),
+        ], limit=1)
+        if mapping.odoo_location_id and (
+            mapping.odoo_location_id.is_consignment
+            or 'CONS' in (mapping.odoo_location_id.complete_name or '').upper()
+        ):
+            return mapping.odoo_location_id
+
+        location = Location.search([
+            ('name', '=', code),
+            ('is_consignment', '=', True),
+        ], limit=1)
+        if location:
+            return location
+
+        building_code = code.split('-', 1)[0].upper()
+        warehouse = self.env['stock.warehouse'].search([
+            ('code', '=', building_code),
+        ], limit=1)
+        if warehouse:
+            cons_root = Location.search([
+                ('name', '=', 'CONS'),
+                ('location_id', '=', warehouse.view_location_id.id),
+            ], limit=1)
+            if cons_root:
+                location = Location.search([
+                    ('name', '=', code),
+                    ('location_id', '=', cons_root.id),
+                    ('is_consignment', '=', True),
+                ], limit=1)
+                if location:
+                    return location
+                if code.upper() == 'CONS' or code.upper() == f'{building_code}-CONS':
+                    return cons_root
+
+        return Location.browse()
+
+    def _get_invoice_consignment_destination_location(self):
+        """Return the shared partner location for end-user consignment."""
+        location = self.env.ref(
+            'tijari_wms_18.stock_location_end_user_consignment',
+            raise_if_not_found=False,
+        )
+        if location:
+            return location
+
+        partner_root = self.env.ref(
+            'stock.stock_location_locations_partner', raise_if_not_found=False
+        )
+        if not partner_root:
+            return self.env['stock.location'].browse()
+        return self.env['stock.location'].sudo().search([
+            ('name', '=', 'End User Consignment'),
+            ('location_id', '=', partner_root.id),
+        ], limit=1)
+
     def _find_uom(self, line, product=False):
         Uom = self.env['uom.uom']
         uom = False
@@ -201,18 +300,10 @@ class AcumaticaInvoiceConsignment(models.Model):
         
         print(f"Picking to skip: {picking_to_skip}")
         
-        picking_to_create = set(staging_records) - set(picking_to_update) - set(picking_to_skip)
-        print(f"Picking to create: {picking_to_create}")
-
         # PERULANGAN UTAMA PER DOKUMEN STAGING
         for first in self:
             first_id = first.id
             first_reference = first.adt_ReferenceNbr
-        
-            # KOREKSI 1: Gunakan 'continue' (BUKAN return) agar dokumen lain tetap diproses
-            if first_reference not in picking_to_create:
-                print(f"Receipt {first_reference} dilewati karena statusnya masuk ke list update/skip.")
-                continue
 
             try:
                 # 2. BUNGKUS DENGAN SAVEPOINT: Jika error, rollback hanya terjadi pada dokumen aktif ini
@@ -226,42 +317,41 @@ class AcumaticaInvoiceConsignment(models.Model):
                         ('receipt_line_id', '=', first.id)
                     ], limit=1)
 
-                    warehouse_code = staging_line.adt_Warehouse if staging_line else False
                     branch_warehouse = staging_line.adt_Branch if staging_line else False
-                    warehouse = self._find_warehouse(warehouse_code)
-                    if not warehouse:
-                        raise UserError(
-                            f'Warehouse tidak ditemukan untuk code: {staging_line.adt_Warehouse or "-"}'
-                        )
 
                     picking_type = first.picking_type_id
                     if not picking_type:
-                        picking_type = warehouse.pick_type_id or self.env['stock.picking.type'].search([
-                            ('warehouse_id', '=', warehouse.id),
-                            ('code', '=', 'internal'),
-                            ('operation_category', '=', 'pick'),
-                        ], limit=1)
+                        picking_type = self.env['stock.picking.type'].resolve_picking_type(
+                            warehouse_code=staging_line.adt_Warehouse if staging_line else False,
+                            code='outgoing',
+                            operation_category='delivery',
+                            api_acumatica='invoice_consignment',
+                            transaction_key='invoice_consignment',
+                            document_only=True,
+                            required=False,
+                        )
                     if not picking_type:
-                        raise UserError('Picking type Pick tidak ditemukan.')
+                        raise UserError('Picking type Direct Delivery Order tidak ditemukan.')
 
-                    dest_location = self._find_location_dest(first, warehouse)
+                    warehouse_code = staging_line.adt_Warehouse if staging_line else False
+                    source_location = self._find_consignment_location(warehouse_code)
+                    if not source_location:
+                        raise UserError(
+                            f'Location CONS tidak ditemukan untuk warehouse {warehouse_code or "-"}.'
+                        )
+
+                    dest_location = self._get_invoice_consignment_destination_location()
                     if not dest_location:
                         raise UserError(
-                            f'Location tujuan tidak ditemukan untuk code: {warehouse_code or "-"}'
+                            'Location Partners/End User Consignment tidak ditemukan.'
                         )
-                    if dest_location.usage == 'customer':
-                        raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
 
                     origin = first.adt_ReferenceNbr or False
 
                     vals = {
                         'partner_id': vendor.id if vendor else False,
                         'picking_type_id': picking_type.id,
-                        'location_id': (
-                            picking_type.default_location_src_id.id
-                            if picking_type.default_location_src_id
-                            else self.env.ref('stock.stock_location_suppliers').id
-                        ),
+                        'location_id': source_location.id,
                         'location_dest_id': dest_location.id,
                         'scheduled_date': self._parse_dt(first.adt_Date),
                         'origin': origin,
@@ -273,13 +363,27 @@ class AcumaticaInvoiceConsignment(models.Model):
                         'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
                         'adt_status': first.adt_Status or False,
                         'adt_type': first.adt_Type or False,
+                        'adt_is_document_only': True,
                         'adt_external_id': first.adt_id or False,
+                        'desc_note': first.adt_Description or False,
+
                     }
                     
                     vals = {k: v for k, v in vals.items() if k in Picking._fields}
                     
-                    picking = Picking.create(vals)
-                    action_state = 'created'
+                    picking = Picking.search([('origin', '=', origin)], limit=1)
+                    if picking:
+                        if picking.state != 'draft':
+                            raise UserError(
+                                f'Invoice Consignment {origin} sudah ada di Odoo dengan state '
+                                f'{picking.state}, tidak bisa diupdate.'
+                            )
+                        picking.write(vals)
+                        action_state = 'updated'
+                        picking.move_ids.unlink()
+                    else:
+                        picking = Picking.create(vals)
+                        action_state = 'created'
 
                     to_create_move = self.env['acumatica.invoice.consignment.staging.line'].search([
                         ('receipt_line_id', '=', first.id)
@@ -302,24 +406,8 @@ class AcumaticaInvoiceConsignment(models.Model):
                             )
 
                         uom = self._find_uom(line, product)
-                        line_dest = self._find_location_dest(line, warehouse) or picking.location_dest_id
-                        if line_dest.usage == 'customer':
-                            raise UserError('Location tujuan customer hanya boleh dipakai oleh SO Shipment.')
                         qty = self._parse_int(line.adt_Qty)
                         print(f"Quantity: {qty} for actual value: {line.adt_Qty}")
-
-                        move_domain = [('picking_id', '=', picking.id)]
-                        if 'adt_line_external_id' in Move._fields and line.adt_external_id:
-                            move_domain.append(('adt_line_external_id', '=', line.adt_external_id))
-                        else:
-                            move_domain += [
-                                ('product_id', '=', product.id),
-                                ('adt_line_nbr', '=', line.adt_rowNumber or False) 
-                            ]
-
-                        existing_move = Move.search(move_domain, limit=1)
-                        if existing_move:
-                            continue
 
                         # Buat dictionary data untuk satu baris barang
                         single_move_vals = {
@@ -329,7 +417,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                             'product_uom_qty': qty,
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': picking.location_id.id,
-                            'location_dest_id': line_dest.id,
+                            'location_dest_id': picking.location_dest_id.id,
                             'description_picking': line.adt_TransactionDescription or False,
                             'adt_line_external_id': line.adt_external_id or False,
                             'adt_inventory_id': line.adt_InventoryID or False,
@@ -349,6 +437,10 @@ class AcumaticaInvoiceConsignment(models.Model):
                     if moves_to_create:
                         Move.create(moves_to_create)
 
+                    # Invoice Consignment dibuat sebagai transaksi Document Only.
+                    # Validasi setelah seluruh move tersedia agar picking impor
+                    # diproses otomatis melalui guard stok Document Only.
+                    picking.action_validate_document_only_import(force=True)
 
                     # Tulis status sukses ke tabel staging kustom
                     first.write({
@@ -358,7 +450,10 @@ class AcumaticaInvoiceConsignment(models.Model):
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(first_reference, 'invoice_consignment')
                     
-                    created += 1
+                    if action_state == 'created':
+                        created += 1
+                    else:
+                        updated += 1
 
             except Exception as e:
                 # KOREKSI 2: Penanganan komplit jika dokumen ini gagal (Otomatis skip ke index loop selanjutnya)
@@ -398,16 +493,17 @@ class AcumaticaInvoiceConsignment(models.Model):
 
         msg = f'Generate done: {created} invoice consignment created, {updated} invoice consignment updated, {error} invoice consignment error.'
         print(f"[SUMMARY SINKRONISASI] Created: {created}, Updated: {updated}, Error: {error}")
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Generate Invoice Consignment',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Generate Invoice Consignment',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
 
     def action_reset_pending(self):
@@ -449,7 +545,10 @@ class AcumaticaInvoiceConsignmentLine(models.Model):
     adt_rowNumber = fields.Char(string='Acumatica Detail Row Number')
     adt_note = fields.Char(string='Acumatica Detail Note')
     adt_Branch = fields.Char(string='Acumatica Detail Branch')
+    adt_LineBranchName = fields.Char(string='Acumatica Detail LineBranchName')
     adt_InventoryID = fields.Char(string='Acumatica Detail Inventory ID')
+    adt_LineNoteID = fields.Char(string='Acumatica Detail LineNoteID')
+    adt_NoteID = fields.Char(string='Acumatica Detail NoteID')
     adt_Qty = fields.Char(string='Acumatica Detail Quantity')
     adt_TransactionDescription = fields.Char(string='Acumatica Detail Transaction Description')
     adt_UOM = fields.Char(string='Acumatica Detail UOM')
@@ -457,53 +556,53 @@ class AcumaticaInvoiceConsignmentLine(models.Model):
 
     # line_external_id = fields.Char(
     #     string='Line External ID',
-    #     readonly=True,
+    #     ,
     #     index=True,
     # )
 
     # line_note = fields.Text(
     #     string='Line Note',
-    #     readonly=True,
+    #     ,
     # )
 
     # branch_warehouse = fields.Char(
     #     string='Branch',
-    #     readonly=True,
+    #     ,
     # )
 
     # line_description = fields.Char(
     #     string='Description',
-    #     readonly=True,
+    #     ,
     # )
 
     # inventory_id = fields.Char(
     #     string='Inventory ID',
-    #     readonly=True,
+    #     ,
     #     index=True,
     # )
 
     # line_nbr = fields.Integer(
     #     string='Line Number',
-    #     readonly=True,
+    #     ,
     # )
 
     # location_code = fields.Char(
     #     string='Location',
-    #     readonly=True,
+    #     ,
     # )
 
     # product_uom_qty = fields.Float(
     #     string='Quantity',
     #     digits=(16, 4),
-    #     readonly=True,
+    #     ,
     # )
 
     # uom_code = fields.Char(
     #     string='UOM',
-    #     readonly=True,
+    #     ,
     # )
 
     # warehouse_code = fields.Char(
     #     string='Warehouse',
-    #     readonly=True,
+    #     ,
     # )

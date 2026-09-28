@@ -19,61 +19,64 @@ class AcumaticaReceiptProductLine(models.Model):
     _name = 'acumatica.inventory.recieved.product.line'
     _description = 'Data Product Inventory Recieve dari Acumatica'
 
-    header_external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
+    header_external_id = fields.Char(string='UUID Header Acumatica')
     inventory_line_id = fields.Many2one('acumatica.inventory.recieved.line', string='Receipt', ondelete='cascade')
 
-    line_external_id = fields.Char(string='UUID Line', readonly=True)
-    line_note = fields.Text(string='Line Note', readonly=True)
-    branch_warehouse = fields.Char(string='Branch', readonly=True)
-    line_description = fields.Char(string='Description', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)
-    location_code = fields.Char(string='Location', readonly=True)
-    line_location_name = fields.Char(string='Line Location Name', readonly=True)
-    line_note_id = fields.Char(string='Line Note ID', readonly=True)
-    product_uom_qty = fields.Char(string='Qty', readonly=True)
-    uom_code = fields.Char(string='UOM', readonly=True)
-    warehouse_dest_code = fields.Char(string='Warehouse Dest', readonly=True)
-    line_warehouse_name = fields.Char(string='Line Warehouse Name', readonly=True)
+    line_external_id = fields.Char(string='UUID Line')
+    line_note = fields.Text(string='Line Note')
+    branch_warehouse = fields.Char(string='Branch')
+    line_description = fields.Char(string='Description')
+    inventory_id = fields.Char(string='InventoryID')
+    line_nbr = fields.Char(string='Line Nbr')
+    location_code = fields.Char(string='Location')
+    line_location_name = fields.Char(string='Line Location Name')
+    line_note_id = fields.Char(string='Line Note ID')
+    product_uom_qty = fields.Char(string='Qty')
+    uom_code = fields.Char(string='UOM')
+    warehouse_dest_code = fields.Char(string='Warehouse Dest')
+    line_warehouse_name = fields.Char(string='Line Warehouse Name')
 
 
 class AcumaticaInventoryRecievedLine(models.Model):
     _name = 'acumatica.inventory.recieved.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Inventory Recieved dari Acumatica'
     _order = 'reference_nbr asc, id asc'
 
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Header', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Header')
     product_line_ids = fields.One2many('acumatica.inventory.recieved.product.line', 'inventory_line_id', string='Lines')
     picking_type_id = fields.Many2one(comodel_name='stock.picking.type', string='Operation Types')
 
-    reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
-    scheduled_date = fields.Char(string='Date', readonly=True)
-    description = fields.Char(string='Description', readonly=True)
-    branch_warehouse = fields.Char(string='Branch', readonly=True)
-    building_code = fields.Char(string='Building Code', readonly=True)
-    actual_qty = fields.Char(string='Control Qty', readonly=True)
+    reference_nbr = fields.Char(string='Reference Number', index=True)
+    scheduled_date = fields.Char(string='Date')
+    description = fields.Char(string='Description')
+    branch_warehouse = fields.Char(string='Branch')
+    building_code = fields.Char(string='Building Code')
+    actual_qty = fields.Char(string='Control Qty')
 
-    acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
-    post_period = fields.Char(string='Post Period', readonly=True)
-    status = fields.Char(string='Status', readonly=True)
-    total_qty = fields.Char(string='Total Qty', readonly=True)
+    acumatica_write_date = fields.Char(string='Last Modified')
+    post_period = fields.Char(string='Post Period')
+    status = fields.Char(string='Status')
+    total_qty = fields.Char(string='Qty Total')
     warehouse_code = fields.Char(string='Warehouse')
-    warehouse_dest_code = fields.Char(string='Warehouse Dest', readonly=True)
-    transfer_type = fields.Char(string='Transfer Type', readonly=True)
-    doc_type = fields.Char(string='Doc Type', readonly=True)
-    note = fields.Text(string='Header Note', readonly=True)
-    note_header_id = fields.Char(string='Note Header ID', readonly=True)
-    external_ref = fields.Char(string='External Ref', readonly=True)
-    document_only = fields.Boolean(string='Document Only', readonly=True)
-    customer_code = fields.Char(string='Customer Code', readonly=True)
-    vendor_code = fields.Char(string='VendorID', readonly=True)
-    vendor_name = fields.Char(string='Vendor Name', readonly=True)
-    shipment_nbr = fields.Char(string='Shipment Nbr', readonly=True)
-    transfer_nbr = fields.Char(string='Transfer Nbr', readonly=True)
-    location_code = fields.Char(string='Location Code', readonly=True)
-    change_item_ref_nbr = fields.Char(string='Change Item Ref Number', readonly=True)
+    warehouse_dest_code = fields.Char(string='Warehouse Dest')
+    transfer_type = fields.Char(string='Transfer Type')
+    doc_type = fields.Char(string='Doc Type')
+    note = fields.Text(string='Header Note')
+    note_header_id = fields.Char(string='Note Header ID')
+    external_ref = fields.Char(string='External Ref')
+    document_only = fields.Boolean(string='Document Only')
+    customer_code = fields.Char(string='Customer Code')
+    customer_location_id = fields.Char(string='Customer Location ID')
+    customer_location_name = fields.Char(string='Customer Location Name')
+    customer_name = fields.Char(string='Customer Name')
+    vendor_code = fields.Char(string='VendorID')
+    vendor_name = fields.Char(string='Vendor Name')
+    shipment_nbr = fields.Char(string='Shipment Nbr')
+    transfer_nbr = fields.Char(string='Transfer Nbr')
+    location_code = fields.Char(string='Location Code')
+    change_item_ref_nbr = fields.Char(string='Change Item Ref Number')
 
 
     import_state = fields.Selection([
@@ -82,18 +85,17 @@ class AcumaticaInventoryRecievedLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], default='staged', readonly=True)
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    ], default='staged')
+    import_message = fields.Char(string='Generation Message', tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order di Odoo',
-        readonly=True,
     )
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -153,15 +155,15 @@ class AcumaticaInventoryRecievedLine(models.Model):
             product = Product.search([('default_code', '=', line.inventory_id)], limit=1)
             if not product:
                 product = Product.search([('barcode', '=', line.inventory_id)], limit=1)
-        if not product and line.line_description:
-            product = Product.search([('name', '=', line.line_description)], limit=1)
+        # if not product and line.line_description:
+        #     product = Product.search([('name', '=', line.line_description)], limit=1)
 
         return product
 
     def _find_warehouse(self, line):
         Warehouse = self.env['stock.location.acumatica']
         warehouse = False
-        code = line.warehouse_code
+        code = line.warehouse_dest_code
         if code:
             warehouse = Warehouse.search([('code', '=', code)], limit=1)
             if warehouse:
@@ -175,8 +177,8 @@ class AcumaticaInventoryRecievedLine(models.Model):
     def _find_location_dest(self, line):
         Location = self.env['stock.location.acumatica']
         location = False
-        if line.warehouse_code:
-            location = Location.search([('code', '=', line.warehouse_code)], limit=1)
+        if line.warehouse_dest_code:
+            location = Location.search([('code', '=', line.warehouse_dest_code)], limit=1)
             if location:
                 if not location.odoo_location_id:
                     location = False
@@ -271,20 +273,39 @@ class AcumaticaInventoryRecievedLine(models.Model):
 
         source_location = transfer_info['source_location']
         destination_location = transfer_info['destination_location']
+        if not source_location:
+            raise InventoryImportError(
+                f'Source location untuk warehouse {source_code or "-"} '
+                'tidak ditemukan atau belum dimapping di WMS | '
+                'WMS Dependency : MAPPING WAREHOUSE.'
+            )
+        if not destination_location:
+            raise InventoryImportError(
+                f'Destination location untuk warehouse {destination_code or "-"} '
+                'tidak ditemukan atau belum dimapping di WMS | '
+                'WMS Dependency : MAPPING WAREHOUSE.'
+            )
+        primary_external_ref = receive.reference_nbr or receive.transfer_nbr
         order, action_state = TransferService.prepare_order(
-            origin,
+            primary_external_ref,
             source_location,
             destination_location,
             transfer_info['transaction_type'],
             schedule_date=receive._parse_dt(receive.scheduled_date),
             note=receive.note or False,
+            description=receive.description or False,
             transfer_type='transfer_in',
+            external_ref_in=receive.reference_nbr,
+            external_ref_out=receive.transfer_nbr,
+            adt_transaction_type=receive.transfer_type or receive.doc_type or False,
+            document_only=receive.document_only,
         )
 
         order.write({'validation_policy': 'validate_all'})
 
         for receive_line in receive.product_line_ids:
             move_vals = {}
+            line_payload = receive_line.read()[0] if receive_line.exists() else {}
             try:
                 product = receive._find_product(receive_line)
                 if not product:
@@ -316,6 +337,21 @@ class AcumaticaInventoryRecievedLine(models.Model):
 
                 qty = receive._parse_float(receive_line.product_uom_qty)
                 line_destination = receive._find_line_location_dest(receive_line) or destination_location
+                if not line_destination:
+                    error_messages.append(
+                        f'Destination location untuk line {receive_line.line_nbr or "-"} '
+                        f'dengan warehouse {receive_line.warehouse_dest_code or destination_code or "-"} '
+                        'tidak ditemukan atau belum dimapping di WMS | '
+                        'WMS Dependency : MAPPING WAREHOUSE.'
+                    )
+                    error_line_payloads.append({
+                        'inventory_id': receive_line.inventory_id or False,
+                        'product_name': receive_line.line_description or False,
+                        'qty': qty,
+                        'uom': receive_line.uom_code or False,
+                        'payload': line_payload,
+                    })
+                    continue
                 move_vals = {
                     'adt_inventory_id': receive_line.inventory_id or False,
                     'adt_line_nbr': receive_line.line_nbr or False,
@@ -342,14 +378,10 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 raise
             except Exception as line_error:
                 _logger.exception("Error import transfer in line %s", receive_line.id)
-                error_messages.append(str(line_error))
-                error_line_payloads.append({
-                    'inventory_id': receive_line.inventory_id or False,
-                    'product_name': receive_line.line_description or False,
-                    'qty': receive._parse_float(receive_line.product_uom_qty),
-                    'uom': receive_line.uom_code or False,
-                    'payload': move_vals if move_vals else (receive_line.read()[0] if receive_line.exists() else {}),
-                })
+                # A database error aborts the current PostgreSQL transaction.
+                # Do not continue with the next line; let the outer savepoint
+                # roll back the order and persist the original error cleanly.
+                raise
 
         if error_messages:
             raise InventoryImportError(
@@ -361,10 +393,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 line_payloads=error_line_payloads,
             )
 
-        TransferService.set_order_ready(
-            order,
-            auto_validate_transfer_in_delivery=True,
-        )
+        TransferService.set_order_ready(order)
         receive.write({
             'import_state': action_state,
             'import_message': 'success',
@@ -400,7 +429,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
         dest_location = receive._find_location_dest(receive)
         if not dest_location:
             error_messages.append(
-                f'Location with code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
 
         partner = False
@@ -419,15 +448,50 @@ class AcumaticaInventoryRecievedLine(models.Model):
         #     ('operation_category', '=', 'internal'),
         #     ('code', '=', 'internal'),
         # ], limit=1)
-        picking_type = receive.config_id._resolve_inventory_receive_picking_type(
-            transfer_type=receive.transfer_type,
-            document_only=receive.document_only,
-            warehouse_code=receive.warehouse_code,
-        ) if receive.config_id else receive.picking_type_id
-        picking_type = picking_type or receive.picking_type_id
+        if receive.picking_type_id:
+            picking_type = receive.picking_type_id
+        elif receive.config_id:
+            picking_type = receive.config_id._resolve_inventory_receive_picking_type(
+                transfer_type=receive.transfer_type,
+                document_only=receive.document_only,
+                warehouse_code=(
+                    receive.warehouse_dest_code
+                    or receive.warehouse_code
+                ),
+            )
+        else:
+            type_key = (receive.transfer_type or 'inventory_receive').strip().lower().replace('-', '_').replace(' ', '_')
+            type_map = {
+                'change_item': ('incoming', 'receive'),
+                'change_item_discontinue': ('incoming', 'receive'),
+                'toko_pegang_do': ('incoming', 'receive'),
+                'inventory_receive': ('incoming', 'receive'),
+                'inventory_received': ('incoming', 'receive'),
+                'inventory_receipt': ('incoming', 'receive'),
+            }
+            code, operation_category = type_map.get(type_key, (False, False))
+            if receive.document_only and type_key != 'transfer_in':
+                picking_type = PickingType.resolve_document_only_picking_type(
+                    api_acumatica='inventory_received',
+                    document_only=True,
+                    warehouse_code=receive.warehouse_dest_code,
+                )
+            elif code:
+                picking_type = PickingType.resolve_picking_type(
+                    warehouse_code=receive.warehouse_dest_code,
+                    code=code,
+                    operation_category=operation_category,
+                    api_acumatica='inventory_received',
+                    transaction_key=type_key,
+                    required=False,
+                )
+            else:
+                picking_type = PickingType.browse()
+        if not receive.picking_type_id and picking_type:
+            receive.write({'picking_type_id': picking_type.id})
         if not picking_type:
             warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
-            location_txt = f'Location code {receive.warehouse_code}'
+            location_txt = f'Location code {receive.warehouse_dest_code}'
             error_messages.append(
                 f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
             )
@@ -454,6 +518,9 @@ class AcumaticaInventoryRecievedLine(models.Model):
             'adt_total_qty': self._parse_float(receive.total_qty),
             'adt_type': receive.transfer_type or False,
             'adt_external_ref': receive.external_ref or False,
+            'adt_change_item_ref_nbr': receive.change_item_ref_nbr or False,
+
+            'desc_note': receive.description or False,
         }
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 
@@ -470,6 +537,9 @@ class AcumaticaInventoryRecievedLine(models.Model):
             picking = Picking.create(picking_vals)
             action_state = 'created'
 
+        if action_state == 'updated':
+            picking.move_ids.unlink()
+
         for receive_line in receive.product_line_ids:
             move_vals = {}
             try:
@@ -480,7 +550,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     )
                     error_line_payloads.append({
                         'inventory_id': receive_line.inventory_id or False,
-                        'product_name': receive_line.description or False,
+                        'product_name': receive_line.line_description or False,
                         'qty': receive._parse_float(receive_line.product_uom_qty),
                         'uom': receive_line.uom_code or False,
                         'payload': receive_line.read()[0] if receive_line.exists() else {},
@@ -488,13 +558,19 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     continue
 
                 uom = receive._find_uom(receive_line, product)
+                dest_location = receive._find_location_dest(receive_line)
+                if not dest_location:
+                    error_messages.append(
+                        f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                    )
+
                 if product and not uom:
                     error_messages.append(
                         f'UOM with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER UOM.'
                     )
                     error_line_payloads.append({
                         'inventory_id': receive_line.inventory_id or False,
-                        'product_name': receive_line.description or False,
+                        'product_name': receive_line.line_description or False,
                         'qty': receive._parse_float(receive_line.product_uom_qty),
                         'uom': receive_line.uom_code or False,
                         'payload': receive_line.read()[0] if receive_line.exists() else {},
@@ -502,16 +578,6 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     continue
 
                 qty = receive._parse_float(receive_line.product_uom_qty)
-                existing = picking.move_ids.filtered(
-                    lambda move: (
-                        move.picking_id.id == picking.id
-                        and move.product_id.id == product.id
-                        and move.product_uom_qty == qty
-                    )
-                )
-                if existing:
-                    continue
-
                 move_vals = {
                     'name': receive_line.line_description or product.display_name,
                     'picking_id': picking.id if picking else False,
@@ -527,7 +593,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     'adt_line_nbr': receive_line.line_nbr or False,
                     'adt_uom_code': receive_line.uom_code or False,
                     'adt_warehouse_dest_code': receive_line.warehouse_dest_code or False,
-                    'adt_dest_location_id': picking.adt_dest_location_id.id if picking else False,
+                    'adt_dest_location_id': dest_location.id if dest_location else picking.adt_dest_location_id.id if picking else False,
                 }
 
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
@@ -624,16 +690,17 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 continue
 
         msg = f'Import done: {created} receive created, {updated} receive updated, {error} receive error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Inventory Receive',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Inventory Receive',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})

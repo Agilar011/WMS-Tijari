@@ -16,7 +16,7 @@
         <field name="name">acumatica.transfer.one.step.line.list</field>
         <field name="model">acumatica.transfer.one.step.line</field>
         <field name="arch" type="xml">
-            <list string="Data Transfer 1 STEP">
+            <list string="Data Transfer 1 Step">
                 <field name="selected" widget="boolean_toggle"/>
 
                 <field name="reference_nbr"/>
@@ -33,18 +33,20 @@
                     decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                     decoration-muted="import_state == 'staged'"
                     decoration-danger="import_state == 'error'"/>
+                <field name="can_rebuild_same_location_transfer" column_invisible="1"/>
 
                 <button name="action_import_this"
                         string="Import"
                         type="object"
                         icon="fa-upload"
-                        invisible="import_state != 'staged'"/>
+                        invisible="import_state != 'staged' and not can_rebuild_same_location_transfer"/>
 
                 <button name="action_open_picking"
                         string="Open Document"
                         type="object"
                         icon="fa-external-link"
-                        invisible="not odoo_picking_id"/>
+                        invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
+                <field name="odoo_internal_transfer_order_id" column_invisible="1"/>
             </list>
         </field>
     </record>
@@ -53,13 +55,13 @@
         <field name="name">acumatica.transfer.one.step.line.form</field>
         <field name="model">acumatica.transfer.one.step.line</field>
         <field name="arch" type="xml">
-            <form string="Data Transfer 1 STEP">
+            <form string="Data Transfer 1 Step">
                 <header>
                     <button name="action_import_this"
                             string="Import Baris Ini"
                             type="object"
                             class="btn-primary"
-                            invisible="import_state != 'staged'"/>
+                            invisible="import_state != 'staged' and not can_rebuild_same_location_transfer"/>
                     <button name="action_reset_pending"
                             string="Reset ke Staged"
                             type="object"
@@ -69,11 +71,12 @@
                     <button name="action_open_picking"
                             string="Open Document"
                             type="object"
-                            invisible="not odoo_picking_id"/>
+                            invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
 
                     <field name="import_state"
                         widget="statusbar"
                         statusbar_visible="staged,created,updated,rejected,error"/>
+                    <field name="can_rebuild_same_location_transfer" invisible="1"/>
                 </header>
 
                 <sheet>
@@ -90,6 +93,7 @@
                             <field name="status"/>
                             <field name="return_type"/>
                             <field name="transfer_type"/>
+                            <field name="document_only"/>
                             <field name="trans_type"/>
                             <field name="total_qty"/>
                             <field name="is_hold"/>
@@ -102,7 +106,7 @@
                     <notebook>
                         <page name="details" string="Details/Lines">
                             <!-- Field relasi One2many ditaruh di sini secara aman -->
-                            <field name="line_ids" readonly="1">
+                            <field name="line_ids">
                                 <list>
                                     <field name="line_nbr"/>
                                     <field name="inventory_id"/>
@@ -121,9 +125,10 @@
                         </page>
                     </notebook>
                     <group string="Import Odoo">
-                        <field name="import_message" readonly="1"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="odoo_internal_transfer_order_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>
@@ -131,7 +136,7 @@
     </record>
 
     <record id="action_acumatica_transfer_one_step_line" model="ir.actions.act_window">
-        <field name="name">Data Transfer 1 STEP</field>
+        <field name="name">Data Transfer 1 Step</field>
         <field name="res_model">acumatica.transfer.one.step.line</field>
         <field name="view_mode">list,form</field>
     </record>

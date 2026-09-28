@@ -72,6 +72,15 @@ class AcumaticaConfig(models.Model):
         default=False,
         help='Dipakai sebagai config bawaan untuk tipe import yang sama.',
     )
+    generate_virtual_location = fields.Boolean(
+        string='Generate Building sebagai Virtual Location',
+        default=True,
+        help=(
+            'Khusus Config Type Warehouse. Jika aktif, BuildingID dibuat di '
+            'Virtual Locations dan tidak dibuat sebagai stock.warehouse. '
+            'Jika nonaktif, BuildingID dibuat sebagai stock.warehouse.'
+        ),
+    )
     picking_type_ids = fields.Many2many(
         'stock.picking.type',
         'acumatica_config_stock_picking_type_rel',
@@ -83,17 +92,18 @@ class AcumaticaConfig(models.Model):
     config_type = fields.Selection(
         selection=[
             ('po_receipt', 'PO Receipt'),
-            ('so_transfer', 'SO Transfer - Inter WH IN'),
+            ('so_transfer', 'Transfer (In/SOTR)'),
             ('inventory_received', 'Inventory Receipt'),
             ('shipment_so', 'SO Return'),
             ('so_shipment', 'SO Shipment'),
             ('shipment_completed', 'Shipment Completed'),
-            ('transfer_shipment', 'SO Transfer - Inter WH OUT'),
+            ('shipment_transfer_completed', 'Shipment Transfer Completed'),
+            ('transfer_shipment', 'Transfer (Out/Shipment)'),
             ('issue_change_item', 'Issue Change Item'),
             ('inventory_issue', 'Inventory Issue'),
             ('issue_po_return', 'PO Return'),
-            ('transfer_one_step', 'Transfer 1 STEP'),
-            ('transfer_two_step', 'Transfer 2 STEP'),
+            ('transfer_one_step', 'Transfer 1 Step'),
+            ('transfer_two_step', 'Transfer 2 Step'),
             ('kit_assembly', 'Kit Assembly'),
 
             ('customer', 'Customer'),
@@ -104,12 +114,19 @@ class AcumaticaConfig(models.Model):
             ('vendor', 'Vendor'),
             ('inventory_stock', 'Inventory Stock'),
             ('invoice_consignment', 'Invoice Consignment'),
-            ('vendor_return_direct_transfer', 'Vendor Return Consignment'),
+            ('vendor_return_direct_transfer', 'Return Consignment'),
             ('vendor_return_document_direct_transfer', 'Direct Transfer'),
             ('credit_memo_consignment', 'Credit Memo Consignment'),
 
         ], string='Config Type', required=True, default='uom',
     )
+
+    @api.onchange('config_type')
+    def _onchange_config_type_shipment_transfer_completed(self):
+        for record in self:
+            if record.config_type == 'shipment_transfer_completed':
+                record.endpoint_name = 'ShipmentTransferCompletedGI'
+                record.odata_expand = 'ShipmentTransferCompletedGIDetails'
 
     @api.model
     def _get_default_config_for_type(self, config_type):
@@ -174,7 +191,7 @@ class AcumaticaConfig(models.Model):
                 'old_odata_expands': {'', 'StockComponents'},
             },
             'vendor_return_direct_transfer': {
-                'name': 'Acumatica Vendor Return Consignment V2 - Default',
+                'name': 'Acumatica Return Consignment V2 - Default',
                 'endpoint_name': 'VendorReturnGI',
                 'odata_expand': 'VendorReturnGIDetails',
                 'odata_filter': False,
@@ -232,7 +249,12 @@ class AcumaticaConfig(models.Model):
     def _normalize_inventory_receive_type(self, value):
         if not value:
             return 'inventory_receive'
-        return str(value).strip().lower().replace('-', '_').replace(' ', '_')
+        normalized = str(value).strip().lower().replace('-', '_').replace(' ', '_')
+        # Acumatica/webhook legacy payloads may call Transfer In
+        # ``transfer_receipt``. Both must use the internal receive operation.
+        return {
+            'transfer_receipt': 'transfer_in',
+        }.get(normalized, normalized)
 
     def _get_config_picking_type(self):
         self.ensure_one()
@@ -244,10 +266,13 @@ class AcumaticaConfig(models.Model):
         type_key = self._normalize_inventory_receive_type(transfer_type)
         domain_by_type = {
             'transfer_in': ('internal', 'receive'),
-            'change_item': ('incoming', 'receive'),
+
             'inventory_receive': ('incoming', 'receive'),
             'inventory_received': ('incoming', 'receive'),
             'inventory_receipt': ('incoming', 'receive'),
+            'change_item': ('incoming', 'receive'),
+            'change_item_discontinue': ('incoming', 'receive'),
+            'toko_pegang_do': ('incoming', 'receive'),
         }
         code, operation_category = domain_by_type.get(type_key, (False, False))
 

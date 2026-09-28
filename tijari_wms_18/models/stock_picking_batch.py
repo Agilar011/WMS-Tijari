@@ -1,7 +1,6 @@
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 
-
 class StockPickingBatch(models.Model):
     _inherit = 'stock.picking.batch'
 
@@ -21,6 +20,10 @@ class StockPickingBatch(models.Model):
     putaway_product_id = fields.Many2one(
         'product.product',
         string='Product Name',
+    )
+    putaway_scan_code = fields.Char(
+        string='Kode scan',
+        help='Bisa diisi dari scanner handheld atau diketik manual.',
     )
     allowed_putaway_lot_ids = fields.Many2many(
         'stock.lot',
@@ -42,6 +45,68 @@ class StockPickingBatch(models.Model):
         related='picking_type_id.name',
         store=False,
     )
+    show_picker_page = fields.Boolean(
+        compute='_compute_show_picker_page',
+    )
+    show_packer_page = fields.Boolean(
+        compute='_compute_show_packer_page',
+    )
+    show_putaway_page = fields.Boolean(
+        compute='_compute_show_putaway_page',
+    )
+
+    @api.depends('picking_ids.pick_responsible_ids')
+    def _compute_show_picker_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        for batch in self:
+            assigned_users = batch.picking_ids.mapped('pick_responsible_ids')
+            batch.show_picker_page = (
+                not is_warehouse_operator
+                or user in assigned_users
+            )
+
+    @api.depends('picking_ids.pack_responsible_ids')
+    def _compute_show_packer_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        for batch in self:
+            assigned_users = batch.picking_ids.mapped('pack_responsible_ids')
+            batch.show_packer_page = (
+                not is_warehouse_operator
+                or user in assigned_users
+            )
+
+    @api.depends('picking_ids.putaway_responsible_ids')
+    def _compute_show_putaway_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        for batch in self:
+            assigned_users = batch.picking_ids.mapped('putaway_responsible_ids')
+            batch.show_putaway_page = (
+                not is_warehouse_operator
+                or user in assigned_users
+            )
+
+    def _sync_responsible_users(self):
+        for picking in self:
+            missing_do = (
+                picking.pick_responsible_ids
+                - picking.do_responsible_ids
+            )
+
+            if missing_do:
+                picking.do_responsible_ids = (
+                    picking.do_responsible_ids | missing_do
+                )
+
+            responsible_users = (
+                picking.pick_responsible_ids
+                | picking.pack_responsible_ids
+                | picking.do_responsible_ids
+            )
+
+            picking.user_ids = [(6, 0, responsible_users.ids)]
 
     def _compute_scan_product_by_lot_button(self):
         for batch in self:
@@ -54,7 +119,10 @@ class StockPickingBatch(models.Model):
             lambda line: (
                 (line.lot_id or line.lot_name)
                 and line.quantity > 0
-                and line.picker_status == 'finished'
+                and (
+                    line.picker_status == 'finished'
+                    or line.confirmation_quantity > 0
+                )
             )
         )
 
@@ -71,7 +139,12 @@ class StockPickingBatch(models.Model):
                 lambda line: line.lot_id == self.putaway_lot_id or line.lot_name == self.putaway_lot_id.name
             )
 
-        return move_lines
+        return move_lines.sorted(
+            key=lambda line: (
+                line.putaway_status != 'unfinished',
+                line._origin.id or 0,
+            )
+        )
 
     def _get_putaway_move_lines_for_product(self, product):
         self.ensure_one()
@@ -115,6 +188,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.product_id',
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.confirmation_quantity',
         'move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_product_ids(self):
@@ -130,6 +204,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.lot_name',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.confirmation_quantity',
         'move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_lot_ids(self):
@@ -144,6 +219,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.product_id',
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.confirmation_quantity',
         'move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_move_line_ids(self):
@@ -158,6 +234,7 @@ class StockPickingBatch(models.Model):
         'move_ids.move_line_ids.product_id',
         'move_ids.move_line_ids.lot_id',
         'move_ids.move_line_ids.quantity',
+        'move_ids.move_line_ids.confirmation_quantity',
         'move_ids.move_line_ids.picker_status',
     )
     def _compute_putaway_values(self):
@@ -257,7 +334,7 @@ class StockPickingBatch(models.Model):
                     and (line.lot_id or line.lot_name)
                 )
             )
-            if batch.picking_type_name in ('Receipts', 'Receipt Internal'):
+            if batch.picking_type_name in ('Receipts', 'Receipt Internal', 'Storage'):
                 unfinished_lines = move_lines.filtered(
                     lambda line: line.putaway_status != 'finished'
                 )
@@ -325,13 +402,22 @@ class StockPickingBatch(models.Model):
         return super().action_done()
 
     def _find_product_by_scan_code(self, scan_code):
-        Product = self.env['product.product']
+        product, _matched_by = self._find_product_scan_match(scan_code)
+        return product
 
-        return Product.search([
-            '|',
-            ('barcode', '=', scan_code),
-            ('default_code', '=', scan_code),
-        ], limit=1)
+    def _find_product_scan_match(self, scan_code):
+        Product = self.env['product.product']
+        scan_code = (scan_code or '').strip()
+
+        product = Product.search([('barcode', '=', scan_code)], limit=1)
+        if product:
+            return product, _('Barcode')
+
+        product = Product.search([('default_code', '=', scan_code)], limit=1)
+        if product:
+            return product, _('SKU')
+
+        return Product.browse(), False
 
     def _find_putaway_product_by_lot_scan_code(self, scan_code):
         self.ensure_one()
@@ -347,8 +433,14 @@ class StockPickingBatch(models.Model):
 
         if not move_lines:
             if lots:
-                raise ValidationError(_('Lot hasil scan tidak ada di dokumen ini.'))
-            raise ValidationError(_('Lot tidak ditemukan untuk kode scan: %s') % scan_code)
+                raise ValidationError(
+                    _('Lot %s ditemukan, tetapi tidak ada di dokumen ini.')
+                    % scan_code
+                )
+            raise ValidationError(
+                _('Kode %s tidak ditemukan sebagai Barcode, SKU, atau Lot.')
+                % scan_code
+            )
 
         products = move_lines.product_id
         if len(products) > 1:
@@ -392,4 +484,217 @@ class StockPickingBatch(models.Model):
             'display_name': product.display_name,
             'lot_id': lot.id,
             'move_line_ids': move_lines.ids,
+        }
+
+    def _get_putaway_scan_values(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        if not scanned_code:
+            raise ValidationError(_('Kode scan tidak boleh kosong.'))
+
+        move_lines = self._get_putaway_base_move_lines()
+        product, matched_by = self._find_product_scan_match(scanned_code)
+        if product:
+            matching_lines = move_lines.filtered(
+                lambda line: line.product_id == product
+            )
+            if matching_lines:
+                lot = matching_lines.mapped('lot_id')[:1]
+                return {
+                    'values': {
+                        'putaway_product_id': product.id,
+                        'putaway_lot_id': lot.id,
+                    },
+                    'result': {
+                        'product_id': product.id,
+                        'display_name': product.display_name,
+                        'lot_id': lot.id,
+                        'move_line_ids': matching_lines.ids,
+                        'matched_by': 'product',
+                    },
+                }
+            raise ValidationError(
+                _(
+                    '%s %s dikenali sebagai Product %s, tetapi product tersebut '
+                    'tidak ada di dokumen ini.'
+                ) % (matched_by, scanned_code, product.display_name)
+            )
+
+        product, matching_lines, lot = self._find_putaway_product_by_lot_scan_code(
+            scanned_code
+        )
+        return {
+            'values': {
+                'putaway_product_id': product.id,
+                'putaway_lot_id': lot.id,
+            },
+            'result': {
+                'product_id': product.id,
+                'display_name': product.display_name,
+                'lot_id': lot.id,
+                'move_line_ids': matching_lines.ids,
+                'matched_by': 'lot',
+            },
+        }
+
+    def action_apply_scanned_putaway_code(self, scanned_code):
+        self.ensure_one()
+        values = self._get_putaway_scan_values(scanned_code)
+        self.write(values['values'])
+        return values['result']
+
+    @api.onchange('putaway_scan_code')
+    def _onchange_putaway_scan_code(self):
+        for batch in self:
+            if not batch.putaway_scan_code:
+                continue
+            values = batch._get_putaway_scan_values(batch.putaway_scan_code)
+            batch.update(values['values'])
+            batch.putaway_scan_code = False
+
+class StockPickingToBatchInherit(models.TransientModel):
+    _inherit = 'stock.picking.to.batch'
+
+    operation_type_name = fields.Char(
+            string='Operation Type',
+            readonly=True,
+        )
+
+    pick_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_to_batch_pick_responsible_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Assigned Picker",
+        domain=[("share", "=", False)],
+    )
+
+    pack_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_to_batch_pack_responsible_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Assigned Packer",
+        domain=[("share", "=", False)],
+    )
+
+    do_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_to_batch_do_responsible_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Assigned Loader",
+        domain=[("share", "=", False)],
+    )
+
+    putaway_responsible_ids = fields.Many2many(
+        comodel_name="res.users",
+        relation="stock_picking_to_batch_putaway_responsible_rel",
+        column1="wizard_id",
+        column2="user_id",
+        string="Assigned Putaway",
+        domain=[("share", "=", False)],
+    )
+
+    @api.model
+    def default_get(self, fields_list):
+        vals = super().default_get(fields_list)
+
+        active_ids = self.env.context.get('active_ids', [])
+        pickings = self.env['stock.picking'].browse(active_ids).exists()
+
+        if not pickings:
+            return vals
+
+        operation_types = pickings.mapped('picking_type_id')
+
+        if len(operation_types) == 1:
+            vals['operation_type_name'] = operation_types.name
+        else:
+            vals['operation_type_name'] = False
+
+        return vals
+
+    def attach_pickings(self):
+        self.ensure_one()
+
+        pickings = self.env['stock.picking'].browse(
+            self.env.context.get('active_ids', [])
+        ).exists()
+
+        if not pickings:
+            raise UserError(
+                _("Tidak ada transfer yang dipilih untuk dimasukkan ke batch.")
+            )
+
+        # Operation Type harus sama
+        operation_types = pickings.mapped('picking_type_id')
+
+        if len(operation_types) > 1:
+            operation_type_names = ", ".join(
+                operation_types.mapped('name')
+            )
+
+            raise UserError(
+                _(
+                    "Transfer yang dipilih memiliki Operation Type yang berbeda.\n\n"
+                    "Operation Type yang ditemukan:\n%s\n\n"
+                    "Silakan pilih transfer dengan Operation Type yang sama "
+                    "untuk membuat batch."
+                )
+                % operation_type_names
+            )
+
+        operation_type = operation_types[:1]
+        self.operation_type_name = operation_type.name
+
+        if self.mode == 'new':
+            company = pickings.company_id
+
+            if len(company) > 1:
+                raise UserError(
+                    _("The selected pickings should belong to an unique company.")
+                )
+
+            batch = self.env['stock.picking.batch'].create({
+                'user_id': self.user_id.id,
+                'company_id': company.id,
+                'picking_type_id': operation_type.id,
+                'description': self.description,
+            })
+        else:
+            batch = self.batch_id
+
+        # Assign responsible users exactly as selected in the wizard.
+        pickings.with_context(
+            tijari_responsible_sync=True
+        ).write({
+            'batch_id': batch.id,
+
+            'pick_responsible_ids': [
+                (6, 0, self.pick_responsible_ids.ids)
+            ],
+
+            'pack_responsible_ids': [
+                (6, 0, self.pack_responsible_ids.ids)
+            ],
+
+            'do_responsible_ids': [
+                (6, 0, self.do_responsible_ids.ids)
+            ],
+
+            'putaway_responsible_ids': [
+                (6, 0, self.putaway_responsible_ids.ids)
+            ],
+        })
+
+        if self.mode == 'new' and not self.is_create_draft:
+            batch.action_confirm()
+
+        return {
+            'name': _('Batch Transfer'),
+            'view_mode': 'form',
+            'res_model': 'stock.picking.batch',
+            'type': 'ir.actions.act_window',
+            'res_id': batch.id,
         }

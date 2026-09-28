@@ -36,6 +36,7 @@
                 <field name="adt_CustomerName" string="Customer Name"/>
                 <field name="adt_BuildingID" string="Building ID"/>
                 <field name="total_qty" string="total Quantity"/>
+                <field name="adt_LastModifiedDateTime" string="Last Modified"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                        decoration-muted="import_state == 'staged'"
@@ -55,50 +56,51 @@
             <form string="Detail Data Credit Memo Consignment">
                 <header>
                     <button name="action_import_this" string="Import Data" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
+                    <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id"/>
                     <button name="action_reset_pending" string="Reset ke Staged" type="object" class="btn-secondary" invisible="import_state != 'error'"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>
                     <group string="Header Information">
                         <group>
-                            <field name="id" readonly="1"/>
-                            <field name="picking_type_id" readonly="1"/>
-                            <field name="adt_id" readonly="1"/>
-                            <field name="adt_rowNumber" readonly="1"/>
-                            <field name="adt_note" readonly="1"/>
-                            <field name="adt_BuildingID" readonly="1"/>
-                            <field name="adt_CreatedDateTime" readonly="1"/>
-                            <field name="adt_CustomerID" readonly="1"/>
-                            <field name="adt_CustomerName" readonly="1"/>
-                            <field name="adt_CustomerOrder" readonly="1"/>
-                            <field name="adt_Date" readonly="1"/>
-                            <field name="adt_Description" readonly="1"/>
-                            <field name="adt_ExternalRef" readonly="1"/>
+                            <field name="id"/>
+                            <field name="picking_type_id"/>
+                            <field name="adt_id"/>
+                            <field name="adt_rowNumber"/>
+                            <field name="adt_note"/>
+                            <field name="adt_BuildingID"/>
+                            <field name="adt_CreatedDateTime"/>
+                            <field name="adt_CustomerID"/>
+                            <field name="adt_CustomerName"/>
+                            <field name="adt_CustomerOrder"/>
+                            <field name="adt_Date"/>
+                            <field name="adt_Description"/>
+                            <field name="adt_ExternalRef"/>
                         </group>
 
                         <group>
-                            <field name="adt_DocumentOnly" readonly="1"/>
-                            <field name="adt_DueDate" readonly="1"/>
-                            <field name="adt_LastModifiedDateTime" readonly="1"/>
-                            <field name="adt_LocationID" readonly="1"/>
-                            <field name="adt_LocationName" readonly="1"/>
-                            <field name="adt_NoteHeaderID" readonly="1"/>
-                            <field name="adt_OrigRefNbr" readonly="1"/>
-                            <field name="adt_PostPeriod" readonly="1"/>
-                            <field name="adt_ReferenceNbr" readonly="1"/>
-                            <field name="adt_Status" readonly="1"/>
-                            <field name="adt_Type" readonly="1"/>
-                            <field name="adt_ConsignmentType" readonly="1"/>
-                            <field name="adt_TotalQty" readonly="1"/>
-                            <field name="adt_TransferType" readonly="1"/>
-                            <field name="adt_FromWarehouseID" readonly="1"/>
-                            <field name="adt_ToWarehouseID" readonly="1"/>
+                            <field name="adt_DocumentOnly"/>
+                            <field name="adt_DueDate"/>
+                            <field name="adt_LastModifiedDateTime"/>
+                            <field name="adt_LocationID"/>
+                            <field name="adt_LocationName"/>
+                            <field name="adt_NoteHeaderID"/>
+                            <field name="adt_OrigRefNbr"/>
+                            <field name="adt_PostPeriod"/>
+                            <field name="adt_ReferenceNbr"/>
+                            <field name="adt_Status"/>
+                            <field name="adt_Type"/>
+                            <field name="adt_ConsignmentType"/>
+                            <field name="adt_TotalQty"/>
+                            <field name="adt_TransferType"/>
+                            <field name="adt_FromWarehouseID"/>
+                            <field name="adt_ToWarehouseID"/>
                         </group>
                     </group>
                     <notebook>
                         <page name="details" string="Details / Lines">
                             <!-- Gantilah 'line_ids' di bawah dengan nama field One2many asli di model Python Anda jika berbeda -->
-                            <field name="line_ids" readonly="1">
+                            <field name="line_ids">
                                 <list>
                                     <field name="adt_rowNumber" string="No. Baris"/>
                                     <field name="adt_Branch" string="Branch"/>
@@ -114,9 +116,9 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

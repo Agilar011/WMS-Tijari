@@ -42,31 +42,31 @@ class AcumaticaNonStockItemLine(models.Model):
     _order       = 'row_number asc'
 
     # ─── Data mentah dari Acumatica ──────────────────
-    row_number             = fields.Integer(string='No',                    readonly=True)
-    external_id            = fields.Char(string='UUID Acumatica',           readonly=True)
+    row_number             = fields.Integer(string='No')
+    external_id            = fields.Char(string='UUID Acumatica')
 
     # Mandatory
-    inventory_id           = fields.Char(string='InventoryID',              readonly=True)
-    description            = fields.Char(string='Description',              readonly=True)
-    item_type              = fields.Char(string='ItemType',                 readonly=True)
-    item_class             = fields.Char(string='ItemClass',                readonly=True)
-    item_status            = fields.Char(string='ItemStatus',               readonly=True)
-    base_unit              = fields.Char(string='BaseUnit',                 readonly=True)
-    purchase_unit          = fields.Char(string='PurchaseUnit',             readonly=True)
-    sales_unit             = fields.Char(string='SalesUnit',                readonly=True)
-    is_a_kit               = fields.Boolean(string='IsAKit',                readonly=True)
-    is_kit                 = fields.Boolean(string='IsKit',                 readonly=True)
-    note_id                = fields.Char(string='NoteID',                   readonly=True)
-    posting_class          = fields.Char(string='PostingClass',             readonly=True)
-    note                   = fields.Text(string='Note',                     readonly=True)
+    inventory_id           = fields.Char(string='InventoryID')
+    description            = fields.Char(string='Description')
+    item_type              = fields.Char(string='ItemType')
+    item_class             = fields.Char(string='ItemClass')
+    item_status            = fields.Char(string='ItemStatus')
+    base_unit              = fields.Char(string='BaseUnit')
+    purchase_unit          = fields.Char(string='PurchaseUnit')
+    sales_unit             = fields.Char(string='SalesUnit')
+    is_a_kit               = fields.Boolean(string='IsAKit')
+    is_kit                 = fields.Boolean(string='IsKit')
+    note_id                = fields.Char(string='NoteID')
+    posting_class          = fields.Char(string='PostingClass')
+    note                   = fields.Text(string='Note')
 
     # Optional
-    last_modified_datetime = fields.Char(string='LastModifiedDateTime',     readonly=True)
-    price_class            = fields.Char(string='PriceClass',               readonly=True)
-    volume                 = fields.Float(string='Volume',                  readonly=True)
-    volume_uom             = fields.Char(string='VolumeUOM',                readonly=True)
-    weight                 = fields.Float(string='Weight',                  readonly=True)
-    weight_uom             = fields.Char(string='WeightUOM',                readonly=True)
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime')
+    price_class            = fields.Char(string='PriceClass')
+    volume                 = fields.Float(string='Volume')
+    volume_uom             = fields.Char(string='VolumeUOM')
+    weight                 = fields.Float(string='Weight')
+    weight_uom             = fields.Char(string='WeightUOM')
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
@@ -75,20 +75,19 @@ class AcumaticaNonStockItemLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True)
+    ], string='Status', default='staged')
 
-    import_message  = fields.Char(string='Generation Message',          readonly=True)
-    odoo_product_id = fields.Many2one('product.template', string='Document Reference', readonly=True)
+    import_message  = fields.Char(string='Generation Message')
+    odoo_product_id = fields.Many2one('product.template', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ItemStatus Acumatica → adt_item_status selection
     STATUS_MAP = {
@@ -146,7 +145,9 @@ class AcumaticaNonStockItemLine(models.Model):
         if not product or not new_sku:
             return
 
-        SkuHistory = self.env['product.sku.history']
+        # SKU history is maintained by this importer; keep direct user access
+        # read-only while allowing the controlled synchronization to proceed.
+        SkuHistory = self.env['product.sku.history'].sudo()
         current_history = SkuHistory.search([
             ('product_tmpl_id', '=', product.id),
             ('is_current', '=', True),
@@ -167,6 +168,33 @@ class AcumaticaNonStockItemLine(models.Model):
             'sku': new_sku,
             'date_start': fields.Datetime.now(),
             'is_current': True,
+        })
+
+    def _sync_product_variant(self, product, vals):
+        """Sinkronkan field variant yang didefinisikan di product.product."""
+        variant = product.product_variant_id or product.product_variant_ids[:1]
+        if not variant:
+            return
+
+        variant_fields = (
+            'default_code',
+            'adt_external_id',
+            'adt_note',
+            'adt_base_unit',
+            'adt_is_a_kit',
+            'adt_is_kit',
+            'adt_note_id',
+            'adt_posting_class',
+            'adt_price_class',
+            'adt_purchase_unit',
+            'adt_sales_unit',
+            'adt_volume_uom',
+            'adt_weight_uom',
+        )
+        variant.write({
+            field: vals[field]
+            for field in variant_fields
+            if field in vals
         })
 
     # ─── Import Actions ──────────────────────────────
@@ -197,7 +225,7 @@ class AcumaticaNonStockItemLine(models.Model):
         if not acumatica_err_id:
             acumatica_err_id = AcumaticaError.create({
                 'name': f'NonStockItem-{self.id}',
-                'data_type': self._name,
+                'data_type': 'acumatica.non.stock.item.line',
                 'import_state': state,
                 'data_id': self.id,
                 'error_msg': err_msg
@@ -218,7 +246,9 @@ class AcumaticaNonStockItemLine(models.Model):
 
             old_value = record[field_name]
 
-            # Normalisasi nilai
+            if field.type == 'many2one':
+                old_value = old_value.id if old_value else False
+                
             old_value = old_value or False
             new_value = new_value or False
 
@@ -294,7 +324,10 @@ class AcumaticaNonStockItemLine(models.Model):
                 escape(record.display_name),
             )
 
-        self.message_post(
+        self.with_context(
+            mail_create_nosubscribe=True,
+            mail_post_autofollow=False,
+        ).message_post(
             body=body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',
@@ -302,6 +335,9 @@ class AcumaticaNonStockItemLine(models.Model):
     
     def _do_import(self):
         created = updated = error = 0
+        total = len(self)
+
+        print(f'[MASTER IMPORT][Non-Stock Item] START total={total}', flush=True)
 
         for line in self:
             try:
@@ -364,6 +400,7 @@ class AcumaticaNonStockItemLine(models.Model):
                         vals,
                     )       
                     existing.write(vals)
+                    self._sync_product_variant(existing, vals)
                     line._sync_sku_history(
                         existing,
                         old_sku=old_sku,
@@ -431,16 +468,22 @@ class AcumaticaNonStockItemLine(models.Model):
                 error += 1
 
         msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag':  'display_notification',
-            'params': {
-                'title':   'Import Non-Stock Item',
-                'message': msg,
-                'type':    'success' if error == 0 else 'warning',
-                'sticky':  True,
-            },
-        }
+        print(
+            f'[MASTER IMPORT][Non-Stock Item] FINISH total={total} '
+            f'created={created} updated={updated} error={error}',
+            flush=True,
+        )
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag':  'display_notification',
+        #     'params': {
+        #         'title':   'Import Non-Stock Item',
+        #         'message': msg,
+        #         'type':    'success' if error == 0 else 'warning',
+        #         'sticky':  True,
+        #     },
+        # }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({

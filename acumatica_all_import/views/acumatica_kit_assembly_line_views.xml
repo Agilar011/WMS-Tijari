@@ -2,8 +2,8 @@
     <record id="action_import_selected_kit_assembly"
             model="ir.actions.server">
         <field name="name">Generate Data</field>
-        <field name="model_id" ref="model_acumatica_kit_assembly_line"/>
-        <field name="binding_model_id" ref="model_acumatica_kit_assembly_line"/>
+        <field name="model_id" ref="model_acumatica_kit_assembly"/>
+        <field name="binding_model_id" ref="model_acumatica_kit_assembly"/>
         <field name="binding_type">action</field>
         <field name="state">code</field>
         <field name="code">
@@ -15,16 +15,19 @@
         <field name="name">acumatica.kit.assembly.list</field>
         <field name="model">acumatica.kit.assembly</field>
         <field name="arch" type="xml">
-            <list string="Data Manufacturing Order" create="0" delete="0">
+            <list string="Data Manufacturing Order">
                 <!-- <field name="selected" widget="boolean_toggle"/> -->
                 <field name="reference_nbr"/>
+                <field name="document_only"/>
                 <!-- <field name="line_nbr"/> -->
                 <field name="inventory_id" optional="show"/>
                 <field name="description"/>
                 <field name="building_id" optional="show"/>
                 <field name="quantity" optional="show"/>
+                <field name="date" optional="show"/>
                 <field name="uom" optional="show"/>
                 <field name="warehouse" optional="show"/>
+                <field name="last_modified_datetime" string="Last Modified" optional="show"/>
                 <!-- <field name="line_inventory_id" optional="show"/> -->
                 <!-- <field name="line_component_qty" optional="show"/>
                 <field name="line_uom" optional="show"/> -->
@@ -33,8 +36,9 @@
                        decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-                <field name="mrp_production_id" readonly="1"/>
+                <field name="mrp_production_id"/>
                 <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_open_manufacturing" string="Open Document" type="object" icon="fa-external-link" invisible="not mrp_production_id"/>
                 <!-- <button name="action_open_product" string="Open Product" type="object" icon="fa-external-link" invisible="not odoo_product_id"/> -->
             </list>
         </field>
@@ -47,6 +51,7 @@
             <form string="Data Manufacturing Order">
                 <header>
                     <button name="action_import_this" string="Import Baris Ini" type="object" class="btn-primary" invisible="import_state != 'staged'"/>
+                    <button name="action_open_manufacturing" string="Open Document" type="object" invisible="not mrp_production_id"/>
                     <!-- <button name="action_open_product" string="Buka Product" type="object" invisible="not odoo_product_id"/> -->
                     <button name="action_reset_pending" string="Reset ke Staged" type="object" invisible="import_state != 'error'"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
@@ -64,8 +69,10 @@
                             <field name="building_id"/>
                             <field name="status"/>
                             <field name="type"/>
+                            <field name="document_only"/>
                             <field name="reason_code"/>
                             <field name="post_period"/>
+                            <field name="date"/>
                             <field name="requested_on"/>
                             <field name="revision"/>
                             <field name="note_header_id"/>
@@ -76,8 +83,8 @@
                     </group>
                     <notebook>
                         <page string="Components">
-                            <field name="component_ids" readonly="1">
-                                <list string="Components" create="0" edit="0" delete="0">
+                            <field name="component_ids">
+                                <list string="Components" edit="0">
                                     <field name="line_nbr"/>
                                     <field name="stock_inventory_id"/>
                                     <field name="line_inventory_id"/>
@@ -96,11 +103,11 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1"/>
-                        <field name="mrp_production_id" readonly="1"/>
-                        <!-- <field name="odoo_bom_id" readonly="1"/> -->
-                        <field name="config_id" readonly="1"/>
-                        <!-- <field name="sync_date" readonly="1"/> -->
+                        <field name="import_message"/>
+                        <field name="mrp_production_id"/>
+                        <!-- <field name="odoo_bom_id"/> -->
+                        <field name="config_id"/>
+                        <!-- <field name="sync_date"/> -->
                     </group>
                 </sheet>
             </form>

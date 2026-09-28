@@ -107,6 +107,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
         self.ensure_one()
         Picking = self.env['stock.picking']
         session = self.config_id._do_login()
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {}
@@ -135,7 +136,14 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
             }
             response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
-                raise UserError(f'Gagal fetch data (HTTP {response.status_code}): {response.text}')
+                last_error = f'Gagal fetch data (HTTP {response.status_code}): {response.text}'
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="credit memo consignment",
+                    error=last_error,
+                    error_type="http",
+                )
+                raise UserError(last_error)
 
             raw_payload = response.json()
             flat_data = (
@@ -185,17 +193,36 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                         if header_key in seen_headers:
                             created_header = seen_headers[header_key]
                         else:
-                            created_header = self.env['acumatica.credit.memo.consignment.staging'].create(header)
-                            seen_headers[header_key] = created_header
-                            result.append(header)
-                            sync_data = fields.Datetime.now()
-                            created_header.write({
+                            header.update({
                                 'config_id': self.config_id.id,
                                 'import_state': 'staged',
                                 'import_message': "Data API Imported",
                                 'selected': True,
-                                'sync_date': sync_data,
+                                'sync_date': fields.Datetime.now(),
                             })
+                            existing_header = self.env['acumatica.credit.memo.consignment.staging'].search([
+                                ('config_id', '=', self.config_id.id),
+                                ('adt_ReferenceNbr', '=', header.get('adt_ReferenceNbr')),
+                            ], limit=1)
+                            if existing_header:
+                                if (
+                                    not header.get('adt_LastModifiedDateTime')
+                                    or existing_header.adt_LastModifiedDateTime == header['adt_LastModifiedDateTime']
+                                ):
+                                    seen_headers[header_key] = existing_header
+                                    continue
+                                existing_header.line_ids.unlink()
+                                existing_header.write(header)
+                                created_header = existing_header
+                            else:
+                                created_header = self.env['acumatica.credit.memo.consignment.staging'].create(header)
+                            seen_headers[header_key] = created_header
+                            result.append(header)
+                            picking = Picking.search([
+                                ('origin', '=', header.get('adt_ReferenceNbr')),
+                            ], limit=1)
+                            if picking:
+                                created_header.write({'odoo_picking_id': picking.id})
 
 
                         if flat_data is not None:
@@ -278,7 +305,16 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                     print(header if 'header' in locals() else item)
                     print("=" * 80)
 
-                    raise UserError(f"ERROR IMPORT HEADER KE-{row_number} dengan error message: {str(e)}")
+                    last_error = f"ERROR IMPORT HEADER KE-{row_number} dengan error message: {str(e)}"
+
+                    AcumaticaErrorService.send_error(
+                        webhook_type="fetch",
+                        webhook_name="credit memo consignment",
+                        error=last_error,
+                        error_type="unknown",
+                    )
+
+                    raise UserError(last_error)
 
                     _logger.exception(
                         "Error import Direct Transfer %s",
@@ -370,14 +406,18 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                 to_create.append(vals)
                 continue
 
-            # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda
-            if vals.get('acumatica_write_date') and existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
+            if (
+                not vals.get('adt_LastModifiedDateTime')
+                or existing.adt_LastModifiedDateTime == vals['adt_LastModifiedDateTime']
+            ):
                 unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+                continue
+
+            # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

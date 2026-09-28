@@ -29,23 +29,23 @@ class AcumaticaVendorLine(models.Model):
     _order       = 'row_number asc'
 
     # ─── Data mentah dari Acumatica ──────────────────
-    row_number             = fields.Integer(string='No',           readonly=True)
-    external_id            = fields.Char(string='UUID Acumatica',  readonly=True)
+    row_number             = fields.Integer(string='No')
+    external_id            = fields.Char(string='UUID Acumatica')
 
     # Mandatory
-    vendor_id              = fields.Char(string='VendorID',        readonly=True)
-    vendor_name            = fields.Char(string='VendorName',      readonly=True)
-    location_name          = fields.Char(string='LocationName',    readonly=True)
-    status                 = fields.Char(string='Status',          readonly=True)
-    lead_time_days         = fields.Integer(string='LeadTimedays', readonly=True)
-    fob_point              = fields.Char(string='FOBPoint',        readonly=True)
-    last_modified_datetime = fields.Char(string='LastModifiedDateTime', readonly=True)
-    note                   = fields.Text(string='Note',            readonly=True)
-    account_ref            = fields.Char(string='AccountRef',      readonly=True)
-    b_account_id          = fields.Char(string='BAccountID',     readonly=True)
+    vendor_id              = fields.Char(string='VendorID')
+    vendor_name            = fields.Char(string='VendorName')
+    location_name          = fields.Char(string='LocationName')
+    status                 = fields.Char(string='Status')
+    lead_time_days         = fields.Integer(string='LeadTimedays')
+    fob_point              = fields.Char(string='FOBPoint')
+    last_modified_datetime = fields.Char(string='LastModifiedDateTime')
+    note                   = fields.Text(string='Note')
+    account_ref            = fields.Char(string='AccountRef')
+    b_account_id          = fields.Char(string='BAccountID')
 
     # Optional
-    vendor_class           = fields.Char(string='VendorClass',     readonly=True)
+    vendor_class           = fields.Char(string='VendorClass')
 
     # ─── Status Import ───────────────────────────────
     import_state = fields.Selection([
@@ -54,10 +54,10 @@ class AcumaticaVendorLine(models.Model):
         ('updated',  'Updated'),
         ('rejected',  'Rejected'),
         ('error',    'Error'),
-    ], string='Status', default='staged', readonly=True)
+    ], string='Status', default='staged')
 
-    import_message  = fields.Char(string='Generation Message',       readonly=True)
-    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference', readonly=True)
+    import_message  = fields.Char(string='Generation Message')
+    odoo_partner_id = fields.Many2one('res.partner', string='Document Reference')
     selected        = fields.Boolean(string='Pilih',          default=True)
     acumatica_err_id = fields.Many2one('acumatica.error.master', string='Error ID')
 
@@ -65,10 +65,9 @@ class AcumaticaVendorLine(models.Model):
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        readonly=True,
         ondelete='cascade',
     )
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ─── Helpers ─────────────────────────────────────
     @staticmethod
@@ -182,6 +181,9 @@ class AcumaticaVendorLine(models.Model):
           VendorClass  → adt_class
         """
         created = updated = error = 0
+        total = len(self)
+
+        print(f'[MASTER IMPORT][Vendor] START total={total}', flush=True)
 
         STATUS_MAP = {
             'active':   'Active',
@@ -307,16 +309,22 @@ class AcumaticaVendorLine(models.Model):
                 error += 1
 
         msg = f'Import selesai: {created} dibuat, {updated} diupdate, {error} error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag':  'display_notification',
-            'params': {
-                'title':   'Import Vendor',
-                'message': msg,
-                'type':    'success' if error == 0 else 'warning',
-                'sticky':  True,
-            },
-        }
+        print(
+            f'[MASTER IMPORT][Vendor] FINISH total={total} '
+            f'created={created} updated={updated} error={error}',
+            flush=True,
+        )
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag':  'display_notification',
+        #     'params': {
+        #         'title':   'Import Vendor',
+        #         'message': msg,
+        #         'type':    'success' if error == 0 else 'warning',
+        #         'sticky':  True,
+        #     },
+        # }
 
     # ─── Misc Actions ────────────────────────────────
     def action_reset_pending(self):
@@ -347,7 +355,9 @@ class AcumaticaVendorLine(models.Model):
 
             old_value = record[field_name]
 
-            # Normalisasi nilai
+            if field.type == 'many2one':
+                old_value = old_value.id if old_value else False
+                
             old_value = old_value or False
             new_value = new_value or False
 
@@ -423,7 +433,10 @@ class AcumaticaVendorLine(models.Model):
                 escape(record.display_name),
             )
 
-        self.message_post(
+        self.with_context(
+            mail_create_nosubscribe=True,
+            mail_post_autofollow=False,
+        ).message_post(
             body=body,
             message_type='comment',
             subtype_xmlid='mail.mt_note',

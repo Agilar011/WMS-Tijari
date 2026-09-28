@@ -15,6 +15,8 @@ class StockLocation(models.Model):
     unique_code = fields.Char(string='Unique Code', help='A unique code for the location')
     is_location_mapping = fields.Boolean(string="Parent Mapping Location")
     is_consignment = fields.Boolean(string="Consignment Location")
+    is_document_only = fields.Boolean(string="Document Only Location")
+    location_owner = fields.Char(string="Location Owner")
 
     @api.depends(
         'name',
@@ -59,11 +61,16 @@ class StockLocationAcumatica(models.Model):
     building = fields.Char(string='Building ID (Acumatica)')
     odoo_location_id = fields.Many2one('stock.location', string='Location Grouping')
     odoo_building_id = fields.Many2one('stock.warehouse', string='Building Grouping')
+    odoo_building_location_id = fields.Many2one(
+        'stock.location',
+        string='Building Virtual Location',
+        ondelete='set null',
+    )
     active = fields.Boolean(string='Aktif', default=True)
     is_active = fields.Boolean(string='Is Active')
     is_error = fields.Boolean(string='Is Error')
     error_message = fields.Char(string='Error Message', readonly=True)
-
+    is_ungropping = fields.Boolean(string='Tidak Digrouping', default=False)
 
     @api.onchange('odoo_location_id')
     def _onchange_odoo_location_id(self):

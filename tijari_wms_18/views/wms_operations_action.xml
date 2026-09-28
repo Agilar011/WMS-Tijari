@@ -1,6 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <!-- Keep Document Only pickings out of Odoo's standard Transfers menus.
+         The picking flag is the primary marker; picking-type and location
+         flags also catch records whose picking flag was not synchronized. -->
+    <record id="stock.action_picking_tree_incoming" model="ir.actions.act_window">
+        <field name="domain">[
+            ('adt_is_document_only', '=', False),
+            ('picking_type_id.is_document_only_api', '=', False),
+        ]</field>
+    </record>
+
+    <record id="stock.action_picking_tree_outgoing" model="ir.actions.act_window">
+        <field name="domain">[
+            ('adt_is_document_only', '=', False),
+            ('picking_type_id.is_document_only_api', '=', False),
+        ]</field>
+    </record>
+
     <record id="action_wms_operations_purchase_receipts" model="ir.actions.act_window">
         <field name="name">Purchase Receipts</field>
         <field name="res_model">stock.picking</field>
@@ -20,7 +37,7 @@
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="domain">[
             ('picking_type_id.code', '=', 'internal'),
-            ('adt_type', '=', 'Transfer Receipt'),
+            ('adt_type', 'in', ('Transfer Receipt', 'SOTR')),
         ('adt_is_document_only', '=', False),
         ]</field>
     </record>
@@ -196,6 +213,7 @@
         <field name="name">Internal Transfer - Intra</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,kanban,form</field>
+        <field name="view_id" ref="stock_picking_tree_internal_transfer_order_columns"/>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_internal_intra': 1}</field>
     </record>
@@ -204,6 +222,7 @@
         <field name="name">Internal Transfer - Inter</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,kanban,form</field>
+        <field name="view_id" ref="stock_picking_tree_internal_transfer_order_columns"/>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
         <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_internal_inter': 1}</field>
     </record>

@@ -113,43 +113,34 @@ class ImportDirectTransferWizard(models.TransientModel):
 
 
     def _search_picking_type(self, header):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
-            return config_picking_type
-
         PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
-        type = False
+        document_only = bool(header.get('adt_DocumentOnly'))
+        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
 
-        document_only_type = PickingType.resolve_document_only_picking_type(
-            target_operation_type='direct_delivery_order',
-            api_acumatica='vendor_return',
-            document_only=header.get('adt_DocumentOnly'),
-            warehouse_code=header.get('adt_FromWarehouseID'),
-        )
-        if document_only_type:
-            return document_only_type
-
-        print(f"Warehouse: {header['adt_FromWarehouseID']}")
-
-        location = Location.search([
-            ('code', '=', header['adt_FromWarehouseID'])
-        ])
-
-            
-        if location:
-            type = PickingType.resolve_picking_type(
-                warehouse_code=header['adt_FromWarehouseID'],
-                code='outgoing',
-                operation_category='delivery',
+        if document_only:
+            if config_picking_type:
+                return config_picking_type
+            return PickingType.resolve_document_only_picking_type(
+                target_operation_type='direct_delivery_order',
                 api_acumatica='vendor_return',
-                transaction_key='vendor_return_direct_transfer',
+                document_only=True,
+                warehouse_code=header.get('adt_FromWarehouseID'),
                 required=False,
             )
 
-            print(f"Type: {type}")
-
-        return type if type else None
+        # Vendor Return (Return Transfer) is received into the internal
+        # transfer order, so resolve the receipt against its destination.
+        warehouse_code = header.get('adt_ToWarehouseID')
+        warehouse = PickingType._adt_find_warehouse(warehouse_code)
+        return PickingType.resolve_picking_type(
+            warehouse=warehouse,
+            warehouse_code=warehouse_code,
+            code='incoming',
+            operation_category='receive',
+            api_acumatica='vendor_return',
+            transaction_key='vendor_return_direct_transfer',
+            required=False,
+        )
 
     def fetch_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
         self.ensure_one()
@@ -333,9 +324,12 @@ class ImportDirectTransferWizard(models.TransientModel):
             })
 
             existing = existing_map.get(reference_nbr)
-            if existing and vals.get('adt_LastModifiedDateTime') and existing.adt_LastModifiedDateTime == vals.get('adt_LastModifiedDateTime'):
-                continue
             if existing:
+                if (
+                    not vals.get('adt_LastModifiedDateTime')
+                    or existing.adt_LastModifiedDateTime == vals['adt_LastModifiedDateTime']
+                ):
+                    continue
                 existing.write(vals)
                 header = existing
                 header.line_ids.unlink()
@@ -418,14 +412,10 @@ class ImportDirectTransferWizard(models.TransientModel):
                 to_create.append(vals)
                 continue
 
-            # KOREKSI 3: Ubah acumatica_write_date menjadi adt_LastModifiedDateTime sesuai model staging Anda
-            if vals.get('acumatica_write_date') and existing.adt_LastModifiedDateTime == vals.get('acumatica_write_date'):
-                unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 

@@ -26,7 +26,9 @@
         'security/groups.xml',
         'security/ir.model.access.csv',
         'data/document_only_picking_type_data.xml',
+        'data/stock_location_consignment_data.xml',
         'data/ir.sequence.xml',
+        'data/mail_template_stock_inventory_approval.xml',
         'data/api_data_hub_dashboard.xml',
         'wizard/generate_package_wizard_views.xml',
         'wizard/putaway_move_line_wizard_views.xml',
@@ -39,6 +41,7 @@
         'views/internal_transfer_order_kanban_views.xml',
         'views/master_menu_view.xml',
         'views/product_template.xml',
+        'views/uom_uom_views.xml',
         'views/res_partner.xml',
         'views/res_users.xml',
         'views/stock_location_views.xml',
@@ -64,6 +67,8 @@
         'views/action_mobile_view_mode.xml',
         'views/wms_operations_menu.xml',
         'views/operator_menu_security.xml',
+        'views/inventory_menu_views.xml',
+        'views/access_menu_security.xml',
     ],
     'assets': {
         'spreadsheet.o_spreadsheet': [

@@ -18,12 +18,14 @@
         <field name="model">acumatica.uom.line</field>
         <field name="arch" type="xml">
             <search string="Cari UoM">
-                <field name="unit_id" string="UnitID (Kategori)"/>
+                <field name="unit_id" string="UnitID (Code)"/>
                 <field name="description" string="Description (Nama UoM)"/>
                 <filter string="Staged" name="staged"
                         domain="[('import_state','=','staged')]"/>
                 <filter string="Created" name="created"
                         domain="[('import_state','=','created')]"/>
+                <filter string="Updated" name="updated"
+                        domain="[('import_state','=','updated')]"/>
                 <filter string="Rejected" name="skipped"
                         domain="[('import_state','=','skipped')]"/>
                 <filter string="Error" name="error"
@@ -34,7 +36,7 @@
                 <group expand="0" string="Group By">
                     <filter string="Status Import" name="group_state"
                             context="{'group_by': 'import_state'}"/>
-                    <filter string="Kategori (UnitID)" name="group_unit"
+                    <filter string="Code (UnitID)" name="group_unit"
                             context="{'group_by': 'unit_id'}"/>
                 </group>
             </search>
@@ -49,17 +51,19 @@
             <list string="Data UoM dari Acumatica" multi_edit="1">
                 <field name="selected" optional="show"/>
                 <field name="row_number" string="No" optional="show"/>
-                <field name="unit_id" string="UnitID"/>
+                <field name="unit_id" string="UnitID (Code)"/>
                 <field name="description" string="Description"/>
                 <field name="external_id" string="UUID Acumatica" optional="hide"/>
                 <field name="import_state" string="Status" widget="badge"
                        decoration-success="import_state == 'created'"
+                       decoration-info="import_state in ['updated', 'staged']"
                        decoration-warning="import_state == 'skipped'"
                        decoration-danger="import_state == 'error'"
-                       decoration-info="import_state == 'staged'"/>
+                       />
                 <field name="odoo_categ_id" string="Document Reference" optional="show"/>
                 <field name="odoo_uom_id" string="Document Reference" optional="show"/>
                 <field name="import_message" string="Generation Message" optional="show"/>
+                <field name="last_modified_datetime" string="Last Modified" optional="show"/>
                 <field name="sync_date" string="Tgl Sync" optional="show"/>
                 <button name="action_import_this"
                         string="Import"
@@ -96,10 +100,11 @@
                 </style>
                 <sheet>
                     <group string="Data dari Acumatica">
-                        <field name="unit_id" string="UnitID"/>
+                        <field name="unit_id" string="UnitID (Code)"/>
                         <field name="description" string="UoM Name"/>
                         <field name="external_id"/>
                         <field name="row_number"/>
+                        <field name="last_modified_datetime" string="Last Modified"/>
                     </group>
                     <group string="Hasil di Odoo">
                         <field name="odoo_categ_id" string="Kategori UoM"/>

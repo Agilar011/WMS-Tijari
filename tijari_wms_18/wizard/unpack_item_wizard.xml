@@ -19,7 +19,7 @@
                         context="{'tijari_stock_picking_product_code_only': True}"/>
                     
                     <label for="product_uom_qty"
-                        string="Total Qty"/>
+                        string="Qty Total"/>
                     <div>
                         <field name="product_uom_qty"
                             readonly="state != 'draft'"
@@ -45,12 +45,12 @@
 
                     <label for="so_confirmation_quantity"
                         string="Qty Dikirim"
-                        readonly="state in ('done', 'cancel')"/>
+                        readonly="state in ('done', 'cancel') or status_check == 'finished'"/>
                     <div>
                         <field name="so_confirmation_quantity"/>
                         <field name="product_uom"
                             groups="uom.group_uom"
-                            readonly="state != 'draft'"
+                            readonly="state in ('done', 'cancel') or status_check == 'finished'"
                             nolabel="1"
                             options="{'no_open': True}"/>
                     </div>
@@ -69,7 +69,7 @@
                             string="Rollback"
                             type="object"
                             class="btn-danger"
-                            invisible="status_check != 'finished' or state in ['done', 'cancel']"/>
+                            invisible="status_check != 'finished' or state not in ['confirmed', 'assigned']"/>
 
                     <button string="Close"
                             special="cancel"

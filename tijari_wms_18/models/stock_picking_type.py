@@ -61,12 +61,12 @@ class StockPickingType(models.Model):
             'transfer_shipment': 'direct_delivery_order',
             'issue_change_item': 'direct_delivery_order',
             'inventory_issue': 'direct_delivery_order',
-            'issue_change_item_discontinue': 'direct_delivery_order',
             'issue_po_return': 'direct_delivery_order',
-            'po_return': 'direct_delivery_order',
+            'issue_change_item_discontinue': 'direct_delivery_order',
             'transfer_one_step': 'direct_delivery_order',
             'transfer_two_step': 'direct_delivery_order',
             'credit_memo_consignment': 'direct_delivery_order',
+            'invoice_consignment': 'direct_delivery_order',
         }
 
     @api.model
@@ -185,14 +185,24 @@ class StockPickingType(models.Model):
 
         WarehouseID seperti ``WH33-PD`` adalah lokasi Acumatica, bukan
         warehouse pemilik picking type. Picking type harus di-resolve dari
-        BuildingID, misalnya ``WH33``.
+        BuildingID, misalnya ``WH33``. Kalau yang datang kode lokasi,
+        terjemahkan ke building-nya lewat mapping ``stock.location.acumatica``.
         """
         building_id = str(building_id or '').strip()
+        Warehouse = self.env['stock.warehouse']
         if not building_id:
-            return self.env['stock.warehouse'].browse()
-        return self.env['stock.warehouse'].search([
+            return Warehouse.browse()
+        warehouse = Warehouse.search([
             ('code', '=', building_id),
         ], limit=1)
+        if warehouse:
+            return warehouse
+        mapping = self.env['stock.location.acumatica'].search([
+            ('code', '=', building_id),
+            ('is_active', '=', True),
+            ('odoo_building_id', '!=', False),
+        ], limit=1)
+        return mapping.odoo_building_id
 
     @api.model
     def _adt_resolve_label(self, transaction_key, warehouse_label, code, operation_category):

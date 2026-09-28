@@ -30,7 +30,8 @@ class ImportIssueWizard(models.TransientModel):
         self.ensure_one()
         staging_list = []
         session = self.config_id._do_login()
-        
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {'$top': limit, '$skip': offset}
@@ -52,7 +53,21 @@ class ImportIssueWizard(models.TransientModel):
                 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
-                raise UserError(f'Gagal ambil data Issue Change Item (HTTP {response.status_code}): {response.text}')
+
+                last_error = (
+                    f'Gagal fetch data Issue Change Item '
+                    f'(HTTP {response.status_code}): '
+                    f'{response.text}'
+                )
+
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="issue change item",
+                    error=last_error,
+                    error_type="http",
+                )
+                
+                raise UserError(last_error)
                 
             raw_data = self._normalize_rows(response.json())
             print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched")
@@ -89,19 +104,27 @@ class ImportIssueWizard(models.TransientModel):
                         'picking_type_id': picking_type_id,
                         'warehouse_code': self._val(item, 'WarehouseID'),
                         'branch_warehouse': self._val(item, 'WarehouseName'),
+                        'config_id': self.config_id.id,
+                        'import_state': 'staged',
+                        'import_message': 'Data API Imported',
+                        'selected': True,
+                        'sync_date': fields.Datetime.now(),
                     }
                     
                     # 3. Create atau Update Header
-                    issue_record = issue_model.search([('external_id', '=', external_id)], limit=1)
+                    issue_record = issue_model.search([
+                        ('external_id', '=', external_id),
+                        ('config_id', '=', self.config_id.id),
+                    ], limit=1)
                     if issue_record:
                         incoming_last_modified = header_vals.get('acumatica_write_date')
-                        if (
-                            incoming_last_modified
-                            and issue_record.acumatica_write_date == incoming_last_modified
-                        ):
-                            staging_list.append(issue_record.id)
+                        if not incoming_last_modified or issue_record.acumatica_write_date == incoming_last_modified:
                             continue
                         issue_record.write(header_vals)
+                        # Staging adalah snapshot penuh dari API. Hapus detail lama
+                        # terlebih dahulu agar baris yang sudah hilang/berubah dari API
+                        # tidak tertinggal dan tidak ikut tergenerate ke stock.picking.
+                        issue_record.product_line_ids.unlink()
                     else:
                         issue_record = issue_model.create(header_vals)
 
@@ -146,11 +169,7 @@ class ImportIssueWizard(models.TransientModel):
                                 'warehouse_code': self._val(detail, 'WarehouseID'),
                             }
                             
-                            product_record = product_model.search([('line_external_id', '=', line_external_id)], limit=1) if line_external_id else False
-                            if product_record:
-                                product_record.write(detail_vals)
-                            else:
-                                product_model.create(detail_vals)
+                            product_model.create(detail_vals)
                             
                             # Commit setiap baris detail yang sukses
                             self.env.cr.commit()
@@ -161,8 +180,22 @@ class ImportIssueWizard(models.TransientModel):
                                 'import_state' : 'error',
                                 'import_message' : 'Proses generate product error'
                             })
+
+                            last_error = (
+                                f"Gagal memproses baris detail "
+                                f"(ID: {line_external_id}) pada dokumen {ref_nbr}. "
+                                f"Error: {str(e_detail)}"
+                            )
+
+                            AcumaticaErrorService.send_error(
+                                webhook_type="fetch",
+                                webhook_name="issue change item",
+                                error=last_error,
+                                error_type="unknown",
+                            )
+                            
                             # Jika detail error, rollback database khusus untuk baris detail ini saja
-                            _logger.error("Gagal memproses baris detail (ID: %s) pada dokumen %s. Error: %s", line_external_id, ref_nbr, str(e_detail))
+                            _logger.error(last_error)
                             continue  # Lanjutkan ke baris detail berikutnya
                             
                 except Exception as e_header:
@@ -174,9 +207,21 @@ class ImportIssueWizard(models.TransientModel):
                             'import_message' : 'Proses generate header error'
                         })
 
+                    last_error = (
+                        f"Gagal sinkronisasi dokumen Acumatica "
+                        f"(RefNbr: {ref_nbr}, ID: {external_id}). "
+                        f"Error: {str(e_header)}"
+                    )
+
+                    AcumaticaErrorService.send_error(
+                        webhook_type="fetch",
+                        webhook_name="issue change item",
+                        error=last_error,
+                        error_type="unknown",
+                    )
 
                     # Jika header error, rollback seluruh perubahan dokumen ini (termasuk jika ada detail yang sempat masuk)
-                    _logger.error("Gagal sinkronisasi dokumen Acumatica (RefNbr: %s, ID: %s). Error: %s", ref_nbr, external_id, str(e_header))
+                    _logger.error(last_error)
                     continue  # Lanjutkan ke dokumen (item) berikutnya di raw_data
                         
             _logger.info('Selesai menjalankan sinkronisasi terjadwal Issue Change Item.')
@@ -302,6 +347,16 @@ class ImportIssueWizard(models.TransientModel):
         if isinstance(value, dict):
             return value.get('value', '') or ''
         return value or ''
+
+    @staticmethod
+    def _bool_value(value):
+        if isinstance(value, dict):
+            value = value.get('value')
+        if isinstance(value, bool):
+            return value
+        if value in (False, None, ''):
+            return False
+        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
     def _search_picking_type(self, header):
         PickingType = self.env['stock.picking.type']

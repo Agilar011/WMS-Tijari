@@ -16,7 +16,7 @@
         <field name="name">acumatica.transfer.line.search</field>
         <field name="model">acumatica.transfer.line</field>
         <field name="arch" type="xml">
-            <search string="Cari Data SO Transfer - Inter WH IN">
+            <search string="Cari Data Transfer (In/SOTR)">
                 <field name="receipt_nbr"/>
                 <field name="document_only"/>
                 <!-- <field name="transfer_order_nbr"/> -->
@@ -43,7 +43,7 @@
         <field name="name">acumatica.transfer.line.list</field>
         <field name="model">acumatica.transfer.line</field>
         <field name="arch" type="xml">
-            <list string="Data SO Transfer - Inter WH IN" multi_edit="1">
+            <list string="Data Transfer (In/SOTR)" multi_edit="1">
                 <!-- <field name="transfer_order_number"/> -->
                 <field name="receipt_nbr"/>
                 <field name="receipt_type"/>
@@ -56,6 +56,7 @@
                 <field name="warehouse_code"/>
                 <field name="warehouse_dest_code"/>
                 <field name="total_qty"/>
+                <field name="acumatica_write_date" string="Last Modified"/>
                 <field name="import_state" widget="badge"
                        decoration-success="import_state == 'created'" decoration-info="import_state == 'updated'" decoration-warning="import_state == 'rejected'"
                        decoration-muted="import_state == 'staged'"
@@ -73,43 +74,44 @@
         <field name="name">acumatica.transfer.line.form</field>
         <field name="model">acumatica.transfer.line</field>
         <field name="arch" type="xml">
-            <form string="Data SO Transfer - Inter WH IN">
+            <form string="Transfer (In/SOTR)">
                 <header>
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged'"/>
                     <button name="action_open_picking" type="object" string="Open Document" class="btn-secondary" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                     <button name="action_reset_pending" type="object" string="Reset Staged" class="btn-secondary" invisible="import_state != 'error'"/>
+                    <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
                 </header>
                 <sheet>
                     <group string="Header">
                         <group>
-                            <field name="external_id" readonly="1"/>
-                            <field name="row_number" readonly="1"/>
-                            <field name="transfer_order_number" readonly="1"/>
-                            <field name="transfer_shipment_number" readonly="1"/>
-                            <field name="receipt_nbr" readonly="1"/>
-                            <field name="receipt_type" readonly="1"/>
-                            <field name="status" readonly="1"/>
-                            <field name="vendor_code" readonly="1"/>
-                            <field name="vendor_name" readonly="1"/>
-                            <field name="partner_ref" readonly="1"/>
-                            <field name="building_code" readonly="1"/>
-                            <field name="warehouse_code" readonly="1"/>
-                            <field name="warehouse_dest_code" readonly="1"/>
-                            <field name="header_location_code" readonly="1"/>
+                            <field name="external_id"/>
+                            <field name="row_number"/>
+                            <field name="transfer_order_number"/>
+                            <field name="transfer_shipment_number"/>
+                            <field name="receipt_nbr"/>
+                            <field name="receipt_type"/>
+                            <field name="status"/>
+                            <field name="vendor_code"/>
+                            <field name="vendor_name"/>
+                            <field name="partner_ref"/>
+                            <field name="building_code"/>
+                            <field name="warehouse_code"/>
+                            <field name="warehouse_dest_code"/>
+                            <field name="header_location_code"/>
                         </group>
                         <group>
-                            <field name="scheduled_date" readonly="1"/>
-                            <field name="actual_qty" readonly="1"/>
-                            <field name="total_qty" readonly="1"/>
-                            <field name="post_period" readonly="1"/>
-                            <field name="acumatica_write_date" readonly="1"/>
-                            <field name="branch_warehouse" readonly="1"/>
-                            <field name="note_header_id" readonly="1"/>
-                            <field name="inventory_ref" readonly="1"/>
-                            <field name="is_hold" readonly="1"/>
-                            <field name="document_only" readonly="1"/>
-                            <field name="picking_type_id" readonly="1"/>
-                            <field name="note" readonly="1"/>
+                            <field name="scheduled_date"/>
+                            <field name="actual_qty"/>
+                            <field name="total_qty"/>
+                            <field name="post_period"/>
+                            <field name="acumatica_write_date"/>
+                            <field name="branch_warehouse"/>
+                            <field name="note_header_id"/>
+                            <field name="inventory_ref"/>
+                            <field name="is_hold"/>
+                            <field name="document_only"/>
+                            <field name="picking_type_id"/>
+                            <field name="note"/>
                         </group>
                     </group>
                     <notebook>
@@ -145,31 +147,31 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" readonly="1"/>
-                        <field name="odoo_internal_transfer_order_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id"/>
+                        <field name="odoo_internal_transfer_order_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
 
 
                     <!-- <group string="Line">
                         <group>
-                            <field name="line_nbr" readonly="1"/>
-                            <field name="inventory_id" readonly="1"/>
-                            <field name="description" readonly="1"/>
-                            <field name="transaction_description" readonly="1"/>
-                            <field name="line_type" readonly="1"/>
-                            <field name="product_uom_qty" readonly="1"/>
-                            <field name="uom_code" readonly="1"/>
+                            <field name="line_nbr"/>
+                            <field name="inventory_id"/>
+                            <field name="description"/>
+                            <field name="transaction_description"/>
+                            <field name="line_type"/>
+                            <field name="product_uom_qty"/>
+                            <field name="uom_code"/>
                         </group>
                         <group>
-                            <field name="warehouse_dest_code" readonly="1"/>
-                            <field name="location_dest_code" readonly="1"/>
-                            <field name="transfer_order_line_number" readonly="1"/>
-                            <field name="transfer_order_type" readonly="1"/>
-                            <field name="transfer_shipment_number" readonly="1"/>
-                            <field name="import_state" readonly="1"/>
-                            <field name="import_message" readonly="1"/>
+                            <field name="warehouse_dest_code"/>
+                            <field name="location_dest_code"/>
+                            <field name="transfer_order_line_number"/>
+                            <field name="transfer_order_type"/>
+                            <field name="transfer_shipment_number"/>
+                            <field name="import_state"/>
+                            <field name="import_message"/>
                         </group>
                     </group> -->
                 </sheet>
@@ -178,7 +180,7 @@
     </record>
 
     <record id="action_acumatica_transfer_line" model="ir.actions.act_window">
-        <field name="name">Data SO Transfer - Inter WH IN</field>
+        <field name="name">Data Transfer (In/SOTR)</field>
         <field name="res_model">acumatica.transfer.line</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_transfer_line_search"/>

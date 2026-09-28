@@ -20,14 +20,14 @@ class AcumaticaInventoryStockQuant(models.Model):
     location_mapping_id = fields.Many2one(
         'stock.location.acumatica', string='Location Mapping', compute='_compute_snapshot',
     )
-    config_id = fields.Many2one('acumatica.config', string='API Configuration', readonly=True)
-    warehouse_code = fields.Char(string='Warehouse Code', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    description = fields.Char(string='Description', readonly=True)
-    api_on_hand = fields.Float(string='Stock API', readonly=True)
-    api_available = fields.Float(string='Available API', readonly=True)
-    source_line_count = fields.Integer(string='Staging Lines', readonly=True)
-    sync_date = fields.Datetime(string='Last API Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='API Configuration')
+    warehouse_code = fields.Char(string='Warehouse Code')
+    inventory_id = fields.Char(string='InventoryID')
+    description = fields.Char(string='Description')
+    api_on_hand = fields.Float(string='Stock API')
+    api_available = fields.Float(string='Available API')
+    source_line_count = fields.Integer(string='Staging Lines')
+    sync_date = fields.Datetime(string='Last API Sync')
 
     odoo_quantity = fields.Float(string='On Hand Odoo', compute='_compute_snapshot')
     odoo_reserved_quantity = fields.Float(string='Reserved Odoo', compute='_compute_snapshot')

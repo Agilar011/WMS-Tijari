@@ -5,8 +5,26 @@ from dateutil import parser as dateutil_parser
 
 class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     _name = 'acumatica.vendor.return.direct.transfer.staging'
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.picking.type.reresolve.mixin', 'acumatica.import.log.mixin']
     _description = 'Staging Header Acumatica Direct Transfer'
     _order = 'id desc'
+
+    def _adt_picking_type_wizard_call(self):
+        warehouse_code = (
+            self.adt_FromWarehouseID if self.adt_DocumentOnly
+            else self.adt_ToWarehouseID
+        )
+        if not warehouse_code:
+            return False
+        return (
+            'import.vendor.return.direct.transfer.wizard',
+            ({
+                'adt_FromWarehouseID': self.adt_FromWarehouseID,
+                'adt_ToWarehouseID': self.adt_ToWarehouseID,
+                'adt_DocumentOnly': self.adt_DocumentOnly,
+            },),
+            {},
+        )
 
     # --- Relasi Odoo ---
     config_id = fields.Many2one('acumatica.config', string="Konfigurasi API")
@@ -15,7 +33,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order',
-        readonly=True,
     )
     line_ids = fields.One2many(
         'acumatica.vendor.return.direct.transfer.staging.line', 
@@ -67,57 +84,55 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
     def write(self, vals):
         result = super().write(vals)
-        if 'picking_type_id' not in vals and {'adt_FromWarehouseID', 'adt_DocumentOnly'} & set(vals):
-            self._fill_vendor_return_picking_type()
+        if 'picking_type_id' not in vals and {
+            'adt_FromWarehouseID', 'adt_ToWarehouseID', 'adt_DocumentOnly'
+        } & set(vals):
+            self._fill_vendor_return_picking_type(force=True)
         return result
 
-    def _resolve_vendor_return_picking_type(self, warehouse_code=False):
+    def _resolve_vendor_return_picking_type(self, warehouse_code=False, document_only=False):
         PickingType = self.env['stock.picking.type'].sudo()
-        picking_type = PickingType.resolve_document_only_picking_type(
-            target_operation_type='direct_delivery_order',
-            api_acumatica='vendor_return',
-            document_only=True,
-            warehouse_code=warehouse_code,
-        )
-        if picking_type:
-            return picking_type
+        if document_only:
+            picking_type = PickingType.resolve_document_only_picking_type(
+                target_operation_type='direct_delivery_order',
+                api_acumatica='vendor_return',
+                document_only=True,
+                warehouse_code=warehouse_code,
+            )
+            if picking_type:
+                return picking_type
 
         warehouse = self._find_warehouse_by_code(warehouse_code)
         picking_type = PickingType.resolve_picking_type(
             warehouse=warehouse,
             warehouse_code=warehouse_code,
-            code='outgoing',
-            operation_category='delivery',
+            code='incoming',
+            operation_category='receive',
             api_acumatica='vendor_return',
             transaction_key='vendor_return',
             required=False,
         )
-        if picking_type:
-            return picking_type
+        # Never fall back globally: a receipt type must belong to the
+        # destination warehouse of this Vendor Return.
+        return picking_type or PickingType.browse()
 
-        return PickingType.search([
-            ('code', '=', 'outgoing'),
-            ('operation_category', '=', 'delivery'),
-            ('active', '=', True),
-        ], limit=1)
-
-    def _fill_vendor_return_picking_type(self):
+    def _fill_vendor_return_picking_type(self, force=False):
         for rec in self:
-            if rec.picking_type_id:
+            if rec.picking_type_id and not force:
                 continue
-            picking_type = rec._resolve_vendor_return_picking_type(rec.adt_FromWarehouseID)
+            warehouse_code = (
+                rec.adt_FromWarehouseID if rec.adt_DocumentOnly
+                else rec.adt_ToWarehouseID
+            )
+            picking_type = rec._resolve_vendor_return_picking_type(
+                warehouse_code, rec.adt_DocumentOnly
+            )
             if picking_type:
                 rec.picking_type_id = picking_type.id
-        return True
-
-    def action_fill_picking_type_id(self):
-        self._fill_vendor_return_picking_type()
-        missing = self.filtered(lambda rec: not rec.picking_type_id)
-        if missing:
-            raise UserError(
-                'Picking Type Direct Delivery Order tidak ditemukan untuk: %s'
-                % ', '.join(missing.mapped('adt_ReferenceNbr'))
-            )
+            elif force:
+                # Clear stale/global operation types so reresolution cannot
+                # reuse a Document Only type from an unrelated warehouse.
+                rec.picking_type_id = False
         return True
 
     def action_reset_pending(self):
@@ -127,89 +142,65 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         })
         return True
 
-    def _get_or_create_consignment_location(
-        self, source_location=False, customer_code=False, cons_location_code=False
-    ):
-        Location = self.env['stock.location'].sudo()
-        if not source_location:
-            raise UserError('Source location wajib diisi untuk membuat lokasi consignment.')
-
-        customer_code = (customer_code or '').strip() or 'Unknown Customer'
-        cons_location_code = (cons_location_code or '').strip() or 'Consignment'
-
-        def get_or_create_child(parent, name, is_consignment=False):
-            location = Location.search([
-                ('location_id', '=', parent.id),
-                ('name', '=', name),
-            ], limit=1)
-            vals = {
-                'name': name,
-                'usage': 'internal',
-                'location_id': parent.id,
-            }
-            if source_location.company_id:
-                vals['company_id'] = source_location.company_id.id
-            if 'is_consignment' in Location._fields:
-                vals['is_consignment'] = is_consignment
-            if location:
-                write_vals = {}
-                if is_consignment and not location.is_consignment:
-                    write_vals['is_consignment'] = True
-                if write_vals:
-                    location.write(write_vals)
-                return location
-            return Location.create(vals)
-
-        warehouse_root = source_location
-        warehouse = self.env['stock.warehouse'].sudo().search([]).filtered(
-            lambda wh: source_location.parent_path.startswith(wh.view_location_id.parent_path)
-        )[:1]
-        if warehouse:
-            warehouse_root = warehouse.view_location_id
-
-        cons_root = get_or_create_child(warehouse_root, 'CONS')
-        customer_location = get_or_create_child(cons_root, customer_code)
-        return get_or_create_child(
-            customer_location,
-            cons_location_code,
-            is_consignment=True,
-        )
-
     def _get_vendor_return_base_location(self, first, picking_type):
-        destination_warehouse = self._find_warehouse_by_code(first.adt_ToWarehouseID)
-        if destination_warehouse and destination_warehouse.lot_stock_id:
-            return destination_warehouse.lot_stock_id
-        return picking_type.default_location_src_id
+        Location = self.env['stock.location']
+        warehouse_code = (first.adt_FromWarehouseID or '').strip()
+        normalized_code = (
+            warehouse_code.split('-', 1)[1].strip()
+            if '-' in warehouse_code
+            else warehouse_code
+        )
+        location_domain = [
+            ('is_consignment', '=', True),
+            ('location_id.name', '=', 'Consignment'),
+        ]
+        # Prefer the full Acumatica WarehouseID so identical suffixes in
+        # different buildings cannot resolve to the wrong consignment bin.
+        source_location = Location.search(
+            location_domain + [('name', '=', warehouse_code)],
+            limit=1,
+        )
+        if not source_location and normalized_code and normalized_code != warehouse_code:
+            # Keep compatibility with existing consignment locations whose
+            # names were stored without the building prefix.
+            source_location = Location.search(
+                location_domain + [('name', '=', normalized_code)],
+                limit=1,
+            )
+        if not source_location:
+            raise UserError(
+                f'Lokasi consignment tidak ditemukan untuk FromWarehouseID '
+                f'{first.adt_FromWarehouseID or "-"}.'
+            )
+        return source_location
 
     def _get_vendor_return_source_location(self, first, picking_type):
-        warehouse_src = self._find_warehouse_by_code(first.adt_FromWarehouseID)
-        if warehouse_src and warehouse_src.lot_stock_id:
-            return warehouse_src.lot_stock_id
-
         base_location = self._get_vendor_return_base_location(first, picking_type)
         if not base_location:
             raise UserError(
                 f"Lokasi basis consignment tidak ditemukan untuk Vendor Return {first.adt_ReferenceNbr or '-'}."
             )
 
-        first_line = first.line_ids[:1]
-        cons_location_code = (
-            (first_line.adt_FromLocationID if first_line else False)
-            or (first_line.adt_ToLocationID if first_line else False)
-            or first.adt_FromWarehouseID
-            or 'Consignment'
-        )
-        return self._get_or_create_consignment_location(
-            base_location,
-            first.adt_FromWarehouseID,
-            cons_location_code,
-        )
+        return base_location
 
     def _get_vendor_return_destination_location(self, first, picking_type):
-        destination_warehouse = self._find_warehouse_by_code(first.adt_ToWarehouseID)
-        if destination_warehouse and destination_warehouse.lot_stock_id:
-            return destination_warehouse.lot_stock_id
-        return picking_type.default_location_dest_id
+        warehouse_code = (first.adt_ToWarehouseID or '').strip()
+        mapping = self.env['stock.location.acumatica'].search([
+            ('code', '=', warehouse_code),
+            ('is_active', '=', True),
+        ], limit=1)
+        if not mapping:
+            raise UserError(
+                f'Mapping ToWarehouseID tidak ditemukan di '
+                f'stock.location.acumatica: {first.adt_ToWarehouseID or "-"}.'
+            )
+        if not mapping.odoo_location_id:
+            raise UserError(
+                f'Lokasi Odoo untuk ToWarehouseID '
+                f'{first.adt_ToWarehouseID or "-"} belum diisi pada '
+                'stock.location.acumatica.'
+            )
+        return mapping.odoo_location_id
 
     # =========================================================================
     # CORE PROCESS FUNCTIONS FOR DIRECT TRANSFER IMPORT
@@ -266,8 +257,8 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     print(f"[DIRECT TRANSFER] Processing Document: {origin}")
 
                     # Tentukan jenis operasi picking (Operation Type)
-                    first._fill_vendor_return_picking_type()
-                    picking_type = first.picking_type_id
+                    first._fill_vendor_return_picking_type(force=True)
+                    picking_type = first._adt_reresolve_picking_type()
                     if not picking_type:
                         raise UserError(f"Picking type (Operation Type) belum diatur pada header staging ID {first.id}.")
 
@@ -283,10 +274,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         origin,
                         source_location,
                         dest_location,
-                        'vendor_return',
+                        'inter_warehouse',
                         self._parse_dt(first.adt_Date),
                         first.adt_note or False,
-                        transfer_type='transfer_out',
+                        description=first.adt_Description or False,
+                        transfer_type='transfer_in',
+                        adt_transaction_type='Vendor Return',
+                        document_only=first.adt_DocumentOnly,
                     )
 
                     for line in to_create_move_lines:
@@ -419,8 +413,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     def action_open_picking(self):
         self.ensure_one()
         if self.odoo_internal_transfer_order_id:
-            if self.odoo_internal_transfer_order_id.picking_count:
-                return self.odoo_internal_transfer_order_id.action_view_pickings()
             return {
                 'type': 'ir.actions.act_window',
                 'res_model': 'internal.transfer.order',

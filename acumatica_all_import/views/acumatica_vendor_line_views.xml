@@ -61,6 +61,7 @@
                 <field name="b_account_id" string="BAccountID" optional="show"/>
                 <field name="lead_time_days" string="Lead Time" optional="show"/>
                 <field name="fob_point" string="FOBPoint" optional="show"/>
+                <field name="last_modified_datetime" string="Last Modified" optional="show"/>
                 <field name="import_state" string="Status Import" widget="badge"
                        decoration-success="import_state == 'created'"
                        decoration-info="import_state == 'updated'"

@@ -2,7 +2,8 @@
 
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
-import { Component } from "@odoo/owl";
+import { CharField } from "@web/views/fields/char/char_field";
+import { Component, useEffect } from "@odoo/owl";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
 
 const ZXING_BROWSER_CDN_URLS = [
@@ -648,12 +649,12 @@ async function scanQrWithZxing(title) {
     }
 }
 
-async function callScannedCodeMethod({ orm, notification, resModel, resId, methodName, title }) {
+async function callScannedCodeMethod({ orm, notification, resModel, resId, methodName, title, scannedCode }) {
     if (!orm || !resModel || !resId || !methodName) {
         return { ok: false, result: null };
     }
 
-    const scannedCode = await scanCodeWithNotification(notification, title);
+    scannedCode = scannedCode || await scanCodeWithNotification(notification, title);
     if (!scannedCode) {
         return { ok: false, result: null };
     }
@@ -675,6 +676,25 @@ function getResultUpdates(result, fieldNames) {
         }
     }
     return updates;
+}
+
+function getRecordResultUpdates(record, result, fieldNames) {
+    const updates = getResultUpdates(result, fieldNames);
+    const fields = record?.fields;
+
+    // A move line can be rendered by several different x2many subviews
+    // (regular stock operations, MRP operations, and the WMS detail views).
+    // The scan RPC returns the complete result for the line, but a given
+    // subview may not load every returned field. Passing such a field to
+    // record.update() makes Odoo's x2many preprocessing dereference an
+    // undefined field definition.
+    if (!fields) {
+        return {};
+    }
+
+    return Object.fromEntries(
+        Object.entries(updates).filter(([fieldName]) => hasOwn(fields, fieldName))
+    );
 }
 
 async function scanQrToMoveLineField(env, action) {
@@ -812,7 +832,11 @@ class MoveLineScanButton extends Component {
                 "action_apply_scanned_field",
                 [[moveLineId], this.fieldName, scannedCode]
             );
-            const updates = getResultUpdates(result, MOVE_LINE_RECORD_UPDATE_FIELDS);
+            const updates = getRecordResultUpdates(
+                this.props.record,
+                result,
+                MOVE_LINE_RECORD_UPDATE_FIELDS
+            );
             if (Object.keys(updates).length) {
                 await this.props.record.update(updates);
             }
@@ -938,13 +962,20 @@ class ProductScanButton extends Component {
 }
 
 class PickerProductScanButton extends ProductScanButton {
+    static template = "tijari.PickerProductScanButton";
+
     get applyMethodName() {
-        return "action_apply_scanned_picker_product";
+        return "action_apply_scanned_picker_code";
     }
 
     get applyByLotMethodName() {
         return "action_apply_scanned_picker_product_by_lot";
     }
+
+    get scanTitle() {
+        return "Scan Kode";
+    }
+
 }
 
 class ProductByLotScanButton extends ProductScanButton {
@@ -956,6 +987,120 @@ class ProductByLotScanButton extends ProductScanButton {
 
     get scanTitle() {
         return "Scan Lot QR Code";
+    }
+}
+
+class PutawayProductScanButton extends ProductScanButton {
+    static template = "tijari.PickerProductScanButton";
+
+    get applyMethodName() {
+        return "action_apply_scanned_putaway_code";
+    }
+
+    get scanTitle() {
+        return "Scan Kode Putaway";
+    }
+}
+
+/**
+ * Handheld scanners normally finish their input with Enter.  CharField's
+ * standard handler commits on Enter, but the move-line onchange can be easy
+ * to miss while the row is being edited.  Capture Enter here so the value is
+ * committed immediately and the onchange result is rendered in the same row.
+ */
+class HandheldScanCodeField extends CharField {
+    setup() {
+        super.setup();
+        this.orm = useService("orm");
+        this.notification = useService("notification");
+        this.action = useService("action");
+        useEffect(
+            (inputEl) => {
+                if (!inputEl) {
+                    return;
+                }
+
+                const onKeydown = async (ev) => {
+                    if (ev.key !== "Enter" && ev.code !== "Enter") {
+                        return;
+                    }
+
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    ev.stopImmediatePropagation();
+
+                    const value = (inputEl.value || "").trim();
+                    if (!value) {
+                        return;
+                    }
+
+                    try {
+                        await this.props.record.update({
+                            [this.props.name]: value,
+                        });
+                        if (
+                            this.props.name === "package_scan_code" &&
+                            this.props.record.resModel === "stock.picking" &&
+                            !this.props.record.isNew
+                        ) {
+                            const saved = await this.props.record.save();
+                            if (saved) {
+                                await this.props.record.load();
+                                const applyResult = await callScannedCodeMethod({
+                                    orm: this.orm,
+                                    notification: this.notification,
+                                    resModel: "stock.picking",
+                                    resId: this.props.record.resId,
+                                    methodName: "action_apply_scanned_package",
+                                    title: "Scan Package",
+                                    scannedCode: value,
+                                });
+                                if (applyResult.ok) {
+                                    await reloadRecordSafely(
+                                        this.props.record,
+                                        this.notification
+                                    );
+                                    const wizardId = applyResult.result?.package_detail_wizard_id;
+                                    if (wizardId) {
+                                        await this.action.doAction(
+                                            {
+                                                type: "ir.actions.act_window",
+                                                res_model: "package.level.detail.wizard",
+                                                res_id: wizardId,
+                                                views: [[false, "form"]],
+                                                target: "new",
+                                            },
+                                            {
+                                                onClose: async () => {
+                                                    await reloadRecordSafely(
+                                                        this.props.record,
+                                                        this.notification
+                                                    );
+                                                },
+                                            }
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        // The onchange clears the transient field in the
+                        // record. Clear the active input too, because the
+                        // standard CharField keeps the scanner value while
+                        // it is marked dirty during the async update.
+                        inputEl.value = "";
+                    } catch (error) {
+                        this.notification.add(
+                            error?.data?.message || error?.message || "Kode scan tidak dapat diproses.",
+                            { title: "Scan handheld gagal", type: "danger" }
+                        );
+                    }
+                };
+
+                inputEl.addEventListener("keydown", onKeydown, true);
+                return () => inputEl.removeEventListener("keydown", onKeydown, true);
+            },
+            () => [this.input.el]
+        );
     }
 }
 
@@ -1056,11 +1201,17 @@ registry.category("fields").add("adt_scan_package_form_button", {
 registry.category("fields").add("adt_scan_product_button", {
     component: ProductScanButton,
 });
+registry.category("fields").add("adt_scan_putaway_product_button", {
+    component: PutawayProductScanButton,
+});
 registry.category("fields").add("adt_scan_product_by_lot_button", {
     component: ProductByLotScanButton,
 });
 registry.category("fields").add("adt_scan_picker_product_button", {
     component: PickerProductScanButton,
+});
+registry.category("fields").add("adt_handheld_scan_code", {
+    component: HandheldScanCodeField,
 });
 registry.category("fields").add("adt_scan_picker_product_by_lot_button", {
     component: PickerProductByLotScanButton,

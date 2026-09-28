@@ -18,6 +18,8 @@
         <field name="arch" type="xml">
             <search string="Cari Data Issue : Inventory Issue">
                 <field name="reference_nbr"/>
+                <field name="shipment_nbr" optional="show"/>
+                <field name="transfer_nbr" optional="show"/>
                 <field name="trans_type"/>
                 <field name="document_only"/>
                 <field name="warehouse_code"/>
@@ -45,6 +47,7 @@
                 <field name="total_qty"/>
                 <field name="line_nbr"/>
                 <field name="inventory_id"/>
+                <field name="acumatica_write_date" string="Last Modified"/>
                 <!-- <field name="inventory_id"/> -->
                 <!-- <field name="transaction_description"/> -->
                 <!-- <field name="product_uom_qty"/> -->
@@ -72,36 +75,41 @@
                     <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged'"/>
                     <button name="action_open_picking" type="object" string="Open Document" class="btn-secondary" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id and not odoo_scrap_id"/>
                     <button name="action_reset_pending" type="object" string="Reset Staged" class="btn-secondary" invisible="import_state != 'error'"/>
-                    <field name="import_state"/>
+                    <field name="import_state" readonly="1"/>
                 </header>
                 <sheet>
                     <group string="Header">
                         <group>
-                            <field name="external_id" readonly="1"/>
-                            <field name="row_number" readonly="1"/>
-                            <field name="reference_nbr" readonly="1"/>
+                            <field name="external_id"/>
+                            <field name="row_number"/>
+                            <field name="reference_nbr"/>
                             <field name="picking_type_id"/>
-                            <field name="scheduled_date" readonly="1"/>
-                            <field name="status" readonly="1"/>
+                            <field name="scheduled_date"/>
+                            <field name="status"/>
                             <field name="customer_id"/>
-                            <field name="customer_name" readonly="1"/>
-                            <field name="trans_type" readonly="1"/>
-                            <field name="doc_type" readonly="1"/>
-                            <field name="actual_qty" readonly="1"/>
-                            <field name="total_qty" readonly="1"/>
-                            <field name="warehouse_code" readonly="1"/>
-                            <field name="building_code" readonly="1"/>
+                            <field name="customer_name"/>
+                            <field name="customer_location_id"/>
+                            <field name="customer_location_name"/>
+                            <field name="shipment_nbr"/>
+                            <field name="transfer_nbr"/>
+                            <field name="trans_type"/>
+                            <field name="document_only"/>
+                            <field name="doc_type"/>
+                            <field name="actual_qty"/>
+                            <field name="total_qty"/>
+                            <field name="warehouse_code"/>
+                            <field name="building_code"/>
                         </group>
                         <group>
-                            <field name="description" readonly="1"/>
-                            <field name="external_ref" readonly="1"/>
-                            <field name="change_item_ref_nbr" readonly="1"/>
-                            <field name="header_location_code" readonly="1"/>
-                            <field name="post_period" readonly="1"/>
-                            <field name="acumatica_write_date" readonly="1"/>
-                            <field name="branch_warehouse" readonly="1"/>
-                            <field name="note_header_id" readonly="1"/>
-                            <field name="note" readonly="1"/>
+                            <field name="description"/>
+                            <field name="external_ref"/>
+                            <field name="change_item_ref_nbr"/>
+                            <field name="header_location_code"/>
+                            <field name="post_period"/>
+                            <field name="acumatica_write_date"/>
+                            <field name="branch_warehouse"/>
+                            <field name="note_header_id"/>
+                            <field name="note"/>
                         </group>
                     </group>
                     <notebook>
@@ -124,11 +132,11 @@
                         </page>
                     </notebook>
                     <group>
-                        <field name="import_message" readonly="1" widget="text"/>
-                        <field name="odoo_picking_id" string="Document Reference" readonly="1" invisible="not odoo_picking_id"/>
-                        <field name="odoo_scrap_id" string="Document Reference" readonly="1" invisible="not odoo_scrap_id"/>
-                        <field name="odoo_internal_transfer_order_id" readonly="1"/>
-                        <field name="exists_in_odoo" readonly="1"/>
+                        <field name="import_message" widget="text"/>
+                        <field name="odoo_picking_id" string="Document Reference" invisible="not odoo_picking_id"/>
+                        <field name="odoo_scrap_id" string="Document Reference" invisible="not odoo_scrap_id"/>
+                        <field name="odoo_internal_transfer_order_id"/>
+                        <field name="exists_in_odoo"/>
                     </group>
                 </sheet>
             </form>

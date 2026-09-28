@@ -98,7 +98,7 @@ class ImportTransferOneStepWizard(models.TransientModel):
             return [], [], []
 
         reference_nbrs = [
-            vals['reference_nbr']
+            vals.get('reference_nbr')
             for vals in data
             if vals.get('reference_nbr')
         ]
@@ -116,18 +116,27 @@ class ImportTransferOneStepWizard(models.TransientModel):
         to_create = []
 
         for vals in data:
-            existing = existing_map.get(vals['reference_nbr'])
+            reference_nbr = vals.get('reference_nbr')
+            if not reference_nbr:
+                _logger.warning(
+                    'Skipping Transfer 1 Step row without ReferenceNbr: %s',
+                    vals,
+                )
+                continue
+            existing = existing_map.get(reference_nbr)
             if not existing:
                 to_create.append(vals)
                 continue
 
-            if vals.get('acumatica_write_date') and existing.acumatica_write_date == vals['acumatica_write_date']:
+            incoming_last_modified = vals.get('acumatica_write_date')
+            if not incoming_last_modified or existing.acumatica_write_date == incoming_last_modified:
                 unchanged.append(existing)
-            else:
-                to_update.append({
-                    'record': existing,
-                    'vals': vals,
-                })
+                continue
+
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
 
         return unchanged, to_update, to_create
 
@@ -214,7 +223,7 @@ class ImportTransferOneStepWizard(models.TransientModel):
             if self.config_id.odata_expand:
                 params['$expand'] = self.config_id.odata_expand
 
-            response = session.put(endpoint, params=params, json={"TransferType": {"value": "1 Step"}}, timeout=300)
+            response = session.put(endpoint, params=params, json={"TransferType": {"value": "1-Step"}}, timeout=300)
             if response.status_code != 200:
                 raise UserError(f'Gagal ambil data Transfer Order (HTTP {response.status_code}): {response.text}')
 
@@ -222,9 +231,25 @@ class ImportTransferOneStepWizard(models.TransientModel):
             result = []
             result_line = []
 
-            detail_rows = raw_data.get("TransferPinjamanGIDetails", [])
-            if isinstance(detail_rows, dict):
-                detail_rows = detail_rows.get("value", []) or []
+            detail_rows = []
+            detail_keys = (
+                "TransferPinjamanGIDetails",
+                "TransferOrderGIDetails",
+                "Details",
+                "details",
+            )
+            for detail_key in detail_keys:
+                candidate = raw_data.get(detail_key, []) if isinstance(raw_data, dict) else []
+                if isinstance(candidate, dict):
+                    candidate = candidate.get("value", candidate.get("rows", [])) or []
+                if isinstance(candidate, list):
+                    detail_rows = candidate
+                    if detail_rows:
+                        break
+            if not detail_rows and isinstance(raw_data, dict):
+                value_rows = raw_data.get("value", [])
+                if isinstance(value_rows, list):
+                    detail_rows = value_rows
             if not isinstance(detail_rows, list):
                 detail_rows = []
 
@@ -304,16 +329,11 @@ class ImportTransferOneStepWizard(models.TransientModel):
 
             result = [headers_by_ref[reference_nbr] for reference_nbr in header_order]
 
-            if not result and raw_data.get('id'):
-                header = {
-                    'external_id': raw_data.get('id'),
-                    'row_number': raw_data.get('rowNumber') or 1,
-                    'note': raw_data.get('note') or '',
-                }
-                if header.get('from_warehouse_code'):
-                    type_record = self._search_picking_type(header)
-                    header['picking_type_id'] = type_record.id if type_record else False
-                result.append(header)
+            if not result:
+                raise UserError(
+                    'Tidak ada data detail Transfer 1 Step dari API Acumatica. '
+                    'Periksa nama expand/detail pada endpoint TransferPinjamanGI.'
+                )
 
             _logger.info("Berhasil ambil %s rows Transfer Order dari Acumatica", len(result))
             return result, result_line

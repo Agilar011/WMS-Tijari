@@ -25,6 +25,17 @@ class ApiSchedulerJob(models.Model):
         ],
         string='Acumatica Data',
     )
+    process_phase = fields.Selection(
+        [
+            ('combined', 'Fetch and Import'),
+            ('fetch', 'Fetch Only'),
+            ('import', 'Import Only'),
+        ],
+        string='Process Phase',
+        default='combined',
+        required=True,
+        help='Controls whether this scheduler fetches staging data, imports it, or runs the legacy combined flow.',
+    )
 
     execution_interval = fields.Selection(
         [
@@ -110,10 +121,21 @@ class ApiSchedulerJob(models.Model):
         status = 'success'
         message = False
         process_result = {}
+        activity_log = False
 
         try:
             self.write({'is_running': True})
-            process_result = self._run_configured_process() or {}
+            activity_log = self._create_log(
+                status='running',
+                execution_time=execution_time,
+                duration=0.0,
+                details=[],
+                message='Job sedang berjalan.',
+            )
+            self.env.cr.commit()
+            process_result = self.with_context(
+                api_scheduler_log_id=activity_log.id,
+            )._run_configured_process() or {}
             message = self._build_process_message(process_result)
             if not self._is_process_result_success(process_result):
                 status = 'failed'
@@ -125,24 +147,93 @@ class ApiSchedulerJob(models.Model):
             after = self._snapshot_stats()
             details = self._build_detail_values(before, after, process_result)
             duration = time.monotonic() - started
-            self._create_log(
-                status=status,
-                execution_time=execution_time,
-                duration=duration,
-                details=details,
-                message=message,
-            )
+            if activity_log:
+                activity_log.write({
+                    'status': status,
+                    'duration': duration,
+                    'message': message,
+                })
+                self._replace_log_details(activity_log, details)
+            else:
+                activity_log = self._create_log(
+                    status=status,
+                    execution_time=execution_time,
+                    duration=duration,
+                    details=details,
+                    message=message,
+                )
             self.write({'is_running': False})
+            if (
+                self.process_phase == 'fetch'
+                and self.acumatica_data_type in ('master', 'transaction')
+                and self.code in ('acumatica_master_fetch', 'acumatica_transaction_fetch')
+            ):
+                successful_types = [
+                    key for key, result in (process_result or {}).items()
+                    if isinstance(result, dict)
+                    and result.get('success', False)
+                    and result.get('data_retrieved', 0) > 0
+                ]
+                if successful_types:
+                    self._trigger_import(successful_types)
         return status == 'success'
+
+    def _replace_log_details(self, log, details):
+        """Replace detail rows and refresh aggregate counters on a live log."""
+        log.detail_ids.unlink()
+        log.write({
+            'data_retrieved': sum(item.get('data_retrieved', 0) for item in details),
+            'staging_created': sum(item.get('staging_created', 0) for item in details),
+            'records_created': sum(item.get('records_created', 0) for item in details),
+            'records_errors': sum(item.get('records_errors', 0) for item in details),
+            'records_skipped': sum(item.get('records_skipped', 0) for item in details),
+            'detail_ids': [(0, 0, item) for item in details],
+        })
+
+    def _trigger_import(self, successful_types):
+        """Start import for data types whose fetch phase completed successfully."""
+        import_code = (
+            'acumatica_master_import'
+            if self.acumatica_data_type == 'master'
+            else 'acumatica_transaction_import'
+        )
+        import_job = self.search([
+            ('code', '=', import_code),
+            ('active', '=', True),
+        ], limit=1)
+        if not import_job:
+            _logger.warning(
+                'Fetch succeeded, but no active %s job was found.', import_code,
+            )
+            return False
+
+        # Persist the successful fetch log and staging rows before import starts.
+        # This keeps an import failure from rolling back the completed fetch phase.
+        self.env.cr.commit()
+        _logger.info('Master fetch succeeded; triggering Master import job.')
+        context_key = (
+            'acumatica_successful_master_types'
+            if self.acumatica_data_type == 'master'
+            else 'acumatica_successful_transaction_types'
+        )
+        return import_job.with_context(**{context_key: successful_types}).run_from_cron()
 
     def _run_configured_process(self):
         self.ensure_one()
         if not self.acumatica_import:
             raise UserError('No process is configured for this scheduler.')
         if self.acumatica_data_type == 'master':
-            return self.env['acumatica.config']._cron_import_master_data()
+            return self.env['acumatica.config'].with_context(
+                acumatica_process_phase=self.process_phase,
+                acumatica_scheduler_code=self.code,
+                api_scheduler_log_id=self.env.context.get('api_scheduler_log_id'),
+            )._cron_import_master_data()
         if self.acumatica_data_type == 'transaction':
-            return self.env['acumatica.config']._cron_import_transaction_data()
+            return self.env['acumatica.config'].with_context(
+                acumatica_process_phase=self.process_phase,
+                acumatica_scheduler_code=self.code,
+                api_scheduler_log_id=self.env.context.get('api_scheduler_log_id'),
+            )._cron_import_transaction_data()
         raise UserError('Acumatica Data is not configured.')
 
     def _is_process_result_success(self, process_result):
@@ -184,15 +275,15 @@ class ApiSchedulerJob(models.Model):
         if self.acumatica_data_type == 'transaction':
             return [
                 ('po_receipt', 'PO Receipt', 'acumatica.receipt.line'),
-                ('so_transfer', 'SO Transfer - Inter WH IN', 'acumatica.transfer.line'),
+                ('so_transfer', 'Transfer (In/SOTR)', 'acumatica.transfer.line'),
                 ('inventory_received', 'Receipt : Inventory Receipt', 'acumatica.inventory.recieved.line'),
                 ('shipment_so', 'SO Return', 'acumatica.shipment.line'),
                 ('so_shipment', 'SO Shipment', 'acumatica.shipment.gi.staging'),
-                ('transfer_shipment', 'SO Transfer - Inter WH OUT', 'acumatica.transfer.shipment.line'),
+                ('transfer_shipment', 'Transfer (Out/Shipment)', 'acumatica.transfer.shipment.line'),
                 ('inventory_issue', 'Issue : Inventory Issue', 'acumatica.inventory.issue.line'),
                 ('issue_po_return', 'PO Return', 'acumatica.issue.po.return.line'),
-                ('transfer_one_step', 'Transfer 1 STEP', 'acumatica.transfer.one.step.line'),
-                ('transfer_two_step', 'Transfer 2 STEP', 'acumatica.transfer.two.step.line'),
+                ('transfer_one_step', 'Transfer 1 Step', 'acumatica.transfer.one.step.line'),
+                ('transfer_two_step', 'Transfer 2 Step', 'acumatica.transfer.two.step.line'),
                 ('shipment_completed', 'Update SO completed', 'acumatica.shipment.completed.staging'),
                 ('kit_assembly', 'Manufacturing Order', 'acumatica.kit.assembly'),
                 ('invoice_consignment', 'Invoice Consignment', 'acumatica.invoice.consignment.staging'),
@@ -284,6 +375,7 @@ class ApiSchedulerLog(models.Model):
     records_skipped = fields.Integer(string='Records Skipped', readonly=True)
     status = fields.Selection(
         [
+            ('running', 'Running'),
             ('success', 'Success'),
             ('failed', 'Failed'),
         ],
@@ -331,15 +423,15 @@ class ApiSchedulerLogDetail(models.Model):
             ('stock_item', 'Stock Item'),
             ('non_stock_item', 'Non Stock Item'),
             ('po_receipt', 'PO Receipt'),
-            ('so_transfer', 'SO Transfer - Inter WH IN'),
+            ('so_transfer', 'Transfer (In/SOTR)'),
             ('inventory_received', 'Receipt : Inventory Receipt'),
             ('shipment_so', 'SO Return'),
                 ('so_shipment', 'SO Shipment'),
-                ('transfer_shipment', 'SO Transfer - Inter WH OUT'),
+                ('transfer_shipment', 'Transfer (Out/Shipment)'),
                 ('inventory_issue', 'Issue : Inventory Issue'),
                 ('issue_po_return', 'PO Return'),
-                ('transfer_one_step', 'Transfer 1 STEP'),
-                ('transfer_two_step', 'Transfer 2 STEP'),
+                ('transfer_one_step', 'Transfer 1 Step'),
+                ('transfer_two_step', 'Transfer 2 Step'),
                 ('shipment_completed', 'Update SO completed'),
                 ('kit_assembly', 'Manufacturing Order'),
                 ('invoice_consignment', 'Invoice Consignment'),

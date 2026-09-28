@@ -13,13 +13,15 @@ _logger = logging.getLogger(__name__)
 class AcumaticaMasterWebhookController(AcumaticaWebhookController):
     def _customer_vals(self, item, row_number):
         b_account_id = self._first_value(item, "BAccountID", "b_account_id")
+        b_account_id = str(b_account_id).strip() if b_account_id not in (False, None, "") else ""
+        customer_id = str(self._first_value(item, "CustomerID", "customer_id")).strip()
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "note": self._note_value(item),
             "b_account_id": str(b_account_id) if b_account_id else "",
             "customer_class": self._first_value(item, "CustomerClass", "customer_class"),
-            "customer_id": self._first_value(item, "CustomerID", "customer_id"),
+            "customer_id": str(customer_id) if customer_id else "",
             "customer_name": self._first_value(item, "CustomerName", "customer_name"),
             "fob_point": self._first_value(item, "FOBPoint", "fob_point"),
             "last_modified_datetime": self._first_value(item, "LastModifiedDateTime", "LastModifiedOn", "last_modified_datetime"),
@@ -29,14 +31,15 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "status": self._first_value(item, "Status", "CustomerStatus", "status"),
             "warehouse_id": self._first_value(item, "WarehouseID", "warehouse_id"),
             "tax_registration_id": self._first_value(item, "TaxRegistrationID", "tax_registration_id"),
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "sync_date": fields.Datetime.now(),
         }
 
     def _vendor_vals(self, item, row_number):
+        vendor_id = str(self._first_value(item, "VendorID", "vendor_id")).strip()
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "note": self._note_value(item),
             "account_ref": self._first_value(item, "AccountRef", "account_ref"),
@@ -46,10 +49,10 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "lead_time_days": self._int_value(item, "LeadTimedays", "LeadTimeDays", "lead_time_days"),
             "location_name": self._first_value(item, "LocationName", "location_name"),
             "status": self._first_value(item, "Status", "status"),
-            "vendor_id": self._first_value(item, "VendorID", "vendor_id"),
+            "vendor_id": str(vendor_id) if vendor_id else "",
             "vendor_name": self._first_value(item, "VendorName", "vendor_name"),
             "vendor_class": self._first_value(item, "VendorClass", "vendor_class"),
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -57,19 +60,20 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
 
     def _uom_vals(self, item, row_number):
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "unit_id": self._first_value(item, "UnitID", "unit_id"),
             "description": self._first_value(item, "Description", "description"),
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
         }
 
     def _warehouse_vals(self, item, row_number):
+        warehouse_id = str(self._first_value(item, "WarehouseID", "warehouse_id")).strip()
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
             "building_id": self._first_value(item, "BuildingID", "building_id"),
             "note": self._note_value(item),
@@ -81,17 +85,19 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "receiving_location_id": self._first_value(item, "ReceivingLocationID", "receiving_location_id"),
             "rma_location_id": self._first_value(item, "RMALocationID", "rma_location_id"),
             "shipping_location_id": self._first_value(item, "ShippingLocationID", "shipping_location_id"),
-            "warehouse_id": self._first_value(item, "WarehouseID", "warehouse_id"),
-            "import_state": "pending",
+            "warehouse_id": warehouse_id,
+            "import_state": "staged",
             "import_message": False,
             "sync_date": fields.Datetime.now(),
         }
 
     def _stock_item_vals(self, item, row_number):
+        raw_inventory_id = self._first_value(item, "InventoryID", "inventory_id")
+        inventory_id = str(raw_inventory_id).rstrip() if raw_inventory_id not in (False, None, "") else ""
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
-            "inventory_id": self._first_value(item, "InventoryID", "inventory_id"),
+            "inventory_id": inventory_id,
             "description": self._first_value(item, "Description", "description"),
             "item_type": self._first_value(item, "ItemType", "item_type"),
             "item_class": self._first_value(item, "ItemClass", "item_class"),
@@ -99,16 +105,18 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "base_uom": self._first_value(item, "BaseUOM", "base_uom"),
             "valuation_method": self._first_value(item, "ValuationMethod", "valuation_method"),
             "last_modified_datetime": self._first_value(item, "LastModifiedDateTime", "last_modified_datetime"),
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "sync_date": fields.Datetime.now(),
         }
 
     def _non_stock_item_vals(self, item, row_number):
+        raw_inventory_id = self._first_value(item, "InventoryID", "inventory_id")
+        inventory_id = str(raw_inventory_id).rstrip() if raw_inventory_id not in (False, None, "") else ""
         return {
-            "external_id": item.get("id") or item.get("external_id") or "",
+            "external_id": self._first_value(item, "id", "external_id"),
             "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
-            "inventory_id": self._first_value(item, "InventoryID", "inventory_id"),
+            "inventory_id": inventory_id,
             "description": self._first_value(item, "Description", "description"),
             "item_type": self._first_value(item, "ItemType", "item_type"),
             "item_class": self._first_value(item, "ItemClass", "item_class"),
@@ -127,7 +135,7 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "volume_uom": self._first_value(item, "VolumeUOM", "volume_uom"),
             "weight": self._float_value(item, "Weight", "weight"),
             "weight_uom": self._first_value(item, "WeightUOM", "weight_uom"),
-            "import_state": "pending",
+            "import_state": "staged",
             "import_message": False,
             "selected": True,
             "sync_date": fields.Datetime.now(),
@@ -138,28 +146,28 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "customer": {
                 "model_name": "acumatica.customer.line",
                 "vals_getter": self._customer_vals,
-                "lookup_fields": [("b_account_id", "customer_id"), ("external_id",), ("customer_id",)],
-                "payload_keys": ("Inserted", "records", "data", "value"),
+                "lookup_fields": [("b_account_id",), ("customer_id",)],
+                "payload_keys": ("Updated", "Inserted", "records", "data", "value"),
                 "label": "Customer",
             },
             "vendor": {
                 "model_name": "acumatica.vendor.line",
                 "vals_getter": self._vendor_vals,
-                "lookup_fields": [("vendor_id",), ("external_id",)],
+                "lookup_fields": [("b_account_id",), ("vendor_id",)],
                 "payload_keys": ("Inserted", "records", "data", "value"),
                 "label": "Vendor",
             },
             "uom": {
                 "model_name": "acumatica.uom.line",
                 "vals_getter": self._uom_vals,
-                "lookup_fields": [("unit_id",), ("description",), ("external_id",)],
+                "lookup_fields": [("unit_id",)],
                 "payload_keys": ("Inserted", "records", "data", "value"),
                 "label": "UoM",
             },
             "warehouse": {
                 "model_name": "acumatica.warehouse.line",
                 "vals_getter": self._warehouse_vals,
-                "lookup_fields": [("warehouse_id",), ("external_id",)],
+                "lookup_fields": [("external_id",), ("warehouse_id",)],
                 "payload_keys": ("Inserted", "records", "data", "value"),
                 "label": "Warehouse",
             },

@@ -5,7 +5,7 @@ from dateutil import parser as dateutil_parser
 
 class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     _name = 'acumatica.credit.memo.consignment.staging'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Staging Header Acumatica Credit Memo Consignment'
     _order = 'id desc'
 
@@ -46,7 +46,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_CustomerOrder = fields.Char(string="Acumatica CustomerOrder")
     adt_Date = fields.Char(string="Acumatica Date")
     adt_Description = fields.Char(string="Acumatica Description")
-    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly", readonly=True)
+    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly")
     adt_DueDate = fields.Char(string="Acumatica DueDate")
     adt_ExternalRef = fields.Char(string="Acumatica ExternalRef")
     adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime")
@@ -64,7 +64,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_Type = fields.Char(string="Acumatica Type")
 
     total_qty = fields.Float(
-        string="Total Qty (Lines)", 
+        string="Qty Total (Lines)", 
         compute="_compute_total_qty", 
         store=True
     )
@@ -151,28 +151,23 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     if not staging_line:
                         raise UserError(f"Detail line belum ada untuk header staging ID {first.id}.")
 
-                    # Cari master data gudang asal (FromWarehouseID)
-                    warehouse_src = self._find_warehouse_by_code(staging_line.adt_Warehouse)
-                    if not warehouse_src:
-                        raise UserError(f"Gudang tidak ditemukan untuk code: {staging_line.adt_Warehouse or '-'}")
-
                     # Tentukan jenis operasi picking (Operation Type)
-                    picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
-                        target_picking_type_id=first.picking_type_id.id if first.picking_type_id and first.picking_type_id.is_document_only_api else False,
-                        target_operation_type='direct_delivery_order',
-                        api_acumatica='credit_memo_consignment',
-                        document_only=True,
-                        warehouse_code=warehouse_src.code,
-                    )
+                    picking_type = first.picking_type_id
                     if not picking_type:
-                        raise UserError(f"Picking type (Operation Type) tidak ditemukan untuk warehouse {staging_line.adt_Warehouse or '-'} pada header staging ID {first.id}.")
+                        picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
+                            target_operation_type='direct_delivery_order',
+                            api_acumatica='credit_memo_consignment',
+                            document_only=True,
+                        )
+                    if not picking_type:
+                        raise UserError(f"Picking type (Operation Type) tidak ditemukan pada header staging ID {first.id}.")
 
-                    source_location = picking_type.default_location_src_id or warehouse_src.lot_stock_id
-                    dest_location = warehouse_src.lot_stock_id
+                    source_location = picking_type.default_location_src_id
+                    dest_location = picking_type.default_location_dest_id
                     if not source_location:
-                        raise UserError(f"Lokasi asal tidak ditemukan untuk code: {staging_line.adt_Warehouse or '-'}")
+                        raise UserError("Lokasi asal belum diatur pada operation type document-only.")
                     if not dest_location:
-                        raise UserError(f"Lokasi tujuan tidak ditemukan untuk code: {staging_line.adt_Warehouse or '-'}")
+                        raise UserError("Lokasi tujuan belum diatur pada operation type document-only.")
                     if dest_location.usage == 'customer':
                         raise UserError("Lokasi tujuan customer hanya boleh dipakai oleh SO Shipment.")
 
@@ -204,7 +199,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     is_new_picking = False
 
                     if picking:
-                        if picking.state not in ('draft', 'waiting', 'confirmed', 'assigned'):
+                        if picking.state != 'draft':
                             raise UserError(f"Dokumen {origin} sudah divalidasi di Odoo (State: {picking.state}), update digagalkan.")
                         picking.write(vals)
                         action_state = 'updated'
@@ -213,6 +208,9 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         picking = Picking.create(vals)
                         is_new_picking = True
                         action_state = 'created'
+
+                    if action_state == 'updated':
+                        picking.move_ids.unlink()
 
                     # ---------------------------------------------------------
                     # BULK CREATION STOCK MOVES (DETAIL LINES)
@@ -232,20 +230,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         # Tentukan lokasi detail per baris barang secara spesifik (jika ada)
                         line_loc_src = picking.location_id
                         line_loc_dest = picking.location_dest_id
-
-                        # DEDUP LOGIKA: Mengunci kombinasi ID Produk + Nomor Baris asli Acumatica
-                        move_domain = [('picking_id', '=', picking.id)]
-                        if 'adt_line_external_id' in Move._fields and line.adt_id:
-                            move_domain.append(('adt_line_external_id', '=', line.adt_id))
-                        else:
-                            move_domain += [
-                                ('product_id', '=', product.id),
-                                ('adt_line_nbr', '=', line.adt_rowNumber or False)
-                            ]
-
-                        existing_move = Move.search(move_domain, limit=1)
-                        if existing_move:
-                            continue
 
                         # Bangun dictionary baris barang tunggal
                         single_move_vals = {
@@ -327,16 +311,17 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
 
         msg = f'Generate done: {created} credit memo consignment created, {updated} credit memo consignment updated, {error} credit memo consignment error.'
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Generate Credit Memo Consignment',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Generate Credit Memo Consignment',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
                 
     def _find_warehouse_by_code(self, code):
         Warehouse = self.env['stock.location.acumatica']

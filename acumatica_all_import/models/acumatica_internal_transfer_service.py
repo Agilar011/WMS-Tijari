@@ -50,6 +50,137 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             return mapping
         return self._find_location_mapping(code, label)
 
+    def _get_location_mapping_group(self, mapping, label):
+        """Return the configured mapping group for an Acumatica location.
+
+        API intra-warehouse transfers are resolved from the explicit
+        ``stock.location.acumatica`` records for the source and destination
+        codes.  We do not search for arbitrary child locations; the parent
+        chain is only used to identify the configured Odoo mapping group.
+        """
+        location = mapping.odoo_location_id if mapping else False
+        if not location:
+            raise UserError(
+                f'{label} mapping belum punya Odoo location: '
+                f'{mapping.code if mapping else "-"}'
+            )
+
+        current = location
+        while current:
+            if current.is_location_mapping:
+                return current
+            current = current.location_id
+
+        raise UserError(
+            f'{label} Odoo location {location.display_name} belum memiliki '
+            'parent mapping dengan is_location_mapping=True.'
+        )
+
+    def classify_intra_by_location_mapping(
+        self,
+        from_code,
+        to_code,
+        from_label='FromLocationID',
+        to_label='ToLocationID',
+        check_same_location_mapping=False,
+        allow_ungrouped_destination=False,
+    ):
+        """Classify a one-step transfer from explicit location mappings.
+
+        The source and destination codes are looked up directly in
+        ``stock.location.acumatica``.  The transaction is always intra
+        warehouse; its transfer type is based on the resolved mapping groups.
+        """
+        from_mapping = self._find_location_mapping(
+            from_code,
+            from_label,
+            required=True,
+            require_odoo_location=True,
+        )
+        to_mapping = self._find_location_mapping(
+            to_code,
+            to_label,
+            required=not allow_ungrouped_destination,
+            require_odoo_location=not allow_ungrouped_destination,
+        )
+
+        ungrouped_destination = False
+        if allow_ungrouped_destination and (
+            not to_mapping or not to_mapping.odoo_location_id
+        ):
+            # An Acumatica location record may be deliberately left without
+            # grouping. In that case route it to the destination building's
+            # virtual location only when the mapping explicitly says so.
+            Mapping = self.env['stock.location.acumatica']
+            clean_code = (to_code or '').strip()
+            if not to_mapping and clean_code:
+                to_mapping = Mapping.search([
+                    '|', ('code', '=', clean_code), ('name', '=', clean_code),
+                ], limit=1)
+            if not to_mapping or not to_mapping.is_ungropping:
+                raise UserError(
+                    f'{to_label} ({clean_code or "-"}) tidak aktif atau belum di-grouping. '
+                    'Jika lokasi ini bukan lokasi grouping, isi field "Tidak Digrouping" '
+                    '(is_ungropping) pada mapping lokasi Acumatica.'
+                )
+            ungrouped_destination = True
+
+        source_location = from_mapping.odoo_location_id
+        destination_location = (
+            self.get_virtual_destination_location(to_mapping, to_code)
+            if ungrouped_destination
+            else to_mapping.odoo_location_id
+        )
+        if not destination_location:
+            raise UserError(
+                f'{to_label} ({to_code or "-"}) tidak memiliki destination virtual location.'
+            )
+        if check_same_location_mapping and source_location == destination_location:
+            return {
+                'status': 'skip',
+                'message': f'Skipped: {from_label} dan {to_label} map ke Odoo location yang sama.',
+                'from_mapping': from_mapping,
+                'to_mapping': to_mapping,
+                'source_location': source_location,
+                'destination_location': destination_location,
+                'location_group': False,
+                'transaction_type': False,
+                'transfer_type': False,
+            }
+
+        from_building = self._get_building_code(from_mapping, from_code)
+        to_building = self._get_building_code(to_mapping, to_code)
+        if from_building and to_building and from_building != to_building:
+            raise UserError(
+                f'{from_label} ({from_code}) dan {to_label} ({to_code}) '
+                'berasal dari building berbeda; Transfer 1 Step hanya untuk intra warehouse.'
+            )
+
+        from_group = self._get_location_mapping_group(from_mapping, from_label)
+        to_group = (
+            False if ungrouped_destination
+            else self._get_location_mapping_group(to_mapping, to_label)
+        )
+        transfer_type = (
+            'intra_group_transfer'
+            if from_group == to_group
+            else 'inter_group_transfer'
+        )
+
+        return {
+            'status': 'import',
+            'message': False,
+            'from_mapping': from_mapping,
+            'to_mapping': to_mapping,
+            'source_location': source_location,
+            'destination_location': destination_location,
+            'location_group': from_group if from_group == to_group else False,
+            'source_location_group': from_group,
+            'destination_location_group': to_group,
+            'transaction_type': 'intra_warehouse',
+            'transfer_type': transfer_type,
+        }
+
     def classify(
         self,
         from_code,
@@ -250,11 +381,28 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             })
         return transit_location
 
-    def prepare_order(self, external_ref, source_location, destination_location, transaction_type, schedule_date=False, note=False, transfer_type='transfer_out'):
+    def prepare_order(
+        self,
+        external_ref,
+        source_location,
+        destination_location,
+        transaction_type,
+        schedule_date=False,
+        note=False,
+        description=False,
+        transfer_type='transfer_out',
+        external_ref_in=False,
+        external_ref_out=False,
+        location_group=False,
+        adt_transaction_type=False,
+        document_only=False,
+    ):
         InternalTransferOrder = self.env['internal.transfer.order']
         order = InternalTransferOrder.search([('external_ref', '=', external_ref)], limit=1)
         vals = {
             'external_ref': external_ref,
+            'external_ref_in': external_ref_in or external_ref_out or external_ref,
+            'external_ref_out': external_ref_out or external_ref_in or external_ref,
             'transaction_type': transaction_type,
             'transfer_type': transfer_type,
             'location_id': source_location.id,
@@ -263,10 +411,22 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             'schedule_date': schedule_date or fields.Datetime.now(),
             'validation_policy': 'validate_all',
             'note': note or False,
+            'description': description or False,
+            'adt_transaction_type': adt_transaction_type or False,
+            'document_only': bool(document_only),
         }
+        if location_group and 'location_group_id' in InternalTransferOrder._fields:
+            vals['location_group_id'] = location_group.id
         if order:
-            if order.picking_ids:
-                raise UserError(f'Transfer {external_ref} sudah memiliki picking, tidak bisa diupdate.')
+            related_pickings = order._get_related_pickings()
+            blocked_picking = related_pickings.filtered(
+                lambda picking: picking.state != 'draft'
+            )[:1]
+            if blocked_picking:
+                raise UserError(
+                    f'Transfer {external_ref} tidak bisa diupdate karena '
+                    f'picking {blocked_picking.display_name} sudah tidak draft.'
+                )
             if order.state not in ('draft', 'cancel'):
                 raise UserError(f'Transfer {external_ref} sudah ada di state {order.state}, tidak bisa diupdate.')
             order.move_ids.unlink()
@@ -278,6 +438,14 @@ class AcumaticaInternalTransferService(models.AbstractModel):
 
     def create_order_move(self, order, product, qty, uom=False, name=False, description=False, extra_vals=False):
         Move = self.env['stock.move']
+        if not order.location_id:
+            raise UserError(
+                f'Source location untuk internal transfer {order.display_name} belum ditemukan.'
+            )
+        if not order.location_dest_id:
+            raise UserError(
+                f'Destination location untuk internal transfer {order.display_name} belum ditemukan.'
+            )
         vals = {
             'name': name or product.display_name,
             'product_id': product.id,

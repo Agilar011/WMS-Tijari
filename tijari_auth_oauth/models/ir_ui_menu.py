@@ -12,33 +12,34 @@ class IrUiMenu(models.Model):
             raise_if_not_found=False,
         )
 
-        # Kalau bukan Guest, jangan diubah
-        if not guest_group or guest_group not in self.env.user.groups_id:
-            return visible_menu_ids
+        # Guest tidak boleh melihat menu apa pun
+        if guest_group and guest_group in self.env.user.groups_id:
+            allowed_menu_ids = set()
 
-        allowed_menu_xmlids = [
-            "mail.menu_root_discuss",
-            "contacts.menu_contacts",
-            "spreadsheet_dashboard.spreadsheet_dashboard_menu_root",
-        ]
-
-        allowed_menu_ids = set()
-
-        for xmlid in allowed_menu_xmlids:
-            menu = self.env.ref(
-                xmlid,
+            # Discuss
+            discuss_menu = self.env.ref(
+                "mail.menu_root",
                 raise_if_not_found=False,
             )
+            if discuss_menu:
+                allowed_menu_ids.update(
+                    self.search([
+                        ("id", "child_of", discuss_menu.id),
+                    ]).ids
+                )
 
-            if menu:
-                # Masukkan menu utama
-                allowed_menu_ids.add(menu.id)
+            # Dashboard
+            dashboard_menu = self.env.ref(
+                "board.menu_root",
+                raise_if_not_found=False,
+            )
+            if dashboard_menu:
+                allowed_menu_ids.update(
+                    self.search([
+                        ("id", "child_of", dashboard_menu.id),
+                    ]).ids
+                )
 
-                # Masukkan parent-parent-nya kalau ada
-                parent = menu.parent_id
+            return allowed_menu_ids
 
-                while parent:
-                    allowed_menu_ids.add(parent.id)
-                    parent = parent.parent_id
-
-        return visible_menu_ids & allowed_menu_ids
+        return visible_menu_ids

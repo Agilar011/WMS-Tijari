@@ -93,77 +93,35 @@ class ImportSOShipmentWizard(models.TransientModel):
             endpoint = f"{self.config_id.api_url}/Shipment"
 
             # =====================================================
-            # 1. BERSIHKAN & PECAH DATA SHIPMENT (CHUNKING)
+            # 1. SIAPKAN FILTER SHIPMENT DALAM SATU REQUEST
             # =====================================================
-            # Hilangkan nomor duplikat dan nilai kosong/False
             clean_shipment_numbers = list(set([nbr for nbr in shipment_numbers if nbr])) if shipment_numbers else []
-            
-            # Potong daftar menjadi per 20 nomor shipment agar URL tidak kepanjangan
-            chunk_size = 10
-            shipment_chunks = [
-                clean_shipment_numbers[i:i + chunk_size] 
-                for i in range(0, len(clean_shipment_numbers), chunk_size)
-            ]
 
-            # Jika shipment_numbers kosong sejak awal, pastikan loop tetap berjalan 1 kali tanpa filter nomor
-            if not shipment_chunks:
-                shipment_chunks = [[]]
+            params = {}
+            filters = []
+            if self.config_id.odata_expand:
+                params["$expand"] = self.config_id.odata_expand
+            if self.config_id.odata_select:
+                params["$select"] = self.config_id.odata_select
+            if clean_shipment_numbers:
+                shipment_filter = " or ".join(
+                    f"ShipmentNbr eq '{nbr}'" for nbr in clean_shipment_numbers
+                )
+                filters.append(f"({shipment_filter})")
+            if odata_filter:
+                filters.append(f"({odata_filter})")
+            elif self.config_id.odata_filter:
+                filters.append(f"({self.config_id.odata_filter})")
+            if filters:
+                params["$filter"] = " and ".join(filters)
 
-            # List untuk menampung seluruh row data mentah hasil normalisasi dari semua chunk
-            all_raw_data = []
-
-            # =====================================================
-            # 2. LOOPING API REQUEST PER CHUNK
-            # =====================================================
-            for chunk in shipment_chunks:
-                params = {}
-                filters = []
-
-                if self.config_id.odata_expand:
-                    params["$expand"] = self.config_id.odata_expand
-
-                if self.config_id.odata_select:
-                    params["$select"] = self.config_id.odata_select
-
-                # Terapkan filter nomor dokumen khusus untuk chunk ini saja
-                if chunk:
-                    shipment_filter = " or ".join([
-                        f"ShipmentNbr eq '{nbr}'"
-                        for nbr in chunk
-                    ])
-                    if shipment_filter:
-                        filters.append(f"({shipment_filter})")
-
-                if odata_filter:
-                    filters.append(f"({odata_filter})")
-                elif self.config_id.odata_filter:
-                    filters.append(f"({self.config_id.odata_filter})")
-
-                if filters:
-                    params["$filter"] = " and ".join(filters)
-
-                # print("--- Mengirim Request Chunk ---")
-                # print("Endpoint: ", endpoint)
-                # print("params: ", params)
-
-                response = session.get(
-                    endpoint,
-                    params=params,
-                    timeout=90
+            response = session.get(endpoint, params=params, timeout=90)
+            if response.status_code != 200:
+                raise UserError(
+                    f"Gagal ambil Shipment (HTTP {response.status_code}): {response.text}"
                 )
 
-                if response.status_code != 200:
-                    raise UserError(
-                        f"Gagal ambil Shipment "
-                        f"(HTTP {response.status_code}): "
-                        f"{response.text}"
-                    )
-
-                # Normalisasi data chunk ini dan gabungkan ke dalam penampung utama
-                chunk_raw_data = self._normalize_rows(
-                    response.json()
-                )
-                all_raw_data.extend(chunk_raw_data)
+            all_raw_data = self._normalize_rows(response.json())
 
             # =====================================================
             # 3. PROSES PEMETAAN DATA (LOGIKA ASLI ANDA)
@@ -186,7 +144,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                         "fobpointdescription":self._val(item,"FOBPointDescription"),
                         "hold":self._val(item, "Hold"),
                         "insurance":self._val(item, "Insurance"),
-                        "lastmodifieddatetime":self._parse_dt(self._val(item,"LastModifiedDateTime")),
+                        "lastmodifieddatetime":self._val(item,"LastModifiedDateTime"),
                         "locationid":self._val(item, "LocationID"),
                         "locationname":self._val(item, "LocationName"),
                         "operation":self._val(item, "Operation"),
@@ -390,6 +348,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'acumatica_id' : item.get('id'),
                     'adt_rowNumber' : item.get('rowNumber'),
                     'adt_note' : item.get('note'),
+                    'adt_Description' : self._val(item, "Description"),
                     'adt_AddressID' : self._val(item, "AddressID"),
                     'adt_AddressLine' : self._val(item, "AddressLine"),
                     'adt_BuildingID' : self._val(item, "BuildingID"),
@@ -418,8 +377,10 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_Phone' : self._val(item, "Phone"),
                     'adt_PostalCode' : self._val(item, "PostalCode"),
                     'adt_ShipDate' : self._val(item, "ShipDate"),
+                    'adt_IssueNbr' : self._val(item, "IssueNbr"),
                     'adt_ShipmentNbr' : self._val(item, "ShipmentNbr"),
                     'adt_ShipmentQty' : self._val(item, "ShipmentQty"),
+                    'adt_LineQty' : self._val(item, "LineQuantity"),
                     'adt_ShipmentType' : self._val(item, "ShipmentType"),
                     'adt_ShipmentVolume' : self._val(item, "ShipmentVolume"),
                     'adt_ShipmentWeight' : self._val(item, "ShipmentWeight"),
@@ -428,6 +389,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_State' : self._val(item, "State"),
                     'adt_StateName' : self._val(item, "StateName"),
                     'adt_Status' : self._val(item, "Status"),
+                    'lastmodifieddatetime' : self._val(item, "LastModifiedDateTime"),
                     'adt_ToWarehouseID' : self._val(item, "ToWarehouseID"),
                     'adt_WarehouseID' : self._val(item, "WarehouseID"),
                     'picking_type_id' : picking_type_id,
@@ -487,6 +449,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_Country': row.get("adt_Country"),
                     'adt_CountryName': row.get("adt_CountryName"),
                     'adt_ShipDate': row.get("adt_ShipDate"),
+                    'adt_IssueNbr': row.get("adt_IssueNbr"),
                     'adt_PostalCode': row.get("adt_PostalCode"),
                     'adt_ShipVia': row.get("adt_ShipVia"),
                     'adt_FOBPoint': row.get("adt_FOBPoint"),
@@ -495,7 +458,10 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'adt_SiteIDDescription': row.get("adt_SiteIDDescription"),
                     'adt_ToWarehouseID': row.get("adt_ToWarehouseID"),
                     'adt_NoteHeader': row.get("adt_NoteHeader"),
+                    'adt_note': row.get("adt_note"),
+                    'adt_Description': row.get("adt_Description"),
                     'picking_type_id': row.get("picking_type_id"),
+                    'adt_ShipmentQty': row.get("adt_ShipmentQty") or row.get("adt_LineQty"),
                     'adt_ShipmentVolume': row.get("adt_ShipmentVolume"),
                     'adt_ShipmentWeight': row.get("adt_ShipmentWeight"),
                 }
@@ -505,9 +471,14 @@ class ImportSOShipmentWizard(models.TransientModel):
                 'adt_rowNumber': row.get("adt_rowNumber"),
                 'adt_LineInventoryID': row.get("adt_LineInventoryID"),
                 'adt_LineDescription': row.get("adt_LineDescription"),
+                'adt_LineNote': row.get("adt_LineNote"),
+                'adt_LineNoteID': row.get("adt_LineNoteID"),
                 'adt_LineLocation': row.get("adt_LineLocation"),
                 'adt_LineNbr': row.get("adt_LineNbr"),
-                'adt_ShipmentQty': row.get("adt_ShipmentQty"),
+                'adt_LineQuantity': row.get("adt_LineQuantity"),
+                # Simpan ShipmentQty untuk payload staging/kompatibilitas lama;
+                # pembuatan stock move menggunakan LineQuantity sebagai acuan.
+                'adt_ShipmentQty': row.get("adt_ShipmentQty") or row.get("adt_LineQty"),
                 'adt_LineUOM': row.get("adt_LineUOM"),
                 'adt_WarehouseID': row.get("adt_WarehouseID"),
             }
@@ -530,6 +501,12 @@ class ImportSOShipmentWizard(models.TransientModel):
         for shipment_nbr, data in grouped_shipments.items():
             gi_vals = data['header']
             lines_vals = data['lines']
+            gi_vals.update({
+                'import_state': 'staged',
+                'import_message': 'Data API Imported',
+                'selected': True,
+                'sync_date': fields.Datetime.now(),
+            })
 
             # Cek memori RAM untuk data lama
             existing_gi = existing_map.get(shipment_nbr)
@@ -539,12 +516,9 @@ class ImportSOShipmentWizard(models.TransientModel):
             with self.env.cr.savepoint():
                 try:
                     if existing_gi:
-                        if (
-                            gi_vals.get('lastmodifieddatetime')
-                            and existing_gi.lastmodifieddatetime == gi_vals.get('lastmodifieddatetime')
-                        ):
+                        incoming_last_modified = gi_vals.get('lastmodifieddatetime')
+                        if not incoming_last_modified or existing_gi.lastmodifieddatetime == incoming_last_modified:
                             continue
-
                         # -------------------------------------------------
                         # KONDISI A: DATA SUDAH ADA -> UPDATE & RECREATE
                         # -------------------------------------------------
@@ -569,7 +543,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                         })
                         print(f"GI Vals: {gi_vals}")
                         GIStaging.create(gi_vals)
-                        
+
                         print(f"--> SUCCESS CREATED NEW FRESH SHIPMENT: {shipment_nbr}")
 
                 except Exception as e:

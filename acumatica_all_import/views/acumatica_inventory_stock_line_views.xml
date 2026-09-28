@@ -27,6 +27,7 @@
                        decoration-warning="import_state == 'staged'"/>
                 <field name="import_message"/>
                 <field name="sync_date"/>
+                <field name="last_modified_datetime" string="Last Modified"/>
                 <!-- <button name="action_import_this" string="Import" type="object" icon="fa-upload"/> -->
             </list>
         </field>
@@ -59,14 +60,15 @@
                     </group>
                     <group>
                         <group string="Mapping">
-                            <field name="odoo_product_id" readonly="1"/>
-                            <field name="odoo_location_id" readonly="1"/>
-                            <field name="exists_in_odoo" readonly="1"/>
+                            <field name="odoo_product_id"/>
+                            <field name="odoo_location_id"/>
+                            <field name="exists_in_odoo"/>
                         </group>
                         <group string="Import">
-                            <field name="import_message" readonly="1" widget="text"/>
-                            <field name="note" readonly="1"/>
-                            <field name="sync_date" readonly="1"/>
+                            <field name="import_message" widget="text"/>
+                            <field name="note"/>
+                            <field name="sync_date"/>
+                            <field name="last_modified_datetime" string="Last Modified"/>
                         </group>
                     </group>
                 </sheet>

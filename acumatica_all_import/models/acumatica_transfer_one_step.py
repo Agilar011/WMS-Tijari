@@ -11,7 +11,7 @@ _logger = logging.getLogger(__name__)
 
 class AcumaticaTransferOneStepLine(models.Model):
     _name = 'acumatica.transfer.one.step.line'
-    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _inherit = ['mail.thread', 'mail.activity.mixin', 'acumatica.import.log.mixin']
     _description = 'Data Transfer Order dari Acumatica'
     _order = 'reference_nbr asc, line_nbr asc, id asc'
 
@@ -21,38 +21,38 @@ class AcumaticaTransferOneStepLine(models.Model):
         string='Transfer Lines'
     )
 
-    row_number = fields.Integer(string='No', readonly=True)
-    external_id = fields.Char(string='UUID Header Acumatica', readonly=True)
-    line_external_id = fields.Char(string='UUID Line Acumatica', readonly=True)
+    row_number = fields.Integer(string='No')
+    external_id = fields.Char(string='UUID Header Acumatica')
+    line_external_id = fields.Char(string='UUID Line Acumatica')
 
-    reference_nbr = fields.Char(string='Reference Number', readonly=True, index=True)
-    scheduled_date = fields.Char(string='Date', readonly=True)
-    to_warehouse_code = fields.Char(string='To Warehouse', readonly=True)
-    to_warehouse_name = fields.Char(string='To Warehouse Name', readonly=True)
-    description = fields.Char(string='Description', readonly=True)
-    external_ref = fields.Char(string='External Ref', readonly=True)
-    from_warehouse_code = fields.Char(string='From Warehouse', readonly=True)
-    from_warehouse_name = fields.Char(string='From Warehouse Name', readonly=True)
-    status = fields.Char(string='Status', readonly=True)
-    return_type = fields.Char(string='Return Type', readonly=True)
-    transfer_type = fields.Char(string='Transfer Type', readonly=True)
-    trans_type = fields.Char(string='Trans Type', readonly=True)
-    total_qty = fields.Char(string='Total Qty', readonly=True)
-    is_hold = fields.Char(string='Hold', readonly=True)
-    post_period = fields.Char(string='Post Period', readonly=True)
-    acumatica_write_date = fields.Char(string='Last Modified', readonly=True)
-    note = fields.Text(string='Header Note', readonly=True)
-    note_header_id = fields.Char(string='Note Header ID', readonly=True)
-    document_only = fields.Boolean(string='Document Only', readonly=True)
+    reference_nbr = fields.Char(string='Reference Number', index=True)
+    scheduled_date = fields.Char(string='Date')
+    to_warehouse_code = fields.Char(string='To Warehouse')
+    to_warehouse_name = fields.Char(string='To Warehouse Name')
+    description = fields.Char(string='Description')
+    external_ref = fields.Char(string='External Ref')
+    from_warehouse_code = fields.Char(string='From Warehouse')
+    from_warehouse_name = fields.Char(string='From Warehouse Name')
+    status = fields.Char(string='Status')
+    return_type = fields.Char(string='Return Type')
+    transfer_type = fields.Char(string='Transfer Type')
+    trans_type = fields.Char(string='Trans Type')
+    total_qty = fields.Char(string='Qty Total')
+    is_hold = fields.Char(string='Hold')
+    post_period = fields.Char(string='Post Period')
+    acumatica_write_date = fields.Char(string='Last Modified')
+    note = fields.Text(string='Header Note')
+    note_header_id = fields.Char(string='Note Header ID')
+    document_only = fields.Boolean(string='Document Only')
 
-    line_nbr = fields.Char(string='Line Nbr', readonly=True)
-    line_note = fields.Text(string='Line Note', readonly=True)
-    line_description = fields.Char(string='Line Description', readonly=True)
-    inventory_id = fields.Char(string='InventoryID', readonly=True)
-    from_location_code = fields.Char(string='From Location', readonly=True)
-    to_location_code = fields.Char(string='To Location', readonly=True)
-    quantity = fields.Char(string='Quantity', readonly=True)
-    uom_code = fields.Char(string='UOM', readonly=True)
+    line_nbr = fields.Char(string='Line Nbr')
+    line_note = fields.Text(string='Line Note')
+    line_description = fields.Char(string='Line Description')
+    inventory_id = fields.Char(string='InventoryID')
+    from_location_code = fields.Char(string='From Location')
+    to_location_code = fields.Char(string='To Location')
+    quantity = fields.Char(string='Quantity')
+    uom_code = fields.Char(string='UOM')
 
     import_state = fields.Selection([
         ('staged', 'Staged'),
@@ -60,7 +60,7 @@ class AcumaticaTransferOneStepLine(models.Model):
         ('updated', 'Updated'),
         ('rejected', 'Rejected'),
         ('error', 'Error'),
-    ], string='Status', default='staged', readonly=True, tracking=True)
+    ], string='Status', default='staged', tracking=True)
 
     state = fields.Selection([
         ('draft', 'Siap'),
@@ -68,19 +68,21 @@ class AcumaticaTransferOneStepLine(models.Model):
         ('done', 'Selesai'),
     ], default='draft')
 
-    import_message = fields.Char(string='Generation Message', readonly=True, tracking=True)
-    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference', readonly=True)
+    import_message = fields.Char(string='Generation Message', tracking=True)
+    odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     odoo_internal_transfer_order_id = fields.Many2one(
         'internal.transfer.order',
         string='Internal Transfer Order',
-        readonly=True,
     )
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', readonly=True, ondelete='cascade')
-    sync_date = fields.Datetime(string='Tanggal Sync', readonly=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
+    can_rebuild_same_location_transfer = fields.Boolean(
+        compute='_compute_can_rebuild_same_location_transfer',
+    )
     picking_type_id = fields.Many2one('stock.picking.type', string="Operation Type")
 
     @api.depends('reference_nbr')
@@ -90,6 +92,38 @@ class AcumaticaTransferOneStepLine(models.Model):
             rec.exists_in_odoo = bool(
                 rec.reference_nbr
                 and InternalTransferOrder.search_count([('external_ref', '=', rec.reference_nbr)])
+            )
+
+    @api.depends(
+        'import_state',
+        'odoo_internal_transfer_order_id',
+        'odoo_internal_transfer_order_id.state',
+        'odoo_internal_transfer_order_id.transaction_type',
+        'odoo_internal_transfer_order_id.location_id',
+        'odoo_internal_transfer_order_id.location_dest_id',
+        'odoo_internal_transfer_order_id.picking_ids',
+        'odoo_internal_transfer_order_id.adt_transaction_type',
+        'odoo_internal_transfer_order_id.move_ids.adt_type',
+    )
+    def _compute_can_rebuild_same_location_transfer(self):
+        for line in self:
+            order = line.odoo_internal_transfer_order_id
+            api_type = (order.adt_transaction_type or '').strip().lower().replace('_', ' ') if order else ''
+            is_one_step = (
+                api_type in ('1-step', '1 step', 'transfer one step')
+                or any(
+                    'transfer one step' in (move.adt_type or '').strip().lower()
+                    for move in order.move_ids
+                )
+            ) if order else False
+            line.can_rebuild_same_location_transfer = bool(
+                line.import_state in ('created', 'updated')
+                and order
+                and order.state == 'done'
+                and not order.picking_ids
+                and order.transaction_type == 'intra_warehouse'
+                and order.location_id == order.location_dest_id
+                and is_one_step
             )
 
     @staticmethod
@@ -198,6 +232,7 @@ class AcumaticaTransferOneStepLine(models.Model):
         lines = self.filtered(
             lambda l: (
                 l.import_state in ['staged', 'error']
+                or l.can_rebuild_same_location_transfer
                 or (
                     l.import_state in ['created', 'updated']
                     and not l.odoo_picking_id
@@ -228,7 +263,7 @@ class AcumaticaTransferOneStepLine(models.Model):
 
         for reference_nbr in self.mapped('reference_nbr'):
             receipt_lines = self.filtered(
-                lambda l: l.reference_nbr == reference_nbr and l.import_state == 'staged'
+                lambda l: l.reference_nbr == reference_nbr
             )
             if not receipt_lines:
                 continue
@@ -242,7 +277,24 @@ class AcumaticaTransferOneStepLine(models.Model):
                     ('external_ref', '=', origin),
                 ], limit=1)
                 if existing_order:
-                    if existing_order.state not in ('draft', 'cancel'):
+                    existing_api_type = (
+                        (existing_order.adt_transaction_type or '')
+                        .strip().lower().replace('_', ' ')
+                    )
+                    legacy_same_location_done = (
+                        existing_order.state == 'done'
+                        and not existing_order.picking_ids
+                        and existing_order.transaction_type == 'intra_warehouse'
+                        and existing_order.location_id == existing_order.location_dest_id
+                        and (
+                            existing_api_type in ('1-step', '1 step', 'transfer one step')
+                            or any(
+                                'transfer one step' in (move.adt_type or '').strip().lower()
+                                for move in existing_order.move_ids
+                            )
+                        )
+                    )
+                    if existing_order.state not in ('draft', 'cancel') and not legacy_same_location_done:
                         raise UserError(
                             f'Transfer {reference_nbr} sudah ada di Odoo dengan state '
                             f'{existing_order.state}, tidak bisa diupdate.'
@@ -252,6 +304,8 @@ class AcumaticaTransferOneStepLine(models.Model):
                             f'Transfer {reference_nbr} sudah memiliki picking, tidak bisa diupdate.'
                         )
                     existing_order.move_ids.unlink()
+                    if legacy_same_location_done:
+                        existing_order.write({'state': 'draft'})
                     order = existing_order
                     action_state = 'updated'
                     updated += 1
@@ -262,36 +316,35 @@ class AcumaticaTransferOneStepLine(models.Model):
                     created += 1
 
                 transfer_service = self.env['acumatica.internal.transfer.service']
-                transfer_info = transfer_service.classify_transfer_out_to_virtual(
+                transfer_info = transfer_service.classify_intra_by_location_mapping(
                     first.from_warehouse_code,
                     first.to_warehouse_code,
-                    'FromWarehouseID',
+                    'WarehouseID',
                     'ToWarehouseID',
-                    check_same_location_mapping=True,
+                    check_same_location_mapping=False,
+                    allow_ungrouped_destination=True,
                 )
                 source_location = transfer_info['source_location']
                 destination_location = transfer_info['destination_location']
-
-                if transfer_info['status'] == 'skip':
-                    receipt_lines.write({
-                        'import_state': 'updated',
-                        'import_message': 'success',
-                    })
-                    self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=reference_nbr)
-                    skipped += len(receipt_lines)
-                    self.env.cr.execute('RELEASE SAVEPOINT import_transfer_one_step_doc')
-                    continue
+                same_odoo_location = source_location == destination_location
 
                 if order:
                     order.write({
                         'transaction_type': transfer_info['transaction_type'],
-                        'transfer_type': 'transfer_out',
+                        'transfer_type': transfer_info['transfer_type'],
+                        'adt_transaction_type': first.transfer_type or first.trans_type or False,
+                        'document_only': bool(first.document_only),
+                        'location_group_id': (
+                            transfer_info['location_group'].id
+                            if transfer_info.get('location_group') else False
+                        ),
                         'location_id': source_location.id,
                         'location_dest_id': destination_location.id,
                         'transit_location_id': transfer_service.get_or_create_transit_location().id,
                         'schedule_date': self._parse_dt(first.scheduled_date),
                         'validation_policy': 'validate_all',
                         'note': first.note or False,
+                        'description': first.description or False,
                         'state': 'draft',
                     })
                 else:
@@ -302,6 +355,11 @@ class AcumaticaTransferOneStepLine(models.Model):
                         transfer_info['transaction_type'],
                         self._parse_dt(first.scheduled_date),
                         first.note or False,
+                        description=first.description or False,
+                        transfer_type=transfer_info['transfer_type'],
+                        location_group=transfer_info.get('location_group'),
+                        adt_transaction_type=first.transfer_type or first.trans_type or False,
+                        document_only=first.document_only,
                     )
 
                 transfer_lines = self.env['acumatica.transfer.one.step.product'].search([
@@ -349,7 +407,15 @@ class AcumaticaTransferOneStepLine(models.Model):
                         _logger.exception('Error import transfer one step line %s', line.id)
                         raise UserError(str(line_e))
 
-                transfer_service.set_order_ready(order)
+                if same_odoo_location:
+                    # Keep both direct operation documents at the mapped location.
+                    # This pair has no net stock effect and completes the ITO only
+                    # after both pickings have been validated.
+                    order.write({'document_only': False})
+                    transfer_service.set_order_ready(order)
+                    order._auto_validate_pickings_by_leg(('delivery', 'receipt'))
+                else:
+                    transfer_service.set_order_ready(order)
                 receipt_lines.write({
                     'import_state': action_state,
                     'import_message': 'success',
@@ -396,16 +462,17 @@ class AcumaticaTransferOneStepLine(models.Model):
             f'Import selesai: {created} transfer dibuat, {updated} transfer diupdate, '
             f'{skipped} transfer diskip, {error} line error.'
         )
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': 'Import Transfer One Step',
-                'message': msg,
-                'type': 'success' if error == 0 else 'danger',
-                'sticky': True,
-            }
-        }
+        # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
+        # return {
+        #     'type': 'ir.actions.client',
+        #     'tag': 'display_notification',
+        #     'params': {
+        #         'title': 'Import Transfer One Step',
+        #         'message': msg,
+        #         'type': 'success' if error == 0 else 'danger',
+        #         'sticky': True,
+        #     }
+        # }
 
     def action_reset_pending(self):
         self.filtered(lambda l: l.import_state == 'error').write({'import_state': 'staged', 'import_message': False})
