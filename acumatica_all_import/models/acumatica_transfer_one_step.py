@@ -322,6 +322,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                     'WarehouseID',
                     'ToWarehouseID',
                     check_same_location_mapping=False,
+                    allow_ungrouped_destination=True,
                 )
                 source_location = transfer_info['source_location']
                 destination_location = transfer_info['destination_location']

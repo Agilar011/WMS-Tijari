@@ -1980,6 +1980,26 @@ class StockPicking(models.Model):
                 and order.validation_policy == 'validate_all'
                 and picking.internal_transfer_leg in ('pack', 'delivery', 'receipt')
             ):
+                api_transaction_type = (
+                    (order.adt_transaction_type or '').strip().lower().replace('_', ' ')
+                )
+                is_same_location_transfer_one_step = (
+                    order.transaction_type == 'intra_warehouse'
+                    and order.location_id == order.location_dest_id
+                    and (
+                        api_transaction_type in ('1-step', '1 step', 'transfer one step')
+                        or any(
+                            'transfer one step' in (move.adt_type or '').strip().lower()
+                            for move in order.move_ids
+                        )
+                    )
+                )
+                if (
+                    is_same_location_transfer_one_step
+                    and picking.internal_transfer_leg in ('delivery', 'receipt')
+                ):
+                    continue
+
                 previous_legs = []
                 error_message = False
                 if picking.internal_transfer_leg == 'pack':
