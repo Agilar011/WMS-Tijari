@@ -8,7 +8,11 @@ import { SMLX2ManyField } from "@stock/fields/stock_move_line_x2_many_field";
 patch(SMLX2ManyField.prototype, {
     
     async onAdd({ context, editable } = {}) {
-        if (!this.props.record.data.show_quant) {
+        const pickingTypeName = this.props.record.data.picking_type_name || "";
+        const isPickOperation = ["Pick", "Pick Internal", "Pick Components"].includes(
+            pickingTypeName
+        );
+        if (!this.props.record.data.show_quant && !isPickOperation) {
             return super.onAdd(...arguments);
         }
 

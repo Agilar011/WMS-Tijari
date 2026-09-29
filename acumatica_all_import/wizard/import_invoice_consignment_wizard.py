@@ -557,7 +557,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     # ---------------------------------------------------------    
     def _search_picking_type(self, header):
         config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
+        if config_picking_type and not config_picking_type.is_document_only_api:
             return config_picking_type
 
         PickingType = self.env['stock.picking.type']
@@ -580,7 +580,6 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
                 operation_category='delivery',
                 api_acumatica='invoice_consignment',
                 transaction_key='invoice_consignment',
-                document_only=True,
                 required=False,
             )
 

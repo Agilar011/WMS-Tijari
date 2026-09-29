@@ -781,6 +781,21 @@ class AcumaticaShipmentGIStaging(models.Model):
 
         return warehouse
 
+    def _find_location(self, line):
+        Warehouse = self.env['stock.location.acumatica']
+        warehouse = False
+        code = line
+        if code:
+            warehouse = Warehouse.search([('code', '=', code)], limit=1)
+            if warehouse:
+                if not warehouse.odoo_building_id:
+                    warehouse = False
+                else:
+                    warehouse = warehouse.odoo_location_id
+
+        return warehouse
+
+
     def _find_warehouse_product(self, line):
         Warehouse = self.env['stock.location.acumatica']
         warehouse = False

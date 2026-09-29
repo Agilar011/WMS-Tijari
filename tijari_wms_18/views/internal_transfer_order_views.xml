@@ -78,10 +78,9 @@
                                 options="{'no_create': True}"/>
                             <field name="external_ref" invisible="1"/>
                             <field name="available_source_product_ids" invisible="1"/>
-                            <field name="external_ref_in"
-                                invisible="transaction_type == 'intra_warehouse' and intra_transfer_type == 'intra_group_transfer'"/>
-                            <field name="external_ref_out"
-                                invisible="transaction_type == 'intra_warehouse' and intra_transfer_type == 'intra_group_transfer'"/>
+                            <field name="external_ref" string="Source Document"/>
+                            <field name="external_ref_in" invisible="1"/>
+                            <field name="external_ref_out" invisible="1"/>
                         </group>
                         <group>
                             <field name="location_id"

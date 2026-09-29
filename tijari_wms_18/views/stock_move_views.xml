@@ -188,7 +188,7 @@
                 <field name="move_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
-                        'form_view_ref': 'stock.view_move_line_mobile_form',
+                        'form_view_ref': 'tijari_wms_18.view_move_line_mobile_form_picker_save',
                         'default_picking_id': picking_id,
                         'default_move_id': id,
                         'default_product_id': product_id,
@@ -432,7 +432,7 @@
                 <field name="move_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
-                        'form_view_ref': 'stock.view_move_line_mobile_form',
+                        'form_view_ref': 'tijari_wms_18.view_move_line_mobile_form_picker_save',
                         'default_picking_id': picking_id,
                         'default_move_id': id,
                         'default_product_id': product_id,
@@ -1071,7 +1071,7 @@
                 <field name="move_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
-                        'form_view_ref': 'stock.view_move_line_mobile_form',
+                        'form_view_ref': 'tijari_wms_18.view_move_line_mobile_form_picker_save',
                         'default_picking_id': picking_id,
                         'default_move_id': id,
                         'default_product_id': product_id,
@@ -1335,7 +1335,7 @@
                                 </div>
 
                                 <div class="d-flex gap-2 mt-2" invisible="'Pick' in (parent.picking_type_name or '') or parent.picking_type_name in ('Pack', 'Delivery Orders')">
-                                    <button name="action_mark_check_pick_finished"
+                                    <!-- <button name="action_mark_check_pick_finished"
                                         type="object"
                                         string="Finish Picking"
                                         class="btn-success o_wms_auto_save_before_action"
@@ -1344,12 +1344,12 @@
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="pick_status == 'unfinished' or parent.state not in ('confirmed','assigned')"/>
-                                    <button name="action_mark_picker_finished"
+                                        invisible="pick_status == 'unfinished' or parent.state not in ('confirmed','assigned')"/> -->
+                                    <!-- <button name="action_mark_picker_finished"
                                         type="object"
                                         string="Finish Picker"
                                         class="btn-success o_wms_auto_save_before_action"
-                                        invisible="picker_status == 'finished'"/>
+                                        invisible="picker_status == 'finished'"/> -->
                                     <button name="action_mark_picker_unfinished"
                                         type="object"
                                         string="Rollback"
@@ -1363,7 +1363,7 @@
                 <field name="move_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
-                        'form_view_ref': 'stock.view_move_line_mobile_form',
+                        'form_view_ref': 'tijari_wms_18.view_move_line_mobile_form_picker_save',
                         'default_picking_id': picking_id,
                         'default_move_id': id,
                         'default_product_id': product_id,
@@ -2347,6 +2347,11 @@
                 <group>
                     <label for="product_uom_qty" string="Demand"/>
                     <field name="product_uom_qty" readonly="1" nolabel="1"/>
+                </group>
+                <group>
+                    <label for="remaining_putaway_quantity" string="Sisa Qty Putaway"/>
+                    <field name="remaining_putaway_quantity" readonly="1" nolabel="1"/>
+                    <field name="product_uom" groups="uom.group_uom" readonly="1" nolabel="1" options="{'no_open': True}"/>
                 </group>
                 <!-- <group>
                     <field name="putaway_progress_status" string="Status"

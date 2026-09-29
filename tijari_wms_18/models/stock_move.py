@@ -144,6 +144,11 @@ class StockMove(models.Model):
         compute='_compute_remaining_picker_quantity',
     )
 
+    remaining_putaway_quantity = fields.Float(
+        string='Sisa Qty Putaway',
+        compute='_compute_remaining_putaway_quantity',
+    )
+
     confirmation_quantity = fields.Float(
         string='Confirmation Qty',
         compute='_compute_confirmation_quantity',
@@ -412,6 +417,11 @@ class StockMove(models.Model):
     def _compute_remaining_picker_quantity(self):
         for move in self:
             move.remaining_picker_quantity = move.product_uom_qty - move.quantity
+
+    @api.depends('product_uom_qty', 'confirmation_quantity')
+    def _compute_remaining_putaway_quantity(self):
+        for move in self:
+            move.remaining_putaway_quantity = move.product_uom_qty - move.confirmation_quantity
 
 
 
@@ -1051,6 +1061,27 @@ class StockMove(models.Model):
             )
         _logger.warning("RESULT: %s", res.ids)
         return res
+
+    def _should_assign_at_confirm(self):
+        self.ensure_one()
+        if (
+            self.picking_id
+            and self.picking_id._is_manual_bad_stock_pick()
+        ):
+            return False
+        return super()._should_assign_at_confirm()
+
+    def _action_assign(self, force_qty=False):
+        moves_to_assign = self.filtered(
+            lambda move: not (
+                move.picking_id
+                and move.picking_id._is_manual_bad_stock_pick()
+            )
+        )
+        if moves_to_assign:
+            return super(StockMove, moves_to_assign)._action_assign(
+                force_qty=force_qty
+            )
 
     def create(self, vals):
         # stock.picking.scheduled_date is computed from stock.move.date.  Odoo
