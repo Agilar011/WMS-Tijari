@@ -206,8 +206,8 @@
   <!-- INTERNAL SUB MENUS -->
   <menuitem id="wms_operations_internal_transfer_order"
             name="Internal Transfer Orders"
-            parent="stock.menu_stock_transfers"
-            sequence="26"
+            parent="menu_stock_picking_worklist"
+            sequence="30"
             action="action_internal_transfer_order"
             groups="tijari_wms_18.group_operator,stock.group_stock_manager"/>
 
