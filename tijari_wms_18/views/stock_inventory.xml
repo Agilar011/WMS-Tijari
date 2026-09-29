@@ -11,6 +11,7 @@
                     string="Print"
                     type="object"
                     class="btn-primary"
+                    invisible="state not in ['in_progress', 'wait_approval']"
                 />
                 <button
                     name="action_send_approval_request_email"

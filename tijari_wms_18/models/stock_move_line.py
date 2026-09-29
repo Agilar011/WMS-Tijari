@@ -1400,11 +1400,11 @@ class StockMoveLine(models.Model):
             self._check_matching_status_pick()
 
         self.write({'pick_status': 'finished'})
-        return True
+        return {'type': 'ir.actions.act_window_close'}
 
     def action_mark_check_pick_unfinished(self):
         self.write({'pick_status': 'unfinished'})
-        return True
+        return self.move_id.action_open_move_pick()
 
     def _validate_before_mark_pick_finished(self):
         confirmation_quantity = self.confirmation_quantity
@@ -1470,11 +1470,11 @@ class StockMoveLine(models.Model):
         self.write({
             'mo_status': 'finished'
         })
-        return True
+        return {'type': 'ir.actions.act_window_close'}
 
     def action_mark_check_unfinished_mo(self):
         self.write({'mo_status': 'unfinished'})
-        return True
+        return self.move_id.action_open_move_pick()
 
     def _validate_before_mark_finished_mo(self):
         confirmation_quantity = self.mo_confirmation_quantity
