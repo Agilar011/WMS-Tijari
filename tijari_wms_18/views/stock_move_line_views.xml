@@ -663,6 +663,34 @@
         </field>
     </record>
 
+    <record id="view_move_line_mobile_form_picker_save" model="ir.ui.view">
+        <field name="name">stock.move.line.mobile.form.picker.save</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.view_move_line_mobile_form"/>
+        <field name="priority">1100</field>
+        <field name="arch" type="xml">
+            <xpath expr="//sheet" position="inside">
+                <field name="picking_type_name" invisible="1"/>
+            </xpath>
+            <xpath expr="//form" position="inside">
+                <footer>
+                    <button name="action_mark_picker_finished"
+                        type="object"
+                        string="Save"
+                        class="btn-primary"
+                        invisible="picking_type_name != 'Receipts'"/>
+                    <button special="save"
+                        string="Save"
+                        class="btn-primary"
+                        invisible="picking_type_name == 'Receipts'"/>
+                    <button special="cancel"
+                        string="Discard"
+                        class="btn-secondary"/>
+                </footer>
+            </xpath>
+        </field>
+    </record>
+
     <record id="action_generate_selected_lot_server" model="ir.actions.server">
         <field name="name">Generate Lot</field>
         <field name="model_id" ref="stock.model_stock_move_line"/>

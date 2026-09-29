@@ -118,12 +118,12 @@ class InternalTransferOrder(models.Model):
         tracking=True,
     )
     source_location_scan_code = fields.Char(
-        string='Kode Scan Handheld Source',
+        string='Scan Handheld Source',
         store=False,
         help='Scan barcode, unique code, atau nama Source Location.',
     )
     destination_location_scan_code = fields.Char(
-        string='Kode Scan Handheld Destination',
+        string='Scan Handheld Destination',
         store=False,
         help='Scan barcode, unique code, atau nama Destination Location.',
     )
@@ -353,7 +353,7 @@ class InternalTransferOrder(models.Model):
             ('partner_type', '=', 'warehouse'),
         ], limit=1)
 
-    @api.depends('transaction_type', 'location_id')
+    @api.depends('transaction_type', 'transfer_type', 'location_id')
     def _compute_available_source_product_ids(self):
         for order in self:
             order.available_source_product_ids = order._get_available_source_products(
@@ -376,21 +376,21 @@ class InternalTransferOrder(models.Model):
 
     def _get_available_source_products(self, location):
         self.ensure_one()
-        if self.transaction_type != 'intra_warehouse' or not location:
+        if (
+            self.transaction_type != 'intra_warehouse'
+            or self.transfer_type != 'intra_group_transfer'
+            or not location
+        ):
             return self.env['product.product']
 
-        quants = self.env['stock.quant'].search([
-            ('location_id', 'child_of', location.id),
-        ])
-        available_by_product = {}
-        for quant in quants:
-            available_by_product[quant.product_id.id] = (
-                available_by_product.get(quant.product_id.id, 0.0)
-                + quant.available_quantity
-            )
+        available_by_product = self.env['stock.quant']._read_group(
+            [('location_id', 'child_of', location.id)],
+            ['product_id'],
+            ['available_quantity:sum'],
+        )
         return self.env['product.product'].browse([
-            product_id
-            for product_id, available_qty in available_by_product.items()
+            product.id
+            for product, available_qty in available_by_product
             if available_qty > 0
         ])
 
@@ -1798,7 +1798,10 @@ class InternalTransferOrder(models.Model):
             lambda order: not order._get_related_pickings()
         )
         for order in orders_to_generate.filtered(
-            lambda item: item.transaction_type == 'intra_warehouse'
+            lambda item: (
+                item.transaction_type == 'intra_warehouse'
+                and not item._is_bad_stock_destination()
+            )
         ):
             order._check_intra_source_products_available()
 
@@ -1809,6 +1812,15 @@ class InternalTransferOrder(models.Model):
         if existing_orders:
             existing_orders.write({'state': 'ready'})
         return True
+
+    def _is_bad_stock_destination(self):
+        self.ensure_one()
+        destination = self.location_dest_id
+        return bool(
+            destination
+            and destination.is_location_mapping
+            and 'bad stock' in (destination.name or '').casefold()
+        )
 
     def _check_intra_source_products_available(self):
         self.ensure_one()

@@ -1302,13 +1302,18 @@ class StockMoveLine(models.Model):
     def action_save_picker_details(self):
         self.ensure_one()
 
-        self._check_picker_quantity_vs_demand()
-        if not self.lot_id:
-            raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
-        if self.quantity == 0:
-            raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
-
-        self.write({'picker_status': 'finished'})
+        if (
+            self.picking_id
+            and self.picking_id.picking_type_id.name == 'Receipts'
+        ):
+            self.action_mark_picker_finished()
+        else:
+            self._check_picker_quantity_vs_demand()
+            if not self.lot_id:
+                raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
+            if self.quantity == 0:
+                raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+            self.write({'picker_status': 'finished'})
 
         return {
             'type': 'ir.actions.act_window',

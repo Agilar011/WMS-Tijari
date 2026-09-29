@@ -363,8 +363,8 @@ class StockPicking(models.Model):
     def _sync_adt_quantities_from_moves(self):
         for picking in self:
             picking.update({
-                'adt_total_qty': sum(picking.move_ids.mapped('product_uom_qty')),
-                'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
+                'adt_total_qty': sum(picking.move_ids.mapped('product_uom_qty'))
+                # 'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
             })
 
     @api.depends("package_level_ids")
@@ -2358,7 +2358,15 @@ class StockPicking(models.Model):
         for picking in transfer_in_receipt_pickings:
             picking.internal_transfer_order_id._prepare_transfer_in_receipt(picking)
 
-        res = super().action_assign()
+        bad_stock_pickings = self.filtered(
+            lambda picking: picking._is_manual_bad_stock_pick()
+        )
+        pickings_to_assign = self - bad_stock_pickings
+        res = (
+            super(StockPicking, pickings_to_assign).action_assign()
+            if pickings_to_assign
+            else True
+        )
 
         for picking in self:
             is_transfer_in_receipt = bool(
@@ -2428,13 +2436,25 @@ class StockPicking(models.Model):
         return res
 
     def action_mark_todo_and_check_availability(self):
-        
         to_confirm = self.filtered(lambda picking: picking.state == 'draft')
         if to_confirm:
             to_confirm.action_confirm()
-            to_confirm.action_assign()
+            pickings_to_assign = to_confirm.filtered(
+                lambda picking: not picking._is_manual_bad_stock_pick()
+            )
+            if pickings_to_assign:
+                pickings_to_assign.action_assign()
 
         return True
+
+    def _is_manual_bad_stock_pick(self):
+        self.ensure_one()
+        order = self.internal_transfer_order_id
+        return bool(
+            order
+            and self.internal_transfer_leg == 'pick'
+            and order._is_bad_stock_destination()
+        )
 
     def action_confirm_shipment(self):
         self.ensure_one()
@@ -2498,6 +2518,10 @@ class StockPicking(models.Model):
             picking._set_document_only_done_quantities()
 
         for picking in self:
+            # update actual qty
+            picking.update({
+                'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
+            })
             if picking.adt_type == 'Toko Pegang DO':
                 if not picking.owner_id:
                     raise UserError(_("Owner is required for Toko Pegang DO."))

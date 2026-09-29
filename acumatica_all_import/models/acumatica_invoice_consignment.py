@@ -188,8 +188,8 @@ class AcumaticaInvoiceConsignment(models.Model):
                     return location
 
         mapping = Mapping.search([
+            '&', ('active', '=', True),
             '|', ('code', '=', code), ('name', '=', code),
-            ('active', '=', True),
         ], limit=1)
         if mapping.odoo_location_id and (
             mapping.odoo_location_id.is_consignment
@@ -319,21 +319,20 @@ class AcumaticaInvoiceConsignment(models.Model):
 
                     branch_warehouse = staging_line.adt_Branch if staging_line else False
 
+                    warehouse_code = staging_line.adt_Warehouse if staging_line else False
                     picking_type = first.picking_type_id
-                    if not picking_type:
+                    if not picking_type or picking_type.is_document_only_api:
                         picking_type = self.env['stock.picking.type'].resolve_picking_type(
-                            warehouse_code=staging_line.adt_Warehouse if staging_line else False,
+                            warehouse_code=warehouse_code,
                             code='outgoing',
                             operation_category='delivery',
                             api_acumatica='invoice_consignment',
                             transaction_key='invoice_consignment',
-                            document_only=True,
                             required=False,
                         )
                     if not picking_type:
-                        raise UserError('Picking type Direct Delivery Order tidak ditemukan.')
+                        raise UserError('Picking type Delivery Orders tidak ditemukan.')
 
-                    warehouse_code = staging_line.adt_Warehouse if staging_line else False
                     source_location = self._find_consignment_location(warehouse_code)
                     if not source_location:
                         raise UserError(
@@ -363,7 +362,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                         'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
                         'adt_status': first.adt_Status or False,
                         'adt_type': first.adt_Type or False,
-                        'adt_is_document_only': True,
+                        'adt_is_document_only': False,
                         'adt_external_id': first.adt_id or False,
                         'desc_note': first.adt_Description or False,
 
@@ -410,13 +409,20 @@ class AcumaticaInvoiceConsignment(models.Model):
                         print(f"Quantity: {qty} for actual value: {line.adt_Qty}")
 
                         # Buat dictionary data untuk satu baris barang
+                        line_source_location = self._find_consignment_location(line.adt_Warehouse)
+                        if not line_source_location:
+                            raise UserError(
+                                f'Location CONS tidak ditemukan untuk warehouse '
+                                f'{line.adt_Warehouse or "-"} pada baris {line.adt_rowNumber or "-"}.'
+                            )
+
                         single_move_vals = {
                             'name': line.adt_TransactionDescription or product.display_name,
                             'picking_id': picking.id,
                             'product_id': product.id,
                             'product_uom_qty': qty,
                             'product_uom': uom.id if uom else product.uom_id.id,
-                            'location_id': picking.location_id.id,
+                            'location_id': line_source_location.id,
                             'location_dest_id': picking.location_dest_id.id,
                             'description_picking': line.adt_TransactionDescription or False,
                             'adt_line_external_id': line.adt_external_id or False,
@@ -437,10 +443,12 @@ class AcumaticaInvoiceConsignment(models.Model):
                     if moves_to_create:
                         Move.create(moves_to_create)
 
-                    # Invoice Consignment dibuat sebagai transaksi Document Only.
-                    # Validasi setelah seluruh move tersedia agar picking impor
-                    # diproses otomatis melalui guard stok Document Only.
-                    picking.action_validate_document_only_import(force=True)
+                    # Keep automatic processing, using normal stock reservation
+                    # and validation from each staging line's source warehouse.
+                    picking.action_confirm()
+                    picking.action_assign()
+                    validation_action = picking.button_validate()
+                    picking._process_document_only_validation_action(validation_action)
 
                     # Tulis status sukses ke tabel staging kustom
                     first.write({
