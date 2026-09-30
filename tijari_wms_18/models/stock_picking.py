@@ -3136,71 +3136,7 @@ class StockPicking(models.Model):
 
         self.action_confirm_shipment()   
 
-    def action_get_transfer_shipment_completed_staging(self):
-        self.ensure_one()
-        if self.adt_type != 'Transfer Shipment':
-            raise UserError(_('Shipment Transfer Completed staging hanya tersedia untuk Transfer Shipment.'))
-
-        staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
-            [('shipment_nbr', '=', self.origin)], limit=1,
-        )
-        if not staging_data:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Gagal Melakukan Update',
-                    'message': f'Staging shipment {self.origin} tidak ditemukan.',
-                    'type': 'warning',
-                    'sticky': False,
-                }
-            }
-
-        staging_data_line = staging_data.line_ids
-        for move in self.move_ids:
-            # In transfer staging, Inventory Number is stored on the header;
-            # detail lines carry the quantities.
-            staging_lines_for_product = (
-                staging_data_line
-                if staging_data.inventory_nbr == move.product_id.default_code
-                else staging_data_line.browse()
-            )
-            staging_qty = sum(staging_lines_for_product.mapped('line_quantity'))
-
-            if not staging_qty:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Gagal Melakukan Update',
-                        'message': f'Quantity {move.product_id.display_name} yang diupdate tidak memiliki quantity',
-                        'type': 'warning',
-                        'sticky': False,
-                    }
-                }
-
-            if float_compare(
-                staging_qty,
-                move.quantity,
-                precision_rounding=move.product_uom.rounding,
-            ) != 0:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Gagal Melakukan Update',
-                        'message': f'Quantity staging {staging_qty} untuk {move.product_id.display_name} harus sama dengan quantity dokumen {move.quantity}. Gunakan Complete Shipment Manually dan lampirkan dokumen pendukung untuk melanjutkan.',
-                        'type': 'warning',
-                        'sticky': False,
-                    }
-                }
-
-            move.shipped_qty = staging_qty
-
-        self.shipment_information = 'full_shipment'
-        self.action_confirm_shipment()
-
-    def action_confirm_shipment_manually(self):
+    def action_complete_transfer_shipment(self):
         self.ensure_one()
         if not (
             self.internal_transfer_order_id
@@ -3209,12 +3145,14 @@ class StockPicking(models.Model):
             and self.adt_type == 'Transfer Shipment'
             and self.wms_state == 'waiting_response'
         ):
-            raise UserError(_('Manual shipment completion is only available for a Transfer Shipment ITO delivery waiting for shipment.'))
+            raise UserError(_('Shipment completion is only available for a Transfer Shipment ITO delivery waiting for shipment.'))
 
         staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
             [('shipment_nbr', '=', self.origin)], limit=1,
         )
-        has_staging_quantity_difference = not staging_data
+
+        staging_quantities = {}
+        staging_matches_document = bool(staging_data)
         for move in self.move_ids:
             staging_lines = (
                 staging_data.line_ids
@@ -3222,15 +3160,21 @@ class StockPicking(models.Model):
                 else self.env['acumatica.shipment.transfer.completed.staging.line'].browse()
             )
             staging_qty = sum(staging_lines.mapped('line_quantity'))
+            staging_quantities[move.id] = staging_qty
             if not staging_qty or float_compare(
                 staging_qty,
                 move.quantity,
                 precision_rounding=move.product_uom.rounding,
             ) != 0:
-                has_staging_quantity_difference = True
-                break
+                staging_matches_document = False
 
-        if has_staging_quantity_difference and not self.attachment_ids:
+        if staging_matches_document:
+            for move in self.move_ids:
+                move.shipped_qty = staging_quantities[move.id]
+            self.shipment_information = 'full_shipment'
+            return self.action_confirm_shipment()
+
+        if not self.attachment_ids:
             raise UserError(_(
                 'Lampiran wajib diisi karena quantity staging berbeda dari quantity dokumen.'
             ))
@@ -3248,6 +3192,13 @@ class StockPicking(models.Model):
 
         self.shipment_information = 'full_shipment' if all_match else 'partial'
         return self.action_confirm_shipment()
+
+    # Keep existing RPC entrypoints compatible while the UI uses one button.
+    def action_get_transfer_shipment_completed_staging(self):
+        return self.action_complete_transfer_shipment()
+
+    def action_confirm_shipment_manually(self):
+        return self.action_complete_transfer_shipment()
 
     def action_fetch_actual_qty(self):
         self.ensure_one()

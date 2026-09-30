@@ -135,7 +135,7 @@
                     class="btn-primary"
                     invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
 
-                <button name="action_get_transfer_shipment_completed_staging"
+                <button name="action_complete_transfer_shipment"
                     string="Complete Shipment"
                     type="object"
                     class="btn-primary"
@@ -146,12 +146,6 @@
                     type="object"
                     class="btn-primary"
                     invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment') or wms_state != 'waiting_response'"/>
-
-                <button name="action_confirm_shipment_manually"
-                    string="Complete Shipment Manually"
-                    type="object"
-                    class="btn-secondary"
-                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response'"/>
 
                 <!-- <button name="action_fetch_actual_qty"
                 string="Get Full Shipment Data"
