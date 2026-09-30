@@ -251,6 +251,7 @@
                     <field name="move_ids_without_package" mode="list,kanban"
                         widget="picker_move_one2many"
                         context="{
+                            'form_view_ref': 'tijari_wms_18.stock_move_delivery_unpack_view',
                             'default_company_id': company_id, 
                             'default_date': scheduled_date, 
                             'default_date_deadline': date_deadline, 
@@ -325,18 +326,19 @@
                             <field name="status_check"
                                 decoration-success="status_check == 'finished'"
                                 decoration-danger="status_check == 'unfinished'" widget="badge" />
-                            <button name="action_mark_check_finished"
+                            
+                            <!-- <button name="action_mark_check_finished"
                                 type="object"
                                 icon="fa-check"
                                 class="btn-success"
                                 title="Finish Package"
-                                invisible="status_check == 'finished'"/>
-                            <button name="action_mark_check_unfinished"
+                                invisible="status_check == 'finished'"/> -->
+                            <!-- <button name="action_mark_check_unfinished"
                                 type="object"
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Package"
-                                invisible="status_check != 'finished' or state not in ['confirmed', 'assigned']"/>
+                                invisible="status_check != 'finished' or state not in ['confirmed', 'assigned']"/> -->
                             <field name="lot_ids" widget="many2many_tags"
                                 readonly="has_tracking != 'serial'"
                                 column_invisible="parent.state == 'draft'"
@@ -396,11 +398,11 @@
                                             type="object"
                                             string="Open Detail"
                                             class="btn-primary"/>
-                                        <button name="action_mark_check_unfinished"
+                                        <!-- <button name="action_mark_check_unfinished"
                                             type="object"
                                             string="Rollback"
                                             class="btn-danger o_wms_auto_save_before_action"
-                                            invisible="status_check == 'unfinished' or state not in ['confirmed', 'assigned']"/>
+                                            invisible="status_check == 'unfinished' or state not in ['confirmed', 'assigned']"/> -->
                                     </div>
                                 </t>
                             </templates>

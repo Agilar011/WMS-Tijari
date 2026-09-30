@@ -362,6 +362,7 @@ class StockPicking(models.Model):
 
     def _sync_adt_quantities_from_moves(self):
         for picking in self:
+                
             picking.update({
                 'adt_total_qty': sum(picking.move_ids.mapped('product_uom_qty'))
                 # 'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
@@ -2140,12 +2141,12 @@ class StockPicking(models.Model):
         return True
     
 
-    @api.onchange("state")
-    def _onchange_state_update_wms_state(self):
-        for picking in self:
-            if picking.state == 'done':
-                continue
-            picking.wms_state = picking.state        
+    # @api.onchange("state")
+    # def _onchange_state_update_wms_state(self):
+    #     for picking in self:
+    #         if picking.state == 'done':
+    #             continue
+    #         picking.wms_state = picking.state        
 
 
     def _format_datetime(self, dt):
@@ -2534,12 +2535,14 @@ class StockPicking(models.Model):
                 picking._check_validate_requirements()
                 picking._check_pick_quantity_vs_demand()
                 picking._check_pick_confirmation_quantity()
+                picking._apply_confirmation_qty_to_quantity_pick()
 
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
 
             if picking.picking_type_id.name in ('Delivery Orders'):
                 picking._check_validate_delivery_requirements()
+                picking._apply_confirmation_qty_to_quantity_delivery()
 
             # Storage validation only depends on putaway completion. It does
             # not use the receipt/picker status checks.
@@ -2631,12 +2634,9 @@ class StockPicking(models.Model):
                 for move in rec.move_ids:
                     confirmation_qty = move.confirmation_quantity
 
-                    move.quantity_shadow = move.quantity
-                    move.quantity = confirmation_qty
                     for dest_move in move.move_dest_ids:
                         dest_move.write({
                             'product_uom_qty': confirmation_qty,
-                            'quantity': confirmation_qty
                         })
             
             elif 'Pack' in (rec.picking_type_name or ""):
@@ -2654,15 +2654,11 @@ class StockPicking(models.Model):
 
             # if rec.picking_type_name in ("Delivery Orders"):
             #     for move in rec.move_ids:
-            #         confirmation_qty = move.so_confirmation_quantity
+            #         for line in move.filtered_unpack_line_ids:
+            #             confirmation_qty = line.so_confirmation_quantity
 
-            #         move.quantity_shadow = move.quantity
-            #         move.quantity = confirmation_qty
-            #         for dest_move in move.move_dest_ids:
-            #             dest_move.write({
-            #                 'product_uom_qty': confirmation_qty,
-            #                 'quantity': confirmation_qty
-            #             })
+            #             line.quantity_shadow = line.quantity
+            #             line.quantity = confirmation_qty
 
             if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
                 rec.wms_state = 'waiting_response'
@@ -2694,7 +2690,13 @@ class StockPicking(models.Model):
                 ("origin", "ilike", rec.origin or rec.name),
                 ("picking_type_id.code", "=", "internal"),
             ], limit=1)
-            total_qty = sum(rec.move_ids.move_line_ids.mapped("quantity"))
+
+            total_qty = (
+            sum(rec.move_ids.move_line_ids.mapped('confirmation_quantity')) 
+                if "Pick" in (rec.picking_type_name or "") 
+                else sum(rec.move_ids.move_line_ids.mapped('quantity'))
+            )
+
             rec.write({
                 'adt_total_qty': total_qty
             })
@@ -2718,6 +2720,22 @@ class StockPicking(models.Model):
 
         return res
 
+    def _apply_confirmation_qty_to_quantity_pick(self):
+        for move in self.move_ids:
+            for line in move.move_line_ids:
+                confirmation_qty = line.confirmation_quantity
+
+                line.quantity_shadow = line.quantity
+                line.quantity = confirmation_qty
+
+    def _apply_confirmation_qty_to_quantity_delivery(self):
+        for move in self.move_ids:
+            for line in move.filtered_unpack_line_ids:
+                confirmation_qty = line.so_confirmation_quantity
+
+                line.quantity_shadow = line.quantity
+                line.quantity = confirmation_qty
+                
     def _check_pick_quantity_vs_demand(self):
         for picking in self:
             has_discrepancy = False
@@ -3303,8 +3321,6 @@ class StockPicking(models.Model):
             self._prepare_picking_default_values()
         )
 
-        new_picking.name = f"Return of {self.picking_id.origin or self.picking_id.name}"
-
         new_picking.user_id = False
 
         new_picking.message_post_with_source(
@@ -3332,6 +3348,8 @@ class StockPicking(models.Model):
         if not self.env.context.get('return_from_actual_qty'):
             new_picking.action_confirm()
             new_picking.action_assign()
+
+        new_picking.origin = f"Return of {self.picking_id.origin if self.picking_id.origin else self.picking_id.name}"
 
         return new_picking
 
