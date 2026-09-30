@@ -1,9 +1,22 @@
-from odoo import _, api, fields, models
+from odoo import _, api, fields, models, Command
 from odoo.exceptions import UserError
 from odoo.tools.float_utils import float_compare
 
 class WMSStockScrap(models.Model):
     _inherit = 'stock.scrap'
+
+    product_id = fields.Many2one(
+        'product.product', 'Product', domain="[('type', '=', 'consu')]",
+        check_company=True)
+    
+    product_uom_id = fields.Many2one(
+        'uom.uom', 'Unit of Measure',
+        compute="_compute_product_uom_id", store=True, readonly=False, precompute=True,
+        domain="[('category_id', '=', product_uom_category_id)]")
+
+    scrap_qty = fields.Float(
+        'Quantity', digits='Product Unit of Measure',
+        compute='_compute_scrap_qty', default=1.0, readonly=False, store=True)
 
     scrap_line_ids = fields.One2many(
         "stock.scrap.line",
@@ -48,6 +61,24 @@ class WMSStockScrap(models.Model):
         readonly=True,
         copy=False,
     )        
+
+    scheduled_date = fields.Datetime('Scheduled Date')
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get("product_id") or not vals.get("scrap_line_ids"):
+                continue
+
+            for command in vals["scrap_line_ids"]:
+                if command[0] == Command.CREATE:
+                    line_vals = command[2]
+
+                    vals["product_id"] = line_vals.get("product_id")
+                    vals["product_uom_id"] = line_vals.get("product_uom_id")
+                    break
+
+        return super().create(vals_list)
 
     def action_validate(self):
 
@@ -343,9 +374,14 @@ class StockScrapLine(models.Model):
         required=True,
     )
 
+    @api.onchange('product_id')
+    def _onchange_product_id(self):
+        print(f"Scrap_id nya {self.scrap_id}")
+
     product_uom_id = fields.Many2one(
         "uom.uom",
-        string="UoM"
+        string="UoM",
+        required=True,
     )
 
     demand_qty = fields.Float(
@@ -495,7 +531,7 @@ class WMSScrapMoveLine(models.Model):
         "stock.lot",
         string="Lot",
     )
-
+    
     location_id = fields.Many2one(
         "stock.location",
         string="Pick From",
@@ -505,6 +541,12 @@ class WMSScrapMoveLine(models.Model):
 
     quantity = fields.Float(
         required=True,
+    )
+
+    confirmation_lot_code = fields.Char(
+        string='Confirmation Lot Code',
+        help='Scanned / input lot code for confirmation.',
+        store=True
     )
 
     matching_lot_id = fields.Many2one(
@@ -534,6 +576,40 @@ class WMSScrapMoveLine(models.Model):
         expected_lot = self.lot_id
         if self.matching_lot_id == expected_lot:
             self.match_status = 'match'
+
+    handheld_scan_code = fields.Char(
+        string='Scan Handheld',
+        help='Masukkan kode lot, lokasi, atau package dari scanner handheld atau ketik manual.',
+        store=False,
+    )
+
+    @api.onchange('handheld_scan_code')
+    def _onchange_handheld_scan_code(self):
+        for line in self:
+            values = line._get_handheld_scan_values(line.handheld_scan_code)
+            if not values:
+                continue
+            line.update(values)
+            line.handheld_scan_code = False
+
+    def _get_handheld_scan_values(self, scanned_code):
+        self.ensure_one()
+        code = (scanned_code or '').strip()
+        if not code:
+            return {}
+
+        lot = self._find_lot_by_scan_code(code)
+        # Resolve an exact lot match before trying locations.  The allowed
+        # lot relation can be temporarily stale while an editable move line
+        # is being changed; treating a valid lot as a location then produces
+        # the misleading "lot atau lokasi tidak terdaftar" error.
+        values = {}
+        if lot:
+            values = {
+                'confirmation_lot_code': code,
+                'matching_lot_id': lot.id,
+            }
+        return values
 
 class ScrapStockPicking(models.Model):
     _inherit = 'stock.picking'

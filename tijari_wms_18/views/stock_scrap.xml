@@ -1,5 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_list_stock_scrap_inherit_wms" model="ir.ui.view">
+        <field name="name">stock.scrap.list.inherit.wms</field>
+        <field name="model">stock.scrap</field>
+        <field name="inherit_id" ref="stock.stock_scrap_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='date_done']" position="before">
+                <field name="scheduled_date" />
+            </xpath>
+            <xpath expr="//field[@name='date_done']" position="attributes">
+                <attribute name="string">Date Done</attribute>
+            </xpath>
+        </field>
+    </record>
+
     <record id="view_stock_scrap_inherit_wms" model="ir.ui.view">
         <field name="name">stock.scrap.inherit.wms</field>
         <field name="model">stock.scrap</field>
@@ -26,6 +40,13 @@
                     invisible="state != 'ready'"
                 />
             </xpath>
+            <xpath expr="//group//field[@name='origin']" position="replace">
+                <field name="name" readonly="1" string="Seri Dokumen"/>
+            </xpath>
+            <xpath expr="//div[contains(@class, 'oe_title')]//field[@name='name']" position="replace">
+                <field name="origin" placeholder="No. Dokumen" invisible="not id"/>
+            </xpath>
+            
             <xpath expr="//field[@name='product_id']" position="attributes">
                 <attribute name="invisible">1</attribute>
                 <attribute name="required">0</attribute>
@@ -48,6 +69,7 @@
             <xpath expr="//field[@name='scrap_location_id']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
+
             <xpath expr="//field[@name='scrap_reason_tag_ids']" position="after">
                 <field 
                     name="location_id" 
@@ -74,6 +96,27 @@
                 <field name="last_availability_check"
                     readonly="1"
                 />
+            </xpath>
+
+            <xpath expr="//field[@name='should_replenish']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='package_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='owner_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='date_done']" position="before">
+                <field name="scheduled_date" />
+            </xpath>
+
+            <xpath expr="//field[@name='date_done']" position="attributes">
+                <attribute name="string">Date Done</attribute>
+                <attribute name="invisible">not date_done</attribute>
             </xpath>
             
             <xpath expr="//sheet" position="inside">

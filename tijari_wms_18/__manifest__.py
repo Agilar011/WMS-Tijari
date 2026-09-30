@@ -25,6 +25,7 @@
     'data': [
         'security/groups.xml',
         'security/ir.model.access.csv',
+        'data/ir_actions_server.xml',
         'data/document_only_picking_type_data.xml',
         'data/stock_location_consignment_data.xml',
         'data/ir.sequence.xml',
