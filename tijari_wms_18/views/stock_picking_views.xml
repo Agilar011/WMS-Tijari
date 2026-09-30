@@ -201,6 +201,10 @@
             <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']" position="replace">
                 
             </xpath>
+            
+            <xpath expr="//field[@name='picking_type_id']" position="before">
+                <field name="adt_type" string="Transaction Type"/>
+            </xpath>
 
             <xpath expr="//page[@name='extra']" position="inside">
                 <group>
