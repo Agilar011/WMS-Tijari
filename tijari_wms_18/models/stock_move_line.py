@@ -257,10 +257,14 @@ class StockMoveLine(models.Model):
     @api.depends(
         "picking_id.move_line_ids.lot_id",
         "picking_id.move_ids.move_line_ids.lot_id",
+        "move_id.move_line_ids.lot_id",
     )
     def _compute_allowed_matching_lot_ids(self):
         for line in self:
-            line.allowed_matching_lot_ids = line.picking_id.move_line_ids.mapped("lot_id") or line.move_id.move_line_ids.mapped("lot_id")
+            line.allowed_matching_lot_ids = (
+                line.picking_id.move_line_ids.mapped("lot_id")
+                | line.move_id.move_line_ids.mapped("lot_id")
+            )
 
     def _get_owner_quant_domain(self):
         self.ensure_one()

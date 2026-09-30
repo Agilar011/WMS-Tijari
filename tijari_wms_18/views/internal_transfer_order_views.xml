@@ -84,27 +84,27 @@
                         </group>
                         <group>
                             <field name="location_id"
-                                invisible="transaction_type == 'intra_warehouse'"
+                                invisible="intra_transfer_type == 'intra_group_transfer'"
                                 readonly="state == 'ready'"/>
                             <field name="source_location_scan_code"
                                 widget="adt_handheld_scan_code"
                                 invisible="transaction_type != 'intra_warehouse' or intra_transfer_type != 'intra_group_transfer'"
                                 readonly="state == 'ready'"/>
                             <field name="intra_location_id"
-                                invisible="transaction_type != 'intra_warehouse'"
+                                invisible="intra_transfer_type != 'intra_group_transfer'"
                                 readonly="state == 'ready'"
-                                domain="[('is_location_mapping', '=', True)] if intra_transfer_type == 'inter_group_transfer' else [('id', 'child_of', location_group_id)]"/>
+                                domain="[('id', 'child_of', location_group_id)]"/>
                             <field name="location_dest_id"
-                                invisible="transaction_type == 'intra_warehouse'"
+                                invisible="intra_transfer_type == 'intra_group_transfer'"
                                 readonly="state == 'ready'"/>
                             <field name="destination_location_scan_code"
                                 widget="adt_handheld_scan_code"
                                 invisible="transaction_type != 'intra_warehouse' or intra_transfer_type != 'intra_group_transfer'"
                                 readonly="state == 'ready'"/>
                             <field name="intra_location_dest_id"
-                                invisible="transaction_type != 'intra_warehouse'"
+                                invisible="intra_transfer_type != 'intra_group_transfer'"
                                 readonly="state == 'ready'"
-                                domain="[('is_location_mapping', '=', True)] if intra_transfer_type == 'inter_group_transfer' else [('id', 'child_of', location_group_id)]"/>
+                                domain="[('id', 'child_of', location_group_id)]"/>
                             <field name="transit_location_id"/>
                             <field name="schedule_date"/>
                         </group>

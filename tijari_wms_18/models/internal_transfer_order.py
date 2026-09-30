@@ -353,11 +353,23 @@ class InternalTransferOrder(models.Model):
             ('partner_type', '=', 'warehouse'),
         ], limit=1)
 
-    @api.depends('transaction_type', 'transfer_type', 'location_id')
+    @api.depends(
+        'transaction_type',
+        'transfer_type',
+        'intra_transfer_type',
+        'location_group_id',
+        'location_id',
+        'intra_location_id',
+    )
     def _compute_available_source_product_ids(self):
         for order in self:
+            source_location = (
+                order.intra_location_id
+                if order.transaction_type == 'intra_warehouse'
+                else order.location_id
+            )
             order.available_source_product_ids = order._get_available_source_products(
-                order.location_id
+                source_location
             )
 
     @api.onchange(
@@ -376,9 +388,10 @@ class InternalTransferOrder(models.Model):
 
     def _get_available_source_products(self, location):
         self.ensure_one()
+        selected_transfer_type = self.intra_transfer_type or self.transfer_type
         if (
             self.transaction_type != 'intra_warehouse'
-            or self.transfer_type != 'intra_group_transfer'
+            or selected_transfer_type != 'intra_group_transfer'
             or not location
         ):
             return self.env['product.product']
