@@ -34,7 +34,7 @@ class AcumaticaInventoryStockLine(models.Model):
     note = fields.Text(string='Note')
     last_modified_datetime = fields.Char(string='LastModifiedDateTime', index=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='set null')
     sync_date = fields.Datetime(string='Tanggal Sync')
 
     selected = fields.Boolean(string='Pilih', default=True)

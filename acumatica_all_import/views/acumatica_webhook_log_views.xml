@@ -26,10 +26,9 @@
                 <field name="create_date"/>
                 <field name="webhook_type"/>
                 <field name="webhook_name"/>
-                <field name="created_count"/>
-                <field name="updated_count"/>
-                <field name="imported_count"/>
-                <field name="error_count"/>
+                <field name="created_count" string="Staging Records"/>
+                <field name="imported_count" string="Generated to WMS"/>
+                <field name="error_count" string="WMS Errors"/>
                 <field name="state" widget="badge"
                        decoration-success="state == 'processed'"
                        decoration-warning="state == 'pending'"
@@ -59,11 +58,9 @@
                             <field name="processed_date"/>
                         </group>
                         <group string="Counters">
-                            <field name="created_count"/>
-                            <field name="updated_count"/>
-                            <field name="imported_count"/>
-                            <field name="error_count"/>
-                            <field name="line_count"/>
+                            <field name="created_count" string="Staging Records"/>
+                            <field name="imported_count" string="Generated to WMS"/>
+                            <field name="error_count" string="WMS Errors"/>
                         </group>
                     </group>
                     <notebook>
