@@ -25,6 +25,13 @@ class WMSStockScrap(models.Model):
         copy=False,
     )
 
+    filtered_scrap_line_ids = fields.One2many(
+        "stock.scrap.line",
+        "scrap_id",
+        string="Filtered Scrap Lines",
+        compute="_compute_filtered_scrap_line_ids",
+    )
+
     picking_id = fields.Many2one(
         "stock.picking",
         string="Receipt",
@@ -74,6 +81,11 @@ class WMSStockScrap(models.Model):
         string="Product Name",
     )
 
+    allowed_scrap_product_ids = fields.Many2many(
+        'product.product',
+        compute='_compute_allowed_scrap_product_ids',
+    )
+
     allowed_scrap_lot_ids = fields.Many2many(
         'stock.lot',
         compute='_compute_allowed_scrap_lot_ids',
@@ -85,6 +97,46 @@ class WMSStockScrap(models.Model):
         domain="[('id', 'in', allowed_scrap_lot_ids)]",
         readonly=False,
     )
+
+    @api.depends('scrap_line_ids.product_id')
+    def _compute_allowed_scrap_product_ids(self):
+        for scrap in self:
+            scrap.allowed_scrap_product_ids = scrap.scrap_line_ids.product_id
+
+    @api.depends(
+        'scrap_product_id',
+        'scrap_lot_id',
+        'scrap_line_ids',
+        'scrap_line_ids.product_id',
+        'scrap_line_ids.lot_ids',
+    )
+    def _compute_filtered_scrap_line_ids(self):
+        for scrap in self:
+            lines = scrap.scrap_line_ids
+            if scrap.scrap_product_id:
+                lines = lines.filtered(
+                    lambda line: line.product_id == scrap.scrap_product_id
+                )
+            if scrap.scrap_lot_id:
+                lines = lines.filtered(
+                    lambda line: scrap.scrap_lot_id in line.lot_ids
+                )
+            scrap.filtered_scrap_line_ids = lines
+
+    @api.onchange('scrap_product_id')
+    def _onchange_scrap_product_id(self):
+        for scrap in self:
+            if scrap.scrap_lot_id and scrap.scrap_lot_id not in scrap.allowed_scrap_lot_ids:
+                scrap.scrap_lot_id = False
+
+    @api.onchange('scrap_lot_id')
+    def _onchange_scrap_lot_id(self):
+        for scrap in self:
+            if scrap.scrap_lot_id:
+                line = scrap.scrap_line_ids.filtered(
+                    lambda item: scrap.scrap_lot_id in item.lot_ids
+                )[:1]
+                scrap.scrap_product_id = line.product_id
 
     @api.depends(
         "scrap_line_ids",
@@ -128,16 +180,15 @@ class WMSStockScrap(models.Model):
                 lambda move: move.product_id == product
             )
             if matching_moves:
-                lot = matching_moves.lot_ids[:1]
                 return {
                     'values': {
                         'scrap_product_id': product.id,
-                        'scrap_lot_id': lot.id,
+                        'scrap_lot_id': False,
                     },
                     'result': {
                         'product_id': product.id,
                         'display_name': product.display_name,
-                        'lot_id': lot.id,
+                        'lot_id': False,
                         'scrap_line_ids': matching_moves.ids,
                         'matched_by': 'product',
                     },
@@ -149,19 +200,17 @@ class WMSStockScrap(models.Model):
                 ) % (matched_by, scanned_code, product.display_name)
             )
 
-        product, matching_moves, lot = self._find_picker_product_by_lot_scan_code(
-            scanned_code
-        )
+        product, matching_lines, lot = self._find_scrap_product_by_lot_scan_code(scanned_code)
         return {
             'values': {
-                'picker_product_id': product.id,
-                'picker_lot_id': lot.id,
+                'scrap_product_id': product.id,
+                'scrap_lot_id': lot.id,
             },
             'result': {
                 'product_id': product.id,
                 'display_name': product.display_name,
                 'lot_id': lot.id,
-                'move_ids': matching_moves.ids,
+                'scrap_line_ids': matching_lines.ids,
                 'matched_by': 'lot',
             },
         }
@@ -180,24 +229,16 @@ class WMSStockScrap(models.Model):
 
         return Product.browse(), False
     
-    def _find_picker_product_by_lot_scan_code(self, scan_code):
+    def _find_scrap_product_by_lot_scan_code(self, scan_code):
         self.ensure_one()
-        StockLot = self.env['stock.lot']
-
-        lots = StockLot.search([('name', '=', scan_code)])
-        moves = self._get_picker_base_moves().filtered(
-            lambda move: (
-                (lots and move.lot_ids and bool(move.lot_ids & lots))
-                or move.move_line_ids.filtered(
-                    lambda line: (
-                        (lots and line.lot_id in lots)
-                        or (line.lot_name and line.lot_name == scan_code)
-                    )
-                )
-            )
+        lots = self.scrap_line_ids.mapped('lot_ids').filtered(
+            lambda lot: lot.name == scan_code or lot.ref == scan_code
+        )
+        matching_lines = self.scrap_line_ids.filtered(
+            lambda line: bool(line.lot_ids & lots)
         )
 
-        if not moves:
+        if not matching_lines:
             if lots:
                 raise ValidationError(
                     _("Lot %s ditemukan, tetapi tidak ada di dokumen ini.")
@@ -208,11 +249,11 @@ class WMSStockScrap(models.Model):
                 % scan_code
             )
 
-        products = moves.product_id
+        products = matching_lines.product_id
         if len(products) > 1:
             raise ValidationError(_("Lot hasil scan mengarah ke lebih dari satu product."))
 
-        return products[:1], moves, lots[:1]
+        return products[:1], matching_lines, lots[:1]
 
     def action_apply_scanned_picker_code(self, scanned_code):
         """Apply a generic scanner input that may identify a product or a lot."""

@@ -122,7 +122,19 @@
             <xpath expr="//sheet" position="inside">
                 <notebook>
                     <page name="item_to_scrap" string="Item to Scrap">
-                        <field name="scrap_line_ids"
+                        <group>
+                            <field name="allowed_scrap_product_ids" invisible="1"/>
+                            <field name="allowed_scrap_lot_ids" invisible="1"/>
+                            <field name="filter_scan_code"
+                                widget="adt_handheld_scan_code"
+                                placeholder="Scan handheld atau ketik kode"
+                                help="Bisa barcode, SKU, atau lot."/>
+                            <field name="scrap_product_id"
+                                domain="[('id', 'in', allowed_scrap_product_ids)]"/>
+                            <field name="scrap_lot_id"
+                                domain="[('id', 'in', allowed_scrap_lot_ids)]"/>
+                        </group>
+                        <field name="filtered_scrap_line_ids"
                             mode="list,kanban"
                             readonly="state == 'done'"
                             nolabel="1">
