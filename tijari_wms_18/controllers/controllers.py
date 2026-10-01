@@ -890,7 +890,7 @@ class WmsApiController(http.Controller):
         stock = request.env['stock.inventory'].sudo().browse(int(id))
         domain = [
             ('location_id', 'in', stock.location_ids.ids),
-            ('inventory_diff_quantity', '>', 0),
+            ('inventory_diff_quantity', '!=', 0),
         ]
 
         if 'inventory_id' in request.env['stock.quant']._fields:
