@@ -288,8 +288,8 @@ class WMSStockScrap(models.Model):
         if not self.scrap_line_ids:
             raise UserError(_("No scrap lines found."))
 
-        if self.availability_state != "available":
-            raise UserError(_("Some products do not have sufficient stock."))
+        # if self.availability_state != "available":
+        #     raise UserError(_("Some products do not have sufficient stock."))
 
         self._check_all_lot_match()
 
@@ -300,6 +300,14 @@ class WMSStockScrap(models.Model):
             )
 
             scrap_move_line = line.scrap_move_id.move_line_ids
+
+            if not scrap_move_line:
+                raise UserError(
+                    _(
+                        "No stock allocation found for product %s."
+                    ) % line.product_id.display_name
+                )
+                
             for move_line in scrap_move_line:
 
                 available = self.env["stock.quant"]._get_available_quantity(
@@ -339,7 +347,7 @@ class WMSStockScrap(models.Model):
 
             line.write({
                 "move_id": move.id,
-                "availability_state": "available",
+                # "availability_state": "available",
             })
 
         self.write({
@@ -419,12 +427,16 @@ class WMSStockScrap(models.Model):
         })
 
         return vals
-    
-    def _check_line_availability(self, line):
 
-        available_qty = self.env["stock.quant"]._get_available_quantity(
-            line.product_id,
-            line.location_id,
+    def _check_line_availability(self, line):
+        locations = self._get_scrap_locations(line.location_id)
+
+        available_qty = sum(
+            self.env["stock.quant"]._get_available_quantity(
+                line.product_id,
+                location,
+            )
+            for location in locations
         )
 
         line.available_qty = available_qty
@@ -435,11 +447,10 @@ class WMSStockScrap(models.Model):
             precision_rounding=line.product_uom_id.rounding,
         ) >= 0:
             line.availability_state = "available"
-
-            self._generate_wms_scrap_move_lines(line)
-
         else:
             line.availability_state = "insufficient"
+        
+        self._generate_wms_scrap_move_lines(line)
 
     def _create_scrap_moves(self):
         self.ensure_one()
@@ -474,22 +485,62 @@ class WMSStockScrap(models.Model):
     def _generate_wms_scrap_move_lines(self, scrap_line):
         self.ensure_one()
 
-        # wms_move = self.wms_scrap_move_ids.filtered(
-        #     lambda move:
-        #         move.product_id == scrap_line.product_id
-        #         and move.location_id == scrap_line.location_id
-        # )[:1]
-
         wms_move = scrap_line.scrap_move_id
 
         if not wms_move:
             return
 
-        # Hapus detail lama supaya tidak duplicate
-        wms_move.move_line_ids.unlink()
+        rounding = scrap_line.product_uom_id.rounding
+
+        # =========================================================
+        # 1. Ambil line yang sudah FINISHED
+        # =========================================================
+        finished_lines = wms_move.move_line_ids.filtered(
+            lambda line: line.status == "finished"
+        )
+
+        # =========================================================
+        # 2. Hapus hanya line yang belum FINISHED
+        # =========================================================
+        wms_move.move_line_ids.filtered(
+            lambda line: line.status != "finished"
+        ).unlink()
+
+        # =========================================================
+        # 3. Hitung quantity yang sudah dikonfirmasi/finished
+        #    Gunakan scrapped_qty karena ini actual confirmed qty.
+        # =========================================================
+        finished_qty = sum(
+            finished_lines.mapped("scrapped_qty")
+        )
+
+        # =========================================================
+        # 4. Hitung sisa demand yang masih perlu dialokasikan
+        # =========================================================
+        remaining_qty = max(
+            scrap_line.demand_qty - finished_qty,
+            0.0,
+        )
+
+        if float_compare(
+            remaining_qty,
+            0.0,
+            precision_rounding=rounding,
+        ) <= 0:
+            return
+
+        # =========================================================
+        # 5. Ambil seluruh location + child
+        # =========================================================
+        locations = self._get_scrap_locations(
+            scrap_line.location_id
+        )
 
         Quant = self.env["stock.quant"]
 
+        # =========================================================
+        # 6. Cari stock berdasarkan FIFO
+        # =========================================================
         # Ambil quant yang:
         # - produknya sama
         # - lokasinya sama
@@ -500,19 +551,24 @@ class WMSStockScrap(models.Model):
         quants = Quant.search(
             [
                 ("product_id", "=", scrap_line.product_id.id),
-                ("location_id", "=", scrap_line.location_id.id),
+                ("location_id", "in", locations.ids),
                 ("lot_id", "!=", False),
                 ("quantity", ">", 0),
             ],
             order="in_date asc, id asc",
         )
 
-        remaining_qty = scrap_line.demand_qty
+        # remaining_qty = scrap_line.demand_qty
 
+        # =========================================================
+        # 7. Allocate sebanyak yang tersedia
+        # =========================================================
         for quant in quants:
+
+            # Demand sudah terpenuhi
             if float_compare(
                 remaining_qty,
-                0,
+                0.0,
                 precision_rounding=scrap_line.product_uom_id.rounding,
             ) <= 0:
                 break
@@ -521,11 +577,13 @@ class WMSStockScrap(models.Model):
 
             if float_compare(
                 available_qty,
-                0,
+                0.0,
                 precision_rounding=scrap_line.product_uom_id.rounding,
             ) <= 0:
                 continue
 
+            # Ambil sebanyak yang tersedia,
+            # tetapi tidak boleh melebihi demand
             allocated_qty = min(
                 available_qty,
                 remaining_qty,
@@ -533,6 +591,7 @@ class WMSStockScrap(models.Model):
 
             self.env["wms.scrap.move.line"].create({
                 "scrap_move_id": wms_move.id,
+                "product_id": scrap_line.product_id.id,
                 "lot_id": quant.lot_id.id,
                 "location_id": quant.location_id.id,
                 "quantity": allocated_qty,
@@ -565,7 +624,12 @@ class WMSStockScrap(models.Model):
             raise UserError(_(
                 f"All products must be in Finished status.\n\n{text}"
         ))
-        
+    
+    def _get_scrap_locations(self, location):
+        return self.env["stock.location"].search([
+            ("id", "child_of", location.id),
+        ])
+
 class StockScrapLine(models.Model):
     _name = "stock.scrap.line"
     _description = "Stock Scrap Line"
