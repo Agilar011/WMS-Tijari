@@ -888,9 +888,7 @@ class WmsApiController(http.Controller):
     def PrintStokOpname(self, id, **kw):
         blank_image = create_blank_image()
         stock = request.env['stock.inventory'].sudo().browse(int(id))
-        domain = [
-            ('location_id', 'in', stock.location_ids.ids)
-        ]
+        domain = [('location_id', 'in', stock.location_ids.ids)]
 
         if 'inventory_id' in request.env['stock.quant']._fields:
             domain.append(('inventory_id', '=', stock.id))
@@ -900,7 +898,7 @@ class WmsApiController(http.Controller):
         lines = request.env['stock.quant'].sudo().search(domain)
 
         if not lines and hasattr(stock, 'quant_ids') and stock.quant_ids:
-            lines = stock.quant_ids.filtered(lambda q: q.inventory_diff_quantity > 0)
+            lines = stock.quant_ids
         
         warehouse = request.env['stock.warehouse'].sudo().search([
             ('lot_stock_id', 'in', stock.location_ids.ids)
