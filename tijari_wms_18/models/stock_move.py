@@ -114,7 +114,11 @@ class StockMove(models.Model):
     )
 
     # temp_float = fields.Float(string="Confirmation Quantity")
-    so_confirmation_quantity = fields.Float(string="Confirmation Quantity")
+    so_confirmation_quantity = fields.Float(
+        compute='_compute_so_confirmation_quantity',
+        store=True,
+    )
+    
     mo_confirmation_quantity = fields.Float(
             string='Qty Digunakan',
             compute='_compute_mo_confirmation_quantity',
@@ -167,7 +171,16 @@ class StockMove(models.Model):
     status_check = fields.Selection([
         ('finished', 'Finished'),
         ('unfinished', 'Unfinished'),
-    ], string='Status', default='unfinished')
+    ], string='Status', default='unfinished', compute="_compute_status_check")
+
+    @api.depends('move_line_ids.status_check')
+    def _compute_status_check(self):
+        for move in self:
+            lines = move.filtered_unpack_line_ids
+            move.status_check = (
+                'finished' if lines and all(line.status_check == 'finished' for line in lines)
+                else 'unfinished'
+            )
 
     status_mo_check = fields.Selection([
         ('finished', 'Finished'),
@@ -196,6 +209,26 @@ class StockMove(models.Model):
                 'finished' if lines and all(line.pick_status == 'finished' for line in lines)
                 else 'unfinished'
             )
+
+    filtered_unpack_line_ids = fields.One2many(
+        comodel_name="stock.move.line",
+        string="Filtered Unpacked Move Line",
+        compute="_compute_filtered_unpack_line_ids",
+    )
+
+    @api.depends(
+        "move_line_ids",
+        "move_line_ids.result_package_id",
+        "remaining_package_qty",
+    )
+    def _compute_filtered_unpack_line_ids(self):
+        for move in self:
+            if move.remaining_package_qty > 0:
+                move.filtered_unpack_line_ids = move.move_line_ids.filtered(
+                    lambda line: not line.result_package_id
+                )
+            else:
+                move.filtered_unpack_line_ids = self.env["stock.move.line"]
 
     def action_mark_check_finished(self):
         self._validate_before_mark_finished()
@@ -394,7 +427,13 @@ class StockMove(models.Model):
 
         return move_line_vals, taken_quantity
     
-    @api.depends('product_uom_qty', 'quantity', 'quantity_shadow', 'picking_type_name', 'confirmation_quantity', 'mo_confirmation_quantity')
+    @api.depends(
+        'product_uom_qty', 
+        'quantity', 
+        'quantity_shadow', 
+        'picking_type_name', 
+        'confirmation_quantity', 
+        'mo_confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
             if move.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage']:
@@ -424,7 +463,6 @@ class StockMove(models.Model):
             move.remaining_putaway_quantity = move.product_uom_qty - move.confirmation_quantity
 
 
-
     @api.depends('move_line_ids.confirmation_quantity')
     def _compute_confirmation_quantity(self):
         for move in self:
@@ -436,6 +474,12 @@ class StockMove(models.Model):
         for move in self:
             total_mo_confirmation_quantity = sum(move.move_line_ids.mapped('mo_confirmation_quantity'))
             move.mo_confirmation_quantity = total_mo_confirmation_quantity if total_mo_confirmation_quantity > 0 else 0.0
+
+    @api.depends('move_line_ids.so_confirmation_quantity')
+    def _compute_so_confirmation_quantity(self):
+        for move in self:
+            total_so_confirmation_quantity = sum(move.filtered_unpack_line_ids.mapped('so_confirmation_quantity'))
+            move.so_confirmation_quantity = total_so_confirmation_quantity if total_so_confirmation_quantity > 0 else 0.0
 
     def action_generate_lot(self):
         for move in self:
@@ -704,6 +748,21 @@ class StockMove(models.Model):
             'target': 'new',
         }
 
+    def action_open_move_delivery(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_delivery_unpack_view'
+            ).id,
+            'target': 'new',
+        }
+
     def action_open_move_mo(self):
         self.ensure_one()
 
@@ -792,6 +851,7 @@ class StockMove(models.Model):
                         display: none;
                     }
                 """ % (index + 1)
+
         self.custom_css_js_stored = """
         <div>
         <style>

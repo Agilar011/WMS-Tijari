@@ -585,6 +585,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                 "company_id": warehouse.company_id.id,
                 "location_id": source_location.id,
                 "scrap_location_id": scrap_location.id,
+                "scheduled_date": self._parse_dt(first.scheduled_date),
 
                 # Header / dummy
                 "product_id": scrap_lines[0]["product_id"].id,

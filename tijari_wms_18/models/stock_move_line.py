@@ -112,7 +112,9 @@ class StockMoveLine(models.Model):
         readonly=True,
     )
     confirmation_quantity = fields.Float(string='Confirmation Qty')
+    so_confirmation_quantity = fields.Float(string='Qty Dikirim')
     mo_confirmation_quantity = fields.Float(string='Qty Digunakan')
+    quantity_shadow = fields.Float(string='Qty Digunakan')
 
     picking_code = fields.Selection(
         related='picking_id.picking_type_code',
@@ -225,6 +227,15 @@ class StockMoveLine(models.Model):
             ('unfinished', 'Unfinished')
         ],
         string='Pick Status',
+        default='unfinished',
+    )
+
+    status_check = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished')
+        ],
+        string='Unpack Status',
         default='unfinished',
     )
 
@@ -1431,7 +1442,39 @@ class StockMoveLine(models.Model):
             raise UserError("Qty Diambil tidak boleh melebihi Saran Qty")
 
         return comparison
-            
+
+    def action_mark_check_unpack_finished(self):
+        self._validate_before_mark_unpack_finished()
+
+        self.write({'status_check': 'finished'})
+        return {'type': 'ir.actions.act_window_close'}
+
+    def action_mark_check_unpack_unfinished(self):
+        self.write({'status_check': 'unfinished'})
+        return self.move_id.action_open_move_delivery()
+
+    def _validate_before_mark_unpack_finished(self):
+        confirmation_quantity = self.so_confirmation_quantity
+        quantity = self.quantity
+
+        rounding = self.product_uom_id.rounding if self.product_uom_id else 0.01
+        comparison = float_compare(
+            confirmation_quantity,
+            quantity,
+            precision_rounding=rounding,
+        )
+
+        if float_is_zero(
+            confirmation_quantity,
+            precision_rounding=rounding,
+        ):
+            raise UserError(f"Qty Dikirim lot {self.lot_id.name} tidak boleh 0.")
+
+        if comparison > 0:
+            raise UserError("Qty Dikirim tidak boleh melebihi Qty Disimpan")
+
+        return comparison
+                
     def _check_matching_status_pick(self):
         expected_location = self.source_location_id or self.location_id
         if not self.matching_loc_dest_id:

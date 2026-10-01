@@ -1,9 +1,22 @@
-from odoo import _, api, fields, models
-from odoo.exceptions import UserError
-from odoo.tools.float_utils import float_compare
+from odoo import _, api, fields, models, Command
+from odoo.exceptions import UserError, ValidationError
+from odoo.tools.float_utils import float_compare, float_is_zero
 
 class WMSStockScrap(models.Model):
     _inherit = 'stock.scrap'
+
+    product_id = fields.Many2one(
+        'product.product', 'Product', domain="[('type', '=', 'consu')]",
+        check_company=True)
+    
+    product_uom_id = fields.Many2one(
+        'uom.uom', 'Unit of Measure',
+        compute="_compute_product_uom_id", store=True, readonly=False, precompute=True,
+        domain="[('category_id', '=', product_uom_category_id)]")
+
+    scrap_qty = fields.Float(
+        'Quantity', digits='Product Unit of Measure',
+        compute='_compute_scrap_qty', default=1.0, readonly=False, store=True)
 
     scrap_line_ids = fields.One2many(
         "stock.scrap.line",
@@ -49,6 +62,181 @@ class WMSStockScrap(models.Model):
         copy=False,
     )        
 
+    scheduled_date = fields.Datetime('Scheduled Date')
+
+    filter_scan_code = fields.Char(
+        string="Kode scan",
+        help="Bisa diisi dari scanner handheld atau diketik manual.",
+    )
+
+    scrap_product_id = fields.Many2one(
+        'product.product',
+        string="Product Name",
+    )
+
+    allowed_scrap_lot_ids = fields.Many2many(
+        'stock.lot',
+        compute='_compute_allowed_scrap_lot_ids',
+    )
+
+    scrap_lot_id = fields.Many2one(
+        'stock.lot',
+        string="LOT Number",
+        domain="[('id', 'in', allowed_scrap_lot_ids)]",
+        readonly=False,
+    )
+
+    @api.depends(
+        "scrap_line_ids",
+        "scrap_line_ids.product_id",
+        "scrap_line_ids.lot_ids",
+    )
+    def _compute_allowed_scrap_lot_ids(self):
+        for scrap in self:
+            lines = scrap.scrap_line_ids
+
+            if scrap.scrap_product_id:
+                lines = lines.filtered(
+                    lambda line: line.product_id == scrap.scrap_product_id
+                )
+
+            scrap.allowed_scrap_lot_ids = lines.mapped("lot_ids")
+
+    @api.onchange('filter_scan_code')
+    def _onchange_filter_scan_code(self):
+        for scrap in self:
+            if not scrap.filter_scan_code:
+                continue
+            values = scrap._get_picker_scan_values(scrap.filter_scan_code)
+            scrap.update(values['values'])
+            scrap.filter_scan_code = False
+    
+    def _get_picker_scan_values(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        if not scanned_code:
+            raise ValidationError(_("Kode scan tidak boleh kosong."))
+
+        scrap_moves = self.scrap_line_ids.filtered(
+            lambda scrap_line: (
+                scrap_line.product_id
+            )
+        )
+        product, matched_by = self._find_product_scan_match(scanned_code)
+        if product:
+            matching_moves = scrap_moves.filtered(
+                lambda move: move.product_id == product
+            )
+            if matching_moves:
+                lot = matching_moves.lot_ids[:1]
+                return {
+                    'values': {
+                        'scrap_product_id': product.id,
+                        'scrap_lot_id': lot.id,
+                    },
+                    'result': {
+                        'product_id': product.id,
+                        'display_name': product.display_name,
+                        'lot_id': lot.id,
+                        'scrap_line_ids': matching_moves.ids,
+                        'matched_by': 'product',
+                    },
+                }
+            raise ValidationError(
+                _(
+                    "%s %s dikenali sebagai Product %s, tetapi product tersebut "
+                    "tidak ada di dokumen ini."
+                ) % (matched_by, scanned_code, product.display_name)
+            )
+
+        product, matching_moves, lot = self._find_picker_product_by_lot_scan_code(
+            scanned_code
+        )
+        return {
+            'values': {
+                'picker_product_id': product.id,
+                'picker_lot_id': lot.id,
+            },
+            'result': {
+                'product_id': product.id,
+                'display_name': product.display_name,
+                'lot_id': lot.id,
+                'move_ids': matching_moves.ids,
+                'matched_by': 'lot',
+            },
+        }
+
+    def _find_product_scan_match(self, scan_code):
+        Product = self.env['product.product']
+        scan_code = (scan_code or '').strip()
+
+        product = Product.search([('barcode', '=', scan_code)], limit=1)
+        if product:
+            return product, _('Barcode')
+
+        product = Product.search([('default_code', '=', scan_code)], limit=1)
+        if product:
+            return product, _('SKU')
+
+        return Product.browse(), False
+    
+    def _find_picker_product_by_lot_scan_code(self, scan_code):
+        self.ensure_one()
+        StockLot = self.env['stock.lot']
+
+        lots = StockLot.search([('name', '=', scan_code)])
+        moves = self._get_picker_base_moves().filtered(
+            lambda move: (
+                (lots and move.lot_ids and bool(move.lot_ids & lots))
+                or move.move_line_ids.filtered(
+                    lambda line: (
+                        (lots and line.lot_id in lots)
+                        or (line.lot_name and line.lot_name == scan_code)
+                    )
+                )
+            )
+        )
+
+        if not moves:
+            if lots:
+                raise ValidationError(
+                    _("Lot %s ditemukan, tetapi tidak ada di dokumen ini.")
+                    % scan_code
+                )
+            raise ValidationError(
+                _("Kode %s tidak ditemukan sebagai Barcode, SKU, atau Lot.")
+                % scan_code
+            )
+
+        products = moves.product_id
+        if len(products) > 1:
+            raise ValidationError(_("Lot hasil scan mengarah ke lebih dari satu product."))
+
+        return products[:1], moves, lots[:1]
+
+    def action_apply_scanned_picker_code(self, scanned_code):
+        """Apply a generic scanner input that may identify a product or a lot."""
+        self.ensure_one()
+        values = self._get_picker_scan_values(scanned_code)
+        self.write(values['values'])
+        return values['result']
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        for vals in vals_list:
+            if vals.get("product_id") or not vals.get("scrap_line_ids"):
+                continue
+
+            for command in vals["scrap_line_ids"]:
+                if command[0] == Command.CREATE:
+                    line_vals = command[2]
+
+                    vals["product_id"] = line_vals.get("product_id")
+                    vals["product_uom_id"] = line_vals.get("product_uom_id")
+                    break
+
+        return super().create(vals_list)
+
     def action_validate(self):
 
         self.ensure_one()
@@ -65,20 +253,6 @@ class WMSStockScrap(models.Model):
         self._check_all_lot_match()
 
         for line in self.scrap_line_ids:
-
-            available = self.env["stock.quant"]._get_available_quantity(
-                line.product_id,
-                line.location_id,
-            )
-    
-            if float_compare(
-                available,
-                line.demand_qty,
-                precision_rounding=line.product_uom_id.rounding,
-            ) < 0:
-                raise UserError(_(
-                    "%s no longer has enough stock. Please check availability again."
-                ) % line.product_id.display_name)
         
             move = self.env["stock.move"].create(
                 self._prepare_scrap_move_values(line)
@@ -86,6 +260,26 @@ class WMSStockScrap(models.Model):
 
             scrap_move_line = line.scrap_move_id.move_line_ids
             for move_line in scrap_move_line:
+
+                available = self.env["stock.quant"]._get_available_quantity(
+                    move_line.product_id,
+                    move_line.location_id,
+                    lot_id = move_line.lot_id,
+                )
+        
+                if float_compare(
+                    available,
+                    move_line.scrapped_qty,
+                    precision_rounding=move_line.product_uom_id.rounding,
+                ) < 0:
+                    raise UserError(_(
+                        "%s no longer has enough stock for lot %s."
+                    ) % (
+                        move_line.product_id.display_name,
+                        move_line.lot_id.name,
+                    ))
+
+
                 self.env["stock.move.line"].create({
                     "move_id": move.id,
                     "product_id": move_line.product_id.id,
@@ -93,7 +287,8 @@ class WMSStockScrap(models.Model):
                     "location_id": move_line.location_id.id,
                     "location_dest_id": self.scrap_location_id.id,
                     "product_uom_id": move_line.product_uom_id.id,
-                    "quantity": move_line.quantity,
+                    "quantity": move_line.scrapped_qty,
+                    # "quantity": move_line.quantity,
                 })
 
             move.with_context(
@@ -103,7 +298,6 @@ class WMSStockScrap(models.Model):
 
             line.write({
                 "move_id": move.id,
-                "scrapped_qty": line.demand_qty,
                 "availability_state": "available",
             })
 
@@ -163,7 +357,7 @@ class WMSStockScrap(models.Model):
 
         return {
             "name": self.name,
-            "origin": self.origin or self.picking_id.name or self.name,
+            "origin": self.origin or self.picking_id.origin or self.name,
             "company_id": self.company_id.id,
             "state": "draft",
             "scrapped": True,
@@ -319,6 +513,18 @@ class WMSStockScrap(models.Model):
                 f"All scrap Lots must be matched before validation.\n\n{text}"
             ))
         
+        unfinished_line = self.scrap_line_ids.filtered(
+            lambda m: m.status != 'finished'
+        )
+
+        if unfinished_line:
+            text = "Product(s) that not Finished:\n"
+            for line in unfinished_line:
+                text += f"- {line.product_id.name}\n"
+            raise UserError(_(
+                f"All products must be in Finished status.\n\n{text}"
+        ))
+        
 class StockScrapLine(models.Model):
     _name = "stock.scrap.line"
     _description = "Stock Scrap Line"
@@ -343,9 +549,14 @@ class StockScrapLine(models.Model):
         required=True,
     )
 
+    @api.onchange('product_id')
+    def _onchange_product_id(self):
+        print(f"Scrap_id nya {self.scrap_id}")
+
     product_uom_id = fields.Many2one(
         "uom.uom",
-        string="UoM"
+        string="UoM",
+        required=True,
     )
 
     demand_qty = fields.Float(
@@ -365,7 +576,29 @@ class StockScrapLine(models.Model):
         digits="Product Unit of Measure",
         copy=False,
         readonly=True,
+        compute="_compute_scrapped_qty"
     )
+
+    @api.depends(
+        "scrap_move_id.move_line_ids.scrapped_qty",
+    )
+    def _compute_scrapped_qty(self):
+        for move in self:
+            total_scrapped_qty = sum(move.scrap_move_id.move_line_ids.mapped('scrapped_qty'))
+            move.scrapped_qty = total_scrapped_qty if total_scrapped_qty > 0 else 0.0
+
+    lot_ids = fields.Many2many(
+        "stock.lot",
+        string="Lots",
+        compute="_compute_lot_ids",
+        store=True,
+    )
+
+    @api.depends("scrap_move_id.move_line_ids.lot_id")
+    def _compute_lot_ids(self):
+        for line in self:
+            line.lot_ids = line.scrap_move_id.move_line_ids.mapped("lot_id")
+
 
     availability_state = fields.Selection(
         [
@@ -418,6 +651,20 @@ class StockScrapLine(models.Model):
         readonly=True,
     )
 
+    status = fields.Selection([
+        ('finished', 'Finished'),
+        ('unfinished', 'Unfinished'),
+    ], string='Status', default="unfinished", compute="_compute_status_check")
+
+    @api.depends('scrap_move_id.move_line_ids.status')
+    def _compute_status_check(self):
+        for move in self:
+            lines = move.scrap_move_id.move_line_ids
+            move.status = (
+                'finished' if lines and all(line.status == 'finished' for line in lines)
+                else 'unfinished'
+            )
+
     def action_show_details(self):
         return self.scrap_move_id.action_show_details()
 
@@ -430,6 +677,8 @@ class WMSScrapMove(models.Model):
         required=True,
         ondelete="cascade",
     )
+
+    state = fields.Selection(related="scrap_id.state")
 
     receipt_move_id = fields.Many2one(
         "stock.move",
@@ -485,6 +734,8 @@ class WMSScrapMoveLine(models.Model):
         ondelete="cascade",
     )
 
+    state = fields.Selection(related="scrap_move_id.state")
+
     product_id = fields.Many2one(
         related="scrap_move_id.product_id",
         store=True,
@@ -495,7 +746,7 @@ class WMSScrapMoveLine(models.Model):
         "stock.lot",
         string="Lot",
     )
-
+    
     location_id = fields.Many2one(
         "stock.location",
         string="Pick From",
@@ -505,6 +756,14 @@ class WMSScrapMoveLine(models.Model):
 
     quantity = fields.Float(
         required=True,
+    )
+
+    scrapped_qty = fields.Float('Scrapped Qty')
+
+    confirmation_lot_code = fields.Char(
+        string='Confirmation Lot Code',
+        help='Scanned / input lot code for confirmation.',
+        store=True
     )
 
     matching_lot_id = fields.Many2one(
@@ -524,16 +783,100 @@ class WMSScrapMoveLine(models.Model):
         for line in self:
             line.allowed_matching_lot_ids = line.scrap_move_id.move_line_ids.mapped("lot_id")
 
+    status = fields.Selection([
+        ('finished', 'Finished'),
+        ('unfinished', 'Unfinished'),
+    ], string='Status', default="unfinished")
+
     match_status = fields.Selection([
         ('match', 'Match'),
         ('not_match', 'Not Match'),
-    ], string='Status', default='not_match')
+    ], string='Match Status', default='not_match', compute="_compute_match_status")
 
-    @api.onchange('matching_lot_id')
-    def _onchange_matching_lot_id(self):
+    @api.depends('matching_lot_id')
+    def _compute_match_status(self):
         expected_lot = self.lot_id
         if self.matching_lot_id == expected_lot:
             self.match_status = 'match'
+        else: 
+            self.match_status = 'not_match'
+
+    handheld_scan_code = fields.Char(
+        string='Scan Handheld',
+        help='Masukkan kode lot, lokasi, atau package dari scanner handheld atau ketik manual.',
+        store=False,
+    )
+
+    @api.onchange('handheld_scan_code')
+    def _onchange_handheld_scan_code(self):
+        for line in self:
+            values = line._get_handheld_scan_values(line.handheld_scan_code)
+            if not values:
+                continue
+            line.update(values)
+            line.handheld_scan_code = False
+
+    def _get_handheld_scan_values(self, scanned_code):
+        self.ensure_one()
+        code = (scanned_code or '').strip()
+        if not code:
+            return {}
+
+        lot = self._find_lot_by_scan_code(code)
+        # Resolve an exact lot match before trying locations.  The allowed
+        # lot relation can be temporarily stale while an editable move line
+        # is being changed; treating a valid lot as a location then produces
+        # the misleading "lot atau lokasi tidak terdaftar" error.
+        values = {}
+        if lot:
+            values = {
+                'confirmation_lot_code': code,
+                'matching_lot_id': lot.id,
+            }
+        return values
+    
+    def _find_lot_by_scan_code(self, lot_code):
+        Lot = self.env['stock.lot']
+        lot_code = (lot_code or '').strip()
+        if not lot_code:
+            return Lot.browse()
+
+        return Lot.search([('name', '=', lot_code)], limit=1)
+
+    def action_mark_check_finished(self):
+        self._validate_before_mark_finished()
+        # match_status = self._get_matching_status_mo()   
+        if self.match_status == 'not_match':
+            raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
+
+        self.write({
+            'status': 'finished'
+        })
+        return {'type': 'ir.actions.act_window_close'}
+
+    def action_mark_check_unfinished(self):
+        self.write({'status': 'unfinished'})
+        return self.scrap_move_id.action_show_details()
+
+    def _validate_before_mark_finished(self):
+        confirmation_quantity = self.scrapped_qty
+        quantity = self.quantity
+
+        rounding = self.product_uom_id.rounding if self.product_uom_id else 0.01
+        comparison = float_compare(
+            confirmation_quantity,
+            quantity,
+            precision_rounding=rounding,
+        )
+
+        if float_is_zero(
+            confirmation_quantity,
+            precision_rounding=rounding,
+        ):
+            raise UserError(f"Scrapped Qty Lot {self.lot_id.name} tidak boleh 0.")
+
+        if comparison > 0:
+            raise UserError("Scrapped Qty tidak boleh melebihi Quantity")
 
 class ScrapStockPicking(models.Model):
     _inherit = 'stock.picking'
