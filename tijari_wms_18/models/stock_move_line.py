@@ -40,6 +40,11 @@ class StockMoveLine(models.Model):
         help='Masukkan kode lot, lokasi, atau package dari scanner handheld atau ketik manual.',
         store=False,
     )
+    putaway_scan_code = fields.Char(
+        string='Putaway Scan Code',
+        related='picking_id.putaway_scan_code',
+        readonly=True,
+    )
     confirmation_lot_code = fields.Char(
         string='Confirmation Lot Code',
         help='Scanned / input lot code for confirmation.',
@@ -1330,17 +1335,7 @@ class StockMoveLine(models.Model):
                 raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
             self.write({'picker_status': 'finished'})
 
-        return {
-            'type': 'ir.actions.act_window',
-            'name': _('Stock Move'),
-            'res_model': 'stock.move',
-            'res_id': self.move_id.id,
-            'view_mode': 'form',
-            'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_pick_view'
-            ).id,
-            'target': 'new',
-        }
+        return self.move_id.action_open_move_pick()
 
     def action_cancel_picker_details(self):
         self.ensure_one()
@@ -2015,6 +2010,25 @@ class StockMoveLine(models.Model):
             'res_model': 'putaway.move.line.wizard',
             'res_id': wizard.id,
             'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def action_open_putaway_details(self):
+        if not self.exists():
+            return {'type': 'ir.actions.client', 'tag': 'reload'}
+        self.ensure_one()
+        if self.picking_type_name in ('Receipts', 'Receipt Internal'):
+            return self.action_open_putaway_move_line_wizard()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Putaway Details'),
+            'res_model': 'stock.move.line',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.view_move_line_form_inherit_tijari'
+            ).id,
             'target': 'new',
         }
 

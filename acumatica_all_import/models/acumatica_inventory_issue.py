@@ -88,7 +88,7 @@ class AcumaticaInventoryIssueLine(models.Model):
     )
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='set null')
     sync_date = fields.Datetime(string='Tanggal Sync')
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
     customer_id = fields.Char(string='Customer ID')

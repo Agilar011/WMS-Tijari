@@ -197,8 +197,7 @@ class AcumaticaShipmentCompletedStaging(models.Model):
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        required=True,
-        ondelete='cascade',
+        ondelete='set null',
         index=True,
     )
 

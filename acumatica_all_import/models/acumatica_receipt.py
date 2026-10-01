@@ -122,7 +122,7 @@ class AcumaticaReceiptLine(models.Model):
     odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='set null')
     sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -349,7 +349,7 @@ class AcumaticaReceiptLine(models.Model):
             'adt_vendor_code': receipt.vendor_code or False,
             'adt_partner_ref': receipt.partner_ref or False,
             'adt_branch_warehouse': receipt.branch_warehouse or False,
-            'adt_actual_qty': receipt._parse_float(receipt.actual_qty),
+            # 'adt_actual_qty': receipt._parse_float(receipt.actual_qty),
             'adt_is_hold': str(receipt.is_hold or '').lower() in ('true', '1', 'yes'),
             'adt_inventory_ref': receipt.inventory_ref or False,
             'adt_acumatica_write_date': receipt._parse_dt(receipt.acumatica_write_date),

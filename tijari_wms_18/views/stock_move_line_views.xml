@@ -674,12 +674,13 @@
             </xpath>
             <xpath expr="//form" position="inside">
                 <footer>
-                    <button name="action_mark_picker_finished"
+                    <button name="action_save_picker_details"
                         type="object"
                         string="Save"
                         class="btn-primary"
                         invisible="picking_type_name != 'Receipts'"/>
-                    <button special="save"
+                    <button name="action_save_picker_details"
+                        type="object"
                         string="Save"
                         class="btn-primary"
                         invisible="picking_type_name == 'Receipts'"/>

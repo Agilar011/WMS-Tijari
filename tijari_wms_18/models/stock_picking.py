@@ -221,7 +221,7 @@ class StockPicking(models.Model):
     putaway_product_id = fields.Many2one(
         'product.product', string="Product Name")
     putaway_scan_code = fields.Char(
-        string="Kode scan",
+        string="Scan Handheld",
         help="Bisa diisi dari scanner handheld atau diketik manual.",
     )
     allowed_putaway_lot_ids = fields.Many2many(
@@ -267,7 +267,7 @@ class StockPicking(models.Model):
         string="Product Name",
     )
     picker_scan_code = fields.Char(
-        string="Kode scan",
+        string="Scan Handheld",
         help="Bisa diisi dari scanner handheld atau diketik manual.",
     )
     allowed_picker_lot_ids = fields.Many2many(
@@ -318,7 +318,7 @@ class StockPicking(models.Model):
     )
 
     package_scan_code = fields.Char(
-        string="Kode Scan Package",
+        string="Scan Handheld",
         help="Masukkan kode package dari scanner handheld atau ketik manual.",
         store=False,
     )
