@@ -2630,7 +2630,7 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-            if "Pick" in (rec.picking_type_name or ""):
+            if "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
                 for move in rec.move_ids:
                     confirmation_qty = move.confirmation_quantity
 

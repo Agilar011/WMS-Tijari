@@ -52,31 +52,16 @@ class WMSMRPProduction(models.Model):
         
         return res
 
-    # def action_confirm(self):
-    #     print("========== BEFORE CONFIRM ==========")
-    #     for production in self:
-    #         print("MO:", production.name)
-    #         print("State:", production.state)
-    #         print("Picking Type:", production.picking_type_id)
-    #         print("Raw Moves:", production.move_raw_ids)
-    #         print("Raw Moves State:", production.move_raw_ids.mapped("state"))
-    #         print("Raw Moves Picking Type:", production.move_raw_ids.mapped("picking_type_id"))
-    #         print("Finished Moves:", production.move_finished_ids)
-    #         print("Existing Pickings:", production.picking_ids)
+    def action_confirm(self):
+        res = super().action_confirm()
 
-    #     res = super().action_confirm()
+        for production in self:
+            if production.origin:
+                production.picking_ids.write({
+                    "origin": production.origin,
+                })
 
-    #     print("========== AFTER CONFIRM ==========")
-    #     for production in self:
-    #         print("MO:", production.name)
-    #         print("State:", production.state)
-    #         print("Raw Moves:", production.move_raw_ids)
-    #         print("Raw Moves State:", production.move_raw_ids.mapped("state"))
-    #         print("Raw Moves Picking Type:", production.move_raw_ids.mapped("picking_type_id"))
-    #         print("Pickings:", production.picking_ids)
-
-    #     raise ValidationError("STOPPP")
-    #     return res
+        return res
 
     def button_mark_done(self):
         for production in self:
@@ -96,7 +81,28 @@ class WMSMRPProduction(models.Model):
                     f"{details}"
                 )
 
-        return super().button_mark_done()
+            if (
+                production.product_id.tracking in ("lot", "serial")
+                and not production.lot_producing_id
+            ):
+                production.action_generate_serial()
+
+            for move in production.move_raw_ids:
+                for line in move.move_line_ids:
+                    confirmation_quantity = line.mo_confirmation_quantity
+
+                    line.quantity_shadow = line.quantity
+                    line.quantity = confirmation_quantity
+
+        res = super().button_mark_done()
+
+        for production in self:
+            if production.origin:
+                production.picking_ids.write({
+                    "origin": production.origin,
+                })
+        
+        return res
 
     def action_print_hasil_manufacturing(self):
         action = {}

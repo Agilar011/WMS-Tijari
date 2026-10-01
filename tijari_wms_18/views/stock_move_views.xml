@@ -2190,14 +2190,21 @@
                                 widget="adt_scan_lot_button"
                                 string="Scan Lot"
                                 readonly="1"
-                                invisible="matching == 'match'"/>
+                                force_save="1"
+                                column_invisible="1"/>
+                        <field name="handheld_scan_code"
+                            widget="adt_handheld_scan_code"
+                            string="Scan Handheld"
+                            placeholder="Scan handheld: lot atau lokasi"
+                            invisible="mo_status == 'finished'"/>
                         <field name="lot_name" readonly="1" force_save="1" column_invisible="1"/>
                         <field name="matching_lot_id" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
                         <field name="matching_loc_dest_id" column_invisible="True"/>
                         <field name="matching" string="Status LOT"
                                 decoration-success="matching == 'match'"
                                 decoration-danger="matching == 'not_match'"
-                                widget="badge"/>
+                                widget="badge"
+                                column_invisible="1"/>
                         <field
                             name="result_package_id"
                             string="Destination Package"
@@ -2225,7 +2232,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Rollback"
-                                invisible="mo_status == 'unfinished' or parent.state not in ['confirmed']"/>
+                                invisible="mo_status == 'unfinished' or parent.state in ['done','cancel']"/>
                         
                     </list>
                     <kanban class="o_kanban_mobile">
