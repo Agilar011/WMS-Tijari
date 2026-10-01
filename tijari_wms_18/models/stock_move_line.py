@@ -1511,7 +1511,7 @@ class StockMoveLine(models.Model):
     def action_mark_check_finished_mo(self):
         self._validate_before_mark_finished_mo()
         # match_status = self._get_matching_status_mo()   
-        if self.matching == 'not_match':
+        if self.matching_lot_id != self.lot_id:
             raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
 
         self.write({
