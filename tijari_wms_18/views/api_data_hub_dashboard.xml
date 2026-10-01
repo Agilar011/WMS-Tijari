@@ -51,7 +51,7 @@
             <graph string="API Data Hub Accumulation" type="bar" stacked="1">
                 <field name="adt_type" type="row"/>
                 <field name="adt_total_qty" type="measure"/>
-                <field name="adt_actual_qty" type="measure"/>
+                <!-- <field name="adt_actual_qty" type="measure"/> -->
                 <field name="shipment_information" type="row"/>
             </graph>
         </field>
@@ -65,7 +65,7 @@
                 <field name="adt_type" type="row"/>
                 <field name="state" type="col"/>
                 <field name="adt_total_qty" type="measure"/>
-                <field name="adt_actual_qty" type="measure"/>
+                <!-- <field name="adt_actual_qty" type="measure"/> -->
                 <field name="shipment_information" type="row"/>
             </pivot>
         </field>
@@ -81,7 +81,7 @@
                 <field name="origin"/>
                 <field name="picking_type_id"/>
                 <field name="adt_total_qty" sum="Total API Qty"/>
-                <field name="adt_actual_qty" sum="Total Actual Qty"/>
+                <!-- <field name="adt_actual_qty" sum="Total Actual Qty"/> -->
                 <field name="shipment_information" widget="badge"
                        decoration-warning="shipment_information == 'partial'"
                        decoration-success="shipment_information == 'full_shipment'"/>

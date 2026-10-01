@@ -18,20 +18,22 @@
                         name="handheld_location_code"
                         placeholder="Scan handheld atau ketik kode lokasi"
                         invisible="putaway_status == 'finished'"
+                        readonly="picking_state == 'done'"
                     />
                     <field name="move_line_id" invisible="1"/>
                     <field name="adt_dest_location_id" invisible="1"/>
                     <field name="putaway_status" invisible="1"/>
+                    <field name="picking_state" invisible="1"/>
                     <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
 
                     <field name="original_location_putaway_id" invisible="1"/>
                     <field name="original_confirmation_location_code" invisible="1"/>
-                    <field name="location_putaway_id" context="{'show_location_short_name': True}" readonly="putaway_status == 'finished'" string="Store To"/>
+                    <field name="location_putaway_id" context="{'show_location_short_name': True}" readonly="putaway_status == 'finished' or picking_state == 'done'" string="Store To"/>
                     <field name="quantity" string="Qty Diterima"/>
                     <field
                         name="confirmation_quantity"
                         string="Qty Disimpan"
-                        readonly="putaway_status == 'finished'"
+                        readonly="putaway_status == 'finished' or picking_state == 'done'"
                     />
                 </group>
                 <footer>
@@ -40,7 +42,7 @@
                         string="Save &amp; Confirm"
                         type="object"
                         class="btn-primary"
-                        invisible="putaway_status == 'finished'"
+                        invisible="putaway_status == 'finished' or picking_state == 'done'"
                     />
                     <button
                         name="action_cancel"

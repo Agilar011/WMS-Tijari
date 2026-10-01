@@ -202,10 +202,6 @@
                 
             </xpath>
             
-            <xpath expr="//field[@name='picking_type_id']" position="before">
-                <field name="adt_type" string="Transaction Type"/>
-            </xpath>
-
             <xpath expr="//page[@name='extra']" position="inside">
                 <group>
                     <group name="responsible_info" string="Responsible Information">

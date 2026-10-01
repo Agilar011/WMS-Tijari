@@ -245,6 +245,37 @@ class AcumaticaInvoiceConsignment(models.Model):
             ('location_id', '=', partner_root.id),
         ], limit=1)
 
+    def _check_invoice_consignment_reserved_qty(self, picking, reference):
+        moves = picking.move_ids.filtered(lambda move: move.state not in ('done', 'cancel'))
+        reserved_total = sum(
+            sum(move.move_line_ids.mapped('quantity'))
+            for move in moves
+        )
+        if reserved_total > 0:
+            return
+
+        details = []
+        for move in moves:
+            reserved_qty = sum(move.move_line_ids.mapped('quantity'))
+            details.append(
+                '- %s | Lokasi sumber: %s | Diminta: %s %s | Berhasil dialokasikan: %s %s'
+                % (
+                    move.product_id.display_name,
+                    move.location_id.complete_name,
+                    move.product_uom_qty,
+                    move.product_uom.name,
+                    reserved_qty,
+                    move.product_uom.name,
+                )
+            )
+
+        raise UserError(
+            'Invoice Consignment %s belum bisa diproses karena tidak ada stok yang '
+            'berhasil dialokasikan dari lokasi sumber. Periksa stok tersedia dan '
+            'pastikan stok tidak sedang dialokasikan ke transaksi lain.\n\n%s'
+            % (reference or '-', '\n'.join(details) or '- Tidak ada baris barang.')
+        )
+
     def _find_uom(self, line, product=False):
         Uom = self.env['uom.uom']
         uom = False
@@ -320,18 +351,15 @@ class AcumaticaInvoiceConsignment(models.Model):
                     branch_warehouse = staging_line.adt_Branch if staging_line else False
 
                     warehouse_code = staging_line.adt_Warehouse if staging_line else False
-                    picking_type = first.picking_type_id
-                    if not picking_type or picking_type.is_document_only_api:
-                        picking_type = self.env['stock.picking.type'].resolve_picking_type(
-                            warehouse_code=warehouse_code,
-                            code='outgoing',
-                            operation_category='delivery',
-                            api_acumatica='invoice_consignment',
-                            transaction_key='invoice_consignment',
-                            required=False,
-                        )
+                    picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
+                        target_operation_type='direct_delivery_order',
+                        api_acumatica='invoice_consignment',
+                        document_only=True,
+                        warehouse_code=warehouse_code,
+                        required=False,
+                    )
                     if not picking_type:
-                        raise UserError('Picking type Delivery Orders tidak ditemukan.')
+                        raise UserError('Picking type Direct Delivery Order tidak ditemukan.')
 
                     source_location = self._find_consignment_location(warehouse_code)
                     if not source_location:
@@ -447,6 +475,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                     # and validation from each staging line's source warehouse.
                     picking.action_confirm()
                     picking.action_assign()
+                    self._check_invoice_consignment_reserved_qty(picking, first_reference)
                     validation_action = picking.button_validate()
                     picking._process_document_only_validation_action(validation_action)
 

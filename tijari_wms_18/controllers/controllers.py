@@ -68,6 +68,8 @@ def format_tanggal_indo(dt):
 
 def generate_stok_opname_pdf(stock):
     """Generate the same Berita Acara PDF used by the stock opname print route."""
+    import requests
+
     stock = stock.sudo()
     blank_image = create_blank_image()
 
@@ -128,7 +130,7 @@ def generate_stok_opname_pdf(stock):
             'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_STOCK_OPNAME',
             'outputFormat': 'pdf',
             'parameters': {
-                'reportParameter': [{'name': 'data', 'value': [json.dumps(data)]}],
+                'reportParameter': [{'name': 'data', 'value': [data]}],
             },
         },
     )
