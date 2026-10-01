@@ -5,6 +5,12 @@
         <field name="model">stock.scrap</field>
         <field name="inherit_id" ref="stock.stock_scrap_tree_view"/>
         <field name="arch" type="xml">
+            <xpath expr="//field[@name='name']" position="before">
+                <field name="origin" />
+            </xpath>
+            <xpath expr="//field[@name='name']" position="attributes">
+                <attribute name="string">Seri Dokumen</attribute>
+            </xpath>
             <xpath expr="//field[@name='date_done']" position="before">
                 <field name="scheduled_date" />
             </xpath>
@@ -21,7 +27,7 @@
         <field name="arch" type="xml">
             <xpath expr="//button[@name='action_validate']" position="attributes">
                 <attribute name="invisible">
-                    state == 'done' or availability_state != 'available'
+                    state != 'ready'
                 </attribute>
             </xpath>
             <xpath expr="//button[@name='action_validate']" position="before">
@@ -159,15 +165,16 @@
 
                                 <field name="product_uom_id"/>
 
+                                 <field name="lot_ids" widget="many2many_tags"/>
+
                                 <field name="status"
                                     widget="badge"
                                     decoration-success="status == 'finished'"
                                     decoration-danger="status == 'unfinished'"
                                 />
 
-                                <field name="lot_ids" widget="many2many_tags" optional="hide"/>
 
-                                <field name="location_id" optional="hide"/>
+                                <field name="location_id" widget="location_short_many2one" force_save="1" context="{'show_location_short_name': True}" optional="hide"/>
 
                                 <field name="receipt_move_id" optional="hide"/>
 
@@ -267,7 +274,7 @@
                             <field name="state" optional="hide"/>
                             <field name="lot_id" />
                             <field name="handheld_scan_code" />
-                            <field name="location_id" />
+                            <field name="location_id" widget="location_short_many2one" force_save="1" context="{'show_location_short_name': True}" />
                             <field name="quantity" />
                             <field name="scrapped_qty" />
                             <field name="product_uom_id" />
