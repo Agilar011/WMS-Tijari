@@ -512,7 +512,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
             'owner_id': owner.id if owner else False,
 
             'adt_branch_warehouse': receive.branch_warehouse or False,
-            'adt_actual_qty': self._parse_float(receive.actual_qty),
+            # 'adt_actual_qty': self._parse_float(receive.actual_qty),
             'adt_acumatica_write_date': self._parse_dt(receive.acumatica_write_date),
             'adt_post_period': receive.post_period or False,
             'adt_total_qty': self._parse_float(receive.total_qty),

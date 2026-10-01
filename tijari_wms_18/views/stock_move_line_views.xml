@@ -671,6 +671,7 @@
         <field name="arch" type="xml">
             <xpath expr="//sheet" position="inside">
                 <field name="picking_type_name" invisible="1"/>
+                <field name="putaway_status" invisible="1"/>
             </xpath>
             <xpath expr="//form" position="inside">
                 <footer>
@@ -684,6 +685,11 @@
                         string="Save"
                         class="btn-primary"
                         invisible="picking_type_name == 'Receipts'"/>
+                    <button name="action_delete_picker_line"
+                        confirm="Apakah Anda yakin ingin menghapus data penerimaan ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Putaway"
+                        type="object"
+                        string="Delete"
+                        invisible="picking_type_name != 'Receipts' or state in ['done', 'cancel']"/>
                     <button special="cancel"
                         string="Discard"
                         class="btn-secondary"/>

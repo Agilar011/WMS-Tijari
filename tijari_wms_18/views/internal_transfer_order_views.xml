@@ -32,9 +32,9 @@
         <field name="arch" type="xml">
             <form string="Internal Transfer Order">
                 <header>
-                    <button name="action_ready" string="Set Ready" type="object"
+                    <button name="action_ready" string="Mark As To Do" type="object"
                         class="btn-primary" invisible="state != 'draft'"/>
-                    <button name="action_done" string="Set Done" type="object"
+                    <button name="action_done" string="Validate" type="object"
                         class="btn-primary" invisible="state != 'ready'"/>
                     <button name="action_cancel" string="Cancel" type="object"
                         invisible="state in ('done', 'cancel')"/>
@@ -60,7 +60,7 @@
                         <group>
                             <field name="transaction_type"/>
                             <field name="transfer_type" invisible="1"/>
-                            <field name="adt_transaction_type" string="Tipe Transaksi (API)" readonly="1"
+                            <field name="adt_transaction_type" string="Tipe Transaksi" readonly="1"
                                 invisible="transaction_type == 'intra_warehouse' and intra_transfer_type == 'intra_group_transfer'"/>
                             <field name="partner_id"
                                 string="Warehouse Partner"

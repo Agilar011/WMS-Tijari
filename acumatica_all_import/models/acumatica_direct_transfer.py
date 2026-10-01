@@ -156,29 +156,20 @@ class AcumaticaDirectTransferStaging(models.Model):
                         first.adt_ToWarehouseID,
                         'ToWarehouseID',
                     )
-                    destination_warehouse = (
-                        destination_mapping.odoo_building_id
+                    destination_location = (
+                        destination_mapping.odoo_location_id
                         if destination_mapping else False
                     )
-                    if not destination_warehouse:
+                    if not destination_location:
                         raise UserError(
-                            f'Warehouse tujuan belum ter-mapping untuk '
+                            f'Lokasi tujuan belum ter-mapping untuk '
                             f'ToWarehouseID {first.adt_ToWarehouseID or "-"}.'
-                        )
-                    document_only_location = (
-                        destination_warehouse
-                        ._adt_get_or_create_document_only_location()
-                    )
-                    if not document_only_location:
-                        raise UserError(
-                            f'Lokasi Document Only tidak ditemukan untuk '
-                            f'warehouse {destination_warehouse.code or "-"}.'
                         )
 
                     order, action_state = TransferService.prepare_order(
                         origin,
                         source_location,
-                        document_only_location,
+                        destination_location,
                         'inter_warehouse',
                         self._parse_dt(first.adt_Date),
                         first.adt_note or False,
@@ -186,7 +177,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                         transfer_type='transfer_in',
                         external_ref_in=origin,
                         adt_transaction_type='Vendor Return Document',
-                        document_only=True,
+                        document_only=False,
                     )
                     order.write({
                         'adt_order_type': (

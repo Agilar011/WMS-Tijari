@@ -115,6 +115,89 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         self.env['acumatica.error.transaction']._handle_acumatica_created(self)
         return result
 
+    def _find_consignment_location(self, warehouse_code):
+        """Resolve each detail line's source CONS location like Invoice Consignment."""
+        Location = self.env['stock.location'].sudo()
+        Mapping = self.env['stock.location.acumatica'].sudo()
+        code = (warehouse_code or '').strip()
+        if not code:
+            return Location.browse()
+
+        virtual_root = self.env.ref(
+            'stock.stock_location_locations_virtual', raise_if_not_found=False
+        )
+        if virtual_root:
+            consignment_root = Location.search([
+                ('name', '=', 'Consignment'),
+                ('location_id', '=', virtual_root.id),
+            ], limit=1)
+            consignment_code = code.split('-', 1)[1].strip() if '-' in code else code
+            if consignment_root and consignment_code:
+                location = Location.search([
+                    ('name', '=', consignment_code),
+                    ('location_id', '=', consignment_root.id),
+                    ('is_consignment', '=', True),
+                ], limit=1)
+                if location:
+                    return location
+
+        mapping = Mapping.search([
+            '&', ('active', '=', True),
+            '|', ('code', '=', code), ('name', '=', code),
+        ], limit=1)
+        if mapping.odoo_location_id and (
+            mapping.odoo_location_id.is_consignment
+            or 'CONS' in (mapping.odoo_location_id.complete_name or '').upper()
+        ):
+            return mapping.odoo_location_id
+
+        location = Location.search([
+            ('name', '=', code),
+            ('is_consignment', '=', True),
+        ], limit=1)
+        if location:
+            return location
+
+        building_code = code.split('-', 1)[0].upper()
+        warehouse = self.env['stock.warehouse'].search([
+            ('code', '=', building_code),
+        ], limit=1)
+        if warehouse:
+            cons_root = Location.search([
+                ('name', '=', 'CONS'),
+                ('location_id', '=', warehouse.view_location_id.id),
+            ], limit=1)
+            if cons_root:
+                location = Location.search([
+                    ('name', '=', code),
+                    ('location_id', '=', cons_root.id),
+                    ('is_consignment', '=', True),
+                ], limit=1)
+                if location:
+                    return location
+                if code.upper() in {'CONS', f'{building_code}-CONS'}:
+                    return cons_root
+
+        return Location.browse()
+
+    def _get_credit_memo_consignment_destination_location(self):
+        location = self.env.ref(
+            'tijari_wms_18.stock_location_end_user_consignment',
+            raise_if_not_found=False,
+        )
+        if location:
+            return location
+
+        partner_root = self.env.ref(
+            'stock.stock_location_locations_partner', raise_if_not_found=False
+        )
+        if not partner_root:
+            return self.env['stock.location'].browse()
+        return self.env['stock.location'].sudo().search([
+            ('name', '=', 'End User Consignment'),
+            ('location_id', '=', partner_root.id),
+        ], limit=1)
+
     def _do_import(self):
         """Fungsi utama eksekusi pembuatan dokumen Stock Picking & Stock Move"""
         Picking = self.env['stock.picking']
@@ -152,24 +235,27 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         raise UserError(f"Detail line belum ada untuk header staging ID {first.id}.")
 
                     # Tentukan jenis operasi picking (Operation Type)
-                    picking_type = first.picking_type_id
-                    if not picking_type:
-                        picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
-                            target_operation_type='direct_delivery_order',
-                            api_acumatica='credit_memo_consignment',
-                            document_only=True,
-                        )
+                    warehouse_code = staging_line.adt_Warehouse
+                    picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
+                        target_operation_type='direct_delivery_order',
+                        api_acumatica='credit_memo_consignment',
+                        document_only=True,
+                        warehouse_code=warehouse_code,
+                        required=False,
+                    )
                     if not picking_type:
                         raise UserError(f"Picking type (Operation Type) tidak ditemukan pada header staging ID {first.id}.")
 
-                    source_location = picking_type.default_location_src_id
-                    dest_location = picking_type.default_location_dest_id
+                    source_location = self._find_consignment_location(warehouse_code)
+                    dest_location = self._get_credit_memo_consignment_destination_location()
                     if not source_location:
-                        raise UserError("Lokasi asal belum diatur pada operation type document-only.")
+                        raise UserError(
+                            f'Lokasi CONS tidak ditemukan untuk warehouse {warehouse_code or "-"}.'
+                        )
                     if not dest_location:
-                        raise UserError("Lokasi tujuan belum diatur pada operation type document-only.")
-                    if dest_location.usage == 'customer':
-                        raise UserError("Lokasi tujuan customer hanya boleh dipakai oleh SO Shipment.")
+                        raise UserError(
+                            'Lokasi Partners/End User Consignment tidak ditemukan.'
+                        )
 
 
                     # Definisikan dictionary payload data stock.picking Odoo
@@ -186,8 +272,8 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         # 'adt_branch_warehouse': first.adt_PostPeriod or False,
                         'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
                         'adt_status': first.adt_Status or False,
-                        'adt_is_document_only': True,
-                        # 'adt_type': first.adt_Type or False,
+                        'adt_type': first.adt_Type or 'Credit Memo Consignment',
+                        'adt_is_document_only': False,
                         'adt_external_id': first.adt_id or False,
                     }
 
@@ -228,7 +314,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         qty = self._parse_float(line.adt_Qty)
 
                         # Tentukan lokasi detail per baris barang secara spesifik (jika ada)
-                        line_loc_src = picking.location_id
+                        line_loc_src = self._find_consignment_location(line.adt_Warehouse)
+                        if not line_loc_src:
+                            raise UserError(
+                                f'Lokasi CONS tidak ditemukan untuk warehouse '
+                                f'{line.adt_Warehouse or "-"} pada baris '
+                                f'{line.adt_rowNumber or "-"}.'
+                            )
                         line_loc_dest = picking.location_dest_id
 
                         # Bangun dictionary baris barang tunggal
@@ -258,6 +350,11 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     # Eksekusi pembuatan seluruh Stock Moves secara massal di luar perulangan
                     if moves_to_create:
                         Move.create(moves_to_create)
+
+                    picking.action_confirm()
+                    picking.action_assign()
+                    validation_action = picking.button_validate()
+                    picking._process_document_only_validation_action(validation_action)
 
                     # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
                     first.write({

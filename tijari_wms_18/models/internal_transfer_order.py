@@ -48,8 +48,8 @@ class InternalTransferOrder(models.Model):
             ('inter_warehouse', 'Inter Warehouse'),
             ('intra_warehouse', 'Intra Warehouse'),
         ],
-        string='Transaction Type',
-        default='inter_warehouse',
+        string='Kategori Transfer',
+        default='intra_warehouse',
         tracking=True,
     )
     transfer_type = fields.Selection(
@@ -86,7 +86,7 @@ class InternalTransferOrder(models.Model):
         tracking=True,
     )
     adt_transaction_type = fields.Char(
-        string='Transaction Type (API)',
+        string='Tipe Transaksi',
         tracking=True,
         copy=False,
     )
@@ -148,6 +148,10 @@ class InternalTransferOrder(models.Model):
         comodel_name='stock.location',
         string='Transit Location',
         domain=[('usage', '=', 'transit')],
+        default=lambda self: self.env['stock.location'].search(
+            [('usage', '=', 'transit')],
+            limit=1,
+        ).id,
         tracking=True,
     )
     schedule_date = fields.Datetime(
@@ -1100,7 +1104,7 @@ class InternalTransferOrder(models.Model):
     def _get_picking_adt_type_for_leg(self, leg):
         self.ensure_one()
         if self.transfer_type == 'transfer_in' and self.adt_transaction_type == 'SOTR':
-            return 'SOTR' if leg == 'receipt' else 'Transfer Shipment'
+            return 'Receipt SOTR' if leg == 'receipt' else 'Transfer Shipment'
         return self._get_picking_adt_type()
 
     def _get_move_mapped_location_name(self, leg):

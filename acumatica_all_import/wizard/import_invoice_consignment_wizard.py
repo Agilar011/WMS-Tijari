@@ -556,34 +556,13 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     # HELPERS
     # ---------------------------------------------------------    
     def _search_picking_type(self, header):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type and not config_picking_type.is_document_only_api:
-            return config_picking_type
-
-        PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
-        warehouse_code = header
-        type = False
-
-        print(f"Warehouse Code: {warehouse_code}")
-
-        location = Location.search([
-            ('code', '=', warehouse_code)
-        ])
-
-        print(f"Location: {location}")
-
-        if location:
-            type = PickingType.resolve_picking_type(
-                warehouse_code=warehouse_code,
-                code='outgoing',
-                operation_category='delivery',
-                api_acumatica='invoice_consignment',
-                transaction_key='invoice_consignment',
-                required=False,
-            )
-
-        return type
+        return self.env['stock.picking.type'].resolve_document_only_picking_type(
+            target_operation_type='direct_delivery_order',
+            api_acumatica='invoice_consignment',
+            document_only=True,
+            warehouse_code=header,
+            required=False,
+        )
 
     def _normalize_rows(self, payload):
         print("="*80)
