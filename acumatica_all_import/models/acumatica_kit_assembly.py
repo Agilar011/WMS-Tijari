@@ -94,7 +94,7 @@ class AcumaticaKitAssembly(models.Model):
     config_id = fields.Many2one(
             'acumatica.config',
             string='Konfigurasi',
-            ondelete='cascade',
+            ondelete='set null',
         )
     _sql_constraints = [
         (
@@ -626,7 +626,7 @@ class AcumaticaKitAssemblyLine(models.Model):
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        ondelete='cascade',
+        ondelete='set null',
     )
     sync_date = fields.Datetime(string='Tanggal Sync')
     warehouse_code = fields.Char(string='Warehouse Code')

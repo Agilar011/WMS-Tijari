@@ -34,7 +34,7 @@ class AcumaticaShipmentTransferCompletedStaging(models.Model):
         ('rejected', 'Rejected'), ('error', 'Error'),
     ], string='Status Import', default='staged', index=True)
     import_message = fields.Text(string='Generation Message')
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', required=True, ondelete='cascade', index=True)
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='set null', index=True)
     sync_date = fields.Datetime(string='Tanggal Sync')
 
     _sql_constraints = [

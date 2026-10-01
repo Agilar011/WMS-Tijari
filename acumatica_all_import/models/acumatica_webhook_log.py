@@ -28,10 +28,10 @@ class AcumaticaWebhookLog(models.Model):
         ('processed', 'Processed'),
         ('error', 'Error'),
     ], string='Status', default='pending', readonly=True, index=True)
-    created_count = fields.Integer(string='Created', readonly=True)
+    created_count = fields.Integer(string='Staging Records', readonly=True)
     updated_count = fields.Integer(string='Updated', readonly=True)
-    imported_count = fields.Integer(string='Imported', readonly=True)
-    error_count = fields.Integer(string='Errors', readonly=True)
+    imported_count = fields.Integer(string='Generated to WMS', readonly=True)
+    error_count = fields.Integer(string='WMS Errors', readonly=True)
     line_count = fields.Integer(string='Lines', readonly=True)
     result_message = fields.Text(string='Result Message', readonly=True)
     processed_date = fields.Datetime(string='Processed Date', readonly=True)
@@ -75,7 +75,7 @@ class AcumaticaWebhookLog(models.Model):
 
                 rec.write({
                     'state': 'processed' if not result.get('errors') else 'error',
-                    'created_count': result.get('created', 0),
+                    'created_count': result.get('created', 0) + result.get('updated', 0),
                     'updated_count': result.get('updated', 0),
                     'imported_count': result.get('imported', 0),
                     'error_count': result.get('errors', 0),

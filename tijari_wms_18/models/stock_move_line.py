@@ -40,6 +40,11 @@ class StockMoveLine(models.Model):
         help='Masukkan kode lot, lokasi, atau package dari scanner handheld atau ketik manual.',
         store=False,
     )
+    putaway_scan_code = fields.Char(
+        string='Putaway Scan Code',
+        related='picking_id.putaway_scan_code',
+        readonly=True,
+    )
     confirmation_lot_code = fields.Char(
         string='Confirmation Lot Code',
         help='Scanned / input lot code for confirmation.',
@@ -107,7 +112,9 @@ class StockMoveLine(models.Model):
         readonly=True,
     )
     confirmation_quantity = fields.Float(string='Confirmation Qty')
+    so_confirmation_quantity = fields.Float(string='Qty Dikirim')
     mo_confirmation_quantity = fields.Float(string='Qty Digunakan')
+    quantity_shadow = fields.Float(string='Qty Digunakan')
 
     picking_code = fields.Selection(
         related='picking_id.picking_type_code',
@@ -223,6 +230,15 @@ class StockMoveLine(models.Model):
         default='unfinished',
     )
 
+    status_check = fields.Selection(
+        [
+            ('finished', 'Finished'),
+            ('unfinished', 'Unfinished')
+        ],
+        string='Unpack Status',
+        default='unfinished',
+    )
+
     is_manufacturing = fields.Boolean(
         compute="_compute_is_manufacturing",
     )
@@ -257,10 +273,14 @@ class StockMoveLine(models.Model):
     @api.depends(
         "picking_id.move_line_ids.lot_id",
         "picking_id.move_ids.move_line_ids.lot_id",
+        "move_id.move_line_ids.lot_id",
     )
     def _compute_allowed_matching_lot_ids(self):
         for line in self:
-            line.allowed_matching_lot_ids = line.picking_id.move_line_ids.mapped("lot_id") or line.move_id.move_line_ids.mapped("lot_id")
+            line.allowed_matching_lot_ids = (
+                line.picking_id.move_line_ids.mapped("lot_id")
+                | line.move_id.move_line_ids.mapped("lot_id")
+            )
 
     def _get_owner_quant_domain(self):
         self.ensure_one()
@@ -1302,25 +1322,20 @@ class StockMoveLine(models.Model):
     def action_save_picker_details(self):
         self.ensure_one()
 
-        self._check_picker_quantity_vs_demand()
-        if not self.lot_id:
-            raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
-        if self.quantity == 0:
-            raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+        if (
+            self.picking_id
+            and self.picking_id.picking_type_id.name == 'Receipts'
+        ):
+            self.action_mark_picker_finished()
+        else:
+            self._check_picker_quantity_vs_demand()
+            if not self.lot_id:
+                raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
+            if self.quantity == 0:
+                raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+            self.write({'picker_status': 'finished'})
 
-        self.write({'picker_status': 'finished'})
-
-        return {
-            'type': 'ir.actions.act_window',
-            'name': _('Stock Move'),
-            'res_model': 'stock.move',
-            'res_id': self.move_id.id,
-            'view_mode': 'form',
-            'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_pick_view'
-            ).id,
-            'target': 'new',
-        }
+        return self.move_id.action_open_move_pick()
 
     def action_cancel_picker_details(self):
         self.ensure_one()
@@ -1427,7 +1442,39 @@ class StockMoveLine(models.Model):
             raise UserError("Qty Diambil tidak boleh melebihi Saran Qty")
 
         return comparison
-            
+
+    def action_mark_check_unpack_finished(self):
+        self._validate_before_mark_unpack_finished()
+
+        self.write({'status_check': 'finished'})
+        return {'type': 'ir.actions.act_window_close'}
+
+    def action_mark_check_unpack_unfinished(self):
+        self.write({'status_check': 'unfinished'})
+        return self.move_id.action_open_move_delivery()
+
+    def _validate_before_mark_unpack_finished(self):
+        confirmation_quantity = self.so_confirmation_quantity
+        quantity = self.quantity
+
+        rounding = self.product_uom_id.rounding if self.product_uom_id else 0.01
+        comparison = float_compare(
+            confirmation_quantity,
+            quantity,
+            precision_rounding=rounding,
+        )
+
+        if float_is_zero(
+            confirmation_quantity,
+            precision_rounding=rounding,
+        ):
+            raise UserError(f"Qty Dikirim lot {self.lot_id.name} tidak boleh 0.")
+
+        if comparison > 0:
+            raise UserError("Qty Dikirim tidak boleh melebihi Qty Disimpan")
+
+        return comparison
+                
     def _check_matching_status_pick(self):
         expected_location = self.source_location_id or self.location_id
         if not self.matching_loc_dest_id:
@@ -1464,7 +1511,7 @@ class StockMoveLine(models.Model):
     def action_mark_check_finished_mo(self):
         self._validate_before_mark_finished_mo()
         # match_status = self._get_matching_status_mo()   
-        if self.matching == 'not_match':
+        if self.matching_lot_id != self.lot_id:
             raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
 
         self.write({
@@ -1963,6 +2010,25 @@ class StockMoveLine(models.Model):
             'res_model': 'putaway.move.line.wizard',
             'res_id': wizard.id,
             'view_mode': 'form',
+            'target': 'new',
+        }
+
+    def action_open_putaway_details(self):
+        if not self.exists():
+            return {'type': 'ir.actions.client', 'tag': 'reload'}
+        self.ensure_one()
+        if self.picking_type_name in ('Receipts', 'Receipt Internal'):
+            return self.action_open_putaway_move_line_wizard()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Putaway Details'),
+            'res_model': 'stock.move.line',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.view_move_line_form_inherit_tijari'
+            ).id,
             'target': 'new',
         }
 

@@ -22,7 +22,7 @@ class StockPickingBatch(models.Model):
         string='Product Name',
     )
     putaway_scan_code = fields.Char(
-        string='Kode scan',
+        string='Scan Handheld',
         help='Bisa diisi dari scanner handheld atau diketik manual.',
     )
     allowed_putaway_lot_ids = fields.Many2many(

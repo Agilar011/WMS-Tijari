@@ -25,6 +25,7 @@
     'data': [
         'security/groups.xml',
         'security/ir.model.access.csv',
+        'data/ir_actions_server.xml',
         'data/document_only_picking_type_data.xml',
         'data/stock_location_consignment_data.xml',
         'data/ir.sequence.xml',
@@ -59,8 +60,8 @@
         'views/stock_report_aging_views.xml',
         'views/stock_report_velocity_views.xml',
         'views/stock_report_inherit_inventory.xml',
-        'views/stock_inventory.xml',
         'views/stock_scrap.xml',
+        'views/stock_inventory.xml',
         'views/mrp_production_views.xml',
         'views/templates.xml',
         'views/wms_operations_action.xml',

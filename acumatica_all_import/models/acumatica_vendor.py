@@ -65,7 +65,7 @@ class AcumaticaVendorLine(models.Model):
     config_id = fields.Many2one(
         'acumatica.config',
         string='Konfigurasi',
-        ondelete='cascade',
+        ondelete='set null',
     )
     sync_date = fields.Datetime(string='Tanggal Sync')
 

@@ -82,7 +82,7 @@ class AcumaticaTransferShipmentLine(models.Model):
     )
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='set null')
     sync_date = fields.Datetime(string='Tanggal Sync')
 
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
@@ -447,7 +447,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             'adt_dest_location_id': dest_location.id,
             'scheduled_date': shipment._parse_dt(shipment.scheduled_date),
             'note': shipment.note or shipment.description or False,
-            'adt_actual_qty': shipment._parse_float(shipment.actual_qty),
+            # 'adt_actual_qty': shipment._parse_float(shipment.actual_qty),
             'adt_total_qty': shipment._parse_float(shipment.shipped_qty),
             'adt_status': shipment.status or False,
             'adt_type': 'Transfer Shipment',

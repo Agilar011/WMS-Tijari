@@ -1,6 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <record id="tijari_wms_inherit_mrp_production_list_views" model="ir.ui.view">
+        <field name="name">tijari.wms.inherit.mrp.production.list.views</field>
+        <field name="model">mrp.production</field>
+        <field name="inherit_id" ref="mrp.mrp_production_tree_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='origin']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
+            <xpath expr="//field[@name='name']" position="before">
+                <field name="origin" />
+            </xpath>
+        </field>
+    </record>
+
     <record id="tijari_wms_inherit_mrp_prodction_views" model="ir.ui.view">
         <field name="name">tijari.wms.inherit.mrp.prodction.views</field>
         <field name="model">mrp.production</field>
@@ -8,7 +22,7 @@
         <field name="arch" type="xml">
 
             <xpath expr="//div/h1/field[@name='name']" position="replace">
-                <field name="origin" />
+                <field name="origin" placeholder="No. Dokumen" invisible="not id"/>
             </xpath>
 
             <xpath expr="//label[@name='bom_label']" position="attributes">
@@ -16,6 +30,10 @@
             </xpath>
 
             <xpath expr="//div[@name='bom_div']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <xpath expr="//button[@name='action_generate_serial']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
 
@@ -38,7 +56,7 @@
             </xpath>
 
             <xpath expr="//field[@name='user_id']" position="before">
-                <field name="name" string="Seri Dokumen" />
+                <field name="name" string="Seri Dokumen" readonly="1" force_save="1" />
             </xpath>
 
             <xpath expr="//page[@name='miscellaneous']" position="after">

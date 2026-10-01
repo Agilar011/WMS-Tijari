@@ -1225,10 +1225,13 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_Warehouse",
         )
         document_only = self._bool_value(item, "DocumentOnly", "adt_DocumentOnly")
-        picking_type = self._search_outbound_pick_picking_type(
+        picking_type = self._search_picking_type(
             warehouse_code,
-            document_only=document_only,
+            "outgoing",
+            document_only=True,
             api_acumatica="invoice_consignment",
+            target_operation_type="direct_delivery_order",
+            operation_category="delivery",
         )
         vals["picking_type_id"] = picking_type.id if picking_type else False
         vals["adt_DocumentOnly"] = document_only

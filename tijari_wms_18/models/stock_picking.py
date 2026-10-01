@@ -221,7 +221,7 @@ class StockPicking(models.Model):
     putaway_product_id = fields.Many2one(
         'product.product', string="Product Name")
     putaway_scan_code = fields.Char(
-        string="Kode scan",
+        string="Scan Handheld",
         help="Bisa diisi dari scanner handheld atau diketik manual.",
     )
     allowed_putaway_lot_ids = fields.Many2many(
@@ -267,7 +267,7 @@ class StockPicking(models.Model):
         string="Product Name",
     )
     picker_scan_code = fields.Char(
-        string="Kode scan",
+        string="Scan Handheld",
         help="Bisa diisi dari scanner handheld atau diketik manual.",
     )
     allowed_picker_lot_ids = fields.Many2many(
@@ -318,7 +318,7 @@ class StockPicking(models.Model):
     )
 
     package_scan_code = fields.Char(
-        string="Kode Scan Package",
+        string="Scan Handheld",
         help="Masukkan kode package dari scanner handheld atau ketik manual.",
         store=False,
     )
@@ -362,9 +362,10 @@ class StockPicking(models.Model):
 
     def _sync_adt_quantities_from_moves(self):
         for picking in self:
+                
             picking.update({
-                'adt_total_qty': sum(picking.move_ids.mapped('product_uom_qty')),
-                'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
+                'adt_total_qty': sum(picking.move_ids.mapped('product_uom_qty'))
+                # 'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
             })
 
     @api.depends("package_level_ids")
@@ -2140,12 +2141,12 @@ class StockPicking(models.Model):
         return True
     
 
-    @api.onchange("state")
-    def _onchange_state_update_wms_state(self):
-        for picking in self:
-            if picking.state == 'done':
-                continue
-            picking.wms_state = picking.state        
+    # @api.onchange("state")
+    # def _onchange_state_update_wms_state(self):
+    #     for picking in self:
+    #         if picking.state == 'done':
+    #             continue
+    #         picking.wms_state = picking.state        
 
 
     def _format_datetime(self, dt):
@@ -2358,7 +2359,15 @@ class StockPicking(models.Model):
         for picking in transfer_in_receipt_pickings:
             picking.internal_transfer_order_id._prepare_transfer_in_receipt(picking)
 
-        res = super().action_assign()
+        bad_stock_pickings = self.filtered(
+            lambda picking: picking._is_manual_bad_stock_pick()
+        )
+        pickings_to_assign = self - bad_stock_pickings
+        res = (
+            super(StockPicking, pickings_to_assign).action_assign()
+            if pickings_to_assign
+            else True
+        )
 
         for picking in self:
             is_transfer_in_receipt = bool(
@@ -2428,13 +2437,25 @@ class StockPicking(models.Model):
         return res
 
     def action_mark_todo_and_check_availability(self):
-        
         to_confirm = self.filtered(lambda picking: picking.state == 'draft')
         if to_confirm:
             to_confirm.action_confirm()
-            to_confirm.action_assign()
+            pickings_to_assign = to_confirm.filtered(
+                lambda picking: not picking._is_manual_bad_stock_pick()
+            )
+            if pickings_to_assign:
+                pickings_to_assign.action_assign()
 
         return True
+
+    def _is_manual_bad_stock_pick(self):
+        self.ensure_one()
+        order = self.internal_transfer_order_id
+        return bool(
+            order
+            and self.internal_transfer_leg == 'pick'
+            and order._is_bad_stock_destination()
+        )
 
     def action_confirm_shipment(self):
         self.ensure_one()
@@ -2498,6 +2519,10 @@ class StockPicking(models.Model):
             picking._set_document_only_done_quantities()
 
         for picking in self:
+            # update actual qty
+            picking.update({
+                'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
+            })
             if picking.adt_type == 'Toko Pegang DO':
                 if not picking.owner_id:
                     raise UserError(_("Owner is required for Toko Pegang DO."))
@@ -2510,12 +2535,14 @@ class StockPicking(models.Model):
                 picking._check_validate_requirements()
                 picking._check_pick_quantity_vs_demand()
                 picking._check_pick_confirmation_quantity()
+                picking._apply_confirmation_qty_to_quantity_pick()
 
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
 
             if picking.picking_type_id.name in ('Delivery Orders'):
                 picking._check_validate_delivery_requirements()
+                picking._apply_confirmation_qty_to_quantity_delivery()
 
             # Storage validation only depends on putaway completion. It does
             # not use the receipt/picker status checks.
@@ -2603,16 +2630,13 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-            if "Pick" in (rec.picking_type_name or ""):
+            if "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
                 for move in rec.move_ids:
                     confirmation_qty = move.confirmation_quantity
 
-                    move.quantity_shadow = move.quantity
-                    move.quantity = confirmation_qty
                     for dest_move in move.move_dest_ids:
                         dest_move.write({
                             'product_uom_qty': confirmation_qty,
-                            'quantity': confirmation_qty
                         })
             
             elif 'Pack' in (rec.picking_type_name or ""):
@@ -2630,15 +2654,11 @@ class StockPicking(models.Model):
 
             # if rec.picking_type_name in ("Delivery Orders"):
             #     for move in rec.move_ids:
-            #         confirmation_qty = move.so_confirmation_quantity
+            #         for line in move.filtered_unpack_line_ids:
+            #             confirmation_qty = line.so_confirmation_quantity
 
-            #         move.quantity_shadow = move.quantity
-            #         move.quantity = confirmation_qty
-            #         for dest_move in move.move_dest_ids:
-            #             dest_move.write({
-            #                 'product_uom_qty': confirmation_qty,
-            #                 'quantity': confirmation_qty
-            #             })
+            #             line.quantity_shadow = line.quantity
+            #             line.quantity = confirmation_qty
 
             if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
                 rec.wms_state = 'waiting_response'
@@ -2670,7 +2690,13 @@ class StockPicking(models.Model):
                 ("origin", "ilike", rec.origin or rec.name),
                 ("picking_type_id.code", "=", "internal"),
             ], limit=1)
-            total_qty = sum(rec.move_ids.move_line_ids.mapped("quantity"))
+
+            total_qty = (
+            sum(rec.move_ids.move_line_ids.mapped('confirmation_quantity')) 
+                if "Pick" in (rec.picking_type_name or "") 
+                else sum(rec.move_ids.move_line_ids.mapped('quantity'))
+            )
+
             rec.write({
                 'adt_total_qty': total_qty
             })
@@ -2694,6 +2720,22 @@ class StockPicking(models.Model):
 
         return res
 
+    def _apply_confirmation_qty_to_quantity_pick(self):
+        for move in self.move_ids:
+            for line in move.move_line_ids:
+                confirmation_qty = line.confirmation_quantity
+
+                line.quantity_shadow = line.quantity
+                line.quantity = confirmation_qty
+
+    def _apply_confirmation_qty_to_quantity_delivery(self):
+        for move in self.move_ids:
+            for line in move.filtered_unpack_line_ids:
+                confirmation_qty = line.so_confirmation_quantity
+
+                line.quantity_shadow = line.quantity
+                line.quantity = confirmation_qty
+                
     def _check_pick_quantity_vs_demand(self):
         for picking in self:
             has_discrepancy = False
@@ -3112,71 +3154,7 @@ class StockPicking(models.Model):
 
         self.action_confirm_shipment()   
 
-    def action_get_transfer_shipment_completed_staging(self):
-        self.ensure_one()
-        if self.adt_type != 'Transfer Shipment':
-            raise UserError(_('Shipment Transfer Completed staging hanya tersedia untuk Transfer Shipment.'))
-
-        staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
-            [('shipment_nbr', '=', self.origin)], limit=1,
-        )
-        if not staging_data:
-            return {
-                'type': 'ir.actions.client',
-                'tag': 'display_notification',
-                'params': {
-                    'title': 'Gagal Melakukan Update',
-                    'message': f'Staging shipment {self.origin} tidak ditemukan.',
-                    'type': 'warning',
-                    'sticky': False,
-                }
-            }
-
-        staging_data_line = staging_data.line_ids
-        for move in self.move_ids:
-            # In transfer staging, Inventory Number is stored on the header;
-            # detail lines carry the quantities.
-            staging_lines_for_product = (
-                staging_data_line
-                if staging_data.inventory_nbr == move.product_id.default_code
-                else staging_data_line.browse()
-            )
-            staging_qty = sum(staging_lines_for_product.mapped('line_quantity'))
-
-            if not staging_qty:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Gagal Melakukan Update',
-                        'message': f'Quantity {move.product_id.display_name} yang diupdate tidak memiliki quantity',
-                        'type': 'warning',
-                        'sticky': False,
-                    }
-                }
-
-            if float_compare(
-                staging_qty,
-                move.quantity,
-                precision_rounding=move.product_uom.rounding,
-            ) != 0:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Gagal Melakukan Update',
-                        'message': f'Quantity staging {staging_qty} untuk {move.product_id.display_name} harus sama dengan quantity dokumen {move.quantity}. Gunakan Complete Shipment Manually dan lampirkan dokumen pendukung untuk melanjutkan.',
-                        'type': 'warning',
-                        'sticky': False,
-                    }
-                }
-
-            move.shipped_qty = staging_qty
-
-        self.shipment_information = 'full_shipment'
-        self.action_confirm_shipment()
-
-    def action_confirm_shipment_manually(self):
+    def action_complete_transfer_shipment(self):
         self.ensure_one()
         if not (
             self.internal_transfer_order_id
@@ -3185,12 +3163,14 @@ class StockPicking(models.Model):
             and self.adt_type == 'Transfer Shipment'
             and self.wms_state == 'waiting_response'
         ):
-            raise UserError(_('Manual shipment completion is only available for a Transfer Shipment ITO delivery waiting for shipment.'))
+            raise UserError(_('Shipment completion is only available for a Transfer Shipment ITO delivery waiting for shipment.'))
 
         staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
             [('shipment_nbr', '=', self.origin)], limit=1,
         )
-        has_staging_quantity_difference = not staging_data
+
+        staging_quantities = {}
+        staging_matches_document = bool(staging_data)
         for move in self.move_ids:
             staging_lines = (
                 staging_data.line_ids
@@ -3198,15 +3178,21 @@ class StockPicking(models.Model):
                 else self.env['acumatica.shipment.transfer.completed.staging.line'].browse()
             )
             staging_qty = sum(staging_lines.mapped('line_quantity'))
+            staging_quantities[move.id] = staging_qty
             if not staging_qty or float_compare(
                 staging_qty,
                 move.quantity,
                 precision_rounding=move.product_uom.rounding,
             ) != 0:
-                has_staging_quantity_difference = True
-                break
+                staging_matches_document = False
 
-        if has_staging_quantity_difference and not self.attachment_ids:
+        if staging_matches_document:
+            for move in self.move_ids:
+                move.shipped_qty = staging_quantities[move.id]
+            self.shipment_information = 'full_shipment'
+            return self.action_confirm_shipment()
+
+        if not self.attachment_ids:
             raise UserError(_(
                 'Lampiran wajib diisi karena quantity staging berbeda dari quantity dokumen.'
             ))
@@ -3224,6 +3210,13 @@ class StockPicking(models.Model):
 
         self.shipment_information = 'full_shipment' if all_match else 'partial'
         return self.action_confirm_shipment()
+
+    # Keep existing RPC entrypoints compatible while the UI uses one button.
+    def action_get_transfer_shipment_completed_staging(self):
+        return self.action_complete_transfer_shipment()
+
+    def action_confirm_shipment_manually(self):
+        return self.action_complete_transfer_shipment()
 
     def action_fetch_actual_qty(self):
         self.ensure_one()
@@ -3328,8 +3321,6 @@ class StockPicking(models.Model):
             self._prepare_picking_default_values()
         )
 
-        new_picking.name = f"Return of {self.picking_id.origin or self.picking_id.name}"
-
         new_picking.user_id = False
 
         new_picking.message_post_with_source(
@@ -3357,6 +3348,8 @@ class StockPicking(models.Model):
         if not self.env.context.get('return_from_actual_qty'):
             new_picking.action_confirm()
             new_picking.action_assign()
+
+        new_picking.origin = f"Return of {self.picking_id.origin if self.picking_id.origin else self.picking_id.name}"
 
         return new_picking
 

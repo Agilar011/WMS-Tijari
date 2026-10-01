@@ -74,7 +74,7 @@ class AcumaticaIssueLine(models.Model):
     odoo_picking_id = fields.Many2one('stock.picking', string='Document Reference')
     selected = fields.Boolean(string='Pilih', default=True)
 
-    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='cascade')
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='set null')
     sync_date = fields.Datetime(string='Tanggal Sync')
     exists_in_odoo = fields.Boolean(string='Sudah Ada di Odoo', compute='_compute_exists_in_odoo')
 
@@ -222,7 +222,7 @@ class AcumaticaIssueLine(models.Model):
 
                     'adt_receipt_nbr': first.reference_nbr or False,
                     'adt_branch_warehouse': first.branch_warehouse or False,
-                    'adt_actual_qty': self._parse_int(first.actual_qty),
+                    # 'adt_actual_qty': self._parse_int(first.actual_qty),
                     'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
                     'adt_post_period': first.post_period or False,
                     'adt_total_qty': self._parse_int(first.total_qty),

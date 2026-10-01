@@ -32,7 +32,7 @@ class PutawayMoveLineWizard(models.TransientModel):
         readonly=True,
     )
     handheld_location_code = fields.Char(
-        string='Kode Lokasi Handheld',
+        string='Scan Handheld',
         help='Masukkan kode lokasi dari scanner handheld atau ketik manual.',
     )
     original_location_putaway_id = fields.Many2one(
