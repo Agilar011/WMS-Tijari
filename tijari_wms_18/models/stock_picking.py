@@ -1326,7 +1326,7 @@ class StockPicking(models.Model):
                 move_lines_to_pack=move_lines_to_pack
             )
 
-        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage'):
+        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'):
             self._check_putaway_status_requirements()
 
         move_line_ids = self._package_move_lines(
@@ -1464,7 +1464,7 @@ class StockPicking(models.Model):
 
         self._adt_apply_dest_location_to_move_lines()
         self.filtered(
-            lambda picking: picking.picking_type_id.name in ('Receipts', 'Storage')
+            lambda picking: picking.picking_type_id.name in ('Receipts', 'Storage', 'Store Finished Product')
         )._remove_qty_move_line()
 
         # Transfer IN: ketika receipt di-Mark as Todo, otomatis
@@ -2546,7 +2546,7 @@ class StockPicking(models.Model):
 
             # Storage validation only depends on putaway completion. It does
             # not use the receipt/picker status checks.
-            if picking.picking_type_id.name == 'Storage':
+            if picking.picking_type_id.name in ('Storage', 'Store Finished Product'):
                 picking._check_putaway_status_requirements()
                 # Refresh Odoo's picked quantity flag from the Storage
                 # putaway status before its standard backorder check runs.
@@ -2559,7 +2559,7 @@ class StockPicking(models.Model):
                 picking._check_putaway_status_requirements()
                 picking._check_picker_status_requirements()
 
-            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal', 'Storage'):
+            if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'):
                 print(f"Run validate all except pick and receipt")
                 # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
                 for move in picking.move_ids:
@@ -2593,7 +2593,7 @@ class StockPicking(models.Model):
                 continue
             print(rec.picking_type_id.name)
             is_receipt_putaway = (
-                rec.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage')
+                rec.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product')
                 and not rec.is_ito_internal_transfer
             )
             for line in rec.move_line_ids:
@@ -2606,7 +2606,7 @@ class StockPicking(models.Model):
                 
             if is_receipt_putaway:
                 rec._check_putaway_status_requirements()
-                if rec.picking_type_id.name != 'Storage':
+                if rec.picking_type_id.name not in ('Storage', 'Store Finished Product'):
                     rec._check_picker_status_requirements()
             else:
                 rec._check_validate_requirements()
@@ -2630,7 +2630,7 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-            if "Pick" in (rec.picking_type_name or ""):
+            if "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
                 for move in rec.move_ids:
                     confirmation_qty = move.confirmation_quantity
 
@@ -2836,7 +2836,7 @@ class StockPicking(models.Model):
     
     def _check_putaway_quantity_vs_demand(self):
         for picking in self:
-            if picking.picking_type_id.name not in ('Receipts', 'Receipt Internal', 'Storage'):
+            if picking.picking_type_id.name not in ('Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'):
                 continue
 
             has_discrepancy = False
@@ -2877,7 +2877,7 @@ class StockPicking(models.Model):
         # of whether the configured operation type still has a legacy name.
         if self.is_ito_internal_transfer:
             return
-        if self.picking_type_id.name == 'Storage':
+        if self.picking_type_id.name in ('Storage', 'Store Finished Product'):
             return self._check_putaway_status_requirements()
         if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Internal Transfers'):
             return self._check_putaway_status_requirements() and self._check_picker_status_requirements()

@@ -31,7 +31,7 @@
                         type="object"
                         string="Validate Lot"
                         class="btn-warning"
-                        invisible="not display_assign_serial or picking_type_name in ['Receipts', 'Receipt Internal', 'Storage']"/>
+                        invisible="not display_assign_serial or picking_type_name in ['Receipts', 'Receipt Internal', 'Storage','Store Finished Product']"/>
                 </span>
             </xpath>
 
@@ -79,14 +79,14 @@
 
             </xpath>
 
-            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']">
+            <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='lot_ids']" position="after" invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage','Store Finished Product']">
                     <field name="adt_type" column_invisible="1"/>
                     <field name="owner_id" column_invisible="parent.adt_type != 'Toko Pegang DO'"/>
                     <!-- <field name="adt_dest_location_id" string="Final Location"/> -->
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
-                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']"
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage','Store Finished Product']"
                         title="Print Lot"/>
                     <!-- <button
                         name="action_open_note_wizard"
@@ -110,9 +110,9 @@
             </xpath>
 
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='quantity']" position="replace">
-                <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']"/>
+                <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"/>
                 <field name="confirmation_quantity" string="Qty Diambil" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
                 <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
             </xpath>
@@ -2190,14 +2190,21 @@
                                 widget="adt_scan_lot_button"
                                 string="Scan Lot"
                                 readonly="1"
-                                invisible="matching == 'match'"/>
+                                force_save="1"
+                                column_invisible="1"/>
+                        <field name="handheld_scan_code"
+                            widget="adt_handheld_scan_code"
+                            string="Scan Handheld"
+                            placeholder="Scan handheld: lot atau lokasi"
+                            invisible="mo_status == 'finished'"/>
                         <field name="lot_name" readonly="1" force_save="1" column_invisible="1"/>
                         <field name="matching_lot_id" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
                         <field name="matching_loc_dest_id" column_invisible="True"/>
                         <field name="matching" string="Status LOT"
                                 decoration-success="matching == 'match'"
                                 decoration-danger="matching == 'not_match'"
-                                widget="badge"/>
+                                widget="badge"
+                                column_invisible="1"/>
                         <field
                             name="result_package_id"
                             string="Destination Package"
@@ -2225,7 +2232,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Rollback"
-                                invisible="mo_status == 'unfinished' or parent.state not in ['confirmed']"/>
+                                invisible="mo_status == 'unfinished' or parent.state in ['done','cancel']"/>
                         
                     </list>
                     <kanban class="o_kanban_mobile">
@@ -2633,7 +2640,7 @@
                 >
                     <list editable="bottom" create="0" delete="0" open_form_view="1" default_order="putaway_status desc, id">
                         <field name="product_id" column_invisible="1" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
-                        <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="parent.picking_type_name == 'Storage'"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="parent.picking_type_name in ('Storage','Store Finished Product')"/>
                         <field name="adt_dest_location_id" column_invisible="1"/>
                         <field name="location_dest_id" column_invisible="1"/>
                         <field
@@ -2641,48 +2648,49 @@
                             domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"
                             readonly="1" force_save="1"
                             string="Packages"
-                            column_invisible="parent.picking_type_name == 'Storage'"/>
+                            column_invisible="parent.picking_type_name in ('Storage','Store Finished Product')"/>
                         <field name="location_id"
                             string="Pick From"
                             widget="location_short_many2one"
                             readonly="1"
                             force_save="1"
                             context="{'show_location_short_name': True}"
-                            column_invisible="parent.picking_type_name != 'Storage'"/>
+                            column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                         <field name="confirmation_lot_code"
                             widget="adt_scan_lot_button"
                             string=" "
                             readonly="1"
                             invisible="putaway_status == 'finished'"
-                            column_invisible="parent.picking_type_name != 'Storage'"/>
+                            column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                         <field name="handheld_scan_code"
                             widget="adt_handheld_scan_code"
                             string="Scan Handheld"
                             placeholder="Scan handheld: lot atau lokasi"
                             invisible="putaway_status == 'finished'"
-                            column_invisible="parent.picking_type_name != 'Storage'"/>
-                        <!-- <field name="putaway_scan_code"
+
+                            column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
+                        <field name="putaway_scan_code"
                             string="Putaway Scan Code"
-                            readonly="1"/> -->
+                            readonly="1"/>
                         <field name="lot_id"
                             string="Lot/Serial Number"
                             readonly="1"
-                            column_invisible="parent.picking_type_name != 'Storage'"/>
+                            column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                         <field name="confirmation_location_code"
                             widget="adt_scan_location_button"
                             string=" "
                             readonly="1"
                             invisible="putaway_status == 'finished'"
-                            column_invisible="parent.picking_type_name != 'Storage'"/>
+                            column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                         <field name="location_putaway_id"
                             string="Store To"
                             context="{'show_location_short_name': True}"
                             domain="[('id', 'child_of', adt_dest_location_id)]"/>
                         <field name="matching_lot_id"
                             string="Confirmation Lot"
-                            column_invisible="parent.picking_type_name != 'Storage'"/>
-                        <field name="quantity" readonly="1" string="Qty Diterima" column_invisible="parent.picking_type_name == 'Storage'"/>
-                        <field name="quantity" readonly="1" string="Qty Dipindah" column_invisible="parent.picking_type_name != 'Storage'"/>
+                            column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
+                        <field name="quantity" readonly="1" string="Qty Diterima" column_invisible="parent.picking_type_name == ('Storage','Store Finished Product')"/>
+                        <field name="quantity" readonly="1" string="Qty Dipindah" column_invisible="parent.picking_type_name != ('Storage','Store Finished Product')"/>
                         <field name="confirmation_quantity" string="Qty Disimpan" readonly="putaway_status == 'finished'" force_save="1"/>
                         <field name="product_uom_id" readonly="1" string="UoM"/>
                         <field name="putaway_status" string="Status"
@@ -2723,7 +2731,7 @@
                                     <div class="o_wms_operation_product">
                                         <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
                                     </div>
-                                    <div invisible="parent.picking_type_name != 'Storage'">
+                                    <div invisible="parent.picking_type_name not in ('Storage','Store Finished Product')">
                                         <div invisible="putaway_status == 'finished'">
                                             <field name="confirmation_lot_code" widget="adt_scan_lot_button" readonly="1"/>
                                         </div>
@@ -2765,7 +2773,7 @@
                                                 invisible="putaway_status == 'unfinished' or parent.state == 'done'"/>
                                         </div>
                                     </div>
-                                    <div invisible="parent.picking_type_name == 'Storage'">
+                                    <div invisible="parent.picking_type_name in ('Storage','Store Finished Product')">
                                         <div class="text-muted" invisible="not lot_id">
                                             <strong>Lot/Serial Number: </strong>
                                             <field name="lot_id"/>

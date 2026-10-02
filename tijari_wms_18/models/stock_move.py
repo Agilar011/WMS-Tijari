@@ -436,7 +436,7 @@ class StockMove(models.Model):
         'mo_confirmation_quantity')
     def _compute_difference_quantity(self):
         for move in self:
-            if move.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage']:
+            if move.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']:
                 total_confirmation_quantity = move.confirmation_quantity
                 difference = move.product_uom_qty - total_confirmation_quantity
             elif move.picking_type_name in ['Pick', 'Pick Internal', 'Pick Components']:
@@ -1017,7 +1017,7 @@ class StockMove(models.Model):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': _('Stock move') if self.picking_type_name == 'Storage' else _('Putaway'),
+            'name': _('Stock move') if self.picking_type_name in ('Storage', 'Store Finished Product') else _('Putaway'),
             'res_model': 'stock.move',
             'res_id': self.id,
             'view_mode': 'form',
@@ -1234,7 +1234,7 @@ class StockMove(models.Model):
 
         base_dest_location = (
             picking.adt_dest_location_id
-            if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Direct Receipt']
+            if picking and picking.adt_dest_location_id and picking.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Direct Receipt']
             else self.adt_dest_location_id
         )
 
