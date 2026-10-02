@@ -8,11 +8,24 @@ import { SMLX2ManyField } from "@stock/fields/stock_move_line_x2_many_field";
 patch(SMLX2ManyField.prototype, {
     
     async onAdd({ context, editable } = {}) {
+        console.log(
+            "=== SML ADD LINE ===",
+            this.props.record.data
+        );
+
+        console.log(
+            "=== CONTEXT ===",
+            this.props.context
+        );
         const pickingTypeName = this.props.record.data.picking_type_name || "";
         const isPickOperation = ["Pick", "Pick Internal", "Pick Components"].includes(
             pickingTypeName
         );
-        if (!this.props.record.data.show_quant && !isPickOperation) {
+        const isManufacturing = !!this.props.context.active_mo_id;
+
+        if (!this.props.record.data.show_quant &&
+            !isPickOperation &&
+            !isManufacturing) {
             return super.onAdd(...arguments);
         }
 
