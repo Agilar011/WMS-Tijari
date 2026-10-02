@@ -174,12 +174,12 @@
                     string="Quantity"
                     readonly="state in ('done', 'cancel') and is_locked"
                     force_save="1"
-                    column_invisible="context.get('picking_type_name') not in ['Receipts', 'Receipt Internal', 'Storage']"/>
+                    column_invisible="context.get('picking_type_name') not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"/>
                 <field name="quantity"
                     string="Quantity"
                     readonly="state in ('done', 'cancel') and is_locked"
                     force_save="1"
-                    column_invisible="context.get('picking_type_name') in ['Receipts', 'Receipt Internal', 'Storage']"/>
+                    column_invisible="context.get('picking_type_name') in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"/>
             </xpath>
 
         </field>
@@ -305,6 +305,7 @@
                         'Pick' not in (picking_type_name or '')
                         and 'Pack' not in (picking_type_name or '')
                         and 'Storage' not in (picking_type_name or '')
+                        and 'Store Finished Product' not in (picking_type_name or '')
                     )">
 
                         <label for="handheld_scan_code"
@@ -321,7 +322,7 @@
 
                     <!-- Storage confirmations are shown in the shared form
                          used by both administrators and Group Operation. -->
-                    <group invisible="is_manufacturing or picking_type_name != 'Storage'">
+                    <group invisible="is_manufacturing or picking_type_name not in ('Storage', 'Store Finished Product')">
 
                         <label for="matching_lot_id" string="Confirmation Lot"/>
 
@@ -333,7 +334,7 @@
 
                     </group>
 
-                    <group invisible="is_manufacturing or picking_type_name != 'Storage'">
+                    <group invisible="is_manufacturing or picking_type_name not in ('Storage', 'Store Finished Product')">
 
                         <label for="location_putaway_id" string="Confirmation Location"/>
 

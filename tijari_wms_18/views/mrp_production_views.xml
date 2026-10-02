@@ -90,6 +90,8 @@
                     'active_mo_id': id
                 }</attribute>
                 <attribute name="mode">list,kanban</attribute>
+                <attribute name="widget">stock_move_one2many</attribute>
+                <attribute name="readonly">state == 'cancel' or (state == 'done' and is_locked)</attribute>
             </xpath>
 
             <xpath expr="//field[@name='move_raw_ids']/list" position="after">

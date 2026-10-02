@@ -51,7 +51,7 @@
             </xpath>
 
             <xpath expr="//page[@name='page_operations']" position="after">
-                <page string="Putaway" name="page_putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']">
+                <page string="Putaway" name="page_putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']">
                     <group>
                         <field name="scan_product_button"
                             widget="adt_scan_putaway_product_button"
@@ -190,7 +190,7 @@
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
-                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage']"
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"
                         title="Print Lot"/>
                     <button
                         name="action_open_note_wizard"
@@ -202,7 +202,7 @@
                         type="object"
                         string="To Process"
                         title="Open Picker"
-                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage'] or state == 'draft'"/>
+                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'] or state == 'draft'"/>
                     <button name="action_open_move_lines"
                         type="object"
                         icon="fa-list"
@@ -258,7 +258,7 @@
                     Receipt only -->
                 <field name="putaway_responsible_ids"
                     widget="many2many_avatar_user"
-                    invisible="operation_type_name not in ['Receipts', 'Receipt Internal', 'Storage']"/>
+                    invisible="operation_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"/>
 
             </xpath>
 
