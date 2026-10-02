@@ -1055,6 +1055,7 @@ class WmsApiController(http.Controller):
 
         list_dikonsumsi = []
         list_tidak_digunakan = []
+        detail_diff = []
 
         for line in mrp.move_raw_ids:
             lot_names = ", ".join(line.lot_ids.mapped('name')) if line.lot_ids else ''
@@ -1078,6 +1079,15 @@ class WmsApiController(http.Controller):
                 })
         data['detail_konsumsi'] = list_dikonsumsi
         data['detail_sisa'] = list_tidak_digunakan
+        for diff in mrp.move_raw_ids:
+            if diff.difference_note:
+                obj = {
+                    'name': diff.product_id.default_code or '',
+                    'uom': diff.difference_note,
+                    'ket': ''
+                }
+                detail_diff.append(obj)
+        data['detail_diff'] = detail_diff
 
         data = json.dumps(data)
 
