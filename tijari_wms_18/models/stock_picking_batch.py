@@ -334,7 +334,7 @@ class StockPickingBatch(models.Model):
                     and (line.lot_id or line.lot_name)
                 )
             )
-            if batch.picking_type_name in ('Receipts', 'Receipt Internal', 'Storage'):
+            if batch.picking_type_name in ('Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'):
                 unfinished_lines = move_lines.filtered(
                     lambda line: line.putaway_status != 'finished'
                 )

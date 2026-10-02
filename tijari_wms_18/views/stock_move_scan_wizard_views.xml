@@ -325,7 +325,7 @@
 		                    </field>
 		                </page>
 
-                <page string="Putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Internal Transfers'] or is_ito_internal_transfer">
+                <page string="Putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Internal Transfers'] or is_ito_internal_transfer">
 	                    <group>
                         <field name="scan_product_button"
                             widget="adt_scan_putaway_product_button"
@@ -358,23 +358,23 @@
                         <list editable="bottom" create="0" delete="0" link="0">
                             <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}" readonly="1"/>
                             <field name="location_dest_id" column_invisible="1"/>
-                            <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
-                            <field name="matching_lot_id" string="Scanned Lot" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
+                            <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
+                            <field name="matching_lot_id" string="Scanned Lot" readonly="1" column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                             <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string=" "
                                 readonly="1"
                                 invisible="putaway_status == 'finished'"
-                                column_invisible="parent.picking_type_name != 'Storage'"/>
+                                column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                             <field name="location_putaway_id"
                                 string="Store To"
                                 readonly="putaway_status == 'finished'"
                                 force_save="1"
                                 context="{'show_location_short_name': True}"
-																widget="location_short_many2one"
+								widget="location_short_many2one"
                                 domain="[('id', 'child_of', adt_dest_location_id)]"/>
-                            <field name="quantity" string="Qty Diterima" readonly="1" column_invisible="parent.picking_type_name == 'Storage'"/>
-                            <field name="quantity" string="Qty Dipindah" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
+                            <field name="quantity" string="Qty Diterima" readonly="1" column_invisible="parent.picking_type_name in ('Storage','Store Finished Product')"/>
+                            <field name="quantity" string="Qty Dipindah" readonly="1" column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                             <field name="confirmation_quantity" string="Qty Disimpan" readonly="putaway_status == 'finished'" force_save="1"/>
                             <field name="product_uom_id" readonly="1" string="UoM" invisible="1"/>
                             <field name="matching" column_invisible="1" force_save="1"/>
@@ -413,15 +413,15 @@
                             <field name="location_dest_id" column_invisible="1"/>
                             <field name="putaway_status" column_invisible="1"/>
                             <field name="adt_dest_location_id" column_invisible="1"/>
-															<field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
-                            <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
-                            <field name="matching_lot_id" string="Scanned Lot" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
+							<field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
+                            <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
+                            <field name="matching_lot_id" string="Scanned Lot" readonly="1" column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                             <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string=" "
                                 readonly="1"
                                 invisible="putaway_status == 'finished'"
-                                column_invisible="parent.picking_type_name != 'Storage'"/>
+                                column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                             <field name="location_putaway_id"
                                 string="Store To"
                                 readonly="putaway_status == 'finished'"
@@ -433,8 +433,8 @@
                                 string=" "
                                 readonly="1"
                                 invisible="putaway_status == 'finished'"/>
-                            <field name="quantity" string="Qty Diterima" readonly="1" column_invisible="parent.picking_type_name == 'Storage'"/>
-                            <field name="quantity" string="Qty Dipindah" readonly="1" column_invisible="parent.picking_type_name != 'Storage'"/>
+                            <field name="quantity" string="Qty Diterima" readonly="1" column_invisible="parent.picking_type_name in ('Storage','Store Finished Product')"/>
+                            <field name="quantity" string="Qty Dipindah" readonly="1" column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
                             <field name="confirmation_quantity" string="Qty Disimpan" readonly="putaway_status == 'finished'" force_save="1"/>
                             <field name="product_uom_id" readonly="1" string="UoM"/>
                             <button name="action_mark_putaway_finished"
