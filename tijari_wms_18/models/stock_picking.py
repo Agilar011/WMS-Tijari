@@ -3565,6 +3565,15 @@ class StockRule(models.Model):
                 "origin": picking.origin if picking.origin else picking.name
             })
 
+        if move_to_copy.production_id and not move_to_copy.raw_material_production_id:
+            mapped_destination = (
+                move_to_copy.adt_dest_location_id
+                or self.env["stock.location"].browse(vals.get("location_final_id"))
+                or self.env["stock.location"].browse(vals.get("location_dest_id"))
+            )
+            if mapped_destination:
+                vals["adt_dest_location_id"] = mapped_destination.id
+
         print(f"vals to update: {vals}")
 
         return vals

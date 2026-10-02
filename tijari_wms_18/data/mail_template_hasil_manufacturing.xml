@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="email_template_hasil_manufacturing" model="mail.template">
+        <field name="name">Manufacturing: Hasil Manufacturing</field>
+        <field name="model_id" ref="mrp.model_mrp_production"/>
+        <field name="subject">Hasil Manufacturing - {{ object.origin or object.name }}</field>
+        <field name="body_html" type="html">
+            <div>
+                <p>Yth. Bapak/Ibu,</p>
+                <p>Bersama email ini kami sampaikan hasil manufacturing dengan detail berikut:</p>
+                <ul>
+                    <li><strong>No. Dokumen:</strong> <t t-out="object.origin or object.name or '-'"/></li>
+                    <li><strong>Produk:</strong> <t t-out="object.product_id.display_name or '-'"/></li>
+                    <li><strong>Jumlah:</strong> <t t-out="object.product_qty"/> <t t-out="object.product_uom_id.name or ''"/></li>
+                    <li><strong>Lot/Serial Number:</strong> <t t-out="object.lot_producing_id.name or '-'"/></li>
+                </ul>
+                <p>Dokumen hasil manufacturing terlampir pada email ini.</p>
+                <p>Terima kasih.</p>
+            </div>
+        </field>
+    </record>
+</odoo>

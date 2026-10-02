@@ -30,6 +30,7 @@
         'data/stock_location_consignment_data.xml',
         'data/ir.sequence.xml',
         'data/mail_template_stock_inventory_approval.xml',
+        'data/mail_template_hasil_manufacturing.xml',
         'data/api_data_hub_dashboard.xml',
         'wizard/generate_package_wizard_views.xml',
         'wizard/putaway_move_line_wizard_views.xml',
