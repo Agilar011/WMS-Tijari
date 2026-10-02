@@ -2669,9 +2669,9 @@
                             invisible="putaway_status == 'finished'"
 
                             column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
-                        <field name="putaway_scan_code"
+                        <!-- <field name="putaway_scan_code"
                             string="Putaway Scan Code"
-                            readonly="1"/>
+                            readonly="1"/> -->
                         <field name="lot_id"
                             string="Lot/Serial Number"
                             readonly="1"
