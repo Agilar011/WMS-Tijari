@@ -1178,7 +1178,14 @@ class StockMove(models.Model):
         res = super().create(vals)
         for line in res:
             if not line.adt_dest_location_id:
-                if line.picking_id.adt_dest_location_id:
+                if line.production_id and not line.raw_material_production_id:
+                    line.adt_dest_location_id = (
+                        line.location_final_id
+                        or line.location_dest_id
+                        or line.production_id.location_final_id
+                        or line.production_id.location_dest_id
+                    )
+                elif line.picking_id.adt_dest_location_id:
                     line.adt_dest_location_id = line.picking_id.adt_dest_location_id
                 elif "Pick" in (line.picking_id.picking_type_name or "") or "Pick" in (line.picking_type_id.name or ""):
                     line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_src_id if line.picking_id else line.picking_type_id.default_location_src_id

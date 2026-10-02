@@ -35,6 +35,12 @@
                     type="object"
                     class="btn-primary"
                 />
+                <button
+                    name="action_send_email_hasil_manufacturing"
+                    string="Send Email"
+                    type="object"
+                    class="btn-secondary"
+                />
             </xpath>
 
             <xpath expr="//field[@name='user_id']" position="before">
