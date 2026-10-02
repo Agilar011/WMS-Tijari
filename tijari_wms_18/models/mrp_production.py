@@ -1,5 +1,7 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+import base64
+from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 
 import logging
 _logger = logging.getLogger(__name__)
@@ -110,3 +112,46 @@ class WMSMRPProduction(models.Model):
         action['url'] = '/print/hasil_manufacturing?id=' + str(self.id)
         action['target'] = 'new'
         return action
+
+    def action_send_email_hasil_manufacturing(self):
+        self.ensure_one()
+
+        response = WmsApiController().PrintHasilManufacturing(id=self.id)
+        content_type = response.headers.get('Content-Type', '')
+        if (
+            response.status_code != 200
+            or not response.data
+            or 'application/pdf' not in content_type.lower()
+        ):
+            raise UserError(_('Gagal membuat PDF hasil manufacturing.'))
+
+        attachment = self.env['ir.attachment'].sudo().create({
+            'name': '%s_hasil_manufacturing.pdf' % (self.origin or self.name or 'manufacturing'),
+            'datas': base64.b64encode(response.data).decode('utf-8'),
+            'res_model': self._name,
+            'res_id': self.id,
+            'type': 'binary',
+            'mimetype': 'application/pdf',
+        })
+        template = self.env.ref(
+            'tijari_wms_18.email_template_hasil_manufacturing',
+            raise_if_not_found=False,
+        )
+
+        return {
+            'name': _('Kirim Email Hasil Manufacturing'),
+            'type': 'ir.actions.act_window',
+            'res_model': 'mail.compose.message',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_model': self._name,
+                'default_res_ids': [self.id],
+                'default_use_template': bool(template),
+                'default_template_id': template.id if template else False,
+                'default_composition_mode': 'comment',
+                'default_attachment_ids': [(6, 0, [attachment.id])],
+                'force_email': True,
+                'tijari_hasil_manufacturing_email': True,
+            },
+        }
