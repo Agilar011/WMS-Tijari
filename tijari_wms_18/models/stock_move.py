@@ -173,6 +173,20 @@ class StockMove(models.Model):
         ('unfinished', 'Unfinished'),
     ], string='Status', default='unfinished', compute="_compute_status_check")
 
+    status_check_sequence = fields.Integer(
+        string='Status Sequence',
+        compute='_compute_status_check_sequence',
+        store=True,
+    )
+
+    @api.depends('move_line_ids.status_check')
+    def _compute_status_check_sequence(self):
+        for move in self:
+            lines = move.filtered_unpack_line_ids
+            move.status_check_sequence = 1 if (
+                lines and all(line.status_check == 'finished' for line in lines)
+            ) else 0
+
     @api.depends('move_line_ids.status_check')
     def _compute_status_check(self):
         for move in self:
