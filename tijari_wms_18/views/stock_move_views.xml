@@ -128,6 +128,7 @@
             <form string="Product Note">
                 <group>
                     <field name="product_note" nolabel="1"/>
+                    <field name="difference_note"/>
                 </group>
             </form>
         </field>
