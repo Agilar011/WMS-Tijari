@@ -19,29 +19,30 @@ class WMSMRPProduction(models.Model):
 
     def _prepare_stock_lot_values(self):
         self.ensure_one()
+        product_code = self.product_id.default_code or f"PROD{self.product_id.id}"
+        document_number = self.origin or self.name
+        lot_name = "%s-%s-%s" % (
+            product_code,
+            fields.Date.today().strftime("%m%d%y"),
+            document_number,
+        )
 
-        sequence = self.env["ir.sequence"]
+        return {
+            "product_id": self.product_id.id,
+            "name": lot_name,
+        }
 
-        name = sequence.next_by_code("stock.lot.manufacture")
-
-        while name and self.env["stock.lot"].search([
+    def _set_lot_producing(self):
+        self.ensure_one()
+        lot_values = self._prepare_stock_lot_values()
+        lot = self.env["stock.lot"].search([
             ("product_id", "=", self.product_id.id),
             "|",
             ("company_id", "=", False),
             ("company_id", "=", self.company_id.id),
-            ("name", "=", name),
-        ], limit=1):
-            name = sequence.next_by_code("stock.lot.manufacture")
-
-        if not name:
-            raise UserError(
-                _("Please configure the Manufacture Lot sequence.")
-            )
-
-        return {
-            "product_id": self.product_id.id,
-            "name": name,
-        }
+            ("name", "=", lot_values["name"]),
+        ], limit=1)
+        self.lot_producing_id = lot or self.env["stock.lot"].create(lot_values)
 
     def action_confirm(self):
         res = super().action_confirm()
