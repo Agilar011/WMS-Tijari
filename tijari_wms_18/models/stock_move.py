@@ -53,6 +53,7 @@ class StockMove(models.Model):
         string="Mapped Location",
     )
     product_note = fields.Text(string='Product Note')
+    difference_note = fields.Text(string='difference Note')
     batch_adt_type = fields.Char(
         related='picking_id.adt_type',
         string='Tipe Transaksi',
@@ -434,6 +435,7 @@ class StockMove(models.Model):
         'picking_type_name', 
         'confirmation_quantity', 
         'mo_confirmation_quantity')
+
     def _compute_difference_quantity(self):
         for move in self:
             if move.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']:
@@ -441,12 +443,12 @@ class StockMove(models.Model):
                 difference = move.product_uom_qty - total_confirmation_quantity
             elif move.picking_type_name in ['Pick', 'Pick Internal', 'Pick Components']:
                 total_confirmation_quantity = move.confirmation_quantity
-                total_qty = move.quantity_shadow if move.quantity_shadow > 0.0 else move.quantity
+                total_qty = (move.quantity_shadow if move.quantity_shadow > 0.0 else move.quantity )
                 difference = total_qty - total_confirmation_quantity
             else:
                 if move.raw_material_production_id:
                     total_confirmation_quantity = move.mo_confirmation_quantity
-                    total_qty = move.quantity
+                    total_qty = move.product_uom_qty
                     difference = total_qty - total_confirmation_quantity
                 else:
                     difference = move.product_uom_qty - move.quantity

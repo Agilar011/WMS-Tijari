@@ -890,17 +890,10 @@ class WmsApiController(http.Controller):
     def PrintStokOpname(self, id, **kw):
         blank_image = create_blank_image()
         stock = request.env['stock.inventory'].sudo().browse(int(id))
-        domain = [('location_id', 'in', stock.location_ids.ids)]
-
-        if 'inventory_id' in request.env['stock.quant']._fields:
-            domain.append(('inventory_id', '=', stock.id))
-        elif 'stock_inventory_id' in request.env['stock.quant']._fields:
-            domain.append(('stock_inventory_id', '=', stock.id))
-
-        lines = request.env['stock.quant'].sudo().search(domain)
-
-        if not lines and hasattr(stock, 'quant_ids') and stock.quant_ids:
-            lines = stock.quant_ids
+        lines = request.env['stock.quant'].sudo().search([
+            ('id', 'in', stock.stock_quant_ids.ids),
+            ('current_inventory_id', '=', stock.id),
+        ])
         
         warehouse = request.env['stock.warehouse'].sudo().search([
             ('lot_stock_id', 'in', stock.location_ids.ids)
@@ -1062,6 +1055,7 @@ class WmsApiController(http.Controller):
 
         list_dikonsumsi = []
         list_tidak_digunakan = []
+        detail_diff = []
 
         for line in mrp.move_raw_ids:
             lot_names = ", ".join(line.lot_ids.mapped('name')) if line.lot_ids else ''
@@ -1085,6 +1079,15 @@ class WmsApiController(http.Controller):
                 })
         data['detail_konsumsi'] = list_dikonsumsi
         data['detail_sisa'] = list_tidak_digunakan
+        for diff in mrp.move_raw_ids:
+            if diff.difference_note:
+                obj = {
+                    'name': diff.product_id.default_code or '',
+                    'uom': diff.difference_note,
+                    'ket': ''
+                }
+                detail_diff.append(obj)
+        data['detail_diff'] = detail_diff
 
         data = json.dumps(data)
 
