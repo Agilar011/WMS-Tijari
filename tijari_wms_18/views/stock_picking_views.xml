@@ -93,7 +93,7 @@
                 <field name="wms_state"
                     widget="statusbar"
                     statusbar_visible="draft,assigned,waiting_response,done"
-                    invisible="(picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment'])"
+                    invisible="((picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment'])) and not (internal_transfer_order_id and internal_transfer_leg == 'receipt')"
                 />
             </xpath>
 
@@ -107,7 +107,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders'] or internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment']"/>
+                    invisible="adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders'] or internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment'] or internal_transfer_order_id and internal_transfer_leg == 'receipt'"/>
 
             </xpath>            
 
@@ -243,7 +243,7 @@
 
             <xpath expr="//notebook/page[@name='operations']" position="after">
 
-                <page string="Unpacked Item Details" name="detail_product" invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer">
+                <page string="Unpacked Item Details" name="detail_product" invisible="(picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer) or not show_delivery_page">
                     <field name="move_ids_without_package" mode="list,kanban"
                         widget="picker_move_one2many"
                         context="{
@@ -261,7 +261,7 @@
                         }"
                         add-label="Add a Product"
                         >
-                        <list 
+                        <list default_order="status_check_sequence, id"
                             decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" 
                             string="Stock Moves" 
                             editable="bottom"
@@ -270,6 +270,7 @@
                             <field name="picking_id" column_invisible="True"/>
                             <field name="name" column_invisible="True"/>
                             <field name="state" readonly="0" column_invisible="True"/>
+                            <field name="status_check_sequence" column_invisible="True"/>
                             <field name="picking_type_id" column_invisible="True"/>
                             <field name="move_line_ids" column_invisible="True"/>
                             <field name="location_id" column_invisible="True"/>
@@ -301,7 +302,8 @@
                                 context="{'default_product_id': product_id}"
                                 readonly="not product_id"/>
                             <field name="product_uom_qty" string="Qty Total" readonly="not is_initial_demand_editable"/>
-                            <field name="remaining_package_qty" string="Remaining Product" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders']"/>
+                            <field name="remaining_package_qty" string="Remaining Product" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders'] or parent.is_ito_internal_transfer"/>
+                            <field name="remaining_package_qty" string="Qty Unpack" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders'] or not parent.is_ito_internal_transfer"/>
                             <field name="remaining_package_qty" string="Qty Unpack" readonly="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
                             <!-- <field name="unpack_quantity" force_save="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']" /> -->
                             <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
@@ -410,7 +412,7 @@
                 </page>
 
                 <page string="Packed Item Details"
-                    invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer">
+                    invisible="(picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer) or not show_delivery_page">
 
                     <group>
                         <group>
@@ -552,6 +554,8 @@
                 <field name="adt_dest_location_id" string="Final Location" invisible="internal_transfer_order_id or 'Receipt' in (picking_type_name or '') or picking_type_name in ['Pick', 'Pick Internal', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal'] or is_ito_internal_transfer"/>
                 <field name="all_moves_picked" invisible="1"/>
                 <field name="show_picker_page" invisible="1"/>
+                <field name="show_packer_page" invisible="1"/>
+                <field name="show_delivery_page" invisible="1"/>
                 <field name="show_putaway_page" invisible="1"/>
             </xpath>
 
@@ -868,11 +872,12 @@
                             'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
                         }"
                     >
-                        <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves">
+                        <list default_order="picker_sequence, id" decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves">
                             <field name="company_id" column_invisible="True"/>
                             <field name="picking_id" column_invisible="True"/>
                             <field name="name" column_invisible="True"/>
                             <field name="state" readonly="0" column_invisible="True"/>
+                            <field name="picker_sequence" column_invisible="True"/>
                             <field name="picking_type_id" column_invisible="True"/>
                             <field name="move_line_ids" column_invisible="True"/>
                             <field name="location_id" column_invisible="True"/>
@@ -1009,11 +1014,12 @@
                             'default_partner_id': partner_id}" 
                         add-label="Add a Product"
                     >
-                        <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" editable="bottom">
+                        <list default_order="status_check_sequence, id" decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" editable="bottom">
                             <field name="company_id" column_invisible="True"/>
                             <field name="picking_id" column_invisible="True"/>
                             <field name="name" column_invisible="True"/>
                             <field name="state" readonly="0" column_invisible="True"/>
+                            <field name="status_check_sequence" column_invisible="True"/>
                             <field name="picking_type_id" column_invisible="True"/>
                             <field name="move_line_ids" column_invisible="True"/>
                             <field name="location_id" column_invisible="True"/>

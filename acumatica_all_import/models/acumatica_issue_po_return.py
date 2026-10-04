@@ -427,6 +427,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             'adt_warehouse_code': item.warehouse_code or False,
                             'adt_location_code': item.location_code or False,
                             'adt_line_note': item.line_note or False,
+                            'product_note': item.line_note or False,
                             'adt_type': 'Issue PO Return',
                         }
                         

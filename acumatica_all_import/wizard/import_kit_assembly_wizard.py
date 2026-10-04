@@ -2,6 +2,8 @@ from odoo import models, fields
 from odoo.exceptions import UserError
 import logging
 
+from psycopg2 import IntegrityError
+
 _logger = logging.getLogger(__name__)
 
 
@@ -234,8 +236,11 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 raw_data = self.config_id._normalize_rows(payload)
             raw_data = [item for item in raw_data if isinstance(item, dict)]
             result = []
+            assemblies_by_reference = {}
+            components_seen_by_reference = {}
+            empty_headers_seen = set()
 
-            for item in raw_data:
+            for item_index, item in enumerate(raw_data):
 
                 last_modified_datetime = self._val(item, 'LastModifiedDateTime')
                 print(f"Last Modified Date Time: :{last_modified_datetime}")
@@ -275,27 +280,52 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 # for h_key, h_val in header.items():
                     # print(f"{h_key:<25} : {h_val}")
 
-                existing_assembly = staging_header.search([
-                    ('config_id', '=', self.config_id.id),
-                    ('name', '=', header['name']),
-                ], limit=1)
-                if existing_assembly:
-                    if (
-                        not header.get('last_modified_datetime')
-                        or existing_assembly.last_modified_datetime == header['last_modified_datetime']
-                    ):
-                        continue
-                    existing_assembly.component_ids.unlink()
-                    existing_assembly.write(header)
-                    assembly = existing_assembly
+                reference_nbr = header.get('reference_nbr')
+                assembly_key = reference_nbr or header.get('external_id') or f'row-{item_index}'
+                cached_assembly = assemblies_by_reference.get(assembly_key)
+                if cached_assembly:
+                    assembly, unchanged_assembly = cached_assembly
                 else:
-                    # This header is created by a system fetch, not by a user
-                    # composing a document.  Avoid mail.thread subscribing
-                    # the API user repeatedly when a fetch is retried/replayed.
-                    assembly = staging_header.with_context(
-                        mail_create_nosubscribe=True,
-                        mail_create_nolog=True,
-                    ).create(header)
+                    existing_assembly = staging_header.search([
+                        ('reference_nbr', '=', reference_nbr),
+                    ], limit=1) if reference_nbr else staging_header.browse()
+                    unchanged_assembly = bool(
+                        existing_assembly
+                        and (
+                            not header.get('last_modified_datetime')
+                            or existing_assembly.last_modified_datetime == header['last_modified_datetime']
+                        )
+                    )
+                    if existing_assembly:
+                        assembly = existing_assembly
+                        if not unchanged_assembly:
+                            existing_assembly.component_ids.unlink()
+                            existing_assembly.write(header)
+                    else:
+                        # Protect the transaction if another fetch creates this
+                        # globally unique reference after the search above.
+                        try:
+                            with self.env.cr.savepoint():
+                                assembly = staging_header.with_context(
+                                    mail_create_nosubscribe=True,
+                                    mail_create_nolog=True,
+                                ).create(header)
+                        except IntegrityError:
+                            if not reference_nbr:
+                                raise
+                            assembly = staging_header.search([
+                                ('reference_nbr', '=', reference_nbr),
+                            ], limit=1)
+                            if not assembly:
+                                raise
+                            unchanged_assembly = bool(
+                                not header.get('last_modified_datetime')
+                                or assembly.last_modified_datetime == header['last_modified_datetime']
+                            )
+                            if not unchanged_assembly:
+                                assembly.component_ids.unlink()
+                                assembly.write(header)
+                    assemblies_by_reference[assembly_key] = (assembly, unchanged_assembly)
                 print(f"Created staging header record with ID {assembly.id} for ReferenceNbr {header['reference_nbr']}")
 
                 stock_components = (item.get('KitAssemblyGIDetails'))
@@ -312,16 +342,23 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     stock_components = [item]
 
                 if not stock_components:
-                    # print("-- (No Components Available)") # Info jika component kosong
-                    result.append(dict(header, line_nbr='0'))
-                    # print("==========================================================================================")
+                    if assembly_key not in empty_headers_seen:
+                        result.append(dict(header, line_nbr='0'))
+                        empty_headers_seen.add(assembly_key)
                     continue
 
                 # === PRINT DATA COMPONENT ===
                 # print("COMPONENTS:")
                 for component in stock_components:
                     line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
-                    
+                    component_external_id = component.get('id', '') or ''
+                    component_key = component_external_id or (f'line-{line_nbr}' if line_nbr else False)
+                    seen_component_keys = components_seen_by_reference.setdefault(assembly_key, set())
+                    if component_key and component_key in seen_component_keys:
+                        continue
+                    if component_key:
+                        seen_component_keys.add(component_key)
+
                     # Buat dictionary component data untuk mempermudah perulangan print
                     component_data = {
                         'line_external_id': component.get('id', '') or '',
@@ -343,10 +380,11 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     # for c_key, c_val in component_data.items():
                         # print(f"  -- {c_key:<25} : {c_val}")
 
-                    assembly_line = self.env['acumatica.kit.assembly.component'].create(component_data)  # Simpan component ke staging, bisa dihapus jika tidak perlu
+                    if not unchanged_assembly:
+                        self.env['acumatica.kit.assembly.component'].create(component_data)
                     # print(f"  Created staging component record with ID {assembly_line.id} for LineNbr {component_data['line_nbr']} under ReferenceNbr {header['reference_nbr']}")
                     
-                    # Tetap masukkan ke hasil akhir Odoo wizard Anda
+                    # Keep flattening fetched rows even when the header is already current.
                     result.append({**header, **component_data})
                 
                 # print("==========================================================================================")

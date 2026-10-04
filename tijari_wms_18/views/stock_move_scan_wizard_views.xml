@@ -574,7 +574,7 @@
                             <button name="action_open_putaway_move_line_wizard"
                                 type="object"
                                 class="btn btn-primary btn-sm"
-                                string="Open Putaway">
+                                string="View Details">
                             </button>
                             <button name="action_mark_putaway_unfinished"
                                 type="object"

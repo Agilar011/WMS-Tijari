@@ -321,7 +321,7 @@ class AcumaticaShipmentLine(models.Model):
             'note': shipment.note or False,
             'adt_acumatica_write_date': self._parse_dt(shipment.acumatica_write_date),
             'adt_total_qty': self._parse_float(shipment.actual_qty),
-            'adt_actual_qty': self._parse_float(shipment.actual_qty),
+            # 'adt_actual_qty': self._parse_float(shipment.actual_qty),
             'adt_type': adt_type,
             'adt_order_nbr': ','.join(order_nbrs) if adt_type == 'SO Return' else False,
             # 'adt_type': shipment.shipment_type or False
