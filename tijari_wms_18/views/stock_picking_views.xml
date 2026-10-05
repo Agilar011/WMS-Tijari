@@ -728,7 +728,7 @@
                     <attribute name="invisible">'Pick' in (picking_type_name or '')</attribute>
                 </xpath>
                 <xpath expr="//page[@name='operations']" position="after">
-                    <page string="Operations" name="page_picker_operation" invisible="not show_picker_page or 'Pick' not in (picking_type_name or '')">
+                    <page string="Operations" name="page_picker_operation" groups="!tijari_wms_18.group_operator" invisible="not show_picker_page or 'Pick' not in (picking_type_name or '')">
                         <field name="move_ids_without_package"
                             mode="list,kanban"
                             readonly='0'
