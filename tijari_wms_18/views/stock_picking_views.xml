@@ -736,11 +736,12 @@
                                 'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
                             }"
                         >
-                            <list decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" editable="bottom">
+                            <list default_order="pick_status_sequence asc, id asc" decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves" editable="bottom">
                                 <field name="company_id" column_invisible="True"/>
                                 <field name="picking_id" column_invisible="True"/>
                                 <field name="name" column_invisible="True"/>
                                 <field name="state" readonly="0" column_invisible="True"/>
+                                <field name="pick_status_sequence" column_invisible="True"/>
                                 <field name="picking_type_id" column_invisible="True"/>
                                 <field name="move_line_ids" column_invisible="True"/>
                                 <field name="location_id" column_invisible="True"/>
@@ -881,19 +882,19 @@
                             <field name="picker_product_id" domain="[('id', 'in', allowed_picker_product_ids)]"/>
                             <field name="picker_lot_id" domain="[('id', 'in', allowed_picker_lot_ids)]"/>
                         </group>
-                        <field name="filtered_move_ids"
+                        <field name="filtered_picker_move_ids"
                             mode="list,kanban"
                             readonly='0'
                             context="{
                                 'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
                             }"
                         >
-                            <list default_order="picker_sequence, id" decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves">
+                            <list create="0" delete="0" default_order="pick_status_sequence asc, id asc" decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" string="Stock Moves">
                                 <field name="company_id" column_invisible="True"/>
                                 <field name="picking_id" column_invisible="True"/>
                                 <field name="name" column_invisible="True"/>
                                 <field name="state" readonly="0" column_invisible="True"/>
-                                <field name="picker_sequence" column_invisible="True"/>
+                                <field name="pick_status_sequence" column_invisible="True"/>
                                 <field name="picking_type_id" column_invisible="True"/>
                                 <field name="move_line_ids" column_invisible="True"/>
                                 <field name="location_id" column_invisible="True"/>
