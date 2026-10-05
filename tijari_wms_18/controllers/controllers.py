@@ -1042,7 +1042,7 @@ class WmsApiController(http.Controller):
         mrp = request.env['mrp.production'].sudo().browse(int(id))
         
         data = {
-            'reference': mrp.name or '', 
+            'reference': mrp.origin or '', 
             'date': format_tanggal_indo(mrp.date_start) if mrp.date_start else '',
             'warehouse_id': mrp.warehouse_id.name or '', 
             # 'lok':  '',
