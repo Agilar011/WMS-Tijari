@@ -311,8 +311,15 @@ class StockPicking(models.Model):
 
     filtered_move_ids = fields.One2many(
         comodel_name="stock.move",
+        inverse_name="picking_id",
         string="Filtered Stock Moves",
         compute='_compute_filtered_move_ids',
+    )
+
+    filtered_picker_move_ids = fields.Many2many(
+        comodel_name="stock.move",
+        string="Ordered Picker Moves",
+        compute='_compute_filtered_picker_move_ids',
     )
 
     def _compute_scan_product_by_lot_button(self):
@@ -924,7 +931,10 @@ class StockPicking(models.Model):
             )
 
         return moves.sorted(
-            key=lambda move: (move.picker_sequence, move._origin.id or 0)
+            key=lambda move: (
+                move.pick_status_sequence,
+                move._origin.id or 0,
+            )
         )
 
     def _get_picker_lots(self):
@@ -1141,10 +1151,23 @@ class StockPicking(models.Model):
 
     @api.depends(
         'picker_product_id',
+        'move_ids_without_package',
+        'move_ids_without_package.move_line_ids.pick_status',
     )
     def _compute_filtered_move_ids(self):
         for picking in self:
             picking.filtered_move_ids = picking._get_picker_moves()
+
+    @api.depends(
+        'picker_product_id',
+        'move_ids_without_package',
+        'move_ids_without_package.state',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.move_line_ids.pick_status',
+    )
+    def _compute_filtered_picker_move_ids(self):
+        for picking in self:
+            picking.filtered_picker_move_ids = picking._get_picker_moves()
 
 
 

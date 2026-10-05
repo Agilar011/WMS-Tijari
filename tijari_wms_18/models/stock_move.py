@@ -53,7 +53,7 @@ class StockMove(models.Model):
         string="Mapped Location",
     )
     product_note = fields.Text(string='Product Note')
-    difference_note = fields.Text(string='difference Note')
+    difference_note = fields.Text(string='Difference Note')
     batch_adt_type = fields.Char(
         related='picking_id.adt_type',
         string='Tipe Transaksi',
@@ -265,17 +265,31 @@ class StockMove(models.Model):
 
     pick_status_sequence = fields.Integer(
         string='Pick Status Sequence',
-        compute='_compute_pick_status_sequence',
         store=True,
     )
 
-    @api.depends('move_line_ids.pick_status')
-    def _compute_pick_status_sequence(self):
-        for move in self:
-            lines = move.move_line_ids
-            move.pick_status_sequence = 1 if (
-                lines and all(line.pick_status == 'finished' for line in lines)
-            ) else 0
+    def _refresh_pick_status_sequence(self):
+        """Persist the Picker list order from the displayed Pick status."""
+        for picking in self.mapped('picking_id'):
+            moves = picking.move_ids_without_package
+            for move in moves:
+                lines = move.move_line_ids
+                move.pick_status_sequence = 1 if (
+                    lines and all(line.pick_status == 'finished' for line in lines)
+                ) else 0
+
+            # The embedded one2many initially follows stock.move's native
+            # sequence/id order. Keep unfinished lines first in that relation
+            # order as well, then append finished lines in their prior order.
+            ordered_moves = moves.sorted(
+                key=lambda move: (
+                    move.pick_status_sequence,
+                    move.sequence,
+                    move.id,
+                )
+            )
+            for position, move in enumerate(ordered_moves, start=1):
+                move.sequence = position * 10
 
     @api.depends('move_line_ids.pick_status')
     def _compute_status_pick_check(self):

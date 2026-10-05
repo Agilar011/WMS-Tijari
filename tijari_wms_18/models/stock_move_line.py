@@ -1415,10 +1415,14 @@ class StockMoveLine(models.Model):
             self._check_matching_status_pick()
 
         self.write({'pick_status': 'finished'})
-        return {'type': 'ir.actions.act_window_close'}
+        # Refresh every move in the picking so the list order reflects status
+        # changes and any older rows with stale sequence values.
+        self.mapped('move_id.picking_id.move_ids_without_package')._refresh_pick_status_sequence()
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_mark_check_pick_unfinished(self):
         self.write({'pick_status': 'unfinished'})
+        self.mapped('move_id.picking_id.move_ids_without_package')._refresh_pick_status_sequence()
         return self.move_id.action_open_move_pick()
 
     def _validate_before_mark_pick_finished(self):
