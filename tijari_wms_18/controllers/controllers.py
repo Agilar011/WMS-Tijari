@@ -917,12 +917,20 @@ class WmsApiController(http.Controller):
             system_qty = float(line.quantity or 0)
             qty2 = float(line.inventory_quantity or 0)
 
+            if diff < 0:
+                diff_color = "#FF0000"
+            elif diff > 0:
+                diff_color = "#008000" 
+            else:
+                diff_color = "#000000" 
+
             obj = {
                 'name': line.product_id.display_name or '',
                 'uom': line.product_uom_id.name or '',
                 'system_qty': system_qty,
                 'qty2': qty2,
                 'diff': diff,
+                'diff_color': diff_color,
                 'ket': ''
             }
             data['detail'].append(obj)
