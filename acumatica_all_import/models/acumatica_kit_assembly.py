@@ -148,7 +148,7 @@ class AcumaticaKitAssembly(models.Model):
                     # HEADER
                     # -----------------------------------------------------
                     header = HeaderReference.search(
-                        [("name", "=", reference_nbr)],
+                        [('reference_nbr', '=', reference_nbr)],
                         limit=1,
                     )
 
@@ -157,7 +157,7 @@ class AcumaticaKitAssembly(models.Model):
                             f"Header tidak ditemukan: {reference_nbr}"
                         )
 
-                    print(f"Header Value: {header.name}")
+                    print(f"Header Value: {header.reference_nbr}")
 
                     # -----------------------------------------------------
                     # WAREHOUSE
@@ -199,7 +199,7 @@ class AcumaticaKitAssembly(models.Model):
                     # FIND EXISTING MO
                     # -----------------------------------------------------
                     manufacturing = Manufacturing.search(
-                        [("origin", "=", header.name)],
+                        [("origin", "=", header.reference_nbr)],
                         limit=1,
                     )
                     picking_type = manufacturing.picking_type_id if manufacturing else PickingType.search(
@@ -768,7 +768,7 @@ class AcumaticaKitAssemblyLine(models.Model):
         # proses per reference number
         for reference_nbr in self.mapped('reference_nbr'):
             records = self.filtered(lambda line: line.reference_nbr == reference_nbr)
-            header = header_reference.search([('name', '=', reference_nbr)], limit=1)
+            header = header_reference.search([('reference_nbr', '=', reference_nbr)], limit=1)
             component_lines = component_reference
             try:
                 with self.env.cr.savepoint():
@@ -789,7 +789,7 @@ class AcumaticaKitAssemblyLine(models.Model):
                         )
 
                     existing_manufacturing = header.mrp_production_id or self.env['mrp.production'].search(
-                        [('origin', '=', header.name)], limit=1,
+                        [('origin', '=', header.reference_nbr)], limit=1,
                     )
                     picking_type = existing_manufacturing.picking_type_id if existing_manufacturing else PickingType.search([
                         ('name', '=', 'Manufacturing'),
@@ -826,7 +826,7 @@ class AcumaticaKitAssemblyLine(models.Model):
                         'desc_note': header.description,
                     }
                     print(f"vals ke sini: {vals}")
-                    manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.name)], limit=1)
+                    manufacturing_check = self.env['mrp.production'].search([('origin', '=', header.reference_nbr)], limit=1)
                     if manufacturing_check:
                         if manufacturing_check.state not in ('draft', 'cancel'):
                             raise UserError(

@@ -1327,12 +1327,31 @@ class StockMoveLine(models.Model):
             and self.picking_id.picking_type_id.name == 'Receipts'
         ):
             self.action_mark_picker_finished()
+        elif self.is_manufacturing:
+            self.action_mark_check_finished_mo()
+            return self.move_id.action_open_move_mo()
         else:
             self._check_picker_quantity_vs_demand()
             if not self.lot_id:
                 raise ValidationError(_("Lot kosong, silahkan generate lot terlebih dahulu"))
             if self.quantity == 0:
                 raise ValidationError(_("Quantity tidak boleh 0, silahkan input quantity terlebih dahulu"))
+            self.write({'picker_status': 'finished'})
+
+        return self.move_id.action_open_move_pick()
+    
+    def action_rollback_details(self):
+        self.ensure_one()
+
+        if (
+            self.picking_id
+            and self.picking_id.picking_type_id.name == 'Receipts'
+        ):
+            self.action_mark_picker_unfinished()
+        elif self.is_manufacturing:
+            self.action_mark_check_unfinished_mo()
+            return self.move_id.action_open_move_mo()
+        else:
             self.write({'picker_status': 'finished'})
 
         return self.move_id.action_open_move_pick()
@@ -1521,11 +1540,11 @@ class StockMoveLine(models.Model):
         self.write({
             'mo_status': 'finished'
         })
-        return {'type': 'ir.actions.act_window_close'}
+        return True
 
     def action_mark_check_unfinished_mo(self):
         self.write({'mo_status': 'unfinished'})
-        return self.move_id.action_open_move_pick()
+        return True
 
     def _validate_before_mark_finished_mo(self):
         confirmation_quantity = self.mo_confirmation_quantity
