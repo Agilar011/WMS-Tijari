@@ -16,10 +16,16 @@ class WMSStockPackageLevel(models.Model):
         ], string='Package Category', related='package_id.package_cat')
 
     def action_mark_finished(self):
+        for line in self.move_line_ids:
+            line.so_confirmation_quantity = line.quantity
+
         self.write({'status': 'finished'})
         return True
 
     def action_mark_unfinished(self):
+        for line in self.move_line_ids:
+            line.so_confirmation_quantity = 0.0
+            
         self.write({'status': 'unfinished'})
         return True
 
@@ -48,6 +54,7 @@ class WMSStockPackageLevel(models.Model):
                 else "unfinished"
             ),
             "package_id": self.package_id.id,
+            "picking_id": self.picking_id.id,
             "move_line_ids": [(6, 0, self.move_line_ids.ids)],
         })
 
