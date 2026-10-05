@@ -6,33 +6,7 @@
         <field name="binding_view_types">list</field>
         <field name="state">code</field>
         <field name="code"><![CDATA[
-pickings = records.search([
-    ("wms_state", "!=", False),
-    ("state", "!=", False),
-])
-
-pickings_to_fix = pickings.filtered(
-    lambda picking: (
-        picking.wms_state != picking.state
-        and not (
-            picking.state == "done"
-            and (
-                picking.adt_type in ("Sales Order Shipment", "SO Shipment")
-                or (
-                    picking.internal_transfer_order_id
-                    and picking.adt_type in (
-                        "Shipment Consignment",
-                        "Transfer Shipment",
-                    )
-                    and picking.internal_transfer_leg == "delivery"
-                    and picking.picking_type_id.code == "internal"
-                )
-            )
-        )
-    )
-)
-
-pickings_to_fix._compute_wms_state()
+records._compute_wms_state()
         ]]></field>
     </record>
 </odoo>

@@ -16,6 +16,150 @@ class WMSMRPProduction(models.Model):
     )
     catatan = fields.Text(string="Transaction Notes")
     desc_note = fields.Char('Description Note')
+    raw_material_product_ids = fields.Many2many(
+        'product.product',
+        compute='_compute_raw_material_product_ids',
+    )
+    raw_material_product_id = fields.Many2one('product.product', string='Product')
+    raw_material_lot_ids = fields.Many2many(
+        'stock.lot',
+        compute='_compute_raw_material_lot_ids',
+    )
+    raw_material_lot_id = fields.Many2one(
+        'stock.lot',
+        string='Lot/Serial Number',
+        domain="[('id', 'in', raw_material_lot_ids)]",
+    )
+    raw_material_scan_code = fields.Char(
+        string='Scan Handheld',
+        help='Bisa diisi dari scanner handheld atau diketik manual.',
+    )
+    raw_material_scan_button = fields.Boolean(string='Scan Handheld')
+    filtered_raw_material_move_ids = fields.One2many(
+        'stock.move',
+        'raw_material_production_id',
+        string='Filtered Raw Materials',
+        compute='_compute_filtered_raw_material_move_ids',
+    )
+
+    def _get_raw_material_base_moves(self):
+        self.ensure_one()
+        return self.move_raw_ids.filtered(lambda move: move.state != 'cancel' and move.product_id)
+
+    def _get_raw_material_moves(self):
+        self.ensure_one()
+        moves = self._get_raw_material_base_moves()
+        if self.raw_material_product_id:
+            moves = moves.filtered(lambda move: move.product_id == self.raw_material_product_id)
+        if self.raw_material_lot_id:
+            lot = self.raw_material_lot_id
+            moves = moves.filtered(lambda move: (
+                lot in move.lot_ids
+                or lot in move.move_line_ids.lot_id
+                or lot.name in move.move_line_ids.mapped('lot_name')
+            ))
+        return moves
+
+    def _get_raw_material_lots(self):
+        self.ensure_one()
+        moves = self._get_raw_material_base_moves()
+        if self.raw_material_product_id:
+            moves = moves.filtered(lambda move: move.product_id == self.raw_material_product_id)
+        lots = moves.lot_ids | moves.move_line_ids.lot_id
+        lot_names = moves.move_line_ids.filtered(
+            lambda line: line.lot_name and not line.lot_id
+        ).mapped('lot_name')
+        if lot_names:
+            domain = [('name', 'in', lot_names)]
+            if moves.product_id:
+                domain.append(('product_id', 'in', moves.product_id.ids))
+            lots |= self.env['stock.lot'].search(domain)
+        return lots
+
+    @api.depends('move_raw_ids', 'move_raw_ids.product_id', 'move_raw_ids.state')
+    def _compute_raw_material_product_ids(self):
+        for production in self:
+            production.raw_material_product_ids = production._get_raw_material_base_moves().product_id
+
+    @api.depends(
+        'raw_material_product_id', 'move_raw_ids', 'move_raw_ids.lot_ids',
+        'move_raw_ids.move_line_ids.lot_id', 'move_raw_ids.move_line_ids.lot_name',
+    )
+    def _compute_raw_material_lot_ids(self):
+        for production in self:
+            production.raw_material_lot_ids = production._get_raw_material_lots()
+
+    @api.depends(
+        'raw_material_product_id', 'raw_material_lot_id', 'move_raw_ids',
+        'move_raw_ids.product_id', 'move_raw_ids.state', 'move_raw_ids.lot_ids',
+        'move_raw_ids.move_line_ids.lot_id', 'move_raw_ids.move_line_ids.lot_name',
+    )
+    def _compute_filtered_raw_material_move_ids(self):
+        for production in self:
+            production.filtered_raw_material_move_ids = production._get_raw_material_moves()
+
+    @api.onchange('raw_material_product_id')
+    def _onchange_raw_material_product_id(self):
+        for production in self:
+            production.raw_material_lot_id = production._get_raw_material_lots()[:1] if production.raw_material_product_id else False
+
+    @api.onchange('raw_material_lot_id')
+    def _onchange_raw_material_lot_id(self):
+        for production in self:
+            if not production.raw_material_lot_id:
+                production.raw_material_product_id = False
+                continue
+            lot = production.raw_material_lot_id
+            moves = production._get_raw_material_base_moves().filtered(lambda move: (
+                lot in move.lot_ids
+                or lot in move.move_line_ids.lot_id
+                or lot.name in move.move_line_ids.mapped('lot_name')
+            ))
+            production.raw_material_product_id = moves.product_id[:1]
+
+    def _get_raw_material_scan_values(self, scanned_code):
+        self.ensure_one()
+        scanned_code = (scanned_code or '').strip()
+        if not scanned_code:
+            raise ValidationError(_('Kode scan tidak boleh kosong.'))
+
+        product = self.env['product.product'].search([('barcode', '=', scanned_code)], limit=1)
+        if not product:
+            product = self.env['product.product'].search([('default_code', '=', scanned_code)], limit=1)
+        moves = self._get_raw_material_base_moves()
+        if product:
+            matched_moves = moves.filtered(lambda move: move.product_id == product)
+            if not matched_moves:
+                raise ValidationError(_('Product hasil scan tidak ada di Raw Material Manufacturing ini.'))
+            lot = (matched_moves.lot_ids | matched_moves.move_line_ids.lot_id)[:1]
+            return {'raw_material_product_id': product.id, 'raw_material_lot_id': lot.id}
+
+        lots = self.env['stock.lot'].search([('name', '=', scanned_code)])
+        matched_moves = moves.filtered(lambda move: (
+            (lots and bool(move.lot_ids & lots))
+            or move.move_line_ids.filtered(lambda line: (
+                (lots and line.lot_id in lots) or line.lot_name == scanned_code
+            ))
+        ))
+        if not matched_moves:
+            raise ValidationError(_('Kode %s tidak ditemukan sebagai Barcode, SKU, atau Lot di Raw Material Manufacturing ini.') % scanned_code)
+        products = matched_moves.product_id
+        if len(products) > 1:
+            raise ValidationError(_('Lot hasil scan mengarah ke lebih dari satu product.'))
+        return {'raw_material_product_id': products.id, 'raw_material_lot_id': lots[:1].id}
+
+    def action_apply_scanned_picker_code(self, scanned_code):
+        self.ensure_one()
+        values = self._get_raw_material_scan_values(scanned_code)
+        self.write(values)
+        return values
+
+    @api.onchange('raw_material_scan_code')
+    def _onchange_raw_material_scan_code(self):
+        for production in self:
+            if production.raw_material_scan_code:
+                production.update(production._get_raw_material_scan_values(production.raw_material_scan_code))
+                production.raw_material_scan_code = False
 
     def _prepare_stock_lot_values(self):
         self.ensure_one()

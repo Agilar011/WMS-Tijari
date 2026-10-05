@@ -1307,6 +1307,14 @@ class InternalTransferOrder(models.Model):
         active_moves = picking.move_ids.filtered(
             lambda move: move.state not in ('done', 'cancel')
         )
+        # This leg receives stock that the paired Transfer OUT has already
+        # moved into transit. It must consume that stock like a normal
+        # receipt, rather than start a new MTO procurement for the
+        # transit-to-destination route. Keep move_orig_ids intact so any
+        # explicit, valid predecessor dependency is still respected.
+        active_moves.filtered(
+            lambda move: move.procure_method != 'make_to_stock'
+        ).write({'procure_method': 'make_to_stock'})
         if (
             picking.location_id == transit_location
             and all(move.location_id == transit_location for move in active_moves)

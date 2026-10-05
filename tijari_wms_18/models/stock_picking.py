@@ -119,6 +119,10 @@ class StockPicking(models.Model):
     show_packer_page = fields.Boolean(
         compute='_compute_show_packer_page',
     )
+
+    show_delivery_page = fields.Boolean(
+        compute='_compute_show_delivery_page',
+    )
     
     show_putaway_page = fields.Boolean(
         compute="_compute_show_putaway_page",
@@ -144,6 +148,16 @@ class StockPicking(models.Model):
             picking.show_packer_page = (
                 not is_warehouse_operator
                 or user in picking.pack_responsible_ids
+            )
+
+    @api.depends('do_responsible_ids')
+    def _compute_show_delivery_page(self):
+        user = self.env.user
+        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        for picking in self:
+            picking.show_delivery_page = (
+                not is_warehouse_operator
+                or user in picking.do_responsible_ids
             )
 
     @api.depends("putaway_responsible_ids")
@@ -935,11 +949,18 @@ class StockPicking(models.Model):
         "state",
         "adt_type",
         "internal_transfer_order_id",
+        "internal_transfer_order_id.transfer_type",
         "internal_transfer_leg",
         "picking_type_id",
+        "picking_type_name",
     )
     def _compute_wms_state(self):
         for picking in self:
+            is_ready_transfer_in_receipt = bool(
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_leg == "receipt"
+                and picking.state in ("confirmed", "assigned")
+            )
             is_waiting_shipment = (
                 picking.adt_type in ("Sales Order Shipment", "SO Shipment")
                 or (
@@ -953,7 +974,15 @@ class StockPicking(models.Model):
                 )
             )
 
-            if picking.state != "done" or not is_waiting_shipment:
+            if is_ready_transfer_in_receipt:
+                # A transfer-in receipt is ready to process after Check
+                # Availability, even when its zero-qty working lines cannot
+                # reserve transit stock like a vendor receipt. Do not prefill
+                # the actual received quantity here.
+                picking.wms_state = "assigned"
+            elif picking.picking_type_name != "Delivery Orders":
+                picking.wms_state = picking.state
+            elif not is_waiting_shipment:
                 picking.wms_state = picking.state
 
     @api.depends(
@@ -1116,6 +1145,8 @@ class StockPicking(models.Model):
     def _compute_filtered_move_ids(self):
         for picking in self:
             picking.filtered_move_ids = picking._get_picker_moves()
+
+
 
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):
@@ -1479,6 +1510,12 @@ class StockPicking(models.Model):
         )
         for receipt in transfer_in_receipts:
             receipt.internal_transfer_order_id.action_auto_validate_transfer_in_delivery()
+            active_moves = receipt.move_ids.filtered(
+                lambda move: move.state not in ('done', 'cancel')
+            )
+            active_moves._recompute_state()
+            if active_moves:
+                receipt.action_assign()
         
         for picking in self:
                     for move in picking.move_ids:
@@ -2434,6 +2471,16 @@ class StockPicking(models.Model):
                 picking
             )
 
+        # Match the PO Receipt operator flow: once Check Availability runs,
+        # a transfer-in receipt is ready to process even though its actual
+        # received quantity remains zero until entered by the operator.
+        self.filtered(
+            lambda picking: (
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_leg == "receipt"
+            )
+        )._compute_wms_state()
+
         return res
 
     def action_mark_todo_and_check_availability(self):
@@ -2520,9 +2567,11 @@ class StockPicking(models.Model):
 
         for picking in self:
             # update actual qty
-            picking.update({
-                'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
-            })
+            if picking.picking_type_id.name not in ("Pack"):
+                picking.update({
+                    'adt_actual_qty': sum(picking.move_ids.mapped('quantity'))
+                })
+            
             if picking.adt_type == 'Toko Pegang DO':
                 if not picking.owner_id:
                     raise UserError(_("Owner is required for Toko Pegang DO."))
@@ -2631,17 +2680,35 @@ class StockPicking(models.Model):
                         ))
 
             if "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
+                next_pickings = rec.move_ids.move_dest_ids.mapped("picking_id").filtered(
+                    lambda picking: picking.picking_type_name == "Pack"
+                )
+                next_pickings.write({
+                    'adt_actual_qty': rec.adt_actual_qty
+                })
+
                 for move in rec.move_ids:
                     confirmation_qty = move.confirmation_quantity
 
-                    for dest_move in move.move_dest_ids:
+                    for dest_move in move.move_dest_ids.filtered(
+                        lambda m: m.picking_id.picking_type_name == "Pack"
+                    ):
                         dest_move.write({
                             'product_uom_qty': confirmation_qty,
                         })
             
             elif 'Pack' in (rec.picking_type_name or ""):
+                next_pickings = rec.move_ids.move_dest_ids.mapped("picking_id").filtered(
+                    lambda picking: picking.picking_type_name == "Delivery Orders"
+                )
+                next_pickings.write({
+                    'adt_actual_qty': rec.adt_actual_qty
+                })
+
                 for move in rec.move_ids:
-                    for dest_move in move.move_dest_ids:
+                    for dest_move in move.move_dest_ids.filtered(
+                        lambda m: m.picking_id.picking_type_name == "Delivery Orders"
+                    ):
                         packaged_qty = sum(
                             ml.quantity
                             for ml in dest_move.move_line_ids
@@ -3566,10 +3633,8 @@ class StockRule(models.Model):
             })
 
         if move_to_copy.production_id and not move_to_copy.raw_material_production_id:
-            mapped_destination = (
-                move_to_copy.adt_dest_location_id
-                or self.env["stock.location"].browse(vals.get("location_final_id"))
-                or self.env["stock.location"].browse(vals.get("location_dest_id"))
+            mapped_destination = self.env["stock.location"].browse(
+                vals.get("location_dest_id") or self.location_dest_id.id
             )
             if mapped_destination:
                 vals["adt_dest_location_id"] = mapped_destination.id

@@ -144,14 +144,31 @@ class StockMove(models.Model):
         store=True,
     )
 
+    remaining_pick_quantity = fields.Float(
+        string='Sisa Pemenuhan Qty',
+        compute='_compute_remaining_pick_quantity',
+    )
+
+
+
     remaining_picker_quantity = fields.Float(
         string='Sisa Qty Pick',
         compute='_compute_remaining_picker_quantity',
     )
 
+    remaining_unpack_quantity = fields.Float(
+        string='Sisa Pemenuhan Qty',
+        compute='_compute_remaining_unpack_quantity',
+    )
+
     remaining_putaway_quantity = fields.Float(
         string='Sisa Qty Putaway',
         compute='_compute_remaining_putaway_quantity',
+    )
+
+    remaining_mo_quantity = fields.Float(
+        string='Sisa Pemenuhan Qty',
+        compute='_compute_remaining_mo_quantity',
     )
 
     confirmation_quantity = fields.Float(
@@ -173,6 +190,20 @@ class StockMove(models.Model):
         ('finished', 'Finished'),
         ('unfinished', 'Unfinished'),
     ], string='Status', default='unfinished', compute="_compute_status_check")
+
+    status_check_sequence = fields.Integer(
+        string='Status Sequence',
+        compute='_compute_status_check_sequence',
+        store=True,
+    )
+
+    @api.depends('move_line_ids.status_check')
+    def _compute_status_check_sequence(self):
+        for move in self:
+            lines = move.filtered_unpack_line_ids
+            move.status_check_sequence = 1 if (
+                lines and all(line.status_check == 'finished' for line in lines)
+            ) else 0
 
     @api.depends('move_line_ids.status_check')
     def _compute_status_check(self):
@@ -304,7 +335,7 @@ class StockMove(models.Model):
         # CUSTOM : TOKO PEGANG DO
         # ======================================================
         if self.picking_id.adt_type == "Toko Pegang DO":
-            if not self.picking_id.owner_id:
+            if not self.owner_id:
                 raise UserError(
                     _("Owner is required for Toko Pegang DO.")
                 )
@@ -460,10 +491,24 @@ class StockMove(models.Model):
             move.remaining_picker_quantity = move.product_uom_qty - move.quantity
 
     @api.depends('product_uom_qty', 'confirmation_quantity')
+    def _compute_remaining_pick_quantity(self):
+        for move in self:
+            move.remaining_pick_quantity = move.product_uom_qty - move.confirmation_quantity
+
+    @api.depends('remaining_package_qty', 'so_confirmation_quantity')
+    def _compute_remaining_unpack_quantity(self):
+        for move in self:
+            move.remaining_unpack_quantity = move.remaining_package_qty - move.so_confirmation_quantity
+
+    @api.depends('product_uom_qty', 'confirmation_quantity')
     def _compute_remaining_putaway_quantity(self):
         for move in self:
             move.remaining_putaway_quantity = move.product_uom_qty - move.confirmation_quantity
 
+    @api.depends('product_uom_qty', 'mo_confirmation_quantity')
+    def _compute_remaining_mo_quantity(self):
+        for move in self:
+            move.remaining_mo_quantity = move.product_uom_qty - move.mo_confirmation_quantity
 
     @api.depends('move_line_ids.confirmation_quantity')
     def _compute_confirmation_quantity(self):
@@ -746,6 +791,51 @@ class StockMove(models.Model):
             'view_mode': 'form',
             'view_id': self.env.ref(
                 'tijari_wms_18.stock_move_pick_detail_view'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_open_move_operation(self):
+            self.ensure_one()
+    
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Stock Move',
+                'res_model': 'stock.move',
+                'res_id': self.id,
+                'view_mode': 'form',
+                'view_id': self.env.ref(
+                    'tijari_wms_18.stock_move_pick_view'
+                ).id,
+                'target': 'new',
+            }
+
+    def action_open_move_pack(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'stock.view_stock_move_operations'
+            ).id,
+            'target': 'new',
+        }
+
+    def action_open_unpack_detail(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_delivery_unpack_view'
             ).id,
             'target': 'new',
         }
