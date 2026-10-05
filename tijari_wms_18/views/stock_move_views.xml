@@ -114,6 +114,7 @@
                 <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                 <field name="confirmation_quantity" string="Qty Diterima" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
                 <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Storage', 'Store Finished Product']"/>
+                <field name="quantity" string="Qty Dikirim" readonly="not is_quantity_done_editable" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
                 <field name="confirmation_quantity" string="Qty Diambil" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
                 <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
             </xpath>
@@ -163,6 +164,11 @@
                         <div invisible="picking_type_name != 'Receipts'" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
                             <label for="remaining_picker_quantity" string="Sisa Qty Pick" style="margin: 0 !important; white-space: nowrap !important;"/>
                             <field name="remaining_picker_quantity" readonly="1" nolabel="1"/>
+                            <field name="product_uom" groups="uom.group_uom" readonly="1" nolabel="1" options="{'no_open': True}"/>
+                        </div>
+                        <div invisible="'Pick' not in (picking_type_name or '')" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
+                            <label for="remaining_pick_quantity" string="Sisa Pemenuhan Qty" style="margin: 0 !important; white-space: nowrap !important;"/>
+                            <field name="remaining_pick_quantity" readonly="1" nolabel="1"/>
                             <field name="product_uom" groups="uom.group_uom" readonly="1" nolabel="1" options="{'no_open': True}"/>
                         </div>
                         <!-- <div invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"> -->
@@ -219,7 +225,7 @@
                                 string="Scan Handheld"
                                 placeholder="Scan handheld: lot, lokasi, atau package"
                                 invisible="matching == 'match' and 'Pick' in (parent.picking_type_name or '')"
-                                column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')"/>
+                                column_invisible="1"/>
                         <field name="adt_dest_location_id" column_invisible="1"/>
                         <field name="allowed_matching_lot_ids" column_invisible="1"/>
                         <field name="product_uom_category_id" column_invisible="1"/>
@@ -231,8 +237,8 @@
                         <field name="available_lot_ids" column_invisible="1"/>
                         <field name="available_location_ids" column_invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
-                        <field name="product_id" readonly="1" force_save="1" context="{'tijari_stock_picking_product_code_only': True}" column_invisible="'Pack' in (parent.picking_type_name or '')"/>
-                        <field name="lot_id" string="Lot/Serial Number" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
+                        <field name="product_id" readonly="1" force_save="1" context="{'tijari_stock_picking_product_code_only': True}" column_invisible="'Pack' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '')"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot" column_invisible="'Pick' in (parent.picking_type_name or '')"/>
                         <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string="Scan Lot"
@@ -249,16 +255,10 @@
                             context="{'show_location_short_name': True}"/>
                         <field
                             name="result_package_id"
-                            domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"
-                            readonly="1" force_save="1"
-                            string="Packages"
-                            optional="hide"/>
-                        <field
-                            name="result_package_id"
                             string="Destination Package"
                             domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"
                             force_save="1"
-                            column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
+                            column_invisible="'Pack' not in (parent.picking_type_name or '') and 'Pick' not in (parent.picking_type_name or '')"/>
                         <field 
                             name="owner_id" 
                             readonly="state in ['cancel', 'done']"
@@ -271,13 +271,14 @@
                                 column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
 
                         <field name="quantity" string="Qty Disimpan" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Quantity" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Saran Qty" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Quantity" readonly="0" force_save="1" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" optional="hide"/>
                         <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="so_confirmation_quantity" string="Qty Confirm" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
                         <field name="product_uom_id" string="Unit of Measure" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="Unit of Measure" column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="matching_loc_dest_id" string="Confirm Location" force_save="1" domain="[('id', 'child_of', adt_dest_location_id)]" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
-                        <field name="matching_lot_id" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="matching_loc_dest_id" string="Confirm Location" force_save="1" domain="[('id', 'child_of', adt_dest_location_id)]" column_invisible="1"/>
+                        <field name="matching_lot_id" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]" column_invisible="1"/>
                         <field name="picker_status" string="Status"
                                 decoration-success="picker_status == 'finished'"
                                 decoration-danger="picker_status == 'unfinished'"
@@ -288,7 +289,7 @@
                                 decoration-success="matching == 'match'"
                                 decoration-danger="matching == 'not_match'"
                                 widget="badge"
-                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                                column_invisible="1"/>
                         <button name="action_mark_picker_finished"
                                 type="object"
                                 icon="fa-check"
@@ -322,6 +323,7 @@
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" invisible="1"/>
                         <field name="lot_name" readonly="1" force_save="1" invisible="1"/>
                         <field name="picking_type_name" invisible="1"/>
+                        <field name="description_picking" invisible="1"/>
                         <templates>
                             <t t-name="card">
                                 <div class="o_wms_operation_card"
@@ -332,7 +334,7 @@
                                     </div>
                                     <div class="text-muted" invisible="not lot_id">
                                         <strong>Lot/Serial Number: </strong>
-                                        <field name="lot_id"/>
+                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
                                     </div>
                                     <div class="o_wms_move_pick_quantities">
                                         <div>
@@ -366,9 +368,8 @@
                                 <div invisible="picking_type_name in ('Receipts', 'Receipt Internal')">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
                                     <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
-                                        context="{'tijari_stock_picking_product_code_only': True}"
-                                        invisible="'Receipt' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                                    <field name="lot_id" readonly="1" force_save="1" class="fw-bold fs-6"
+                                        context="{'tijari_stock_picking_product_code_only': True}" invisible="'Pack' in (parent.picking_type_name or '')"/>
+                                    <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
                                         groups="stock.group_production_lot"
                                         invisible="parent.picking_type_name not in ('Pick', 'Pick Internal', 'Pick Components', 'Pack') or 'Pick' in (parent.picking_type_name or '')"/>
@@ -403,10 +404,10 @@
                                     groups="stock.group_production_lot"
                                     invisible="'Receipts' not in (parent.picking_type_name or '') and 'Receipt Internal' not in (parent.picking_type_name or '')">
                                     <strong>Lot/Serial Number: </strong>
-                                    <field name="lot_id" readonly="1" force_save="1"
+                                    <field name="lot_id" readonly="0" force_save="1"
                                         domain="[('id', 'in', available_lot_ids)]"/>
                                 </div>
-
+                                            
                                 <div class="d-flex align-items-center gap-1" invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
                                     <strong>Pick From: </strong>
                                     <field name="location_id" widget="location_short_many2one" readonly="1" force_save="1" context="{'show_location_short_name': True}"/>
@@ -419,18 +420,11 @@
                                     <strong>To: </strong>
                                     <field name="location_dest_id" widget="location_short_many2one" readonly="1" force_save="1" context="{'show_location_short_name': True}"/>
                                 </div> -->
-                                <div invisible="1">
+                                <div class="d-flex align-items-center gap-1" invisible="'Pack' not in (parent.picking_type_name or '')">
                                     <strong>Packages: </strong>
                                     <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" readonly="1" force_save="1"/>
                                 </div>
-                                <div class="d-flex align-items-center gap-1" invisible="'Pack' not in (parent.picking_type_name or '')">
-                                    <strong>Destination Package: </strong>
-                                    <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" force_save="1"/>
-                                    <field name="confirmation_package_code"
-                                        widget="adt_scan_result_package_button"
-                                        readonly="1"
-                                        invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                                </div>
+                                
                                 <div class="d-flex align-items-center gap-1">
                                     <strong invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')">Qty In Pack: </strong>
                                     <strong invisible="'Pack' not in (parent.picking_type_name or '')">Quantity: </strong>
@@ -507,6 +501,7 @@
                         <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
                         <field name="location_id"/>
                         <field name="lot_id"/>
+                        <field name="available_lot_ids"/>
                         <field name="quantity"/>
                         <field name="confirmation_quantity"/>
                         <field name="product_uom_id"/>
@@ -523,7 +518,7 @@
                                     </div>
                                     <div class="text-muted" invisible="not lot_id">
                                         <strong>Lot/Serial Number: </strong>
-                                        <field name="lot_id"/>
+                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
                                     </div>
                                     <div class="o_wms_move_pick_quantities">
                                         <div>
@@ -706,28 +701,18 @@
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="matching" column_invisible="1"/>
 
-                        <field name="lot_id" string="Lot" force_save="1"/>
-                        <field name="confirmation_lot_code"
-                                widget="adt_scan_lot_button"
-                                string="Scan Lot"
-                                readonly="1"
-                                invisible="matching == 'match'"/>
+                        <field name="lot_id" string="Lot" force_save="1" domain="[('id', 'in', available_lot_ids)]" column_invisible="1"/>
                         <field name="location_id" string="Pick From" widget="location_short_many2one" force_save="1" context="{'show_location_short_name': True}"/>
-                        <field name="confirmation_location_code"
-                                widget="adt_scan_location_button"
-                                string="Scan Location"
-                                readonly="1"
-                                invisible="matching == 'match'"/>
-                        <field name="quantity" string="Quantity" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Saran Qty" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
-                        <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" optional="hide"/>
+                        <field name="confirmation_quantity" string="Qty Diambil"/>
                         <field name="product_uom_id" string="Unit of Measure"/>
                         <field name="matching_lot_id" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]" optional="hide"/>
                         <field name="matching_loc_dest_id" string="Confirm Location" force_save="1" domain="[('id', 'child_of', adt_dest_location_id)]" optional="hide"/>
                         <field name="matching" string="Status"
                                 decoration-success="matching == 'match'"
                                 decoration-danger="matching == 'not_match'"
-                                widget="badge"/>
+                                widget="badge"
+                                optional="hide"/>
                     </list>
                     <kanban class="o_kanban_mobile">
                         <field name="company_id" invisible="1" force_save="1"/>
@@ -747,7 +732,7 @@
                         <templates>
                             <t t-name="card">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <field name="lot_id" force_save="1" class="fw-bold fs-6"/>
+                                    <field name="lot_id" domain="[('id', 'in', available_lot_ids)]" force_save="1" class="fw-bold fs-6"/>
                                     <field name="second_matching"
                                         widget="badge"
                                         decoration-success="second_matching == 'Match'"
@@ -803,8 +788,9 @@
                         <field name="tracking" column_invisible="1"/>
                         <field name="state" column_invisible="1"/>
                         <field name="is_locked" column_invisible="1"/>
+                        <field name="available_lot_ids" column_invisible="1" />
 
-                        <field name="lot_id" string="Lot/Serial Number" force_save="1"/>
+                        <field name="lot_id" string="Lot/Serial Number" domain="[('id', 'in', available_lot_ids)]" force_save="1"/>
                         <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" string="Destination Package" force_save="1"/>
                         <field name="confirmation_package_code"
                                 widget="adt_scan_result_package_button"
@@ -821,14 +807,19 @@
                         <field name="tracking" invisible="1"/>
                         <field name="state" invisible="1"/>
                         <field name="is_locked" invisible="1"/>
+                        <field name="available_lot_ids" invisible="1"/>
                         <templates>
                             <t t-name="card">
                                 <div class="o_wms_operation_card">
                                     <div class="o_wms_operation_product">
-                                        <field name="lot_id" class="fs-3"/>
+                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]" class="fs-3"/>
                                     </div>
                                     <br/>
                                     <div>
+                                        <div>
+                                            <strong>Description: </strong>
+                                            <field name="description_picking"/>
+                                        </div>
                                         <div>
                                             <strong>Packages: </strong>
                                             <field name="result_package_id"/>
@@ -889,7 +880,7 @@
                         <field name="available_location_ids" column_invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1" context="{'tijari_stock_picking_product_code_only': True}" column_invisible="'Pack' in (parent.picking_type_name or '')"/>
-                        <field name="lot_id" string="Lot/Serial Number" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
                         <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string="Scan Lot"
@@ -917,8 +908,8 @@
                                 column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
 
                         <field name="quantity" string="Qty In Pack" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Quantity" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Saran Qty" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Quantity" readonly="0" force_save="1" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="UoM" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="Unit of Measure" column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')"/>
@@ -978,7 +969,7 @@
                                     </div>
                                     <div class="text-muted" invisible="not lot_id">
                                         <strong>Lot/Serial Number: </strong>
-                                        <field name="lot_id"/>
+                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
                                     </div>
                                     <div class="o_wms_move_pick_quantities">
                                         <div>
@@ -1014,7 +1005,7 @@
                                     <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
                                         context="{'tijari_stock_picking_product_code_only': True}"
                                         invisible="'Receipt' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                                    <field name="lot_id" readonly="1" force_save="1" class="fw-bold fs-6"
+                                    <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
                                         groups="stock.group_production_lot"
                                         invisible="parent.picking_type_name not in ('Pick', 'Pick Internal', 'Pick Components', 'Pack')"/>
@@ -1148,6 +1139,11 @@
                             <field name="remaining_picker_quantity" readonly="1" nolabel="1"/>
                             <field name="product_uom" groups="uom.group_uom" readonly="1" nolabel="1" options="{'no_open': True}"/>
                         </div>
+                        <div invisible="'Pick' not in (picking_type_name or '')" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
+                            <label for="remaining_pick_quantity" string="Sisa Pemenuhan Qty" style="margin: 0 !important; white-space: nowrap !important;"/>
+                            <field name="remaining_pick_quantity" readonly="1" nolabel="1"/>
+                            <field name="product_uom" groups="uom.group_uom" readonly="1" nolabel="1" options="{'no_open': True}"/>
+                        </div>
                         <div invisible="1">
                             <label for="lot_ids" style="margin: 0 !important; white-space: nowrap !important;"/>
                             <field name="lot_ids" readonly="1" force_save="1" widget="many2many_tags" string="Lot/Serial Number"/>
@@ -1213,7 +1209,7 @@
                         <field name="available_location_ids" column_invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1" context="{'tijari_stock_picking_product_code_only': True}" column_invisible="'Pack' in (parent.picking_type_name or '')"/>
-                        <field name="lot_id" string="Lot/Serial Number" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]" />
                         <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string="Scan Lot"
@@ -1252,9 +1248,9 @@
                                 column_invisible="1"/>
 
                         <field name="quantity" string="Qty Diterima" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Quantity" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Saran Qty" column_invisible="'Pick' not in (parent.picking_type_name or '') or parent.state == 'done'"/>
-                        <field name="quantity_shadow" string="Saran Qty" column_invisible="'Pick' not in (parent.picking_type_name or '') or parent.state != 'done'"/>
+                        <field name="quantity" string="Quantity" readonly="0" force_save="1" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '') or parent.state == 'done'"/>
+                        <field name="quantity_shadow" string="Saran Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '') or parent.state != 'done'"/>
                         <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="not context.get('is_unpack')"/>
                         <field name="product_uom_id" string="UoM" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
@@ -1345,7 +1341,7 @@
                                     </div>
                                     <div class="text-muted" invisible="not lot_id">
                                         <strong>Lot/Serial Number: </strong>
-                                        <field name="lot_id"/>
+                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
                                     </div>
                                     <div class="o_wms_move_pick_quantities">
                                         <div>
@@ -1381,7 +1377,7 @@
                                     <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
                                         context="{'tijari_stock_picking_product_code_only': True}"
                                         invisible="'Receipt' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                                    <field name="lot_id" readonly="1" force_save="1" class="fw-bold fs-6"
+                                    <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
                                         groups="stock.group_production_lot"
                                         invisible="parent.picking_type_name not in ('Pick', 'Pick Internal', 'Pick Components', 'Pack')"/>
@@ -1421,7 +1417,7 @@
                                     groups="stock.group_production_lot"
                                     invisible="'Receipts' not in (parent.picking_type_name or '') and 'Receipt Internal' not in (parent.picking_type_name or '')">
                                     <strong>Lot/Serial Number: </strong>
-                                    <field name="lot_id" readonly="1" force_save="1"
+                                    <field name="lot_id" readonly="0" force_save="1"
                                         domain="[('id', 'in', available_lot_ids)]"/>
                                 </div>
 
@@ -1539,6 +1535,7 @@
                         <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
                         <field name="location_id"/>
                         <field name="lot_id"/>
+                        <field name="available_lot_ids" />
                         <field name="quantity"/>
                         <field name="confirmation_quantity"/>
                         <field name="product_uom_id"/>
@@ -1555,7 +1552,7 @@
                                     </div>
                                     <div class="text-muted" invisible="not lot_id">
                                         <strong>Lot/Serial Number: </strong>
-                                        <field name="lot_id"/>
+                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
                                     </div>
                                     <div class="o_wms_move_pick_quantities">
                                         <div>
@@ -1735,7 +1732,7 @@
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="matching" column_invisible="1"/>
 
-                        <field name="lot_id" string="Lot" force_save="1"/>
+                        <field name="lot_id" string="Lot" force_save="1" domain="[('id', 'in', available_lot_ids)]" />
                         <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string="Scan Lot"
@@ -1747,8 +1744,8 @@
                                 string="Scan Location"
                                 readonly="1"
                                 invisible="matching == 'match'"/>
-                        <field name="quantity" string="Saran Qty" column_invisible="parent.state == 'done'"/>
-                        <field name="quantity_shadow" string="Saran Qty" column_invisible="parent.state != 'done'"/>
+                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" column_invisible="parent.state == 'done'"/>
+                        <field name="quantity_shadow" string="Saran Qty" readonly="1" force_save="1" column_invisible="parent.state != 'done'"/>
                         <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="Unit of Measure"/>
                         <field name="matching_lot_id" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]" optional="hide"/>
@@ -1796,7 +1793,7 @@
                         <templates>
                             <t t-name="card">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <field name="lot_id" force_save="1" class="fw-bold fs-6"/>
+                                    <field name="lot_id" domain="[('id', 'in', available_lot_ids)]" force_save="1" class="fw-bold fs-6"/>
                                     <field name="second_matching"
                                         widget="badge"
                                         decoration-success="second_matching == 'Match'"
@@ -1870,8 +1867,9 @@
                         <field name="tracking" column_invisible="1"/>
                         <field name="state" column_invisible="1"/>
                         <field name="is_locked" column_invisible="1"/>
+                        <field name="available_lot_ids" column_invisible="1"/>
 
-                        <field name="lot_id" string="Lot/Serial Number" force_save="1"/>
+                        <field name="lot_id" string="Lot/Serial Number" domain="[('id', 'in', available_lot_ids)]" force_save="1"/>
                         <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" string="Destination Package" force_save="1"/>
                         <field name="confirmation_package_code"
                                 widget="adt_scan_result_package_button"
@@ -1956,7 +1954,7 @@
                         <field name="available_location_ids" column_invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1" context="{'tijari_stock_picking_product_code_only': True}" column_invisible="'Receipt' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                        <field name="lot_id" string="Lot/Serial Number" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
                         <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string="Scan Lot"
@@ -1984,8 +1982,8 @@
                                 column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
 
                         <field name="quantity" string="Qty In Pack" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Quantity" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Saran Qty" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Quantity" readonly="0" force_save="1" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="UoM" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="Unit of Measure" column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')"/>
@@ -2039,7 +2037,7 @@
                                     <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
                                         context="{'tijari_stock_picking_product_code_only': True}"
                                         invisible="'Receipt' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                                    <field name="lot_id" readonly="1" force_save="1" class="fw-bold fs-6"
+                                    <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
                                         groups="stock.group_production_lot"
                                         invisible="parent.picking_type_name not in ('Pick', 'Pick Internal', 'Pick Components', 'Pack')"/>
@@ -2153,6 +2151,11 @@
                             <field name="product_uom" groups="uom.group_uom" readonly="state != 'draft'" nolabel="1" options="{'no_open': True}"/>
                         </div>                        
                     </div>
+                    <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
+                        <label for="remaining_mo_quantity" string="Sisa Pemenuhan Qty" style="margin: 0 !important; white-space: nowrap !important;"/>
+                        <field name="remaining_mo_quantity" readonly="1" nolabel="1"/>
+                        <field name="product_uom" groups="uom.group_uom" readonly="1" nolabel="1" options="{'no_open': True}"/>
+                    </div>
                 </div>
                 <!-- <button name="action_add_picker_line"
                     type="object"
@@ -2187,7 +2190,7 @@
                         <field name="available_location_ids" column_invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1" context="{'tijari_stock_picking_product_code_only': True}" column_invisible="1"/>
-                        <field name="lot_id" string="Lot/Serial Number" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
                         <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string="Scan Lot"
@@ -2256,7 +2259,7 @@
                                 <div class="d-flex justify-content-between align-items-start mb-1">
                                     <!-- <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
                                         context="{'tijari_stock_picking_product_code_only': True}"/> -->
-                                    <field name="lot_id" readonly="1" force_save="1" class="fw-bold fs-6"
+                                    <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
                                         groups="stock.group_production_lot"/>
                                     <field name="mo_status"
@@ -2351,8 +2354,7 @@
 
                     </div>
 
-                    <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
-                                            
+                    <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">                   
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
                             <label for="product_uom_qty" style="margin: 0 !important; white-space: nowrap !important;"/>
                             <field name="product_uom_qty" readonly="state != 'draft'" nolabel="1"/>
@@ -2363,8 +2365,11 @@
                             <label for="lot_ids" style="margin: 0 !important; white-space: nowrap !important;"/>
                             <field name="lot_ids" readonly="1" force_save="1" widget="many2many_tags" string="Lot/Serial Number"/>
                         </div>
-                        
-
+                    </div>
+                    <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
+                        <label for="remaining_unpack_quantity" string="Sisa Pemenuhan Qty" style="margin: 0 !important; white-space: nowrap !important;"/>
+                        <field name="remaining_unpack_quantity" readonly="1" nolabel="1"/>
+                        <field name="product_uom" groups="uom.group_uom" readonly="1" nolabel="1" options="{'no_open': True}"/>
                     </div>
                 </div>
                 
@@ -2393,7 +2398,7 @@
                         <field name="allowed_matching_lot_ids" column_invisible="1"/>
                         <field name="product_uom_category_id" column_invisible="1"/>
                         <field name="tracking" column_invisible="1"/>
-                        <field name="state" column_invisible="0"/>
+                        <field name="state" column_invisible="1"/>
                         <field name="is_locked" column_invisible="1"/>
                         <field name="temp_quant_ids" column_invisible="1"/>
                         <field name="temp_lot_ids" column_invisible="1"/>
@@ -2401,7 +2406,7 @@
                         <field name="available_location_ids" column_invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1" context="{'tijari_stock_picking_product_code_only': True}" />
-                        <field name="lot_id" string="Lot/Serial Number" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
                         <field name="lot_name" readonly="1" force_save="1" column_invisible="1"/>
                         <field 
                             name="location_dest_id" 
@@ -2469,7 +2474,7 @@
                                 <div class="d-flex justify-content-between align-items-start mb-1">
                                     <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
                                         context="{'tijari_stock_picking_product_code_only': True}"/>
-                                    <field name="lot_id" readonly="1" force_save="1" class="fw-bold fs-6"
+                                    <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
                                         groups="stock.group_production_lot"/>
                                     
@@ -2539,6 +2544,12 @@
             <xpath expr="//span[@invisible='is_inventory']" position="replace">
                 <span invisible="is_inventory">
                     <br/>
+
+                    <div>
+                        <strong>Description: </strong>
+                        <field name="description_picking"/>
+                    </div>
+
                     <div>
                         <strong>Qty Total: </strong>
                         <field name="product_uom_qty"
