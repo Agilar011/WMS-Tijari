@@ -952,6 +952,7 @@ class StockPicking(models.Model):
         "internal_transfer_order_id.transfer_type",
         "internal_transfer_leg",
         "picking_type_id",
+        "picking_type_name",
     )
     def _compute_wms_state(self):
         for picking in self:
@@ -979,7 +980,9 @@ class StockPicking(models.Model):
                 # reserve transit stock like a vendor receipt. Do not prefill
                 # the actual received quantity here.
                 picking.wms_state = "assigned"
-            elif picking.state != "done" or not is_waiting_shipment:
+            elif picking.picking_type_name != "Delivery Orders":
+                picking.wms_state = picking.state
+            elif not is_waiting_shipment:
                 picking.wms_state = picking.state
 
     @api.depends(
@@ -1142,6 +1145,8 @@ class StockPicking(models.Model):
     def _compute_filtered_move_ids(self):
         for picking in self:
             picking.filtered_move_ids = picking._get_picker_moves()
+
+
 
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):
@@ -2562,9 +2567,11 @@ class StockPicking(models.Model):
 
         for picking in self:
             # update actual qty
-            picking.update({
-                'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
-            })
+            if picking.picking_type_id.name not in ("Pack"):
+                picking.update({
+                    'adt_actual_qty': sum(picking.move_ids.mapped('quantity'))
+                })
+            
             if picking.adt_type == 'Toko Pegang DO':
                 if not picking.owner_id:
                     raise UserError(_("Owner is required for Toko Pegang DO."))
@@ -2673,17 +2680,35 @@ class StockPicking(models.Model):
                         ))
 
             if "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
+                next_pickings = rec.move_ids.move_dest_ids.mapped("picking_id").filtered(
+                    lambda picking: picking.picking_type_name == "Pack"
+                )
+                next_pickings.write({
+                    'adt_actual_qty': rec.adt_actual_qty
+                })
+
                 for move in rec.move_ids:
                     confirmation_qty = move.confirmation_quantity
 
-                    for dest_move in move.move_dest_ids:
+                    for dest_move in move.move_dest_ids.filtered(
+                        lambda m: m.picking_id.picking_type_name == "Pack"
+                    ):
                         dest_move.write({
                             'product_uom_qty': confirmation_qty,
                         })
             
             elif 'Pack' in (rec.picking_type_name or ""):
+                next_pickings = rec.move_ids.move_dest_ids.mapped("picking_id").filtered(
+                    lambda picking: picking.picking_type_name == "Delivery Orders"
+                )
+                next_pickings.write({
+                    'adt_actual_qty': rec.adt_actual_qty
+                })
+
                 for move in rec.move_ids:
-                    for dest_move in move.move_dest_ids:
+                    for dest_move in move.move_dest_ids.filtered(
+                        lambda m: m.picking_id.picking_type_name == "Delivery Orders"
+                    ):
                         packaged_qty = sum(
                             ml.quantity
                             for ml in dest_move.move_line_ids
