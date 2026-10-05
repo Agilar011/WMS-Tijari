@@ -900,7 +900,7 @@ class WmsApiController(http.Controller):
         ], limit=1)
 
         data = {
-            'warehouse_id': warehouse.name or '',
+            'warehouse_id': stock.name or '',
             'date': format_tanggal_indo(stock.date),
             'lok': ", ".join(stock.location_ids.mapped('complete_name')) if stock.location_ids else '',
             'note': stock.notes or '',
