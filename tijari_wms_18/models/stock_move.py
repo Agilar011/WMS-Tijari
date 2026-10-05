@@ -180,10 +180,40 @@ class StockMove(models.Model):
         store=True,
     )
 
-    @api.depends('move_line_ids.status_check')
+    unpack_status_sequence = fields.Integer(
+        string='Unpack Status Sequence',
+        compute='_compute_unpack_status_sequence',
+        store=True,
+    )
+
+    @api.depends(
+        'move_line_ids.status_check',
+        'move_line_ids.result_package_id',
+        'remaining_package_qty',
+    )
+    def _compute_unpack_status_sequence(self):
+        for move in self:
+            lines = (
+                move.move_line_ids.filtered(lambda line: not line.result_package_id)
+                if move.remaining_package_qty > 0
+                else self.env['stock.move.line']
+            )
+            move.unpack_status_sequence = 1 if (
+                lines and all(line.status_check == 'finished' for line in lines)
+            ) else 0
+
+    @api.depends(
+        'move_line_ids.status_check',
+        'move_line_ids.result_package_id',
+        'remaining_package_qty',
+    )
     def _compute_status_check_sequence(self):
         for move in self:
-            lines = move.filtered_unpack_line_ids
+            lines = (
+                move.move_line_ids.filtered(lambda line: not line.result_package_id)
+                if move.remaining_package_qty > 0
+                else self.env['stock.move.line']
+            )
             move.status_check_sequence = 1 if (
                 lines and all(line.status_check == 'finished' for line in lines)
             ) else 0
@@ -215,6 +245,20 @@ class StockMove(models.Model):
         ('finished', 'Finished'),
         ('unfinished', 'Unfinished'),
     ], string='Status', compute="_compute_status_pick_check")
+
+    pick_status_sequence = fields.Integer(
+        string='Pick Status Sequence',
+        compute='_compute_pick_status_sequence',
+        store=True,
+    )
+
+    @api.depends('move_line_ids.pick_status')
+    def _compute_pick_status_sequence(self):
+        for move in self:
+            lines = move.move_line_ids
+            move.pick_status_sequence = 1 if (
+                lines and all(line.pick_status == 'finished' for line in lines)
+            ) else 0
 
     @api.depends('move_line_ids.pick_status')
     def _compute_status_pick_check(self):

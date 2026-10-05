@@ -17,10 +17,14 @@ class WMSStockPackageLevel(models.Model):
 
     def action_mark_finished(self):
         self.write({'status': 'finished'})
+        if self.env.context.get('wms_refresh_packed_sequence'):
+            return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
         return True
 
     def action_mark_unfinished(self):
         self.write({'status': 'unfinished'})
+        if self.env.context.get('wms_refresh_packed_sequence'):
+            return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
         return True
 
     # def action_show_package_details(self):
@@ -64,4 +68,3 @@ class WMSStockPackageLevel(models.Model):
             "target": "new",
             "res_id": wizard.id,
         }
-        
