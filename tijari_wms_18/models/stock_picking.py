@@ -311,8 +311,15 @@ class StockPicking(models.Model):
 
     filtered_move_ids = fields.One2many(
         comodel_name="stock.move",
+        inverse_name="picking_id",
         string="Filtered Stock Moves",
         compute='_compute_filtered_move_ids',
+    )
+
+    filtered_picker_move_ids = fields.Many2many(
+        comodel_name="stock.move",
+        string="Ordered Picker Moves",
+        compute='_compute_filtered_picker_move_ids',
     )
 
     def _compute_scan_product_by_lot_button(self):
@@ -924,7 +931,10 @@ class StockPicking(models.Model):
             )
 
         return moves.sorted(
-            key=lambda move: (move.picker_sequence, move._origin.id or 0)
+            key=lambda move: (
+                move.pick_status_sequence,
+                move._origin.id or 0,
+            )
         )
 
     def _get_picker_lots(self):
@@ -979,6 +989,8 @@ class StockPicking(models.Model):
                 # Availability, even when its zero-qty working lines cannot
                 # reserve transit stock like a vendor receipt. Do not prefill
                 # the actual received quantity here.
+                picking.wms_state = "assigned"
+            elif is_waiting_shipment and not picking.shipment_information:
                 picking.wms_state = "assigned"
             elif picking.picking_type_name != "Delivery Orders":
                 picking.wms_state = picking.state
@@ -1141,10 +1153,23 @@ class StockPicking(models.Model):
 
     @api.depends(
         'picker_product_id',
+        'move_ids_without_package',
+        'move_ids_without_package.move_line_ids.pick_status',
     )
     def _compute_filtered_move_ids(self):
         for picking in self:
             picking.filtered_move_ids = picking._get_picker_moves()
+
+    @api.depends(
+        'picker_product_id',
+        'move_ids_without_package',
+        'move_ids_without_package.state',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.move_line_ids.pick_status',
+    )
+    def _compute_filtered_picker_move_ids(self):
+        for picking in self:
+            picking.filtered_picker_move_ids = picking._get_picker_moves()
 
 
 
@@ -2797,7 +2822,7 @@ class StockPicking(models.Model):
 
     def _apply_confirmation_qty_to_quantity_delivery(self):
         for move in self.move_ids:
-            for line in move.filtered_unpack_line_ids:
+            for line in move.move_line_ids:
                 confirmation_qty = line.so_confirmation_quantity
 
                 line.quantity_shadow = line.quantity
@@ -3589,6 +3614,16 @@ class StockPicking(models.Model):
         return base64.b64encode(buffer.getvalue()).decode()
 
     
+class StockReturnPicking(models.TransientModel):
+    _inherit = 'stock.return.picking'
+
+    def _prepare_picking_default_values(self):
+        vals = super()._prepare_picking_default_values()
+        source_origin = self.picking_id.origin or ''
+        vals['origin'] = _("Return of %(origin)s", origin=source_origin)
+        return vals
+
+
 class StockRule(models.Model):
     _inherit = "stock.rule"
 

@@ -53,7 +53,7 @@ class StockMove(models.Model):
         string="Mapped Location",
     )
     product_note = fields.Text(string='Product Note')
-    difference_note = fields.Text(string='difference Note')
+    difference_note = fields.Text(string='Difference Note')
     batch_adt_type = fields.Char(
         related='picking_id.adt_type',
         string='Tipe Transaksi',
@@ -116,6 +116,11 @@ class StockMove(models.Model):
 
     # temp_float = fields.Float(string="Confirmation Quantity")
     so_confirmation_quantity = fields.Float(
+        compute='_compute_so_confirmation_quantity',
+        store=True,
+    )
+
+    do_confirmation_quantity = fields.Float(
         compute='_compute_so_confirmation_quantity',
         store=True,
     )
@@ -197,10 +202,40 @@ class StockMove(models.Model):
         store=True,
     )
 
-    @api.depends('move_line_ids.status_check')
+    unpack_status_sequence = fields.Integer(
+        string='Unpack Status Sequence',
+        compute='_compute_unpack_status_sequence',
+        store=True,
+    )
+
+    @api.depends(
+        'move_line_ids.status_check',
+        'move_line_ids.result_package_id',
+        'remaining_package_qty',
+    )
+    def _compute_unpack_status_sequence(self):
+        for move in self:
+            lines = (
+                move.move_line_ids.filtered(lambda line: not line.result_package_id)
+                if move.remaining_package_qty > 0
+                else self.env['stock.move.line']
+            )
+            move.unpack_status_sequence = 1 if (
+                lines and all(line.status_check == 'finished' for line in lines)
+            ) else 0
+
+    @api.depends(
+        'move_line_ids.status_check',
+        'move_line_ids.result_package_id',
+        'remaining_package_qty',
+    )
     def _compute_status_check_sequence(self):
         for move in self:
-            lines = move.filtered_unpack_line_ids
+            lines = (
+                move.move_line_ids.filtered(lambda line: not line.result_package_id)
+                if move.remaining_package_qty > 0
+                else self.env['stock.move.line']
+            )
             move.status_check_sequence = 1 if (
                 lines and all(line.status_check == 'finished' for line in lines)
             ) else 0
@@ -232,6 +267,34 @@ class StockMove(models.Model):
         ('finished', 'Finished'),
         ('unfinished', 'Unfinished'),
     ], string='Status', compute="_compute_status_pick_check")
+
+    pick_status_sequence = fields.Integer(
+        string='Pick Status Sequence',
+        store=True,
+    )
+
+    def _refresh_pick_status_sequence(self):
+        """Persist the Picker list order from the displayed Pick status."""
+        for picking in self.mapped('picking_id'):
+            moves = picking.move_ids_without_package
+            for move in moves:
+                lines = move.move_line_ids
+                move.pick_status_sequence = 1 if (
+                    lines and all(line.pick_status == 'finished' for line in lines)
+                ) else 0
+
+            # The embedded one2many initially follows stock.move's native
+            # sequence/id order. Keep unfinished lines first in that relation
+            # order as well, then append finished lines in their prior order.
+            ordered_moves = moves.sorted(
+                key=lambda move: (
+                    move.pick_status_sequence,
+                    move.sequence,
+                    move.id,
+                )
+            )
+            for position, move in enumerate(ordered_moves, start=1):
+                move.sequence = position * 10
 
     @api.depends('move_line_ids.pick_status')
     def _compute_status_pick_check(self):
@@ -465,7 +528,8 @@ class StockMove(models.Model):
         'quantity_shadow', 
         'picking_type_name', 
         'confirmation_quantity', 
-        'mo_confirmation_quantity')
+        'mo_confirmation_quantity',
+        'do_confirmation_quantity',)
 
     def _compute_difference_quantity(self):
         for move in self:
@@ -476,6 +540,10 @@ class StockMove(models.Model):
                 total_confirmation_quantity = move.confirmation_quantity
                 total_qty = (move.quantity_shadow if move.quantity_shadow > 0.0 else move.quantity )
                 difference = total_qty - total_confirmation_quantity
+            elif move.picking_type_name in ['Delivery Orders']:
+                total_confirmation_quantity = move.do_confirmation_quantity
+                total_qty = (move.product_uom_qty)
+                difference = total_qty - total_confirmation_quantity 
             else:
                 if move.raw_material_production_id:
                     total_confirmation_quantity = move.mo_confirmation_quantity
@@ -526,7 +594,9 @@ class StockMove(models.Model):
     def _compute_so_confirmation_quantity(self):
         for move in self:
             total_so_confirmation_quantity = sum(move.filtered_unpack_line_ids.mapped('so_confirmation_quantity'))
+            total_do_confirmation_quantity = sum(move.move_line_ids.mapped('so_confirmation_quantity'))
             move.so_confirmation_quantity = total_so_confirmation_quantity if total_so_confirmation_quantity > 0 else 0.0
+            move.do_confirmation_quantity = total_do_confirmation_quantity if total_do_confirmation_quantity > 0 else 0.0
 
     def action_generate_lot(self):
         for move in self:
@@ -780,6 +850,9 @@ class StockMove(models.Model):
 
         return base64.b64encode(buffer.getvalue()).decode()
 
+    def action_open_unpack_detail(self):
+        pass
+
     def action_open_move_pick(self):
         self.ensure_one()
 
@@ -791,6 +864,21 @@ class StockMove(models.Model):
             'view_mode': 'form',
             'view_id': self.env.ref(
                 'tijari_wms_18.stock_move_pick_detail_view'
+            ).id,
+            'target': 'new',
+        }
+    
+    def action_open_move_mo(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_mo_view'
             ).id,
             'target': 'new',
         }
