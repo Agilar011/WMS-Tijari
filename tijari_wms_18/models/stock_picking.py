@@ -3589,6 +3589,16 @@ class StockPicking(models.Model):
         return base64.b64encode(buffer.getvalue()).decode()
 
     
+class StockReturnPicking(models.TransientModel):
+    _inherit = 'stock.return.picking'
+
+    def _prepare_picking_default_values(self):
+        vals = super()._prepare_picking_default_values()
+        source_origin = self.picking_id.origin or ''
+        vals['origin'] = _("Return of %(origin)s", origin=source_origin)
+        return vals
+
+
 class StockRule(models.Model):
     _inherit = "stock.rule"
 

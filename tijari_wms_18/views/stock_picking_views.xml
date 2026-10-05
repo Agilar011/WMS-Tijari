@@ -245,6 +245,7 @@
 
                 <page string="Unpacked Item Details" name="detail_product" invisible="(picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer) or not show_delivery_page">
                     <field name="move_ids_without_package" mode="list,kanban"
+                        widget="stock_move_one2many"
                         context="{
                             'form_view_ref': 'tijari_wms_18.stock_move_delivery_unpack_view',
                             'default_company_id': company_id, 
@@ -260,7 +261,7 @@
                         }"
                         add-label="Add a Product"
                         >
-                        <list default_order="status_check_sequence, id"
+                        <list default_order="unpack_status_sequence asc, id asc"
                             decoration-muted="scrapped == True or state == 'cancel' or (state == 'done' and is_locked == True)" 
                             string="Stock Moves" 
                             editable="bottom"
@@ -269,7 +270,7 @@
                             <field name="picking_id" column_invisible="True"/>
                             <field name="name" column_invisible="True"/>
                             <field name="state" readonly="0" column_invisible="True"/>
-                            <field name="status_check_sequence" column_invisible="True"/>
+                            <field name="unpack_status_sequence" column_invisible="True"/>
                             <field name="picking_type_id" column_invisible="True"/>
                             <field name="move_line_ids" column_invisible="True"/>
                             <field name="location_id" column_invisible="True"/>
@@ -314,7 +315,7 @@
                                 column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
                             <field name="product_qty" readonly="1" column_invisible="True"/>
                             <!-- <field name="temp_float" string="Confirmed Quantity"/> -->
-                            <field name="so_confirmation_quantity" string="Confirmed Quantity" column_invisible="not parent.is_ito_internal_transfer"/>
+                            <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="not parent.is_ito_internal_transfer"/>
                             <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="parent.picking_type_name not in ['Delivery Orders']" readonly="state in ('done', 'cancel') or status_check == 'finished'"/>
                             <field name="quantity" string="Qty Diterima" optional="hide" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                             <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
@@ -437,7 +438,21 @@
                             'default_company_id': company_id,
                         }"
                         readonly="state == 'done'"
-                        invisible="not picking_type_entire_packs and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment')"/>
+                        invisible="not picking_type_entire_packs and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Shipment Consignment')">
+                        <list default_order="status desc, id" editable="bottom" decoration-muted="state == 'done'">
+                            <field name="is_fresh_package" column_invisible="True"/>
+                            <field name="company_id" column_invisible="True"/>
+                            <field name="package_id" readonly="state in ('confirmed', 'assigned', 'done', 'cancel')" options="{'no_create': True}"/>
+                            <field name="location_id" options="{'no_create': True}" column_invisible="parent.picking_type_code == 'incoming'" groups="stock.group_stock_multi_locations"/>
+                            <field name="location_dest_id" options="{'no_create': True}" column_invisible="parent.picking_type_code != 'incoming'" groups="stock.group_stock_multi_locations"/>
+                            <field name="state"/>
+                            <field name="is_done" readonly="parent.state in ('draft', 'new', 'done') or is_fresh_package"/>
+                            <field name="status" widget="badge" decoration-success="status == 'finished'" decoration-danger="status == 'unfinished'"/>
+                            <button name="action_mark_finished" type="object" icon="fa-check" class="btn-success" title="Finish Package" context="{'wms_refresh_packed_sequence': True}" invisible="status == 'finished'"/>
+                            <button name="action_mark_unfinished" type="object" icon="fa-undo" class="btn-danger" title="Undo Package" context="{'wms_refresh_packed_sequence': True}" invisible="status != 'finished'"/>
+                            <button name="action_show_package_details" title="Display package content" type="object" icon="fa-list"/>
+                        </list>
+                    </field>
 
                     <button name="action_refresh_consignment_transfer_out"
                             type="object"

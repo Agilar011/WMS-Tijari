@@ -1447,11 +1447,11 @@ class StockMoveLine(models.Model):
         self._validate_before_mark_unpack_finished()
 
         self.write({'status_check': 'finished'})
-        return {'type': 'ir.actions.act_window_close'}
+        return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
 
     def action_mark_check_unpack_unfinished(self):
         self.write({'status_check': 'unfinished'})
-        return self.move_id.action_open_move_delivery()
+        return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
 
     def _validate_before_mark_unpack_finished(self):
         confirmation_quantity = self.so_confirmation_quantity
