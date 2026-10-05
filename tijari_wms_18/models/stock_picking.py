@@ -990,6 +990,8 @@ class StockPicking(models.Model):
                 # reserve transit stock like a vendor receipt. Do not prefill
                 # the actual received quantity here.
                 picking.wms_state = "assigned"
+            elif is_waiting_shipment and not picking.shipment_information:
+                picking.wms_state = "assigned"
             elif picking.picking_type_name != "Delivery Orders":
                 picking.wms_state = picking.state
             elif not is_waiting_shipment:
@@ -2820,7 +2822,7 @@ class StockPicking(models.Model):
 
     def _apply_confirmation_qty_to_quantity_delivery(self):
         for move in self.move_ids:
-            for line in move.filtered_unpack_line_ids:
+            for line in move.move_line_ids:
                 confirmation_qty = line.so_confirmation_quantity
 
                 line.quantity_shadow = line.quantity
