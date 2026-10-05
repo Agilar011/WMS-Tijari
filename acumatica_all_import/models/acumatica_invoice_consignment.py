@@ -452,7 +452,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': line_source_location.id,
                             'location_dest_id': picking.location_dest_id.id,
-                            'description_picking': line.adt_TransactionDescription or False,
+                            # 'description_picking': product.name or False,
                             'adt_line_external_id': line.adt_external_id or False,
                             'adt_inventory_id': line.adt_InventoryID or False,
                             'adt_line_nbr': line.adt_rowNumber or False,

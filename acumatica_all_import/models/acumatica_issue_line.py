@@ -264,7 +264,7 @@ class AcumaticaIssueLine(models.Model):
                         'product_uom': uom.id if uom else product.uom_id.id,
                         'location_id': source_location.id,
                         'location_dest_id': dest_location.id,
-                        'description_picking': line.line_description or False,
+                        # 'description_picking': product.name or False,
 
                         'adt_line_external_id': line.line_external_id or False,
                         'adt_inventory_id': line.line_note or False,

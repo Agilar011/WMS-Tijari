@@ -454,10 +454,11 @@ class AcumaticaInternalTransferService(models.AbstractModel):
             'location_id': order.location_id.id,
             'location_dest_id': order.location_dest_id.id,
             'internal_transfer_order_id': order.id,
-            'description_picking': description or name or False,
+            # 'description_picking': product.name or False,
         }
         if extra_vals:
             vals.update(extra_vals)
+        # vals['description_picking'] = product.name or False
         vals = {key: value for key, value in vals.items() if key in Move._fields}
         return Move.create(vals)
 

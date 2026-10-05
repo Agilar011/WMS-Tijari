@@ -244,7 +244,22 @@
             <xpath expr="//notebook/page[@name='operations']" position="after">
 
                 <page string="Unpacked Item Details" name="detail_product" invisible="(picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer) or not show_delivery_page">
-                    <field name="move_ids_without_package" mode="list,kanban"
+                    <group>
+                        <field name="allowed_unpacked_product_ids" invisible="1"/>
+                        <field name="allowed_unpacked_lot_ids" invisible="1"/>
+                        <field name="unpacked_lot_code" invisible="1"/>
+                        <field name="unpacked_scan_code"
+                            widget="adt_handheld_scan_code"
+                            placeholder="Scan handheld atau ketik kode"
+                            help="Bisa barcode atau SKU."/>
+                        <field name="unpacked_product_id" string="Filter Product"
+                            domain="[('id', 'in', allowed_unpacked_product_ids)]"
+                            options="{'no_create': True, 'no_open': True}"/>
+                        <field name="unpacked_lot_id" string="Filter Lot"
+                            domain="[('id', 'in', allowed_unpacked_lot_ids)]"
+                            options="{'no_create': True, 'no_open': True}"/>
+                    </group>
+                    <field name="filtered_unpacked_move_ids" mode="list,kanban"
                         widget="stock_move_one2many"
                         context="{
                             'form_view_ref': 'tijari_wms_18.stock_move_delivery_unpack_view',
@@ -258,6 +273,8 @@
                             'default_location_id': location_id, 
                             'default_location_dest_id': location_dest_id, 
                             'default_partner_id': partner_id,
+                            'unpacked_lot_id': unpacked_lot_id,
+                            'unpacked_lot_code': unpacked_lot_code,
                         }"
                         add-label="Add a Product"
                         >

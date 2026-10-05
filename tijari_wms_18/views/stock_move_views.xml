@@ -2447,7 +2447,7 @@
                     </div>
                 </div>
                 
-                <field name="filtered_unpack_line_ids"
+                <field name="filtered_unpacked_lot_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
                         'form_view_ref': 'stock.view_move_line_mobile_form',

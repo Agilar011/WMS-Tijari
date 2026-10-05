@@ -294,7 +294,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         qty = self._parse_float(line.adt_Quantity)
 
                         transfer_service.create_order_move(order, product, qty, product.uom_id, line.adt_Description or product.display_name, line.adt_Description or False, {
-                            'description_picking': line.adt_Description or False,
+                            # 'description_picking': product.name or False,
                             'adt_line_external_id': line.adt_id or False,
                             'adt_inventory_id': line.adt_InventoryID or False,
                             'adt_line_nbr': line.adt_rowNumber or False,

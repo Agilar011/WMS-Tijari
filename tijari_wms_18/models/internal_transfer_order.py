@@ -260,7 +260,7 @@ class InternalTransferOrder(models.Model):
         self.ensure_one()
         if (
             self.transaction_type != 'intra_warehouse'
-            or self.transfer_type != 'intra_group_transfer'
+            or self.intra_transfer_type != 'intra_group_transfer'
         ):
             raise ValidationError(
                 'Scan lokasi hanya tersedia untuk Intra Group Transfer.'
