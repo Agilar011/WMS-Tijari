@@ -521,7 +521,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                     'location_id': picking.location_id.id,
                     'location_dest_id': picking.location_dest_id.id,
                     'warehouse_id': source_wh.id if source_wh else False,
-                    'description_picking': shipment_line.line_description or False,
+                    # 'description_picking': product.name or False,
                     'adt_dest_location_id': adt_dest_location,
                     'adt_line_external_id': shipment_line.line_external_id or False,
                     'adt_inventory_id': shipment_line.inventory_id or False,

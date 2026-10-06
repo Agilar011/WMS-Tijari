@@ -587,7 +587,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     'location_id': picking.location_id.id if picking else False,
                     'location_dest_id': picking.location_dest_id.id if picking else False,
                     'warehouse_id': warehouse.id if warehouse else False,
-                    'description_picking': receive_line.line_description or False,
+                    # 'description_picking': product.name or False,
 
                     'adt_inventory_id': receive_line.line_note or False,
                     'adt_line_nbr': receive_line.line_nbr or False,

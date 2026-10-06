@@ -545,7 +545,8 @@
                                 force_save="1"
                                 nolabel="1"
                                 options="{'no_create': True}"
-                                groups="uom.group_uom"/>
+                                groups="uom.group_uom"
+                                invisible="'Pick' not in (picking_type_name or '') and 'Pack' not in (picking_type_name or '') and 'Receipts' not in (picking_type_name or '')"/>
 
                         </div>
 
@@ -559,6 +560,7 @@
                     <group invisible="is_manufacturing or (
                         'Pack' in (picking_type_name or '')
                         or 'Receipts' in (picking_type_name or '')
+                        or 'Delivery Orders' in (picking_type_name or '')
                     )">
 
                         <label for="confirmation_quantity"
@@ -567,6 +569,35 @@
                         <div class="o_row">
 
                             <field name="confirmation_quantity"
+                                nolabel="1"
+                                class="fw-bold fs-6"/>
+                            
+                            <field name="product_uom_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                options="{'no_create': True}"
+                                groups="uom.group_uom"/>
+
+                        </div>
+
+                    </group>
+
+                    
+                    <!-- ===================================================== -->
+                    <!-- Qty Dikirim dan Unpack - Normal -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or (
+                        'Delivery Orders' not in (picking_type_name or '')
+                    )">
+
+                        <label for="so_confirmation_quantity"
+                            string="Qty Dikirim"/>
+
+                        <div class="o_row">
+
+                            <field name="so_confirmation_quantity"
                                 nolabel="1"
                                 class="fw-bold fs-6"/>
 
@@ -672,14 +703,44 @@
         <field name="arch" type="xml">
             <xpath expr="//sheet" position="inside">
                 <field name="picking_type_name" invisible="1"/>
-                <field name="putaway_status" invisible="1"/>
                 <field name="mo_status" invisible="1"/>
                 <field name="picker_status" invisible="1"/>
+                <field name="pick_status" invisible="1"/>
+                <field name="status_check" invisible="1"/>
                 <field name="is_manufacturing" invisible="1"/>
             </xpath>
             <xpath expr="//form" position="inside">
-                <footer>
-                    <button name="action_save_picker_details"
+                <footer> 
+                    <button 
+                        name="action_save_picker_details"
+                        type="object"
+                        string="Save &amp; Confirm"
+                        class="btn-primary"
+                        invisible="
+                            (picking_type_name == 'Receipts' and picker_status == 'finished')
+                            or
+                            (picking_type_name in ['Pick', 'Pick Components'] and pick_status == 'finished')
+                            or
+                            (picking_type_name == 'Delivery Orders' and status_check == 'finished')
+                            or
+                            (is_manufacturing and mo_status == 'finished')"
+                    />
+                    <button 
+                        name="action_rollback_details"
+                        type="object"
+                        string="Rollback"
+                        class="btn-danger"
+                        invisible="
+                            (picking_type_name == 'Receipts' and picker_status != 'finished')
+                            or
+                            (picking_type_name in ['Pick', 'Pick Components'] and pick_status != 'finished')
+                            or
+                            (picking_type_name == 'Delivery Orders' and status_check != 'finished')
+                            or
+                            (is_manufacturing and mo_status != 'finished')"
+                        />
+
+                    <!-- <button name="action_save_picker_details"
                         type="object"
                         string="Save"
                         class="btn-primary"
@@ -698,7 +759,7 @@
                         type="object"
                         string="Rollback"
                         class="btn-danger"
-                        invisible="picking_type_name == 'Receipts' or mo_status == 'unfinished' or (picker_status == 'unfinished' and not is_manufacturing)"/>
+                        invisible="picking_type_name == 'Receipts' or mo_status == 'unfinished' or (picker_status == 'unfinished' and not is_manufacturing)"/> -->
                     
                     <button name="action_delete_picker_line"
                         confirm="Apakah Anda yakin ingin menghapus data penerimaan ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Putaway"

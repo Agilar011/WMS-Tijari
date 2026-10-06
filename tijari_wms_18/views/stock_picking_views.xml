@@ -7,8 +7,8 @@
         <field name="inherit_id" ref="stock.view_picking_internal_search"/>
         <field name="arch" type="xml">
             <xpath expr="//search/separator[1]" position="before">
-                <filter name="tijari_pick" string="Pick" domain="[('operation_category', '=', 'pick')]"/>
-                <filter name="tijari_pack" string="Pack" domain="[('operation_category', '=', 'pack')]"/>
+                <filter name="tijari_pick" string="Pick" domain="[('picking_type_id.group_view', '=', 'pick')]"/>
+                <filter name="tijari_pack" string="Pack" domain="[('picking_type_id.group_view', '=', 'pack')]"/>
                 <filter name="tijari_internal_intra" string="Internal Transfer - Intra" domain="[('internal_transfer_order_id.transaction_type', '=', 'intra_warehouse')]"/>
                 <filter name="tijari_internal_inter" string="Internal Transfer - Inter" domain="[('internal_transfer_order_id.transaction_type', '=', 'inter_warehouse')]"/>
                 <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', 'in', ['Internal Transfer', 'Internal Transfers', 'Transfer Internal'])]"/>
@@ -229,12 +229,12 @@
                             invisible="picking_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
 
                         <!-- PUTAWAY
-                            Receipt only -->
+                            Receipt and Storage -->
                         <field 
                             name="putaway_responsible_ids"
                             widget="many2many_avatar_user"
                             readonly="state in ('cancel','done')"
-                            invisible="'Receipt' not in (picking_type_name or '')"/>
+                            invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"/>
                         
                         <field name="user_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="1" force_save="1"/>
                     </group>
@@ -244,8 +244,23 @@
             <xpath expr="//notebook/page[@name='operations']" position="after">
 
                 <page string="Unpacked Item Details" name="detail_product" invisible="(picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer) or not show_delivery_page">
-                    <field name="move_ids_without_package" mode="list,kanban"
-                        widget="stock_move_one2many"
+                    <group>
+                        <field name="allowed_unpacked_product_ids" invisible="1"/>
+                        <field name="allowed_unpacked_lot_ids" invisible="1"/>
+                        <field name="unpacked_lot_code" invisible="1"/>
+                        <field name="unpacked_scan_code"
+                            widget="adt_handheld_scan_code"
+                            placeholder="Scan handheld atau ketik kode"
+                            help="Bisa barcode atau SKU."/>
+                        <field name="unpacked_product_id" string="Filter Product"
+                            domain="[('id', 'in', allowed_unpacked_product_ids)]"
+                            options="{'no_create': True, 'no_open': True}"/>
+                        <field name="unpacked_lot_id" string="Filter Lot"
+                            domain="[('id', 'in', allowed_unpacked_lot_ids)]"
+                            options="{'no_create': True, 'no_open': True}"/>
+                    </group>
+                    <field name="filtered_unpacked_move_ids" mode="list,kanban"
+                        
                         context="{
                             'form_view_ref': 'tijari_wms_18.stock_move_delivery_unpack_view',
                             'default_company_id': company_id, 
@@ -258,6 +273,8 @@
                             'default_location_id': location_id, 
                             'default_location_dest_id': location_dest_id, 
                             'default_partner_id': partner_id,
+                            'unpacked_lot_id': unpacked_lot_id,
+                            'unpacked_lot_code': unpacked_lot_code,
                         }"
                         add-label="Add a Product"
                         >
@@ -389,7 +406,7 @@
                                     </div>
 
                                     <div class="d-flex gap-2 mt-2">
-                                        <button name="action_open_upack_wizard"
+                                        <button name="action_open_unpack_detail"
                                             type="object"
                                             string="Open Detail"
                                             class="btn-primary"/>
@@ -855,6 +872,11 @@
                                                 </div>
                                             </div>
                                             <br/>
+                                            <button
+                                                name="action_open_note_wizard"
+                                                type="object"
+                                                icon="fa-sticky-note"
+                                                title="Note"/>
                                             <button 
                                                 name="action_open_move_pick"
                                                 type="object"
@@ -978,7 +1000,7 @@
                                     title="Open Putaway"
                                     icon="fa-archive"
                                     class="btn-link"
-                                    invisible="not parent.show_putaway_page or parent.picking_type_name not in ['Receipts', 'Receipt Internal']"
+                                    invisible="not parent.show_putaway_page or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"
                                 />
                             </list>
                             <kanban class="o_kanban_mobile">
@@ -1016,6 +1038,12 @@
                                                 </div>
                                             </div>
                                             <br/>
+                                            <button
+                                                name="action_open_note_wizard"
+                                                type="object"
+                                                icon="fa-sticky-note"
+                                                title="Note"
+                                                />
                                             <button name="action_open_move_pick"
                                                 type="object"
                                                 string="Pick Detail"
@@ -1154,6 +1182,12 @@
                                                 </div>
                                             </div>
                                             <br/>
+                                            <button
+                                                name="action_open_note_wizard"
+                                                type="object"
+                                                icon="fa-sticky-note"
+                                                title="Note"
+                                                />
                                             <button name="action_open_move_operation"
                                                 type="object"
                                                 string="Pack Detail"

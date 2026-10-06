@@ -332,7 +332,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             'product_uom': product.uom_id.id,
                             'location_id': line_loc_src.id,
                             'location_dest_id': line_loc_dest.id,
-                            'description_picking': line.adt_TransactionDescription or False,
+                            # 'description_picking': product.name or False,
                             
                             # Custom tracking audit trail
                             'adt_line_external_id': line.adt_id or False,

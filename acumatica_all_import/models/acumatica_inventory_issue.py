@@ -158,6 +158,15 @@ class AcumaticaInventoryIssueLine(models.Model):
             location = Location.search([('code', '=', code)], limit=1)
         return location
 
+    def _find_location_dest(self, code):
+        Location = self.env['stock.location.acumatica']
+        location = False
+        if code:
+            mapping = Location.search([('code', '=', code)], limit=1)
+            if mapping and mapping.odoo_location_id:
+                location = mapping.odoo_location_id
+        return location
+
     def _find_bad_stock_location(self, warehouse, location_code=None):
         """Return the internal Bad Stock location belonging to ``warehouse``."""
         loc = self._find_location(location_code)
@@ -336,12 +345,20 @@ class AcumaticaInventoryIssueLine(models.Model):
                     updated += 1 if action_state == 'updated' else 0
                     continue
 
+                adt_dest_location = first._find_location_dest(first.warehouse_code)
+                if not adt_dest_location:
+                    raise UserError(
+                        f'Location with code {first.warehouse_code or "-"} was not found '
+                        'or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                    )
+
                 vals = {
                     'origin': first.reference_nbr,
                     'partner_id': customer.id if customer else False,
                     'picking_type_id': picking_type.id,
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,
+                    'adt_dest_location_id': adt_dest_location.id,
                     'scheduled_date': self._parse_dt(first.scheduled_date),
                     'note': first.note or first.description or False,
                     'adt_receipt_nbr': first.reference_nbr or False,
@@ -381,6 +398,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     picking.move_ids.unlink()
 
                 to_create_move = self.env['acumatica.inventory.issue.product'].search([('receipt_line_id', '=', first.id)])
+                location_errors = []
                     
                 for line in to_create_move:
                     print("Processed Stock Move")
@@ -409,6 +427,15 @@ class AcumaticaInventoryIssueLine(models.Model):
                         )
                     uom = self._find_uom(line, product)
                     qty = self._parse_int(line.product_uom_qty)
+                    line_dest_location = first._find_location_dest(line.warehouse_code)
+                    if not line_dest_location:
+                        location_errors.append(
+                            f'Location with code {line.warehouse_code or "-"} was not found '
+                            'or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+                        )
+                    adt_dest_location = (
+                        line_dest_location or picking.adt_dest_location_id
+                    )
                     print(f"Qty value before: {line.product_uom_qty} and after: {qty}")
                     
                     move_domain = [
@@ -424,6 +451,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'product_uom_qty': qty,
                             'name': line.line_description or product.display_name,
                             'owner_id': owner_id,
+                            'adt_dest_location_id': adt_dest_location.id if adt_dest_location else False,
                         })
                         first.write({
                             'import_state': action_state,
@@ -440,7 +468,8 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': source_location.id,
                             'location_dest_id': dest_location.id,
-                            'description_picking': line.line_description or False,
+                            'adt_dest_location_id': adt_dest_location.id if adt_dest_location else False,
+                            # 'description_picking': product.name or False,
                             'transaction_type' : 'outbound',
                             'adt_type': first.trans_type or False,
                             'owner_id': owner_id,
@@ -451,6 +480,9 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'odoo_picking_id': picking.id,
                             'odoo_internal_transfer_order_id': False,
                         })
+
+                if location_errors:
+                    raise UserError('\n'.join(location_errors))
 
                 if first.document_only:
                     picking.action_validate_document_only_import(force=True)

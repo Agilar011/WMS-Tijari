@@ -20,7 +20,7 @@
                 <group><group string="Shipment"><field name="shipment_nbr"/><field name="ship_date"/><field name="shipment_type"/><field name="status"/><field name="inventory_nbr"/></group>
                     <group string="Shipment Information"><field name="shipment_qty"/><field name="shipment_volume"/><field name="shipment_weight"/><field name="building_id"/><field name="site_id_description"/><field name="to_warehouse_id"/></group></group>
                 <group string="Location and Customer"><field name="location_id"/><field name="location_name"/><field name="customer_name"/><field name="note_header"/><field name="note_header_id"/></group>
-                <notebook><page string="Details"><field name="line_ids"><list><field name="line_nbr"/><field name="line_description"/><field name="line_location"/><field name="line_quantity"/><field name="line_uom"/><field name="line_note"/><field name="line_note_id"/></list></field></page>
+                <notebook><page string="Details"><field name="line_ids"><list><field name="line_nbr"/><field name="line_description"/><field name="line_inventory_id"/><field name="line_location"/><field name="line_quantity"/><field name="line_uom"/><field name="line_note"/><field name="line_note_id"/></list></field></page>
                     <page string="Import"><group><field name="acumatica_id"/><field name="row_number"/><field name="config_id"/><field name="sync_date"/><field name="import_message"/><field name="note"/></group></page></notebook>
             </sheet><chatter/></form></field>
     </record>

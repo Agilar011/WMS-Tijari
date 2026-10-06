@@ -559,7 +559,7 @@ class AcumaticaTransferLine(models.Model):
                     'location_id': location_id,
                     'location_dest_id': location_dest_id,
                     'warehouse_id': warehouse.id if warehouse else False,
-                    'description_picking': receipt_line.description or False,
+                    # 'description_picking': product.name or False,
                     'adt_line_external_id': receipt_line.line_external_id or False,
                     'adt_inventory_id': receipt_line.inventory_id or False,
                     'adt_line_nbr': receipt_line.line_nbr or False,

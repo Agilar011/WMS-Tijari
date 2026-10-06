@@ -434,7 +434,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': picking.location_id.id,
                             'location_dest_id': line_dest.id,
-                            'description_picking': line.adt_Description or False,
+                            # 'description_picking': product.name or False,
 
                             'adt_line_nbr': line.adt_LineNumber or False,
                             'adt_line_note': line.adt_note or False,

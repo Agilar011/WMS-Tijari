@@ -418,7 +418,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             'location_id': picking.location_id.id,
                             'location_dest_id': dest_location.id,
                             # PERBAIKAN: Hapus kata 'item.description'
-                            'description_picking': item.line_description or False,
+                            # 'description_picking': product.name or False,
 
                             'adt_line_external_id': item.line_external_id or False,
                             'adt_inventory_id': item.inventory_id or False,

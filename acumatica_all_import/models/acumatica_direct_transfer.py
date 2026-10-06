@@ -205,7 +205,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                             line.adt_Description or product.display_name,
                             line.adt_Description or False,
                             {
-                                'description_picking': line.adt_Description or False,
+                                # 'description_picking': product.name or False,
                                 'adt_line_external_id': line.adt_id or False,
                                 'adt_inventory_id': line.adt_InventoryID or False,
                                 'adt_line_nbr': line.adt_rowNumber or False,
@@ -400,7 +400,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                             'product_uom': product.uom_id.id,
                             'location_id': line_loc_src.id,
                             'location_dest_id': line_loc_dest.id,
-                            'description_picking': line.adt_Description or False,
+                            # 'description_picking': product.name or False,
                             
                             # Custom tracking audit trail
                             'adt_line_external_id': line.adt_id or False,

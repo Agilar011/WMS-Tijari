@@ -8,6 +8,8 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='code']" position="after">
                 <field name="operation_category" required="1"/>
+                <field name="group_view"/>
+                <field name="automatic_process"/>
                 <field name="is_api_config" />
                 <field name="is_default_api" />
                 <field name="is_document_only_api" />

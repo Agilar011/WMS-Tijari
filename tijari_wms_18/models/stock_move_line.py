@@ -527,6 +527,8 @@ class StockMoveLine(models.Model):
         for line in self:
             if not line.move_id:
                 continue
+            if line.picking_type_name != 'Receipts':
+                continue
 
             previous_lines = line.move_id.move_line_ids.filtered(
                 lambda l: l != line
@@ -1327,9 +1329,24 @@ class StockMoveLine(models.Model):
             and self.picking_id.picking_type_id.name == 'Receipts'
         ):
             self.action_mark_picker_finished()
+
+        elif (
+            self.picking_id
+            and "Pick" in (self.picking_id.picking_type_id.name or "")
+        ):
+            self.action_mark_check_pick_finished()
+
+        elif (
+            self.picking_id
+            and "Delivery Orders" in (self.picking_id.picking_type_id.name or "")
+        ):
+            self.action_mark_check_unpack_finished()
+            return self.move_id.action_open_unpack_detail()
+
         elif self.is_manufacturing:
             self.action_mark_check_finished_mo()
             return self.move_id.action_open_move_mo()
+
         else:
             self._check_picker_quantity_vs_demand()
             if not self.lot_id:
@@ -1348,9 +1365,24 @@ class StockMoveLine(models.Model):
             and self.picking_id.picking_type_id.name == 'Receipts'
         ):
             self.action_mark_picker_unfinished()
+
+        elif (
+            self.picking_id
+            and "Pick" in (self.picking_id.picking_type_id.name or "")
+        ):
+            self.action_mark_check_pick_unfinished()
+        
+        elif (
+            self.picking_id
+            and "Delivery Orders" in (self.picking_id.picking_type_id.name or "")
+        ):
+            self.action_mark_check_unpack_unfinished()
+            return self.move_id.action_open_unpack_detail()
+
         elif self.is_manufacturing:
             self.action_mark_check_unfinished_mo()
             return self.move_id.action_open_move_mo()
+            
         else:
             self.write({'picker_status': 'finished'})
 
@@ -1533,18 +1565,22 @@ class StockMoveLine(models.Model):
 
     def action_mark_check_finished_mo(self):
         self._validate_before_mark_finished_mo()
-        # match_status = self._get_matching_status_mo()   
-        if self.matching_lot_id != self.lot_id:
-            raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
 
         self.write({
             'mo_status': 'finished'
         })
-        return True
+
+        # lines = self.move_id.move_line_ids
+        # self.move_id.status_mo_check = (
+        #     'finished' if lines and all(line.mo_status == 'finished' for line in lines)
+        #     else 'unfinished'
+        # )
+
+        return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
 
     def action_mark_check_unfinished_mo(self):
         self.write({'mo_status': 'unfinished'})
-        return True
+        return self.move_id.action_open_move_mo()
 
     def _validate_before_mark_finished_mo(self):
         confirmation_quantity = self.mo_confirmation_quantity
@@ -1565,6 +1601,11 @@ class StockMoveLine(models.Model):
 
         if comparison > 0:
             raise UserError("Qty Digunakan tidak boleh melebihi Quantity")  
+        
+        if self.matching_lot_id != self.lot_id:
+            raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
+
+        return comparison
 
     @api.onchange('location_putaway_id')
     def _onchange_location_putaway_id(self):
@@ -2029,7 +2070,7 @@ class StockMoveLine(models.Model):
 
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Putaway Move Line',
+            'name': _('Putaway'),
             'res_model': 'putaway.move.line.wizard',
             'res_id': wizard.id,
             'view_mode': 'form',
@@ -2040,7 +2081,9 @@ class StockMoveLine(models.Model):
         if not self.exists():
             return {'type': 'ir.actions.client', 'tag': 'reload'}
         self.ensure_one()
-        if self.picking_type_name in ('Receipts', 'Receipt Internal'):
+        if self.picking_type_name in (
+            'Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'
+        ):
             return self.action_open_putaway_move_line_wizard()
 
         return {
