@@ -672,20 +672,64 @@
         <field name="arch" type="xml">
             <xpath expr="//sheet" position="inside">
                 <field name="picking_type_name" invisible="1"/>
-                <field name="putaway_status" invisible="1"/>
+                <field name="mo_status" invisible="1"/>
+                <field name="picker_status" invisible="1"/>
+                <field name="pick_status" invisible="1"/>
+                <field name="status_check" invisible="1"/>
+                <field name="is_manufacturing" invisible="1"/>
             </xpath>
             <xpath expr="//form" position="inside">
-                <footer>
+                <footer> 
+                    <button 
+                        name="action_save_picker_details"
+                        type="object"
+                        string="Save"
+                        class="btn-primary"
+                        invisible="
+                            (picking_type_name == 'Receipts' and picker_status == 'finished')
+                            or
+                            (picking_type_name in ['Pick', 'Pick Components'] and pick_status == 'finished')
+                            or
+                            (picking_type_name == 'Delivery Orders' and status_check == 'finished')
+                            or
+                            (is_manufacturing and mo_status == 'finished')"
+                    />
+                    <button 
+                        name="action_rollback_details"
+                        type="object"
+                        string="Rollback"
+                        class="btn-danger"
+                        invisible="
+                            (picking_type_name == 'Receipts' and picker_status != 'finished')
+                            or
+                            (picking_type_name in ['Pick', 'Pick Components'] and pick_status != 'finished')
+                            or
+                            (picking_type_name == 'Delivery Orders' and status_check != 'finished')
+                            or
+                            (is_manufacturing and mo_status != 'finished')"
+                        />
+
+                    <!-- <button name="action_save_picker_details"
+                        type="object"
+                        string="Save"
+                        class="btn-primary"
+                        invisible="picking_type_name != 'Receipts' or  picker_status == 'finished'"/>
                     <button name="action_save_picker_details"
                         type="object"
                         string="Save"
                         class="btn-primary"
-                        invisible="picking_type_name != 'Receipts'"/>
-                    <button name="action_save_picker_details"
+                        invisible="picking_type_name == 'Receipts' or mo_status == 'finished' or (picker_status == 'finished' and not is_manufacturing)"/>
+                    <button name="action_rollback_details"
                         type="object"
-                        string="Save"
-                        class="btn-primary"
-                        invisible="picking_type_name == 'Receipts'"/>
+                        string="Rollback"
+                        class="btn-danger"
+                        invisible="picking_type_name != 'Receipts' or picker_status == 'unfinished'"/>
+                    <button name="action_rollback_details"
+                        type="object"
+                        string="Rollback"
+                        class="btn-danger"
+                        invisible="picking_type_name == 'Receipts' or mo_status == 'unfinished' or (picker_status == 'unfinished' and not is_manufacturing)"/> -->
+                    
                     <button name="action_delete_picker_line"
                         confirm="Apakah Anda yakin ingin menghapus data penerimaan ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Putaway"
                         type="object"

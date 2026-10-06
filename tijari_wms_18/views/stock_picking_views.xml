@@ -260,7 +260,7 @@
                             options="{'no_create': True, 'no_open': True}"/>
                     </group>
                     <field name="filtered_unpacked_move_ids" mode="list,kanban"
-                        widget="stock_move_one2many"
+                        
                         context="{
                             'form_view_ref': 'tijari_wms_18.stock_move_delivery_unpack_view',
                             'default_company_id': company_id, 

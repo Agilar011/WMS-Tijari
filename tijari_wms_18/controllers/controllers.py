@@ -900,7 +900,7 @@ class WmsApiController(http.Controller):
         ], limit=1)
 
         data = {
-            'warehouse_id': warehouse.name or '',
+            'warehouse_id': stock.name or '',
             'date': format_tanggal_indo(stock.date),
             'lok': ", ".join(stock.location_ids.mapped('complete_name')) if stock.location_ids else '',
             'note': stock.notes or '',
@@ -917,12 +917,20 @@ class WmsApiController(http.Controller):
             system_qty = float(line.quantity or 0)
             qty2 = float(line.inventory_quantity or 0)
 
+            if diff < 0:
+                diff_color = "#FF0000"
+            elif diff > 0:
+                diff_color = "#008000" 
+            else:
+                diff_color = "#000000" 
+
             obj = {
                 'name': line.product_id.display_name or '',
                 'uom': line.product_uom_id.name or '',
                 'system_qty': system_qty,
                 'qty2': qty2,
                 'diff': diff,
+                'diff_color': diff_color,
                 'ket': ''
             }
             data['detail'].append(obj)
@@ -1034,7 +1042,7 @@ class WmsApiController(http.Controller):
         mrp = request.env['mrp.production'].sudo().browse(int(id))
         
         data = {
-            'reference': mrp.name or '', 
+            'reference': mrp.origin or '', 
             'date': format_tanggal_indo(mrp.date_start) if mrp.date_start else '',
             'warehouse_id': mrp.warehouse_id.name or '', 
             # 'lok':  '',

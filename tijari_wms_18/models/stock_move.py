@@ -130,6 +130,11 @@ class StockMove(models.Model):
         compute='_compute_so_confirmation_quantity',
         store=True,
     )
+
+    do_confirmation_quantity = fields.Float(
+        compute='_compute_so_confirmation_quantity',
+        store=True,
+    )
     
     mo_confirmation_quantity = fields.Float(
             string='Qty Digunakan',
@@ -570,7 +575,8 @@ class StockMove(models.Model):
         'quantity_shadow', 
         'picking_type_name', 
         'confirmation_quantity', 
-        'mo_confirmation_quantity')
+        'mo_confirmation_quantity',
+        'do_confirmation_quantity',)
 
     def _compute_difference_quantity(self):
         for move in self:
@@ -581,6 +587,10 @@ class StockMove(models.Model):
                 total_confirmation_quantity = move.confirmation_quantity
                 total_qty = (move.quantity_shadow if move.quantity_shadow > 0.0 else move.quantity )
                 difference = total_qty - total_confirmation_quantity
+            elif move.picking_type_name in ['Delivery Orders']:
+                total_confirmation_quantity = move.do_confirmation_quantity
+                total_qty = (move.product_uom_qty)
+                difference = total_qty - total_confirmation_quantity 
             else:
                 if move.raw_material_production_id:
                     total_confirmation_quantity = move.mo_confirmation_quantity
@@ -631,7 +641,9 @@ class StockMove(models.Model):
     def _compute_so_confirmation_quantity(self):
         for move in self:
             total_so_confirmation_quantity = sum(move.filtered_unpack_line_ids.mapped('so_confirmation_quantity'))
+            total_do_confirmation_quantity = sum(move.move_line_ids.mapped('so_confirmation_quantity'))
             move.so_confirmation_quantity = total_so_confirmation_quantity if total_so_confirmation_quantity > 0 else 0.0
+            move.do_confirmation_quantity = total_do_confirmation_quantity if total_do_confirmation_quantity > 0 else 0.0
 
     def action_generate_lot(self):
         for move in self:
@@ -896,6 +908,21 @@ class StockMove(models.Model):
             'view_mode': 'form',
             'view_id': self.env.ref(
                 'tijari_wms_18.stock_move_pick_detail_view'
+            ).id,
+            'target': 'new',
+        }
+    
+    def action_open_move_mo(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_mo_view'
             ).id,
             'target': 'new',
         }

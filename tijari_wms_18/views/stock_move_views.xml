@@ -111,10 +111,10 @@
 
             <xpath expr="//field[@name='move_ids_without_package']/list/field[@name='quantity']" position="replace">
                 <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Pick', 'Pick Internal']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft' or parent.picking_type_name in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Pick', 'Pick Internal', 'Delivery Orders']" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                 <field name="confirmation_quantity" string="Qty Diterima" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
                 <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Storage', 'Store Finished Product']"/>
-                <field name="quantity" string="Qty Dikirim" readonly="not is_quantity_done_editable" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
+                <field name="do_confirmation_quantity" string="Qty Dikirim" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
                 <field name="confirmation_quantity" string="Qty Diambil" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']"/>
                 <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
             </xpath>
@@ -1493,12 +1493,12 @@
                                         type="object"
                                         string="Finish Picking"
                                         class="btn-success o_wms_auto_save_before_action"
-                                        invisible="pick_status == 'finished'"/>
+                                        invisible="pick_status == 'finished'"/> -->
                                     <button name="action_mark_check_pick_unfinished"
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="pick_status == 'unfinished' or parent.state not in ('confirmed','assigned')"/> -->
+                                        invisible="pick_status == 'unfinished' or parent.state not in ('confirmed','assigned')"/>
                                     <!-- <button name="action_mark_picker_finished"
                                         type="object"
                                         string="Finish Picker"
@@ -2389,12 +2389,12 @@
                                         string="Pick Details"
                                         class="btn-primary"
                                         invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/> -->
-                                    <button name="action_mark_check_finished_mo"
+                                    <!-- <button name="action_mark_check_finished_mo"
                                         type="object"
                                         string="Finish"
                                         class="btn-success o_wms_auto_save_before_action"
-                                        invisible="mo_status == 'finished'"/>
-                                    <button name="action_mark_picker_unfinished"
+                                        invisible="mo_status == 'finished'"/> -->
+                                    <button name="action_mark_check_unfinished_mo"
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
