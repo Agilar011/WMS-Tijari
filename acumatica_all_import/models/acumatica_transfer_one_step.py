@@ -386,7 +386,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                             'location_id': source_location.id,
                             'location_dest_id': destination_location.id,
                             'internal_transfer_order_id': order.id,
-                            'description_picking': line.line_description or False,
+                            # 'description_picking': product.name or False,
                             'adt_line_nbr': line.line_nbr or False,
                             'adt_line_note': line.line_note or False,
                             'adt_inventory_id': line.inventory_id or False,

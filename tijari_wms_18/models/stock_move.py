@@ -14,6 +14,17 @@ _logger = logging.getLogger(__name__)
 class StockMove(models.Model):
     _inherit = 'stock.move'
 
+    description_picking = fields.Text(
+        string='Description of Picking',
+        compute='_compute_description_picking_from_product',
+        store=True,
+    )
+
+    @api.depends('product_id.name')
+    def _compute_description_picking_from_product(self):
+        for move in self:
+            move.description_picking = move.product_id.name or False
+
     adt_line_external_id = fields.Char(string='UUID Line Acumatica', index=True)
     adt_inventory_id = fields.Char(string='InventoryID (Acumatica)')
     adt_line_nbr = fields.Char(string='Line Nbr (Acumatica)')
@@ -311,6 +322,13 @@ class StockMove(models.Model):
         compute="_compute_filtered_unpack_line_ids",
     )
 
+    filtered_unpacked_lot_line_ids = fields.One2many(
+        comodel_name="stock.move.line",
+        inverse_name="move_id",
+        string="Filtered Unpacked Lot Lines",
+        compute="_compute_filtered_unpacked_lot_line_ids",
+    )
+
     @api.depends(
         "move_line_ids",
         "move_line_ids.result_package_id",
@@ -324,6 +342,35 @@ class StockMove(models.Model):
                 )
             else:
                 move.filtered_unpack_line_ids = self.env["stock.move.line"]
+
+    @api.depends(
+        "move_line_ids",
+        "move_line_ids.result_package_id",
+        "move_line_ids.lot_id",
+        "move_line_ids.lot_name",
+        "remaining_package_qty",
+    )
+    @api.depends_context("unpacked_lot_id", "unpacked_lot_code")
+    def _compute_filtered_unpacked_lot_line_ids(self):
+        lot_id = self.env.context.get("unpacked_lot_id")
+        lot_code = (self.env.context.get("unpacked_lot_code") or "").strip()
+        for move in self:
+            lines = (
+                move.move_line_ids.filtered(lambda line: not line.result_package_id)
+                if move.remaining_package_qty > 0
+                else self.env["stock.move.line"]
+            )
+            if lot_id or lot_code:
+                lines = lines.filtered(
+                    lambda line: (
+                        (lot_id and line.lot_id.id == lot_id)
+                        or (lot_code and (
+                            (line.lot_id and line.lot_id.name == lot_code)
+                            or line.lot_name == lot_code
+                        ))
+                    )
+                )
+            move.filtered_unpacked_lot_line_ids = lines
 
     def action_mark_check_finished(self):
         self._validate_before_mark_finished()
@@ -926,6 +973,11 @@ class StockMove(models.Model):
                 'tijari_wms_18.stock_move_delivery_unpack_view'
             ).id,
             'target': 'new',
+            'context': dict(
+                self.env.context,
+                unpacked_lot_id=self.env.context.get('unpacked_lot_id'),
+                unpacked_lot_code=self.env.context.get('unpacked_lot_code'),
+            ),
         }
 
     def action_open_move_delivery(self):
@@ -941,6 +993,11 @@ class StockMove(models.Model):
                 'tijari_wms_18.stock_move_delivery_unpack_view'
             ).id,
             'target': 'new',
+            'context': dict(
+                self.env.context,
+                unpacked_lot_id=self.env.context.get('unpacked_lot_id'),
+                unpacked_lot_code=self.env.context.get('unpacked_lot_code'),
+            ),
         }
 
     def action_open_move_mo(self):

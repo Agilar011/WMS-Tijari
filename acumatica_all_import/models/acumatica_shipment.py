@@ -387,7 +387,7 @@ class AcumaticaShipmentLine(models.Model):
                     'location_id': picking.location_id.id if picking else False,
                     'location_dest_id': picking.location_dest_id.id if picking else False,
                     'warehouse_id': warehouse.id if warehouse else False,
-                    'description_picking': shipment_line.description or False,
+                    # 'description_picking': product.name or False,
                     'product_note': shipment_line.note or False,
                     'adt_dest_location_id': picking.adt_dest_location_id.id if picking else False
                 }

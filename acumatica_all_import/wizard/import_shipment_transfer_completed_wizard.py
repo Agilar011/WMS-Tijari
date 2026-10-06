@@ -205,7 +205,8 @@ class ImportShipmentTransferCompletedWizard(models.TransientModel):
 
             response_data = response.json()
 
-            rows = self._normalize_rows(response_data)
+            # rows = self._normalize_rows(response_data)
+            rows = self._normalize_rows(response_data.get(self.config_id.odata_expand, []))
 
             _logger.info(
                 'Shipment Transfer Completed received %s rows',
@@ -401,6 +402,7 @@ class ImportShipmentTransferCompletedWizard(models.TransientModel):
             'note': self._val(item, 'note'),
             'line_nbr': self._int_val(item, 'LineNbr'),
             'line_description': self._val(item, 'LineDescription'),
+            'line_inventory_id': self._val(item, 'LineInventoryID'),
             'line_location': self._val(item, 'LineLocation'),
             'line_note': self._val(item, 'LineNote'),
             'line_note_id': self._val(item, 'LineNoteID'),
@@ -533,23 +535,12 @@ class ImportShipmentTransferCompletedWizard(models.TransientModel):
 
             return False
 
-    @staticmethod
-    def _normalize_rows(payload):
-
+    def _normalize_rows(self, payload):
         if isinstance(payload, list):
             return payload
-
         if isinstance(payload, dict):
-
             if isinstance(payload.get('value'), list):
                 return payload.get('value')
-
             if isinstance(payload.get('rows'), list):
                 return payload.get('rows')
-
-            if isinstance(payload.get('ShipmentTransferGIDetails'), list):
-                return payload.get(
-                    'ShipmentTransferGIDetails'
-                )
-
         return []

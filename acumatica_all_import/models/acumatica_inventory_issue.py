@@ -440,7 +440,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'product_uom': uom.id if uom else product.uom_id.id,
                             'location_id': source_location.id,
                             'location_dest_id': dest_location.id,
-                            'description_picking': line.line_description or False,
+                            # 'description_picking': product.name or False,
                             'transaction_type' : 'outbound',
                             'adt_type': first.trans_type or False,
                             'owner_id': owner_id,

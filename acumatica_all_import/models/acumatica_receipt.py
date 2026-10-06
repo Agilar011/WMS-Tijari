@@ -433,7 +433,7 @@ class AcumaticaReceiptLine(models.Model):
                     'location_id': picking.location_id.id if picking else False,
                     'location_dest_id': adt_dest_location,
                     'warehouse_id': warehouse.id if warehouse else False,
-                    'description_picking': receipt_line.description or False,
+                    # 'description_picking': product.name or False,
                     'adt_dest_location_id': adt_dest_location,
 
                     'adt_line_external_id': receipt_line.line_external_id or False,

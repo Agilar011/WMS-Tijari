@@ -316,6 +316,33 @@ class StockPicking(models.Model):
         compute='_compute_filtered_move_ids',
     )
 
+    allowed_unpacked_product_ids = fields.Many2many(
+        comodel_name="product.product",
+        compute="_compute_allowed_unpacked_product_ids",
+    )
+    allowed_unpacked_lot_ids = fields.Many2many(
+        comodel_name="stock.lot",
+        compute="_compute_allowed_unpacked_lot_ids",
+    )
+    unpacked_product_id = fields.Many2one(
+        comodel_name="product.product",
+        string="Filter Product",
+        domain="[('id', 'in', allowed_unpacked_product_ids)]",
+    )
+    unpacked_lot_id = fields.Many2one(
+        comodel_name="stock.lot",
+        string="Filter Lot",
+        domain="[('id', 'in', allowed_unpacked_lot_ids)]",
+    )
+    unpacked_lot_code = fields.Char(string="Filter Lot Code")
+    unpacked_scan_code = fields.Char(string="Scan Handheld")
+    filtered_unpacked_move_ids = fields.One2many(
+        comodel_name="stock.move",
+        inverse_name="picking_id",
+        string="Filtered Unpacked Moves",
+        compute="_compute_filtered_unpacked_move_ids",
+    )
+
     filtered_picker_move_ids = fields.Many2many(
         comodel_name="stock.move",
         string="Ordered Picker Moves",
@@ -920,6 +947,116 @@ class StockPicking(models.Model):
                 and move.product_id
             )
         )
+
+    def _get_unpacked_base_moves(self):
+        self.ensure_one()
+        return self.move_ids_without_package
+
+    @api.depends(
+        'move_ids_without_package',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.state',
+    )
+    def _compute_allowed_unpacked_product_ids(self):
+        for picking in self:
+            picking.allowed_unpacked_product_ids = (
+                picking._get_unpacked_base_moves().filtered('product_id').product_id
+            )
+
+    @api.depends(
+        'move_ids_without_package',
+        'move_ids_without_package.move_line_ids.lot_id',
+    )
+    def _compute_allowed_unpacked_lot_ids(self):
+        for picking in self:
+            picking.allowed_unpacked_lot_ids = (
+                picking._get_unpacked_base_moves().mapped('move_line_ids.lot_id')
+            )
+
+    @api.depends(
+        'unpacked_product_id',
+        'unpacked_lot_id',
+        'unpacked_lot_code',
+        'move_ids_without_package',
+        'move_ids_without_package.product_id',
+        'move_ids_without_package.state',
+        'move_ids_without_package.move_line_ids.lot_id',
+        'move_ids_without_package.move_line_ids.lot_name',
+    )
+    def _compute_filtered_unpacked_move_ids(self):
+        for picking in self:
+            moves = picking._get_unpacked_base_moves()
+            if picking.unpacked_product_id:
+                moves = moves.filtered(lambda move: move.product_id == picking.unpacked_product_id)
+            if picking.unpacked_lot_id or picking.unpacked_lot_code:
+                lot_code = picking.unpacked_lot_code or picking.unpacked_lot_id.name
+                moves = moves.filtered(lambda move: move.move_line_ids.filtered(
+                    lambda line: (
+                        (picking.unpacked_lot_id and line.lot_id == picking.unpacked_lot_id)
+                        or (lot_code and line.lot_name == lot_code)
+                    )
+                ))
+            picking.filtered_unpacked_move_ids = moves
+
+    @api.onchange('unpacked_product_id')
+    def _onchange_unpacked_product_id(self):
+        for picking in self:
+            if picking.unpacked_lot_id and picking.unpacked_lot_id.product_id != picking.unpacked_product_id:
+                picking.unpacked_lot_id = False
+                picking.unpacked_lot_code = False
+
+    @api.onchange('unpacked_lot_id')
+    def _onchange_unpacked_lot_id(self):
+        for picking in self:
+            if not picking.unpacked_lot_id:
+                picking.unpacked_lot_code = False
+                continue
+            picking.unpacked_lot_code = picking.unpacked_lot_id.name
+            lot_moves = picking._get_unpacked_base_moves().filtered(
+                lambda move: picking.unpacked_lot_id in move.move_line_ids.lot_id
+            )
+            if lot_moves:
+                picking.unpacked_product_id = lot_moves.product_id[:1]
+
+    @api.onchange('unpacked_scan_code')
+    def _onchange_unpacked_scan_code(self):
+        for picking in self:
+            scanned_code = (picking.unpacked_scan_code or '').strip()
+            if not scanned_code:
+                continue
+
+            product, matched_by = picking._find_product_scan_match(scanned_code)
+            if product:
+                if product not in picking.allowed_unpacked_product_ids:
+                    raise ValidationError(
+                        _("Product hasil scan tidak ada di dokumen ini.")
+                    )
+                picking.unpacked_product_id = product
+                picking.unpacked_lot_id = False
+                picking.unpacked_lot_code = False
+                picking.unpacked_scan_code = False
+                continue
+
+            matching_lines = picking._get_unpacked_base_moves().mapped('move_line_ids').filtered(
+                lambda line: (
+                    (line.lot_id and line.lot_id.name == scanned_code)
+                    or line.lot_name == scanned_code
+                )
+            )
+            if not matching_lines:
+                raise ValidationError(
+                    _("Kode %s tidak ditemukan sebagai Barcode, SKU, atau Lot.") % scanned_code
+                )
+            products = matching_lines.product_id
+            if len(products) > 1:
+                raise ValidationError(_("Lot hasil scan mengarah ke lebih dari satu product."))
+
+            picking.unpacked_product_id = products[:1]
+            picking.unpacked_lot_id = matching_lines.mapped('lot_id').filtered(
+                lambda lot: lot.name == scanned_code
+            )[:1]
+            picking.unpacked_lot_code = scanned_code
+            picking.unpacked_scan_code = False
 
     def _get_picker_moves(self):
         self.ensure_one()
@@ -3263,24 +3400,46 @@ class StockPicking(models.Model):
 
         staging_quantities = {}
         staging_matches_document = bool(staging_data)
+        if staging_data:
+            # Acumatica can return multiple detail rows for the same product.
+            # Merge those rows by InventoryID before comparing with the moves.
+            for line in staging_data.line_ids:
+                inventory_id = (line.line_inventory_id or '').strip()
+                if inventory_id:
+                    staging_quantities[inventory_id] = (
+                        staging_quantities.get(inventory_id, 0.0)
+                        + line.line_quantity
+                    )
+
+        move_quantities = {}
         for move in self.move_ids:
-            staging_lines = (
-                staging_data.line_ids
-                if staging_data and staging_data.inventory_nbr == move.product_id.default_code
-                else self.env['acumatica.shipment.transfer.completed.staging.line'].browse()
+            inventory_id = (move.product_id.default_code or '').strip()
+            move_quantities[inventory_id] = (
+                move_quantities.get(inventory_id, 0.0) + move.quantity
             )
-            staging_qty = sum(staging_lines.mapped('line_quantity'))
-            staging_quantities[move.id] = staging_qty
+
+        if not staging_data:
+            staging_matches_document = False
+        elif set(staging_quantities) != set(move_quantities):
+            staging_matches_document = False
+        for inventory_id, move_qty in move_quantities.items():
+            staging_qty = staging_quantities.get(inventory_id, 0.0)
+            product_moves = self.move_ids.filtered(
+                lambda move: (move.product_id.default_code or '').strip() == inventory_id
+            )
+            rounding = product_moves[:1].product_uom.rounding
             if not staging_qty or float_compare(
                 staging_qty,
-                move.quantity,
-                precision_rounding=move.product_uom.rounding,
+                move_qty,
+                precision_rounding=rounding,
             ) != 0:
                 staging_matches_document = False
 
         if staging_matches_document:
             for move in self.move_ids:
-                move.shipped_qty = staging_quantities[move.id]
+                # The staging total was checked per product above. Distribute
+                # the confirmed total to each move using its own document qty.
+                move.shipped_qty = move.quantity
             self.shipment_information = 'full_shipment'
             return self.action_confirm_shipment()
 

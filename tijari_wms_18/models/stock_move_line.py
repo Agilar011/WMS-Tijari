@@ -527,6 +527,8 @@ class StockMoveLine(models.Model):
         for line in self:
             if not line.move_id:
                 continue
+            if line.picking_type_name != 'Receipts':
+                continue
 
             previous_lines = line.move_id.move_line_ids.filtered(
                 lambda l: l != line

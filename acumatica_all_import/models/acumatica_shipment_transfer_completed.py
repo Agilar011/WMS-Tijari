@@ -59,6 +59,7 @@ class AcumaticaShipmentTransferCompletedStagingLine(models.Model):
     row_number = fields.Integer(string='Row Number')
     note = fields.Text(string='Note')
     line_description = fields.Text(string='Description')
+    line_inventory_id = fields.Char(string='Inventory ID', index=True)
     line_location = fields.Char(string='Line Location')
     line_nbr = fields.Integer(string='Line Number')
     line_note = fields.Text(string='Line Note')
