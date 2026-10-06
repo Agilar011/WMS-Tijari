@@ -29,6 +29,10 @@
             <xpath expr="//field[@name='approval_state']" position="after">
                 <field name="notes" string="Notes" nolabel="1"/>
             </xpath>
+             <xpath expr="//field[@name='location_ids']" position="attributes">
+                <attribute name="widget">location_short_many2one</attribute>
+                <attribute name="context">{'show_location_short_name': True}</attribute>
+            </xpath>
             <xpath expr="//field[@name='location_ids']" position="before">
                 <field name="warehouse_ids" widget="many2many_tags"/>
             </xpath>

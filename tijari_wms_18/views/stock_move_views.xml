@@ -1488,17 +1488,17 @@
                                     <field name="product_uom_id" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                 </div>
 
-                                <div class="d-flex gap-2 mt-2" invisible="'Pick' in (parent.picking_type_name or '') or parent.picking_type_name in ('Pack', 'Delivery Orders')">
-                                    <!-- <button name="action_mark_check_pick_finished"
-                                        type="object"
-                                        string="Finish Picking"
-                                        class="btn-success o_wms_auto_save_before_action"
-                                        invisible="pick_status == 'finished'"/> -->
+                                <div class="d-flex gap-2 mt-2" invisible="'Pick' not in (parent.picking_type_name or '')">
+                                   
                                     <button name="action_mark_check_pick_unfinished"
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
                                         invisible="pick_status == 'unfinished' or parent.state not in ('confirmed','assigned')"/>
+
+                                </div>
+
+                                <div class="d-flex gap-2 mt-2" invisible="'Pick' in (parent.picking_type_name or '') or parent.picking_type_name in ('Pack', 'Delivery Orders')">
                                     <!-- <button name="action_mark_picker_finished"
                                         type="object"
                                         string="Finish Picker"
@@ -2220,11 +2220,12 @@
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                                             
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
-                            <label for="product_uom_qty" style="margin: 0 !important; white-space: nowrap !important;"/>
+                            <label for="product_uom_qty" string="To Consume" style="margin: 0 !important; white-space: nowrap !important;"/>
                             <field name="product_uom_qty" readonly="state != 'draft'" nolabel="1"/>
                             <field name="product_uom" groups="uom.group_uom" readonly="state != 'draft'" nolabel="1" options="{'no_open': True}"/>
                         </div>                        
                     </div>
+                    
                     <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
                         <label for="remaining_mo_quantity" string="Sisa Pemenuhan Qty" style="margin: 0 !important; white-space: nowrap !important;"/>
                         <field name="remaining_mo_quantity" readonly="1" nolabel="1"/>
@@ -2299,7 +2300,8 @@
                         <field name="mo_status" string="Status"
                                 decoration-success="mo_status == 'finished'"
                                 decoration-danger="mo_status == 'unfinished'"
-                                widget="badge"/>
+                                widget="badge"
+                                force_save="1"/>
                         <button name="action_mark_check_finished_mo"
                                 type="object"
                                 icon="fa-check"
@@ -2328,6 +2330,8 @@
                         <field name="available_location_ids" invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" invisible="1"/>
                         <field name="lot_name" readonly="1" force_save="1" invisible="1"/>
+                        <field name="mo_status" invisible="1"/>
+                        
                         <templates>
                             <t t-name="card">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
@@ -2384,21 +2388,11 @@
                                 </div>
 
                                 <div class="d-flex gap-2 mt-2">
-                                    <!-- <button name="action_open_picker_details"
-                                        type="object"
-                                        string="Pick Details"
-                                        class="btn-primary"
-                                        invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/> -->
-                                    <!-- <button name="action_mark_check_finished_mo"
-                                        type="object"
-                                        string="Finish"
-                                        class="btn-success o_wms_auto_save_before_action"
-                                        invisible="mo_status == 'finished'"/> -->
                                     <button name="action_mark_check_unfinished_mo"
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="mo_status == 'unfinished' or parent.state != 'confirmed'"/>
+                                        invisible="mo_status == 'unfinished' or parent.state in ('done','cancel')"/>
                                 </div>
                             </t>
                         </templates>
@@ -2506,7 +2500,7 @@
                         <field name="quantity" readonly="1" force_save="1" column_invisible="parent.state == 'done'" string="Qty Disimpan" />
                         <field name="quantity_shadow" readonly="1" force_save="1" column_invisible="parent.state != 'done'" string="Qty Disimpan" />
                         <field name="so_confirmation_quantity" readonly="status_check == 'finished' or state in ('done', 'cancel')" string="Qty Dikirim"/>
-                        <field name="product_uom_id" readonly="status_check == 'finished' or state in ('done', 'cancel')" string="Unit of Measure" />
+                        <field name="product_uom_id" readonly="1" force_save="1" string="Unit of Measure" />
                         <field name="status_check"
                             string="Satatus"
                             widget="badge"
@@ -2546,8 +2540,8 @@
                         <templates>
                             <t t-name="card">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
-                                        context="{'tijari_stock_picking_product_code_only': True}"/>
+                                    <!-- <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
+                                        context="{'tijari_stock_picking_product_code_only': True}"/> -->
                                     <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
                                         groups="stock.group_production_lot"/>
@@ -2568,38 +2562,28 @@
                                 </div>
                                 
                                 <div class="d-flex align-items-center gap-1">
-                                    <strong invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')">Qty In Pack: </strong>
-                                    <field name="quantity" invisible="'Pick' not in (parent.picking_type_name or '')"/>
-                                    <field name="product_uom_id" readonly="picker_status == 'finished'" />
+                                    <strong>Qty Disimpan: </strong>
+                                    <field name="quantity" />
+                                    <field name="product_uom_id" readonly="1" force_save="1" />
                                     <!-- <field name="product_uom_id" readonly="picker_status == 'finished'" /> -->
                                 </div>
 
                                 <div class="d-flex align-items-center gap-1">
                                     <strong>Qty Dikirim: </strong>
                                     <field name="so_confirmation_quantity"/>
-                                    <field name="product_uom_id"/>
+                                    <field name="product_uom_id" readonly="1" force_save="1"/>
                                 </div>
 
-                                <!-- <div class="d-flex gap-2 mt-2" invisible="'Pick' in (parent.picking_type_name or '') or parent.picking_type_name in ('Pack', 'Delivery Orders')">
-                                    <button name="action_open_picker_details"
-                                        type="object"
-                                        string="Pick Details"
-                                        class="btn-primary"
-                                        invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
-                                    <button name="action_mark_check_unpack_finished"
-                                        type="object"
-                                        icon="fa-check"
-                                        class="btn-success"
-                                        title="Finish Package"
-                                        invisible="status_check == 'finished'"/>
+                                <div class="d-flex gap-2 mt-2" >
+                                    
                                     <button name="action_mark_check_unpack_unfinished"
                                         type="object"
                                         icon="fa-undo"
                                         class="btn-danger"
                                         title="Undo Package"
-                                        invisible="status_check != 'finished' or state not in ['confirmed', 'assigned']"/>
+                                        invisible="status_check != 'finished' or state in ['done', 'cancel']"/>
                                     
-                                </div> -->
+                                </div>
                             </t>
                         </templates>
                     </kanban>

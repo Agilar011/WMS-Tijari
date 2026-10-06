@@ -1565,18 +1565,22 @@ class StockMoveLine(models.Model):
 
     def action_mark_check_finished_mo(self):
         self._validate_before_mark_finished_mo()
-        # match_status = self._get_matching_status_mo()   
-        if self.matching_lot_id != self.lot_id:
-            raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
 
         self.write({
             'mo_status': 'finished'
         })
-        return True
+
+        # lines = self.move_id.move_line_ids
+        # self.move_id.status_mo_check = (
+        #     'finished' if lines and all(line.mo_status == 'finished' for line in lines)
+        #     else 'unfinished'
+        # )
+
+        return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
 
     def action_mark_check_unfinished_mo(self):
         self.write({'mo_status': 'unfinished'})
-        return True
+        return self.move_id.action_open_move_mo()
 
     def _validate_before_mark_finished_mo(self):
         confirmation_quantity = self.mo_confirmation_quantity
@@ -1597,6 +1601,11 @@ class StockMoveLine(models.Model):
 
         if comparison > 0:
             raise UserError("Qty Digunakan tidak boleh melebihi Quantity")  
+        
+        if self.matching_lot_id != self.lot_id:
+            raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
+
+        return comparison
 
     @api.onchange('location_putaway_id')
     def _onchange_location_putaway_id(self):
