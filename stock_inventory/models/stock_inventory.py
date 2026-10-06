@@ -60,6 +60,11 @@ class InventoryAdjustmentsGroup(models.Model):
         readonly=True,
     )
 
+    warehouse_ids = fields.Many2many(
+        'stock.warehouse',
+        string='Warehouse'
+    )
+
     product_selection = fields.Selection(
         [
             ("all", "All Products"),
