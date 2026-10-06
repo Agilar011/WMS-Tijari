@@ -1329,9 +1329,24 @@ class StockMoveLine(models.Model):
             and self.picking_id.picking_type_id.name == 'Receipts'
         ):
             self.action_mark_picker_finished()
+
+        elif (
+            self.picking_id
+            and "Pick" in (self.picking_id.picking_type_id.name or "")
+        ):
+            self.action_mark_check_pick_finished()
+
+        elif (
+            self.picking_id
+            and "Delivery Orders" in (self.picking_id.picking_type_id.name or "")
+        ):
+            self.action_mark_check_unpack_finished()
+            return self.move_id.action_open_unpack_detail()
+
         elif self.is_manufacturing:
             self.action_mark_check_finished_mo()
             return self.move_id.action_open_move_mo()
+
         else:
             self._check_picker_quantity_vs_demand()
             if not self.lot_id:
@@ -1350,9 +1365,24 @@ class StockMoveLine(models.Model):
             and self.picking_id.picking_type_id.name == 'Receipts'
         ):
             self.action_mark_picker_unfinished()
+
+        elif (
+            self.picking_id
+            and "Pick" in (self.picking_id.picking_type_id.name or "")
+        ):
+            self.action_mark_check_pick_unfinished()
+        
+        elif (
+            self.picking_id
+            and "Delivery Orders" in (self.picking_id.picking_type_id.name or "")
+        ):
+            self.action_mark_check_unpack_unfinished()
+            return self.move_id.action_open_unpack_detail()
+
         elif self.is_manufacturing:
             self.action_mark_check_unfinished_mo()
             return self.move_id.action_open_move_mo()
+            
         else:
             self.write({'picker_status': 'finished'})
 

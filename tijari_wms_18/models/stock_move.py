@@ -897,9 +897,6 @@ class StockMove(models.Model):
 
         return base64.b64encode(buffer.getvalue()).decode()
 
-    def action_open_unpack_detail(self):
-        pass
-
     def action_open_move_pick(self):
         self.ensure_one()
 
