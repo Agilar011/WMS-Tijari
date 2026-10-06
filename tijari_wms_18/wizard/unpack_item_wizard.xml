@@ -50,7 +50,7 @@
                         <field name="so_confirmation_quantity"/>
                         <field name="product_uom"
                             groups="uom.group_uom"
-                            readonly="state in ('done', 'cancel') or status_check == 'finished'"
+                            readonly="state != 'draft'"
                             nolabel="1"
                             options="{'no_open': True}"/>
                     </div>

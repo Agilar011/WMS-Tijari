@@ -26,8 +26,8 @@ class MoveUnpackItemWizard(models.TransientModel):
     def action_mark_check_finished(self):
         move_id = self.move_id
         move_id.so_confirmation_quantity = self.so_confirmation_quantity
-        move_id.action_mark_check_finished()
+        move_id.action_mark_check_unpack_finished()
     
     def action_mark_check_unfinished(self):
         move_id = self.move_id
-        move_id.action_mark_check_unfinished()
+        move_id.action_mark_check_unpack_unfinished()

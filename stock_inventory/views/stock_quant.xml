@@ -21,6 +21,28 @@
                 <xpath expr="//button[@name='action_apply_all']" position="attributes">
                     <attribute name="invisible">1</attribute>
                 </xpath>
+                <xpath expr="//field[@name='location_id']" position="attributes">
+                    <attribute name="widget">location_short_many2one</attribute>
+                    <attribute name="context">{'show_location_short_name': True}</attribute>
+                </xpath>
+                <xpath expr="//field[@name='package_id']" position="attributes">
+                    <attribute name="optional">hide</attribute>
+                </xpath>
+                <xpath expr="//field[@name='owner_id']" position="attributes">
+                    <attribute name="optional">hide</attribute>
+                </xpath>
+                <xpath expr="//field[@name='quantity']" position="attributes">
+                    <attribute name="optional">hide</attribute>
+                </xpath>
+                <xpath expr="//field[@name='product_uom_id']" position="attributes">
+                    <attribute name="optional">hide</attribute>
+                </xpath>
+                <xpath expr="//field[@name='inventory_date']" position="attributes">
+                    <attribute name="optional">hide</attribute>
+                </xpath>
+                <xpath expr="//field[@name='user_id']" position="attributes">
+                    <attribute name="optional">hide</attribute>
+                </xpath>
                 <!-- <xpath expr="//field[@name='user_id']" position="after">
                     <button 
                         string="Generate Lot" 

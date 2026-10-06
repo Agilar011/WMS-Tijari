@@ -900,7 +900,7 @@ class WmsApiController(http.Controller):
         ], limit=1)
 
         data = {
-            'warehouse_id': stock.name or '',
+            'warehouse_id': ", ".join(stock.warehouse_ids.mapped('name')) if stock.warehouse_ids else '',
             'date': format_tanggal_indo(stock.date),
             'lok': ", ".join(stock.location_ids.mapped('complete_name')) if stock.location_ids else '',
             'note': stock.notes or '',
@@ -1067,26 +1067,28 @@ class WmsApiController(http.Controller):
 
         for line in mrp.move_raw_ids:
             lot_names = ", ".join(line.lot_ids.mapped('name')) if line.lot_ids else ''
-            diff_qty = getattr(line, 'difference_quantity', 0.0) or 0.0
+            # diff_qty = getattr(line, 'difference_quantity', 0.0) or 0.0
 
-            if diff_qty > 0:
-                list_tidak_digunakan.append({
-                    'name': line.product_id.name or '',
-                    'lot': lot_names,
-                    'qty': diff_qty,
-                    'uom': line.product_uom.name or '',
-                    'lok': line.location_id.name or '',
-                })
-            else:
-                list_dikonsumsi.append({
-                    'name': line.product_id.name or '',
-                    'lot': lot_names,
-                    'demand': line.product_uom_qty or 0.0,
-                    'qty': line.quantity or 0.0,
-                    'uom': line.product_uom.name or '',
-                })
+            list_tidak_digunakan.append({
+                'name': line.product_id.name or '',
+                'lot': lot_names,
+                'qty': line.difference_quantity,
+                'uom': line.product_uom.name or '',
+                'lok': line.location_id.name or '',
+            })
+
+            list_dikonsumsi.append({
+                'name': line.product_id.name or '',
+                'lot': lot_names,
+                'demand': line.product_uom_qty or 0.0,
+                'qty': line.mo_confirmation_quantity or 0.0,
+                'qty2': line.quantity or 0.0,
+                'uom': line.product_uom.name or '',
+            })
+
         data['detail_konsumsi'] = list_dikonsumsi
         data['detail_sisa'] = list_tidak_digunakan
+
         for diff in mrp.move_raw_ids:
             if diff.difference_note:
                 obj = {
