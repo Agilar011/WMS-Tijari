@@ -16,6 +16,40 @@ class StockPickingType(models.Model):
         ('others', 'Others')
     ], string='Operation Category', required=False, default='others')
 
+    group_view = fields.Selection([
+        ('receive', 'Receive'),
+        ('pick', 'Pick'),
+        ('pack', 'Pack'),
+        ('delivery', 'Delivery'),
+        ('manufacture', 'Manufacture'),
+    ], string='Group View')
+    automatic_process = fields.Boolean(string='Automatic Process', default=False)
+
+    @api.model
+    def _set_wh33_group_view(self):
+        """Apply the Group View mapping requested for WH33 operation types."""
+        group_by_type_name = {
+            'receipts': 'receive',
+            'storage': 'receive',
+            'pick': 'pick',
+            'pack': 'pack',
+            'internal transfer': 'delivery',
+            'delivery orders': 'delivery',
+            'pick components': 'pick',
+            'manufacturing': 'manufacture',
+            'store finished product': 'receive',
+            'direct receipt': 'receive',
+            'direct delivery order/transfer': 'delivery',
+        }
+        picking_types = self.search([('warehouse_id.code', '=', 'WH33')])
+        for picking_type in picking_types:
+            type_name = (picking_type.name or '').strip().casefold()
+            group_view = group_by_type_name.get(type_name)
+            if group_view is not None and picking_type.group_view != group_view:
+                picking_type.group_view = group_view
+            if type_name in ('direct receipt', 'direct delivery order/transfer'):
+                picking_type.automatic_process = True
+
     is_default_api = fields.Boolean(string="Default Picking Type For API")
     is_api_config = fields.Boolean(string="Picking Type API Config")
     is_document_only_api = fields.Boolean(string="Document Only API")

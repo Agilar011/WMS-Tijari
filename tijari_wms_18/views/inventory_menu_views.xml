@@ -1,12 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <record id="stock.in_picking" model="ir.ui.menu">
+        <field name="name">Receive &amp; Storage</field>
+    </record>
+
+    <record id="wms_operations_menu_internal" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+    <record id="stock_menu_operations_internal_intra" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+    <record id="stock_menu_operations_internal_inter" model="ir.ui.menu">
+        <field name="active" eval="False"/>
+    </record>
+
     <record id="stock.out_picking" model="ir.ui.menu">
         <field name="sequence">25</field>
     </record>
 
     <record id="stock.int_picking" model="ir.ui.menu">
-        <field name="active" eval="True" />
+        <field name="active" eval="False" />
     </record>
 
     <!-- Keep Odoo's native Internal Transfers menu, but restrict it to the
@@ -69,6 +83,11 @@
             parent="menu_operations_others"
             sequence="2"
             action="action_wms_operations_so_consignment_receipts"/>
+        <menuitem id="menu_operations_others_auto_transaction_log"
+            name="Auto-Transaction Log"
+            parent="menu_operations_others"
+            sequence="3"
+            action="action_wms_auto_transaction_log"/>
 
 
 </odoo>

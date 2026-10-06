@@ -1520,6 +1520,18 @@ class InternalTransferOrder(models.Model):
         previous_picking=False,
     ):
         self.ensure_one()
+        if not location:
+            raise ValidationError(
+                'Internal Transfer Order %s tidak dapat membuat langkah %s: '
+                'Source Location belum ditentukan.'
+                % (self.display_name, suffix)
+            )
+        if not location_dest:
+            raise ValidationError(
+                'Internal Transfer Order %s tidak dapat membuat langkah %s: '
+                'Destination Location belum ditentukan.'
+                % (self.display_name, suffix)
+            )
         picking = self.env['stock.picking'].create(self._prepare_picking_vals(
             picking_type,
             location,
