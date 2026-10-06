@@ -8,6 +8,7 @@
         <field name="domain">[
             ('adt_is_document_only', '=', False),
             ('picking_type_id.is_document_only_api', '=', False),
+            ('picking_type_id.group_view', '=', 'receive'),
         ]</field>
     </record>
 
@@ -15,6 +16,7 @@
         <field name="domain">[
             ('adt_is_document_only', '=', False),
             ('picking_type_id.is_document_only_api', '=', False),
+            ('picking_type_id.group_view', '=', 'delivery'),
         ]</field>
     </record>
 
@@ -192,12 +194,24 @@
         <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_document_only': 1}</field>
     </record>
 
+    <record id="action_wms_auto_transaction_log" model="ir.actions.act_window">
+        <field name="name">Auto-Transaction Log</field>
+        <field name="res_model">stock.picking</field>
+        <field name="view_mode">list,form</field>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+        <field name="domain">[
+            ('picking_type_id.automatic_process', '=', True),
+            ('adt_is_document_only', '=', False),
+        ]</field>
+    </record>
+
     <!-- Operations menu shortcuts: filtered by the configured operation category. -->
     <record id="action_stock_operations_pick" model="ir.actions.act_window">
         <field name="name">Pick</field>
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+        <field name="domain">[('picking_type_id.group_view', '=', 'pick')]</field>
         <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pick': 1}</field>
     </record>
 
@@ -206,6 +220,7 @@
         <field name="res_model">stock.picking</field>
         <field name="view_mode">list,kanban,form</field>
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager')])]"/>
+        <field name="domain">[('picking_type_id.group_view', '=', 'pack')]</field>
         <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pack': 1}</field>
     </record>
 

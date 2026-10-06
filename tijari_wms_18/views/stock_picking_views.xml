@@ -7,8 +7,8 @@
         <field name="inherit_id" ref="stock.view_picking_internal_search"/>
         <field name="arch" type="xml">
             <xpath expr="//search/separator[1]" position="before">
-                <filter name="tijari_pick" string="Pick" domain="[('operation_category', '=', 'pick')]"/>
-                <filter name="tijari_pack" string="Pack" domain="[('operation_category', '=', 'pack')]"/>
+                <filter name="tijari_pick" string="Pick" domain="[('picking_type_id.group_view', '=', 'pick')]"/>
+                <filter name="tijari_pack" string="Pack" domain="[('picking_type_id.group_view', '=', 'pack')]"/>
                 <filter name="tijari_internal_intra" string="Internal Transfer - Intra" domain="[('internal_transfer_order_id.transaction_type', '=', 'intra_warehouse')]"/>
                 <filter name="tijari_internal_inter" string="Internal Transfer - Inter" domain="[('internal_transfer_order_id.transaction_type', '=', 'inter_warehouse')]"/>
                 <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', 'in', ['Internal Transfer', 'Internal Transfers', 'Transfer Internal'])]"/>
