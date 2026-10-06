@@ -1493,12 +1493,12 @@
                                         type="object"
                                         string="Finish Picking"
                                         class="btn-success o_wms_auto_save_before_action"
-                                        invisible="pick_status == 'finished'"/>
+                                        invisible="pick_status == 'finished'"/> -->
                                     <button name="action_mark_check_pick_unfinished"
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
-                                        invisible="pick_status == 'unfinished' or parent.state not in ('confirmed','assigned')"/> -->
+                                        invisible="pick_status == 'unfinished' or parent.state not in ('confirmed','assigned')"/>
                                     <!-- <button name="action_mark_picker_finished"
                                         type="object"
                                         string="Finish Picker"

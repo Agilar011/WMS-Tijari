@@ -1127,12 +1127,10 @@ class StockPicking(models.Model):
                 # reserve transit stock like a vendor receipt. Do not prefill
                 # the actual received quantity here.
                 picking.wms_state = "assigned"
+            elif not is_waiting_shipment or picking.picking_type_name != "Delivery Orders":
+                picking.wms_state = picking.state
             elif is_waiting_shipment and not picking.shipment_information:
-                picking.wms_state = "assigned"
-            elif picking.picking_type_name != "Delivery Orders":
-                picking.wms_state = picking.state
-            elif not is_waiting_shipment:
-                picking.wms_state = picking.state
+                picking.wms_state = "assigned"       
 
     @api.depends(
         'move_line_ids',
@@ -2734,9 +2732,9 @@ class StockPicking(models.Model):
                     'adt_actual_qty': sum(picking.move_ids.mapped('quantity'))
                 })
             
-            if picking.adt_type == 'Toko Pegang DO':
-                if not picking.owner_id:
-                    raise UserError(_("Owner is required for Toko Pegang DO."))
+            # if picking.adt_type == 'Toko Pegang DO':
+            #     if not picking.owner_id:
+            #         raise UserError(_("Owner is required for Toko Pegang DO."))
 
             if picking.adt_is_document_only:
                 continue
