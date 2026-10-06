@@ -2012,7 +2012,7 @@ class StockMoveLine(models.Model):
 
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Putaway Move Line',
+            'name': _('Putaway'),
             'res_model': 'putaway.move.line.wizard',
             'res_id': wizard.id,
             'view_mode': 'form',
@@ -2023,7 +2023,9 @@ class StockMoveLine(models.Model):
         if not self.exists():
             return {'type': 'ir.actions.client', 'tag': 'reload'}
         self.ensure_one()
-        if self.picking_type_name in ('Receipts', 'Receipt Internal'):
+        if self.picking_type_name in (
+            'Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'
+        ):
             return self.action_open_putaway_move_line_wizard()
 
         return {

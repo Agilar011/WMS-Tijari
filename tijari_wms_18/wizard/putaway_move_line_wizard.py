@@ -17,6 +17,10 @@ class PutawayMoveLineWizard(models.TransientModel):
         related='move_line_id.product_id',
         readonly=True,
     )
+    picking_type_name = fields.Char(
+        related='move_line_id.picking_type_name',
+        readonly=True,
+    )
     adt_dest_location_id = fields.Many2one(
         'stock.location',
         related='move_line_id.adt_dest_location_id',
@@ -31,6 +35,29 @@ class PutawayMoveLineWizard(models.TransientModel):
         string='Scan Location',
         readonly=True,
     )
+    confirmation_lot_code = fields.Char(
+        string='Confirmation Lot',
+        readonly=True,
+    )
+    handheld_scan_code = fields.Char(
+        string='Scan Handheld',
+        help='Scan kode lot atau lokasi untuk Storage.',
+    )
+    matching_lot_id = fields.Many2one(
+        'stock.lot',
+        string='Confirmation Lot',
+        domain="[('id', 'in', allowed_matching_lot_ids)]",
+    )
+    allowed_matching_lot_ids = fields.Many2many(
+        'stock.lot',
+        related='move_line_id.allowed_matching_lot_ids',
+        readonly=True,
+    )
+    matching = fields.Selection(
+        [('match', 'Match'), ('not_match', 'Not Match')],
+        readonly=True,
+    )
+    second_matching = fields.Char(readonly=True)
     handheld_location_code = fields.Char(
         string='Scan Handheld',
         help='Masukkan kode lokasi dari scanner handheld atau ketik manual.',
@@ -80,6 +107,10 @@ class PutawayMoveLineWizard(models.TransientModel):
                 'location_putaway_id': move_line.location_putaway_id.id,
                 'original_location_putaway_id': move_line.location_putaway_id.id,
                 'confirmation_location_code': move_line.confirmation_location_code,
+                'confirmation_lot_code': move_line.confirmation_lot_code,
+                'matching_lot_id': move_line.matching_lot_id.id,
+                'matching': move_line.matching,
+                'second_matching': move_line.second_matching,
                 'original_confirmation_location_code': move_line.confirmation_location_code,
                 'quantity': move_line.quantity,
                 'confirmation_quantity': move_line.confirmation_quantity,
@@ -113,6 +144,41 @@ class PutawayMoveLineWizard(models.TransientModel):
                 'handheld_location_code': False,
             })
 
+    @api.onchange('handheld_scan_code')
+    def _onchange_handheld_scan_code(self):
+        for wizard in self:
+            code = (wizard.handheld_scan_code or '').strip()
+            if not code or wizard.picking_type_name not in (
+                'Storage', 'Store Finished Product'
+            ):
+                continue
+            values = wizard.move_line_id._get_handheld_scan_values(code)
+            wizard.update({
+                key: value
+                for key, value in values.items()
+                if key in (
+                    'confirmation_lot_code',
+                    'matching_lot_id',
+                    'matching',
+                    'second_matching',
+                    'confirmation_location_code',
+                    'location_putaway_id',
+                )
+            })
+            wizard.handheld_scan_code = False
+
+    @api.onchange('matching_lot_id')
+    def _onchange_matching_lot_id(self):
+        for wizard in self:
+            lot = wizard.matching_lot_id
+            wizard.confirmation_lot_code = lot.name if lot else False
+            is_match = bool(
+                lot
+                and wizard.move_line_id._is_storage_lot_match(lot)
+            )
+            wizard.matching = 'match' if is_match else 'not_match'
+            wizard.second_matching = 'Match' if is_match else 'Not Match'
+
     def _prepare_move_line_values(self):
         self.ensure_one()
         move_line = self._existing_move_line()
@@ -121,6 +187,13 @@ class PutawayMoveLineWizard(models.TransientModel):
         values = {
             'confirmation_quantity': self.confirmation_quantity,
         }
+        if self.picking_type_name in ('Storage', 'Store Finished Product'):
+            values.update({
+                'confirmation_lot_code': self.confirmation_lot_code,
+                'matching_lot_id': self.matching_lot_id.id,
+                'matching': self.matching,
+                'second_matching': self.second_matching,
+            })
         location_changed = (
             self.location_putaway_id != self.original_location_putaway_id
             or self.confirmation_location_code != self.original_confirmation_location_code

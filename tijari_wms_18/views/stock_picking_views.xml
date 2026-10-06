@@ -229,12 +229,12 @@
                             invisible="picking_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
 
                         <!-- PUTAWAY
-                            Receipt only -->
+                            Receipt and Storage -->
                         <field 
                             name="putaway_responsible_ids"
                             widget="many2many_avatar_user"
                             readonly="state in ('cancel','done')"
-                            invisible="'Receipt' not in (picking_type_name or '')"/>
+                            invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"/>
                         
                         <field name="user_ids" widget="many2many_avatar_user" domain="[('share', '=', False)]" readonly="1" force_save="1"/>
                     </group>
@@ -995,7 +995,7 @@
                                     title="Open Putaway"
                                     icon="fa-archive"
                                     class="btn-link"
-                                    invisible="not parent.show_putaway_page or parent.picking_type_name not in ['Receipts', 'Receipt Internal']"
+                                    invisible="not parent.show_putaway_page or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"
                                 />
                             </list>
                             <kanban class="o_kanban_mobile">

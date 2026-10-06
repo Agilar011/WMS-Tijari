@@ -2776,8 +2776,8 @@
                         <field name="matching_lot_id"
                             string="Confirmation Lot"
                             column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
-                        <field name="quantity" readonly="1" string="Qty Diterima" column_invisible="parent.picking_type_name == ('Storage','Store Finished Product')"/>
-                        <field name="quantity" readonly="1" string="Qty Dipindah" column_invisible="parent.picking_type_name != ('Storage','Store Finished Product')"/>
+                        <field name="quantity" readonly="1" string="Qty Diterima" column_invisible="parent.picking_type_name in ['Storage', 'Store Finished Product']"/>
+                        <field name="quantity" readonly="1" string="Qty Dipindah" column_invisible="parent.picking_type_name not in ['Storage', 'Store Finished Product']"/>
                         <field name="confirmation_quantity" string="Qty Disimpan" readonly="putaway_status == 'finished'" force_save="1"/>
                         <field name="product_uom_id" readonly="1" string="UoM"/>
                         <field name="putaway_status" string="Status"
@@ -2848,11 +2848,6 @@
                                                 decoration-success="putaway_status == 'finished'"
                                                 decoration-danger="putaway_status == 'unfinished'"
                                                 widget="badge"/>
-                                            <button name="action_mark_putaway_finished"
-                                                type="object"
-                                                class="btn btn-success btn-sm"
-                                                string="Finish Putaway"
-                                                invisible="putaway_status == 'finished'"/>
                                             <button name="action_mark_putaway_unfinished"
                                                 type="object"
                                                 class="btn btn-danger btn-sm"
@@ -2950,64 +2945,6 @@
                 </footer>
             </form>
 
-        </field>
-    </record>
-
-    <record id="putaway_move_line_wizard_view_form" model="ir.ui.view">
-        <field name="name">putaway.move.line.wizard.view.form</field>
-        <field name="model">putaway.move.line.wizard</field>
-        <field name="arch" type="xml">
-            <form string="Putaway">
-                <group>
-                    <field
-                        name="confirmation_location_code"
-                        widget="adt_scan_location_text_button"
-                        string=" "
-                        readonly="1"
-                        invisible="putaway_status == 'finished'"
-                    />
-                    <field
-                        name="handheld_location_code"
-                        placeholder="Scan handheld atau ketik kode lokasi"
-                        invisible="putaway_status == 'finished'"
-                        readonly="picking_state == 'done'"
-                    />
-                    <field name="adt_dest_location_id" invisible="1"/>
-                    <field name="putaway_status" invisible="1"/>
-                    <field name="picking_state" invisible="1"/>
-                    <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
-
-                    <field name="location_putaway_id" context="{'show_location_short_name': True}" readonly="putaway_status == 'finished' or picking_state == 'done'" string="Store To"/>
-                    <field name="quantity" string="Qty Diterima"/>
-                    <field
-                        name="confirmation_quantity"
-                        string="Qty Disimpan"
-                        readonly="putaway_status == 'finished' or picking_state == 'done'"
-                    />
-                </group>
-                <footer>
-                    <button
-                        name="action_save_and_finish"
-                        string="Save &amp; Confirm"
-                        type="object"
-                        class="btn-primary"
-                        invisible="putaway_status == 'finished' or picking_state == 'done'"
-                    />
-                    <button
-                        name="action_rollback"
-                        string="Rollback"
-                        type="object"
-                        class="btn-danger"
-                        invisible="putaway_status != 'finished' or picking_state == 'done'"
-                    />
-                    <button
-                        name="action_cancel"
-                        string="Cancel"
-                        type="object"
-                        class="btn-secondary"
-                    />
-                </footer>
-            </form>
         </field>
     </record>
 
