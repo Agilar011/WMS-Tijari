@@ -1251,7 +1251,7 @@ class StockMove(models.Model):
         self.ensure_one()
         return {
             'type': 'ir.actions.act_window',
-            'name': _('Stock move') if self.picking_type_name in ('Storage', 'Store Finished Product') else _('Putaway'),
+            'name': _('Putaway'),
             'res_model': 'stock.move',
             'res_id': self.id,
             'view_mode': 'form',
