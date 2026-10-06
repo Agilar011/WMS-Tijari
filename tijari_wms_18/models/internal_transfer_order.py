@@ -1433,7 +1433,11 @@ class InternalTransferOrder(models.Model):
                 and picking.state not in ('done', 'cancel')
             ).sorted(lambda picking: picking.internal_transfer_sequence)
             for picking in pickings:
-                if shipment_picking and picking.internal_transfer_leg == 'receipt':
+                if (
+                    shipment_picking
+                    and order.adt_transaction_type == 'Shipment Consignment'
+                    and picking.internal_transfer_leg == 'receipt'
+                ):
                     order._set_consignment_receipt_shipped_quantities(
                         picking,
                         shipment_picking,
