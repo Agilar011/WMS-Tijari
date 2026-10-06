@@ -139,9 +139,8 @@
                                     <field name="internal_transfer_order_id" column_invisible="1"/>
                                     <field name="internal_transfer_product_scan_code"
                                         widget="adt_handheld_scan_code"
-                                        string="Scan Product"
-                                        placeholder="Scan barcode / product code"
-                                        groups="tijari_wms_18.group_operator"/>
+                                        string="Scan Handheld"
+                                        placeholder="Scan barcode / SKU / lot"/>
                                     <field name="product_id"
                                         context="{'tijari_stock_picking_product_code_only': True}"
                                         domain="[('id', 'in', parent.available_source_product_ids)] if parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer' else []"
@@ -150,28 +149,32 @@
                                     <field name="product_uom" string="UoM"
                                         groups="uom.group_uom"
                                         options="{'no_open': True, 'no_create': True}"/>
-                                    <field name="lot_ids" widget="many2many_tags"
+                                    <field name="internal_transfer_scan_lot_ids" widget="many2many_tags"
                                         string="Lot/Serial Number"
+                                        domain="[('product_id', '=', product_id)]"
                                         groups="stock.group_production_lot"/>
                                 </list>
                                 <kanban>
-                                    <field name="product_id"/>
-                                    <field name="internal_transfer_product_scan_code"
-                                        groups="tijari_wms_18.group_operator"/>
+                                    <field name="product_id"
+                                        context="{'tijari_stock_picking_product_code_only': True}"
+                                        domain="[('id', 'in', parent.available_source_product_ids)] if parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer' else []"/>
+                                    <field name="internal_transfer_product_scan_code"/>
                                     <field name="product_uom_qty"/>
                                     <field name="product_uom" groups="uom.group_uom"/>
-                                    <field name="lot_ids" groups="stock.group_production_lot"/>
+                                    <field name="internal_transfer_scan_lot_ids" groups="stock.group_production_lot"/>
                                     <templates>
                                         <t t-name="card">
                                             <div class="oe_kanban_global_click">
                                                 <div class="fw-bold fs-5">
-                                                    <field name="product_id"/>
+                                                    <field name="product_id"
+                                                        context="{'tijari_stock_picking_product_code_only': True}"
+                                                        domain="[('id', 'in', parent.available_source_product_ids)] if parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer' else []"/>
                                                 </div>
                                                 <div class="mt-2">
                                                     <field name="internal_transfer_product_scan_code"
                                                         widget="adt_handheld_scan_code"
-                                                        placeholder="Scan barcode / product code"
-                                                        groups="tijari_wms_18.group_operator"/>
+                                                        string="Scan Handheld"
+                                                        placeholder="Scan barcode / product code"/>
                                                 </div>
                                                 <div class="mt-2">
                                                     <span class="text-muted">Demand: </span>
@@ -180,7 +183,8 @@
                                                 </div>
                                                 <div class="mt-2" groups="stock.group_production_lot">
                                                     <span class="text-muted">Lot/Serial: </span>
-                                                    <field name="lot_ids" widget="many2many_tags"
+                                                    <field name="internal_transfer_scan_lot_ids" widget="many2many_tags"
+                                                        domain="[('product_id', '=', product_id)]"
                                                         groups="stock.group_production_lot"/>
                                                 </div>
                                             </div>
@@ -218,15 +222,17 @@
                     <field name="location_dest_id" invisible="1"/>
                     <field name="product_uom_category_id" invisible="1"/>
                     <field name="internal_transfer_order_id" invisible="1"/>
+                    <field name="internal_transfer_available_source_product_ids" invisible="1"/>
+                    <field name="internal_transfer_transaction_type" invisible="1"/>
+                    <field name="internal_transfer_intra_transfer_type" invisible="1"/>
                     <group>
                         <field name="internal_transfer_product_scan_code"
                             widget="adt_handheld_scan_code"
-                            string="Scan Product"
-                            placeholder="Scan barcode / product code"
-                            groups="tijari_wms_18.group_operator"/>
+                            string="Scan Handheld"
+                            placeholder="Scan barcode / product code"/>
                         <field name="product_id"
                             context="{'tijari_stock_picking_product_code_only': True}"
-                            domain="[('id', 'in', internal_transfer_order_id.available_source_product_ids)] if internal_transfer_order_id.transaction_type == 'intra_warehouse' and internal_transfer_order_id.intra_transfer_type == 'intra_group_transfer' else []"
+                            domain="[('id', 'in', internal_transfer_available_source_product_ids)] if internal_transfer_transaction_type == 'intra_warehouse' and internal_transfer_intra_transfer_type == 'intra_group_transfer' else []"
                             required="1"/>
                         <label for="product_uom_qty" string="Demand"/>
                         <div class="o_row">
@@ -235,8 +241,9 @@
                                 groups="uom.group_uom"
                                 options="{'no_open': True, 'no_create': True}"/>
                         </div>
-                        <field name="lot_ids" widget="many2many_tags"
+                        <field name="internal_transfer_scan_lot_ids" widget="many2many_tags"
                             string="Lot/Serial Number"
+                            domain="[('product_id', '=', product_id)]"
                             groups="stock.group_production_lot"/>
                     </group>
                 </sheet>

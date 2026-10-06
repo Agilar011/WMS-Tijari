@@ -238,7 +238,7 @@
                         <field name="available_location_ids" column_invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1" context="{'tijari_stock_picking_product_code_only': True}" column_invisible="'Pack' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '')"/>
-                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot" column_invisible="'Pick' in (parent.picking_type_name or '')"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
                         <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string="Scan Lot"
@@ -272,7 +272,7 @@
 
                         <field name="quantity" string="Qty Disimpan" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="quantity" string="Quantity" readonly="0" force_save="1" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" optional="hide"/>
+                        <field name="quantity" string="Saran Qty" force_save="1"/>
                         <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="so_confirmation_quantity" string="Qty Confirm" readonly="1" optional="show" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
                         <field name="product_uom_id" string="Unit of Measure" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
@@ -2447,7 +2447,7 @@
                     </div>
                 </div>
                 
-                <field name="filtered_unpacked_lot_line_ids"
+                <field name="filtered_unpack_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
                         'form_view_ref': 'stock.view_move_line_mobile_form',

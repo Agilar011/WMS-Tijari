@@ -60,7 +60,11 @@ class InternalTransferOrder(models.Model):
             ('inter_group_transfer', 'Inter Group Transfer'),
         ],
         string='Transfer Type',
-        default='transfer_out',
+        default=lambda self: (
+            'transfer_out'
+            if self.env.context.get('default_transaction_type') == 'inter_warehouse'
+            else 'intra_group_transfer'
+        ),
         tracking=True,
     )
     inter_transfer_type = fields.Selection(
@@ -429,6 +433,18 @@ class InternalTransferOrder(models.Model):
                 else False
             )
 
+    @api.onchange('transaction_type')
+    def _onchange_transaction_type_default_transfer_type(self):
+        for order in self:
+            if order.transaction_type == 'intra_warehouse' and order.transfer_type not in (
+                'intra_group_transfer', 'inter_group_transfer'
+            ):
+                order.transfer_type = 'intra_group_transfer'
+            elif order.transaction_type == 'inter_warehouse' and order.transfer_type not in (
+                'transfer_in', 'transfer_out'
+            ):
+                order.transfer_type = 'transfer_out'
+
     def _inverse_inter_transfer_type(self):
         for order in self:
             if order.inter_transfer_type:
@@ -448,6 +464,34 @@ class InternalTransferOrder(models.Model):
         prepared_vals_list = []
         for vals in vals_list:
             vals = dict(vals)
+            transaction_type = (
+                vals.get('transaction_type')
+                or self.env.context.get('default_transaction_type')
+                or 'intra_warehouse'
+            )
+            if (
+                'transfer_type' not in vals
+                and not self.env.context.get('default_transfer_type')
+            ):
+                if transaction_type == 'inter_warehouse':
+                    vals['transfer_type'] = 'transfer_out'
+                elif transaction_type == 'intra_warehouse':
+                    vals['transfer_type'] = 'intra_group_transfer'
+            transfer_type = (
+                vals.get('transfer_type')
+                or self.env.context.get('default_transfer_type')
+                or (
+                    'transfer_out'
+                    if transaction_type == 'inter_warehouse'
+                    else 'intra_group_transfer'
+                )
+            )
+            if (
+                transaction_type == 'intra_warehouse'
+                and transfer_type == 'intra_group_transfer'
+                and vals.get('location_group_id')
+            ):
+                vals['location_dest_id'] = vals['location_group_id']
             source_location_id = (
                 vals.get('location_id') or vals.get('intra_location_id')
             )
@@ -588,17 +632,19 @@ class InternalTransferOrder(models.Model):
                 continue
             if order.state == 'ready':
                 continue
+            location_group_changed = (
+                order._origin.location_group_id != order.location_group_id
+            )
             if not order.location_group_id:
                 order.location_id = False
                 order.location_dest_id = False
                 continue
             if not order._location_belongs_to(order.location_id, order.location_group_id):
                 order.location_id = False
-            if not order._location_belongs_to(
-                order.location_dest_id,
-                order.location_group_id,
+            if location_group_changed or not order._location_belongs_to(
+                order.location_dest_id, order.location_group_id
             ):
-                order.location_dest_id = False
+                order.location_dest_id = order.location_group_id
 
     @api.constrains(
         'transaction_type',
@@ -1192,7 +1238,22 @@ class InternalTransferOrder(models.Model):
         }
         if picking.adt_dest_location_id:
             vals['adt_dest_location_id'] = picking.adt_dest_location_id.id
-        return self.env['stock.move'].create(vals)
+        picking_move = self.env['stock.move'].create(vals)
+        selected_lots = source_move.internal_transfer_scan_lot_ids.filtered(
+            lambda lot: lot.product_id == picking_move.product_id
+        )
+        if selected_lots:
+            picking_move.internal_transfer_scan_lot_ids = selected_lots
+            if picking_move.product_id.tracking == 'serial':
+                picking_move.lot_ids = picking_move.lot_ids | selected_lots
+            else:
+                move_line_vals = []
+                for lot in selected_lots:
+                    line_vals = picking_move._prepare_move_line_vals(quantity=0)
+                    line_vals.update({'lot_id': lot.id, 'lot_name': lot.name})
+                    move_line_vals.append(line_vals)
+                self.env['stock.move.line'].create(move_line_vals)
+        return picking_move
 
     def _get_move_match_key(self, move):
         return (
@@ -1938,6 +1999,14 @@ class StockMove(models.Model):
         store=False,
         help='Scan barcode or internal reference to select the operation product.',
     )
+    internal_transfer_scan_lot_ids = fields.Many2many(
+        comodel_name='stock.lot',
+        relation='stock_move_internal_transfer_scan_lot_rel',
+        column1='move_id',
+        column2='lot_id',
+        string='Scanned Lot/Serial Numbers',
+        copy=False,
+    )
 
     internal_transfer_order_id = fields.Many2one(
         comodel_name='internal.transfer.order',
@@ -1945,6 +2014,16 @@ class StockMove(models.Model):
         ondelete='cascade',
         index=True,
         copy=False,
+    )
+    internal_transfer_available_source_product_ids = fields.Many2many(
+        related='internal_transfer_order_id.available_source_product_ids',
+        string='ITO Available Source Products',
+    )
+    internal_transfer_transaction_type = fields.Selection(
+        related='internal_transfer_order_id.transaction_type',
+    )
+    internal_transfer_intra_transfer_type = fields.Selection(
+        related='internal_transfer_order_id.intra_transfer_type',
     )
 
     @api.onchange('product_id', 'internal_transfer_order_id')
@@ -1955,10 +2034,15 @@ class StockMove(models.Model):
             order = move.internal_transfer_order_id
             move.location_id = order.location_id
             move.location_dest_id = order.location_dest_id
+            move.internal_transfer_scan_lot_ids = move.internal_transfer_scan_lot_ids.filtered(
+                lambda lot: lot.product_id == move.product_id
+            )
 
     @api.onchange('internal_transfer_product_scan_code')
     def _onchange_internal_transfer_product_scan_code(self):
         Product = self.env['product.product']
+        Lot = self.env['stock.lot']
+        Quant = self.env['stock.quant']
         for move in self:
             code = (move.internal_transfer_product_scan_code or '').strip()
             if not code:
@@ -1966,13 +2050,56 @@ class StockMove(models.Model):
             product = Product.search([
                 '|', ('barcode', '=', code), ('default_code', '=', code),
             ], limit=1)
+            order = move.internal_transfer_order_id
+            scanned_lot = Lot.browse()
+            if not product and order:
+                lot_domain = [
+                    ('name', '=', code),
+                    ('product_id.tracking', 'in', ('lot', 'serial')),
+                ]
+                if order.company_id:
+                    lot_domain.append(('company_id', 'in', [False, order.company_id.id]))
+                candidate_lots = Lot.search(lot_domain)
+                if (
+                    order.transaction_type == 'intra_warehouse'
+                    and order.intra_transfer_type == 'intra_group_transfer'
+                ):
+                    source_location = order.intra_location_id or order.location_id
+                    available_products = order._get_available_source_products(source_location)
+                    candidate_lots = candidate_lots.filtered(
+                        lambda lot: lot.product_id in available_products
+                    )
+                source_location = (
+                    (order.intra_location_id or order.location_id)
+                    if order.transaction_type == 'intra_warehouse'
+                    else order.location_id
+                )
+                if source_location and source_location.usage in ('internal', 'transit'):
+                    candidate_lots = candidate_lots.filtered(
+                        lambda lot: sum(Quant.search([
+                            ('product_id', '=', lot.product_id.id),
+                            ('lot_id', '=', lot.id),
+                            ('location_id', 'child_of', source_location.id),
+                            ('quantity', '>', 0),
+                        ]).mapped('available_quantity')) > 0
+                    )
+                if len(candidate_lots) > 1:
+                    raise ValidationError(
+                        _('Kode lot %s cocok dengan lebih dari satu lot yang tersedia.') % code
+                    )
+                if candidate_lots:
+                    scanned_lot = candidate_lots
+                    product = scanned_lot.product_id
+
             if not product:
                 raise ValidationError(
-                    _('Product tidak ditemukan untuk kode scan: %s') % code
+                    _('Kode %s tidak ditemukan sebagai barcode, SKU, atau lot/serial.') % code
                 )
 
-            order = move.internal_transfer_order_id
-            if order.transaction_type == 'intra_warehouse':
+            if order and (
+                order.transaction_type == 'intra_warehouse'
+                and order.intra_transfer_type == 'intra_group_transfer'
+            ):
                 source_location = order.intra_location_id or order.location_id
                 available_products = order._get_available_source_products(source_location)
                 if product not in available_products:
@@ -1980,7 +2107,13 @@ class StockMove(models.Model):
                         _('Product hasil scan tidak tersedia di Source Location.')
                     )
 
+            if move.product_id and move.product_id != product:
+                move.internal_transfer_scan_lot_ids = move.internal_transfer_scan_lot_ids.filtered(
+                    lambda lot: lot.product_id == product
+                )
             move.product_id = product
+            if scanned_lot:
+                move.internal_transfer_scan_lot_ids |= scanned_lot
             move.internal_transfer_product_scan_code = False
 
 
