@@ -34,6 +34,9 @@
                 <xpath expr="//field[@name='quantity']" position="attributes">
                     <attribute name="optional">hide</attribute>
                 </xpath>
+                <xpath expr="//field[@name='inventory_diff_quantity']" position="attributes">
+                    <attribute name="optional">hide</attribute>
+                </xpath>
                 <xpath expr="//field[@name='product_uom_id']" position="attributes">
                     <attribute name="optional">hide</attribute>
                 </xpath>
