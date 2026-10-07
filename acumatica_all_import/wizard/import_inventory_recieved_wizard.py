@@ -215,6 +215,12 @@ class ImportInventoryRecievedWizard(models.TransientModel):
             'description': self._val(item, 'Description'),
             'doc_type': self._val(item, 'DocType'),
             'document_only': self._bool_val(item, 'DocumentOnly'),
+            'stock_lebih': (
+                self._bool_val(item, 'WMSRelated')
+                or self._bool_val(item, 'wms_related')
+                or self._bool_val(item, 'StockLebih')
+                or self._bool_val(item, 'stock_lebih')
+            ),
             'external_ref': self._val(item, 'ExternalRef'),
             'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
             'customer_location_id': self._val(item, 'CustomerLocationID'),

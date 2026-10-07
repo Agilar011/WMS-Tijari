@@ -476,8 +476,36 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 staging_ids.extend(created_staging.ids)
                 staging_lines += len(staging_vals)
 
-        # Webhook hanya menyiapkan staging. Import Manufacturing dijalankan
-        # dari tombol Import This agar sama dengan alur staging manual.
+        # Generate/update Manufacturing Orders as part of webhook processing,
+        # using the same importer as the manual "Import This" action.
+        staged_records = Staging.browse(staging_ids)
+        import_logs = []
+        if staged_records:
+            staged_records._do_import()
+            ErrorLog = self._env()["acumatica.error.transaction"].sudo()
+            ErrorLog._handle_acumatica_created(staged_records)
+            error_logs = ErrorLog.search([
+                ("data_type", "=", "acumatica.kit.assembly.line"),
+                ("data_id", "in", staged_records.ids),
+            ])
+            error_messages = {log.data_id: log.error_msg for log in error_logs}
+
+            for line in staged_records:
+                import_logs.append({
+                    "reference_nbr": line.reference_nbr,
+                    "status": line.import_state,
+                    "message": error_messages.get(line.id) or line.import_message or "",
+                })
+
+            for reference_nbr in grouped:
+                reference_records = staged_records.filtered(
+                    lambda line: line.reference_nbr == reference_nbr
+                )
+                states = set(reference_records.mapped("import_state"))
+                if states.intersection({"created", "updated"}):
+                    imported += 1
+                elif states.intersection({"error", "rejected"}):
+                    errors += 1
 
         return {
             "transaction_type": "kit_assembly",
@@ -486,6 +514,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "updated": updated,
             "imported": imported,
             "errors": errors,
+            "logs": import_logs,
             "header_ids": staging_ids,
             "component_lines": component_lines,
             "product_lines": staging_lines,
@@ -639,6 +668,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "warehouse_dest_code": self._first_value(item, "ToWarehouseID", "Warehouse", "LineWarehouseID", "warehouse_dest_code"),
             "location_dest_code": self._first_value(item, "LineLocation", "Location", "location_dest_code"),
             "transfer_order_number": self._first_value(item, "TransferOrderNbr", "transfer_order_number"),
+            "stock_lebih": self._bool_value(item, "WMSRelated", "wms_related", "StockLebih", "stock_lebih"),
             "transfer_order_line_number": self._first_value(item, "TransferOrderLineNbr", "transfer_order_line_number"),
             "transfer_order_type": self._first_value(item, "TransferOrderType", "transfer_order_type"),
             "transfer_shipment_number": self._first_value(item, "LineTransferShipmentNbr", "TransferShipmentNbr", "transfer_shipment_number"),
@@ -844,6 +874,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "description": self._first_value(item, "Description", "description"),
             "doc_type": self._first_value(item, "DocType", "doc_type"),
             "document_only": document_only,
+            "stock_lebih": self._bool_value(item, "WMSRelated", "wms_related", "StockLebih", "stock_lebih"),
             "external_ref": self._first_value(item, "ExternalRef", "external_ref"),
             "acumatica_write_date": self._first_value(item, "LastModifiedDateTime", "acumatica_write_date"),
             "location_code": self._first_value(item, "Location", "location_code"),

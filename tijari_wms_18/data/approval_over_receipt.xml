@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="approval_model_stock_picking" model="approval.model">
+        <field name="name">Stock Picking</field>
+        <field name="model_id" ref="stock.model_stock_picking"/>
+    </record>
+
+    <record id="approval_type_over_receipt" model="approval.type">
+        <field name="name">Over-Receipt</field>
+        <field name="code">OVER_RECEIPT</field>
+        <field name="approval_model_id" ref="approval_model_stock_picking"/>
+    </record>
+</odoo>

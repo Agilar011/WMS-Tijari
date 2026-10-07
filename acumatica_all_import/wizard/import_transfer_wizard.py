@@ -356,6 +356,12 @@ class ImportTransferWizard(models.TransientModel):
                         ),
                         'receipt_nbr': receipt_nbr,
                         'document_only': document_only,
+                        'stock_lebih': (
+                            self._bool_val(item, 'WMSRelated')
+                            or self._bool_val(item, 'wms_related')
+                            or self._bool_val(item, 'StockLebih')
+                            or self._bool_val(item, 'stock_lebih')
+                        ),
                         'status': self._val(
                             item,
                             'Status',
