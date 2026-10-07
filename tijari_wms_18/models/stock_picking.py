@@ -18,7 +18,63 @@ from odoo.tools.float_utils import float_is_zero
 _logger = logging.getLogger(__name__)
 
 class StockPicking(models.Model):
-    _inherit = 'stock.picking'
+    _name = 'stock.picking'
+    _inherit = ['stock.picking', 'approval.mixin']
+
+    @api.model
+    def default_get(self, fields_list):
+        vals = super().default_get(fields_list)
+        if self.env.context.get('default_stock_lebih') and 'picking_type_id' in fields_list and not vals.get('picking_type_id'):
+            # The Over-Receipt menu creates a normal inbound receipt.
+            warehouse_id = (
+                self.env.context.get('default_warehouse_id')
+                or self.env.user.warehouse_id.id
+            )
+            domain = [
+                ('code', '=', 'incoming'),
+                ('name', '=', 'Receipts'),
+                ('operation_category', '=', 'receive'),
+                ('company_id', '=', self.env.company.id),
+            ]
+            PickingType = self.env['stock.picking.type']
+            picking_type = PickingType.search(
+                domain + ([('warehouse_id', '=', warehouse_id)] if warehouse_id else []),
+                limit=1,
+            )
+            if not picking_type:
+                picking_type = PickingType.search(domain, order='warehouse_id, id', limit=1)
+            if picking_type:
+                vals['picking_type_id'] = picking_type.id
+        return vals
+
+    stock_lebih = fields.Boolean(
+        string='Stock Lebih',
+        default=False,
+        copy=False,
+        index=True,
+        help='Dokumen khusus untuk penerimaan SOTR dengan quantity berlebih.',
+    )
+    over_receipt_transaction_type = fields.Selection(
+        [
+            ('receipt_sotr', 'Receipt SOTR'),
+            ('inventory_receive', 'Inventory Receive'),
+        ],
+        string='Tipe Transaksi Over-Receipt',
+        default='receipt_sotr',
+        copy=False,
+        tracking=True,
+    )
+    ref_sotr = fields.Char(
+        string='Ref. No. Document',
+        copy=False,
+        tracking=True,
+    )
+
+    approval_type_id = fields.Many2one(
+        'approval.type',
+        string='Approval Type',
+        domain="[('approval_model_id.model', '=', 'stock.picking')]",
+    )
 
     # Memberi label unik untuk menghindari warning 'Same label: Type (Acumatica)'
     adt_receipt_nbr = fields.Char(string='Receipt Nbr (Acumatica)')
@@ -820,6 +876,20 @@ class StockPicking(models.Model):
         copy=False,
         tracking=True,
     )
+    wms_state_over_receipt = fields.Selection(
+        selection=[
+            ('draft', 'Draft'),
+            ('waiting', 'Waiting Another Operation'),
+            ('confirmed', 'Waiting'),
+            ('assigned', 'Ready'),
+            ('waiting_response', 'Waiting For Approval'),
+            ('return_shipment', 'Returned Shipment'),
+            ('done', 'Done'),
+            ('cancel', 'Cancelled'),
+        ],
+        string='Over-Receipt State',
+        compute='_compute_wms_state_over_receipt',
+    )
 
     shipment_information = fields.Selection([
         ('partial', 'Partial Shipment'),
@@ -1094,6 +1164,8 @@ class StockPicking(models.Model):
 
     @api.depends(
         "state",
+        "stock_lebih",
+        "approval_request_id",
         "adt_type",
         "internal_transfer_order_id",
         "internal_transfer_order_id.transfer_type",
@@ -1103,6 +1175,11 @@ class StockPicking(models.Model):
     )
     def _compute_wms_state(self):
         for picking in self:
+            is_waiting_over_receipt = bool(
+                picking.stock_lebih
+                and picking.approval_request_id
+                and picking.state in ('confirmed', 'assigned')
+            )
             is_ready_transfer_in_receipt = bool(
                 picking.internal_transfer_order_id
                 and picking.internal_transfer_leg == "receipt"
@@ -1121,7 +1198,9 @@ class StockPicking(models.Model):
                 )
             )
 
-            if is_ready_transfer_in_receipt:
+            if is_waiting_over_receipt:
+                picking.wms_state = 'waiting_response'
+            elif is_ready_transfer_in_receipt:
                 # A transfer-in receipt is ready to process after Check
                 # Availability, even when its zero-qty working lines cannot
                 # reserve transit stock like a vendor receipt. Do not prefill
@@ -1131,6 +1210,11 @@ class StockPicking(models.Model):
                 picking.wms_state = picking.state
             elif is_waiting_shipment and not picking.shipment_information:
                 picking.wms_state = "assigned"       
+
+    @api.depends('wms_state')
+    def _compute_wms_state_over_receipt(self):
+        for picking in self:
+            picking.wms_state_over_receipt = picking.wms_state
 
     @api.depends(
         'move_line_ids',
@@ -2711,7 +2795,156 @@ class StockPicking(models.Model):
                 shipment_picking=self,
             )
 
+    def action_update_over_receipt(self):
+        self.ensure_one()
+        if not self.stock_lebih:
+            raise UserError(_('Update Receipt hanya tersedia untuk dokumen Over-Receipt.'))
+        if self.approval_state != 'approved':
+            raise UserError(_('Dokumen harus disetujui sebelum Update Receipt.'))
+        if not (self.ref_sotr or '').strip():
+            raise UserError(_('Ref. No. Document wajib diisi sebelum Update Receipt.'))
+        if self.wms_state != 'waiting_response':
+            raise UserError(_('Dokumen tidak sedang menunggu approval/penerimaan.'))
+
+        transaction_type = self.over_receipt_transaction_type or 'receipt_sotr'
+        if transaction_type == 'receipt_sotr':
+            staging_model = 'acumatica.transfer.line'
+            reference_field = 'receipt_nbr'
+            source_label = _('SOTR')
+        elif transaction_type == 'inventory_receive':
+            staging_model = 'acumatica.inventory.recieved.line'
+            reference_field = 'reference_nbr'
+            source_label = _('Inventory Receive')
+        else:
+            raise UserError(_('Pilih Tipe Transaksi Over-Receipt terlebih dahulu.'))
+
+        Staging = self.env[staging_model]
+        staging = Staging.search(
+            [(reference_field, '=', self.ref_sotr.strip()), ('stock_lebih', '=', True)],
+            order='id desc',
+            limit=1,
+        )
+        if not staging:
+            return self._over_receipt_quantity_warning(
+                _('Data %s Over-Receipt %s belum ditemukan di staging.')
+                % (source_label, self.ref_sotr)
+            )
+
+        api_quantities = {}
+        for line in staging.product_line_ids:
+            inventory_id = (line.inventory_id or '').strip()
+            if inventory_id:
+                api_quantities[inventory_id] = (
+                    api_quantities.get(inventory_id, 0.0)
+                    + staging._parse_float(line.product_uom_qty)
+                )
+
+        document_quantities = {}
+        for move in self.move_ids:
+            inventory_id = (move.product_id.default_code or '').strip()
+            if inventory_id:
+                document_quantities[inventory_id] = (
+                    document_quantities.get(inventory_id, 0.0) + move.quantity
+                )
+
+        mismatches = []
+        inventory_ids = set(api_quantities) | set(document_quantities)
+        for inventory_id in sorted(inventory_ids):
+            product_moves = self.move_ids.filtered(
+                lambda move: (move.product_id.default_code or '').strip() == inventory_id
+            )
+            product_name = (
+                product_moves[:1].product_id.default_code
+                if product_moves else inventory_id
+            )
+            rounding = product_moves[:1].product_uom.rounding if product_moves else 0.01
+            api_qty = api_quantities.get(inventory_id, 0.0)
+            document_qty = document_quantities.get(inventory_id, 0.0)
+            if float_compare(api_qty, document_qty, precision_rounding=rounding) != 0:
+                mismatches.append(
+                    _('Product: %(product)s\nQty di API: %(api_qty)s\nQty di Dokumen: %(document_qty)s')
+                    % {
+                        'product': product_name,
+                        'api_qty': f'{api_qty:g}',
+                        'document_qty': f'{document_qty:g}',
+                    }
+                )
+
+        if mismatches:
+            message = _(
+                'Dokumen ini tidak bisa di-update karena ada perbedaan quantity:\n\n%s'
+            ) % '\n\n'.join(mismatches)
+            return self._over_receipt_quantity_warning(message)
+
+        return self.with_context(over_receipt_update=True).button_validate()
+
+    def action_approve(self):
+        self.ensure_one()
+        if self.stock_lebih and not (self.ref_sotr or '').strip():
+            raise UserError(_('Ref. No. Document wajib diisi sebelum dokumen Over-Receipt dapat disetujui.'))
+        return super().action_approve()
+
+    def action_rollback_over_receipt_approval(self):
+        self.ensure_one()
+        if not self.stock_lebih:
+            raise UserError(_('Rollback approval hanya tersedia untuk dokumen Over-Receipt.'))
+        if not self.env.user.has_group('stock.group_stock_manager'):
+            raise UserError(_('Hanya Stock Manager yang dapat melakukan rollback approval.'))
+        if self.state in ('done', 'cancel'):
+            raise UserError(_('Approval tidak dapat di-rollback setelah dokumen selesai atau dibatalkan.'))
+        request = self.approval_request_id
+        if not request or request.state != 'approved':
+            raise UserError(_('Rollback hanya dapat dilakukan pada dokumen yang sudah disetujui.'))
+
+        request.line_ids.write({'state': 'waiting', 'action_date': False})
+        request.write({'state': 'waiting'})
+        self.message_post(body=_('Approval di-rollback. Ref. No. Document dapat diperiksa dan diperbarui.'))
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+    @api.model
+    def _over_receipt_quantity_warning(self, message):
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Update Receipt belum dapat diproses'),
+                'message': message,
+                'type': 'warning',
+                'sticky': True,
+            },
+        }
+
     def button_validate(self):
+        if not self.env.context.get('over_receipt_update'):
+            over_receipts = self.filtered('stock_lebih')
+            for picking in over_receipts:
+                if picking.state in ('done', 'cancel'):
+                    continue
+                if picking.approval_state == 'approved':
+                    raise UserError(_(
+                        'Gunakan tombol Update Receipt untuk menyelesaikan dokumen Over-Receipt.'
+                    ))
+                if picking.approval_request_id:
+                    raise UserError(_(
+                        'Dokumen Over-Receipt sudah dikirim untuk approval dan belum disetujui.'
+                    ))
+
+                approval_type = self.env.ref(
+                    'tijari_wms_18.approval_type_over_receipt',
+                    raise_if_not_found=False,
+                )
+                if not approval_type:
+                    raise UserError(_('Approval Type Over-Receipt belum dikonfigurasi.'))
+                if not approval_type._get_approval_lines(0.0):
+                    raise UserError(_(
+                        'Tambahkan approver pada Approval Type Over-Receipt terlebih dahulu.'
+                    ))
+                picking.approval_type_id = approval_type
+                picking.action_submit_approval()
+
+            if over_receipts:
+                return {'type': 'ir.actions.client', 'tag': 'reload'}
+
         document_only_pickings = self.filtered(
             lambda picking: picking.adt_is_document_only
         )
@@ -3905,3 +4138,17 @@ class StockPickingAcumaticaErrorLine(models.Model):
     qty = fields.Float(string="Demand")
     uom = fields.Char()
     payload = fields.Json()
+
+
+class ApprovalRequest(models.Model):
+    _inherit = 'approval.request'
+
+    def action_approve(self):
+        self.ensure_one()
+        if self.source_model == 'stock.picking':
+            picking = self.env['stock.picking'].browse(self.source_id).exists()
+            if picking and picking.stock_lebih and not (picking.ref_sotr or '').strip():
+                raise UserError(
+                    _('Ref. No. Document wajib diisi sebelum dokumen Over-Receipt dapat disetujui.')
+                )
+        return super().action_approve()

@@ -247,7 +247,9 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'adt_type' : "Sales Order Shipment",
                         'adt_order_type': shipment.adt_OrderType or False,
                         'transaction_type' : 'outbound',
+                        'note': shipment.adt_note or shipment.adt_NoteHeader or False,
                         'desc_note' : shipment.adt_Description,
+                        'adt_description': shipment.adt_Description or False,
                     }
 
                     shipment_location_id = shipment.adt_WarehouseID

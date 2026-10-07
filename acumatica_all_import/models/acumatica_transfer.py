@@ -81,6 +81,7 @@ class AcumaticaTransferLine(models.Model):
     total_qty = fields.Char(string='Qty Total')
     is_hold = fields.Char(string='Hold')
     document_only = fields.Boolean(string='Document Only')
+    stock_lebih = fields.Boolean(string='Stock Lebih', default=False, index=True)
     inventory_ref = fields.Char(string='Inventory Ref Nbr')
     post_period = fields.Char(string='Post Period')
     acumatica_write_date = fields.Char(string='Last Modified')
@@ -205,8 +206,12 @@ class AcumaticaTransferLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.import_state in ['staged', 'error'])
+        lines = self.filtered(
+            lambda line: line.import_state in ['staged', 'error'] and not line.stock_lebih
+        )
         if not lines:
+            if self.filtered('stock_lebih'):
+                raise UserError('Data Stock Lebih tidak digenerate ke stock.picking. Gunakan menu Over-Receipt Document.')
             raise UserError('Hanya bisa generate data dengan state Staged & Error')
         result = lines._do_import()
         self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
@@ -214,6 +219,8 @@ class AcumaticaTransferLine(models.Model):
 
     def action_import_this(self):
         self.ensure_one()
+        if self.stock_lebih:
+            raise UserError('Data Stock Lebih tidak digenerate ke stock.picking. Gunakan menu Over-Receipt Document.')
         result = self._do_import()
         self.env['acumatica.error.transaction']._handle_acumatica_created(self)
         return result
@@ -629,6 +636,8 @@ class AcumaticaTransferLine(models.Model):
         grouped_receipts = []
         seen_receipt_numbers = set()
         for receipt in self.sorted(lambda record: (record.receipt_nbr or '', record.id)):
+            if receipt.stock_lebih:
+                continue
             receipt_key = receipt.receipt_nbr or receipt.id
             if receipt_key in seen_receipt_numbers:
                 continue

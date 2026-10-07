@@ -751,7 +751,6 @@ class AcumaticaKitAssemblyLine(models.Model):
         PickingType = self.env['stock.picking.type']
         Bom = self.env['mrp.bom']
         BomLine = self.env['mrp.bom.line']
-        Warehouse = self.env['stock.warehouse']
         mapping_location = self.env['stock.location.acumatica']
         header_reference = self.env['acumatica.kit.assembly']
         component_reference = self.env['acumatica.kit.assembly.component']
@@ -775,9 +774,23 @@ class AcumaticaKitAssemblyLine(models.Model):
                     if not header:
                         raise UserError(f"Header tidak ditemukan: {reference_nbr}")
 
-                    warehouse = Warehouse.search([('code', '=', header.warehouse)], limit=1)
+                    warehouse_mapping = mapping_location.search(
+                        [('code', '=', header.warehouse)],
+                        limit=1,
+                    )
+                    if not warehouse_mapping:
+                        raise UserError(
+                            f"Mapping warehouse Acumatica tidak ditemukan untuk: "
+                            f"{header.warehouse or '-'}"
+                        )
+
+                    location_record = warehouse_mapping.odoo_location_id
+                    warehouse = location_record.warehouse_id if location_record else False
                     if not warehouse:
-                        raise UserError(f"Warehouse tidak ditemukan untuk: {header.warehouse or '-'}")
+                        raise UserError(
+                            f"Warehouse Odoo tidak ditemukan untuk mapping: "
+                            f"{header.warehouse or '-'}"
+                        )
 
                     processed_product = self.env['product.product'].search([
                         ('default_code', '=', header.inventory_id),
@@ -862,11 +875,18 @@ class AcumaticaKitAssemblyLine(models.Model):
                     if raw_move_vals:
                         Move.create(raw_move_vals)
 
+                    result_state = 'created' if not manufacturing_check else 'updated'
                     records.write({
-                        'import_state': 'created' if not manufacturing_check else 'updated',
+                        'import_state': result_state,
                         'import_message': 'success',
                         'odoo_product_id': processed_product.product_tmpl_id.id,
                     })
+                    if header and header.exists():
+                        header.write({
+                            'import_state': result_state,
+                            'import_message': 'success',
+                            'mrp_production_id': manufacturing.id,
+                        })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'kit_assembly')
             except Exception as e:
                 error += len(records) or 1
@@ -889,12 +909,18 @@ class AcumaticaKitAssemblyLine(models.Model):
                         'payload': line.read()[0] if line.exists() else {},
                     } for line in (component_lines if component_lines else records)],
                 )
+                result_state = 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error'
                 records.write({
-                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                    'import_state': result_state,
                     'import_message': str(e)[:200],
                     'odoo_product_id': False,
                     'odoo_bom_id': False,
                 })
+                if header and header.exists():
+                    header.write({
+                        'import_state': result_state,
+                        'import_message': str(e)[:200],
+                    })
 
 
         # picking_type = PickingType.search([

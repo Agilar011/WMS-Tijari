@@ -447,6 +447,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             'adt_dest_location_id': dest_location.id,
             'scheduled_date': shipment._parse_dt(shipment.scheduled_date),
             'note': shipment.note or shipment.description or False,
+            'adt_description': shipment.description or False,
             # 'adt_actual_qty': shipment._parse_float(shipment.actual_qty),
             'adt_total_qty': shipment._parse_float(shipment.shipped_qty),
             'adt_status': shipment.status or False,

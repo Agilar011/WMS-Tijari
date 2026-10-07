@@ -24,6 +24,7 @@ class AcumaticaErrorTransaction(models.Model):
         ('acumatica.issue.line', 'Issue Type Change Item'),
         ('acumatica.issue.po.return.line', 'Issue Type PO Return'),
         ('acumatica.kit.assembly', 'Kit Assembly'),
+        ('acumatica.kit.assembly.line', 'Kit Assembly Staging Line'),
         ('acumatica.inventory.stock.line', 'Inventory Stock'),
         ('acumatica.shipment.gi.staging', 'Shipment GI'),
         ('acumatica.shipment.completed.staging', 'Shipment Completed'),

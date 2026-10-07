@@ -67,6 +67,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
     note_header_id = fields.Char(string='Note Header ID')
     external_ref = fields.Char(string='External Ref')
     document_only = fields.Boolean(string='Document Only')
+    stock_lebih = fields.Boolean(string='WMSRelated', index=True)
     customer_code = fields.Char(string='Customer Code')
     customer_location_id = fields.Char(string='Customer Location ID')
     customer_location_name = fields.Char(string='Customer Location Name')
@@ -405,6 +406,15 @@ class AcumaticaInventoryRecievedLine(models.Model):
 
     def _import_single_receive(self, receive):
         receive.ensure_one()
+
+        if receive.stock_lebih:
+            receive.write({
+                'import_state': 'updated',
+                'import_message': 'WMSRelated: dokumen tidak digenerate ke dokumen Odoo.',
+                'odoo_picking_id': False,
+                'odoo_internal_transfer_order_id': False,
+            })
+            return 'updated'
 
         if receive._is_transfer_in():
             return receive._import_single_transfer_in(receive)

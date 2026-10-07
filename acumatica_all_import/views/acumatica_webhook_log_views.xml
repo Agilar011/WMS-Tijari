@@ -67,7 +67,7 @@
                         <page string="Payload">
                             <field name="payload" widget="text"/>
                         </page>
-                        <page string="Result">
+                        <page string="Log">
                             <field name="result_message" widget="text"/>
                         </page>
                     </notebook>
