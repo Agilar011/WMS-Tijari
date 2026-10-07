@@ -3338,21 +3338,27 @@ class StockPicking(models.Model):
                     line.line_inventory_id == move.product_id.default_code
             )
 
+            if not staging_lines_for_product:
+                staging_qty = 0.0
+                all_match = False
+
             staging_qty = sum(
                 staging_lines_for_product.mapped('line_quantity')
             )
 
             if not staging_qty:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Gagal Melakukan Update',
-                        'message': f'Quantity {move.product_id.display_name} yang diupdate tidak memiliki quantity',
-                        'type': 'warning',
-                        'sticky': False,
-                    }
-                }
+                staging_qty = 0.0
+                all_match = False
+                # return {
+                #     'type': 'ir.actions.client',
+                #     'tag': 'display_notification',
+                #     'params': {
+                #         'title': 'Gagal Melakukan Update',
+                #         'message': f'Quantity {move.product_id.display_name} yang diupdate tidak memiliki quantity',
+                #         'type': 'warning',
+                #         'sticky': False,
+                #     }
+                # }
 
             if staging_qty < move.quantity:
                 all_match = False
@@ -3550,7 +3556,7 @@ class StockPicking(models.Model):
 
         for line in wizard.product_return_moves:
             move = line.move_id
-            actual = move.shipped_qty
+            actual = move.shipped_qty if move.shipped_qty != 0.0 else move.quantity
             planned = move.quantity
             line.quantity = max(planned - actual, 0)
 
