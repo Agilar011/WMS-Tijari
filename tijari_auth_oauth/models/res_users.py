@@ -58,23 +58,23 @@ class ResUsers(models.Model):
         # =========================================================
         # 1. EMAIL DOMAIN VALIDATION
         # =========================================================
-        # if not email.endswith("@aditya.co.id"):
-        #     _logger.warning(
-        #         "OAuth signin rejected: unauthorized email domain - %s",
-        #         email,
-        #     )
+        if not email.endswith("@aditya.co.id"):
+            _logger.warning(
+                "OAuth signin rejected: unauthorized email domain - %s",
+                email,
+            )
 
-        #     self.env["wms.google.login.log"].log_event(
-        #         validation=validation,
-        #         provider=provider_record,
-        #         status="denied",
-        #         reason="invalid_domain",
-        #         error_message=(
-        #             f"Unauthorized email domain: {email}"
-        #         ),
-        #     )
+            self.env["wms.google.login.log"].log_event(
+                validation=validation,
+                provider=provider_record,
+                status="denied",
+                reason="invalid_domain",
+                error_message=(
+                    f"Unauthorized email domain: {email}"
+                ),
+            )
 
-        #     raise OAuthAccessDenied("invalid_domain")
+            raise OAuthAccessDenied("invalid_domain")
 
         # =========================================================
         # 2. EXISTING OAUTH USER
