@@ -4,7 +4,7 @@
     "depends": [
         "base",
         "mail",
-        # "hr",
+        "hr",
     ],
     "data": [
         "security/ir.model.access.csv",
@@ -12,6 +12,8 @@
         # "data/approval_model_data.xml",
 
         "views/approval_type_views.xml",
+        "views/approval_request_views.xml",
+        "views/approval_menu.xml",
     ],
-    "application": False,
+    "application": True,
 }

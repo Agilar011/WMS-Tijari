@@ -108,3 +108,12 @@ class StockQuant(models.Model):
                 self.env.context.get("active_id")
             ).refresh_stock_quant_ids()
         return res
+
+    @api.model
+    def _get_inventory_fields_create(self):
+        fields = super()._get_inventory_fields_create()
+
+        if "current_inventory_id" not in fields:
+            fields.append("current_inventory_id")
+
+        return fields

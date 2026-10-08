@@ -5,6 +5,7 @@ from werkzeug.exceptions import BadRequest
 
 from odoo import http, SUPERUSER_ID, _
 from odoo.exceptions import AccessDenied
+
 from odoo.http import request
 
 from odoo.addons.auth_oauth.controllers.main import (
@@ -18,7 +19,7 @@ from odoo.addons.web.controllers.utils import (
 )
 from odoo.tools.misc import clean_context
 
-from ..exceptions import AccountNotRegistered
+from ..exceptions import AccountNotRegistered, OAuthAccessDenied
 
 _logger = logging.getLogger(__name__)
 
@@ -82,6 +83,13 @@ class TijariOAuthController(OAuthController):
             _logger.exception("auth_signup not installed")
             url = "/web/login?oauth_error=1"
 
+        except OAuthAccessDenied as e:
+            _logger.info(
+                "OAuth access denied: %s",
+                e.reason,
+            )
+            url = "/web/login?oauth_error=3&oauth_reason=%s" % e.reason
+
         except AccessDenied:
             _logger.info("OAuth access denied")
             url = "/web/login?oauth_error=3"
@@ -100,11 +108,40 @@ class TijariOAuthLogin(OAuthLogin):
     def web_login(self, *args, **kw):
         response = super().web_login(*args, **kw)
 
-        if response.is_qweb and request.params.get("oauth_error") == "4":
-            response.qcontext["error"] = _(
-                "Your account is not registered.\n"
-                "Please contact your administrator."
-            )
+        if response.is_qweb:
+            oauth_error = request.params.get("oauth_error")
+            oauth_reason = request.params.get("oauth_reason")
+
+            if oauth_error == "4":
+                response.qcontext["error"] = _(
+                    "Your account is not registered.\n"
+                    "Please contact your administrator."
+                )
+
+            elif oauth_error == "3":
+                messages = {
+                    "missing_email": _(
+                        "Your Google account email could not be verified."
+                    ),
+                    "invalid_domain": _(
+                        "Only authorized company Google accounts can sign in."
+                    ),
+                    "user_inactive": _(
+                        "Your account is inactive.\n"
+                        "Please contact your administrator."
+                    ),
+                    "email_mismatch": _(
+                        "Your Google account does not match the registered account."
+                    ),
+                }
+
+                response.qcontext["error"] = messages.get(
+                    oauth_reason,
+                    _(
+                        "You do not have access to this database or your "
+                        "invitation has expired. Please contact your administrator."
+                    ),
+                )
 
         return response
 
