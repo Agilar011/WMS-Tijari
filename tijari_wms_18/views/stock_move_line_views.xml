@@ -352,7 +352,8 @@
                     <!-- Handheld Scan - Manufacturing -->
                     <!-- ===================================================== -->
 
-                    <group invisible="not is_manufacturing">
+                    <!-- <group invisible="not is_manufacturing"> -->
+                    <group invisible="1">
 
                         <label for="handheld_scan_code"
                             string="Scan Handheld"/>
@@ -388,7 +389,8 @@
                     <!-- Confirm LOT - Manufacturing -->
                     <!-- ===================================================== -->
 
-                    <group invisible="not is_manufacturing">
+                    <!-- <group invisible="not is_manufacturing"> -->
+                    <group invisible="1">
 
                         <label for="matching_lot_id"
                             string="Confirm LOT"/>

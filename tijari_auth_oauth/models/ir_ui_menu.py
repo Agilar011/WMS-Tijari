@@ -12,32 +12,29 @@ class IrUiMenu(models.Model):
             raise_if_not_found=False,
         )
 
-        # Guest tidak boleh melihat menu apa pun
+
         if guest_group and guest_group in self.env.user.groups_id:
+            
             allowed_menu_ids = set()
 
-            # Discuss
-            discuss_menu = self.env.ref(
-                "mail.menu_root",
+            guest_root_menu = self.env.ref(
+                "tijari_auth_oauth.menu_guest_root",
                 raise_if_not_found=False,
             )
-            if discuss_menu:
-                allowed_menu_ids.update(
-                    self.search([
-                        ("id", "child_of", discuss_menu.id),
-                    ]).ids
-                )
 
-            # Dashboard
-            dashboard_menu = self.env.ref(
-                "board.menu_root",
-                raise_if_not_found=False,
-            )
-            if dashboard_menu:
+            if guest_root_menu:
+                self.env.cr.execute("""
+                    SELECT id
+                    FROM ir_ui_menu
+                    WHERE id = %s
+                    OR parent_path LIKE %s
+                """, (
+                    guest_root_menu.id,
+                    f"{guest_root_menu.id}/%",
+                ))
+
                 allowed_menu_ids.update(
-                    self.search([
-                        ("id", "child_of", dashboard_menu.id),
-                    ]).ids
+                    row[0] for row in self.env.cr.fetchall()
                 )
 
             return allowed_menu_ids

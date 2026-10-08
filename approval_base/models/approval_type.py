@@ -88,6 +88,8 @@ class ApprovalTypeLine(models.Model):
         required=True,
     )
 
+    job_id = fields.Many2one('hr.job', string='Position')
+
 class ApprovalTypeRange(models.Model):
     _name = "approval.type.range"
     _description = "Approval Type Range"

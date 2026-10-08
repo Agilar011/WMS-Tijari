@@ -2276,9 +2276,10 @@
                             widget="adt_handheld_scan_code"
                             string="Scan Handheld"
                             placeholder="Scan handheld: lot atau lokasi"
-                            invisible="mo_status == 'finished'"/>
+                            invisible="mo_status == 'finished'"
+                            column_invisible="1"/>
                         <field name="lot_name" readonly="1" force_save="1" column_invisible="1"/>
-                        <field name="matching_lot_id" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
+                        <field name="matching_lot_id" column_invisible="1" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
                         <field name="matching_loc_dest_id" column_invisible="True"/>
                         <field name="matching" string="Status LOT"
                                 decoration-success="matching == 'match'"

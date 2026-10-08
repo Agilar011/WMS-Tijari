@@ -1,0 +1,50 @@
+<odoo>
+
+    <record id="guest_home_record" model="tijari.guest.home">
+        <field name="name">Guest Home</field>
+    </record>
+
+    <!-- Guest Home -->
+    <record id="view_guest_home_form" model="ir.ui.view">
+        <field name="name">tijari.guest.home.form</field>
+        <field name="model">tijari.guest.home</field>
+        <field name="arch" type="xml">
+            <form string="Guest Home" create="0" edit="0" delete="0">
+                <sheet>
+                    <div class="text-center">
+                        <h1>Welcome!</h1>
+                        <p>You are logged in as a Guest.</p>
+                    </div>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_guest_home" model="ir.actions.act_window">
+        <field name="name">Guest Home</field>
+        <field name="res_model">tijari.guest.home</field>
+        <field name="view_mode">form</field>
+        <field name="res_id" ref="guest_home_record"/>
+        <field name="target">current</field>
+    </record>
+
+    <!-- Root menu -->
+    <menuitem
+        id="menu_guest_root"
+        name="Guest"
+        web_icon="tijari_auth_oauth,static/description/icon.png"
+        sequence="1"
+        groups="tijari_auth_oauth.group_guest"
+    />
+
+    <!-- Welcome menu -->
+    <menuitem
+        id="menu_guest_home"
+        name="Welcome"
+        parent="menu_guest_root"
+        action="action_guest_home"
+        sequence="1"
+        groups="tijari_auth_oauth.group_guest"
+    />
+
+</odoo>

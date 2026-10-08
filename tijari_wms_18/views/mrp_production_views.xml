@@ -334,9 +334,11 @@
             </xpath>
 
             <xpath expr="//field[@name='move_raw_ids']/list/field[@name='quantity']" position="after">
+                <field name="quantity_shadow" string="Qty Target" optional="hide" />
                 <field name="mo_confirmation_quantity"/>
                 <field name="difference_quantity"/>
             </xpath>
+            
             <xpath expr="//field[@name='move_raw_ids']/list/field[@name='group_id']" position="after">
                 <field name="status_mo_check"
                     decoration-success="status_mo_check == 'finished'"
