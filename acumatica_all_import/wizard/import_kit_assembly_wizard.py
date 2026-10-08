@@ -215,8 +215,8 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
                 AcumaticaErrorService.send_error(
                     webhook_type="fetch",
-                    webhook_name="issue change item",
-                    error=last_error,
+                    webhook_name="Kit Assembly",
+                    error=f"Gagal fetch Kit Assembly dari Acumatica (HTTP {response.status_code}).",
                     error_type="http",
                 )
                 

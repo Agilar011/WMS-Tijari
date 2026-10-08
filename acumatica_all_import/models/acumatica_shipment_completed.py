@@ -223,46 +223,65 @@ class AcumaticaShipmentCompletedStaging(models.Model):
         return True
 
     def action_update_stock_picking(self):
+        """
+        Process all shipment completed staging records.
+        Each record is handled independently.
+        """
+        for record in self:
+            record._action_update_stock_picking()
+
+        return True
+
+    def _action_update_stock_picking(self):
+        """
+        Process a single shipment completed staging record.
+        """
         self.ensure_one()
 
         Picking = self.env['stock.picking']
         shipment_nbr = self.shipment_nbr
 
-        self.env.cr.execute("SAVEPOINT shipment_completed_update")
+        savepoint_name = "shipment_completed_update"
+
+        self.env.cr.execute(
+            f"SAVEPOINT {savepoint_name}"
+        )
 
         try:
+            # ---------------------------------------------------------
+            # Find Stock Picking
+            # ---------------------------------------------------------
             picking = Picking.search([
                 ('origin', '=', shipment_nbr),
+                ('wms_state', '=', 'waiting_response')
             ], limit=1)
 
             if not picking:
-                _logger.error(
+                error_message = f"Dokumen {shipment_nbr} tidak ada di WMS."
+                _logger.warning(
                     "SHIPMENT COMPLETED | SKIP | Stock Picking tidak ditemukan | "
                     "shipment_nbr=%s | staging_id=%s",
                     shipment_nbr,
                     self.id,
                 )
+
                 self.env.cr.execute(
-                    "ROLLBACK TO SAVEPOINT shipment_completed_update"
+                    f"ROLLBACK TO SAVEPOINT {savepoint_name}"
                 )
+                self.import_message = error_message
+
                 return False
 
+            # ---------------------------------------------------------
+            # Get staging lines
+            # ---------------------------------------------------------
             staging_lines = self.line_ids
-
-            if not staging_lines:
-                _logger.error(
-                    "SHIPMENT COMPLETED | SKIP | Tidak ada staging line | "
-                    "shipment_nbr=%s | staging_id=%s",
-                    shipment_nbr,
-                    self.id,
-                )
-                self.env.cr.execute(
-                    "ROLLBACK TO SAVEPOINT shipment_completed_update"
-                )
-                return False
 
             all_match = True
 
+            # ---------------------------------------------------------
+            # Compare staging quantity with DO quantity
+            # ---------------------------------------------------------
             for move in picking.move_ids:
 
                 staging_lines_for_product = staging_lines.filtered(
@@ -271,45 +290,70 @@ class AcumaticaShipmentCompletedStaging(models.Model):
                         == move.product_id.default_code
                 )
 
-                staging_qty = sum(
-                    staging_lines_for_product.mapped('line_quantity')
-                )
+                if not staging_lines_for_product:
+                    staging_qty = 0.0
+                    all_match = False
 
-                if not staging_qty:
-                    raise UserError(
-                        f"Quantity tidak ditemukan untuk "
-                        f"{move.product_id.display_name}"
+                else:
+                    staging_qty = sum(
+                        staging_lines_for_product.mapped(
+                            'line_quantity'
+                        )
                     )
 
+                    if not staging_qty:
+                        all_match = False
+
+                # -----------------------------------------------------
+                # Staging quantity less than DO quantity
+                # -----------------------------------------------------
                 if staging_qty < move.quantity:
                     all_match = False
 
+                # -----------------------------------------------------
+                # Staging quantity exceeds DO quantity
+                # -----------------------------------------------------
                 elif staging_qty > move.quantity:
-                    raise UserError(
+                    raise ValidationError(
                         f"Quantity {move.product_id.display_name} "
                         f"melebihi quantity DO. "
                         f"DO={move.quantity}, staging={staging_qty}"
                     )
 
+                # -----------------------------------------------------
+                # Update shipped quantity
+                # -----------------------------------------------------
                 move.shipped_qty = staging_qty
 
+            # ---------------------------------------------------------
+            # Determine shipment type
+            # ---------------------------------------------------------
             picking.shipment_information = (
                 'full_shipment'
                 if all_match
                 else 'partial'
             )
 
-            self.is_used = True
-
+            # ---------------------------------------------------------
+            # Confirm shipment
+            # ---------------------------------------------------------
             picking.action_confirm_shipment()
 
+            # ---------------------------------------------------------
+            # Mark staging as used
+            # ---------------------------------------------------------
+            self.is_used = True
+
+            # ---------------------------------------------------------
+            # Commit current savepoint
+            # ---------------------------------------------------------
             self.env.cr.execute(
-                "RELEASE SAVEPOINT shipment_completed_update"
+                f"RELEASE SAVEPOINT {savepoint_name}"
             )
 
             _logger.info(
-                "SHIPMENT COMPLETED | SUCCESS | shipment_nbr=%s | "
-                "picking=%s | type=%s",
+                "SHIPMENT COMPLETED | SUCCESS | "
+                "shipment_nbr=%s | picking=%s | type=%s",
                 shipment_nbr,
                 picking.name,
                 picking.shipment_information,
@@ -318,20 +362,27 @@ class AcumaticaShipmentCompletedStaging(models.Model):
             return True
 
         except Exception as e:
+
+            # ---------------------------------------------------------
+            # Rollback only this staging record
+            # ---------------------------------------------------------
             self.env.cr.execute(
-                "ROLLBACK TO SAVEPOINT shipment_completed_update"
+                f"ROLLBACK TO SAVEPOINT {savepoint_name}"
             )
 
+            self.import_message = str(e)
+
             _logger.exception(
-                "SHIPMENT COMPLETED | SKIP | shipment_nbr=%s | "
-                "staging_id=%s | error=%s",
+                "SHIPMENT COMPLETED | SKIP | "
+                "shipment_nbr=%s | staging_id=%s | error=%s",
                 shipment_nbr,
                 self.id,
                 e,
             )
 
             return False
-    
+
+
 class AcumaticaShipmentCompletedStagingLine(models.Model):
     _name = 'acumatica.shipment.completed.staging.line'
     _description = 'Detail Staging Shipment Completed dari Acumatica'

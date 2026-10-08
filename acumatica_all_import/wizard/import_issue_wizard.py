@@ -62,8 +62,8 @@ class ImportIssueWizard(models.TransientModel):
 
                 AcumaticaErrorService.send_error(
                     webhook_type="fetch",
-                    webhook_name="issue change item",
-                    error=last_error,
+                    webhook_name="Issue Change Item",
+                    error=f"Gagal fetch Issue Change Item dari Acumatica (HTTP {response.status_code}).",
                     error_type="http",
                 )
                 

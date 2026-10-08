@@ -171,6 +171,12 @@ class AcumaticaShipmentGIStaging(models.Model):
 
         for staging_rec in not_pending_shipment:
             message = f'Receipt {staging_rec.adt_ShipmentNbr} sudah ada di Odoo dengan state selain draft, tidak bisa diupdate.'
+            self.env['acumatica.webhook.error.service'].send_user_error(
+                webhook_type='import', webhook_name='SO Shipment',
+                transaction_name=staging_rec.adt_ShipmentNbr or str(staging_rec.id),
+                event_type='error',
+                message=f"Shipment {staging_rec.adt_ShipmentNbr or '-'} tidak dapat diperbarui karena dokumen di WMS sudah diproses. Hubungi admin jika perubahan diperlukan.",
+            )
             lines = shipment_line.search([('gi_id', '=', staging_rec.id)])
             self.env['acumatica.error.transaction']._handle_acumatica_error(
                 staging_rec,
@@ -213,6 +219,7 @@ class AcumaticaShipmentGIStaging(models.Model):
             with self.env.cr.savepoint():
                 self.env.cr.execute('SAVEPOINT import_so_shipment_doc')
                 try:
+                    update_messages = []
                     if (shipment.adt_OrderType or '').strip().upper() == 'CO':
                         self._import_consignment_internal_transfer(shipment, shipment_line)
                         self.env.cr.execute('RELEASE SAVEPOINT import_so_shipment_doc')
@@ -266,6 +273,17 @@ class AcumaticaShipmentGIStaging(models.Model):
                         ('origin', '=', shipment.adt_ShipmentNbr),
                         ('state', '=', 'draft')
                     ], limit=1)
+
+                    previous_moves = {}
+                    if picking:
+                        update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                            picking, updated_vals,
+                            field_names={'partner_id', 'picking_type_id', 'location_id', 'location_dest_id', 'origin', 'scheduled_date', 'adt_type', 'adt_order_type', 'transaction_type', 'note', 'desc_note', 'adt_description'},
+                            prefix='Header',
+                        ))
+                        for old_move in picking.move_ids:
+                            key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.product_id.default_code or old_move.id)
+                            previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.product_id.default_code or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
 
                     create_tms_state = False
 
@@ -347,6 +365,18 @@ class AcumaticaShipmentGIStaging(models.Model):
                             'product_note': item.adt_LineNote or False,
                         }
                         adt_dest_location_id =  Move.create(move_vals)
+                        if action_state == 'updated':
+                            line_key = str(item.acumatica_id or getattr(item, 'adt_LineNbr', False) or item.adt_LineInventoryID or adt_dest_location_id.id)
+                            old = previous_moves.pop(line_key, None)
+                            label = getattr(item, 'adt_LineNbr', False) or item.adt_LineInventoryID or '?'
+                            current = {'Produk': product.display_name or '—', 'Jumlah': f"{float(item.adt_LineQuantity or 0.0):g}", 'Satuan': product.product_tmpl_id.uom_id.display_name or '—', 'Lokasi tujuan': adt_dest_location_id.location_dest_id.display_name or '—', 'Deskripsi': adt_dest_location_id.name or '—'}
+                            if old:
+                                previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                                changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                                if changes:
+                                    update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                            else:
+                                update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {float(item.adt_LineQuantity or 0.0):g} ditambahkan")
                         print(f"mapped location: {adt_dest_location_id.id}")
 
                         item_qty = float(item.adt_LineQuantity or 0.0)
@@ -359,6 +389,8 @@ class AcumaticaShipmentGIStaging(models.Model):
                     #     created_loginext_header.loginext_number_of_items = move_count
 
                     if shipment.adt_DocumentOnly:
+                        if not move_items:
+                            raise UserError(f"Shipment {shipment.adt_ShipmentNbr} tidak memiliki detail line.")
                         picking.action_validate_document_only_import(force=True)
 
                     # Tandai sukses jika semua proses di atas berhasil tanpa memicu exception
@@ -369,10 +401,31 @@ class AcumaticaShipmentGIStaging(models.Model):
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(shipment.adt_ShipmentNbr, 'so_shipment')
                     self.env.cr.execute('RELEASE SAVEPOINT import_so_shipment_doc')
+                    if action_state == 'updated':
+                        update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='SO Shipment',
+                            transaction_name=shipment.adt_ShipmentNbr or str(shipment.id),
+                            event_type='update',
+                            message='\n'.join(update_messages) or 'Shipment berhasil disinkronkan; tidak ada field yang berubah.',
+                        )
 
                 except Exception as e:
                     self.env.cr.execute('ROLLBACK TO SAVEPOINT import_so_shipment_doc')
                     _logger.error(f"Error importing shipment {shipment.adt_ShipmentNbr}: {str(e)}")
+                    error_text = str(e).lower()
+                    if 'warehouse' in error_text and 'tidak ditemukan' in error_text:
+                        user_message = f"Warehouse dengan kode {shipment.adt_WarehouseID or '-'} belum ditemukan atau belum memiliki mapping aktif. Periksa mapping warehouse di WMS."
+                    elif 'operation type' in error_text or 'picking type' in error_text:
+                        user_message = f"Operation Type untuk Shipment {shipment.adt_ShipmentNbr or '-'} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS."
+                    elif 'produk' in error_text and ('tidak ditemukan' in error_text or 'tidak punya detail' in error_text):
+                        user_message = f"Produk atau detail produk untuk Shipment {shipment.adt_ShipmentNbr or '-'} belum tersedia. Lengkapi detail transaksi atau master produk di WMS."
+                    elif 'customer' in error_text and 'tidak ditemukan' in error_text:
+                        user_message = f"Customer dengan kode {shipment.adt_CustomerID or '-'} belum terdaftar. Periksa master customer di WMS."
+                    elif 'tidak bisa diupdate' in error_text or 'sudah memiliki transfer' in error_text or 'sudah ada di state' in error_text:
+                        user_message = f"Shipment {shipment.adt_ShipmentNbr or '-'} tidak dapat diperbarui karena proses sebelumnya sudah berjalan. Periksa status transaksi di WMS."
+                    else:
+                        user_message = False
                     tracked_lines = shipment_line.search([('gi_id', '=', shipment.id)])
                     self.env['acumatica.error.transaction']._handle_acumatica_error(
                         shipment,
@@ -402,6 +455,17 @@ class AcumaticaShipmentGIStaging(models.Model):
                         'odoo_picking_id': False,
                         'odoo_internal_transfer_order_id': False,
                     })
+                    if user_message:
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='SO Shipment',
+                            transaction_name=shipment.adt_ShipmentNbr or str(shipment.id),
+                            event_type='error', message=user_message,
+                        )
+                    else:
+                        self.env['acumatica.webhook.error.service'].send_error(
+                            webhook_type='import', webhook_name='SO Shipment',
+                            error=str(e), error_type='unexpected',
+                        )
 
                     # Paksa loop untuk melanjutkan dokumen berikutnya tanpa menghentikan sistem
                     continue
@@ -583,6 +647,8 @@ class AcumaticaShipmentGIStaging(models.Model):
         order = InternalTransferOrder.search([
             ('external_ref', '=', shipment.adt_ShipmentNbr),
         ], limit=1)
+        update_messages = []
+        previous_moves = {}
         if order:
             if order.picking_ids:
                 raise UserError(
@@ -592,6 +658,22 @@ class AcumaticaShipmentGIStaging(models.Model):
                 raise UserError(
                     f"Shipment {shipment.adt_ShipmentNbr} sudah ada di state {order.state}, tidak bisa diupdate."
                 )
+            update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                order,
+                {'transaction_type': 'inter_warehouse', 'transfer_type': 'transfer_out',
+                 'adt_transaction_type': adt_transaction_type,
+                 'document_only': bool(shipment.adt_DocumentOnly), 'adt_order_type': shipment.adt_OrderType or False,
+                 'partner_id': partner.id, 'location_id': source_location.id,
+                 'location_dest_id': destination_location.id, 'transit_location_id': transit_location.id,
+                 'schedule_date': ship_date or fields.Datetime.now(),
+                 'note': shipment.adt_note or shipment.adt_NoteHeader or False,
+                 'description': shipment.adt_Description or False},
+                field_names={'transaction_type', 'transfer_type', 'adt_transaction_type', 'document_only', 'adt_order_type', 'partner_id', 'location_id', 'location_dest_id', 'transit_location_id', 'schedule_date', 'note', 'description'},
+                prefix='Header',
+            ))
+            for old_move in order.move_ids:
+                key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
             order.move_ids.unlink()
             order.write({
                 'transaction_type': 'inter_warehouse',
@@ -689,7 +771,19 @@ class AcumaticaShipmentGIStaging(models.Model):
                 'adt_to_location_code': destination_location.complete_name,
             }
             move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
-            Move.create(move_vals)
+            created_move = Move.create(move_vals)
+            if action_state == 'updated':
+                line_key = str(item.acumatica_id or getattr(item, 'adt_LineNbr', False) or item.adt_LineInventoryID or created_move.id)
+                old = previous_moves.pop(line_key, None)
+                label = getattr(item, 'adt_LineNbr', False) or item.adt_LineInventoryID or '?'
+                current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else product.uom_id.display_name, 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                if old:
+                    previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                    changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                    if changes:
+                        update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                else:
+                    update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} ditambahkan")
 
         #     if create_tms_state:
         #         self._build_loginext_item(
@@ -705,6 +799,14 @@ class AcumaticaShipmentGIStaging(models.Model):
         #     created_loginext_header.loginext_number_of_items = move_count
 
         order.action_ready()
+        if action_state == 'updated':
+            update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
+            self.env['acumatica.webhook.error.service'].send_user_error(
+                webhook_type='import', webhook_name='SO Shipment Consignment',
+                transaction_name=shipment.adt_ShipmentNbr or str(shipment.id),
+                event_type='update',
+                message='\n'.join(update_messages) or 'Shipment Consignment berhasil disinkronkan; tidak ada field yang berubah.',
+            )
         shipment.write({
             'import_state': action_state,
             'import_message': 'success',

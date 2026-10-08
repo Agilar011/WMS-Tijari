@@ -9,10 +9,12 @@ import requests
 
 
 class InventoryImportError(Exception):
-    def __init__(self, message, payload=None, line_payloads=None):
+    def __init__(self, message, payload=None, line_payloads=None, user_message=None, technical_errors=None):
         super().__init__(message)
         self.payload = payload or {}
         self.line_payloads = line_payloads or []
+        self.user_message = user_message or False
+        self.technical_errors = technical_errors or []
 
 
 class AcumaticaReceiptProductLine(models.Model):
@@ -234,12 +236,21 @@ class AcumaticaInventoryRecievedLine(models.Model):
     def _import_single_transfer_in(self, receive):
         receive.ensure_one()
 
+        if receive.document_only and not receive.product_line_ids:
+            raise InventoryImportError(
+                f'Transfer IN {receive.reference_nbr or receive.id} tidak memiliki detail produk.',
+                payload={'header': receive.read()[0] if receive.exists() else {}},
+                user_message=f"Transfer IN {receive.reference_nbr or '-'} belum bisa diproses karena belum memiliki baris produk. Lengkapi detail transaksi.",
+            )
+
         TransferService = self.env['acumatica.internal.transfer.service']
         Move = self.env['stock.move']
 
         origin = receive.reference_nbr or False
         header_payload = receive.read()[0] if receive.exists() else {}
         error_messages = []
+        user_messages = []
+        technical_errors = []
         error_line_payloads = []
 
         source_code = receive.warehouse_code
@@ -253,6 +264,15 @@ class AcumaticaInventoryRecievedLine(models.Model):
             )
         except UserError as error:
             error_messages.append(str(error))
+            error_text = str(error).lower()
+            if 'towarehouseid' in error_text:
+                user_messages.append(f"Warehouse tujuan {destination_code or '-'} belum memiliki mapping lokasi yang aktif di WMS. Periksa mapping warehouse tujuan.")
+            elif 'fromwarehouseid' in error_text:
+                user_messages.append(f"Warehouse sumber {source_code or '-'} belum memiliki mapping lokasi yang sesuai di WMS. Periksa mapping warehouse sumber.")
+            elif 'virtual locations' in error_text:
+                user_messages.append("Lokasi virtual untuk proses transfer belum tersedia. Hubungi admin untuk memeriksa konfigurasi lokasi WMS.")
+            else:
+                user_messages.append("Lokasi sumber atau tujuan belum dapat ditentukan. Periksa mapping warehouse pada transaksi.")
             transfer_info = False
 
         if transfer_info and transfer_info['status'] == 'skip':
@@ -264,12 +284,13 @@ class AcumaticaInventoryRecievedLine(models.Model):
             })
             self.env['acumatica.error.transaction']._handle_acumatica_update(receive, origin=receive.reference_nbr or False)
             self._handle_acumatica_error(receive)
-            return 'updated'
+            return 'updated', []
 
         if error_messages:
             raise InventoryImportError(
                 '\n'.join(error_messages),
                 payload={'header': header_payload},
+                user_message='\n'.join(user_messages),
             )
 
         source_location = transfer_info['source_location']
@@ -278,29 +299,56 @@ class AcumaticaInventoryRecievedLine(models.Model):
             raise InventoryImportError(
                 f'Source location untuk warehouse {source_code or "-"} '
                 'tidak ditemukan atau belum dimapping di WMS | '
-                'WMS Dependency : MAPPING WAREHOUSE.'
+                'WMS Dependency : MAPPING WAREHOUSE.',
+                user_message=f"Warehouse sumber {source_code or '-'} belum memiliki mapping lokasi yang aktif di WMS. Periksa mapping warehouse sumber."
             )
         if not destination_location:
             raise InventoryImportError(
                 f'Destination location untuk warehouse {destination_code or "-"} '
                 'tidak ditemukan atau belum dimapping di WMS | '
-                'WMS Dependency : MAPPING WAREHOUSE.'
+                'WMS Dependency : MAPPING WAREHOUSE.',
+                user_message=f"Warehouse tujuan {destination_code or '-'} belum memiliki mapping lokasi yang aktif di WMS. Periksa mapping warehouse tujuan."
             )
         primary_external_ref = receive.reference_nbr or receive.transfer_nbr
-        order, action_state = TransferService.prepare_order(
-            primary_external_ref,
-            source_location,
-            destination_location,
-            transfer_info['transaction_type'],
-            schedule_date=receive._parse_dt(receive.scheduled_date),
-            note=receive.note or False,
-            description=receive.description or False,
-            transfer_type='transfer_in',
-            external_ref_in=receive.reference_nbr,
-            external_ref_out=receive.transfer_nbr,
-            adt_transaction_type=receive.transfer_type or receive.doc_type or False,
-            document_only=receive.document_only,
-        )
+        existing_order = self.env['internal.transfer.order'].search([('external_ref', '=', primary_external_ref)], limit=1)
+        update_messages = []
+        previous_moves = {}
+        if existing_order:
+            for old_move in existing_order.move_ids:
+                key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
+            update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                existing_order,
+                {'external_ref_in': receive.reference_nbr or False, 'external_ref_out': receive.transfer_nbr or False,
+                 'transaction_type': transfer_info['transaction_type'], 'transfer_type': 'transfer_in',
+                 'location_id': source_location.id, 'location_dest_id': destination_location.id,
+                 'schedule_date': receive._parse_dt(receive.scheduled_date) or fields.Datetime.now(),
+                 'note': receive.note or False, 'description': receive.description or False,
+                 'adt_transaction_type': receive.transfer_type or receive.doc_type or False,
+                 'document_only': bool(receive.document_only)},
+                field_names={'external_ref_in', 'external_ref_out', 'transaction_type', 'transfer_type', 'location_id', 'location_dest_id', 'schedule_date', 'note', 'description', 'adt_transaction_type', 'document_only'},
+                prefix='Header',
+            ))
+        try:
+            order, action_state = TransferService.prepare_order(
+                primary_external_ref,
+                source_location,
+                destination_location,
+                transfer_info['transaction_type'],
+                schedule_date=receive._parse_dt(receive.scheduled_date),
+                note=receive.note or False,
+                description=receive.description or False,
+                transfer_type='transfer_in',
+                external_ref_in=receive.reference_nbr,
+                external_ref_out=receive.transfer_nbr,
+                adt_transaction_type=receive.transfer_type or receive.doc_type or False,
+                document_only=receive.document_only,
+            )
+        except UserError as error:
+            raise InventoryImportError(
+                str(error), payload={'header': header_payload},
+                user_message=f"Transfer {primary_external_ref or '-'} tidak dapat diperbarui karena proses sebelumnya sudah berjalan. Periksa status transfer dan picking terkait di WMS."
+            )
 
         order.write({'validation_policy': 'validate_all'})
 
@@ -313,6 +361,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     error_messages.append(
                         f'Product with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
                     )
+                    user_messages.append(f"Produk dengan kode {receive_line.inventory_id or '-'} pada baris {receive_line.line_nbr or '-'} belum terdaftar. Hubungi admin untuk melengkapi master produk di WMS.")
                     error_line_payloads.append({
                         'inventory_id': receive_line.inventory_id or False,
                         'product_name': receive_line.line_description or False,
@@ -327,6 +376,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     error_messages.append(
                         f'UOM with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER UOM.'
                     )
+                    user_messages.append(f"Satuan untuk produk {receive_line.inventory_id or '-'} belum tersedia. Periksa satuan produk di master WMS.")
                     error_line_payloads.append({
                         'inventory_id': receive_line.inventory_id or False,
                         'product_name': receive_line.line_description or False,
@@ -345,6 +395,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                         'tidak ditemukan atau belum dimapping di WMS | '
                         'WMS Dependency : MAPPING WAREHOUSE.'
                     )
+                    user_messages.append(f"Lokasi tujuan untuk baris {receive_line.line_nbr or '-'} belum ditemukan atau tidak aktif. Periksa mapping lokasi di WMS.")
                     error_line_payloads.append({
                         'inventory_id': receive_line.inventory_id or False,
                         'product_name': receive_line.line_description or False,
@@ -365,7 +416,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     'location_dest_id': line_destination.id,
                 }
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
-                TransferService.create_order_move(
+                created_move = TransferService.create_order_move(
                     order,
                     product,
                     qty,
@@ -374,6 +425,18 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     description=receive_line.line_description or False,
                     extra_vals=move_vals,
                 )
+                if action_state == 'updated':
+                    line_key = str(receive_line.line_external_id or receive_line.line_nbr or receive_line.inventory_id or created_move.id)
+                    old = previous_moves.pop(line_key, None)
+                    label = receive_line.line_nbr or receive_line.line_external_id or receive_line.inventory_id or '?'
+                    current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                    if old:
+                        previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                        changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                        if changes:
+                            update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                    else:
+                        update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
 
             except InventoryImportError:
                 raise
@@ -382,6 +445,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 # A database error aborts the current PostgreSQL transaction.
                 # Do not continue with the next line; let the outer savepoint
                 # roll back the order and persist the original error cleanly.
+                technical_errors.append(str(line_error))
                 raise
 
         if error_messages:
@@ -392,9 +456,22 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     'order_id': order.id if order else False,
                 },
                 line_payloads=error_line_payloads,
+                user_message='\n'.join(user_messages),
+                technical_errors=technical_errors,
             )
 
-        TransferService.set_order_ready(order)
+        if action_state == 'updated':
+            update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
+
+        try:
+            TransferService.set_order_ready(order)
+        except Exception as error:
+            error_text = str(error).lower()
+            if 'operation type' in error_text or 'picking type' in error_text:
+                raise InventoryImportError(str(error), payload={'header': header_payload, 'order_id': order.id}, user_message=f"Operation Type untuk Transfer IN {origin or '-'} belum dikonfigurasi pada warehouse terkait. Minta admin memeriksa tipe transfer di WMS.")
+            if 'operation line belum diisi' in error_text or 'no lines to validate' in error_text:
+                raise InventoryImportError(str(error), payload={'header': header_payload, 'order_id': order.id}, user_message=f"Transfer IN {origin or '-'} belum bisa diproses karena belum memiliki baris produk. Lengkapi detail transaksi.")
+            raise
         receive.write({
             'import_state': action_state,
             'import_message': 'success',
@@ -402,7 +479,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
             'odoo_picking_id': False,
         })
         self._handle_acumatica_error(receive)
-        return action_state
+        return action_state, update_messages
 
     def _import_single_receive(self, receive):
         receive.ensure_one()
@@ -414,7 +491,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 'odoo_picking_id': False,
                 'odoo_internal_transfer_order_id': False,
             })
-            return 'updated'
+            return 'updated', ['Dokumen ditandai sebagai terkait WMS; dokumen Odoo tidak dibuat sesuai pengaturan transaksi.']
 
         if receive._is_transfer_in():
             return receive._import_single_transfer_in(receive)
@@ -426,6 +503,8 @@ class AcumaticaInventoryRecievedLine(models.Model):
         origin = receive.reference_nbr or False
         header_payload = receive.read()[0] if receive.exists() else {}
         error_messages = []
+        user_messages = []
+        technical_errors = []
         error_line_payloads = []
         picking = receive.odoo_picking_id
         action_state = 'staged'
@@ -435,12 +514,14 @@ class AcumaticaInventoryRecievedLine(models.Model):
             error_messages.append(
                 f'Warehouse with location code {receive.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
+            user_messages.append(f"Warehouse tujuan dengan kode {receive.warehouse_dest_code or receive.warehouse_code or '-'} belum ditemukan atau tidak aktif. Periksa mapping warehouse di WMS.")
 
         dest_location = receive._find_location_dest(receive)
         if not dest_location:
             error_messages.append(
                 f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
+            user_messages.append(f"Lokasi tujuan dengan kode {receive.warehouse_dest_code or '-'} belum ditemukan atau tidak aktif. Periksa mapping lokasi di WMS.")
 
         partner = False
         owner = False
@@ -452,6 +533,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 error_messages.append(
                     f'Partner with code {receive.customer_code} was not found in the WMS | WMS Dependency : MASTER CUSTOMER.'
                 )
+                user_messages.append(f"Customer dengan kode {receive.customer_code or '-'} belum terdaftar. Periksa master customer di WMS.")
 
         # picking_type = PickingType.search([
         #     ('warehouse_id', '=', warehouse.id if warehouse else False),
@@ -505,11 +587,13 @@ class AcumaticaInventoryRecievedLine(models.Model):
             error_messages.append(
                 f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
             )
+            user_messages.append(f"Operation Type untuk warehouse {receive.warehouse_dest_code or receive.warehouse_code or '-'} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS.")
 
         if error_messages:
             raise InventoryImportError(
                 '\n'.join(error_messages),
                 payload={'header': header_payload},
+                user_message='\n'.join(user_messages),
             )
 
         picking_vals = {
@@ -534,11 +618,24 @@ class AcumaticaInventoryRecievedLine(models.Model):
         }
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 
+        update_messages = []
+        previous_moves = {}
+        if picking and picking.state == 'draft':
+            update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                picking, picking_vals,
+                field_names={'partner_id', 'origin', 'picking_type_id', 'adt_dest_location_id', 'scheduled_date', 'note', 'owner_id', 'adt_branch_warehouse', 'adt_post_period', 'adt_total_qty', 'adt_type', 'adt_external_ref', 'adt_change_item_ref_nbr', 'desc_note'},
+                prefix='Header',
+            ))
+            for old_move in picking.move_ids:
+                key = str(old_move.adt_line_nbr or old_move.adt_line_external_id or old_move.adt_inventory_id or old_move.id)
+                previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.adt_dest_location_id.display_name if 'adt_dest_location_id' in old_move._fields and old_move.adt_dest_location_id else old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
+
         if picking:
             if picking.state != 'draft':
                 raise InventoryImportError(
                     f'receive {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
+                    user_message=f"Inventory Receipt {origin or '-'} tidak dapat diperbarui karena dokumen di WMS sudah berstatus {picking.state}. Hubungi admin jika perubahan diperlukan.",
             )
             picking.write(picking_vals)
             action_state = 'updated'
@@ -558,6 +655,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     error_messages.append(
                         f'Product with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
                     )
+                    user_messages.append(f"Produk dengan kode {receive_line.inventory_id or '-'} pada baris {receive_line.line_nbr or '-'} belum terdaftar. Hubungi admin untuk melengkapi master produk di WMS.")
                     error_line_payloads.append({
                         'inventory_id': receive_line.inventory_id or False,
                         'product_name': receive_line.line_description or False,
@@ -573,11 +671,13 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     error_messages.append(
                         f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
                     )
+                    user_messages.append(f"Lokasi tujuan untuk baris {receive_line.line_nbr or '-'} (kode {receive_line.warehouse_dest_code or receive_line.location_code or '-'}) belum ditemukan atau tidak aktif. Periksa mapping lokasi di WMS.")
 
                 if product and not uom:
                     error_messages.append(
                         f'UOM with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER UOM.'
                     )
+                    user_messages.append(f"Satuan untuk produk {receive_line.inventory_id or '-'} belum tersedia. Periksa satuan produk di master WMS.")
                     error_line_payloads.append({
                         'inventory_id': receive_line.inventory_id or False,
                         'product_name': receive_line.line_description or False,
@@ -607,7 +707,19 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 }
 
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
-                Move.create(move_vals)
+                created_move = Move.create(move_vals)
+                if action_state == 'updated':
+                    line_key = str(receive_line.line_nbr or receive_line.line_external_id or receive_line.inventory_id or created_move.id)
+                    old = previous_moves.pop(line_key, None)
+                    label = receive_line.line_nbr or receive_line.line_external_id or receive_line.inventory_id or '?'
+                    current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else '—', 'Lokasi tujuan': created_move.adt_dest_location_id.display_name if 'adt_dest_location_id' in created_move._fields and created_move.adt_dest_location_id else created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                    if old:
+                        previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                        changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                        if changes:
+                            update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                    else:
+                        update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
                 # picking.action_confirm()
 
             except InventoryImportError:
@@ -616,6 +728,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
             except Exception as line_error:
                 _logger.exception("Error import line %s", receive.id)
                 error_messages.append(str(line_error))
+                technical_errors.append(str(line_error))
                 error_line_payloads.append({
                     'inventory_id': receive_line.inventory_id or False,
                     'product_name': receive_line.line_description or False,
@@ -633,10 +746,27 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     'picking_id': picking.id if picking else False,
                 },
                 line_payloads=error_line_payloads,
+                user_message='\n'.join(user_messages),
+                technical_errors=technical_errors,
             )
 
+        if action_state == 'updated':
+            update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
+
         if receive.document_only:
-            picking.action_validate_document_only_import(force=True)
+            if not receive.product_line_ids:
+                raise InventoryImportError(
+                    f'Inventory Receipt {origin or receive.id} tidak memiliki detail produk.',
+                    payload={'header': header_payload, 'picking_id': picking.id},
+                    user_message=f"Inventory Receipt {origin or '-'} belum bisa diproses karena belum memiliki baris produk. Lengkapi detail transaksi.",
+                )
+            try:
+                picking.action_validate_document_only_import(force=True)
+            except Exception as validation_error:
+                raise InventoryImportError(
+                    str(validation_error), payload={'header': header_payload, 'picking_id': picking.id},
+                    user_message=f"Inventory Receipt {origin or '-'} belum dapat diselesaikan. Periksa kembali detail transaksi dan hubungi admin jika masalah berlanjut."
+                )
 
         receive.write({
             'import_state': action_state,
@@ -644,7 +774,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
             'odoo_picking_id': picking.id if picking else False,
         })
         self._handle_acumatica_error(receive)
-        return action_state
+        return action_state, update_messages
 
     def _do_import(self):
         created = 0
@@ -663,21 +793,41 @@ class AcumaticaInventoryRecievedLine(models.Model):
         for receive in grouped_references:
             try:
                 with self.env.cr.savepoint():
-                    action_state = self._import_single_receive(receive)
+                    action_state, update_messages = self._import_single_receive(receive)
                 if action_state == 'created':
                     created += 1
                 elif action_state == 'updated':
                     updated += 1
+                    message = '\n'.join(update_messages) or 'Inventory Receipt berhasil disinkronkan; tidak ada field yang berubah.'
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import',
+                        webhook_name='Inventory Receipt',
+                        transaction_name=receive.reference_nbr or str(receive.id),
+                        event_type='update',
+                        message=message,
+                    )
             except Exception as exc:
                 _logger.exception("Error import Inventory Receive %s", receive.reference_nbr or receive.id)
                 if isinstance(exc, InventoryImportError):
                     error_payload = exc.payload
                     error_line_payloads = exc.line_payloads
                     error_message = str(exc)
+                    user_message = exc.user_message
+                    technical_errors = exc.technical_errors
                 else:
                     error_payload = {'header': receive.read()[0] if receive.exists() else {}}
                     error_line_payloads = []
                     error_message = str(exc)
+                    user_message = False
+                    technical_errors = [str(exc)]
+
+                if technical_errors:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import',
+                        webhook_name='Inventory Receipt',
+                        error='\n'.join(technical_errors),
+                        error_type='unexpected',
+                    )
 
                 try:
                     self._handle_acumatica_error(
@@ -697,6 +847,14 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     'import_message': error_message[:1000],
                 })
                 error += 1
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import',
+                        webhook_name='Inventory Receipt',
+                        transaction_name=receive.reference_nbr or str(receive.id),
+                        event_type='error',
+                        message=user_message,
+                    )
                 continue
 
         msg = f'Import done: {created} receive created, {updated} receive updated, {error} receive error.'

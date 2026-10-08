@@ -212,20 +212,21 @@ class InternalTransferOrder(models.Model):
         for order in self:
             group = order.location_group_id
             is_intra = order.transaction_type == 'intra_warehouse'
-            is_inter_group = (
-                is_intra and order.transfer_type == 'inter_group_transfer'
+            is_intra_group = (
+                is_intra and order.intra_transfer_type == 'intra_group_transfer'
             )
+            is_inter_group = is_intra and order.intra_transfer_type == 'inter_group_transfer'
             order.intra_location_id = (
                 order.location_id
                 if is_inter_group or (
-                    is_intra and order._location_belongs_to(order.location_id, group)
+                    is_intra_group and order._intra_group_location_belongs_to(order.location_id, group)
                 )
                 else False
             )
             order.intra_location_dest_id = (
                 order.location_dest_id
                 if is_inter_group or (
-                    is_intra and order._location_belongs_to(order.location_dest_id, group)
+                    is_intra_group and order._intra_group_location_belongs_to(order.location_dest_id, group)
                 )
                 else False
             )
@@ -273,7 +274,11 @@ class InternalTransferOrder(models.Model):
             raise ValidationError('Pilih Location Group sebelum scan lokasi.')
 
         Location = self.env['stock.location']
-        base_domain = [('id', 'child_of', self.location_group_id.id)]
+        base_domain = [
+            '|',
+            ('id', 'child_of', self.location_group_id.id),
+            ('location_group_id', '=', self.location_group_id.id),
+        ]
         for field_name in ('barcode', 'unique_code', 'complete_name', 'name'):
             matches = Location.search(
                 base_domain + [(field_name, '=', code)],
@@ -627,7 +632,7 @@ class InternalTransferOrder(models.Model):
             if order.transaction_type != 'intra_warehouse':
                 order.location_group_id = False
                 continue
-            if order.transfer_type == 'inter_group_transfer':
+            if order.intra_transfer_type != 'intra_group_transfer':
                 order.location_group_id = False
                 continue
             if order.state == 'ready':
@@ -639,9 +644,9 @@ class InternalTransferOrder(models.Model):
                 order.location_id = False
                 order.location_dest_id = False
                 continue
-            if not order._location_belongs_to(order.location_id, order.location_group_id):
+            if not order._intra_group_location_belongs_to(order.location_id, order.location_group_id):
                 order.location_id = False
-            if location_group_changed or not order._location_belongs_to(
+            if location_group_changed or not order._intra_group_location_belongs_to(
                 order.location_dest_id, order.location_group_id
             ):
                 order.location_dest_id = order.location_group_id
@@ -657,23 +662,32 @@ class InternalTransferOrder(models.Model):
         for order in self:
             if order.transaction_type != 'intra_warehouse':
                 continue
-            if order.transfer_type == 'inter_group_transfer':
+            if order.intra_transfer_type != 'intra_group_transfer':
                 continue
             if not order.location_group_id:
                 # Existing API-created intra orders are kept compatible until
                 # the Data Hub mapping is migrated to populate this field.
                 continue
             invalid_locations = (order.location_id | order.location_dest_id).filtered(
-                lambda location: not order._location_belongs_to(
+                lambda location: not order._intra_group_location_belongs_to(
                     location,
                     order.location_group_id,
                 )
             )
             if invalid_locations:
                 raise ValidationError(_(
-                    'Source dan Destination Location harus berada di bawah '
+                    'Source dan Destination Location harus berada di bawah atau '
+                    'tergabung ke '
                     'Location Group yang dipilih.'
                 ))
+
+    def _intra_group_location_belongs_to(self, location, group_location):
+        if not location or not group_location:
+            return False
+        return bool(
+            self._location_belongs_to(location, group_location)
+            or location.location_group_id == group_location
+        )
 
     def _location_belongs_to(self, location, parent_location):
         if not location or not parent_location:

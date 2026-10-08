@@ -197,6 +197,12 @@ class ImportShipmentCompletedWizard(models.TransientModel):
             )
 
             if response.status_code != 200:
+                self.env["acumatica.webhook.error.service"].send_error(
+                    webhook_type="fetch",
+                    webhook_name="Shipment Completed",
+                    error=f"Gagal fetch Shipment Completed dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
                 raise UserError(
                     'Gagal mengambil Shipment Completed '
                     f'(HTTP {response.status_code}): '

@@ -207,6 +207,12 @@ class ImportVendorWizard(models.TransientModel):
             response = session.get(endpoint, params=params, timeout=60)
 
             if response.status_code != 200:
+                self.env["acumatica.webhook.error.service"].send_error(
+                    webhook_type="fetch",
+                    webhook_name="Vendor",
+                    error=f"Gagal fetch Vendor dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
                 raise UserError(
                     f'Gagal ambil data Vendor (HTTP {response.status_code}): {response.text}'
                 )

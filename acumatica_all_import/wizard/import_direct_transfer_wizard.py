@@ -178,7 +178,7 @@ class ImportDirectTransferWizard(models.TransientModel):
                 AcumaticaErrorService.send_error(
                     webhook_type="fetch",
                     webhook_name="direct transfer",
-                    error=last_error,
+                    error=f"Gagal fetch Direct Transfer dari Acumatica (HTTP {response.status_code}).",
                     error_type="http",
                 )
                 
@@ -276,7 +276,9 @@ class ImportDirectTransferWizard(models.TransientModel):
             'adt_note': self._val(item, 'note'),
             'adt_Date': self._val(item, 'Date'),
             'adt_Description': self._val(item, 'Description'),
-            'adt_DocumentOnly': self._bool_val(item, 'DocumentOnly'),
+            # This wizard is dedicated to Return Transfer Document, which is
+            # always handled through the Document Only flow.
+            'adt_DocumentOnly': True,
             'adt_ExternalRef': self._val(item, 'ExternalRef'),
             'adt_LastModifiedDateTime': self._val(item, 'LastModifiedDateTime'),
             'adt_PostPeriod': str(self._val(item, 'PostPeriod') or ''),

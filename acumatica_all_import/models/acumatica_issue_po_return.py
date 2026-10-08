@@ -289,6 +289,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
             # Gunakan satu record induk sebagai acuan pengisian data level Header/Picking.
             # Ini juga melindungi import dari staging lama yang terlanjur dobel.
             first = receipt_lines[0]
+            update_messages = []
 
             # WAJIB: Ambil sub-transaksi database tingkat dokumen agar tidak menghentikan loop massal jika terjadi error
             with self.env.cr.savepoint():
@@ -357,6 +358,16 @@ class AcumaticaIssuePoReturnLine(models.Model):
 
                     # Pengecekan Duplikasi Dokumen menggunakan Origin
                     picking = Picking.search([('origin', '=', origin)], limit=1)
+                    previous_moves = {}
+                    if picking and picking.state == 'draft':
+                        update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                            picking, vals,
+                            field_names={'partner_id', 'picking_type_id', 'location_id', 'location_dest_id', 'scheduled_date', 'origin', 'note', 'adt_receipt_nbr', 'adt_vendor_code', 'adt_partner_ref', 'adt_branch_warehouse', 'adt_is_hold', 'adt_inventory_ref', 'adt_header_location_code', 'adt_post_period', 'adt_status', 'adt_total_qty', 'adt_type', 'adt_warehouse_code'},
+                            prefix='Header',
+                        ))
+                        for old_move in picking.move_ids:
+                            key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                            previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
 
                     if picking:
                         if picking.state != 'draft':
@@ -392,6 +403,9 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         seen_line_keys.add(line_key)
                         unique_product_lines |= product_line
                     product_lines = unique_product_lines
+
+                    if receipt_lines.filtered('document_only') and not product_lines:
+                        raise UserError(f'PO Return {receipt_nbr} tidak memiliki detail produk.')
 
                     print(f"Memproses {len(product_lines)} baris produk untuk Receipt: {origin}")
                     
@@ -432,7 +446,22 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         }
                         
                         move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
-                        Move.create(move_vals)
+                        created_move = Move.create(move_vals)
+                        if action_state == 'updated':
+                            line_key = str(item.line_external_id or item.line_nbr or item.inventory_id or created_move.id)
+                            old = previous_moves.pop(line_key, None)
+                            label = item.line_nbr or item.line_external_id or item.inventory_id or '?'
+                            current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name or '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                            if old:
+                                previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                                changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                                if changes:
+                                    update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                            else:
+                                update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
+
+                    if action_state == 'updated':
+                        update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
 
                     if receipt_lines.filtered('document_only'):
                         picking.action_validate_document_only_import(force=True)
@@ -444,11 +473,35 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         'odoo_picking_id': picking.id,
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(receipt_nbr, 'issue_po_return')
+                    if action_state == 'updated':
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='Issue PO Return',
+                            transaction_name=receipt_nbr or str(first.id),
+                            event_type='update',
+                            message='\n'.join(update_messages) or 'PO Return berhasil disinkronkan; tidak ada field yang berubah.',
+                        )
                     self.env.cr.execute('RELEASE SAVEPOINT import_issue_po_return_doc')
 
                 except Exception as e:
                     self.env.cr.execute('ROLLBACK TO SAVEPOINT import_issue_po_return_doc')
                     import_message = f'!!! ERROR ON IMPORT PROCESS: {str(e)}'
+                    error_text = str(e).lower()
+                    if 'vendor tidak ditemukan' in error_text:
+                        user_message = f"Vendor dengan kode {first.vendor_code or first.partner_ref or '-'} belum terdaftar. Periksa master vendor di WMS."
+                    elif 'warehouse tidak ditemukan' in error_text or 'location tujuan tidak ditemukan' in error_text:
+                        user_message = f"Warehouse atau lokasi tujuan untuk PO Return {receipt_nbr} belum ditemukan atau belum memiliki mapping aktif. Periksa mapping lokasi di WMS."
+                    elif 'picking type' in error_text or 'operation type' in error_text:
+                        user_message = f"Operation Type untuk PO Return {receipt_nbr} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS."
+                    elif 'location tujuan customer' in error_text:
+                        user_message = "Lokasi tujuan bertipe Customer tidak dapat digunakan untuk PO Return. Periksa lokasi tujuan transaksi."
+                    elif 'product tidak ditemukan' in error_text:
+                        user_message = f"Produk pada PO Return {receipt_nbr} belum terdaftar. Periksa master produk di WMS."
+                    elif 'tidak memiliki detail produk' in error_text:
+                        user_message = f"PO Return {receipt_nbr} belum bisa diproses karena belum memiliki baris produk. Lengkapi detail transaksi."
+                    elif 'sudah ada di odoo' in error_text or 'tidak bisa diupdate' in error_text:
+                        user_message = f"PO Return {receipt_nbr} tidak dapat diperbarui karena dokumen di WMS sudah diproses. Hubungi admin jika perubahan diperlukan."
+                    else:
+                        user_message = False
                     print(f"Error pada dokumen receipt {receipt_nbr}: {str(e)}")
                     tracked_lines = self.env['acumatica.issue.po.return.product'].search([
                         ('receipt_line_id', 'in', receipt_lines.ids),
@@ -480,6 +533,17 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         'import_message': import_message,
                         'odoo_picking_id': False,
                     })
+                    if user_message:
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='Issue PO Return',
+                            transaction_name=receipt_nbr or str(first.id),
+                            event_type='error', message=user_message,
+                        )
+                    else:
+                        self.env['acumatica.webhook.error.service'].send_error(
+                            webhook_type='import', webhook_name='Issue PO Return',
+                            error=str(e), error_type='unexpected',
+                        )
                     
                     # Teruskan loop ke dokumen receipt berikutnya
                     continue

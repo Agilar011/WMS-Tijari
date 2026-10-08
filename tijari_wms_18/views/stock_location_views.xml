@@ -72,6 +72,9 @@
                             class="btn-link" icon="fa-barcode" invisible="unique_code"/>
                 </div>
                 <field name="is_location_mapping" />
+                <field name="location_group_id"
+                    domain="[('is_location_mapping', '=', True), ('id', '!=', id)]"
+                    options="{'no_create': True}"/>
                 <field name="is_consignment" />
                 <field name="location_owner" invisible="not is_consignment" />
                 <field name="is_document_only" />

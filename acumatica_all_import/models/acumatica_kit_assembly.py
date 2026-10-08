@@ -137,6 +137,7 @@ class AcumaticaKitAssembly(models.Model):
 
         for reference_nbr in self.mapped("reference_nbr"):
             records = self.filtered(lambda line: line.reference_nbr == reference_nbr)
+            update_messages = []
             try:
                 # ---------------------------------------------------------
                 # Setiap reference punya savepoint sendiri.
@@ -224,6 +225,21 @@ class AcumaticaKitAssembly(models.Model):
                                 f'Manufacturing Order {reference_nbr} sudah berada pada state '
                                 f'{manufacturing.state}, tidak bisa diupdate.'
                             )
+                        update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                            manufacturing,
+                            {'product_id': finished_product.id, 'product_qty': header.quantity,
+                             'product_uom_id': finished_product.uom_id.id, 'date_start': header.requested_on,
+                             'picking_type_id': picking_type.id, 'warehouse_id': warehouse_record.id,
+                             'location_src_id': picking_type.default_location_src_id.id,
+                             'location_dest_id': picking_type.default_location_dest_id.id,
+                             'catatan': header.note_header, 'desc_note': header.description},
+                            field_names={'product_id', 'product_qty', 'product_uom_id', 'date_start', 'picking_type_id', 'warehouse_id', 'location_src_id', 'location_dest_id', 'catatan', 'desc_note'},
+                            prefix='Header MO',
+                        ))
+                        old_components = {}
+                        for old_move in manufacturing.move_raw_ids:
+                            key = old_move.product_id.default_code or old_move.product_id.display_name
+                            old_components.setdefault(key, []).append({'name': old_move.product_id.display_name, 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name, 'note': old_move.product_note or '—'})
                         manufacturing.write({
                             'product_id': finished_product.id,
                             'product_qty': header.quantity,
@@ -338,6 +354,25 @@ class AcumaticaKitAssembly(models.Model):
                         manufacturing.write({
                             "move_raw_ids": raw_moves,
                         })
+                        if action_state == 'updated':
+                            for component in components:
+                                key = component.stock_inventory_id or component.line_inventory_id
+                                old_group = old_components.get(key) or []
+                                old = old_group.pop(0) if old_group else False
+                                if not old_group:
+                                    old_components.pop(key, None)
+                                new_product = Product.search([('default_code', '=', key)], limit=1)
+                                new_values = {'Produk': new_product.display_name or key, 'Jumlah': f'{component.line_quantity:g}', 'Satuan': new_product.uom_id.display_name if new_product else '—', 'Catatan': component.line_note or '—'}
+                                label = component.line_inventory_id or key or '?'
+                                if old:
+                                    old_values = {'Produk': old['name'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Catatan': old['note']}
+                                    changes = [f'{name}: {old_values[name]} → {value}' for name, value in new_values.items() if old_values[name] != value]
+                                    if changes:
+                                        update_messages.append(f"• Komponen {label}: " + '; '.join(changes))
+                                else:
+                                    update_messages.append(f"• Komponen {label}: {new_values['Produk']}, jumlah {component.line_quantity:g} ditambahkan")
+                            for key, old_group in old_components.items():
+                                update_messages.extend(f"• Komponen {old['name']}: dihapus" for old in old_group)
 
                         print(
                             f"Raw moves berhasil dibuat: "
@@ -354,6 +389,12 @@ class AcumaticaKitAssembly(models.Model):
                         "import_state": action_state,
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'kit_assembly')
+                    if action_state == 'updated':
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='Kit Assembly',
+                            transaction_name=reference_nbr or str(header.id), event_type='update',
+                            message='\n'.join(update_messages) or 'Kit Assembly berhasil disinkronkan; tidak ada field yang berubah.',
+                        )
 
                     # _logger.warning("""
                     #     ========== RAW MOVE AFTER CREATE ==========
@@ -392,6 +433,19 @@ class AcumaticaKitAssembly(models.Model):
 
             except Exception as e:
                 error += 1
+                error_text = str(e).lower()
+                if 'warehouse tidak ditemukan' in error_text or 'warehouse odoo tidak ditemukan' in error_text:
+                    user_message = f"Warehouse dengan kode {getattr(locals().get('header'), 'warehouse', False) or '-'} belum memiliki mapping aktif di WMS. Periksa mapping warehouse."
+                elif 'picking type' in error_text or 'operation type' in error_text:
+                    user_message = f"Operation Type Manufacturing untuk warehouse {getattr(locals().get('warehouse_record'), 'display_name', False) or '-'} belum tersedia. Minta admin memeriksa pengaturan produksi di WMS."
+                elif 'product tidak ditemukan' in error_text or 'finished product' in error_text:
+                    user_message = f"Produk Kit Assembly {reference_nbr or '-'} atau salah satu komponennya belum terdaftar. Periksa master produk di WMS."
+                elif 'tidak bisa diupdate' in error_text or 'state' in error_text and 'manufacturing order' in error_text:
+                    user_message = f"Manufacturing Order {reference_nbr or '-'} tidak dapat diperbarui karena proses produksi sudah berjalan. Hubungi admin jika perubahan diperlukan."
+                elif 'header tidak ditemukan' in error_text:
+                    user_message = f"Data header Kit Assembly {reference_nbr or '-'} tidak ditemukan. Periksa data transaksi yang diterima."
+                else:
+                    user_message = False
 
                 print(
                     f"ERROR processing {reference_nbr}: "
@@ -423,6 +477,16 @@ class AcumaticaKitAssembly(models.Model):
                         'payload': component.read()[0] if component.exists() else {},
                     } for component in component_records],
                 )
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Kit Assembly',
+                        transaction_name=reference_nbr or '-', event_type='error', message=user_message,
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Kit Assembly',
+                        error=str(e), error_type='unexpected',
+                    )
 
         # -------------------------------------------------------------
         # RESULT
@@ -769,6 +833,8 @@ class AcumaticaKitAssemblyLine(models.Model):
             records = self.filtered(lambda line: line.reference_nbr == reference_nbr)
             header = header_reference.search([('reference_nbr', '=', reference_nbr)], limit=1)
             component_lines = component_reference
+            update_messages = []
+            old_components = {}
             try:
                 with self.env.cr.savepoint():
                     if not header:
@@ -847,6 +913,14 @@ class AcumaticaKitAssemblyLine(models.Model):
                                 f'{manufacturing_check.state}, tidak bisa diupdate.'
                             )
                         manufacturing = manufacturing_check
+                        update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                            manufacturing, vals,
+                            field_names={'origin', 'product_id', 'product_qty', 'product_uom_id', 'picking_type_id', 'warehouse_id', 'location_src_id', 'location_dest_id', 'company_id', 'catatan', 'desc_note'},
+                            prefix='Header MO',
+                        ))
+                        for old_move in manufacturing.move_raw_ids:
+                            key = old_move.product_id.default_code or old_move.product_id.display_name
+                            old_components.setdefault(key, []).append({'name': old_move.product_id.display_name, 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name, 'note': old_move.product_note or '—'})
                         manufacturing.write(vals)
                         manufacturing.move_raw_ids.unlink()
                         updated += 1
@@ -874,6 +948,25 @@ class AcumaticaKitAssemblyLine(models.Model):
                         })
                     if raw_move_vals:
                         Move.create(raw_move_vals)
+                    if manufacturing_check:
+                        for item in component_lines:
+                            key = item.stock_inventory_id or item.inventory_id
+                            old_group = old_components.get(key) or []
+                            old = old_group.pop(0) if old_group else False
+                            if not old_group:
+                                old_components.pop(key, None)
+                            component_product = self.env['product.product'].search([('default_code', '=', key)], limit=1)
+                            label = item.line_inventory_id or item.inventory_id or key or '?'
+                            current = {'Produk': component_product.display_name if component_product else key or '—', 'Jumlah': f'{(item.line_quantity or item.quantity):g}', 'Satuan': component_product.uom_id.display_name if component_product else item.line_uom or item.uom or '—', 'Catatan': item.line_note or '—'}
+                            if old:
+                                previous = {'Produk': old['name'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Catatan': old['note']}
+                                changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                                if changes:
+                                    update_messages.append(f"• Komponen {label}: " + '; '.join(changes))
+                            else:
+                                update_messages.append(f"• Komponen {label}: {current['Produk']}, jumlah {item.line_quantity or item.quantity:g} ditambahkan")
+                        for old_group in old_components.values():
+                            update_messages.extend(f"• Komponen {old['name']}: dihapus" for old in old_group)
 
                     result_state = 'created' if not manufacturing_check else 'updated'
                     records.write({
@@ -888,8 +981,27 @@ class AcumaticaKitAssemblyLine(models.Model):
                             'mrp_production_id': manufacturing.id,
                         })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'kit_assembly')
+                    if result_state == 'updated':
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='Kit Assembly Components',
+                            transaction_name=reference_nbr or str(header.id), event_type='update',
+                            message='\n'.join(update_messages) or 'Kit Assembly berhasil disinkronkan; tidak ada field yang berubah.',
+                        )
             except Exception as e:
                 error += len(records) or 1
+                error_text = str(e).lower()
+                if 'warehouse' in error_text and ('tidak ditemukan' in error_text or 'mapping' in error_text):
+                    user_message = f"Warehouse dengan kode {getattr(header, 'warehouse', False) or '-'} belum memiliki mapping aktif di WMS. Periksa mapping warehouse."
+                elif 'picking type' in error_text or 'operation type' in error_text:
+                    user_message = f"Operation Type Manufacturing untuk Kit Assembly {reference_nbr or '-'} belum tersedia. Minta admin memeriksa pengaturan produksi di WMS."
+                elif 'product tidak ditemukan' in error_text or 'finished product' in error_text or 'component product' in error_text:
+                    user_message = f"Produk Kit Assembly {reference_nbr or '-'} atau salah satu komponennya belum terdaftar. Periksa master produk di WMS."
+                elif 'tidak bisa diupdate' in error_text:
+                    user_message = f"Manufacturing Order {reference_nbr or '-'} tidak dapat diperbarui karena proses produksi sudah berjalan. Hubungi admin jika perubahan diperlukan."
+                elif 'header tidak ditemukan' in error_text:
+                    user_message = f"Data header Kit Assembly {reference_nbr or '-'} tidak ditemukan. Periksa data transaksi yang diterima."
+                else:
+                    user_message = False
                 self.env['acumatica.error.transaction']._handle_acumatica_error(
                     records[:1] or self,
                     [str(e)],
@@ -921,6 +1033,16 @@ class AcumaticaKitAssemblyLine(models.Model):
                         'import_state': result_state,
                         'import_message': str(e)[:200],
                     })
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Kit Assembly Components',
+                        transaction_name=reference_nbr or '-', event_type='error', message=user_message,
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Kit Assembly Components',
+                        error=str(e), error_type='unexpected',
+                    )
 
 
         # picking_type = PickingType.search([

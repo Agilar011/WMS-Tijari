@@ -3789,7 +3789,7 @@ class StockPicking(models.Model):
 
         for line in wizard.product_return_moves:
             move = line.move_id
-            actual = move.shipped_qty if move.shipped_qty != 0.0 else move.quantity
+            actual = move.shipped_qty
             planned = move.quantity
             line.quantity = max(planned - actual, 0)
 

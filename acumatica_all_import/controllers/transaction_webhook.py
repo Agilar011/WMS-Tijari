@@ -1821,10 +1821,11 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             log = self._create_webhook_log("transaction", config_key, payload)
             return self._json_response(
                 "success",
-                _("Webhook logged. Process it from Webhook Logs."),
+                _("Webhook logged as pending. Process it from Webhook Logs."),
                 log_id=log.id,
                 webhook_type="transaction",
                 webhook_name=config_key,
+                state=log.state,
             )
         except UserError as exc:
             return self._json_response("error", str(exc), http_status=400)

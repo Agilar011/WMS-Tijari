@@ -411,6 +411,17 @@ class AcumaticaInventoryStockLine(models.Model):
                         subtype_xmlid='mail.mt_note',
                     )
                     updated += 1
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import',
+                        webhook_name='Inventory Stock',
+                        transaction_name=f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
+                        event_type='update',
+                        message=(
+                            f"• Produk: {product.display_name}\n"
+                            f"• Lokasi: {location.display_name}\n"
+                            f"• Stok tersedia: {current_qty:g} → {target_qty:g}"
+                        ),
+                    )
                 else:
                     action_state = 'created'
                     message = (
@@ -461,6 +472,26 @@ class AcumaticaInventoryStockLine(models.Model):
                     flush=True,
                 )
                 _logger.exception('Error import Inventory Stock line %s', line.id)
+                error_text = str(e).lower()
+                if 'product' in error_text and ('tidak ditemukan' in error_text or 'not found' in error_text):
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Inventory Stock',
+                        transaction_name=f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
+                        event_type='error',
+                        message=f"Produk dengan kode {line.inventory_id or '-'} belum terdaftar. Periksa master produk di WMS.",
+                    )
+                elif 'warehouse' in error_text and ('tidak ditemukan' in error_text or 'not found' in error_text):
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Inventory Stock',
+                        transaction_name=f"{line.inventory_id or '-'} / {line.warehouse_code or '-'}",
+                        event_type='error',
+                        message=f"Warehouse atau lokasi dengan kode {line.warehouse_code or '-'} belum ditemukan atau belum memiliki mapping aktif. Periksa mapping lokasi di WMS.",
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Inventory Stock',
+                        error=str(e), error_type='unexpected',
+                    )
                 self.env['acumatica.error.transaction']._handle_acumatica_error(
                     line,
                     [str(e)],

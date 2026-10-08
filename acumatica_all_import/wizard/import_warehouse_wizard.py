@@ -85,6 +85,12 @@ class ImportWarehouseWizard(models.TransientModel):
             response = session.get(endpoint, params=params, timeout=60)
 
             if response.status_code != 200:
+                self.env["acumatica.webhook.error.service"].send_error(
+                    webhook_type="fetch",
+                    webhook_name="Warehouse",
+                    error=f"Gagal fetch Warehouse dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
                 raise UserError(
                     f'Gagal ambil data Warehouse (HTTP {response.status_code}): {response.text}'
                 )

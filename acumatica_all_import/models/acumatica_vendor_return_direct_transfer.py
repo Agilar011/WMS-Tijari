@@ -247,6 +247,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
             # Ambil seluruh baris data item (Lines) yang berelasi dengan header ini
             to_create_move_lines = first.line_ids
+            update_messages = []
 
             print(f"Move Line count: {len(to_create_move_lines)}")
 
@@ -268,6 +269,25 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         raise UserError(f"Lokasi asal tidak ditemukan untuk code: {first.adt_FromWarehouseID or '-'}.")
                     if not dest_location:
                         raise UserError(f"Lokasi tujuan tidak ditemukan untuk code: {first.adt_ToWarehouseID or '-'}.")
+
+                    if not to_create_move_lines:
+                        raise UserError(f'Transaksi {origin or "-"} tidak memiliki detail produk.')
+
+                    existing_order = self.env['internal.transfer.order'].search([('external_ref', '=', origin)], limit=1)
+                    previous_moves = {}
+                    if existing_order:
+                        for old_move in existing_order.move_ids:
+                            key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                            previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
+                        update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                            existing_order,
+                            {'location_id': source_location.id, 'location_dest_id': dest_location.id,
+                             'schedule_date': self._parse_dt(first.adt_Date) or fields.Datetime.now(),
+                             'note': first.adt_note or False, 'description': first.adt_Description or False,
+                             'adt_transaction_type': 'Vendor Return', 'document_only': bool(first.adt_DocumentOnly)},
+                            field_names={'location_id', 'location_dest_id', 'schedule_date', 'note', 'description', 'adt_transaction_type', 'document_only'},
+                            prefix='Header',
+                        ))
 
                     transfer_service = self.env['acumatica.internal.transfer.service']
                     order, action_state = transfer_service.prepare_order(
@@ -293,7 +313,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         # uom = self._find_uom_by_name(line.adt_UOM, product)
                         qty = self._parse_float(line.adt_Quantity)
 
-                        transfer_service.create_order_move(order, product, qty, product.uom_id, line.adt_Description or product.display_name, line.adt_Description or False, {
+                        created_move = transfer_service.create_order_move(order, product, qty, product.uom_id, line.adt_Description or product.display_name, line.adt_Description or False, {
                             # 'description_picking': product.name or False,
                             'adt_line_external_id': line.adt_id or False,
                             'adt_inventory_id': line.adt_InventoryID or False,
@@ -310,8 +330,25 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                             'adt_type': 'Vendor Return',
                             'transaction_type': 'internal',
                         })
+                        if action_state == 'updated':
+                            line_key = str(line.adt_id or line.adt_LineNumber or line.adt_rowNumber or line.adt_InventoryID or created_move.id)
+                            old = previous_moves.pop(line_key, None)
+                            label = line.adt_LineNumber or line.adt_rowNumber or line.adt_InventoryID or '?'
+                            current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': product.uom_id.display_name or '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                            if old:
+                                previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                                changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                                if changes:
+                                    update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                            else:
+                                update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} ditambahkan")
+
+                    if action_state == 'updated':
+                        update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
 
                     transfer_service.set_order_ready(order)
+                    if first.adt_DocumentOnly:
+                        order._auto_validate_pickings_by_leg(('delivery', 'receipt'))
                     # Kunci status dokumen jika seluruh perulangan sukses terlewati tanpa hambatan
                     first.write({
                         'import_state': action_state,
@@ -320,6 +357,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         'odoo_internal_transfer_order_id': order.id,
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'vendor_return')
+
+                    if action_state == 'updated':
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='Vendor Return',
+                            transaction_name=origin or str(first.id), event_type='update',
+                            message='\n'.join(update_messages) or 'Transfer berhasil disinkronkan; tidak ada field yang berubah.',
+                        )
 
                     if action_state == 'created':
                         imported += 1
@@ -331,6 +375,21 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # Savepoint di atas sudah membatalkan dokumen Odoo yang gagal.
                 # Jangan rollback cursor utama karena record staging masih harus ditulis error.
                 error += 1
+                error_text = str(e).lower()
+                if 'operation type' in error_text or 'picking type' in error_text:
+                    user_message = f"Operation Type untuk Vendor Return {origin or '-'} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS."
+                elif 'lokasi asal' in error_text or 'fromwarehouseid' in error_text:
+                    user_message = f"Lokasi sumber untuk warehouse {first.adt_FromWarehouseID or '-'} belum ditemukan atau belum memiliki mapping aktif. Periksa mapping sumber di WMS."
+                elif 'lokasi tujuan' in error_text or 'towarehouseid' in error_text:
+                    user_message = f"Lokasi tujuan untuk warehouse {first.adt_ToWarehouseID or '-'} belum ditemukan atau belum memiliki mapping aktif. Periksa mapping tujuan di WMS."
+                elif 'product tidak ditemukan' in error_text:
+                    user_message = f"Produk dengan kode {getattr(locals().get('line'), 'adt_InventoryID', False) or '-'} belum terdaftar. Periksa master produk di WMS."
+                elif 'tidak memiliki detail produk' in error_text:
+                    user_message = f"Vendor Return {origin or '-'} belum bisa diproses karena belum memiliki baris produk. Lengkapi detail transaksi."
+                elif 'tidak bisa diupdate' in error_text or 'sudah ada di state' in error_text or 'sudah tidak draft' in error_text:
+                    user_message = f"Vendor Return {origin or '-'} tidak dapat diperbarui karena proses sebelumnya sudah berjalan. Periksa status transfer terkait di WMS."
+                else:
+                    user_message = False
                 self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
@@ -361,6 +420,17 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         'odoo_internal_transfer_order_id': False,
                     })
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Vendor Return',
+                        transaction_name=origin or str(first.id), event_type='error',
+                        message=user_message,
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Vendor Return',
+                        error=str(e), error_type='unexpected',
+                    )
                 
     def _find_warehouse_by_code(self, code):
         Warehouse = self.env['stock.location.acumatica']
