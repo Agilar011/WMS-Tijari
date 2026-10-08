@@ -42,6 +42,7 @@
                                 <list editable="bottom">
                                     <field name="sequence"/>
                                     <field name="user_id"/>
+                                    <field name="job_id"/>
                                     <field name="name" />
                                 </list>
                             </field>

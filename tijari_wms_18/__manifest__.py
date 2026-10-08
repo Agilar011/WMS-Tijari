@@ -15,6 +15,7 @@
         'mail',
         'stock',
         'mrp',
+        'mrp_account',
         'stock_picking_batch',
         'stock_sms',
         'product',

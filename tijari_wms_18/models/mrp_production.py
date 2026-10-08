@@ -3,6 +3,8 @@ from odoo.exceptions import UserError, ValidationError
 import base64
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 
+from odoo.tools.float_utils import float_compare, float_round
+
 import logging
 _logger = logging.getLogger(__name__)
 
@@ -196,17 +198,6 @@ class WMSMRPProduction(models.Model):
                 production.picking_ids.write({
                     "origin": production.origin,
                 })
-        
-        return res
-
-    def action_confirm(self):
-        res = super().action_confirm()
-
-        for production in self:
-            if production.origin:
-                production.picking_ids.write({
-                    "origin": production.origin,
-                })
 
         return res
 
@@ -226,6 +217,22 @@ class WMSMRPProduction(models.Model):
                     "Tidak dapat menyelesaikan Manufacturing Order.\n\n"
                     "Raw Materials berikut belum memiliki status 'Finished':\n"
                     f"{details}"
+                )
+
+            if float_compare(
+                production.qty_producing,
+                production.product_qty,
+                precision_rounding=production.product_uom_id.rounding,
+            ) != 0:
+                raise ValidationError(
+                    _(
+                        "Qty Producing (%s) harus sama dengan "
+                        "Quantity (%s) sebelum menyelesaikan Manufacture."
+                    )
+                    % (
+                        production.qty_producing,
+                        production.product_qty,
+                    )
                 )
 
             if (
@@ -300,3 +307,35 @@ class WMSMRPProduction(models.Model):
                 'tijari_hasil_manufacturing_email': True,
             },
         }
+
+    @api.onchange('qty_producing', 'lot_producing_id')
+    def _onchange_producing(self):
+        if self.state in ['draft', 'cancel'] or (
+            self.state == 'done' and self.is_locked
+        ):
+            return
+
+        productions_bypass_qty_producting = self.filtered(
+            lambda p: p.lot_producing_id
+            and p.product_tracking == 'lot'
+            and p._origin
+            and p._origin.qty_producing == p.qty_producing
+        )
+
+        (
+            self - productions_bypass_qty_producting
+        ).with_context(
+            skip_raw_material_quantity_update=True
+        )._set_qty_producing(False)
+
+class StockMove(models.Model):
+    _inherit = "stock.move"
+
+    def _set_quantity_done(self, qty):
+        if (
+            self.env.context.get('skip_raw_material_quantity_update')
+            and self.raw_material_production_id
+        ):
+            return
+
+        return super()._set_quantity_done(qty)
