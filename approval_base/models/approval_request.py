@@ -101,6 +101,7 @@ class ApprovalRequest(models.Model):
             approval_lines.append((0, 0, {
                 "sequence": template.sequence,
                 "role": template.name,
+                "job_id": template.job_id.id if template.job_id else False,
                 "user_id": template.user_id.id,
             }))
 
@@ -157,6 +158,28 @@ class ApprovalRequest(models.Model):
         self.state = "rejected"
         document = self.env[self.source_model].browse(self.source_id)
         document._approval_rejected()
+
+    def action_open_source_document(self):
+        self.ensure_one()
+
+        if (
+            not self.source_model
+            or self.source_model not in self.env.registry.models
+        ):
+            raise UserError(_("The source document is unavailable."))
+
+        document = self.env[self.source_model].browse(self.source_id).exists()
+        if not document:
+            raise UserError(_("The source document no longer exists."))
+
+        return {
+            "type": "ir.actions.act_window",
+            "name": document.display_name,
+            "res_model": self.source_model,
+            "res_id": document.id,
+            "view_mode": "form",
+            "target": "current",
+        }
     
     ### HELPER FUNCTION ###
     def _get_source_document(self):
@@ -177,6 +200,8 @@ class ApprovalRequestLine(models.Model):
     sequence = fields.Integer()
 
     role = fields.Char()
+
+    job_id = fields.Many2one('hr.job', string='Position')
 
     user_id = fields.Many2one(
         "res.users",

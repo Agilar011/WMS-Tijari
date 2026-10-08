@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+   <record id="seq_google_login_log" model="ir.sequence">
+        <field name="name">Google Login Log</field>
+        <field name="code">wms.google.login.log</field>
+        <field name="prefix">GLG%(day)s%(month)s%(y)s</field>
+        <field name="padding">5</field>
+        <field name="number_increment">1</field>
+    </record>
+
+    <record id="view_google_login_log_tree" model="ir.ui.view">
+        <field name="name">wms.google.login.log.tree</field>
+        <field name="model">wms.google.login.log</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="login_date"/>
+                <field name="status"/>
+                <field name="reason"/>
+                <field name="email"/>
+                <field name="name_from_google"/>
+                <field name="user_id"/>
+                <field name="ip_address"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_google_login_log_form" model="ir.ui.view">
+        <field name="name">wms.google.login.log.form</field>
+        <field name="model">wms.google.login.log</field>
+        <field name="arch" type="xml">
+            <form create="0" edit="0" delete="0">
+                <sheet>
+
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="login_date"/>
+                            <field name="status"/>
+                            <field name="reason"/>
+                        </group>
+
+                        <group>
+                            <field name="email"/>
+                            <field name="name_from_google"/>
+                            <field name="user_id"/>
+                        </group>
+                    </group>
+
+                    <separator string="OAuth Information"/>
+
+                    <group>
+                        <field name="oauth_uid"/>
+                        <field name="provider_id"/>
+                    </group>
+
+                    <separator string="Request Information"/>
+
+                    <group>
+                        <field name="ip_address"/>
+                        <field name="user_agent"/>
+                    </group>
+
+                    <separator string="Error"/>
+
+                    <field name="error_message"/>
+
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_google_login_log" model="ir.actions.act_window">
+        <field name="name">Google Login Logs</field>
+        <field name="res_model">wms.google.login.log</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <menuitem
+        id="menu_google_login_log"
+        name="Google Login Logs"
+        parent="base.menu_users"
+        action="action_google_login_log"
+        groups="base.group_system"
+        sequence="99"
+    />
+
+</odoo>

@@ -1,0 +1,3 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_guest_home_guest,tijari.guest.home guest,tijari_auth_oauth.model_tijari_guest_home,tijari_auth_oauth.group_guest,1,1,1,1
+access_google_login_log_admin,wms.google.login.log admin,tijari_auth_oauth.model_wms_google_login_log,base.group_system,1,0,0,0

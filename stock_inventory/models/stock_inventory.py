@@ -371,23 +371,34 @@ class InventoryAdjustmentsGroup(models.Model):
         self.ensure_one()
         self._check_inventory_adjustments_is_set()
 
-        stock_quant_ids = self.stock_quant_ids.filtered(lambda q: q.inventory_quantity and q.inventory_diff_quantity != 0)
+        stock_quant_ids = self.stock_quant_ids.filtered(
+            lambda q: q.inventory_quantity 
+            and q.inventory_diff_quantity != 0
+        )
+
+        adjustment_date = fields.Datetime.to_datetime(self.date).strftime("%m%d%y")
+
         for quant in stock_quant_ids:
-            # if (
-            #     quant.product_id.tracking == "lot"
-            #     and not quant.lot_id
-            # ):
-            #     lot_name = self.env["ir.sequence"].next_by_code(
-            #         "stock.lot.adjustment"
-            #     )
+            if (
+                quant.product_id.tracking == "lot"
+                and not quant.lot_id
+            ):
+                
+                lot_name = "{}-{}-{}".format(
+                    quant.product_id.default_code,
+                    adjustment_date,
+                    self.acumatica_ref_doc,
+                )
 
-            #     lot = self.env["stock.lot"].create({
-            #         "name": lot_name,
-            #         "product_id": quant.product_id.id,
-            #         "company_id": quant.company_id.id,
-            #     })
+                lot = self.env["stock.lot"].create({
+                    "name": lot_name,
+                    "product_id": quant.product_id.id,
+                    "company_id": quant.company_id.id,
+                })
 
-            #     quant.lot_id = lot.id
+                quant.write({
+                    "lot_id": lot.id,
+                })
 
             quant.action_apply_inventory()
 
@@ -471,25 +482,34 @@ class InventoryAdjustmentsGroup(models.Model):
 
     def action_view_inventory_adjustment(self):
         self.ensure_one()
+
         result = self.env["stock.quant"].action_view_inventory()
+        
+        allowed_locations = (
+            self.location_ids
+            | self.location_ids.child_internal_location_ids
+        )
+        
         context = result.get("context", {})
-        context.update(
-            {
-                "search_default_to_do": 1,
-                "inventory_id": self.id,
-                "default_to_do": True,
-            }
-        )
-        result.update(
-            {
-                "domain": [
-                    ("id", "in", self.stock_quant_ids.ids),
-                    ("current_inventory_id", "=", self.id),
-                ],
-                "search_view_id": self.env.ref("stock.quant_search_view").id,
-                "context": context,
-            }
-        )
+        context.update({
+            "search_default_to_do": 1,
+            "inventory_id": self.id,
+            "inventory_location_ids": allowed_locations.ids,
+            "default_to_do": True,
+            "default_current_inventory_id": self.id,
+            "default_location_id": allowed_locations.ids[0] or False,
+        })
+
+        result.update({
+            "domain": [
+                ("current_inventory_id", "=", self.id),
+            ],
+            "search_view_id": self.env.ref(
+                "stock.quant_search_view"
+            ).id,
+            "context": context,
+        })
+
         return result
 
     def action_view_stock_moves(self):
@@ -556,6 +576,10 @@ class InventoryAdjustmentsGroup(models.Model):
 
     def _approval_approved(self):
         self.ensure_one()
+
+        if not self.acumatica_ref_doc:
+            raise UserError("Acumatica Ref Document tidak boleh kosong.")
+        
         self.state = "approved"
 
     def _approval_rejected(self):

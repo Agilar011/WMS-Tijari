@@ -1602,8 +1602,8 @@ class StockMoveLine(models.Model):
         if comparison > 0:
             raise UserError("Qty Digunakan tidak boleh melebihi Quantity")  
         
-        if self.matching_lot_id != self.lot_id:
-            raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
+        # if self.matching_lot_id != self.lot_id:
+        #     raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
 
         return comparison
 
