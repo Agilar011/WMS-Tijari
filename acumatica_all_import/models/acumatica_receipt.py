@@ -8,10 +8,19 @@ _logger = logging.getLogger(__name__)
 
 
 class ReceiptImportError(Exception):
-    def __init__(self, message, payload=None, line_payloads=None):
+    def __init__(
+        self,
+        message,
+        payload=None,
+        line_payloads=None,
+        user_message=None,
+        technical_errors=None,
+    ):
         super().__init__(message)
         self.payload = payload or {}
         self.line_payloads = line_payloads or []
+        self.user_message = user_message or False
+        self.technical_errors = technical_errors or []
 
 
 class AcumaticaReceiptProductLine(models.Model):
@@ -287,9 +296,12 @@ class AcumaticaReceiptLine(models.Model):
         origin = receipt.receipt_nbr or False
         header_payload = receipt.read()[0] if receipt.exists() else {}
         error_messages = []
+        user_messages = []
+        technical_errors = []
         all_line_payloads = []
         picking = receipt.odoo_picking_id
         action_state = 'staged'
+        update_messages = []
 
         for receipt_line in receipt.product_line_ids:
             all_line_payloads.append({
@@ -305,17 +317,29 @@ class AcumaticaReceiptLine(models.Model):
             error_messages.append(
                 f'Vendor with VendorID {receipt.vendor_code} was not found in the WMS | WMS Dependency : MASTER VENDOR.'
             )
+            user_messages.append(
+                f"Vendor dengan kode {receipt.vendor_code or '-'} belum terdaftar. "
+                "Periksa master vendor di WMS."
+            )
 
         warehouse = receipt._find_warehouse(receipt)
         if not warehouse:
             error_messages.append(
                 f'Warehouse with location code {receipt.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
+            user_messages.append(
+                f"Warehouse dengan kode {receipt.building_code or '-'} "
+                "belum ditemukan atau tidak aktif. Periksa mapping warehouse di WMS."
+            )
 
         dest_location = receipt._find_location_dest(receipt.warehouse_code)
         if not dest_location:
             error_messages.append(
                 f'Location with code {receipt.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+            )
+            user_messages.append(
+                f"Lokasi tujuan dengan kode {receipt.warehouse_code or '-'} "
+                "belum ditemukan atau tidak aktif. Periksa mapping lokasi di WMS."
             )
 
         # picking_type = PickingType.search([
@@ -329,12 +353,17 @@ class AcumaticaReceiptLine(models.Model):
             error_messages.append(
                 f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
             )
+            user_messages.append(
+                f"Tipe operasi untuk {warehouse_txt if warehouse else location_txt} belum tersedia. "
+                "Periksa pengaturan tipe operasi di WMS."
+            )
 
         if error_messages:
             raise ReceiptImportError(
                 '\n'.join(error_messages),
                 payload={'header': header_payload},
                 line_payloads=all_line_payloads,
+                user_message="\n".join(user_messages),
             )
 
         scheduled_date = receipt._parse_dt(receipt.scheduled_date)
@@ -369,8 +398,26 @@ class AcumaticaReceiptLine(models.Model):
                 raise ReceiptImportError(
                     f'Receipt {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
-                    line_payloads=all_line_payloads
+                    line_payloads=all_line_payloads,
+                    user_message=(
+                        f"Receipt {origin} tidak dapat diperbarui karena dokumen di WMS "
+                        f"sudah berstatus {picking.state}. Hubungi admin jika perubahan diperlukan."
+                    ),
                 )
+            update_messages.extend(
+                self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                    picking,
+                    picking_vals,
+                    field_names={
+                        'partner_id', 'picking_type_id', 'scheduled_date', 'origin',
+                        'note', 'adt_receipt_nbr', 'adt_vendor_code', 'adt_partner_ref',
+                        'adt_branch_warehouse', 'adt_is_hold', 'adt_inventory_ref',
+                        'adt_header_location_code', 'adt_post_period', 'adt_status',
+                        'adt_total_qty', 'adt_type', 'adt_warehouse_code',
+                    },
+                    prefix="Header",
+                )
+            )
             picking.write(picking_vals)
             receipt._handle_acumatica_update(receipt)
             action_state = 'updated'
@@ -389,6 +436,10 @@ class AcumaticaReceiptLine(models.Model):
                 if not product:
                     error_messages.append(
                         f'Product with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
+                    )
+                    user_messages.append(
+                        f"Produk dengan kode {receipt_line.inventory_id or '-'} belum terdaftar. "
+                        "Hubungi admin untuk melengkapi master produk di WMS."
                     )
                     # all_line_payloads.append({
                     #     'inventory_id': receipt_line.inventory_id or False,
@@ -418,7 +469,12 @@ class AcumaticaReceiptLine(models.Model):
                 if not dest_move_location:
                     error_messages.append(
                         f'Location with code {receipt_line.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
-                     )
+                    )
+                    user_messages.append(
+                        f"Lokasi tujuan untuk baris {receipt_line.line_nbr or '-'} "
+                        f"(kode {receipt_line.warehouse_dest_code or '-'}) belum ditemukan "
+                        "atau tidak aktif. Periksa mapping lokasi di WMS."
+                    )
 
                 adt_dest_location = dest_move_location.id if dest_move_location else picking.adt_dest_location_id.id or False
 
@@ -462,11 +518,33 @@ class AcumaticaReceiptLine(models.Model):
                     receipt_line,
                     used_move_ids,
                 )
+                line_label = (
+                    receipt_line.line_nbr
+                    or receipt_line.line_external_id
+                    or receipt_line.inventory_id
+                    or "?"
+                )
                 if existing:
+                    update_messages.extend(
+                        self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                            existing,
+                            move_vals,
+                            field_names={
+                                'name', 'product_id', 'product_uom_qty', 'product_uom',
+                                'location_id', 'location_dest_id', 'date', 'product_note',
+                            },
+                            prefix=f"Baris {line_label}",
+                        )
+                    )
                     existing.write(move_vals)
                     used_move_ids.add(existing.id)
                 else:
                     created_move = Move.create(move_vals)
+                    if action_state == 'updated':
+                        update_messages.append(
+                            f"• Baris {line_label}: produk "
+                            f"{product.display_name}, jumlah {qty:g} ditambahkan"
+                        )
                     used_move_ids.add(created_move.id)
 
             except ReceiptImportError:
@@ -475,6 +553,7 @@ class AcumaticaReceiptLine(models.Model):
             except Exception as line_error:
                 _logger.exception("Error import line %s", receipt.id)
                 error_messages.append(str(line_error))
+                technical_errors.append(str(line_error))
                 all_line_payloads.append({
                     'inventory_id': receipt_line.inventory_id or False,
                     'product_name': receipt_line.description or False,
@@ -492,6 +571,8 @@ class AcumaticaReceiptLine(models.Model):
                     'picking_id': picking.id if picking else False,
                 },
                 line_payloads=all_line_payloads,
+                user_message="\n".join(user_messages),
+                technical_errors=technical_errors,
             )
 
         managed_moves = picking.move_ids.filtered(
@@ -503,6 +584,12 @@ class AcumaticaReceiptLine(models.Model):
         )
         stale_moves = managed_moves.filtered(lambda move: move.id not in used_move_ids)
         if stale_moves:
+            if action_state == 'updated':
+                for stale_move in stale_moves:
+                    stale_label = stale_move.adt_line_nbr or stale_move.adt_inventory_id or stale_move.name
+                    update_messages.append(
+                        f"• Baris {stale_label}: {stale_move.product_id.display_name} dihapus"
+                    )
             stale_moves.unlink()
 
         if receipt.document_only:
@@ -514,7 +601,7 @@ class AcumaticaReceiptLine(models.Model):
             'odoo_picking_id': picking.id if picking else False,
         })
         # picking.action_confirm()
-        return action_state
+        return action_state, update_messages
 
     def _do_import(self):
         created = 0
@@ -533,21 +620,43 @@ class AcumaticaReceiptLine(models.Model):
         for receipt in grouped_receipts:
             try:
                 with self.env.cr.savepoint():
-                    action_state = self._import_single_receipt(receipt)
+                    action_state, update_messages = self._import_single_receipt(receipt)
                 if action_state == 'created':
                     created += 1
                 elif action_state == 'updated':
                     updated += 1
+                    message = "\n".join(update_messages) or (
+                        "Receipt berhasil disinkronkan; tidak ada field yang berubah."
+                    )
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type="import",
+                        webhook_name="PO Receipt",
+                        transaction_name=receipt.receipt_nbr or str(receipt.id),
+                        event_type="update",
+                        message=message,
+                    )
             except Exception as exc:
                 _logger.exception("Error import receipt %s", receipt.receipt_nbr or receipt.id)
                 if isinstance(exc, ReceiptImportError):
                     error_payload = exc.payload
                     all_line_payloads = exc.line_payloads
                     error_message = str(exc)
+                    user_message = exc.user_message
+                    technical_errors = exc.technical_errors
                 else:
                     error_payload = {'header': receipt.read()[0] if receipt.exists() else {}}
                     all_line_payloads = []
                     error_message = str(exc)
+                    user_message = False
+                    technical_errors = [str(exc)]
+
+                if technical_errors:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type="import",
+                        webhook_name="PO Receipt",
+                        error="\n".join(technical_errors),
+                        error_type="unexpected",
+                    )
 
                 try:
                     receipt._handle_acumatica_error(
@@ -565,6 +674,14 @@ class AcumaticaReceiptLine(models.Model):
                     'import_message': error_message[:1000],
                 })
                 error += 1
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type="import",
+                        webhook_name="PO Receipt",
+                        transaction_name=receipt.receipt_nbr or str(receipt.id),
+                        event_type="error",
+                        message=user_message,
+                    )
                 continue
 
         msg = f'Generate done: {created} receipt created, {updated} receipt updated, {error} receipt error.'

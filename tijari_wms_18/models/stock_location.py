@@ -14,6 +14,14 @@ class StockLocation(models.Model):
     sequence = fields.Boolean(string='Sequence', default=False, help='Indicates if the location uses sequence for operations')
     unique_code = fields.Char(string='Unique Code', help='A unique code for the location')
     is_location_mapping = fields.Boolean(string="Parent Mapping Location")
+    location_group_id = fields.Many2one(
+        'stock.location',
+        string='Location Group',
+        index=True,
+        ondelete='set null',
+        domain="[('is_location_mapping', '=', True), ('id', '!=', id)]",
+        help='Pilih lokasi grup agar lokasi ini dapat dipakai dalam mapping grup selain struktur parent-child.',
+    )
     is_consignment = fields.Boolean(string="Consignment Location")
     is_document_only = fields.Boolean(string="Document Only Location")
     location_owner = fields.Char(string="Location Owner")

@@ -218,6 +218,12 @@ class ImportTransferTwoStepWizard(models.TransientModel):
 
             response = session.put(endpoint, params=params, json={"TransferType": {"value": "2-Step"}}, timeout=300)
             if response.status_code != 200:
+                self.env["acumatica.webhook.error.service"].send_error(
+                    webhook_type="fetch",
+                    webhook_name="Transfer Two Step",
+                    error=f"Gagal fetch Transfer Two Step dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
                 raise UserError(f'Gagal ambil data Transfer Order (HTTP {response.status_code}): {response.text}')
 
             raw_data = response.json()

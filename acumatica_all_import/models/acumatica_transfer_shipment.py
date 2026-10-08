@@ -9,10 +9,12 @@ _logger = logging.getLogger(__name__)
 
 
 class TransferShipmentImportError(Exception):
-    def __init__(self, message, payload=None, line_payloads=None):
+    def __init__(self, message, payload=None, line_payloads=None, user_message=None, technical_errors=None):
         super().__init__(message)
         self.payload = payload or {}
         self.line_payloads = line_payloads or []
+        self.user_message = user_message or False
+        self.technical_errors = technical_errors or []
 
 
 class AcumaticaTransferShipmentLine(models.Model):
@@ -255,6 +257,8 @@ class AcumaticaTransferShipmentLine(models.Model):
         origin = shipment.shipment_nbr or False
         header_payload = shipment.read()[0] if shipment.exists() else {}
         error_messages = []
+        user_messages = []
+        technical_errors = []
         all_line_payloads = []
         picking = shipment.odoo_picking_id
         action_state = 'staged'
@@ -291,10 +295,12 @@ class AcumaticaTransferShipmentLine(models.Model):
             error_messages.append(
                 f'Warehouse with location code {source_warehouse_code or "-"} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
             )
+            user_messages.append(f"Warehouse sumber dengan kode {source_warehouse_code or '-'} belum ditemukan atau tidak aktif. Periksa mapping warehouse di WMS.")
         if shipment.document_only and not picking_type:
             error_messages.append(
                 f'Operation Type for Transfer Shipment with warehouse code {source_warehouse_code or "-"} was not found in the WMS | WMS Dependency : MASTER OPERATION TYPE.'
             )
+            user_messages.append(f"Operation Type untuk Transfer Shipment di warehouse {source_warehouse_code or '-'} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS.")
 
         src_location = (
             shipment._find_acumatica_location(source_warehouse_code)
@@ -305,12 +311,21 @@ class AcumaticaTransferShipmentLine(models.Model):
         transfer_service = self.env['acumatica.internal.transfer.service']
         dest_location = False
         if shipment.document_only and not error_messages:
-            transfer_info = transfer_service.classify_transfer_out_to_virtual(
-                source_warehouse_code,
-                shipment.warehouse_dest_code,
-                'WarehouseID',
-                'ToWarehouseID',
-            )
+            try:
+                transfer_info = transfer_service.classify_transfer_out_to_virtual(
+                    source_warehouse_code,
+                    shipment.warehouse_dest_code,
+                    'WarehouseID',
+                    'ToWarehouseID',
+                )
+            except UserError as mapping_error:
+                error_text = str(mapping_error).lower()
+                user_message = (
+                    f"Warehouse tujuan {shipment.warehouse_dest_code or '-'} belum memiliki mapping lokasi aktif di WMS. Periksa mapping warehouse tujuan."
+                    if 'towarehouseid' in error_text else
+                    f"Warehouse sumber {source_warehouse_code or '-'} belum memiliki mapping lokasi aktif di WMS. Periksa mapping warehouse sumber."
+                )
+                raise TransferShipmentImportError(str(mapping_error), payload={'header': header_payload}, user_message=user_message)
             src_location = transfer_info['source_location']
             dest_location = transfer_info['destination_location']
 
@@ -318,25 +333,37 @@ class AcumaticaTransferShipmentLine(models.Model):
             error_messages.append(
                 f'Source location for code {source_warehouse_code or shipment.header_location_code or "-"} was not found in the WMS | WMS Dependency : MAPPING LOCATION.'
             )
+            user_messages.append(f"Lokasi sumber untuk Transfer Shipment {origin or '-'} belum ditemukan atau tidak aktif. Periksa mapping lokasi di WMS.")
         if shipment.document_only and dest_location and dest_location.usage == 'customer':
             error_messages.append(
                 'Destination location customer hanya boleh dipakai oleh SO Shipment.'
             )
+            user_messages.append("Lokasi tujuan bertipe Customer tidak dapat digunakan untuk Transfer Shipment. Periksa warehouse tujuan pada transaksi.")
 
         if error_messages:
             raise TransferShipmentImportError(
                 '\n'.join(error_messages),
                 payload={'header': header_payload},
                 line_payloads=all_line_payloads,
+                user_message='\n'.join(user_messages),
             )
 
         if not shipment.document_only:
-            transfer_info = transfer_service.classify_transfer_out_to_virtual(
-                source_warehouse_code,
-                shipment.warehouse_dest_code,
-                'WarehouseID',
-                'ToWarehouseID',
-            )
+            try:
+                transfer_info = transfer_service.classify_transfer_out_to_virtual(
+                    source_warehouse_code,
+                    shipment.warehouse_dest_code,
+                    'WarehouseID',
+                    'ToWarehouseID',
+                )
+            except UserError as mapping_error:
+                error_text = str(mapping_error).lower()
+                user_message = (
+                    f"Warehouse tujuan {shipment.warehouse_dest_code or '-'} belum memiliki mapping lokasi aktif di WMS. Periksa mapping warehouse tujuan."
+                    if 'towarehouseid' in error_text else
+                    f"Warehouse sumber {source_warehouse_code or '-'} belum memiliki mapping lokasi aktif di WMS. Periksa mapping warehouse sumber."
+                )
+                raise TransferShipmentImportError(str(mapping_error), payload={'header': header_payload}, user_message=user_message)
             if transfer_info['status'] == 'skip':
                 shipment.write({
                     'import_state': 'updated',
@@ -345,10 +372,28 @@ class AcumaticaTransferShipmentLine(models.Model):
                     'odoo_internal_transfer_order_id': False,
                 })
                 self.env['acumatica.error.transaction']._handle_acumatica_update(shipment, origin=shipment.shipment_nbr or False)
-                return 'updated'
+                return 'updated', []
             src_location = transfer_info['source_location']
             dest_location = transfer_info['destination_location']
-            order, action_state = transfer_service.prepare_order(
+            existing_order = self.env['internal.transfer.order'].search([('external_ref', '=', origin)], limit=1)
+            update_messages = []
+            previous_moves = {}
+            if existing_order:
+                for old_move in existing_order.move_ids:
+                    key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                    previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
+                update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                    existing_order,
+                    {'location_id': src_location.id, 'location_dest_id': dest_location.id,
+                     'schedule_date': shipment._parse_dt(shipment.scheduled_date) or fields.Datetime.now(),
+                     'note': shipment.note or shipment.description or False,
+                     'description': shipment.description or False,
+                     'adt_transaction_type': 'Transfer Shipment', 'document_only': shipment.document_only},
+                    field_names={'location_id', 'location_dest_id', 'schedule_date', 'note', 'description', 'adt_transaction_type', 'document_only'},
+                    prefix='Header',
+                ))
+            try:
+                order, action_state = transfer_service.prepare_order(
                 origin,
                 src_location,
                 dest_location,
@@ -359,7 +404,12 @@ class AcumaticaTransferShipmentLine(models.Model):
                 transfer_type='transfer_out',
                 adt_transaction_type='Transfer Shipment',
                 document_only=shipment.document_only,
-            )
+                )
+            except UserError as transfer_error:
+                raise TransferShipmentImportError(
+                    str(transfer_error), payload={'header': header_payload},
+                    user_message=f"Transfer Shipment {origin or '-'} tidak dapat diperbarui karena proses sebelumnya sudah berjalan. Periksa status transfer terkait di WMS."
+                )
 
             for shipment_line in shipment.shipment_line_ids:
                 move_vals = {}
@@ -369,6 +419,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                         error_messages.append(
                             f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
                         )
+                        user_messages.append(f"Produk dengan kode {shipment_line.inventory_id or '-'} pada baris {shipment_line.line_nbr or '-'} belum terdaftar. Periksa master produk di WMS.")
                         continue
 
                     uom = shipment._find_uom(shipment_line, product)
@@ -376,6 +427,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                         error_messages.append(
                             f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
                         )
+                        user_messages.append(f"Satuan untuk produk {shipment_line.inventory_id or '-'} belum tersedia. Periksa satuan produk di master WMS.")
                         continue
 
                     qty = shipment._parse_float(shipment_line.product_uom_qty)
@@ -396,7 +448,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                         'adt_type': 'Transfer Shipment',
                         'product_note': shipment_line.line_note or False,
                     }
-                    transfer_service.create_order_move(
+                    created_move = transfer_service.create_order_move(
                         order,
                         product,
                         qty,
@@ -405,11 +457,24 @@ class AcumaticaTransferShipmentLine(models.Model):
                         shipment_line.line_description or False,
                         move_vals,
                     )
+                    if action_state == 'updated':
+                        line_key = str(shipment_line.line_external_id or shipment_line.line_nbr or shipment_line.inventory_id or created_move.id)
+                        old = previous_moves.pop(line_key, None)
+                        label = shipment_line.line_nbr or shipment_line.line_external_id or shipment_line.inventory_id or '?'
+                        current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name or '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                        if old:
+                            previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                            changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                            if changes:
+                                update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                        else:
+                            update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name} ditambahkan")
                 except TransferShipmentImportError:
                     raise
                 except Exception as line_error:
                     _logger.exception("Error import transfer shipment line %s", shipment_line.id)
                     error_messages.append(str(line_error))
+                    technical_errors.append(str(line_error))
                     all_line_payloads.append({
                         'inventory_id': shipment_line.inventory_id or False,
                         'product_name': shipment_line.line_description or False,
@@ -426,9 +491,19 @@ class AcumaticaTransferShipmentLine(models.Model):
                         'order_id': order.id if order else False,
                     },
                     line_payloads=all_line_payloads,
+                    user_message='\n'.join(user_messages),
+                    technical_errors=technical_errors,
                 )
 
-            transfer_service.set_order_ready(order)
+            if action_state == 'updated':
+                update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
+
+            try:
+                transfer_service.set_order_ready(order)
+            except Exception as ready_error:
+                if 'operation type' in str(ready_error).lower() or 'picking type' in str(ready_error).lower():
+                    raise TransferShipmentImportError(str(ready_error), payload={'header': header_payload, 'order_id': order.id}, user_message=f"Operation Type untuk Transfer Shipment {origin or '-'} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS.")
+                raise
             shipment.write({
                 'import_state': action_state,
                 'import_message': 'success',
@@ -436,7 +511,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                 'odoo_internal_transfer_order_id': order.id if order else False,
             })
             self._handle_acumatica_error(shipment)
-            return action_state
+            return action_state, update_messages
 
         picking_vals = {
             'origin': origin,
@@ -461,12 +536,25 @@ class AcumaticaTransferShipmentLine(models.Model):
         }
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
 
+        update_messages = []
+        previous_moves = {}
+        if picking and picking.state == 'draft':
+            update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                picking, picking_vals,
+                field_names={'origin', 'partner_id', 'picking_type_id', 'location_id', 'location_dest_id', 'adt_dest_location_id', 'scheduled_date', 'note', 'adt_description', 'adt_total_qty', 'adt_status', 'adt_type', 'adt_warehouse_code', 'adt_to_warehouse_code', 'adt_header_location_code', 'adt_is_document_only'},
+                prefix='Header',
+            ))
+            for old_move in picking.move_ids:
+                key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
+
         if picking:
             if picking.state != 'draft':
                 raise TransferShipmentImportError(
                     f'Transfer Shipment {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
                     payload={'header': header_payload, 'picking_vals': picking_vals},
                     line_payloads=all_line_payloads,
+                    user_message=f"Transfer Shipment {origin or '-'} tidak dapat diperbarui karena dokumen di WMS sudah berstatus {picking.state}. Hubungi admin jika perubahan diperlukan.",
             )
             picking.write(picking_vals)
             action_state = 'updated'
@@ -482,6 +570,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                         f'Transfer Shipment {origin} sudah ada di Odoo dengan state {existing_picking.state}, tidak bisa diupdate.',
                         payload={'header': header_payload, 'picking_vals': picking_vals},
                         line_payloads=all_line_payloads,
+                        user_message=f"Transfer Shipment {origin or '-'} tidak dapat diperbarui karena dokumen di WMS sudah berstatus {existing_picking.state}. Hubungi admin jika perubahan diperlukan.",
                 )
                 picking = existing_picking
                 picking.write(picking_vals)
@@ -502,6 +591,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                     error_messages.append(
                         f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
                     )
+                    user_messages.append(f"Produk dengan kode {shipment_line.inventory_id or '-'} pada baris {shipment_line.line_nbr or '-'} belum terdaftar. Periksa master produk di WMS.")
                     continue
 
                 uom = shipment._find_uom(shipment_line, product)
@@ -509,6 +599,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                     error_messages.append(
                         f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
                     )
+                    user_messages.append(f"Satuan untuk produk {shipment_line.inventory_id or '-'} belum tersedia. Periksa satuan produk di master WMS.")
                     continue
 
                 qty = shipment._parse_float(shipment_line.product_uom_qty)
@@ -540,12 +631,25 @@ class AcumaticaTransferShipmentLine(models.Model):
                     'product_note': shipment_line.line_note or False,
                 }
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
-                Move.create(move_vals)
+                created_move = Move.create(move_vals)
+                if action_state == 'updated':
+                    line_key = str(shipment_line.line_external_id or shipment_line.line_nbr or shipment_line.inventory_id or created_move.id)
+                    old = previous_moves.pop(line_key, None)
+                    label = shipment_line.line_nbr or shipment_line.line_external_id or shipment_line.inventory_id or '?'
+                    current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name or '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                    if old:
+                        previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                        changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                        if changes:
+                            update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                    else:
+                        update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name} ditambahkan")
             except TransferShipmentImportError:
                 raise
             except Exception as line_error:
                 _logger.exception("Error import transfer shipment line %s", shipment_line.id)
                 error_messages.append(str(line_error))
+                technical_errors.append(str(line_error))
                 all_line_payloads.append({
                     'inventory_id': shipment_line.inventory_id or False,
                     'product_name': shipment_line.line_description or False,
@@ -563,10 +667,27 @@ class AcumaticaTransferShipmentLine(models.Model):
                     'picking_id': picking.id if picking else False,
                 },
                 line_payloads=all_line_payloads,
+                user_message='\n'.join(user_messages),
+                technical_errors=technical_errors,
             )
 
+        if action_state == 'updated':
+            update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
+
         if shipment.document_only:
-            picking.action_validate_document_only_import(force=True)
+            if not shipment.shipment_line_ids:
+                raise TransferShipmentImportError(
+                    f'Transfer Shipment {origin or shipment.id} tidak memiliki detail produk.',
+                    payload={'header': header_payload, 'picking_id': picking.id},
+                    user_message=f"Transfer Shipment {origin or '-'} belum bisa diproses karena belum memiliki baris produk. Lengkapi detail transaksi.",
+                )
+            try:
+                picking.action_validate_document_only_import(force=True)
+            except Exception as validation_error:
+                raise TransferShipmentImportError(
+                    str(validation_error), payload={'header': header_payload, 'picking_id': picking.id},
+                    user_message=f"Transfer Shipment {origin or '-'} belum dapat diselesaikan. Periksa detail transaksi dan hubungi admin jika masalah berlanjut."
+                )
 
         shipment.write({
             'import_state': action_state,
@@ -575,7 +696,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             'odoo_internal_transfer_order_id': False,
         })
         self._handle_acumatica_error(shipment)
-        return action_state
+        return action_state, update_messages
 
     def _do_import(self):
         created = updated = error = 0
@@ -591,21 +712,37 @@ class AcumaticaTransferShipmentLine(models.Model):
         for shipment in grouped_shipments:
             try:
                 with self.env.cr.savepoint():
-                    action_state = self._import_single_transfer_shipment(shipment)
+                    action_state, update_messages = self._import_single_transfer_shipment(shipment)
                 if action_state == 'created':
                     created += 1
                 elif action_state == 'updated':
                     updated += 1
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Transfer Shipment',
+                        transaction_name=shipment.shipment_nbr or str(shipment.id),
+                        event_type='update',
+                        message='\n'.join(update_messages) or 'Transfer Shipment berhasil disinkronkan; tidak ada field yang berubah.',
+                    )
             except Exception as exc:
                 _logger.exception('Error import transfer shipment %s', shipment.shipment_nbr or shipment.id)
                 if isinstance(exc, TransferShipmentImportError):
                     error_payload = exc.payload
                     all_line_payloads = exc.line_payloads
                     error_message = str(exc)
+                    user_message = exc.user_message
+                    technical_errors = exc.technical_errors
                 else:
                     error_payload = {'header': shipment.read()[0] if shipment.exists() else {}}
                     all_line_payloads = []
                     error_message = str(exc)
+                    user_message = False
+                    technical_errors = [str(exc)]
+
+                if technical_errors:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Transfer Shipment',
+                        error='\n'.join(technical_errors), error_type='unexpected',
+                    )
 
                 try:
                     self._handle_acumatica_error(
@@ -625,6 +762,12 @@ class AcumaticaTransferShipmentLine(models.Model):
                     'import_message': error_message[:1000],
                 })
                 error += 1
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Transfer Shipment',
+                        transaction_name=shipment.shipment_nbr or str(shipment.id),
+                        event_type='error', message=user_message,
+                    )
 
         msg = f'Generate done: {created} transfer shipment created, {updated} transfer shipment updated, {error} transfer shipment error.'
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.

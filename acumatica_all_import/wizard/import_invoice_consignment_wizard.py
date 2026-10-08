@@ -104,8 +104,8 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
 
                 AcumaticaErrorService.send_error(
                     webhook_type="fetch",
-                    webhook_name="po receipt",
-                    error=last_error,
+                    webhook_name="Invoice Consignment",
+                    error=f"Gagal fetch Invoice Consignment dari Acumatica (HTTP {response.status_code}).",
                     error_type="http",
                 )
                 

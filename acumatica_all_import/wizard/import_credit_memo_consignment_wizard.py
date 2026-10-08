@@ -140,7 +140,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                 AcumaticaErrorService.send_error(
                     webhook_type="fetch",
                     webhook_name="credit memo consignment",
-                    error=last_error,
+                    error=f"Gagal fetch Credit Memo Consignment dari Acumatica (HTTP {response.status_code}).",
                     error_type="http",
                 )
                 raise UserError(last_error)

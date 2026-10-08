@@ -155,6 +155,12 @@ class ImportDirectTransferWizard(models.TransientModel):
 
             response = session.put(endpoint, params=params, json=self._get_vendor_return_fetch_body(), timeout=300)
             if response.status_code != 200:
+                self.env["acumatica.webhook.error.service"].send_error(
+                    webhook_type="fetch",
+                    webhook_name="Vendor Return Direct Transfer",
+                    error=f"Gagal fetch Vendor Return Direct Transfer dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
                 raise UserError(f'Gagal fetch data (HTTP {response.status_code}): {response.text}')
 
             raw_data = self._extract_response_rows(response.json())

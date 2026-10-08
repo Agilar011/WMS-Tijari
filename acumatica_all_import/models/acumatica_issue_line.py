@@ -186,6 +186,7 @@ class AcumaticaIssueLine(models.Model):
             if not issue_lines:
                 continue
             first = issue_lines[0]
+            update_messages = []
             try:
                 self.env.cr.execute('SAVEPOINT import_issue_change_item_doc')
                 warehouse = self._find_warehouse(first)
@@ -234,6 +235,16 @@ class AcumaticaIssueLine(models.Model):
                 print(f" Type: {vals['adt_type']}, Reference: {vals['origin']}, Scheduled: {vals['scheduled_date']}")
 
                 picking = Picking.search([('origin', '=', first.reference_nbr)], limit=1)
+                previous_moves = {}
+                if picking and picking.state == 'draft':
+                    update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                        picking, vals,
+                        field_names={'origin', 'partner_id', 'picking_type_id', 'location_id', 'location_dest_id', 'scheduled_date', 'note', 'adt_receipt_nbr', 'adt_branch_warehouse', 'adt_post_period', 'adt_total_qty', 'adt_type', 'adt_external_id', 'adt_external_ref'},
+                        prefix='Header',
+                    ))
+                    for old_move in picking.move_ids:
+                        key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                        previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
                 if picking:
                     if picking.state != 'draft':
                         raise UserError(f'Delivery Order {first.reference_nbr} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.')
@@ -256,7 +267,7 @@ class AcumaticaIssueLine(models.Model):
                     uom = self._find_uom(line, product)
                     qty = self._parse_int(line.product_uom_qty)
 
-                    Move.create({
+                    created_move = Move.create({
                         'name': line.line_description or product.display_name,
                         'picking_id': picking.id,
                         'product_id': product.id,
@@ -275,6 +286,18 @@ class AcumaticaIssueLine(models.Model):
                         'adt_line_type': line.line_trans_type or False,
 
                     })
+                    if action_state == 'updated':
+                        line_key = str(line.line_external_id or line.line_nbr or line.inventory_id or created_move.id)
+                        old = previous_moves.pop(line_key, None)
+                        label = line.line_nbr or line.inventory_id or '?'
+                        current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                        if old:
+                            previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                            changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                            if changes:
+                                update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                        else:
+                            update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
                     line.write({
                         'import_state': action_state,
                         'import_message': f'{action_state.title()}: {picking.name}',
@@ -282,12 +305,37 @@ class AcumaticaIssueLine(models.Model):
                     })
 
                 if issue_lines.filtered('document_only'):
+                    if not issue_lines.mapped('product_line_ids'):
+                        raise UserError(f'Issue {issue_key} tidak memiliki detail produk.')
                     picking.action_validate_document_only_import(force=True)
+                if action_state == 'updated':
+                    update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
                 self.env['acumatica.error.transaction']._handle_acumatica_error(issue_key, 'issue_change_item')
                 self.env.cr.execute('RELEASE SAVEPOINT import_issue_change_item_doc')
+                if action_state == 'updated':
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Issue Change Item',
+                        transaction_name=issue_key or str(first.id), event_type='update',
+                        message='\n'.join(update_messages) or 'Issue berhasil disinkronkan; tidak ada field yang berubah.',
+                    )
             except Exception as e:
                 self.env.cr.execute('ROLLBACK TO SAVEPOINT import_issue_change_item_doc')
                 _logger.exception('Error import issue %s', issue_key)
+                error_text = str(e).lower()
+                if 'warehouse tidak ditemukan' in error_text:
+                    user_message = f"Warehouse dengan kode {first.warehouse_code or '-'} belum ditemukan atau tidak aktif. Periksa mapping warehouse di WMS."
+                elif 'picking type' in error_text or 'operation type' in error_text:
+                    user_message = f"Operation Type untuk Issue {issue_key} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS."
+                elif 'source location' in error_text or 'destination location' in error_text or 'location' in error_text and 'tidak ditemukan' in error_text:
+                    user_message = f"Lokasi sumber atau tujuan untuk Issue {issue_key} belum tersedia. Periksa pengaturan lokasi di WMS."
+                elif 'product tidak ditemukan' in error_text:
+                    user_message = f"Produk pada Issue {issue_key} belum terdaftar. Periksa master produk di WMS."
+                elif 'location tujuan customer' in error_text:
+                    user_message = "Lokasi tujuan bertipe Customer tidak dapat digunakan untuk Issue Change Item. Periksa lokasi tujuan transaksi."
+                elif 'sudah ada di odoo' in error_text or 'tidak bisa diupdate' in error_text:
+                    user_message = f"Issue {issue_key} tidak dapat diperbarui karena dokumen di WMS sudah diproses. Hubungi admin jika perubahan diperlukan."
+                else:
+                    user_message = False
                 self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
@@ -314,6 +362,17 @@ class AcumaticaIssueLine(models.Model):
                     'odoo_picking_id': False,
                 })
                 error += len(issue_lines)
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Issue Change Item',
+                        transaction_name=issue_key or str(first.id), event_type='error',
+                        message=user_message,
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Issue Change Item',
+                        error=str(e), error_type='unexpected',
+                    )
 
         msg = f'Import selesai: {imported} delivery dibuat, {updated} delivery diupdate, {error} line error.'
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.

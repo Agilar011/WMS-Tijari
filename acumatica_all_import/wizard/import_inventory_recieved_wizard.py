@@ -292,7 +292,7 @@ class ImportInventoryRecievedWizard(models.TransientModel):
                 AcumaticaErrorService.send_error(
                     webhook_type="fetch",
                     webhook_name="inventory receipt",
-                    error=last_error,
+                    error=f"Gagal fetch Inventory Receipt dari Acumatica (HTTP {response.status_code}).",
                     error_type="http",
                 )
                 
