@@ -13,10 +13,9 @@
                 <field name="source_model" optional="hide"/>
                 <field name="current_user_id" string="Current Approver"/>
                 <field name="state" widget="badge"
-                       decoration-warning="state == 'waiting'"
+                       decoration-muted="state == 'waiting'"
                        decoration-success="state == 'approved'"
-                       decoration-danger="state == 'rejected'"
-                       decoration-muted="state == 'cancelled'"/>
+                       decoration-danger="state in ('rejected', 'cancelled')"/>
             </list>
         </field>
     </record>
@@ -45,7 +44,10 @@
                             <field name="reference"/>
                         </group>
                         <group>
-                            <field name="state" widget="badge"/>
+                            <field name="state" widget="badge"
+                                   decoration-muted="state == 'waiting'"
+                                   decoration-success="state == 'approved'"
+                                   decoration-danger="state in ('rejected', 'cancelled')"/>
                             <field name="current_user_id" string="Current Approver"/>
                             <field name="source_model" invisible="1"/>
                             <field name="source_id" invisible="1"/>
@@ -59,7 +61,10 @@
                                     <field name="role"/>
                                     <field name="job_id"/>
                                     <field name="user_id"/>
-                                    <field name="state" widget="badge"/>
+                                    <field name="state" widget="badge"
+                                           decoration-muted="state == 'waiting'"
+                                           decoration-success="state == 'approved'"
+                                           decoration-danger="state in ('rejected', 'cancelled')"/>
                                     <field name="action_date"/>
                                     <field name="remark"/>
                                 </list>

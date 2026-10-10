@@ -198,6 +198,9 @@ class WMSMRPProduction(models.Model):
                 production.picking_ids.write({
                     "origin": production.origin,
                 })
+            production.picking_ids.filtered(
+                lambda picking: picking.picking_type_name == "Pick Components"
+            ).write({"adt_type": "Kit Assembly"})
 
         return res
 
@@ -218,22 +221,26 @@ class WMSMRPProduction(models.Model):
                     "Raw Materials berikut belum memiliki status 'Finished':\n"
                     f"{details}"
                 )
+            
+            for move in production.move_raw_ids:
+                confirmed_qty = move.mo_confirmation_quantity
 
-            if float_compare(
-                production.qty_producing,
-                production.product_qty,
-                precision_rounding=production.product_uom_id.rounding,
-            ) != 0:
-                raise ValidationError(
-                    _(
-                        "Qty Producing (%s) harus sama dengan "
-                        "Quantity (%s) sebelum menyelesaikan Manufacture."
+                if float_compare(
+                    production.qty_producing,
+                    confirmed_qty,
+                    precision_rounding=production.product_uom_id.rounding,
+                ) != 0:
+                    raise ValidationError(
+                        _(
+                            "Qty Digunakan (%s) pada (%s) harus sama dengan "
+                            "Qty Producing (%s) sebelum menyelesaikan Manufacture."
+                        )
+                        % (
+                            confirmed_qty,
+                            move.product_id.display_name,
+                            production.qty_producing,
+                        )
                     )
-                    % (
-                        production.qty_producing,
-                        production.product_qty,
-                    )
-                )
 
             if (
                 production.product_id.tracking in ("lot", "serial")
@@ -255,6 +262,9 @@ class WMSMRPProduction(models.Model):
                 production.picking_ids.write({
                     "origin": production.origin,
                 })
+            production.picking_ids.filtered(
+                lambda picking: picking.picking_type_name == "Store Finished Product"
+            ).write({"adt_type": "Kit Assembly"})
         
         return res
 
