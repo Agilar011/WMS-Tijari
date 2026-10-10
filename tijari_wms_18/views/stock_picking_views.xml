@@ -280,7 +280,10 @@
                         <group string="Approval Information">
                             <field name="approval_request_id" readonly="1"/>
                             <field name="approval_type_id" readonly="1"/>
-                            <field name="approval_state" readonly="1"/>
+                            <field name="approval_state" readonly="1" widget="badge"
+                                decoration-muted="approval_state == 'waiting'"
+                                decoration-success="approval_state == 'approved'"
+                                decoration-danger="approval_state in ('rejected', 'cancelled')"/>
                             <field name="current_approver_id" readonly="1"/>
                         </group>
                     </group>
@@ -289,7 +292,10 @@
                             <field name="sequence" widget="handle"/>
                             <field name="role"/>
                             <field name="user_id" widget="many2one_avatar_user"/>
-                            <field name="state" widget="badge"/>
+                            <field name="state" widget="badge"
+                                decoration-muted="state == 'waiting'"
+                                decoration-success="state == 'approved'"
+                                decoration-danger="state in ('rejected', 'cancelled')"/>
                             <field name="action_date"/>
                             <field name="remark" optional="hide"/>
                         </list>
@@ -634,7 +640,10 @@
                 <field name="status_ba"/>
                 <separator string="Over Receipt Info" colspan="2"
                     invisible="not stock_lebih or wms_state not in ('waiting_response', 'done')"/>
-                <field name="approval_state" string="Approval Status"
+                <field name="approval_state" string="Approval Status" widget="badge"
+                    decoration-muted="approval_state == 'waiting'"
+                    decoration-success="approval_state == 'approved'"
+                    decoration-danger="approval_state in ('rejected', 'cancelled')"
                     invisible="not stock_lebih or wms_state not in ('waiting_response', 'done')" readonly="1"/>
                 <field name="current_approver_id" string="Current Approver"
                     invisible="not stock_lebih or wms_state != 'waiting_response'" readonly="1"/>

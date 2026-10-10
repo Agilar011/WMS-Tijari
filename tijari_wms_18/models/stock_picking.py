@@ -3077,7 +3077,9 @@ class StockPicking(models.Model):
                     lambda picking: picking.picking_type_name == "Pack"
                 )
                 next_pickings.write({
-                    'adt_actual_qty': rec.adt_actual_qty
+                    # 'adt_actual_qty': rec.adt_actual_qty,
+                    'adt_actual_qty': 0.0,
+                    
                 })
 
                 for move in rec.move_ids:
@@ -3095,7 +3097,8 @@ class StockPicking(models.Model):
                     lambda picking: picking.picking_type_name == "Delivery Orders"
                 )
                 next_pickings.write({
-                    'adt_actual_qty': rec.adt_actual_qty
+                    # 'adt_actual_qty': rec.adt_actual_qty,
+                    'adt_actual_qty': 0.0
                 })
 
                 for move in rec.move_ids:
