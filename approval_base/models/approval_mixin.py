@@ -35,6 +35,22 @@ class ApprovalMixin(models.AbstractModel):
         readonly=True,
     )  
 
+    def write(self, vals):
+        cancel_document = vals.get("state") in {"cancel", "cancelled"}
+        approval_requests = self.env["approval.request"]
+        if cancel_document:
+            approval_requests = self.mapped("approval_request_id")
+
+        result = super().write(vals)
+
+        if cancel_document:
+            approval_requests |= self.mapped("approval_request_id")
+            approval_requests.filtered(
+                lambda request: request.state != "cancelled"
+            ).write({"state": "cancelled"})
+
+        return result
+
     def action_submit_approval(self):
         self.ensure_one()
 

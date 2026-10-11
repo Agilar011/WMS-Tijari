@@ -180,7 +180,7 @@
                                     <field name="user_id" />            
                                     <field name="state" widget="badge"
                                         decoration-success="state == 'approved'"
-                                        decoration-danger="state == 'rejected'"
+                                        decoration-danger="state in ('rejected', 'cancelled')"
                                         decoration-muted="state == 'waiting'" 
                                     />            
                                     <field name="action_date" />            
