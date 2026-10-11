@@ -73,13 +73,28 @@ def generate_stok_opname_pdf(stock):
     stock = stock.sudo()
     blank_image = create_blank_image()
 
-    lines = stock.env['stock.quant'].sudo().search([
-        ('id', 'in', stock.stock_quant_ids.ids),
-        ('current_inventory_id', '=', stock.id),
-    ])
+    domain = [
+        ('location_id', 'in', stock.location_ids.ids),
+        ('inventory_diff_quantity', '>', 0),
+    ]
+
+    if 'inventory_id' in stock.env['stock.quant']._fields:
+        domain.append(('inventory_id', '=', stock.id))
+    elif 'stock_inventory_id' in stock.env['stock.quant']._fields:
+        domain.append(('stock_inventory_id', '=', stock.id))
+
+    lines = stock.env['stock.quant'].sudo().search(domain)
+
+    if not lines and hasattr(stock, 'quant_ids') and stock.quant_ids:
+        lines = stock.quant_ids.filtered(lambda q: q.inventory_diff_quantity > 0)
+
+
+    warehouse = stock.env['stock.warehouse'].sudo().search([
+        ('lot_stock_id', 'in', stock.location_ids.ids)
+    ], limit=1)
 
     data = {
-        'warehouse_id': ", ".join(stock.warehouse_ids.mapped('name')) if stock.warehouse_ids else '',
+        'warehouse_id': warehouse.name or '',
         'date': format_tanggal_indo(stock.date) if hasattr(stock, 'date') and stock.date else '',
         'lok': ", ".join(stock.location_ids.mapped('complete_name')) if stock.location_ids else '',
         'note': stock.notes or '',
@@ -95,24 +110,19 @@ def generate_stok_opname_pdf(stock):
         diff = float(line.inventory_diff_quantity or 0)
         system_qty = float(line.quantity or 0)
         qty2 = float(line.inventory_quantity or 0)
-        if diff < 0:
-            diff_color = "#FF0000"
-        elif diff > 0:
-            diff_color = "#008000"
-        else:
-            diff_color = "#000000"
         obj = {
             'name': line.product_id.display_name or '',
             'uom': line.product_uom_id.name or '',
             'system_qty': system_qty,
             'qty2': qty2,
             'diff': diff,
-            'diff_color': diff_color,
             'ket': ''
         }
         data['detail'].append(obj)
 
-    serialized_data = json.dumps(data)
+    data = json.dumps(data)
+    usrnm = 'jasperadmin'
+    psswd = 't1j4r1s0lut10n'
     execution = requests.post(
         'http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
         auth=('jasperadmin', 't1j4r1s0lut10n'),
@@ -120,16 +130,13 @@ def generate_stok_opname_pdf(stock):
             'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_STOCK_OPNAME',
             'outputFormat': 'pdf',
             'parameters': {
-                'reportParameter': [{'name': 'data', 'value': [serialized_data]}],
+                'reportParameter': [{'name': 'data', 'value': [data]}],
             },
         },
     )
-    execution.raise_for_status()
     xml = etree.XML(execution.content)
-    request_id = xml.findtext('.//requestId')
-    export_id = xml.findtext('.//export//id')
-    if not request_id or not export_id:
-        raise UserError(_('Jasper tidak mengembalikan PDF Berita Acara Stock Opname.'))
+    request_id = xml.find('.//requestId').text
+    export_id = xml.find('.//export//id').text
     result = requests.get(
         'http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/'
         f'{request_id}/exports/{export_id}/outputResource',
@@ -137,8 +144,6 @@ def generate_stok_opname_pdf(stock):
         verify=False,
     )
     result.raise_for_status()
-    if not result.content.startswith(b'%PDF'):
-        raise UserError(_('Hasil cetak Berita Acara Stock Opname bukan file PDF.'))
     return result.content
 
 class WmsApiController(http.Controller):
@@ -883,18 +888,84 @@ class WmsApiController(http.Controller):
 
     @http.route('/print/stok_opname', type='http', auth='user')
     def PrintStokOpname(self, id, **kw):
+        blank_image = create_blank_image()
         stock = request.env['stock.inventory'].sudo().browse(int(id))
+        lines = request.env['stock.quant'].sudo().search([
+            ('id', 'in', stock.stock_quant_ids.ids),
+            ('current_inventory_id', '=', stock.id),
+        ])
+        
+        warehouse = request.env['stock.warehouse'].sudo().search([
+            ('lot_stock_id', 'in', stock.location_ids.ids)
+        ], limit=1)
+
+        data = {
+            'warehouse_id': ", ".join(stock.warehouse_ids.mapped('name')) if stock.warehouse_ids else '',
+            'date': format_tanggal_indo(stock.date),
+            'lok': ", ".join(stock.location_ids.mapped('complete_name')) if stock.location_ids else '',
+            'note': stock.notes or '',
+            'created_by': stock.responsible_id.name or '',
+            'ttd_created_by': (stock.responsible_id.partner_id.digital_signature.decode('utf-8') if stock.responsible_id.partner_id.digital_signature else blank_image),
+            'status_ba': dict(stock._fields['status_ba'].selection).get(stock.status_ba, ''),
+
+            'detail': []
+        }
+
+        grouped_lines = {}
+        for line in lines:
+            product = line.product_id
+            if not product:
+                continue
+                
+            if product.id not in grouped_lines:
+                grouped_lines[product.id] = {
+                    'name': product.display_name or '',
+                    'uom': line.product_uom_id.name or '',
+                    'system_qty': 0.0,
+                    'qty2': 0.0,
+                    'diff': 0.0,
+                    'ket': ''
+                }
+            
+            grouped_lines[product.id]['system_qty'] += float(line.quantity or 0)
+            grouped_lines[product.id]['qty2'] += float(line.inventory_quantity or 0)
+            grouped_lines[product.id]['diff'] += float(line.inventory_diff_quantity or 0)
+
+        for prod_id, obj in grouped_lines.items():
+            data['detail'].append(obj)
+        data = json.dumps(data)
+
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_STOCK_OPNAME',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
         try:
-            pdf_content = generate_stok_opname_pdf(stock)
-            return request.make_response(pdf_content, [
-                ('Content-Type', 'application/pdf'),
-                ('Content-Disposition', 'inline; filename="Stok Opname.pdf"'),
-            ])
-        except Exception as error:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "Stok Opname.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
             import traceback
-            _logger.exception("Gagal membuat PDF Stock Opname")
-            resp = json.dumps({'msg': str(error), 'traceback': traceback.format_exc()})
-            return request.make_response(resp, [('Content-Type', 'application/json')], status=500)
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
 
     @http.route('/print/stok_scrab', type='http', auth='user')
     def PrintStokScrab(self, id, **kw):

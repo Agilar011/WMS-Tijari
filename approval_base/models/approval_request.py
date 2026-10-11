@@ -51,6 +51,17 @@ class ApprovalRequest(models.Model):
     source_model = fields.Char(readonly=True)
     source_id = fields.Integer(readonly=True)
 
+    def write(self, vals):
+        result = super().write(vals)
+
+        if vals.get("state") == "cancelled":
+            waiting_lines = self.mapped("line_ids").filtered(
+                lambda line: line.state == "waiting"
+            )
+            waiting_lines.write({"state": "cancelled"})
+
+        return result
+
     def _check_current_approver(self):
         if self.state != "waiting":
             raise UserError(_("Approval request is already finished."))
@@ -212,6 +223,7 @@ class ApprovalRequestLine(models.Model):
         ("waiting", "Waiting"),
         ("approved", "Approved"),
         ("rejected", "Rejected"),
+        ("cancelled", "Cancelled"),
     ], default="waiting")
 
     action_date = fields.Datetime()

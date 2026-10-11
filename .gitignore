@@ -1,3 +1,6 @@
 *.pyc
-__pycache__
+__pycache__/
 .DS_Store
+**/.DS_Store
+stock_inventory/tests/__init__.py
+stock_inventory/tests/test_stock_inventory.py
