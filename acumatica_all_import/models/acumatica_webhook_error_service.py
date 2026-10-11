@@ -16,6 +16,11 @@ class AcumaticaWebhookErrorService(models.AbstractModel):
             "acumatica_all_import.chat_webhook_url"
         )
 
+    def _get_chat_webhook_url_user(self):
+        return self.env["ir.config_parameter"].sudo().get_param(
+            "acumatica_all_import.chat_webhook_url_user"
+        )
+
     def send_error(
         self,
         webhook_type,
@@ -134,7 +139,9 @@ class AcumaticaWebhookErrorService(models.AbstractModel):
         Keep ``message`` focused on what happened and what the user can do;
         technical exception details belong in ``send_error``.
         """
-        webhook_url = self._get_chat_webhook_url()
+        webhook_url = self._get_chat_webhook_url_user()
+        if not webhook_url:
+            raise ValueError("Google Chat webhook URL is not configured.")
 
         if not webhook_url:
             _logger.warning(

@@ -1,4 +1,9 @@
-from odoo import fields, models
+import logging
+
+from odoo import api, fields, models
+
+
+_logger = logging.getLogger(__name__)
 
 
 class AcumaticaShipmentTransferCompletedStaging(models.Model):
@@ -47,6 +52,46 @@ class AcumaticaShipmentTransferCompletedStaging(models.Model):
             'import_state': 'staged', 'import_message': False,
         })
         return True
+
+    def action_update_stock_picking(self):
+        for record in self:
+            record._action_update_stock_picking()
+        return True
+
+    def _action_update_stock_picking(self, success_state='created'):
+        self.ensure_one()
+        if self.import_state in ('created', 'updated'):
+            return True
+
+        picking = self.env['stock.picking'].sudo().search([
+            ('origin', '=', self.shipment_nbr),
+            ('internal_transfer_leg', '=', 'delivery'),
+            ('picking_type_id.code', '=', 'internal'),
+            ('adt_type', '=', 'Transfer Shipment'),
+            ('wms_state', '=', 'waiting_response'),
+        ], limit=1)
+        if not picking:
+            self.write({
+                'import_state': 'error',
+                'import_message': f'Transfer Shipment {self.shipment_nbr} tidak ditemukan dalam status menunggu konfirmasi.',
+            })
+            return False
+
+        try:
+            with self.env.cr.savepoint():
+                picking.action_complete_transfer_shipment()
+                self.write({
+                    'import_state': success_state,
+                    'import_message': 'Transfer Shipment berhasil dikonfirmasi dari webhook.',
+                })
+            return True
+        except Exception as error:
+            self.write({'import_state': 'error', 'import_message': str(error)})
+            _logger.exception(
+                'Shipment Transfer Completed failed for shipment %s',
+                self.shipment_nbr,
+            )
+            return False
 
 
 class AcumaticaShipmentTransferCompletedStagingLine(models.Model):

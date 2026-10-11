@@ -149,7 +149,7 @@
                     string="Complete Shipment"
                     type="object"
                     class="btn-primary"
-                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response'"/>
+                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment') or wms_state != 'waiting_response' or transfer_shipment_discrepancy"/>
 
                 <button name="action_get_shipment_completed_staging"
                     string="Complete Shipment"
@@ -204,6 +204,12 @@
                     class="btn-primary"
                     groups="stock.group_stock_user"
                     invisible="not stock_lebih or wms_state != 'waiting_response' or approval_state != 'waiting' or current_approver_id != uid"/>
+                <button name="action_approve"
+                    string="Approve Quantity Discrepancy"
+                    type="object"
+                    class="btn-primary"
+                    groups="stock.group_stock_user"
+                    invisible="not transfer_shipment_discrepancy or wms_state != 'waiting_response' or approval_state != 'waiting' or current_approver_id != uid"/>
                 <button name="action_rollback_over_receipt_approval"
                     string="Rollback Approval"
                     type="object"
@@ -218,15 +224,11 @@
             </xpath>
 
             <xpath expr="//field[@name='date_done']" position="after">
-                <field name="stock_lebih" invisible="1"/>
                 <field name="shipment_information"
                     invisible="(picking_type_name not in ('Delivery Orders') or adt_type not in ('Sales Order Shipment', 'SO Consignment')) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ('Shipment Consignment', 'Transfer Shipment'))"
                     decoration-success="shipment_information == 'full_shipment'"
                     decoration-warning="shipment_information == 'partial'"
                     decoration-danger="shipment_information == 'canceled'"/>
-                <field name="attachment_ids"
-                    widget="many2many_binary"
-                    invisible="not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type == 'Transfer Shipment')"/>
             </xpath>
 
             <xpath expr="//page[@name='extra']//group[@name='other_infos']/field[@name='user_id']" position="replace">
@@ -273,34 +275,6 @@
             </xpath>
 
             <xpath expr="//notebook/page[@name='operations']" position="after">
-
-                <page string="Approval" name="over_receipt_approval"
-                    invisible="not stock_lebih or not approval_request_id">
-                    <group>
-                        <group string="Approval Information">
-                            <field name="approval_request_id" readonly="1"/>
-                            <field name="approval_type_id" readonly="1"/>
-                            <field name="approval_state" readonly="1" widget="badge"
-                                decoration-muted="approval_state == 'waiting'"
-                                decoration-success="approval_state == 'approved'"
-                                decoration-danger="approval_state in ('rejected', 'cancelled')"/>
-                            <field name="current_approver_id" readonly="1"/>
-                        </group>
-                    </group>
-                    <field name="approval_line_ids" readonly="1">
-                        <list create="false" edit="false" delete="false">
-                            <field name="sequence" widget="handle"/>
-                            <field name="role"/>
-                            <field name="user_id" widget="many2one_avatar_user"/>
-                            <field name="state" widget="badge"
-                                decoration-muted="state == 'waiting'"
-                                decoration-success="state == 'approved'"
-                                decoration-danger="state in ('rejected', 'cancelled')"/>
-                            <field name="action_date"/>
-                            <field name="remark" optional="hide"/>
-                        </list>
-                    </field>
-                </page>
 
                 <page string="Unpacked Item Details" name="detail_product" invisible="(picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer) or not show_delivery_page">
                     <group>
@@ -484,7 +458,7 @@
                     <button class="btn-secondary float-end" name="action_put_in_pack" type="object" string="Put in Pack" invisible="picking_type_name != 'Receipts'" groups="stock.group_tracking_lot" data-hotkey="shift+g"/>
                 </page>
 
-                <page string="Packed Item Details"
+                <page string="Packed Items"
                     invisible="(picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer) or not show_delivery_page">
 
                     <group>
@@ -550,6 +524,30 @@
 
             </xpath>
 
+            <xpath expr="//notebook/page[@name='note']" position="after">
+                <page string="Approval" name="over_receipt_approval"
+                    invisible="not (stock_lebih or transfer_shipment_discrepancy) or not approval_request_id">
+                    <group>
+                        <group string="Approval Information">
+                            <field name="approval_request_id" readonly="1"/>
+                            <field name="approval_type_id" readonly="1"/>
+                            <field name="approval_state" readonly="1"/>
+                            <field name="current_approver_id" readonly="1"/>
+                        </group>
+                    </group>
+                    <field name="approval_line_ids" readonly="1">
+                        <list create="false" edit="false" delete="false">
+                            <field name="sequence" widget="handle"/>
+                            <field name="role"/>
+                            <field name="user_id" widget="many2one_avatar_user"/>
+                            <field name="state" widget="badge"/>
+                            <field name="action_date"/>
+                            <field name="remark" optional="hide"/>
+                        </list>
+                    </field>
+                </page>
+            </xpath>
+
         </field>
     </record>
 
@@ -569,10 +567,6 @@
             <xpath expr="//field[@name='picking_type_id']"
                 position="after">
                 <field name="adt_type" string="Tipe Transaksi" />
-                <field name="over_receipt_transaction_type"
-                    string="Tipe Transaksi Over-Receipt"
-                    invisible="not stock_lebih or approval_state != 'approved'"
-                    readonly="state in ('done', 'cancel')"/>
 
             </xpath>
 
@@ -640,10 +634,7 @@
                 <field name="status_ba"/>
                 <separator string="Over Receipt Info" colspan="2"
                     invisible="not stock_lebih or wms_state not in ('waiting_response', 'done')"/>
-                <field name="approval_state" string="Approval Status" widget="badge"
-                    decoration-muted="approval_state == 'waiting'"
-                    decoration-success="approval_state == 'approved'"
-                    decoration-danger="approval_state in ('rejected', 'cancelled')"
+                <field name="approval_state" string="Approval Status"
                     invisible="not stock_lebih or wms_state not in ('waiting_response', 'done')" readonly="1"/>
                 <field name="current_approver_id" string="Current Approver"
                     invisible="not stock_lebih or wms_state != 'waiting_response'" readonly="1"/>
@@ -662,6 +653,44 @@
                 <field name="show_packer_page" invisible="1"/>
                 <field name="show_delivery_page" invisible="1"/>
                 <field name="show_putaway_page" invisible="1"/>
+            </xpath>
+
+            <xpath expr="//field[@name='status_ba']" position="after">
+                <separator string="Over Receipt Info" colspan="2"
+                    invisible="not stock_lebih and not context.get('default_stock_lebih')"/>
+                <field name="approval_request_id" string="Approval Request"
+                    invisible="not stock_lebih and not context.get('default_stock_lebih')" readonly="1"/>
+                <field name="approval_state" string="Approval Status"
+                    invisible="not stock_lebih and not context.get('default_stock_lebih')" readonly="1"/>
+                <field name="current_approver_id" string="Current Approver"
+                    invisible="not stock_lebih and not context.get('default_stock_lebih')" readonly="1"/>
+                <field name="approval_type_id"
+                    invisible="not stock_lebih and not context.get('default_stock_lebih')"
+                    readonly="wms_state_over_receipt != 'assigned'"/>
+                <field name="over_receipt_transaction_type"
+                    string="Tipe Transaksi Over-Receipt"
+                    invisible="not stock_lebih and not context.get('default_stock_lebih')"
+                    readonly="approval_state != 'waiting' or current_approver_id != uid"/>
+                <field name="ref_sotr" string="Ref. No. Document"
+                    invisible="not stock_lebih and not context.get('default_stock_lebih')"
+                    readonly="approval_state != 'waiting' or current_approver_id != uid"/>
+            </xpath>
+
+            <xpath expr="//field[@name='status_ba']" position="after">
+                <field name="stock_lebih" invisible="1"/>
+                <field name="transfer_shipment_discrepancy" invisible="1"/>
+                <separator string="Approval Info" colspan="2"
+                    invisible="not transfer_shipment_discrepancy"/>
+                <field name="approval_request_id" readonly="1"
+                    invisible="not transfer_shipment_discrepancy"/>
+                <field name="approval_type_id" readonly="wms_state != 'assigned'"
+                    invisible="not transfer_shipment_discrepancy"/>
+                <field name="approval_state" readonly="1"
+                    invisible="not transfer_shipment_discrepancy"/>
+                <field name="current_approver_id" readonly="1"
+                    invisible="not transfer_shipment_discrepancy"/>
+                <field name="attachment_ids" widget="many2many_binary"
+                    invisible="not transfer_shipment_discrepancy"/>
             </xpath>
 
             <xpath expr="//label[@for='partner_id'][@invisible=&quot;picking_type_code != 'incoming'&quot;]" position="attributes">

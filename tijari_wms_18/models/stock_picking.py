@@ -24,6 +24,16 @@ class StockPicking(models.Model):
     @api.model
     def default_get(self, fields_list):
         vals = super().default_get(fields_list)
+        if (
+            self.env.context.get('default_stock_lebih')
+            and 'approval_type_id' in fields_list
+            and not vals.get('approval_type_id')
+        ):
+            approval_type = self.env.ref(
+                'tijari_wms_18.approval_type_over_receipt', raise_if_not_found=False,
+            )
+            if approval_type:
+                vals['approval_type_id'] = approval_type.id
         if self.env.context.get('default_stock_lebih') and 'picking_type_id' in fields_list and not vals.get('picking_type_id'):
             # The Over-Receipt menu creates a normal inbound receipt.
             warehouse_id = (
@@ -66,6 +76,11 @@ class StockPicking(models.Model):
     )
     ref_sotr = fields.Char(
         string='Ref. No. Document',
+        copy=False,
+        tracking=True,
+    )
+    transfer_shipment_discrepancy = fields.Boolean(
+        string='Transfer Shipment Quantity Discrepancy',
         copy=False,
         tracking=True,
     )
@@ -2751,6 +2766,41 @@ class StockPicking(models.Model):
     def action_confirm_shipment(self):
         self.ensure_one()
 
+        is_transfer_shipment_ito_delivery = bool(
+            self.internal_transfer_order_id
+            and self.internal_transfer_order_id.adt_transaction_type == 'Transfer Shipment'
+            and self.internal_transfer_leg == 'delivery'
+            and self.picking_type_id.code == 'internal'
+            and self.adt_type == 'Transfer Shipment'
+        )
+        has_transfer_shipment_quantity_difference = bool(
+            is_transfer_shipment_ito_delivery
+            and any(
+                float_compare(
+                    move.shipped_qty,
+                    move.quantity,
+                    precision_rounding=move.product_uom.rounding,
+                ) != 0
+                for move in self.move_ids
+            )
+        )
+        if (
+            is_transfer_shipment_ito_delivery
+            and self.transfer_shipment_discrepancy
+            and self.approval_state != 'approved'
+        ):
+            raise UserError(_(
+                'Transfer Shipment discrepancy harus disetujui sebelum shipment dapat diselesaikan.'
+            ))
+        if (
+            is_transfer_shipment_ito_delivery
+            and not self.transfer_shipment_discrepancy
+            and (self.shipment_information == 'partial' or has_transfer_shipment_quantity_difference)
+        ):
+            raise UserError(_(
+                'Periksa dokumen pada Shipment Transfer Completed dengan tombol Complete Shipment sebelum menyelesaikan quantity yang berbeda.'
+            ))
+
         if not self.shipment_information:
             raise UserError(_("Shipment Information is required."))
 
@@ -2882,7 +2932,43 @@ class StockPicking(models.Model):
         self.ensure_one()
         if self.stock_lebih and not (self.ref_sotr or '').strip():
             raise UserError(_('Ref. No. Document wajib diisi sebelum dokumen Over-Receipt dapat disetujui.'))
+        if self.transfer_shipment_discrepancy and not self.attachment_ids:
+            raise UserError(_(
+                'Lampiran wajib diisi sebelum discrepancy quantity Transfer Shipment dapat disetujui.'
+            ))
         return super().action_approve()
+
+    def _approval_approved(self):
+        result = super()._approval_approved()
+        for picking in self.filtered('transfer_shipment_discrepancy'):
+            if not picking.attachment_ids:
+                raise UserError(_(
+                    'Lampiran wajib diisi sebelum discrepancy quantity Transfer Shipment dapat disetujui.'
+                ))
+            if picking.shipment_information not in ('partial', 'full_shipment'):
+                raise UserError(_(
+                    'Shipment Information belum ditentukan untuk Transfer Shipment discrepancy.'
+                ))
+            picking.action_confirm_shipment()
+        return result
+
+    def _submit_transfer_shipment_discrepancy_approval(self):
+        self.ensure_one()
+        approval_type = self.approval_type_id or self.env.ref(
+            'tijari_wms_18.approval_type_over_receipt', raise_if_not_found=False,
+        )
+        if not approval_type:
+            raise UserError(_(
+                'Approval Type Discrepancy Quantity belum dikonfigurasi.'
+            ))
+
+        if not self.approval_type_id:
+            self.approval_type_id = approval_type
+        if not approval_type._get_approval_lines(0.0):
+            raise UserError(_(
+                'Tambahkan approver pada Approval Type %s terlebih dahulu.'
+            ) % approval_type.display_name)
+        self.action_submit_approval()
 
     def action_rollback_over_receipt_approval(self):
         self.ensure_one()
@@ -2929,17 +3015,17 @@ class StockPicking(models.Model):
                         'Dokumen Over-Receipt sudah dikirim untuk approval dan belum disetujui.'
                     ))
 
-                approval_type = self.env.ref(
-                    'tijari_wms_18.approval_type_over_receipt',
-                    raise_if_not_found=False,
+                approval_type = picking.approval_type_id or self.env.ref(
+                    'tijari_wms_18.approval_type_over_receipt', raise_if_not_found=False,
                 )
                 if not approval_type:
-                    raise UserError(_('Approval Type Over-Receipt belum dikonfigurasi.'))
+                    raise UserError(_('Approval Type Discrepancy Quantity belum dikonfigurasi.'))
+                if not picking.approval_type_id:
+                    picking.approval_type_id = approval_type
                 if not approval_type._get_approval_lines(0.0):
                     raise UserError(_(
-                        'Tambahkan approver pada Approval Type Over-Receipt terlebih dahulu.'
-                    ))
-                picking.approval_type_id = approval_type
+                        'Tambahkan approver pada Approval Type %s terlebih dahulu.'
+                    ) % approval_type.display_name)
                 picking.action_submit_approval()
 
             if over_receipts:
@@ -3637,6 +3723,10 @@ class StockPicking(models.Model):
         staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
             [('shipment_nbr', '=', self.origin)], limit=1,
         )
+        if not staging_data:
+            raise UserError(_(
+                'Dokumen %(document)s tidak ditemukan di staging Shipment Transfer Completed.'
+            ) % {'document': self.origin})
 
         staging_quantities = {}
         staging_matches_document = bool(staging_data)
@@ -3676,17 +3766,14 @@ class StockPicking(models.Model):
                 staging_matches_document = False
 
         if staging_matches_document:
+            if not self.approval_request_id:
+                self.transfer_shipment_discrepancy = False
             for move in self.move_ids:
                 # The staging total was checked per product above. Distribute
                 # the confirmed total to each move using its own document qty.
                 move.shipped_qty = move.quantity
             self.shipment_information = 'full_shipment'
             return self.action_confirm_shipment()
-
-        if not self.attachment_ids:
-            raise UserError(_(
-                'Lampiran wajib diisi karena quantity staging berbeda dari quantity dokumen.'
-            ))
 
         all_match = True
         for move in self.move_ids:
@@ -3700,7 +3787,10 @@ class StockPicking(models.Model):
                 all_match = False
 
         self.shipment_information = 'full_shipment' if all_match else 'partial'
-        return self.action_confirm_shipment()
+        self.transfer_shipment_discrepancy = True
+        if not self.approval_request_id:
+            self._submit_transfer_shipment_discrepancy_approval()
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     # Keep existing RPC entrypoints compatible while the UI uses one button.
     def action_get_transfer_shipment_completed_staging(self):
@@ -4154,4 +4244,8 @@ class ApprovalRequest(models.Model):
                 raise UserError(
                     _('Ref. No. Document wajib diisi sebelum dokumen Over-Receipt dapat disetujui.')
                 )
+            if picking and picking.transfer_shipment_discrepancy and not picking.attachment_ids:
+                raise UserError(_(
+                    'Lampiran wajib diisi sebelum discrepancy quantity Transfer Shipment dapat disetujui.'
+                ))
         return super().action_approve()

@@ -6,8 +6,14 @@
     </record>
 
     <record id="approval_type_over_receipt" model="approval.type">
-        <field name="name">Over-Receipt</field>
-        <field name="code">OVER_RECEIPT</field>
+        <field name="name">Discrepancy Quantity</field>
+        <field name="code">DISCREPANCY_QUANTITY</field>
+        <field name="approval_model_id" ref="approval_model_stock_picking"/>
+    </record>
+
+    <record id="approval_type_transfer_shipment_quantity_discrepancy" model="approval.type">
+        <field name="active" eval="False"/>
+        <field name="code">TRANSFER_SHIPMENT_QTY_DISCREPANCY</field>
         <field name="approval_model_id" ref="approval_model_stock_picking"/>
     </record>
 </odoo>

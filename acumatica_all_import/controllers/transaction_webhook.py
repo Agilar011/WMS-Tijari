@@ -549,6 +549,8 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 ("config_id", "=", acumatica_config.id),
                 ("shipment_nbr", "=", shipment_nbr),
             ], limit=1)
+            previously_processed = False
+            previous_import_state = False
             if header:
                 changed = self._changed_values(header, header_vals)
                 if changed:
@@ -586,6 +588,155 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "errors": errors,
             "header_ids": header_ids,
             "product_lines": product_lines,
+        }
+
+    def _process_shipment_transfer_completed_webhook(self, payload, config):
+        records = self._records_from_transaction_payload(payload, config)
+        if not records:
+            raise UserError(_("No Shipment Transfer Completed records found in payload."))
+
+        env = self._env()
+        acumatica_config = env["acumatica.config"].sudo()._get_default_config_for_type(
+            "shipment_transfer_completed"
+        )
+        if not acumatica_config:
+            raise UserError(_("No active Acumatica config found for Shipment Transfer Completed."))
+
+        Staging = env["acumatica.shipment.transfer.completed.staging"].sudo()
+        Line = env["acumatica.shipment.transfer.completed.staging.line"].sudo()
+        Picking = env["stock.picking"].sudo()
+        grouped = {}
+        for index, item in enumerate(records, start=1):
+            shipment_nbr = self._first_value(item, "ShipmentNbr", "shipment_nbr")
+            if shipment_nbr:
+                grouped.setdefault(shipment_nbr, []).append((index, item))
+        if not grouped:
+            raise UserError(_("No valid ShipmentNbr found in payload."))
+
+        created = updated = product_lines = imported = errors = 0
+        header_ids = []
+        for shipment_nbr, document_records in grouped.items():
+            first_index, first_item = document_records[0]
+            header_vals = self._shipment_transfer_completed_header_vals(
+                first_item, first_index, acumatica_config
+            )
+            header = Staging.search([
+                ("config_id", "=", acumatica_config.id),
+                ("shipment_nbr", "=", shipment_nbr),
+            ], limit=1)
+            if header:
+                if header.import_state in ("created", "updated"):
+                    header_ids.append(header.id)
+                    imported += 1
+                    continue
+                import_state = "updated"
+                header.write(header_vals)
+                header.line_ids.unlink()
+                updated += 1
+            else:
+                import_state = "created"
+                header = Staging.create(header_vals)
+                created += 1
+
+            line_vals = [
+                self._shipment_transfer_completed_line_vals(item, header)
+                for _, item in document_records
+                if isinstance(item, dict)
+            ]
+            if line_vals:
+                Line.create(line_vals)
+                product_lines += len(line_vals)
+            header_ids.append(header.id)
+
+            picking = Picking.search([
+                ("origin", "=", shipment_nbr),
+                ("internal_transfer_leg", "=", "delivery"),
+                ("picking_type_id.code", "=", "internal"),
+                ("adt_type", "=", "Transfer Shipment"),
+                ("wms_state", "=", "waiting_response"),
+            ], limit=1)
+            if not picking:
+                header.write({
+                    "import_state": "error",
+                    "import_message": f"Transfer Shipment {shipment_nbr} tidak ditemukan dalam status menunggu konfirmasi.",
+                })
+                errors += 1
+                continue
+
+            try:
+                # Use the existing WMS transfer completion flow. This confirms
+                # the transfer shipment and does not create a return document.
+                with env.cr.savepoint():
+                    picking.action_complete_transfer_shipment()
+                    header.write({
+                        "import_state": import_state,
+                        "import_message": "Transfer Shipment berhasil dikonfirmasi dari webhook.",
+                    })
+                imported += 1
+            except Exception as error:
+                header.write({
+                    "import_state": "error",
+                    "import_message": str(error),
+                })
+                errors += 1
+                _logger.exception(
+                    "Shipment Transfer Completed webhook failed for %s",
+                    shipment_nbr,
+                )
+
+        return {
+            "transaction_type": "shipment_transfer_completed",
+            "model": "acumatica.shipment.transfer.completed.staging",
+            "created": created,
+            "updated": updated,
+            "imported": imported,
+            "errors": errors,
+            "header_ids": header_ids,
+            "product_lines": product_lines,
+        }
+
+    def _shipment_transfer_completed_header_vals(self, item, row_number, acumatica_config):
+        return {
+            "config_id": acumatica_config.id,
+            "acumatica_id": item.get("id") or item.get("acumatica_id") or "",
+            "row_number": item.get("rowNumber") or item.get("row_number") or row_number,
+            "note": self._first_value(item, "note", "Note"),
+            "building_id": self._first_value(item, "BuildingID", "building_id"),
+            "customer_name": self._first_value(item, "CustomerName", "customer_name"),
+            "inventory_nbr": self._first_value(item, "InvtRefNbr", "inventory_nbr"),
+            "location_id": self._first_value(item, "LocationID", "location_id"),
+            "location_name": self._first_value(item, "LocationName", "location_name"),
+            "note_header": self._first_value(item, "NoteHeader", "note_header"),
+            "note_header_id": self._first_value(item, "NoteHeaderID", "note_header_id"),
+            "ship_date": self._datetime_value(item, "ShipDate", "ship_date"),
+            "shipment_nbr": self._first_value(item, "ShipmentNbr", "shipment_nbr"),
+            "shipment_qty": self._float_value(item, "ShipmentQty", "shipment_qty"),
+            "shipment_type": self._first_value(item, "ShipmentType", "shipment_type"),
+            "shipment_volume": self._float_value(item, "ShipmentVolume", "shipment_volume"),
+            "shipment_weight": self._float_value(item, "ShipmentWeight", "shipment_weight"),
+            "site_id_description": self._first_value(item, "SiteIDDescription", "site_id_description"),
+            "status": self._first_value(item, "Status", "status"),
+            "to_warehouse_id": self._first_value(item, "ToWarehouseID", "to_warehouse_id"),
+            "import_state": "staged",
+            "import_message": False,
+            "selected": True,
+            "sync_date": fields.Datetime.now(),
+        }
+
+    def _shipment_transfer_completed_line_vals(self, item, header):
+        return {
+            "staging_id": header.id,
+            "acumatica_id": item.get("line_id") or item.get("id") or item.get("acumatica_id") or "",
+            "row_number": self._int_value(item, "line_rowNumber", "rowNumber", "row_number"),
+            "note": self._first_value(item, "LineNote", "note", "Note"),
+            "line_description": self._first_value(item, "LineDescription", "Description", "line_description"),
+            "line_inventory_id": self._first_value(item, "LineInventoryID", "InventoryID", "line_inventory_id"),
+            "line_location": self._first_value(item, "LineLocation", "Location", "line_location"),
+            "line_nbr": self._int_value(item, "LineNbr", "LineNumber", "line_nbr"),
+            "line_note": self._first_value(item, "LineNote", "line_note"),
+            "line_note_id": self._first_value(item, "LineNoteID", "line_note_id"),
+            "line_quantity": self._float_value(item, "LineQuantity", "Quantity", "line_quantity"),
+            "line_uom": self._first_value(item, "LineUOM", "UOM", "line_uom"),
         }
 
     def _shipment_completed_header_vals(self, item, row_number, acumatica_config):
@@ -1465,6 +1616,17 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 "records_keys": ("Inserted",),
                 "processor": self._process_so_shipment_completed_webhook,
             },
+            "shipment_transfer_completed": {
+                "label": "Shipment Transfer Completed",
+                "records_keys": ("Inserted",),
+                "detail_keys": (
+                    "ShipmentTransferCompletedGIDetails",
+                    "ShipmentTransferGIDetails",
+                    "Details",
+                    "details",
+                ),
+                "processor": self._process_shipment_transfer_completed_webhook,
+            },
             "vendor_return": {
                 "label": "Vendor Return",
                 "records_keys": ("Inserted",),
@@ -1576,6 +1738,9 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "shipment_completed": "so_shipment_completed",
             "so_shipment_complete": "so_shipment_completed",
             "shipment_complete": "so_shipment_completed",
+            "shipment_transfer_complete": "shipment_transfer_completed",
+            "transfer_shipment_completed": "shipment_transfer_completed",
+            "transfer_shipment_complete": "shipment_transfer_completed",
             "sotr": "so_transfer",
             "inventory_issue_change_item": "inventory_issue",
             "issue_change_item": "inventory_issue",
@@ -1600,6 +1765,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "vendor_return": "vendor_return_direct_transfer",
             "vendor_return_document": "vendor_return_document_direct_transfer",
             "so_shipment_completed": "shipment_completed",
+            "shipment_transfer_completed": "shipment_transfer_completed",
         }
         return aliases.get(config_key, config_key)
 
