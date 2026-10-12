@@ -365,7 +365,7 @@
                                 column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
                             <field name="product_qty" readonly="1" column_invisible="True"/>
                             <!-- <field name="temp_float" string="Confirmed Quantity"/> -->
-                            <field name="so_confirmation_quantity" string="Qty Dikirim" optional="show" column_invisible="not parent.internal_transfer_order_id"/>
+                            <field name="so_confirmation_quantity" string="Qty Dikirim" optional="show" column_invisible="parent.adt_type != 'Transfer Shipment'"/>
                             <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="parent.picking_type_name not in ['Delivery Orders']" readonly="state in ('done', 'cancel') or status_check == 'finished'"/>
                             <field name="quantity" string="Qty Diterima" optional="hide" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                             <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
