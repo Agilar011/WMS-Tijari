@@ -365,7 +365,7 @@
                                 column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
                             <field name="product_qty" readonly="1" column_invisible="True"/>
                             <!-- <field name="temp_float" string="Confirmed Quantity"/> -->
-                            <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="not parent.is_ito_internal_transfer"/>
+                            <field name="so_confirmation_quantity" string="Qty Dikirim" optional="show" column_invisible="not parent.internal_transfer_order_id"/>
                             <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="parent.picking_type_name not in ['Delivery Orders']" readonly="state in ('done', 'cancel') or status_check == 'finished'"/>
                             <field name="quantity" string="Qty Diterima" optional="hide" readonly="not is_quantity_done_editable" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                             <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
@@ -1233,7 +1233,8 @@
                                 <!-- <field name="quantity_shadow" string="Saran Qty" column_invisible="parent.state != 'done'" decoration-danger="product_uom_qty and quantity_shadow > product_uom_qty and parent.state not in ['done', 'cancel']"/> -->
                                 <!-- <field name="quantity" string="Saran Qty" readonly="not is_quantity_done_editable" column_invisible="parent.state in ('draft','done')" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/> -->
                                 <field name="quantity_shadow" string="Saran Qty" optional="hide" decoration-danger="product_uom_qty and quantity_shadow > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                                <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                                <field name="quantity" string="Quantity" optional="hide" readonly="not is_quantity_done_editable" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
+                                <field name="so_confirmation_quantity" string="Qty Dikirim" optional="show" column_invisible="not parent.internal_transfer_order_id"/>
                                 <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
                                 <field name="adt_dest_location_id" string="Final Location" column_invisible="True"/>
                                 <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
@@ -1709,6 +1710,36 @@
                 <p>Terima kasih.</p>
             </div>
         </field>
+    </record>
+
+    <!-- Manual stock.picking creation is limited to explicit workflows such as
+         Over-Receipt. Hide the generic New button from the standard To Do and
+         Pick lists; server-side create validation remains the enforcement. -->
+    <record id="view_stock_picking_list_no_manual_create" model="ir.ui.view">
+        <field name="name">stock.picking.list.no.manual.create</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock.vpicktree"/>
+        <field name="mode">primary</field>
+        <field name="priority" eval="100"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="attributes">
+                <attribute name="create">false</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_picking_tree_ready_no_manual_create" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_stock_picking_list_no_manual_create"/>
+        <field name="act_window_id" ref="stock.action_picking_tree_ready"/>
+    </record>
+
+    <record id="action_stock_operations_pick_no_manual_create" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_stock_picking_list_no_manual_create"/>
+        <field name="act_window_id" ref="action_stock_operations_pick"/>
     </record>
 
 </odoo>

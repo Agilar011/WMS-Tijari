@@ -380,7 +380,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         # OPTIMAL: Unlink/Hapus baris lama terlebih dahulu jika melakukan update agar data tidak menumpuk double
                         picking.move_ids.unlink()
                     else:
-                        picking = Picking.create(vals)
+                        picking = Picking.sudo().create(vals)
                         action_state = 'created'
                         created += 1
 

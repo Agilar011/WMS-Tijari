@@ -1550,7 +1550,7 @@ class InternalTransferOrder(models.Model):
                 'Destination Location belum ditentukan.'
                 % (self.display_name, suffix)
             )
-        picking = self.env['stock.picking'].create(self._prepare_picking_vals(
+        picking = self.env['stock.picking'].sudo().create(self._prepare_picking_vals(
             picking_type,
             location,
             location_dest,

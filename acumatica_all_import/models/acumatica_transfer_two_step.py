@@ -423,7 +423,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         created += 1
 
                 else:
-                    picking = Picking.create(vals)
+                    picking = Picking.sudo().create(vals)
                     print(f"Picking : {picking} Created")
                     # raise UserError("Checkpoint")
                     action_state = 'created'
