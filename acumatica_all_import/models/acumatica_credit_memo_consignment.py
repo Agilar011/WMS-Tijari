@@ -302,7 +302,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         action_state = 'updated'
                         self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=origin)
                     else:
-                        picking = Picking.create(vals)
+                        picking = Picking.sudo().create(vals)
                         is_new_picking = True
                         action_state = 'created'
 

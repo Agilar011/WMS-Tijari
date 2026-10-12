@@ -422,7 +422,7 @@ class AcumaticaReceiptLine(models.Model):
             receipt._handle_acumatica_update(receipt)
             action_state = 'updated'
         else:
-            picking = Picking.create(picking_vals)
+            picking = Picking.sudo().create(picking_vals)
             receipt._handle_acumatica_error(
                 receipt
             )

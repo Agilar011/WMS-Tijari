@@ -9,8 +9,9 @@ import logging
 import json
 import requests
 from collections import defaultdict
+from lxml import etree
 from odoo import models, api, fields, _
-from odoo.exceptions import ValidationError, UserError
+from odoo.exceptions import AccessError, ValidationError, UserError
 from odoo.tools import float_compare
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 from odoo.tools.float_utils import float_is_zero
@@ -20,6 +21,24 @@ _logger = logging.getLogger(__name__)
 class StockPicking(models.Model):
     _name = 'stock.picking'
     _inherit = ['stock.picking', 'approval.mixin']
+
+    @api.model
+    def get_view(self, view_id=None, view_type='form', **options):
+        result = super().get_view(view_id=view_id, view_type=view_type, **options)
+        restricted_list = self.env.ref(
+            'tijari_wms_18.view_stock_picking_list_no_manual_create',
+            raise_if_not_found=False,
+        )
+        if (
+            view_type == 'list'
+            and restricted_list
+            and view_id == restricted_list.id
+            and self.env.user.has_group('stock.group_stock_manager')
+        ):
+            arch = etree.fromstring(result['arch'].encode())
+            arch.set('create', 'true')
+            result['arch'] = etree.tostring(arch, encoding='unicode')
+        return result
 
     @api.model
     def default_get(self, fields_list):
@@ -1553,6 +1572,37 @@ class StockPicking(models.Model):
 # Function to foward adt_type from parent picking
     @api.model_create_multi
     def create(self, vals_list):
+        if not self.env.su:
+            can_create_over_receipt = any(self.env.user.has_group(group_xmlid) for group_xmlid in (
+                'tijari_wms_18.group_warehouse_manager',
+                'tijari_wms_18.group_warehouse_head',
+                'tijari_wms_18.group_warehouse_admin',
+                'tijari_wms_18.group_it_staff',
+                'stock.group_stock_manager',
+            ))
+            default_vals = self.default_get(['stock_lebih', 'picking_type_id'])
+            for vals in vals_list:
+                is_over_receipt = vals.get(
+                    'stock_lebih',
+                    self.env.context.get('default_stock_lebih', default_vals.get('stock_lebih')),
+                )
+                picking_type_id = vals.get(
+                    'picking_type_id',
+                    self.env.context.get('default_picking_type_id', default_vals.get('picking_type_id')),
+                )
+                picking_type = self.env['stock.picking.type'].browse(picking_type_id).exists()
+                if not (
+                    can_create_over_receipt
+                    and is_over_receipt
+                    and picking_type
+                    and picking_type.code == 'incoming'
+                    and picking_type.operation_category == 'receive'
+                ):
+                    raise AccessError(_(
+                        'Stock picking hanya dapat dibuat melalui API Data Hub. '
+                        'Pengecualian manual hanya berlaku untuk dokumen Over-Receipt '
+                        'dan Internal Transfer Order yang dibuat melalui alurnya.'
+                    ))
         # print("=" * 100)
         # print("CREATE PICKING")
         # traceback.print_stack(limit=15)        

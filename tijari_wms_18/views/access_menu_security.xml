@@ -9,6 +9,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -17,6 +18,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -25,18 +27,21 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="stock.menu_stock_config_settings" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="stock.menu_warehouse_config" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -48,6 +53,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -56,6 +62,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -64,24 +71,28 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="stock.menu_action_location_form" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="stock.menu_storage_categoty_config" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="stock.menu_putaway" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -91,18 +102,21 @@
     <record id="menu_stock_picking_worklist" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_operator'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_stock_picking_my_worklist" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_operator'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_stock_picking_my_worklist_overview" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_operator'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -114,6 +128,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -122,6 +137,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -130,6 +146,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -138,6 +155,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -146,6 +164,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -154,6 +173,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -162,6 +182,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -170,6 +191,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -178,6 +200,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -186,6 +209,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -194,6 +218,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -202,6 +227,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -210,6 +236,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -218,6 +245,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -226,6 +254,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -234,6 +263,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -242,6 +272,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -250,6 +281,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -258,6 +290,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -267,6 +300,16 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="action_wms_over_receipt_document" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -276,6 +319,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -284,6 +328,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -292,6 +337,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -300,6 +346,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -309,6 +356,7 @@
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>

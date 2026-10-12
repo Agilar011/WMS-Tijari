@@ -448,7 +448,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=first.reference_nbr or False)
                     print(f"Update Picking: {picking}")
                 else:
-                    picking = Picking.create(vals)
+                    picking = Picking.sudo().create(vals)
                     action_state = 'created'
                     created += 1
                     print(f"Create Picking: {picking}")

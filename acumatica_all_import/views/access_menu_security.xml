@@ -6,66 +6,77 @@
     <record id="menu_acumatica_all_import_root" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_acumatica_api_data_hub_dashboard" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_inventory_api_data_hub_kanban" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_acumatica_all_import_unified" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_acumatica_all_import_config_root" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_acumatica_all_import_config" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_acumatica_api_scheduler" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_acumatica_webhook_log" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_acumatica_webhook_key_config" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_acumatica_all_import_staging_root" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="menu_acumatica_all_import_staging_master" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -73,18 +84,21 @@
     <record id="action_acumatica_config" model="ir.actions.act_window">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="action_acumatica_webhook_key_config" model="ir.actions.act_window">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
     <record id="action_acumatica_webhook_api_key_history" model="ir.actions.act_window">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>

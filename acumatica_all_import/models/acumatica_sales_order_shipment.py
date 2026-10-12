@@ -294,7 +294,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                         picking.move_ids.unlink()
                         print(f"--> SUCCESS UNLINK OLD LINES FOR PICKING ID: {picking.id}")
                     else:
-                        picking = Picking.create(updated_vals)
+                        picking = Picking.sudo().create(updated_vals)
                         action_state = 'created'
                         # exist_post_data = self.env['loginext.staging.data'].search([('odoo_shipment_number', '=', picking.origin)], limit=1)
                         # if not exist_post_data:

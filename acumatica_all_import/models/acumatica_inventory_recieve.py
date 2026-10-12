@@ -641,7 +641,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
             action_state = 'updated'
             self.env['acumatica.error.transaction']._handle_acumatica_update(receive, origin=origin)
         else:
-            picking = Picking.create(picking_vals)
+            picking = Picking.sudo().create(picking_vals)
             action_state = 'created'
 
         if action_state == 'updated':

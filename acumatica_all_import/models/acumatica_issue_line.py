@@ -253,7 +253,7 @@ class AcumaticaIssueLine(models.Model):
                     updated += 1
                     self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=issue_key)
                 else:
-                    picking = Picking.create(vals)
+                    picking = Picking.sudo().create(vals)
                     action_state = 'created'
 
                 if action_state == 'updated':

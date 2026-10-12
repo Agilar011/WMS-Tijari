@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Stock users inherit broad create permission from stock. Keep the
+         existing read/write/delete rights, but expose Create through the
+         WMS role ACLs and enforce the permitted source in stock.picking. -->
+    <record id="stock.access_stock_picking_user" model="ir.model.access">
+        <field name="perm_create" eval="False"/>
+    </record>
+</odoo>

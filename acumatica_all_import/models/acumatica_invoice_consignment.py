@@ -420,7 +420,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                         action_state = 'updated'
                         picking.move_ids.unlink()
                     else:
-                        picking = Picking.create(vals)
+                        picking = Picking.sudo().create(vals)
                         action_state = 'created'
 
                     to_create_move = self.env['acumatica.invoice.consignment.staging.line'].search([
