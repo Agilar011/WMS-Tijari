@@ -539,7 +539,7 @@
                     <group>
                         <group string="Approval Information">
                             <field name="approval_request_id" readonly="1"/>
-                            <field name="approval_type_id" readonly="1"/>
+                            <field name="approval_type_id" readonly="state == 'done' or wms_state == 'waiting_response'"/>
                             <field name="approval_state" readonly="1"/>
                             <field name="current_approver_id" readonly="1"/>
                         </group>
@@ -654,13 +654,13 @@
                        readonly="1"/>
                 <field name="status_ba"/>
                 <separator string="Dokumen Over Receipt" colspan="2"
-                    invisible="not stock_lebih or wms_state != 'waiting_response'"/>
+                    invisible="not stock_lebih or (wms_state != 'waiting_response' and state != 'done')"/>
                 <field name="over_receipt_transaction_type"
                     string="Tipe Transaksi Over-Receipt"
-                    invisible="not stock_lebih or wms_state != 'waiting_response'"
+                    invisible="not stock_lebih or (wms_state != 'waiting_response' and state != 'done')"
                     readonly="approval_state != 'waiting' or current_approver_id != uid"/>
                 <field name="ref_sotr" string="Ref. No. Document"
-                    invisible="not stock_lebih or wms_state != 'waiting_response'"
+                    invisible="not stock_lebih or (wms_state != 'waiting_response' and state != 'done')"
                     readonly="approval_state != 'waiting' or current_approver_id != uid"/>
                 <field name="internal_transfer_order_id" invisible="1"/>
                 <field name="internal_transfer_leg" invisible="1"/>
