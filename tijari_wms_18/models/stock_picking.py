@@ -159,6 +159,30 @@ class StockPicking(models.Model):
                 vals['location_dest_id'] = finish_goods.id
         return vals
 
+    @api.depends('picking_type_id', 'partner_id', 'stock_lebih')
+    def _compute_location_id(self):
+        super()._compute_location_id()
+        for picking in self:
+            if not picking.stock_lebih or picking.state in ('done', 'cancel'):
+                continue
+            warehouse_id = (
+                picking.picking_type_id.warehouse_id.id
+                or self.env.context.get('default_warehouse_id')
+                or self.env.user.warehouse_id.id
+            )
+            domain = [
+                ('usage', '=', 'internal'),
+                ('name', 'ilike', 'Finish Good'),
+                ('company_id', 'in', [picking.company_id.id, False]),
+            ]
+            if warehouse_id:
+                domain.append(('warehouse_id', '=', warehouse_id))
+            finish_goods = self.env['stock.location'].search(
+                domain, order='id', limit=1,
+            )
+            if finish_goods:
+                picking.location_dest_id = finish_goods
+
     stock_lebih = fields.Boolean(
         string='Stock Lebih',
         default=False,
@@ -3049,6 +3073,59 @@ class StockPicking(models.Model):
                 shipment_picking=self,
             )
 
+    def _get_over_receipt_warehouse_partner(self):
+        self.ensure_one()
+        ref_no = (self.ref_sotr or '').strip()
+        if not ref_no:
+            return self.env['res.partner'].browse()
+
+        transaction_type = self.over_receipt_transaction_type or 'receipt_sotr'
+        if transaction_type == 'receipt_sotr':
+            staging_model, reference_field = 'acumatica.transfer.line', 'receipt_nbr'
+        elif transaction_type == 'inventory_receive':
+            staging_model, reference_field = 'acumatica.inventory.recieved.line', 'reference_nbr'
+        else:
+            return self.env['res.partner'].browse()
+
+        staging = self.env[staging_model].search(
+            [(reference_field, '=', ref_no), ('stock_lebih', '=', True)],
+            order='id desc',
+            limit=1,
+        )
+        if not staging:
+            return self.env['res.partner'].browse()
+
+        # Supplier / Customer partner follows the source Warehouse, not
+        # Warehouse Dest (which is the receipt destination warehouse).
+        source_warehouse_code = (staging.warehouse_code or '').strip().upper()
+        if not source_warehouse_code:
+            return self.env['res.partner'].browse()
+        warehouse_code = source_warehouse_code.split('-', 1)[0].strip()
+        if not warehouse_code:
+            return self.env['res.partner'].browse()
+
+        LocationMapping = self.env['stock.location.acumatica']
+        mapping = LocationMapping.search([
+            ('code', '=', source_warehouse_code),
+            ('is_active', '=', True),
+            ('odoo_building_id', '!=', False),
+        ], limit=1)
+        warehouse = mapping.odoo_building_id
+        if not warehouse:
+            warehouse = self.env['stock.warehouse'].search([
+                ('code', '=', warehouse_code),
+                ('company_id', '=', self.company_id.id),
+            ], limit=1)
+
+        partner = warehouse.partner_id if warehouse else self.env['res.partner'].browse()
+        if partner and partner.partner_type == 'warehouse':
+            return partner
+        return self.env['res.partner'].search([
+            ('name', '=', warehouse_code),
+            ('partner_type', '=', 'warehouse'),
+            ('company_id', 'in', [self.company_id.id, False]),
+        ], limit=1)
+
     def action_update_over_receipt(self):
         self.ensure_one()
         if not self.stock_lebih:
@@ -3474,6 +3551,32 @@ class StockPicking(models.Model):
                         storage_move.write({
                             "product_note": receipt_move.product_note,
                         })
+
+        if self.env.context.get('over_receipt_update'):
+            completed_over_receipts = self.filtered(
+                lambda picking: picking.stock_lebih and picking.state == 'done'
+            )
+            for picking in completed_over_receipts:
+                ref_no = (picking.ref_sotr or '').strip()
+                vals = {}
+                if ref_no and picking.origin != ref_no:
+                    vals['origin'] = ref_no
+                if not picking.adt_type:
+                    transaction_type_labels = {
+                        'receipt_sotr': _('Receipt SOTR'),
+                        'inventory_receive': _('Inventory Receive'),
+                    }
+                    transaction_type_label = transaction_type_labels.get(
+                        picking.over_receipt_transaction_type
+                    )
+                    if transaction_type_label:
+                        vals['adt_type'] = transaction_type_label
+                if not picking.partner_id:
+                    warehouse_partner = picking._get_over_receipt_warehouse_partner()
+                    if warehouse_partner:
+                        vals['partner_id'] = warehouse_partner.id
+                if vals:
+                    picking.sudo().write(vals)
 
         return res
 
