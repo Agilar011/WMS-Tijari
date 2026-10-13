@@ -6,21 +6,84 @@
          Administrator user continues to see the complete WMS. -->
     <record id="stock.menu_stock_warehouse_mgmt" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock.menu_stock_inventory_control" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
+    </record>
+    <!-- A role with at least Read in the workbook must be able to reach its
+         menu. Operator is read-only for both sections; create/edit controls
+         are governed by the model-specific rights and views. -->
+    <record id="stock.menu_stock_adjustments" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.menu_stock_scrap" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock_inventory.action_view_inventory_group_form" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock_inventory.menu_action_inventory_tree" model="ir.ui.menu">
+        <field name="active" eval="True"/>
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.action_stock_scrap" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.action_picking_tree_ready" model="ir.actions.act_window">
+        <field name="context">{
+            'contact_display': 'partner_address',
+            'search_default_available': 1,
+            'tijari_operator_readonly': True
+        }</field>
     </record>
     <record id="stock.menu_warehouse_report" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
@@ -28,21 +91,110 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock.menu_stock_config_settings" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock.menu_warehouse_config" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+
+    <!-- Operator may reach Configuration only to open the Locations menu. -->
+    <record id="stock.menu_product_in_config_stock" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.product_uom_menu" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.menu_action_warehouse_form" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.menu_pickingtype" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.menu_routes_config" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="menu_master_approval_type" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="menu_stock_location_acumatica" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.menu_product_variant_config_stock" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.product_product_menu" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.product_template_action_product" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="stock.stock_product_normal_action" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
 
@@ -54,7 +206,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock.menu_action_production_lot_form" model="ir.ui.menu">
@@ -63,7 +215,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock.menu_package" model="ir.ui.menu">
@@ -72,28 +224,28 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock.menu_action_location_form" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock.menu_storage_categoty_config" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock.menu_putaway" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
 
@@ -103,21 +255,21 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="menu_stock_picking_my_worklist" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="menu_stock_picking_my_worklist_overview" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
 
@@ -129,7 +281,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_sotr_receipts" model="ir.actions.act_window">
@@ -138,7 +290,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_receipts_type_change" model="ir.actions.act_window">
@@ -147,7 +299,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_inventory_receive" model="ir.actions.act_window">
@@ -156,7 +308,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_shipment_so_return" model="ir.actions.act_window">
@@ -165,7 +317,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_so_consignment_receipts" model="ir.actions.act_window">
@@ -174,7 +326,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_sale_orders_shipment" model="ir.actions.act_window">
@@ -183,7 +335,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_issue_type_change_items" model="ir.actions.act_window">
@@ -192,7 +344,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_inventory_issue" model="ir.actions.act_window">
@@ -201,7 +353,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_po_return" model="ir.actions.act_window">
@@ -210,7 +362,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_transfer_shipment" model="ir.actions.act_window">
@@ -219,7 +371,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_transfer_pinjaman_1_step" model="ir.actions.act_window">
@@ -228,7 +380,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_transfer_pinjaman_2_step" model="ir.actions.act_window">
@@ -237,7 +389,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_kit_assembly" model="ir.actions.act_window">
@@ -246,7 +398,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_operations_document_only" model="ir.actions.act_window">
@@ -255,7 +407,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_stock_operations_pick" model="ir.actions.act_window">
@@ -264,7 +416,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_stock_operations_pack" model="ir.actions.act_window">
@@ -273,7 +425,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_stock_operations_internal_intra" model="ir.actions.act_window">
@@ -282,7 +434,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_stock_operations_internal_inter" model="ir.actions.act_window">
@@ -291,7 +443,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_internal_transfer_order" model="ir.actions.act_window">
@@ -301,7 +453,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="action_wms_over_receipt_document" model="ir.actions.act_window">
@@ -310,7 +462,16 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+    <record id="action_wms_auto_transaction_log" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
 
@@ -320,7 +481,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock_menu_operations_pack" model="ir.ui.menu">
@@ -329,7 +490,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock_menu_operations_internal_intra" model="ir.ui.menu">
@@ -338,7 +499,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="stock_menu_operations_internal_inter" model="ir.ui.menu">
@@ -347,7 +508,7 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
     <record id="wms_operations_internal_transfer_order" model="ir.ui.menu">
@@ -357,8 +518,114 @@
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
-            ref('stock.group_stock_manager')
+            ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
+    </record>
+
+    <!-- Operator has Read access to Operations, Packages and Locations in the
+         workbook, so expose the navigation paths and their read actions. -->
+    <record id="wms_operations_menu" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="wms_operations_menu_inbound" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="wms_operations_menu_outbound" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="stock_menu_operations_pick" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="stock_menu_operations_pack" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="stock_menu_operations_internal_intra" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="stock_menu_operations_internal_inter" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="action_stock_operations_pick" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="action_stock_operations_pack" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="action_stock_operations_internal_intra" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="action_stock_operations_internal_inter" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="stock.menu_stock_config_settings" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="stock.menu_warehouse_config" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="stock.menu_action_location_form" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="stock.menu_package" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+    </record>
+    <record id="action_wms_operations_purchase_receipts" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_sotr_receipts" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_receipts_type_change" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_inventory_receive" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_shipment_so_return" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_sale_orders_shipment" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_issue_type_change_items" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_inventory_issue" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_po_return" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_transfer_shipment" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_transfer_pinjaman_1_step" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_operations_transfer_pinjaman_2_step" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_wms_kit_assembly" model="ir.actions.act_window">
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="context">{'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_stock_operations_pick" model="ir.actions.act_window">
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pick': 1, 'tijari_operator_readonly': True}</field>
+    </record>
+    <record id="action_stock_operations_pack" model="ir.actions.act_window">
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pack': 1, 'tijari_operator_readonly': True}</field>
     </record>
 
 </odoo>

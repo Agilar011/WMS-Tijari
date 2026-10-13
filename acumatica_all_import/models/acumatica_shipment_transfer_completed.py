@@ -42,10 +42,10 @@ class AcumaticaShipmentTransferCompletedStaging(models.Model):
     config_id = fields.Many2one('acumatica.config', string='Konfigurasi', ondelete='set null', index=True)
     sync_date = fields.Datetime(string='Tanggal Sync')
 
-    _sql_constraints = [
-        ('shipment_transfer_completed_unique', 'unique(shipment_nbr, config_id)',
-         'Data Shipment Transfer Completed dari Acumatica sudah ada!'),
-    ]
+    # _sql_constraints = [
+    #     ('shipment_transfer_completed_unique', 'unique(shipment_nbr, config_id)',
+    #      'Data Shipment Transfer Completed dari Acumatica sudah ada!'),
+    # ]
 
     def action_reset_pending(self):
         self.filtered(lambda record: record.import_state == 'error').write({

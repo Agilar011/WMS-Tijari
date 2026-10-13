@@ -1,9 +1,66 @@
 from odoo import _, api, fields, models, Command
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
+from lxml import etree
 from odoo.tools.float_utils import float_compare, float_is_zero
 
 class WMSStockScrap(models.Model):
     _inherit = 'stock.scrap'
+
+    def _is_operator_only(self):
+        if not self.env.user.has_group('tijari_wms_18.group_operator'):
+            return False
+        elevated = (
+            'tijari_wms_18.group_it_staff',
+            'stock.group_stock_manager',
+            'base.group_system',
+        )
+        return not any(self.env.user.has_group(group) for group in elevated)
+
+    @api.model
+    def get_view(self, view_id=None, view_type='form', **options):
+        result = super().get_view(view_id=view_id, view_type=view_type, **options)
+        if self._is_operator_only() and view_type in ('form', 'list'):
+            arch = etree.fromstring(result['arch'].encode())
+            root_tag = 'form' if view_type == 'form' else 'list'
+            root = arch if arch.tag == root_tag else arch.find('.//' + root_tag)
+            if root is not None:
+                root.set('create', 'false')
+                root.set('delete', 'false')
+                if view_type == 'list':
+                    root.set('edit', 'false')
+                else:
+                    writable_pages = {'item_to_scrap', 'scrap_notes_page'}
+                    for field_node in arch.xpath('.//field'):
+                        page = field_node.getparent()
+                        while page is not None and page.tag != 'page':
+                            page = page.getparent()
+                        if page is None or page.get('name') not in writable_pages:
+                            field_node.set('readonly', '1')
+                    for button in arch.xpath('.//header//button'):
+                        button.set('invisible', '1')
+            result['arch'] = etree.tostring(arch, encoding='unicode')
+        return result
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        if not self.env.su and self._is_operator_only():
+            raise AccessError(_('Warehouse Operator hanya memiliki akses baca pada Disposal Document.'))
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if not self.env.su and self._is_operator_only():
+            writable_fields = {
+                'note', 'scrap_line_ids', 'filtered_scrap_line_ids',
+                'scrap_product_id', 'scrap_lot_id', 'filter_scan_code',
+            }
+            if set(vals) - writable_fields:
+                raise AccessError(_('Warehouse Operator hanya dapat mengubah bagian Item to Scrap dan Notes.'))
+        return super().write(vals)
+
+    def unlink(self):
+        if not self.env.su and self._is_operator_only():
+            raise AccessError(_('Warehouse Operator tidak memiliki akses untuk menghapus Disposal Document.'))
+        return super().unlink()
 
     product_id = fields.Many2one(
         'product.product', 'Product', domain="[('type', '=', 'consu')]",

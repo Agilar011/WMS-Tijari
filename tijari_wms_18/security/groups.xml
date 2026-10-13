@@ -3,6 +3,12 @@
 
     <function model="res.groups" name="_tijari_ensure_operator_group_xmlid"/>
 
+    <!-- The built-in Administrator user must retain full Inventory/WMS access
+         even when no warehouse role is assigned manually. -->
+    <record id="base.user_admin" model="res.users">
+        <field name="groups_id" eval="[(4, ref('stock.group_stock_manager'))]"/>
+    </record>
+
     <!-- Role groups used by the WMS menu matrix. They intentionally imply the
          standard Inventory User group only; menu visibility is assigned below
          without granting Administrator-level model access. -->

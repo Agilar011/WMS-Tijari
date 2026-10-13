@@ -105,9 +105,6 @@
 	            <xpath expr="//page[@name='operations']" position="after">
                 <page string="Picker" name="page_picker" invisible="not show_picker_page or picking_type_name not in ['Receipts', 'Receipt Internal']">
 	                    <group>
-                            <field name="scan_picker_product_button"
-                                    widget="adt_scan_picker_product_button"
-                                    nolabel="1"/>
                             <field name="picker_scan_code"
                                 widget="adt_handheld_scan_code"
                                 placeholder="Scan handheld atau ketik kode"
@@ -327,9 +324,6 @@
 
                 <page string="Putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Internal Transfers'] or is_ito_internal_transfer">
 	                    <group>
-                        <field name="scan_product_button"
-                            widget="adt_scan_putaway_product_button"
-                            nolabel="1"/>
                         <field name="putaway_scan_code"
                             widget="adt_handheld_scan_code"
                             placeholder="Scan handheld atau ketik kode"

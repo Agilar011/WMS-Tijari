@@ -5,7 +5,8 @@ import os
 from PIL import Image
 import qrcode
 import io
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import AccessError, UserError, ValidationError
+from lxml import etree
 from odoo.tools.float_utils import float_is_zero
 import logging
 
@@ -21,6 +22,54 @@ class InventoryAdjustmentsGroup(models.Model):
     string='Status BA',
 
     )
+
+    def _is_operator_only(self):
+        if not self.env.user.has_group('tijari_wms_18.group_operator'):
+            return False
+        elevated = (
+            'tijari_wms_18.group_it_staff',
+            'stock.group_stock_manager',
+            'base.group_system',
+        )
+        return not any(self.env.user.has_group(group) for group in elevated)
+
+    @api.model
+    def get_view(self, view_id=None, view_type='form', **options):
+        result = super().get_view(view_id=view_id, view_type=view_type, **options)
+        if self._is_operator_only() and view_type in ('form', 'list'):
+            arch = etree.fromstring(result['arch'].encode())
+            root_tag = 'form' if view_type == 'form' else 'list'
+            root = arch if arch.tag == root_tag else arch.find('.//' + root_tag)
+            if root is not None:
+                root.set('create', 'false')
+                root.set('delete', 'false')
+                if view_type == 'list':
+                    root.set('edit', 'false')
+                else:
+                    for field_node in arch.xpath('.//field'):
+                        if field_node.get('name') != 'notes':
+                            field_node.set('readonly', '1')
+                    for button in arch.xpath('.//header//button'):
+                        if button.get('name') != 'action_view_inventory_adjustment':
+                            button.set('invisible', '1')
+            result['arch'] = etree.tostring(arch, encoding='unicode')
+        return result
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        if not self.env.su and self._is_operator_only():
+            raise AccessError(_('Warehouse Operator hanya memiliki akses baca pada Adjustment Document.'))
+        return super().create(vals_list)
+
+    def write(self, vals):
+        if not self.env.su and self._is_operator_only() and set(vals) - {'notes'}:
+            raise AccessError(_('Warehouse Operator hanya dapat mengubah Notes pada Adjustment Document.'))
+        return super().write(vals)
+
+    def unlink(self):
+        if not self.env.su and self._is_operator_only():
+            raise AccessError(_('Warehouse Operator tidak memiliki akses untuk menghapus Adjustment Document.'))
+        return super().unlink()
     def action_print_stok_opname(self):
         action = {}
         action['type'] = 'ir.actions.act_url'

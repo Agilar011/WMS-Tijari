@@ -33,10 +33,63 @@ class StockPicking(models.Model):
             view_type == 'list'
             and restricted_list
             and view_id == restricted_list.id
-            and self.env.user.has_group('stock.group_stock_manager')
+            and (
+                self.env.user.has_group('stock.group_stock_manager')
+                or self.env.user.has_group('base.group_system')
+            )
         ):
             arch = etree.fromstring(result['arch'].encode())
             arch.set('create', 'true')
+            result['arch'] = etree.tostring(arch, encoding='unicode')
+
+        # Matrix read access applies to the picking document itself. Operators
+        # may edit only the notebook pages granted to their role; list/form
+        # creation and top-level workflow buttons stay unavailable.
+        elevated_groups = (
+            'tijari_wms_18.group_warehouse_manager',
+            'tijari_wms_18.group_warehouse_head',
+            'tijari_wms_18.group_warehouse_admin',
+            'tijari_wms_18.group_it_staff',
+            'stock.group_stock_manager',
+            'base.group_system',
+        )
+        is_limited_operator = (
+            self.env.user.has_group('tijari_wms_18.group_operator')
+            and not any(self.env.user.has_group(group) for group in elevated_groups)
+        )
+        # Creation on stock.picking and edits outside permitted notebook pages
+        # stay restricted even when an action does not preserve its context.
+        if view_type in ('list', 'form') and is_limited_operator:
+            arch = etree.fromstring(result['arch'].encode())
+            arch.set('create', 'false')
+            if view_type == 'list':
+                arch.set('edit', 'false')
+                arch.set('delete', 'false')
+                for button in arch.xpath('.//header//button'):
+                    button.set('invisible', '1')
+                result['arch'] = etree.tostring(arch, encoding='unicode')
+                return result
+
+            writable_pages = {
+                'page_picker', 'page_packer_operation', 'page_putaway',
+                'detail_product', 'packed_items', 'note', 'Notes', 'extra',
+                'extra_info', 'additional_info', 'page_notes',
+            }
+            writable_page_labels = {
+                'Unpacked Item Details', 'Packed Items', 'Additional Info',
+                'Additional Information', 'Notes',
+            }
+            for field_node in arch.xpath('.//field'):
+                page = field_node.getparent()
+                while page is not None and page.tag != 'page':
+                    page = page.getparent()
+                if page is None or (
+                    page.get('name') not in writable_pages
+                    and page.get('string') not in writable_page_labels
+                ):
+                    field_node.set('readonly', '1')
+            for button in arch.xpath('.//header//button'):
+                button.set('invisible', '1')
             result['arch'] = etree.tostring(arch, encoding='unicode')
         return result
 
@@ -74,6 +127,36 @@ class StockPicking(models.Model):
                 picking_type = PickingType.search(domain, order='warehouse_id, id', limit=1)
             if picking_type:
                 vals['picking_type_id'] = picking_type.id
+        if (
+            self.env.context.get('default_stock_lebih')
+            and 'location_id' in fields_list
+            and not vals.get('location_id')
+            and not self.env.context.get('default_location_id')
+        ):
+            picking_type_id = (
+                vals.get('picking_type_id')
+                or self.env.context.get('default_picking_type_id')
+            )
+            picking_type = self.env['stock.picking.type'].browse(picking_type_id).exists()
+            source_location = picking_type.default_location_src_id if picking_type else False
+            if not source_location:
+                source_location = self.env.ref(
+                    'stock.stock_location_suppliers', raise_if_not_found=False,
+                )
+            if source_location:
+                vals['location_id'] = source_location.id
+        if self.env.context.get('default_stock_lebih') and 'location_dest_id' in fields_list and not self.env.context.get('default_location_dest_id'):
+            warehouse_id = self.env.context.get('default_warehouse_id') or self.env.user.warehouse_id.id
+            location_domain = [
+                ('usage', '=', 'internal'),
+                ('name', 'ilike', 'Finish Good'),
+                ('company_id', 'in', [self.env.company.id, False]),
+            ]
+            if warehouse_id:
+                location_domain.append(('warehouse_id', '=', warehouse_id))
+            finish_goods = self.env['stock.location'].search(location_domain, order='id', limit=1)
+            if finish_goods:
+                vals['location_dest_id'] = finish_goods.id
         return vals
 
     stock_lebih = fields.Boolean(
@@ -560,6 +643,37 @@ class StockPicking(models.Model):
         #         "Hanya user non-operator yang dapat mengisi/mengubah Penanggungjawab Pick."
         #     ))
 
+        if (
+            not self.env.su
+            and self.env.user.has_group('tijari_wms_18.group_operator')
+            and not any(self.env.user.has_group(group) for group in (
+                'tijari_wms_18.group_warehouse_manager',
+                'tijari_wms_18.group_warehouse_head',
+                'tijari_wms_18.group_warehouse_admin',
+                'tijari_wms_18.group_it_staff',
+                'stock.group_stock_manager',
+                'base.group_system',
+            ))
+        ):
+            protected_pickings = self.filtered(
+                lambda picking: not picking.internal_transfer_order_id
+            )
+            allowed_operator_fields = {
+                'note', 'desc_note', 'note_ba', 'carrier_id',
+                'carrier_tracking_ref', 'weight', 'shipping_weight',
+                'move_type', 'sale_id', 'batch_id', 'user_ids',
+                'pick_responsible_ids', 'pack_responsible_ids',
+                'do_responsible_ids', 'putaway_responsible_ids',
+                'picker_scan_code', 'picker_product_id', 'picker_lot_id',
+                'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id',
+                'package_scan_code', 'scanned_package_id',
+            }
+            if protected_pickings and set(vals) - allowed_operator_fields:
+                raise AccessError(_(
+                    'Warehouse Operator hanya dapat mengubah field pada notebook '
+                    'yang diizinkan; field dokumen lainnya hanya dapat dibaca.'
+                ))
+
         result = super().write(vals)
         if import_audit_fields and not self.env.context.get('skip_acumatica_import_log'):
             staging_models = (
@@ -629,6 +743,23 @@ class StockPicking(models.Model):
         ):
             self._set_document_only_picking_type()
         return result
+
+    def unlink(self):
+        if (
+            not self.env.su
+            and self.env.user.has_group('tijari_wms_18.group_operator')
+            and not any(self.env.user.has_group(group) for group in (
+                'tijari_wms_18.group_warehouse_manager',
+                'tijari_wms_18.group_warehouse_head',
+                'tijari_wms_18.group_warehouse_admin',
+                'tijari_wms_18.group_it_staff',
+                'stock.group_stock_manager',
+                'base.group_system',
+            ))
+            and self.filtered(lambda picking: not picking.internal_transfer_order_id)
+        ):
+            raise AccessError(_('Warehouse Operator tidak dapat menghapus dokumen picking.'))
+        return super().unlink()
 
     def _sync_user_ids_from_user_id(self):
         for picking in self.filtered(lambda record: record.user_id and record.user_id not in record.user_ids):
@@ -900,6 +1031,7 @@ class StockPicking(models.Model):
             ('confirmed', 'Waiting'),
             ('assigned', 'Ready'),
             ('waiting_response', 'Waiting For Shipment'),
+            ('waiting_approval', 'Waiting For Approval'),
             ('return_shipment', 'Returned Shipment'),
             ('done', 'Done'),
             ('cancel', 'Cancelled'),
@@ -917,6 +1049,7 @@ class StockPicking(models.Model):
             ('confirmed', 'Waiting'),
             ('assigned', 'Ready'),
             ('waiting_response', 'Waiting For Approval'),
+            ('waiting_approval', 'Waiting For Approval'),
             ('return_shipment', 'Returned Shipment'),
             ('done', 'Done'),
             ('cancel', 'Cancelled'),
@@ -1206,12 +1339,16 @@ class StockPicking(models.Model):
         "internal_transfer_leg",
         "picking_type_id",
         "picking_type_name",
+        "transfer_shipment_discrepancy",
+        "approval_state",
+        "shipment_information",
     )
     def _compute_wms_state(self):
         for picking in self:
             is_waiting_over_receipt = bool(
                 picking.stock_lebih
                 and picking.approval_request_id
+                and picking.approval_state != 'rejected'
                 and picking.state in ('confirmed', 'assigned')
             )
             is_ready_transfer_in_receipt = bool(
@@ -1231,8 +1368,18 @@ class StockPicking(models.Model):
                     and picking.picking_type_id.code == "internal"
                 )
             )
+            is_transfer_shipment_discrepancy = bool(
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_leg == "delivery"
+                and picking.picking_type_id.code == "internal"
+                and picking.adt_type == "Transfer Shipment"
+                and picking.transfer_shipment_discrepancy
+                and picking.approval_state != "approved"
+            )
 
-            if is_waiting_over_receipt:
+            if is_transfer_shipment_discrepancy:
+                picking.wms_state = "waiting_approval"
+            elif is_waiting_over_receipt:
                 picking.wms_state = 'waiting_response'
             elif is_ready_transfer_in_receipt:
                 # A transfer-in receipt is ready to process after Check
@@ -1240,7 +1387,7 @@ class StockPicking(models.Model):
                 # reserve transit stock like a vendor receipt. Do not prefill
                 # the actual received quantity here.
                 picking.wms_state = "assigned"
-            elif not is_waiting_shipment or picking.picking_type_name != "Delivery Orders":
+            elif not is_waiting_shipment or picking.picking_type_name not in ["Delivery Orders", "Internal Transfer"]:
                 picking.wms_state = picking.state
             elif is_waiting_shipment and not picking.shipment_information:
                 picking.wms_state = "assigned"       
@@ -1572,7 +1719,7 @@ class StockPicking(models.Model):
 # Function to foward adt_type from parent picking
     @api.model_create_multi
     def create(self, vals_list):
-        if not self.env.su:
+        if not self.env.su and not self.env.user.has_group('base.group_system'):
             can_create_over_receipt = any(self.env.user.has_group(group_xmlid) for group_xmlid in (
                 'tijari_wms_18.group_warehouse_manager',
                 'tijari_wms_18.group_warehouse_head',
@@ -1788,6 +1935,13 @@ class StockPicking(models.Model):
         #         )
 
         marked_as_todo = self.filtered(lambda picking: picking.state == 'draft')
+        over_receipt_moves = marked_as_todo.filtered(
+            lambda picking: picking.stock_lebih
+        ).mapped('move_ids').filtered(lambda move: move.product_uom_qty <= 0)
+        if over_receipt_moves:
+            raise ValidationError(_(
+                "Product quantity must be greater than zero before marking an Over Receipt as To Do."
+            ))
         res = super().action_confirm()
 
         # Manufacturing component moves already carry the authoritative
@@ -3061,9 +3215,13 @@ class StockPicking(models.Model):
                         'Gunakan tombol Update Receipt untuk menyelesaikan dokumen Over-Receipt.'
                     ))
                 if picking.approval_request_id:
-                    raise UserError(_(
-                        'Dokumen Over-Receipt sudah dikirim untuk approval dan belum disetujui.'
-                    ))
+                    if picking.approval_state != 'rejected':
+                        raise UserError(_(
+                            'Dokumen Over-Receipt sudah dikirim untuk approval dan belum disetujui.'
+                        ))
+                    # Keep the rejected request as history, then let Validate
+                    # create a fresh request for the corrected quantities.
+                    picking.approval_request_id = False
 
                 approval_type = picking.approval_type_id or self.env.ref(
                     'tijari_wms_18.approval_type_over_receipt', raise_if_not_found=False,
@@ -3838,6 +3996,7 @@ class StockPicking(models.Model):
 
         self.shipment_information = 'full_shipment' if all_match else 'partial'
         self.transfer_shipment_discrepancy = True
+        self.wms_state = 'waiting_approval'
         if not self.approval_request_id:
             self._submit_transfer_shipment_discrepancy_approval()
         return {'type': 'ir.actions.client', 'tag': 'reload'}
@@ -3938,7 +4097,7 @@ class StockPicking(models.Model):
 
         result = wizard.with_context(
             return_from_actual_qty=True
-        ).action_create_returns()
+        ).sudo().action_create_returns()
 
         return result
 

@@ -7,6 +7,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -14,6 +15,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -21,6 +23,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -28,6 +31,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -35,6 +39,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -42,6 +47,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -49,6 +55,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -56,6 +63,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -63,6 +71,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -70,6 +79,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -77,6 +87,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -85,6 +96,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -92,6 +104,7 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -99,6 +112,184 @@
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+
+
+    <!-- Preserve full Data Hub menu visibility for the standard administrator groups. -->
+    <record id="menu_acumatica_all_import_staging_inbound" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_receipt" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_inventory_received" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_shipment_so" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_outbound" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_so_shipment" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_shipment_completed" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_shipment_transfer_completed" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_inventory_issue" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_issue_po_return" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_invoice_consignment" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_internal" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_so_shipment_co" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_vendor_return_direct_transfer" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_vendor_return_document" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_credit_memo_consignment" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_transfer_one_step" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_transfer_two_step" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_so_transfer" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_transfer_shipment" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_production" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_kit_assembly" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_uom" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_customer" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_vendor" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_warehouse" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_stock_item" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_non_stock_item" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="menu_acumatica_all_import_staging_inventory_stock" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
