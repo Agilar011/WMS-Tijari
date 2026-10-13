@@ -49,14 +49,14 @@ access_internal_transfer_order_it_staff,access.internal.transfer.order.it.staff,
 access_loginext_master_country_manager,loginext.master.country.manager,model_loginext_master_country,stock.group_stock_manager,1,1,1,1
 access_loginext_master_state_manager,loginext.master.state.manager,model_loginext_master_state,stock.group_stock_manager,1,1,1,1
 
-access_stock_scrap_operator,stock.scrap.operator,model_stock_scrap,tijari_wms_18.group_operator,1,1,1,1
+access_stock_scrap_operator,stock.scrap.operator,model_stock_scrap,tijari_wms_18.group_operator,1,1,0,0
 access_stock_scrap_manager,stock.scrap.manager,model_stock_scrap,stock.group_stock_manager,1,1,1,1
-access_stock_scrap_line_operator,stock.scrap.line.operator,model_stock_scrap_line,tijari_wms_18.group_operator,1,1,1,1
+access_stock_scrap_line_operator,stock.scrap.line.operator,model_stock_scrap_line,tijari_wms_18.group_operator,1,1,0,0
 access_stock_scrap_line_manager,stock.scrap.line.manager,model_stock_scrap_line,stock.group_stock_manager,1,1,1,1
 access_stock_scrap_line_it_staff,stock.scrap.line.it.staff,model_stock_scrap_line,tijari_wms_18.group_it_staff,1,1,1,1
-access_wms_scrap_move_operator,wms.scrap.move.operator,model_wms_scrap_move,tijari_wms_18.group_operator,1,1,1,1
+access_wms_scrap_move_operator,wms.scrap.move.operator,model_wms_scrap_move,tijari_wms_18.group_operator,1,1,0,0
 access_wms_scrap_move_manager,wms.scrap.move.manager,model_wms_scrap_move,stock.group_stock_manager,1,1,1,1
-access_wms_scrap_move_line_operator,wms.scrap.move.line.operator,model_wms_scrap_move_line,tijari_wms_18.group_operator,1,1,1,1
+access_wms_scrap_move_line_operator,wms.scrap.move.line.operator,model_wms_scrap_move_line,tijari_wms_18.group_operator,1,1,0,0
 access_wms_scrap_move_line_manager,wms.scrap.move.line.manager,model_wms_scrap_move_line,stock.group_stock_manager,1,1,1,1
 
 access_generate_package_wizard_operator,generate.package.wizard.operator,model_generate_package_wizard,tijari_wms_18.group_operator,1,1,1,1

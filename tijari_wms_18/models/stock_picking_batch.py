@@ -58,7 +58,10 @@ class StockPickingBatch(models.Model):
     @api.depends('picking_ids.pick_responsible_ids')
     def _compute_show_picker_page(self):
         user = self.env.user
-        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        is_warehouse_operator = (
+            user.has_group('tijari_wms_18.group_operator')
+            and not user.has_group('base.group_system')
+        )
         for batch in self:
             assigned_users = batch.picking_ids.mapped('pick_responsible_ids')
             batch.show_picker_page = (
@@ -69,7 +72,10 @@ class StockPickingBatch(models.Model):
     @api.depends('picking_ids.pack_responsible_ids')
     def _compute_show_packer_page(self):
         user = self.env.user
-        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        is_warehouse_operator = (
+            user.has_group('tijari_wms_18.group_operator')
+            and not user.has_group('base.group_system')
+        )
         for batch in self:
             assigned_users = batch.picking_ids.mapped('pack_responsible_ids')
             batch.show_packer_page = (
@@ -80,7 +86,10 @@ class StockPickingBatch(models.Model):
     @api.depends('picking_ids.putaway_responsible_ids')
     def _compute_show_putaway_page(self):
         user = self.env.user
-        is_warehouse_operator = user.has_group('tijari_wms_18.group_operator')
+        is_warehouse_operator = (
+            user.has_group('tijari_wms_18.group_operator')
+            and not user.has_group('base.group_system')
+        )
         for batch in self:
             assigned_users = batch.picking_ids.mapped('putaway_responsible_ids')
             batch.show_putaway_page = (

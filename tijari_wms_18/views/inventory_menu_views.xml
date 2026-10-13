@@ -77,23 +77,26 @@
             name="Document Only Operations"
             parent="menu_operations_others"
             sequence="1"
-            action="action_stock_operations_document_only"/>
+            action="action_stock_operations_document_only"
+            groups="tijari_wms_18.group_warehouse_manager,tijari_wms_18.group_warehouse_head,tijari_wms_18.group_warehouse_admin,tijari_wms_18.group_it_staff,stock.group_stock_manager,base.group_system"/>
         <menuitem id="menu_operations_others_over_receipt_document"
             name="Over-Receipt Document"
             parent="menu_operations_others"
             sequence="2"
             action="action_wms_over_receipt_document"
-            groups="tijari_wms_18.group_operator,stock.group_stock_manager"/>
+            groups="tijari_wms_18.group_warehouse_manager,tijari_wms_18.group_warehouse_head,tijari_wms_18.group_warehouse_admin,tijari_wms_18.group_it_staff,stock.group_stock_manager,base.group_system"/>
         <menuitem id="menu_operations_others_so_consignment_receipts"
             name="Consignment Overview"
             parent="menu_operations_others"
             sequence="3"
-            action="action_wms_operations_so_consignment_receipts"/>
+            action="action_wms_operations_so_consignment_receipts"
+            groups="tijari_wms_18.group_warehouse_manager,tijari_wms_18.group_warehouse_head,tijari_wms_18.group_warehouse_admin,tijari_wms_18.group_it_staff,stock.group_stock_manager,base.group_system"/>
         <menuitem id="menu_operations_others_auto_transaction_log"
             name="Auto-Transaction Log"
             parent="menu_operations_others"
             sequence="4"
-            action="action_wms_auto_transaction_log"/>
+            action="action_wms_auto_transaction_log"
+            groups="tijari_wms_18.group_warehouse_manager,tijari_wms_18.group_warehouse_head,tijari_wms_18.group_warehouse_admin,tijari_wms_18.group_it_staff,stock.group_stock_manager,base.group_system"/>
 
 
 </odoo>

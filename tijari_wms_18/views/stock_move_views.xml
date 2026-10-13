@@ -143,6 +143,7 @@
             <form>
                 <field name="adt_type" invisible="1"/>
                 <field name="owner_id" invisible="1"/>
+                <field name="picking_id" invisible="1"/>
                 <field name="picking_type_name" invisible="1"/>
                 <field name="adt_dest_location_id" invisible="1"/>
                 <div class="grid-container">
@@ -159,7 +160,7 @@
                                             
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
                             <label for="product_uom_qty" style="margin: 0 !important; white-space: nowrap !important;"/>
-                            <field name="product_uom_qty" readonly="state != 'draft'" nolabel="1"/>
+                            <field name="product_uom_qty" readonly="state != 'draft' and not (picking_id.stock_lebih and picking_id.state == 'assigned' and picking_id.approval_state == 'rejected')" nolabel="1"/>
                             <field name="product_uom" groups="uom.group_uom" readonly="state != 'draft'" nolabel="1" options="{'no_open': True}"/>
                         </div>
                         <div invisible="picking_type_name != 'Receipts'" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
@@ -2735,11 +2736,11 @@
                             string="Scan Handheld"
                             placeholder="Scan handheld: lot atau lokasi"
                             invisible="putaway_status == 'finished'"
-
+                            column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product','Receipts','Receipt Internal')"/>
+                        <field name="putaway_scan_code"
+                            string="Scan Product"
+                            readonly="1"
                             column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
-                        <!-- <field name="putaway_scan_code"
-                            string="Putaway Scan Code"
-                            readonly="1"/> -->
                         <field name="lot_id"
                             string="Lot/Serial Number"
                             readonly="1"

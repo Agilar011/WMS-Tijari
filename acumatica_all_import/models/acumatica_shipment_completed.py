@@ -207,13 +207,13 @@ class AcumaticaShipmentCompletedStaging(models.Model):
 
     is_used = fields.Boolean('is_used', default=False)
 
-    _sql_constraints = [
-        (
-            'shipment_completed_unique',
-            'unique(shipment_nbr, config_id)',
-            'Data Shipment Completed dari Acumatica sudah ada!'
-        ),
-    ]
+    # _sql_constraints = [
+    #     (
+    #         'shipment_completed_unique',
+    #         'unique(shipment_nbr, config_id)',
+    #         'Data Shipment Completed dari Acumatica sudah ada!'
+    #     ),
+    # ]
 
     def action_reset_pending(self):
         self.filtered(lambda record: record.import_state == 'error').write({
