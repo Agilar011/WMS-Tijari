@@ -56,7 +56,7 @@
                 <field name="warehouse_code"/>
                 <field name="warehouse_dest_code"/>
                 <field name="document_only"/>
-                <field name="stock_lebih"/>
+                <field name="stock_lebih" string="WMSRelated"/>
                 <field name="total_qty"/>
                 <field name="acumatica_write_date" string="Last Modified"/>
                 <field name="import_state" widget="badge"
@@ -112,7 +112,7 @@
                             <field name="inventory_ref"/>
                             <field name="is_hold"/>
                             <field name="document_only"/>
-                            <field name="stock_lebih"/>
+                            <field name="stock_lebih" string="WMSRelated"/>
                             <field name="picking_type_id"/>
                             <field name="note"/>
                         </group>

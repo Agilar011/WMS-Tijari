@@ -1280,7 +1280,7 @@ class StockMoveLine(models.Model):
             if self.matching_lot_id and not self.lot_id:
                 vals['lot_id'] = self.matching_lot_id.id
         self.write(vals)
-        return {'type': 'ir.actions.act_window_close'}
+        return self.move_id.action_open_move_putaway()
 
     def action_mark_putaway_unfinished(self):
         self.write({'putaway_status': 'unfinished'})

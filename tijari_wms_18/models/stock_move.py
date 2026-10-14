@@ -1267,7 +1267,7 @@ class StockMove(models.Model):
         for line in lines:
             line.action_mark_putaway_finished()
 
-        return {'type': 'ir.actions.act_window_close'}
+        return True
 
     def action_open_move_putaway(self):
         self.ensure_one()
