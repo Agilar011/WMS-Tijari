@@ -95,7 +95,7 @@
             <xpath expr="//field[@name='state']" position="after">
                 <field name="wms_state"
                     widget="statusbar"
-                    statusbar_visible="draft,assigned,waiting_response,waiting_approval,done"
+                    statusbar_visible="draft,assigned,done"
                     invisible="stock_lebih or ((picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment'])) and not (internal_transfer_order_id and internal_transfer_leg == 'receipt')"
                 />
                 <field name="wms_state_over_receipt"
@@ -105,7 +105,7 @@
                 />
                 <field name="wms_state_over_receipt"
                     widget="statusbar"
-                    statusbar_visible="draft,assigned,waiting_response,done"
+                    statusbar_visible="draft,assigned,done"
                     invisible="not stock_lebih or not approval_request_id"
                 />
             </xpath>
@@ -202,25 +202,25 @@
 
             <xpath expr="//header" position="inside">
                 <button name="action_approve"
-                    string="Approve Over-Receipt"
+                    string="Approve"
                     type="object"
                     class="btn-primary"
                     groups="stock.group_stock_user"
                     invisible="not stock_lebih or wms_state != 'waiting_response' or approval_state != 'waiting' or current_approver_id != uid"/>
                 <button name="action_reject"
-                    string="Reject Over-Receipt"
+                    string="Reject"
                     type="object"
                     class="btn-secondary"
                     groups="stock.group_stock_user"
                     invisible="not stock_lebih or wms_state != 'waiting_response' or approval_state != 'waiting' or current_approver_id != uid"/>
                 <button name="action_approve"
-                    string="Approve Quantity Discrepancy"
+                    string="Approve"
                     type="object"
                     class="btn-primary"
                     groups="stock.group_stock_user"
                     invisible="not transfer_shipment_discrepancy or wms_state != 'waiting_approval' or approval_state != 'waiting' or current_approver_id != uid"/>
                 <button name="action_rollback_over_receipt_approval"
-                    string="Rollback Approval"
+                    string="Rollback"
                     type="object"
                     groups="stock.group_stock_manager,base.group_system"
                     confirm="Rollback approval dan kembalikan dokumen ke tahap menunggu approval?"
@@ -661,7 +661,7 @@
                     readonly="approval_state != 'waiting' or current_approver_id != uid"/>
                 <field name="ref_sotr" string="Ref. No. Document"
                     invisible="not stock_lebih or (wms_state != 'waiting_response' and state != 'done')"
-                    readonly="approval_state != 'waiting' or current_approver_id != uid"/>
+                    readonly="state == 'done'"/>
                 <field name="internal_transfer_order_id" invisible="1"/>
                 <field name="internal_transfer_leg" invisible="1"/>
                 <field name="show_internal_transfer_destination_location" invisible="1"/>
