@@ -196,7 +196,6 @@ class StockPicking(models.Model):
             ('inventory_receive', 'Inventory Receive'),
         ],
         string='Tipe Transaksi Over-Receipt',
-        default='receipt_sotr',
         copy=False,
         tracking=True,
     )
