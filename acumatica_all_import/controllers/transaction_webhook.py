@@ -422,8 +422,10 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         Header = self._env()["acumatica.kit.assembly"].sudo()
         Component = self._env()["acumatica.kit.assembly.component"].sudo()
         Staging = self._env()["acumatica.kit.assembly.line"].sudo()
+        Manufacturing = self._env()["mrp.production"].sudo()
         created = updated = component_lines = staging_lines = imported = errors = 0
         staging_ids = []
+        already_generated = {}
 
         for reference_nbr, document_records in grouped.items():
             first_index, first_item = document_records[0]
@@ -443,6 +445,19 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                     mail_create_nolog=True,
                 ).create({field: value for field, value in header_vals.items() if field in Header._fields})
                 created += 1
+
+            # Decide whether this webhook reference has already generated its MO.
+            # Lock the header so concurrent webhook deliveries cannot both generate it.
+            self._env().cr.execute(
+                f'SELECT id FROM "{header._table}" WHERE id = %s FOR UPDATE',
+                (header.id,),
+            )
+            header.invalidate_recordset(['mrp_production_id'])
+            existing_manufacturing = header.mrp_production_id or Manufacturing.search(
+                [('origin', '=', reference_nbr)], limit=1,
+            )
+            if existing_manufacturing:
+                already_generated[reference_nbr] = existing_manufacturing
 
             header.component_ids.unlink()
             Staging.search([("reference_nbr", "=", reference_nbr)]).unlink()
@@ -481,7 +496,28 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         staged_records = Staging.browse(staging_ids)
         import_logs = []
         if staged_records:
-            staged_records._do_import()
+            for reference_nbr, manufacturing in already_generated.items():
+                product = manufacturing.product_id
+                message = "Manufacturing Order already generated: %s" % manufacturing.display_name
+                header = Header.search([("reference_nbr", "=", reference_nbr)], limit=1)
+                header.write({
+                    "import_state": "created",
+                    "import_message": message,
+                    "mrp_production_id": manufacturing.id,
+                })
+                staged_records.filtered(
+                    lambda line: line.reference_nbr == reference_nbr
+                ).write({
+                    "import_state": "created",
+                    "import_message": message,
+                    "odoo_product_id": product.product_tmpl_id.id if product else False,
+                })
+
+            pending_records = staged_records.filtered(
+                lambda line: line.reference_nbr not in already_generated
+            )
+            if pending_records:
+                pending_records._do_import()
             ErrorLog = self._env()["acumatica.error.transaction"].sudo()
             ErrorLog._handle_acumatica_created(staged_records)
             error_logs = ErrorLog.search([
