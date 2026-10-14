@@ -932,6 +932,14 @@ class WmsApiController(http.Controller):
             grouped_lines[product.id]['diff'] += float(line.inventory_diff_quantity or 0)
 
         for prod_id, obj in grouped_lines.items():
+            diff = obj['diff']
+            if diff < 0:
+                obj['diff_color'] = "#FF0000"
+            elif diff > 0:
+                obj['diff_color'] = "#008000" 
+            else:
+                obj['diff_color'] = "#000000" 
+                
             data['detail'].append(obj)
         data = json.dumps(data)
 
