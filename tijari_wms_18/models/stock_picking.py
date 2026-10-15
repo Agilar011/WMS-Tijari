@@ -4018,8 +4018,92 @@ class StockPicking(models.Model):
         staging_data.is_used = True
 
         self.action_confirm_shipment()   
+    # transfer shipment lama
+    # def action_complete_transfer_shipment(self):
+    #     self.ensure_one()
+    #     if not (
+    #         self.internal_transfer_order_id
+    #         and self.internal_transfer_leg == 'delivery'
+    #         and self.picking_type_id.code == 'internal'
+    #         and self.adt_type == 'Transfer Shipment'
+    #         and self.wms_state == 'waiting_response'
+    #     ):
+    #         raise UserError(_('Shipment completion is only available for a Transfer Shipment ITO delivery waiting for shipment.'))
 
-    def action_complete_transfer_shipment(self):
+    #     staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
+    #         [('shipment_nbr', '=', self.origin)], limit=1,
+    #     )
+    #     if not staging_data:
+    #         raise UserError(_(
+    #             'Dokumen %(document)s tidak ditemukan di staging Shipment Transfer Completed.'
+    #         ) % {'document': self.origin})
+
+    #     staging_quantities = {}
+    #     staging_matches_document = bool(staging_data)
+    #     if staging_data:
+    #         # Acumatica can return multiple detail rows for the same product.
+    #         # Merge those rows by InventoryID before comparing with the moves.
+    #         for line in staging_data.line_ids:
+    #             inventory_id = (line.line_inventory_id or '').strip()
+    #             if inventory_id:
+    #                 staging_quantities[inventory_id] = (
+    #                     staging_quantities.get(inventory_id, 0.0)
+    #                     + line.line_quantity
+    #                 )
+
+    #     move_quantities = {}
+    #     for move in self.move_ids:
+    #         inventory_id = (move.product_id.default_code or '').strip()
+    #         move_quantities[inventory_id] = (
+    #             move_quantities.get(inventory_id, 0.0) + move.quantity
+    #         )
+
+    #     if not staging_data:
+    #         staging_matches_document = False
+    #     elif set(staging_quantities) != set(move_quantities):
+    #         staging_matches_document = False
+    #     for inventory_id, move_qty in move_quantities.items():
+    #         staging_qty = staging_quantities.get(inventory_id, 0.0)
+    #         product_moves = self.move_ids.filtered(
+    #             lambda move: (move.product_id.default_code or '').strip() == inventory_id
+    #         )
+    #         rounding = product_moves[:1].product_uom.rounding
+    #         if not staging_qty or float_compare(
+    #             staging_qty,
+    #             move_qty,
+    #             precision_rounding=rounding,
+    #         ) != 0:
+    #             staging_matches_document = False
+
+    #     if staging_matches_document:
+    #         if not self.approval_request_id:
+    #             self.transfer_shipment_discrepancy = False
+    #         for move in self.move_ids:
+    #             # The staging total was checked per product above. Distribute
+    #             # the confirmed total to each move using its own document qty.
+    #             move.shipped_qty = move.quantity
+    #         self.shipment_information = 'full_shipment'
+    #         return self.action_confirm_shipment()
+
+    #     all_match = True
+    #     for move in self.move_ids:
+    #         if move.shipped_qty < 0:
+    #             raise UserError(_('Shipped Qty tidak boleh kurang dari nol.'))
+    #         if float_compare(
+    #             move.shipped_qty,
+    #             move.quantity,
+    #             precision_rounding=move.product_uom.rounding,
+    #         ) != 0:
+    #             all_match = False
+
+    #     self.shipment_information = 'full_shipment' if all_match else 'partial'
+    #     self.transfer_shipment_discrepancy = True
+    #     self.wms_state = 'waiting_approval'
+    #     if not self.approval_request_id:
+    #         self._submit_transfer_shipment_discrepancy_approval()
+    #     return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+    def action_get_transfer_shipment_completed_staging(self):
         self.ensure_one()
         if not (
             self.internal_transfer_order_id
@@ -4039,17 +4123,15 @@ class StockPicking(models.Model):
             ) % {'document': self.origin})
 
         staging_quantities = {}
-        staging_matches_document = bool(staging_data)
-        if staging_data:
-            # Acumatica can return multiple detail rows for the same product.
-            # Merge those rows by InventoryID before comparing with the moves.
-            for line in staging_data.line_ids:
-                inventory_id = (line.line_inventory_id or '').strip()
-                if inventory_id:
-                    staging_quantities[inventory_id] = (
-                        staging_quantities.get(inventory_id, 0.0)
-                        + line.line_quantity
-                    )
+        # Acumatica can return multiple detail rows for a product. Aggregate
+        # by InventoryID before distributing the reported quantity to moves.
+        for line in staging_data.line_ids:
+            inventory_id = (line.line_inventory_id or '').strip()
+            if inventory_id:
+                staging_quantities[inventory_id] = (
+                    staging_quantities.get(inventory_id, 0.0)
+                    + line.line_quantity
+                )
 
         move_quantities = {}
         for move in self.move_ids:
@@ -4058,54 +4140,52 @@ class StockPicking(models.Model):
                 move_quantities.get(inventory_id, 0.0) + move.quantity
             )
 
-        if not staging_data:
-            staging_matches_document = False
-        elif set(staging_quantities) != set(move_quantities):
-            staging_matches_document = False
+        staging_matches_document = set(staging_quantities) == set(move_quantities)
         for inventory_id, move_qty in move_quantities.items():
             staging_qty = staging_quantities.get(inventory_id, 0.0)
             product_moves = self.move_ids.filtered(
                 lambda move: (move.product_id.default_code or '').strip() == inventory_id
             )
             rounding = product_moves[:1].product_uom.rounding
-            if not staging_qty or float_compare(
+            if float_compare(
                 staging_qty,
                 move_qty,
                 precision_rounding=rounding,
             ) != 0:
                 staging_matches_document = False
 
+        # Persist the actual shipped quantity from staging, including zero for
+        # products missing from the response. A discrepancy is routed through
+        # the existing approval flow below.
+        for move in self.move_ids:
+            inventory_id = (move.product_id.default_code or '').strip()
+            product_moves = self.move_ids.filtered(
+                lambda candidate: (candidate.product_id.default_code or '').strip() == inventory_id
+            )
+            total_move_qty = sum(product_moves.mapped('quantity'))
+            total_staging_qty = staging_quantities.get(inventory_id, 0.0)
+            move.shipped_qty = (
+                move.quantity * total_staging_qty / total_move_qty
+                if total_move_qty
+                else 0.0
+            )
+
+        self.shipment_information = 'full_shipment' if staging_matches_document else 'partial'
         if staging_matches_document:
-            if not self.approval_request_id:
-                self.transfer_shipment_discrepancy = False
-            for move in self.move_ids:
-                # The staging total was checked per product above. Distribute
-                # the confirmed total to each move using its own document qty.
-                move.shipped_qty = move.quantity
-            self.shipment_information = 'full_shipment'
+            self.transfer_shipment_discrepancy = False
+            staging_data.is_used = True
             return self.action_confirm_shipment()
 
-        all_match = True
-        for move in self.move_ids:
-            if move.shipped_qty < 0:
-                raise UserError(_('Shipped Qty tidak boleh kurang dari nol.'))
-            if float_compare(
-                move.shipped_qty,
-                move.quantity,
-                precision_rounding=move.product_uom.rounding,
-            ) != 0:
-                all_match = False
-
-        self.shipment_information = 'full_shipment' if all_match else 'partial'
         self.transfer_shipment_discrepancy = True
         self.wms_state = 'waiting_approval'
         if not self.approval_request_id:
             self._submit_transfer_shipment_discrepancy_approval()
+        staging_data.is_used = True
         return {'type': 'ir.actions.client', 'tag': 'reload'}
 
-    # Keep existing RPC entrypoints compatible while the UI uses one button.
-    def action_get_transfer_shipment_completed_staging(self):
-        return self.action_complete_transfer_shipment()
+    # Keep existing RPC entrypoints compatible while sharing one completion flow.
+    def action_complete_transfer_shipment(self):
+        return self.action_get_transfer_shipment_completed_staging()
 
     def action_confirm_shipment_manually(self):
         return self.action_complete_transfer_shipment()
