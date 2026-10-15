@@ -80,6 +80,66 @@ class StockLocationAcumatica(models.Model):
     error_message = fields.Char(string='Error Message', readonly=True)
     is_ungropping = fields.Boolean(string='Tidak Digrouping', default=False)
 
+    def action_generate_stock_location(self):
+        """Create an internal child location using the Acumatica location code."""
+        Location = self.env['stock.location']
+        created_locations = Location
+
+        for mapping in self:
+            code = (mapping.code or '').strip()
+            if not code:
+                raise ValidationError('Location Code harus diisi sebelum membuat lokasi.')
+
+            warehouse = mapping.odoo_building_id
+            if not warehouse and mapping.building:
+                warehouse = self.env['stock.warehouse'].search(
+                    [('code', '=', mapping.building)], limit=1
+                )
+            if not warehouse or not warehouse.lot_stock_id:
+                warehouse_name = mapping.building or (
+                    mapping.odoo_building_id.display_name
+                    if mapping.odoo_building_id else ''
+                )
+                raise ValidationError(
+                    'Gudang %s tidak ditemukan atau belum memiliki lokasi stok.'
+                    % warehouse_name
+                )
+
+            location = Location.search([
+                ('name', '=', code),
+                ('location_id', '=', warehouse.lot_stock_id.id),
+            ], limit=1)
+            if not location:
+                location = Location.create({
+                    'name': code,
+                    'location_id': warehouse.lot_stock_id.id,
+                    'usage': 'internal',
+                    'is_location_mapping': True,
+                })
+            elif not location.is_location_mapping:
+                location.is_location_mapping = True
+            if mapping.odoo_location_id != location:
+                mapping.odoo_location_id = location
+            created_locations |= location
+
+        if len(created_locations) == 1:
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Stock Location',
+                'res_model': 'stock.location',
+                'view_mode': 'form',
+                'res_id': created_locations.id,
+                'target': 'current',
+            }
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Locations',
+            'res_model': 'stock.location',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', created_locations.ids)],
+            'target': 'current',
+        }
+
     @api.onchange('odoo_location_id')
     def _onchange_odoo_location_id(self):
         if self.is_error:
