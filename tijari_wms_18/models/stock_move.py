@@ -615,7 +615,7 @@ class StockMove(models.Model):
                 difference = total_qty - total_confirmation_quantity 
             else:
                 if move.raw_material_production_id:
-                    total_confirmation_quantity = move.mo_confirmation_quantity
+                    total_confirmation_quantity = move.quantity
                     total_qty = move.product_uom_qty
                     difference = total_qty - total_confirmation_quantity
                 else:
@@ -1017,21 +1017,6 @@ class StockMove(models.Model):
                 unpacked_lot_id=self.env.context.get('unpacked_lot_id'),
                 unpacked_lot_code=self.env.context.get('unpacked_lot_code'),
             ),
-        }
-
-    def action_open_move_mo(self):
-        self.ensure_one()
-
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Stock Move',
-            'res_model': 'stock.move',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_mo_view'
-            ).id,
-            'target': 'new',
         }
 
     # Putaway flow scoped to the current stock move. The existing picking and
