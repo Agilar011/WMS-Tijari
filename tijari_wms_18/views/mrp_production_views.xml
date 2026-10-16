@@ -174,7 +174,7 @@
                             <templates>
                                 <t t-name="card">
                                     <div class="o_wms_operation_card">
-                                        <div class="o_wms_operation_product">
+                                        <div class="o_wms_operation_product d-flex justify-content-between align-items-center">
                                             <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
                                             <field name="status_mo_check"
                                                     widget="badge"
