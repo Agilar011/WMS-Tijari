@@ -3448,7 +3448,68 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-            if "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
+            if (
+                "Pick Components" in (rec.picking_type_name or "")
+                and rec.state == 'done'
+                and (rec.backorder_id or rec.backorder_ids)
+            ):
+                # Raw material moves belong to the MO and may not have a
+                # picking_id. Detect the backorder from this picking, then
+                # create a separate working line on each affected MO move.
+                component_moves = rec.move_ids.move_dest_ids.filtered(
+                    lambda move: bool(move.raw_material_production_id)
+                )
+                for move in component_moves:
+                    finished_lines = move.move_line_ids.filtered(
+                        lambda line: line.mo_status == 'finished'
+                    )
+                    if not finished_lines:
+                        continue
+
+                    working_lines = move.move_line_ids.filtered(
+                        lambda line: (
+                            line.state not in ('done', 'cancel')
+                            and line.mo_status != 'finished'
+                        )
+                    )
+
+                    source_moves = rec.move_ids.filtered(
+                        lambda source_move: move in source_move.move_dest_ids
+                    )
+                    lot_values = {}
+                    for source_line in source_moves.move_line_ids:
+                        lot_id = source_line.lot_id.id or False
+                        lot_name = source_line.lot_id.name or source_line.lot_name or False
+                        lot_values[(lot_id, lot_name)] = True
+
+                    # If the transfer line has no lot, preserve the lot from
+                    # the finished MO line so the new line remains traceable.
+                    if not lot_values:
+                        for finished_line in finished_lines:
+                            lot_id = finished_line.lot_id.id or False
+                            lot_name = finished_line.lot_id.name or finished_line.lot_name or False
+                            lot_values[(lot_id, lot_name)] = True
+
+                    for lot_id, lot_name in lot_values:
+                        matching_working_line = working_lines.filtered(
+                            lambda line: (
+                                line.lot_id.id == lot_id
+                                and (line.lot_id.name or line.lot_name or False) == lot_name
+                            )
+                        )
+                        if matching_working_line:
+                            continue
+                        line_vals = move._prepare_move_line_vals(quantity=0.0)
+                        line_vals.update({
+                            'quantity': 0.0,
+                            'lot_id': lot_id,
+                            'lot_name': lot_name,
+                            'mo_status': 'unfinished',
+                            'picked': False,
+                        })
+                        self.env['stock.move.line'].create(line_vals)
+
+            elif "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
                 next_pickings = rec.move_ids.move_dest_ids.mapped("picking_id").filtered(
                     lambda picking: picking.picking_type_name == "Pack"
                 )
