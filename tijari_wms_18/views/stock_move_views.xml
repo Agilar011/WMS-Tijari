@@ -2300,8 +2300,8 @@
                             optional="hide"
                             readonly="parent.state in ('done', 'cancel')"/>
 
-                        <field name="quantity" string="Qty Target" readonly="1" force_save="1" />
-                        <field name="mo_confirmation_quantity" string="Qty Digunakan" readonly="parent.state in ('done', 'cancel')"/>
+                        <field name="quantity" string="Qty Digunakan" readonly="0" force_save="1" />
+                        <field name="mo_confirmation_quantity" string="Qty Digunakan" column_invisible="1" readonly="parent.state in ('done', 'cancel')"/>
                         <field name="product_uom_id" string="Unit of Measure" readonly="parent.state in ('done', 'cancel')"/>
                         
                         <field name="mo_status" string="Status"
@@ -2383,12 +2383,12 @@
                                     <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" readonly="parent.state in ('done', 'cancel')" force_save="1"/>
                                 </div> -->
                                 <div class="d-flex align-items-center gap-1">
-                                    <strong>Qty Target: </strong>
-                                    <field name="quantity" readonly="1" force_save="1"/>
+                                    <strong>Qty Digunakan: </strong>
+                                    <field name="quantity" readonly="0" force_save="1"/>
                                     <field name="product_uom_id" readonly="1" force_save="1"/>
                                 </div>
 
-                                <div class="d-flex align-items-center gap-1">
+                                <div class="d-flex align-items-center gap-1" invisible="1">
                                     <strong>Qty Digunakan: </strong>
                                     <field name="mo_confirmation_quantity" readonly="parent.state in ('done', 'cancel')"/>
                                     <field name="product_uom_id" readonly="parent.state in ('done', 'cancel')"/>
@@ -2746,10 +2746,10 @@
                             placeholder="Scan handheld: lot atau lokasi"
                             invisible="putaway_status == 'finished'"
                             column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product','Receipts','Receipt Internal')"/>
-                        <field name="putaway_scan_code"
+                        <!-- <field name="putaway_scan_code"
                             string="Scan Product"
                             readonly="1"
-                            column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
+                            column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/> -->
                         <field name="lot_id"
                             string="Lot/Serial Number"
                             readonly="1"

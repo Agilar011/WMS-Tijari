@@ -1583,29 +1583,30 @@ class StockMoveLine(models.Model):
         return self.move_id.action_open_move_mo()
 
     def _validate_before_mark_finished_mo(self):
-        confirmation_quantity = self.mo_confirmation_quantity
-        quantity = self.quantity
+        for line in self:
+            move = line.move_id
+            if not move:
+                continue
 
-        rounding = self.product_uom_id.rounding if self.product_uom_id else 0.01
-        comparison = float_compare(
-            confirmation_quantity,
-            quantity,
-            precision_rounding=rounding,
-        )
+            total_used_qty = sum(move.move_line_ids.mapped('quantity'))
+            demand_qty = move.product_uom_qty
+            rounding = move.product_uom.rounding if move.product_uom else 0.01
+            if float_compare(
+                total_used_qty,
+                demand_qty,
+                precision_rounding=rounding,
+            ) > 0:
+                raise ValidationError(_(
+                    "Qty Digunakan tidak boleh lebih besar dari To Consume.\n"
+                    "Product: %(product)s\n"
+                    "Qty Digunakan: %(used)s\n"
+                    "To Consume: %(demand)s"
+                ) % {
+                    'product': move.product_id.display_name,
+                    'used': total_used_qty,
+                    'demand': demand_qty,
+                })
 
-        if float_is_zero(
-            confirmation_quantity,
-            precision_rounding=rounding,
-        ):
-            raise UserError(f"Qty Digunakan Lot {self.lot_id.name} tidak boleh 0.")
-
-        if comparison > 0:
-            raise UserError("Qty Digunakan tidak boleh melebihi Quantity")  
-        
-        # if self.matching_lot_id != self.lot_id:
-        #     raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
-
-        return comparison
 
     @api.onchange('location_putaway_id')
     def _onchange_location_putaway_id(self):
@@ -1897,6 +1898,12 @@ class StockMoveLine(models.Model):
 
             # Return picking tidak melalui proses matching WMS.
             if move.picking_id.return_id:
+                move.picked = True
+                continue
+
+            # Raw material moves are consumed by manufacturing and do not use
+            # the transfer matching flow to determine whether they were picked.
+            if move.raw_material_production_id:
                 move.picked = True
                 continue
 
