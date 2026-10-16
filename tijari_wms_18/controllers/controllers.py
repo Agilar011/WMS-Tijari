@@ -1080,6 +1080,7 @@ class WmsApiController(http.Controller):
                 'name': line.product_id.name or '',
                 'lot': lot_names,
                 'qty': line.difference_quantity,
+                'qty2': line.quantity,
                 'uom': line.product_uom.name or '',
                 'lok': line.location_id.name or '',
             })
