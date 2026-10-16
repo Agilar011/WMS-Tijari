@@ -1896,6 +1896,14 @@ class StockMoveLine(models.Model):
     def _update_move_picked(self):
         for move in self.mapped('move_id'):
 
+            # Odoo's inventory adjustment moves have no picking and are
+            # already marked picked by _get_inventory_move_values(). They do
+            # not use the WMS matching workflow; changing picked to False
+            # makes stock.move._action_done() skip applying their quantities.
+            if move.is_inventory and not move.picking_id:
+                move.picked = True
+                continue
+
             # Return picking tidak melalui proses matching WMS.
             if move.picking_id.return_id:
                 move.picked = True
