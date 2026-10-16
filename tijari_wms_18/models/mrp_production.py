@@ -204,6 +204,20 @@ class WMSMRPProduction(models.Model):
 
         return res
 
+    def action_assign(self):
+        res = super().action_assign()
+
+        # Keep the normal reservation flow, then leave raw-material quantity
+        # entry to the warehouse operator, like the receipt flow in
+        # stock.picking.action_assign().
+        move_lines = self.move_raw_ids.move_line_ids.filtered(
+            lambda line: line.state not in ('done', 'cancel')
+        )
+        if move_lines:
+            move_lines.write({'quantity': 0.0})
+
+        return res
+
     def button_mark_done(self):
         for production in self:
             unfinished_moves = production.move_raw_ids.filtered(
@@ -223,7 +237,7 @@ class WMSMRPProduction(models.Model):
                 )
             
             for move in production.move_raw_ids:
-                confirmed_qty = move.mo_confirmation_quantity
+                confirmed_qty = move.quantity
 
                 if float_compare(
                     production.qty_producing,
@@ -248,12 +262,12 @@ class WMSMRPProduction(models.Model):
             ):
                 production.action_generate_serial()
 
-            for move in production.move_raw_ids:
-                for line in move.move_line_ids:
-                    confirmation_quantity = line.mo_confirmation_quantity
+            # for move in production.move_raw_ids:
+            #     for line in move.move_line_ids:
+            #         confirmation_quantity = line.mo_confirmation_quantity
 
-                    line.quantity_shadow = line.quantity
-                    line.quantity = confirmation_quantity
+            #         line.quantity_shadow = line.quantity
+            #         line.quantity = confirmation_quantity
 
         res = super().button_mark_done()
 
