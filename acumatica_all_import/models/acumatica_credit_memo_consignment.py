@@ -221,6 +221,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
 
             # Ambil seluruh baris data item (Lines) yang berelasi dengan header ini
             to_create_move_lines = first.line_ids
+            update_messages = []
 
             print(f"Move Line count: {len(to_create_move_lines)}")
 
@@ -283,6 +284,16 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     # Cek pencegahan duplikasi (Dedup Dokumen via Origin)
                     picking = Picking.search([('origin', '=', origin)], limit=1)
                     is_new_picking = False
+                    previous_moves = {}
+                    if picking and picking.state == 'draft':
+                        update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                            picking, vals,
+                            field_names={'picking_type_id', 'location_id', 'location_dest_id', 'scheduled_date', 'origin', 'note', 'adt_receipt_nbr', 'adt_acumatica_write_date', 'adt_status', 'adt_type', 'adt_is_document_only', 'adt_external_id'},
+                            prefix='Header',
+                        ))
+                        for old_move in picking.move_ids:
+                            key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                            previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
 
                     if picking:
                         if picking.state != 'draft':
@@ -291,7 +302,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         action_state = 'updated'
                         self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=origin)
                     else:
-                        picking = Picking.create(vals)
+                        picking = Picking.sudo().create(vals)
                         is_new_picking = True
                         action_state = 'created'
 
@@ -302,6 +313,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     # BULK CREATION STOCK MOVES (DETAIL LINES)
                     # ---------------------------------------------------------
                     moves_to_create = []
+                    update_line_snapshots = []
 
                     for line in to_create_move_lines:
                         # Cari data produk Odoo berdasarkan InventoryID Acumatica
@@ -346,10 +358,24 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         # Sterilkan data dari Invalid Field khusus stock.move
                         single_move_vals = {k: v for k, v in single_move_vals.items() if k in Move._fields}
                         moves_to_create.append(single_move_vals)
+                        update_line_snapshots.append((line, product, qty))
 
                     # Eksekusi pembuatan seluruh Stock Moves secara massal di luar perulangan
                     if moves_to_create:
-                        Move.create(moves_to_create)
+                        created_moves = Move.create(moves_to_create)
+                        if action_state == 'updated':
+                            for (source_line, product, qty), created_move in zip(update_line_snapshots, created_moves):
+                                line_key = str(source_line.adt_id or source_line.adt_rowNumber or source_line.adt_InventoryID or created_move.id)
+                                old = previous_moves.pop(line_key, None)
+                                label = source_line.adt_rowNumber or source_line.adt_InventoryID or '?'
+                                current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': product.uom_id.display_name or '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                                if old:
+                                    previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                                    changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                                    if changes:
+                                        update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                                else:
+                                    update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} ditambahkan")
 
                     picking.action_confirm()
                     picking.action_assign()
@@ -363,6 +389,13 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         'odoo_picking_id': picking.id,
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(reference_nbr, 'credit_memo_consignment')
+                    if action_state == 'updated':
+                        update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='Credit Memo Consignment',
+                            transaction_name=origin or str(first.id), event_type='update',
+                            message='\n'.join(update_messages) or 'Credit Memo Consignment berhasil disinkronkan; tidak ada field yang berubah.',
+                        )
 
                     # Ubah juga status sub-tabel staging lines-nya agar sinkron di UI
                     # to_create_move_lines.write({
@@ -379,6 +412,19 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # 2. STRATEGI PENANGANAN JIKA DOKUMEN ERROR:
                 # Savepoint di atas membatalkan picking/move dokumen yang gagal.
                 error += 1
+                error_text = str(e).lower()
+                if 'picking type' in error_text or 'operation type' in error_text:
+                    user_message = f"Operation Type untuk Credit Memo Consignment {origin or '-'} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS."
+                elif 'lokasi cons' in error_text or 'consignment' in error_text or 'end user consignment' in error_text:
+                    user_message = f"Lokasi consignment untuk Credit Memo {origin or '-'} belum tersedia. Periksa konfigurasi lokasi consignment di WMS."
+                elif 'product tidak ditemukan' in error_text:
+                    user_message = f"Produk pada Credit Memo Consignment {origin or '-'} belum terdaftar. Periksa master produk di WMS."
+                elif 'detail line belum ada' in error_text:
+                    user_message = f"Credit Memo Consignment {origin or '-'} belum memiliki detail produk. Lengkapi detail transaksi."
+                elif 'sudah divalidasi' in error_text or 'update digagalkan' in error_text:
+                    user_message = f"Credit Memo Consignment {origin or '-'} tidak dapat diperbarui karena dokumen sudah diproses. Hubungi admin jika perubahan diperlukan."
+                else:
+                    user_message = False
                 self.env['acumatica.error.transaction']._handle_acumatica_error(
                     first,
                     [str(e)],
@@ -405,6 +451,16 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     'import_message': str(e),
                     'odoo_picking_id': False,
                 })
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Credit Memo Consignment',
+                        transaction_name=origin or str(first.id), event_type='error', message=user_message,
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Credit Memo Consignment',
+                        error=str(e), error_type='unexpected',
+                    )
                 print(f"[ERROR SINKRONISASI] Dokumen {reference_nbr} Gagal: {str(e)}")
 
         msg = f'Generate done: {created} credit memo consignment created, {updated} credit memo consignment updated, {error} credit memo consignment error.'

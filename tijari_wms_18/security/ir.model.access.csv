@@ -1,29 +1,62 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_stock_report_velocity_line_manager,access.stock.report.velocity.line.manager,model_stock_report_velocity_line,stock.group_stock_manager,1,0,0,0
+access_stock_report_velocity_line_warehouse_manager,access.stock.report.velocity.line.warehouse.manager,model_stock_report_velocity_line,tijari_wms_18.group_warehouse_manager,1,0,0,0
+access_stock_report_velocity_line_warehouse_head,access.stock.report.velocity.line.warehouse.head,model_stock_report_velocity_line,tijari_wms_18.group_warehouse_head,1,0,0,0
+access_stock_report_velocity_line_warehouse_admin,access.stock.report.velocity.line.warehouse.admin,model_stock_report_velocity_line,tijari_wms_18.group_warehouse_admin,1,0,0,0
+access_stock_report_velocity_line_it_staff,access.stock.report.velocity.line.it.staff,model_stock_report_velocity_line,tijari_wms_18.group_it_staff,1,0,0,0
 access_stock_report_velocity_generate_manager,access.stock.report.velocity.generate.manager,model_stock_report_velocity_generate,stock.group_stock_manager,1,1,1,1
+access_stock_report_velocity_generate_warehouse_manager,access.stock.report.velocity.generate.warehouse.manager,model_stock_report_velocity_generate,tijari_wms_18.group_warehouse_manager,1,1,1,1
+access_stock_report_velocity_generate_warehouse_head,access.stock.report.velocity.generate.warehouse.head,model_stock_report_velocity_generate,tijari_wms_18.group_warehouse_head,1,1,1,1
+access_stock_report_velocity_generate_warehouse_admin,access.stock.report.velocity.generate.warehouse.admin,model_stock_report_velocity_generate,tijari_wms_18.group_warehouse_admin,1,1,1,1
+access_stock_report_velocity_generate_it_staff,access.stock.report.velocity.generate.it.staff,model_stock_report_velocity_generate,tijari_wms_18.group_it_staff,1,1,1,1
 access_stock_report_aging_line_manager,access.stock.report.aging.line.manager,model_stock_report_aging_line,stock.group_stock_manager,1,0,0,0
+access_stock_report_aging_line_warehouse_manager,access.stock.report.aging.line.warehouse.manager,model_stock_report_aging_line,tijari_wms_18.group_warehouse_manager,1,0,0,0
+access_stock_report_aging_line_warehouse_head,access.stock.report.aging.line.warehouse.head,model_stock_report_aging_line,tijari_wms_18.group_warehouse_head,1,0,0,0
+access_stock_report_aging_line_warehouse_admin,access.stock.report.aging.line.warehouse.admin,model_stock_report_aging_line,tijari_wms_18.group_warehouse_admin,1,0,0,0
+access_stock_report_aging_line_it_staff,access.stock.report.aging.line.it.staff,model_stock_report_aging_line,tijari_wms_18.group_it_staff,1,0,0,0
 access_stock_report_aging_generate_manager,access.stock.report.aging.generate.manager,model_stock_report_aging_generate,stock.group_stock_manager,1,1,1,1
+access_stock_report_aging_generate_warehouse_manager,access.stock.report.aging.generate.warehouse.manager,model_stock_report_aging_generate,tijari_wms_18.group_warehouse_manager,1,1,1,1
+access_stock_report_aging_generate_warehouse_head,access.stock.report.aging.generate.warehouse.head,model_stock_report_aging_generate,tijari_wms_18.group_warehouse_head,1,1,1,1
+access_stock_report_aging_generate_warehouse_admin,access.stock.report.aging.generate.warehouse.admin,model_stock_report_aging_generate,tijari_wms_18.group_warehouse_admin,1,1,1,1
+access_stock_report_aging_generate_it_staff,access.stock.report.aging.generate.it.staff,model_stock_report_aging_generate,tijari_wms_18.group_it_staff,1,1,1,1
+
+access_stock_picking_create_warehouse_manager,stock.picking.create.warehouse.manager,model_stock_picking,tijari_wms_18.group_warehouse_manager,1,0,1,0
+access_stock_picking_create_warehouse_head,stock.picking.create.warehouse.head,model_stock_picking,tijari_wms_18.group_warehouse_head,1,0,1,0
+access_stock_picking_create_warehouse_admin,stock.picking.create.warehouse.admin,model_stock_picking,tijari_wms_18.group_warehouse_admin,1,0,1,0
+access_stock_picking_create_it_staff,stock.picking.create.it.staff,model_stock_picking,tijari_wms_18.group_it_staff,1,0,1,0
 
 access_stock_picking_acumatica_error_manager,access.stock.picking.acumatica.error.manager,model_stock_picking_acumatica_error,stock.group_stock_manager,1,1,1,1
 access_stock_picking_acumatica_error_line_manager,access.stock.picking.acumatica.error.line.manager,model_stock_picking_acumatica_error_line,stock.group_stock_manager,1,1,1,1
+access_stock_picking_acumatica_error_it_staff,access.stock.picking.acumatica.error.it.staff,model_stock_picking_acumatica_error,tijari_wms_18.group_it_staff,1,1,1,1
+access_stock_picking_acumatica_error_line_it_staff,access.stock.picking.acumatica.error.line.it.staff,model_stock_picking_acumatica_error_line,tijari_wms_18.group_it_staff,1,1,1,1
+access_stock_valuation_layer_it_staff,access.stock.valuation.layer.it.staff,stock_account.model_stock_valuation_layer,tijari_wms_18.group_it_staff,1,0,0,0
 access_stock_move_scan_wizard_operator,access.stock.move.scan.wizard.operator,model_stock_move_scan_wizard,tijari_wms_18.group_operator,1,1,1,1
 access_stock_move_scan_wizard_manager,access.stock.move.scan.wizard.manager,model_stock_move_scan_wizard,stock.group_stock_manager,1,1,1,1
 access_product_sku_history_user,access.product.sku.history.user,model_product_sku_history,base.group_user,1,0,0,0
 access_vendor_id_history_user,access.vendor.id.history.user,model_vendor_id_history,base.group_user,1,1,1,0
 
 access_stock_location_acumatica_manager,access.stock.location.acumatica.manager,model_stock_location_acumatica,stock.group_stock_manager,1,1,1,1
+access_stock_location_acumatica_warehouse_manager,access.stock.location.acumatica.warehouse.manager,model_stock_location_acumatica,tijari_wms_18.group_warehouse_manager,1,1,1,1
+access_stock_location_acumatica_warehouse_head,access.stock.location.acumatica.warehouse.head,model_stock_location_acumatica,tijari_wms_18.group_warehouse_head,1,0,0,0
+access_stock_location_acumatica_warehouse_admin,access.stock.location.acumatica.warehouse.admin,model_stock_location_acumatica,tijari_wms_18.group_warehouse_admin,1,0,0,0
+access_stock_location_acumatica_it_staff,access.stock.location.acumatica.it.staff,model_stock_location_acumatica,tijari_wms_18.group_it_staff,1,1,1,1
 access_internal_transfer_order_operator,access.internal.transfer.order.operator,model_internal_transfer_order,tijari_wms_18.group_operator,1,1,1,1
 access_internal_transfer_order_manager,access.internal.transfer.order.manager,model_internal_transfer_order,stock.group_stock_manager,1,1,1,1
+access_internal_transfer_order_warehouse_manager,access.internal.transfer.order.warehouse.manager,model_internal_transfer_order,tijari_wms_18.group_warehouse_manager,1,1,1,1
+access_internal_transfer_order_warehouse_head,access.internal.transfer.order.warehouse.head,model_internal_transfer_order,tijari_wms_18.group_warehouse_head,1,1,1,1
+access_internal_transfer_order_warehouse_admin,access.internal.transfer.order.warehouse.admin,model_internal_transfer_order,tijari_wms_18.group_warehouse_admin,1,1,1,1
+access_internal_transfer_order_it_staff,access.internal.transfer.order.it.staff,model_internal_transfer_order,tijari_wms_18.group_it_staff,1,1,1,1
 access_loginext_master_country_manager,loginext.master.country.manager,model_loginext_master_country,stock.group_stock_manager,1,1,1,1
 access_loginext_master_state_manager,loginext.master.state.manager,model_loginext_master_state,stock.group_stock_manager,1,1,1,1
 
-access_stock_scrap_operator,stock.scrap.operator,model_stock_scrap,tijari_wms_18.group_operator,1,1,1,1
+access_stock_scrap_operator,stock.scrap.operator,model_stock_scrap,tijari_wms_18.group_operator,1,1,0,0
 access_stock_scrap_manager,stock.scrap.manager,model_stock_scrap,stock.group_stock_manager,1,1,1,1
-access_stock_scrap_line_operator,stock.scrap.line.operator,model_stock_scrap_line,tijari_wms_18.group_operator,1,1,1,1
+access_stock_scrap_line_operator,stock.scrap.line.operator,model_stock_scrap_line,tijari_wms_18.group_operator,1,1,0,0
 access_stock_scrap_line_manager,stock.scrap.line.manager,model_stock_scrap_line,stock.group_stock_manager,1,1,1,1
-access_wms_scrap_move_operator,wms.scrap.move.operator,model_wms_scrap_move,tijari_wms_18.group_operator,1,1,1,1
+access_stock_scrap_line_it_staff,stock.scrap.line.it.staff,model_stock_scrap_line,tijari_wms_18.group_it_staff,1,1,1,1
+access_wms_scrap_move_operator,wms.scrap.move.operator,model_wms_scrap_move,tijari_wms_18.group_operator,1,1,0,0
 access_wms_scrap_move_manager,wms.scrap.move.manager,model_wms_scrap_move,stock.group_stock_manager,1,1,1,1
-access_wms_scrap_move_line_operator,wms.scrap.move.line.operator,model_wms_scrap_move_line,tijari_wms_18.group_operator,1,1,1,1
+access_wms_scrap_move_line_operator,wms.scrap.move.line.operator,model_wms_scrap_move_line,tijari_wms_18.group_operator,1,1,0,0
 access_wms_scrap_move_line_manager,wms.scrap.move.line.manager,model_wms_scrap_move_line,stock.group_stock_manager,1,1,1,1
 
 access_generate_package_wizard_operator,generate.package.wizard.operator,model_generate_package_wizard,tijari_wms_18.group_operator,1,1,1,1
@@ -37,5 +70,3 @@ access_package_level_detail_wizard_operator,package.level.detail.wizard.operator
 
 access_move_unpack_wizard_manager,package.level.detail.wizard.manager,model_move_unpack_wizard,stock.group_stock_manager,1,1,1,1
 access_move_unpack_wizard_operator,package.level.detail.wizard.operator,model_move_unpack_wizard,tijari_wms_18.group_operator,1,1,1,1
-
-

@@ -982,14 +982,34 @@ class AcumaticaStockItemLine(models.Model):
                 # =============================================
 
                 if staging_success:
+                    staging_model = self.env[
+                        'acumatica.stock.item.line'
+                    ].with_context(tracking_disable=True, mail_notrack=True)
+                    for state, message, product_id, line_id in staging_success:
+                        staging_model.browse(line_id).write({
+                            'import_state': state,
+                            'import_message': message,
+                            'odoo_product_id': product_id,
+                        })
 
-                    self.env.cr.executemany("""
-                        UPDATE acumatica_stock_item_line
-                        SET import_state = %s,
-                            import_message = %s,
-                            odoo_product_id = %s
-                        WHERE id = %s
-                    """, staging_success)
+                    # Verify status using the ORM after the write. Product
+                    # updates and staging status are separate operations; do
+                    # not let the import summary claim success if this part
+                    # did not persist.
+                    refreshed = staging_model.browse(
+                        [item[3] for item in staging_success]
+                    )
+                    refreshed.invalidate_recordset([
+                        'import_state', 'import_message', 'odoo_product_id',
+                    ])
+                    missing_status = refreshed.filtered(
+                        lambda line: line.import_state not in ('created', 'updated')
+                    )
+                    if missing_status:
+                        raise UserError(
+                            'Status staging Stock Item tidak tersimpan untuk: %s'
+                            % ', '.join(missing_status.mapped('inventory_id'))
+                        )
 
                 # =============================================
                 # BULK STAGING ERROR

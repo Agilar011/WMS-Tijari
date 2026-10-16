@@ -9,7 +9,6 @@
             <search string="API Data Hub Dashboard">
                 <field name="adt_type" string="Transaction Type"/>
                 <field name="origin" string="Reference"/>
-                <field name="picking_type_id" string="Operation Type"/>
                 <field name="scheduled_date" string="Scheduled Date"/>
                 <field name="state" string="Odoo Status"/>
                 <field name="sync_state" string="Sync State"/>
@@ -25,12 +24,20 @@
                         domain="[('sync_state', '=', 'not_ready')]"/>
                 <filter name="filter_partial_discrepancy" string="Partial &amp; Discrepancy"
                         domain="[('shipment_information', '=', 'partial')]"/>
+                <filter name="filter_group_view_receive" string="Receive"
+                        domain="[('picking_type_id.group_view', '=', 'receive')]"/>
+                <filter name="filter_group_view_pick" string="Pick"
+                        domain="[('picking_type_id.group_view', '=', 'pick')]"/>
+                <filter name="filter_group_view_pack" string="Pack"
+                        domain="[('picking_type_id.group_view', '=', 'pack')]"/>
+                <filter name="filter_group_view_delivery" string="Delivery"
+                        domain="[('picking_type_id.group_view', '=', 'delivery')]"/>
+                <filter name="filter_group_view_manufacture" string="Manufacture"
+                        domain="[('picking_type_id.group_view', '=', 'manufacture')]"/>
 
                 <group string="Group By">
                     <filter name="group_transaction_type" string="Transaction Type"
                             context="{'group_by': 'adt_type'}"/>
-                    <filter name="group_operation_type" string="Operation Type"
-                            context="{'group_by': 'picking_type_id'}"/>
                     <filter name="group_odoo_status" string="Odoo Status"
                             context="{'group_by': 'state'}"/>
                     <filter name="group_sync_state" string="Sync State"
@@ -134,6 +141,6 @@
               parent="stock.menu_stock_root"
               action="action_api_data_hub_dashboard"
               sequence="12"
-              groups="stock.group_stock_manager"/>
+              groups="stock.group_stock_manager,base.group_system"/>
 
 </odoo>

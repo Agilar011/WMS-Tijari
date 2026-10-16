@@ -9,10 +9,19 @@ _logger = logging.getLogger(__name__)
 
 
 class ReceiptImportError(Exception):
-    def __init__(self, message, payload=None, line_payloads=None):
+    def __init__(
+        self,
+        message,
+        payload=None,
+        line_payloads=None,
+        user_message=None,
+        technical_errors=None,
+    ):
         super().__init__(message)
         self.payload = payload or {}
         self.line_payloads = line_payloads or []
+        self.user_message = user_message or False
+        self.technical_errors = technical_errors or []
 
 
 class AcumaticaTransferProductLine(models.Model):
@@ -81,6 +90,7 @@ class AcumaticaTransferLine(models.Model):
     total_qty = fields.Char(string='Qty Total')
     is_hold = fields.Char(string='Hold')
     document_only = fields.Boolean(string='Document Only')
+    stock_lebih = fields.Boolean(string='Stock Lebih', default=False, index=True)
     inventory_ref = fields.Char(string='Inventory Ref Nbr')
     post_period = fields.Char(string='Post Period')
     acumatica_write_date = fields.Char(string='Last Modified')
@@ -205,8 +215,12 @@ class AcumaticaTransferLine(models.Model):
         return uom
 
     def action_import_selected(self):
-        lines = self.filtered(lambda l: l.import_state in ['staged', 'error'])
+        lines = self.filtered(
+            lambda line: line.import_state in ['staged', 'error'] and not line.stock_lebih
+        )
         if not lines:
+            if self.filtered('stock_lebih'):
+                raise UserError('Data Stock Lebih tidak digenerate ke stock.picking. Gunakan menu Over-Receipt Document.')
             raise UserError('Hanya bisa generate data dengan state Staged & Error')
         result = lines._do_import()
         self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
@@ -214,6 +228,8 @@ class AcumaticaTransferLine(models.Model):
 
     def action_import_this(self):
         self.ensure_one()
+        if self.stock_lebih:
+            raise UserError('Data Stock Lebih tidak digenerate ke stock.picking. Gunakan menu Over-Receipt Document.')
         result = self._do_import()
         self.env['acumatica.error.transaction']._handle_acumatica_created(self)
         return result
@@ -236,7 +252,19 @@ class AcumaticaTransferLine(models.Model):
         origin = receipt.receipt_nbr or False
         header_payload = receipt.read()[0] if receipt.exists() else {}
         error_messages = []
+        user_messages = []
+        technical_errors = []
         error_line_payloads = []
+
+        if not receipt.product_line_ids:
+            raise ReceiptImportError(
+                f'Transfer Receipt {origin or receipt.id} tidak memiliki detail produk.',
+                payload={'header': header_payload},
+                user_message=(
+                    f"Transfer {origin or '-'} belum bisa dibuat karena belum memiliki "
+                    "baris produk. Lengkapi detail produk pada transaksi."
+                ),
+            )
 
         source_code = receipt.warehouse_code
         destination_code = receipt.warehouse_dest_code
@@ -249,6 +277,27 @@ class AcumaticaTransferLine(models.Model):
             )
         except UserError as error:
             error_messages.append(str(error))
+            error_text = str(error).lower()
+            if 'towarehouseid' in error_text:
+                user_messages.append(
+                    f"Warehouse tujuan {destination_code or '-'} belum memiliki mapping "
+                    "lokasi yang aktif di WMS. Periksa mapping warehouse tujuan."
+                )
+            elif 'fromwarehouseid' in error_text:
+                user_messages.append(
+                    f"Warehouse sumber {source_code or '-'} belum memiliki mapping "
+                    "lokasi yang sesuai di WMS. Periksa mapping warehouse sumber."
+                )
+            elif 'virtual locations' in error_text:
+                user_messages.append(
+                    "Lokasi virtual untuk proses transfer belum tersedia. Hubungi admin "
+                    "untuk memeriksa konfigurasi lokasi WMS."
+                )
+            else:
+                user_messages.append(
+                    "Lokasi sumber atau tujuan belum dapat ditentukan. Periksa mapping "
+                    "warehouse pada transaksi."
+                )
             transfer_info = False
 
         if transfer_info and transfer_info['status'] == 'skip':
@@ -260,12 +309,13 @@ class AcumaticaTransferLine(models.Model):
             })
             self.env['acumatica.error.transaction']._handle_acumatica_update(receipt, origin=receipt.receipt_nbr or False)
             self._handle_acumatica_error(receipt)
-            return 'updated'
+            return 'updated', []
 
         if error_messages:
             raise ReceiptImportError(
                 '\n'.join(error_messages),
                 payload={'header': header_payload},
+                user_message="\n".join(user_messages),
             )
 
         source_location = transfer_info['source_location']
@@ -276,15 +326,24 @@ class AcumaticaTransferLine(models.Model):
                 'FromWarehouseID kosong atau tidak dapat ditentukan untuk Transfer Receipt %s.'
                 % (origin or receipt.id)
             )
+            user_messages.append(
+                f"Warehouse sumber {source_code or '-'} belum dapat ditentukan. "
+                "Periksa kode warehouse sumber dan konfigurasi lokasi virtual di WMS."
+            )
         if not destination_location:
             missing_location_messages.append(
                 'ToWarehouseID mapping tidak ditemukan untuk Transfer Receipt %s: %s.'
                 % (origin or receipt.id, destination_code or '-')
             )
+            user_messages.append(
+                f"Warehouse tujuan {destination_code or '-'} belum memiliki lokasi tujuan "
+                "yang aktif di WMS. Periksa mapping warehouse tujuan."
+            )
         if missing_location_messages:
             raise ReceiptImportError(
                 '\n'.join(missing_location_messages),
                 payload={'header': header_payload},
+                user_message="\n".join(user_messages),
             )
 
         transfer_shipment_numbers = []
@@ -298,22 +357,76 @@ class AcumaticaTransferLine(models.Model):
             ):
                 transfer_shipment_numbers.append(transfer_shipment_number)
 
-        order, action_state = TransferService.prepare_order(
-            origin,
-            source_location,
-            destination_location,
-            transfer_info['transaction_type'],
-            schedule_date=receipt._parse_dt(receipt.scheduled_date),
-            note=receipt.note or False,
-            description=receipt.description or False,
-            transfer_type='transfer_in',
-            external_ref_in=origin,
-            external_ref_out=','.join(transfer_shipment_numbers),
-            # Keep the internal transfer's API identity explicit so each
-            # generated picking can receive the correct SOTR leg type.
-            adt_transaction_type='SOTR',
-            document_only=receipt.document_only,
-        )
+        Order = self.env['internal.transfer.order']
+        existing_order = Order.search([('external_ref', '=', origin)], limit=1)
+        update_messages = []
+        previous_moves = {}
+        if existing_order:
+            for old_move in existing_order.move_ids:
+                key = old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id
+                previous_moves[str(key or old_move.id)] = {
+                    'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name,
+                    'product': old_move.product_id.display_name or '—',
+                    'qty': old_move.product_uom_qty,
+                    'uom': old_move.product_uom.display_name or '—',
+                    'destination': old_move.location_dest_id.display_name or '—',
+                    'name': old_move.name or '—',
+                }
+            update_messages.extend(
+                self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                    existing_order,
+                    {
+                        'external_ref_in': origin,
+                        'external_ref_out': ','.join(transfer_shipment_numbers) or origin,
+                        'transaction_type': transfer_info['transaction_type'],
+                        'transfer_type': 'transfer_in',
+                        'location_id': source_location.id,
+                        'location_dest_id': destination_location.id,
+                        'schedule_date': receipt._parse_dt(receipt.scheduled_date) or fields.Datetime.now(),
+                        'note': receipt.note or False,
+                        'description': receipt.description or False,
+                        'adt_transaction_type': 'SOTR',
+                        'document_only': bool(receipt.document_only),
+                    },
+                    field_names={
+                        'external_ref_in', 'external_ref_out', 'transaction_type',
+                        'transfer_type', 'location_id', 'location_dest_id',
+                        'schedule_date', 'note', 'description',
+                        'adt_transaction_type', 'document_only',
+                    },
+                    prefix='Header',
+                )
+            )
+
+        try:
+            order, action_state = TransferService.prepare_order(
+                origin,
+                source_location,
+                destination_location,
+                transfer_info['transaction_type'],
+                schedule_date=receipt._parse_dt(receipt.scheduled_date),
+                note=receipt.note or False,
+                description=receipt.description or False,
+                transfer_type='transfer_in',
+                external_ref_in=origin,
+                external_ref_out=','.join(transfer_shipment_numbers),
+                # Keep the internal transfer's API identity explicit so each
+                # generated picking can receive the correct SOTR leg type.
+                adt_transaction_type='SOTR',
+                document_only=receipt.document_only,
+            )
+        except UserError as error:
+            error_text = str(error).lower()
+            if 'tidak bisa diupdate' in error_text:
+                raise ReceiptImportError(
+                    str(error),
+                    payload={'header': header_payload},
+                    user_message=(
+                        f"Transfer {origin or '-'} tidak dapat diperbarui karena proses "
+                        "sebelumnya sudah berjalan. Periksa status transfer dan picking terkait di WMS."
+                    ),
+                )
+            raise
         order.write({'validation_policy': 'validate_all'})
 
         for receipt_line in receipt.product_line_ids:
@@ -323,6 +436,10 @@ class AcumaticaTransferLine(models.Model):
                 if not product:
                     error_messages.append(
                         f'Product with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
+                    )
+                    user_messages.append(
+                        f"Produk dengan kode {receipt_line.inventory_id or '-'} belum terdaftar. "
+                        "Hubungi admin untuk melengkapi master produk di WMS."
                     )
                     error_line_payloads.append({
                         'inventory_id': receipt_line.inventory_id or False,
@@ -337,6 +454,10 @@ class AcumaticaTransferLine(models.Model):
                 if product and not uom:
                     error_messages.append(
                         f'UOM with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER UOM.'
+                    )
+                    user_messages.append(
+                        f"Satuan untuk produk {receipt_line.inventory_id or '-'} belum tersedia. "
+                        "Periksa satuan produk di master WMS."
                     )
                     error_line_payloads.append({
                         'inventory_id': receipt_line.inventory_id or False,
@@ -372,7 +493,7 @@ class AcumaticaTransferLine(models.Model):
                     'product_note': receipt_line.line_note or False,
                 }
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
-                TransferService.create_order_move(
+                created_move = TransferService.create_order_move(
                     order,
                     product,
                     qty,
@@ -381,12 +502,44 @@ class AcumaticaTransferLine(models.Model):
                     description=receipt_line.description or False,
                     extra_vals=move_vals,
                 )
+                if action_state == 'updated':
+                    line_key = str(
+                        receipt_line.line_external_id
+                        or receipt_line.line_nbr
+                        or receipt_line.inventory_id
+                        or created_move.id
+                    )
+                    old = previous_moves.pop(line_key, None)
+                    label = receipt_line.line_nbr or receipt_line.line_external_id or receipt_line.inventory_id or '?'
+                    current = {
+                        'Produk': product.display_name or '—',
+                        'Jumlah': f'{qty:g}',
+                        'Satuan': uom.display_name if uom else '—',
+                        'Lokasi tujuan': created_move.location_dest_id.display_name or '—',
+                        'Deskripsi': created_move.name or '—',
+                    }
+                    if old:
+                        previous = {
+                            'Produk': old['product'],
+                            'Jumlah': f"{old['qty']:g}",
+                            'Satuan': old['uom'],
+                            'Lokasi tujuan': old['destination'],
+                            'Deskripsi': old['name'],
+                        }
+                        changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                        if changes:
+                            update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                    else:
+                        update_messages.append(
+                            f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan"
+                        )
 
             except ReceiptImportError:
                 raise
             except Exception as line_error:
                 _logger.exception("Error import transfer receipt line %s", receipt_line.id)
                 error_messages.append(str(line_error))
+                technical_errors.append(str(line_error))
                 error_line_payloads.append({
                     'inventory_id': receipt_line.inventory_id or False,
                     'product_name': receipt_line.description or False,
@@ -403,9 +556,39 @@ class AcumaticaTransferLine(models.Model):
                     'order_id': order.id if order else False,
                 },
                 line_payloads=error_line_payloads,
+                user_message="\n".join(user_messages),
+                technical_errors=technical_errors,
             )
 
-        TransferService.set_order_ready(order)
+        if action_state == 'updated':
+            for old in previous_moves.values():
+                update_messages.append(
+                    f"• Baris {old['label']}: {old['product']} dihapus"
+                )
+
+        try:
+            TransferService.set_order_ready(order)
+        except Exception as error:
+            error_text = str(error).lower()
+            if 'operation type' in error_text or 'picking type' in error_text or 'document only picking type' in error_text:
+                raise ReceiptImportError(
+                    str(error),
+                    payload={'header': header_payload, 'order_id': order.id},
+                    user_message=(
+                        f"Operation Type untuk transfer {origin or '-'} belum dikonfigurasi "
+                        "pada warehouse terkait. Minta admin memeriksa tipe Transfer OUT dan Transfer IN di WMS."
+                    ),
+                )
+            if 'operation line belum diisi' in error_text:
+                raise ReceiptImportError(
+                    str(error),
+                    payload={'header': header_payload, 'order_id': order.id},
+                    user_message=(
+                        f"Transfer {origin or '-'} belum bisa dibuat karena tidak memiliki "
+                        "baris produk. Lengkapi detail produk pada transaksi."
+                    ),
+                )
+            raise
         receipt.write({
             'import_state': action_state,
             'import_message': 'success',
@@ -413,7 +596,7 @@ class AcumaticaTransferLine(models.Model):
             'odoo_picking_id': False,
         })
         self._handle_acumatica_error(receipt)
-        return action_state
+        return action_state, update_messages
 
     def _import_single_receipt(self, receipt):
         receipt.ensure_one()
@@ -510,7 +693,7 @@ class AcumaticaTransferLine(models.Model):
             action_state = 'updated'
             self.env['acumatica.error.transaction']._handle_acumatica_update(receipt, origin=origin)
         else:
-            picking = Picking.create(picking_vals)
+            picking = Picking.sudo().create(picking_vals)
             action_state = 'created'
 
         if action_state == 'updated':
@@ -629,6 +812,8 @@ class AcumaticaTransferLine(models.Model):
         grouped_receipts = []
         seen_receipt_numbers = set()
         for receipt in self.sorted(lambda record: (record.receipt_nbr or '', record.id)):
+            if receipt.stock_lebih:
+                continue
             receipt_key = receipt.receipt_nbr or receipt.id
             if receipt_key in seen_receipt_numbers:
                 continue
@@ -638,21 +823,43 @@ class AcumaticaTransferLine(models.Model):
         for receipt in grouped_receipts:
             try:
                 with self.env.cr.savepoint():
-                    action_state = self._import_single_receipt(receipt)
+                    action_state, update_messages = self._import_single_receipt(receipt)
                 if action_state == 'created':
                     created += 1
                 elif action_state == 'updated':
                     updated += 1
+                    message = '\n'.join(update_messages) or (
+                        'Transfer berhasil disinkronkan; tidak ada field yang berubah.'
+                    )
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import',
+                        webhook_name='SOTR',
+                        transaction_name=receipt.receipt_nbr or str(receipt.id),
+                        event_type='update',
+                        message=message,
+                    )
             except Exception as exc:
                 _logger.exception("Error import receipt %s", receipt.receipt_nbr or receipt.id)
                 if isinstance(exc, ReceiptImportError):
                     error_payload = exc.payload
                     error_line_payloads = exc.line_payloads
                     error_message = str(exc)
+                    user_message = exc.user_message
+                    technical_errors = exc.technical_errors
                 else:
                     error_payload = {'header': receipt.read()[0] if receipt.exists() else {}}
                     error_line_payloads = []
                     error_message = str(exc)
+                    user_message = False
+                    technical_errors = [str(exc)]
+
+                if technical_errors:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type="import",
+                        webhook_name="SOTR",
+                        error="\n".join(technical_errors),
+                        error_type="unexpected",
+                    )
 
                 try:
                     self._handle_acumatica_error(
@@ -672,6 +879,14 @@ class AcumaticaTransferLine(models.Model):
                     'import_message': error_message[:1000],
                 })
                 error += 1
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type="import",
+                        webhook_name="SOTR",
+                        transaction_name=receipt.receipt_nbr or str(receipt.id),
+                        event_type="error",
+                        message=user_message,
+                    )
                 continue
 
         msg = f'Import done: {created} receipt created, {updated} receipt updated, {error} receipt error.'

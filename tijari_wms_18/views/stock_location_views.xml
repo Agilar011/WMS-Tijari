@@ -41,6 +41,15 @@
         </field>
     </record>
 
+    <record id="server_action_generate_stock_location_acumatica" model="ir.actions.server">
+        <field name="name">Generate Location</field>
+        <field name="model_id" ref="model_stock_location_acumatica"/>
+        <field name="binding_model_id" ref="model_stock_location_acumatica"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = records.action_generate_stock_location()</field>
+    </record>
+
     <record id="view_stock_location_acumatica_list_error" model="ir.ui.view">
         <field name="name">stock.location.acumatica.list.error</field>
         <field name="model">stock.location.acumatica</field>
@@ -72,6 +81,9 @@
                             class="btn-link" icon="fa-barcode" invisible="unique_code"/>
                 </div>
                 <field name="is_location_mapping" />
+                <field name="location_group_id"
+                    domain="[('is_location_mapping', '=', True), ('id', '!=', id)]"
+                    options="{'no_create': True}"/>
                 <field name="is_consignment" />
                 <field name="location_owner" invisible="not is_consignment" />
                 <field name="is_document_only" />

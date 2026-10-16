@@ -335,6 +335,7 @@ class AcumaticaInvoiceConsignment(models.Model):
         for first in self:
             first_id = first.id
             first_reference = first.adt_ReferenceNbr
+            update_messages = []
 
             try:
                 # 2. BUNGKUS DENGAN SAVEPOINT: Jika error, rollback hanya terjadi pada dokumen aktif ini
@@ -399,6 +400,16 @@ class AcumaticaInvoiceConsignment(models.Model):
                     vals = {k: v for k, v in vals.items() if k in Picking._fields}
                     
                     picking = Picking.search([('origin', '=', origin)], limit=1)
+                    previous_moves = {}
+                    if picking and picking.state == 'draft':
+                        update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                            picking, vals,
+                            field_names={'partner_id', 'picking_type_id', 'location_id', 'location_dest_id', 'scheduled_date', 'origin', 'note', 'adt_receipt_nbr', 'adt_vendor_code', 'adt_partner_ref', 'adt_branch_warehouse', 'adt_acumatica_write_date', 'adt_status', 'adt_type', 'adt_is_document_only', 'adt_external_id', 'desc_note'},
+                            prefix='Header',
+                        ))
+                        for old_move in picking.move_ids:
+                            key = str(old_move.adt_line_external_id or old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                            previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
                     if picking:
                         if picking.state != 'draft':
                             raise UserError(
@@ -409,7 +420,7 @@ class AcumaticaInvoiceConsignment(models.Model):
                         action_state = 'updated'
                         picking.move_ids.unlink()
                     else:
-                        picking = Picking.create(vals)
+                        picking = Picking.sudo().create(vals)
                         action_state = 'created'
 
                     to_create_move = self.env['acumatica.invoice.consignment.staging.line'].search([
@@ -420,6 +431,7 @@ class AcumaticaInvoiceConsignment(models.Model):
 
                     # Inisialisasi list kosong sebelum loop lines dimulai
                     moves_to_create = []
+                    update_line_snapshots = []
 
                     print(f"Processing {len(to_create_move)} lines for receipt {first_reference}")
 
@@ -466,10 +478,24 @@ class AcumaticaInvoiceConsignment(models.Model):
                         
                         # Masukkan ke dalam antrean list bulk create
                         moves_to_create.append(single_move_vals)
+                        update_line_snapshots.append((line, product, qty, uom or product.uom_id))
 
                     # DI LUAR LOOP: Eksekusi pembuatan seluruh Stock Move secara massal (Bulk Create)
                     if moves_to_create:
-                        Move.create(moves_to_create)
+                        created_moves = Move.create(moves_to_create)
+                        if action_state == 'updated':
+                            for (source_line, product, qty, uom), created_move in zip(update_line_snapshots, created_moves):
+                                line_key = str(source_line.adt_external_id or source_line.adt_rowNumber or source_line.adt_InventoryID or created_move.id)
+                                old = previous_moves.pop(line_key, None)
+                                label = source_line.adt_rowNumber or source_line.adt_InventoryID or '?'
+                                current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name or '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                                if old:
+                                    previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                                    changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                                    if changes:
+                                        update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                                else:
+                                    update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name} ditambahkan")
 
                     # Keep automatic processing, using normal stock reservation
                     # and validation from each staging line's source warehouse.
@@ -486,6 +512,13 @@ class AcumaticaInvoiceConsignment(models.Model):
                         'odoo_picking_id': picking.id,
                     })
                     self.env['acumatica.error.transaction']._handle_acumatica_error(first_reference, 'invoice_consignment')
+                    if action_state == 'updated':
+                        update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='Invoice Consignment',
+                            transaction_name=first_reference or str(first.id), event_type='update',
+                            message='\n'.join(update_messages) or 'Invoice Consignment berhasil disinkronkan; tidak ada field yang berubah.',
+                        )
                     
                     if action_state == 'created':
                         created += 1
@@ -495,6 +528,19 @@ class AcumaticaInvoiceConsignment(models.Model):
             except Exception as e:
                 # KOREKSI 2: Penanganan komplit jika dokumen ini gagal (Otomatis skip ke index loop selanjutnya)
                 error += 1
+                error_text = str(e).lower()
+                if 'picking type' in error_text or 'operation type' in error_text:
+                    user_message = f"Operation Type untuk Invoice Consignment {first_reference or '-'} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS."
+                elif 'location cons' in error_text or 'consignment' in error_text or 'end user consignment' in error_text:
+                    user_message = f"Lokasi consignment untuk Invoice {first_reference or '-'} belum tersedia. Periksa konfigurasi lokasi consignment di WMS."
+                elif 'product tidak ditemukan' in error_text:
+                    user_message = f"Produk pada Invoice Consignment {first_reference or '-'} belum terdaftar. Periksa master produk di WMS."
+                elif 'reserved' in error_text or 'quantity' in error_text or 'qty' in error_text:
+                    user_message = f"Stok untuk Invoice Consignment {first_reference or '-'} belum mencukupi. Periksa stok produk di lokasi consignment."
+                elif 'sudah ada di odoo' in error_text or 'tidak bisa diupdate' in error_text:
+                    user_message = f"Invoice Consignment {first_reference or '-'} tidak dapat diperbarui karena dokumen di WMS sudah diproses. Hubungi admin jika perubahan diperlukan."
+                else:
+                    user_message = False
                 tracked_lines = self.env['acumatica.invoice.consignment.staging.line'].search([
                     ('receipt_line_id', '=', first.id),
                 ])
@@ -527,6 +573,16 @@ class AcumaticaInvoiceConsignment(models.Model):
                         'odoo_picking_id': False,
                     })
                 print(f"[ERROR IMPORT] Dokumen {first_reference} Gagal: {str(e)}")
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Invoice Consignment',
+                        transaction_name=first_reference or str(first.id), event_type='error', message=user_message,
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Invoice Consignment',
+                        error=str(e), error_type='unexpected',
+                    )
 
         msg = f'Generate done: {created} invoice consignment created, {updated} invoice consignment updated, {error} invoice consignment error.'
         print(f"[SUMMARY SINKRONISASI] Created: {created}, Updated: {updated}, Error: {error}")

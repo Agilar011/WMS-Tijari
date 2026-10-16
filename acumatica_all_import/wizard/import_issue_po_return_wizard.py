@@ -129,8 +129,8 @@ class ImportReceiptWizard(models.TransientModel):
 
                 AcumaticaErrorService.send_error(
                     webhook_type="fetch",
-                    webhook_name="po receipt",
-                    error=last_error,
+                    webhook_name="Issue PO Return",
+                    error=f"Gagal fetch Issue PO Return dari Acumatica (HTTP {response.status_code}).",
                     error_type="http",
                 )
                 

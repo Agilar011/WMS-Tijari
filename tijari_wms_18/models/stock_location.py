@@ -14,6 +14,14 @@ class StockLocation(models.Model):
     sequence = fields.Boolean(string='Sequence', default=False, help='Indicates if the location uses sequence for operations')
     unique_code = fields.Char(string='Unique Code', help='A unique code for the location')
     is_location_mapping = fields.Boolean(string="Parent Mapping Location")
+    location_group_id = fields.Many2one(
+        'stock.location',
+        string='Location Group',
+        index=True,
+        ondelete='set null',
+        domain="[('is_location_mapping', '=', True), ('id', '!=', id)]",
+        help='Pilih lokasi grup agar lokasi ini dapat dipakai dalam mapping grup selain struktur parent-child.',
+    )
     is_consignment = fields.Boolean(string="Consignment Location")
     is_document_only = fields.Boolean(string="Document Only Location")
     location_owner = fields.Char(string="Location Owner")
@@ -71,6 +79,66 @@ class StockLocationAcumatica(models.Model):
     is_error = fields.Boolean(string='Is Error')
     error_message = fields.Char(string='Error Message', readonly=True)
     is_ungropping = fields.Boolean(string='Tidak Digrouping', default=False)
+
+    def action_generate_stock_location(self):
+        """Create an internal child location using the Acumatica location code."""
+        Location = self.env['stock.location']
+        created_locations = Location
+
+        for mapping in self:
+            code = (mapping.code or '').strip()
+            if not code:
+                raise ValidationError('Location Code harus diisi sebelum membuat lokasi.')
+
+            warehouse = mapping.odoo_building_id
+            if not warehouse and mapping.building:
+                warehouse = self.env['stock.warehouse'].search(
+                    [('code', '=', mapping.building)], limit=1
+                )
+            if not warehouse or not warehouse.lot_stock_id:
+                warehouse_name = mapping.building or (
+                    mapping.odoo_building_id.display_name
+                    if mapping.odoo_building_id else ''
+                )
+                raise ValidationError(
+                    'Gudang %s tidak ditemukan atau belum memiliki lokasi stok.'
+                    % warehouse_name
+                )
+
+            location = Location.search([
+                ('name', '=', code),
+                ('location_id', '=', warehouse.lot_stock_id.id),
+            ], limit=1)
+            if not location:
+                location = Location.create({
+                    'name': code,
+                    'location_id': warehouse.lot_stock_id.id,
+                    'usage': 'internal',
+                    'is_location_mapping': True,
+                })
+            elif not location.is_location_mapping:
+                location.is_location_mapping = True
+            if mapping.odoo_location_id != location:
+                mapping.odoo_location_id = location
+            created_locations |= location
+
+        if len(created_locations) == 1:
+            return {
+                'type': 'ir.actions.act_window',
+                'name': 'Stock Location',
+                'res_model': 'stock.location',
+                'view_mode': 'form',
+                'res_id': created_locations.id,
+                'target': 'current',
+            }
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Locations',
+            'res_model': 'stock.location',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', created_locations.ids)],
+            'target': 'current',
+        }
 
     @api.onchange('odoo_location_id')
     def _onchange_odoo_location_id(self):

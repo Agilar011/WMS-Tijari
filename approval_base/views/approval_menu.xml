@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_approval_root"
+              name="Approval"
+              action="action_approval_request"
+              web_icon="approval_base,static/description/icon.png"
+              sequence="50"/>
+</odoo>

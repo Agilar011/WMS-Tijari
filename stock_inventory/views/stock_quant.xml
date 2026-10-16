@@ -24,6 +24,7 @@
                 <xpath expr="//field[@name='location_id']" position="attributes">
                     <attribute name="widget">location_short_many2one</attribute>
                     <attribute name="context">{'show_location_short_name': True}</attribute>
+                    <attribute name="domain">[('id', 'in', context.get('inventory_location_ids', [('usage', 'in', ['internal', 'transit'])]))]</attribute>
                 </xpath>
                 <xpath expr="//field[@name='package_id']" position="attributes">
                     <attribute name="optional">hide</attribute>
@@ -32,6 +33,12 @@
                     <attribute name="optional">hide</attribute>
                 </xpath>
                 <xpath expr="//field[@name='quantity']" position="attributes">
+                    <attribute name="optional">hide</attribute>
+                </xpath>
+                <xpath expr="//field[@name='inventory_quantity']" position="attributes">
+                    <attribute name="optional">show</attribute>
+                </xpath>
+                <xpath expr="//field[@name='inventory_diff_quantity']" position="attributes">
                     <attribute name="optional">hide</attribute>
                 </xpath>
                 <xpath expr="//field[@name='product_uom_id']" position="attributes">
@@ -43,15 +50,13 @@
                 <xpath expr="//field[@name='user_id']" position="attributes">
                     <attribute name="optional">hide</attribute>
                 </xpath>
-                <!-- <xpath expr="//field[@name='user_id']" position="after">
-                    <button 
-                        string="Generate Lot" 
-                        name="generate_lot_stock_quant" 
-                        type="object" 
-                        class="oe_highlight"
-                        invisible="lot_id != False"
-                    />
-                </xpath> -->
+
+                <xpath expr="//field[@name='user_id']" position="after">
+                    <field name="current_inventory_id" column_invisible="1" />
+                </xpath>
+                <xpath expr="//field[@name='location_id']" position="before">
+                    <field name="to_do" column_invisible="1" />
+                </xpath>
             </field>
         </record>
 </odoo>

@@ -911,28 +911,35 @@ class WmsApiController(http.Controller):
             'detail': []
         }
 
+        grouped_lines = {}
         for line in lines:
-            diff = float(line.inventory_diff_quantity or 0)
+            product = line.product_id
+            if not product:
+                continue
+                
+            if product.id not in grouped_lines:
+                grouped_lines[product.id] = {
+                    'name': product.display_name or '',
+                    'uom': line.product_uom_id.name or '',
+                    'system_qty': 0.0,
+                    'qty2': 0.0,
+                    'diff': 0.0,
+                    'ket': ''
+                }
+            
+            grouped_lines[product.id]['system_qty'] += float(line.quantity or 0)
+            grouped_lines[product.id]['qty2'] += float(line.inventory_quantity or 0)
+            grouped_lines[product.id]['diff'] += float(line.inventory_diff_quantity or 0)
 
-            system_qty = float(line.quantity or 0)
-            qty2 = float(line.inventory_quantity or 0)
-
+        for prod_id, obj in grouped_lines.items():
+            diff = obj['diff']
             if diff < 0:
-                diff_color = "#FF0000"
+                obj['diff_color'] = "#FF0000"
             elif diff > 0:
-                diff_color = "#008000" 
+                obj['diff_color'] = "#008000" 
             else:
-                diff_color = "#000000" 
-
-            obj = {
-                'name': line.product_id.display_name or '',
-                'uom': line.product_uom_id.name or '',
-                'system_qty': system_qty,
-                'qty2': qty2,
-                'diff': diff,
-                'diff_color': diff_color,
-                'ket': ''
-            }
+                obj['diff_color'] = "#000000" 
+                
             data['detail'].append(obj)
         data = json.dumps(data)
 
@@ -1073,6 +1080,7 @@ class WmsApiController(http.Controller):
                 'name': line.product_id.name or '',
                 'lot': lot_names,
                 'qty': line.difference_quantity,
+                'qty2': line.quantity,
                 'uom': line.product_uom.name or '',
                 'lok': line.location_id.name or '',
             })

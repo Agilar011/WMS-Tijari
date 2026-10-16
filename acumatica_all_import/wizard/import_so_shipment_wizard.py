@@ -117,6 +117,12 @@ class ImportSOShipmentWizard(models.TransientModel):
 
             response = session.get(endpoint, params=params, timeout=90)
             if response.status_code != 200:
+                self.env["acumatica.webhook.error.service"].send_error(
+                    webhook_type="fetch",
+                    webhook_name="Shipment",
+                    error=f"Gagal fetch Shipment dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
                 raise UserError(
                     f"Gagal ambil Shipment (HTTP {response.status_code}): {response.text}"
                 )
@@ -304,6 +310,12 @@ class ImportSOShipmentWizard(models.TransientModel):
 
 
             if response.status_code != 200:
+                self.env["acumatica.webhook.error.service"].send_error(
+                    webhook_type="fetch",
+                    webhook_name="Shipment GI",
+                    error=f"Gagal fetch Shipment GI dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
                 raise UserError(
                     f"Gagal ambil data Shipment GI "
                     f"(HTTP {response.status_code}): {response.text}"

@@ -25,6 +25,9 @@ Features:
     ],
     "data": [
         "security/groups.xml",
+        "security/ir.model.access.csv",
+        "views/guest_home_views.xml",
+        "views/login_log_views.xml",
         "views/login_password_toggle_templates.xml",
     ],
     "assets": {

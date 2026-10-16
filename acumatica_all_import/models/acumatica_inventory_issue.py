@@ -246,6 +246,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                 continue
                 
             first = issue_lines[0]
+            update_messages = []
             # print(f"value :{first}")
             
             try:
@@ -296,7 +297,47 @@ class AcumaticaInventoryIssueLine(models.Model):
                 customer = self._find_customer(first.customer_id)
 
                 if is_disposal:
+                    existing_scrap = self.env['stock.scrap'].search([('origin', '=', first.reference_nbr)], limit=1)
+                    old_scrap_lines = []
+                    if existing_scrap:
+                        old_scrap_lines = [
+                            {'product': line.product_id.display_name, 'key': line.product_id.default_code or line.product_id.display_name,
+                             'qty': line.demand_qty, 'uom': line.product_uom_id.display_name, 'name': line.name or '—'}
+                            for line in existing_scrap.scrap_line_ids
+                        ]
+                        target_warehouse = self._find_warehouse(first)
+                        target_scrap_location = self.env['stock.location'].search([
+                            ('scrap_location', '=', True),
+                            ('company_id', 'in', [False, target_warehouse.company_id.id]),
+                        ], limit=1) if target_warehouse else self.env['stock.location']
+                        update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                            existing_scrap,
+                            {'location_id': dest_location.id, 'scrap_location_id': target_scrap_location.id,
+                             'scheduled_date': self._parse_dt(first.scheduled_date)},
+                            field_names={'location_id', 'scrap_location_id', 'scheduled_date'},
+                            prefix='Header',
+                        ))
                     order, action_state = self._generate_disposal_scrap(first, dest_location)
+                    if action_state == 'updated':
+                        new_lines = list(order.scrap_line_ids)
+                        for new_line in new_lines:
+                            key = new_line.product_id.default_code or new_line.product_id.display_name
+                            old_index = next((idx for idx, old_line in enumerate(old_scrap_lines) if old_line['key'] == key), None)
+                            label = new_line.product_id.display_name
+                            if old_index is None:
+                                update_messages.append(f"• Baris {label}: jumlah {new_line.demand_qty:g} {new_line.product_uom_id.display_name} ditambahkan")
+                                continue
+                            old_line = old_scrap_lines.pop(old_index)
+                            changes = []
+                            if old_line['qty'] != new_line.demand_qty:
+                                changes.append(f"Jumlah: {old_line['qty']:g} → {new_line.demand_qty:g}")
+                            if old_line['uom'] != new_line.product_uom_id.display_name:
+                                changes.append(f"Satuan: {old_line['uom']} → {new_line.product_uom_id.display_name}")
+                            if old_line['name'] != (new_line.name or '—'):
+                                changes.append(f"Deskripsi: {old_line['name']} → {new_line.name or '—'}")
+                            if changes:
+                                update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                        update_messages.extend(f"• Baris {old_line['product']}: dihapus" for old_line in old_scrap_lines)
                     # order, action_state = self._prepare_disposal_internal_transfer(
                     #     first,
                     #     source_location,
@@ -341,6 +382,13 @@ class AcumaticaInventoryIssueLine(models.Model):
 
                     self.env.cr.execute('RELEASE SAVEPOINT import_issue_line')
                     self.env.cr.commit()
+                    if action_state == 'updated':
+                        self.env['acumatica.webhook.error.service'].send_user_error(
+                            webhook_type='import', webhook_name='Inventory Issue',
+                            transaction_name=first.reference_nbr or str(first.id),
+                            event_type='update',
+                            message='\n'.join(update_messages) or 'Disposal berhasil disinkronkan; tidak ada field yang berubah.',
+                        )
                     created += 1 if action_state == 'created' else 0
                     updated += 1 if action_state == 'updated' else 0
                     continue
@@ -379,6 +427,17 @@ class AcumaticaInventoryIssueLine(models.Model):
                     ('origin', '=', first.reference_nbr),
                     ('picking_type_id', '=', picking_type.id),
                 ], limit=1)
+
+                previous_moves = {}
+                if picking and picking.state == 'draft':
+                    update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                        picking, vals,
+                        field_names={'origin', 'partner_id', 'picking_type_id', 'location_id', 'location_dest_id', 'adt_dest_location_id', 'scheduled_date', 'note', 'adt_receipt_nbr', 'adt_branch_warehouse', 'adt_post_period', 'adt_status', 'adt_total_qty', 'adt_warehouse_code', 'adt_type', 'adt_change_item_ref_nbr', 'owner_id'},
+                        prefix='Header',
+                    ))
+                    for old_move in picking.move_ids:
+                        key = str(old_move.product_id.id) + ':' + str(old_move.owner_id.id or 0)
+                        previous_moves.setdefault(key, []).append({'product': old_move.product_id.display_name, 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name, 'destination': old_move.adt_dest_location_id.display_name if old_move.adt_dest_location_id else old_move.location_dest_id.display_name, 'name': old_move.name or '—'})
                 
                 if picking:
                     if picking.state != 'draft':
@@ -389,7 +448,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=first.reference_nbr or False)
                     print(f"Update Picking: {picking}")
                 else:
-                    picking = Picking.create(vals)
+                    picking = Picking.sudo().create(vals)
                     action_state = 'created'
                     created += 1
                     print(f"Create Picking: {picking}")
@@ -447,6 +506,14 @@ class AcumaticaInventoryIssueLine(models.Model):
                     existing_move = Move.search(move_domain, limit=1)
                     
                     if existing_move:
+                        old = {'qty': existing_move.product_uom_qty, 'uom': existing_move.product_uom.display_name, 'destination': existing_move.adt_dest_location_id.display_name if existing_move.adt_dest_location_id else existing_move.location_dest_id.display_name, 'name': existing_move.name or '—'}
+                        if action_state == 'updated':
+                            changes = []
+                            new_values = {'Jumlah': f'{qty:g}', 'Deskripsi': line.line_description or product.display_name, 'Lokasi tujuan': adt_dest_location.display_name if adt_dest_location else '—'}
+                            old_values = {'Jumlah': f"{old['qty']:g}", 'Deskripsi': old['name'], 'Lokasi tujuan': old['destination']}
+                            changes = [f'{label}: {old_values[label]} → {value}' for label, value in new_values.items() if old_values[label] != value]
+                            if changes:
+                                update_messages.append(f"• Baris {line.line_nbr or line.inventory_id or product.display_name}: " + '; '.join(changes))
                         existing_move.write({
                             'product_uom_qty': qty,
                             'name': line.line_description or product.display_name,
@@ -460,7 +527,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'odoo_internal_transfer_order_id': False,
                         })
                     else:
-                        Move.create({
+                        created_move = Move.create({
                             'name': line.line_description or product.display_name,
                             'picking_id': picking.id,
                             'product_id': product.id,
@@ -474,6 +541,21 @@ class AcumaticaInventoryIssueLine(models.Model):
                             'adt_type': first.trans_type or False,
                             'owner_id': owner_id,
                         })
+                        if action_state == 'updated':
+                            move_key = str(product.id) + ':' + str(owner_id or 0)
+                            old_group = previous_moves.get(move_key) or []
+                            old = old_group.pop(0) if old_group else False
+                            if not old_group:
+                                previous_moves.pop(move_key, None)
+                            label = line.line_nbr or line.inventory_id or product.display_name
+                            if old:
+                                new_values = {'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else product.uom_id.display_name, 'Deskripsi': created_move.name or '—', 'Lokasi tujuan': created_move.adt_dest_location_id.display_name if created_move.adt_dest_location_id else created_move.location_dest_id.display_name}
+                                old_values = {'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Deskripsi': old['name'], 'Lokasi tujuan': old['destination']}
+                                changes = [f'{field}: {old_values[field]} → {value}' for field, value in new_values.items() if old_values[field] != value]
+                                if changes:
+                                    update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                            else:
+                                update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
                         first.write({
                             'import_state': action_state,
                             'import_message': 'success',
@@ -484,18 +566,51 @@ class AcumaticaInventoryIssueLine(models.Model):
                 if location_errors:
                     raise UserError('\n'.join(location_errors))
 
+                if action_state == 'updated':
+                    for old_group in previous_moves.values():
+                        update_messages.extend(f"• Baris {old_line['product']}: dihapus" for old_line in old_group)
+
+                if action_state == 'updated':
+                    message = '\n'.join(update_messages) or 'Inventory Issue berhasil disinkronkan; tidak ada field yang berubah.'
+
                 if first.document_only:
                     picking.action_validate_document_only_import(force=True)
 
                 # === PENTING: Release Savepoint & Commit Data Sukses ===
                 self.env.cr.execute('RELEASE SAVEPOINT import_issue_line')
                 self.env.cr.commit()  # Mengunci data yang sukses ke database agar tidak hilang jika loop berikutnya error
+                if action_state == 'updated':
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Inventory Issue',
+                        transaction_name=first.reference_nbr or str(first.id),
+                        event_type='update', message=message,
+                    )
                         
             except Exception as e:
                 # === PENTING: Rollback hanya untuk baris yang error saja ===
                 self.env.cr.execute('ROLLBACK TO SAVEPOINT import_issue_line')
                 
                 _logger.exception('Error import issue %s', issue_key)
+                error_text = str(e).lower()
+                user_message = False
+                if 'warehouse' in error_text and ('tidak ditemukan' in error_text or 'mapping' in error_text):
+                    user_message = f"Warehouse dengan kode {first.warehouse_code or '-'} belum ditemukan atau belum memiliki mapping aktif di WMS. Periksa mapping warehouse."
+                elif 'picking type' in error_text or 'operation type' in error_text:
+                    user_message = f"Operation Type untuk Inventory Issue {issue_key} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS."
+                elif 'bad stock' in error_text or 'scrap location' in error_text:
+                    user_message = f"Lokasi Bad Stock atau Scrap untuk warehouse {first.warehouse_code or '-'} belum tersedia. Minta admin memeriksa konfigurasi lokasi di WMS."
+                elif 'location' in error_text and ('not found' in error_text or 'tidak ditemukan' in error_text):
+                    user_message = f"Lokasi tujuan untuk Inventory Issue {issue_key} belum ditemukan atau tidak aktif. Periksa mapping lokasi di WMS."
+                elif 'product' in error_text and ('tidak ditemukan' in error_text or 'not found' in error_text):
+                    user_message = f"Produk dengan kode {getattr(locals().get('line'), 'inventory_id', False) or '-'} pada Inventory Issue {issue_key} belum terdaftar. Periksa master produk di WMS."
+                elif 'customer' in error_text and ('tidak ditemukan' in error_text or 'not found' in error_text):
+                    user_message = f"Customer dengan kode {getattr(locals().get('line'), 'customer_id', False) or first.customer_id or '-'} belum terdaftar. Periksa master customer di WMS."
+                elif 'state' in error_text and ('tidak bisa diupdate' in error_text or 'already processed' in error_text):
+                    user_message = f"Inventory Issue {issue_key} tidak dapat diperbarui karena dokumen di WMS sudah diproses. Hubungi admin jika perubahan diperlukan."
+                elif 'tidak ada product' in error_text or 'no product' in error_text:
+                    user_message = f"Inventory Issue {issue_key} belum bisa diproses karena belum memiliki baris produk. Lengkapi detail transaksi."
+                elif 'document only' in error_text or 'no lines to validate' in error_text:
+                    user_message = f"Inventory Issue {issue_key} belum dapat diselesaikan. Pastikan detail transaksi tersedia dan lengkap."
                 
                 # Tulis pesan error ke object line (lalu commit status errornya agar tersimpan)
                 product_lines = self.env['acumatica.inventory.issue.product'].search([
@@ -533,6 +648,17 @@ class AcumaticaInventoryIssueLine(models.Model):
                 self.env.cr.commit() 
                 
                 error += len(issue_lines)
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Inventory Issue',
+                        transaction_name=first.reference_nbr or str(first.id),
+                        event_type='error', message=user_message,
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Inventory Issue',
+                        error=str(e), error_type='unexpected',
+                    )
                 
         msg = f'Import selesai: {created} dokumen dibuat, {updated} dokumen diupdate, {error} line error.'
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.

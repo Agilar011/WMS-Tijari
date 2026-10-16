@@ -51,6 +51,17 @@ class ApprovalRequest(models.Model):
     source_model = fields.Char(readonly=True)
     source_id = fields.Integer(readonly=True)
 
+    def write(self, vals):
+        result = super().write(vals)
+
+        if vals.get("state") == "cancelled":
+            waiting_lines = self.mapped("line_ids").filtered(
+                lambda line: line.state == "waiting"
+            )
+            waiting_lines.write({"state": "cancelled"})
+
+        return result
+
     def _check_current_approver(self):
         if self.state != "waiting":
             raise UserError(_("Approval request is already finished."))
@@ -101,6 +112,7 @@ class ApprovalRequest(models.Model):
             approval_lines.append((0, 0, {
                 "sequence": template.sequence,
                 "role": template.name,
+                "job_id": template.job_id.id if template.job_id else False,
                 "user_id": template.user_id.id,
             }))
 
@@ -157,6 +169,28 @@ class ApprovalRequest(models.Model):
         self.state = "rejected"
         document = self.env[self.source_model].browse(self.source_id)
         document._approval_rejected()
+
+    def action_open_source_document(self):
+        self.ensure_one()
+
+        if (
+            not self.source_model
+            or self.source_model not in self.env.registry.models
+        ):
+            raise UserError(_("The source document is unavailable."))
+
+        document = self.env[self.source_model].browse(self.source_id).exists()
+        if not document:
+            raise UserError(_("The source document no longer exists."))
+
+        return {
+            "type": "ir.actions.act_window",
+            "name": document.display_name,
+            "res_model": self.source_model,
+            "res_id": document.id,
+            "view_mode": "form",
+            "target": "current",
+        }
     
     ### HELPER FUNCTION ###
     def _get_source_document(self):
@@ -178,6 +212,8 @@ class ApprovalRequestLine(models.Model):
 
     role = fields.Char()
 
+    job_id = fields.Many2one('hr.job', string='Position')
+
     user_id = fields.Many2one(
         "res.users",
         required=True,
@@ -187,6 +223,7 @@ class ApprovalRequestLine(models.Model):
         ("waiting", "Waiting"),
         ("approved", "Approved"),
         ("rejected", "Rejected"),
+        ("cancelled", "Cancelled"),
     ], default="waiting")
 
     action_date = fields.Datetime()

@@ -269,6 +269,8 @@ class AcumaticaTransferOneStepLine(models.Model):
                 continue
 
             first = receipt_lines[0]
+            update_messages = []
+            previous_moves = {}
 
             try:
                 self.env.cr.execute('SAVEPOINT import_transfer_one_step_doc')
@@ -277,6 +279,9 @@ class AcumaticaTransferOneStepLine(models.Model):
                     ('external_ref', '=', origin),
                 ], limit=1)
                 if existing_order:
+                    for old_move in existing_order.move_ids:
+                        key = str(old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                        previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
                     existing_api_type = (
                         (existing_order.adt_transaction_type or '')
                         .strip().lower().replace('_', ' ')
@@ -316,19 +321,41 @@ class AcumaticaTransferOneStepLine(models.Model):
                     created += 1
 
                 transfer_service = self.env['acumatica.internal.transfer.service']
-                transfer_info = transfer_service.classify_intra_by_location_mapping(
+                try:
+                    transfer_info = transfer_service.classify_intra_by_location_mapping(
                     first.from_warehouse_code,
                     first.to_warehouse_code,
                     'WarehouseID',
                     'ToWarehouseID',
                     check_same_location_mapping=False,
                     allow_ungrouped_destination=True,
-                )
+                    )
+                except UserError as mapping_error:
+                    error_text = str(mapping_error).lower()
+                    user_message = (
+                        f"Warehouse tujuan {first.to_warehouse_code or '-'} belum memiliki mapping lokasi aktif di WMS. Periksa mapping warehouse tujuan."
+                        if 'towarehouseid' in error_text or 'to location' in error_text else
+                        f"Warehouse sumber {first.from_warehouse_code or '-'} belum memiliki mapping lokasi aktif di WMS. Periksa mapping warehouse sumber."
+                    )
+                    raise UserError(f"{mapping_error}\nUSER_MESSAGE:{user_message}")
                 source_location = transfer_info['source_location']
                 destination_location = transfer_info['destination_location']
                 same_odoo_location = source_location == destination_location
 
                 if order:
+                    update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                        order,
+                        {'transaction_type': transfer_info['transaction_type'],
+                         'transfer_type': transfer_info['transfer_type'],
+                         'adt_transaction_type': first.transfer_type or first.trans_type or False,
+                         'document_only': bool(first.document_only),
+                         'location_group_id': transfer_info.get('location_group').id if transfer_info.get('location_group') else False,
+                         'location_id': source_location.id, 'location_dest_id': destination_location.id,
+                         'schedule_date': self._parse_dt(first.scheduled_date) or fields.Datetime.now(),
+                         'note': first.note or False, 'description': first.description or False},
+                        field_names={'transaction_type', 'transfer_type', 'adt_transaction_type', 'document_only', 'location_group_id', 'location_id', 'location_dest_id', 'schedule_date', 'note', 'description'},
+                        prefix='Header',
+                    ))
                     order.write({
                         'transaction_type': transfer_info['transaction_type'],
                         'transfer_type': transfer_info['transfer_type'],
@@ -401,7 +428,19 @@ class AcumaticaTransferOneStepLine(models.Model):
                             'adt_type': first.transfer_type or 'Transfer One Step',
                         }
                         move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
-                        Move.create(move_vals)
+                        created_move = Move.create(move_vals)
+                        if action_state == 'updated':
+                            line_key = str(line.line_nbr or line.inventory_id or created_move.id)
+                            old = previous_moves.pop(line_key, None)
+                            label = line.line_nbr or line.inventory_id or '?'
+                            current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                            if old:
+                                previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                                changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                                if changes:
+                                    update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                            else:
+                                update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
 
                     except Exception as line_e:
                         _logger.exception('Error import transfer one step line %s', line.id)
@@ -423,11 +462,32 @@ class AcumaticaTransferOneStepLine(models.Model):
                     'odoo_internal_transfer_order_id': order.id,
                 })
                 self.env['acumatica.error.transaction']._handle_acumatica_error(origin, 'transfer_one_step')
+                if action_state == 'updated':
+                    update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Transfer One Step',
+                        transaction_name=reference_nbr or str(first.id),
+                        event_type='update',
+                        message='\n'.join(update_messages) or 'Transfer berhasil disinkronkan; tidak ada field yang berubah.',
+                    )
                 self.env.cr.execute('RELEASE SAVEPOINT import_transfer_one_step_doc')
 
             except Exception as e:
                 self.env.cr.execute('ROLLBACK TO SAVEPOINT import_transfer_one_step_doc')
                 _logger.exception('Error import transfer one step %s', reference_nbr)
+                raw_error = str(e)
+                error_text = raw_error.lower()
+                user_message = False
+                if 'user_message:' in error_text:
+                    user_message = raw_error.split('USER_MESSAGE:', 1)[-1].strip()
+                elif 'tidak ditemukan' in error_text or 'mapping' in error_text:
+                    user_message = f"Mapping warehouse sumber {first.from_warehouse_code or '-'} atau tujuan {first.to_warehouse_code or '-'} belum tersedia di WMS. Periksa mapping lokasi transaksi."
+                elif 'product tidak ditemukan' in error_text:
+                    user_message = f"Produk pada Transfer One Step {reference_nbr or '-'} belum terdaftar. Periksa master produk di WMS."
+                elif 'sudah ada di odoo' in error_text or 'sudah memiliki picking' in error_text or 'tidak bisa diupdate' in error_text:
+                    user_message = f"Transfer One Step {reference_nbr or '-'} tidak dapat diperbarui karena proses sebelumnya sudah berjalan. Periksa status transfer di WMS."
+                elif 'operation type' in error_text or 'picking type' in error_text:
+                    user_message = f"Operation Type untuk Transfer One Step {reference_nbr or '-'} belum tersedia. Minta admin memeriksa pengaturan transfer di WMS."
                 tracked_lines = self.env['acumatica.transfer.one.step.product'].search([
                     ('header_id', '=', first.id),
                 ])
@@ -457,6 +517,17 @@ class AcumaticaTransferOneStepLine(models.Model):
                     'odoo_internal_transfer_order_id': False,
                 })
                 error += len(receipt_lines)
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Transfer One Step',
+                        transaction_name=reference_nbr or str(first.id),
+                        event_type='error', message=user_message,
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Transfer One Step',
+                        error=raw_error, error_type='unexpected',
+                    )
 
         msg = (
             f'Import selesai: {created} transfer dibuat, {updated} transfer diupdate, '

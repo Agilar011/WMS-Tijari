@@ -14,6 +14,28 @@ _logger = logging.getLogger(__name__)
 class StockMove(models.Model):
     _inherit = 'stock.move'
 
+    operation_scan_code = fields.Char(string='Scan Handheld')
+
+    @api.onchange('operation_scan_code')
+    def _onchange_operation_scan_code(self):
+        for move in self:
+            scan_code = (move.operation_scan_code or '').strip()
+            if not scan_code:
+                continue
+            if not move.picking_id or not move.picking_id.stock_lebih:
+                continue
+            product, _matched_by = move.picking_id._find_product_scan_match(scan_code)
+            if not product:
+                raise ValidationError(_("Kode %s tidak ditemukan sebagai Barcode atau SKU.") % scan_code)
+            move.product_id = product
+            move.operation_scan_code = False
+
+    @api.constrains('product_uom_qty', 'picking_id')
+    def _check_over_receipt_positive_demand(self):
+        for move in self:
+            if move.picking_id.stock_lebih and move.product_uom_qty <= 0:
+                raise ValidationError(_('Quantity Total harus lebih besar dari 0.'))
+
     description_picking = fields.Text(
         string='Description of Picking',
         compute='_compute_description_picking_from_product',
@@ -593,7 +615,7 @@ class StockMove(models.Model):
                 difference = total_qty - total_confirmation_quantity 
             else:
                 if move.raw_material_production_id:
-                    total_confirmation_quantity = move.mo_confirmation_quantity
+                    total_confirmation_quantity = move.quantity
                     total_qty = move.product_uom_qty
                     difference = total_qty - total_confirmation_quantity
                 else:
@@ -997,21 +1019,6 @@ class StockMove(models.Model):
             ),
         }
 
-    def action_open_move_mo(self):
-        self.ensure_one()
-
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Stock Move',
-            'res_model': 'stock.move',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_mo_view'
-            ).id,
-            'target': 'new',
-        }
-
     # Putaway flow scoped to the current stock move. The existing picking and
     # batch Putaway flows continue to use their stock.move.line collections.
     putaway_scan_product_button = fields.Boolean(string='Scan Product')
@@ -1245,7 +1252,7 @@ class StockMove(models.Model):
         for line in lines:
             line.action_mark_putaway_finished()
 
-        return {'type': 'ir.actions.act_window_close'}
+        return True
 
     def action_open_move_putaway(self):
         self.ensure_one()
@@ -1424,7 +1431,7 @@ class StockMove(models.Model):
                 elif "Pick" in (line.picking_id.picking_type_name or "") or "Pick" in (line.picking_type_id.name or ""):
                     line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_src_id if line.picking_id else line.picking_type_id.default_location_src_id
                 else:
-                    line.adt_dest_location_id = line.picking_id.picking_type_id.default_location_dest_id
+                    line.adt_dest_location_id = line.picking_id.location_dest_id.id or line.picking_type_id.default_location_dest_id.id
 
         res.mapped('picking_id').filtered(
             lambda picking: picking.adt_is_document_only

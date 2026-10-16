@@ -140,6 +140,7 @@ class ImportReceiptWizard(models.TransientModel):
     def fetch_receipt_data(self, limit=50, offset=0, receipt_nbr=False, odata_filter=False):
         self.ensure_one()
         session = self.config_id._do_login()
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         try:
             endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
             params = {}
@@ -168,7 +169,17 @@ class ImportReceiptWizard(models.TransientModel):
             }
             response = session.put(endpoint, params=params, json=body, timeout=300)
             if response.status_code != 200:
-                raise UserError(f'Gagal ambil data PO Receipt (HTTP {response.status_code}): {response.text}')
+                last_error = f'Gagal ambil data PO Receipt (HTTP {response.status_code}).'
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="PO Receipt",
+                    error=last_error,
+                    error_type="http",
+                )
+                raise UserError(
+                    f'Gagal ambil data PO Receipt '
+                    f'(HTTP {response.status_code}): {response.text}'
+                )
 
             raw_data = response.json()
             result = []

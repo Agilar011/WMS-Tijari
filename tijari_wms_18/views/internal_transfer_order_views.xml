@@ -93,7 +93,7 @@
                             <field name="intra_location_id"
                                 invisible="intra_transfer_type != 'intra_group_transfer'"
                                 readonly="state == 'ready'"
-                                domain="[('id', 'child_of', location_group_id)]"/>
+                                domain="['|', ('id', 'child_of', location_group_id), ('location_group_id', '=', location_group_id)]"/>
                             <field name="location_dest_id"
                                 invisible="intra_transfer_type == 'intra_group_transfer'"
                                 readonly="state == 'ready'"/>
@@ -104,7 +104,7 @@
                             <field name="intra_location_dest_id"
                                 invisible="intra_transfer_type != 'intra_group_transfer'"
                                 readonly="state == 'ready'"
-                                domain="[('id', 'child_of', location_group_id)]"/>
+                                domain="['|', ('id', 'child_of', location_group_id), ('location_group_id', '=', location_group_id)]"/>
                             <field name="transit_location_id"/>
                             <field name="schedule_date"/>
                         </group>

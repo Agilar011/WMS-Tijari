@@ -21,6 +21,7 @@
                 <field name="transfer_type"/>
                 <field name="doc_type"/>
                 <field name="document_only"/>
+                <field name="stock_lebih" string="WMSRelated"/>
                 <field name="customer_code"/>
                 <field name="customer_location_id"/>
                 <field name="customer_location_name"/>
@@ -37,7 +38,7 @@
                        decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload" invisible="stock_lebih"/>
                 <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                 <field name="odoo_picking_id" column_invisible="1"/>
                 <field name="odoo_internal_transfer_order_id" column_invisible="1"/>
@@ -51,7 +52,7 @@
         <field name="arch" type="xml">
             <form string="Data Receipt : Inventory Receipt">
                 <header>
-                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state not in ['staged', 'error']"/>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state not in ['staged', 'error'] or stock_lebih"/>
                     <button name="action_reset_pending" type="object" string="Reset ke Staged" class="btn-secondary" invisible="import_state != 'error'"/>
                     <button name="action_open_picking" type="object" string="Open Document"
                             invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
@@ -68,6 +69,7 @@
                             <field name="description"/>
                             <field name="doc_type"/>
                             <field name="document_only"/>
+                            <field name="stock_lebih" string="WMSRelated"/>
                             <field name="actual_qty"/>
                             <field name="acumatica_write_date"/>
                             <field name="post_period"/>

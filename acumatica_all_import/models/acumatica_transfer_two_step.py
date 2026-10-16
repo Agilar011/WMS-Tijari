@@ -210,17 +210,27 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 continue
 
             first = receipt_lines[0]
+            update_messages = []
             print(f"first: {first}")
 
             try:
                 self.env.cr.execute('SAVEPOINT import_transfer_two_step_doc')
                 transfer_service = self.env['acumatica.internal.transfer.service']
-                transfer_info = transfer_service.classify_transfer_out_to_virtual(
-                    first.from_warehouse_code,
-                    first.to_warehouse_code,
-                    'FromWarehouseID',
-                    'ToWarehouseID',
-                )
+                try:
+                    transfer_info = transfer_service.classify_transfer_out_to_virtual(
+                        first.from_warehouse_code,
+                        first.to_warehouse_code,
+                        'FromWarehouseID',
+                        'ToWarehouseID',
+                    )
+                except UserError as mapping_error:
+                    error_text = str(mapping_error).lower()
+                    user_message = (
+                        f"Warehouse tujuan {first.to_warehouse_code or '-'} belum memiliki mapping lokasi aktif di WMS. Periksa mapping warehouse tujuan."
+                        if 'towarehouseid' in error_text else
+                        f"Warehouse sumber {first.from_warehouse_code or '-'} belum memiliki mapping lokasi aktif di WMS. Periksa mapping warehouse sumber."
+                    )
+                    raise UserError(f"{mapping_error}\nUSER_MESSAGE:{user_message}")
                 if transfer_info['status'] == 'skip':
                     receipt_lines.write({
                         'import_state': 'updated',
@@ -231,7 +241,30 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     self.env['acumatica.error.transaction']._handle_acumatica_update(first, origin=first.reference_nbr or False)
                     updated += len(receipt_lines)
                     self.env.cr.execute('RELEASE SAVEPOINT import_transfer_two_step_doc')
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Transfer Two Step',
+                        transaction_name=first.reference_nbr or str(first.id),
+                        event_type='update',
+                        message='Transfer tidak memerlukan pembuatan dokumen baru karena lokasi sumber dan tujuan sudah sesuai.',
+                    )
                     continue
+
+                existing_order = self.env['internal.transfer.order'].search([('external_ref', '=', first.reference_nbr)], limit=1)
+                previous_moves = {}
+                if existing_order:
+                    update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
+                        existing_order,
+                        {'location_id': transfer_info['source_location'].id,
+                         'location_dest_id': transfer_info['destination_location'].id,
+                         'schedule_date': self._parse_dt(first.scheduled_date) or fields.Datetime.now(),
+                         'note': first.note or False, 'description': first.description or False,
+                         'adt_transaction_type': 'Transfer 2 Step', 'document_only': bool(first.document_only)},
+                        field_names={'location_id', 'location_dest_id', 'schedule_date', 'note', 'description', 'adt_transaction_type', 'document_only'},
+                        prefix='Header',
+                    ))
+                    for old_move in existing_order.move_ids:
+                        key = str(old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.id)
+                        previous_moves[key] = {'label': old_move.adt_line_nbr or old_move.adt_inventory_id or old_move.name, 'product': old_move.product_id.display_name or '—', 'qty': old_move.product_uom_qty, 'uom': old_move.product_uom.display_name or '—', 'destination': old_move.location_dest_id.display_name or '—', 'name': old_move.name or '—'}
 
                 order, action_state = transfer_service.prepare_order(
                     first.reference_nbr,
@@ -253,7 +286,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         raise UserError(f'Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or "-"}')
                     uom = self._find_uom(line, product)
                     qty = self._parse_float(line.adt_Quantity)
-                    transfer_service.create_order_move(order, product, qty, uom, line.adt_Description or product.display_name, line.adt_Description or False, {
+                    created_move = transfer_service.create_order_move(order, product, qty, uom, line.adt_Description or product.display_name, line.adt_Description or False, {
                         'adt_line_nbr': line.adt_LineNumber or False,
                         'adt_line_note': line.adt_note or False,
                         'adt_inventory_id': line.adt_InventoryID or False,
@@ -267,6 +300,21 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         'adt_quantity': qty,
                         'adt_type': 'Transfer 2 Step',
                     })
+                    if action_state == 'updated':
+                        line_key = str(line.adt_LineNumber or line.adt_InventoryID or created_move.id)
+                        old = previous_moves.pop(line_key, None)
+                        label = line.adt_LineNumber or line.adt_InventoryID or '?'
+                        current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
+                        if old:
+                            previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
+                            changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
+                            if changes:
+                                update_messages.append(f"• Baris {label}: " + '; '.join(changes))
+                        else:
+                            update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
+
+                if action_state == 'updated':
+                    update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
 
                 transfer_service.set_order_ready(order)
                 receipt_lines.write({
@@ -281,6 +329,13 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 else:
                     updated += 1
                 self.env.cr.execute('RELEASE SAVEPOINT import_transfer_two_step_doc')
+                if action_state == 'updated':
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Transfer Two Step',
+                        transaction_name=first.reference_nbr or str(first.id),
+                        event_type='update',
+                        message='\n'.join(update_messages) or 'Transfer berhasil disinkronkan; tidak ada field yang berubah.',
+                    )
                 continue
 
                 # vendor = self._find_vendor(first)
@@ -368,7 +423,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         created += 1
 
                 else:
-                    picking = Picking.create(vals)
+                    picking = Picking.sudo().create(vals)
                     print(f"Picking : {picking} Created")
                     # raise UserError("Checkpoint")
                     action_state = 'created'
@@ -483,6 +538,20 @@ class AcumaticaTransferTwoStepLine(models.Model):
             except Exception as e:
                 self.env.cr.execute('ROLLBACK TO SAVEPOINT import_transfer_two_step_doc')
                 _logger.exception("Error import receipt %s", reference_nbr)
+                raw_error = str(e)
+                error_text = raw_error.lower()
+                user_message = False
+                if 'user_message:' in error_text:
+                    user_message = raw_error.split('USER_MESSAGE:', 1)[-1].strip()
+                elif 'operation type' in error_text or 'picking type' in error_text:
+                    user_message = f"Operation Type untuk Transfer Two Step {reference_nbr or '-'} belum tersedia. Minta admin memeriksa pengaturan tipe transfer di WMS."
+                elif 'tidak bisa diupdate' in error_text or 'sudah di state' in error_text or 'already processed' in error_text:
+                    user_message = f"Transfer Two Step {reference_nbr or '-'} tidak dapat diperbarui karena proses sebelumnya sudah berjalan. Periksa status transfer terkait di WMS."
+                elif 'product tidak ditemukan' in error_text or 'product with inventoryid' in error_text:
+                    user_message = f"Produk pada Transfer Two Step {reference_nbr or '-'} belum terdaftar. Periksa master produk di WMS."
+                elif 'operation line belum diisi' in error_text or 'no lines to validate' in error_text:
+                    user_message = f"Transfer Two Step {reference_nbr or '-'} belum bisa diproses karena belum memiliki baris produk. Lengkapi detail transaksi."
+                error_message = raw_error.split('\nUSER_MESSAGE:', 1)[0]
                 tracked_lines = self.env['acumatica.transfer.two.step.line.product'].search([
                     ('header_id', '=', first.id),
                 ])
@@ -512,6 +581,17 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     'odoo_internal_transfer_order_id': False,
                 })
                 error += len(receipt_lines)
+                if user_message:
+                    self.env['acumatica.webhook.error.service'].send_user_error(
+                        webhook_type='import', webhook_name='Transfer Two Step',
+                        transaction_name=reference_nbr or str(first.id),
+                        event_type='error', message=user_message,
+                    )
+                else:
+                    self.env['acumatica.webhook.error.service'].send_error(
+                        webhook_type='import', webhook_name='Transfer Two Step',
+                        error=raw_error, error_type='unexpected',
+                    )
 
         msg = f'Import selesai: {created} receipt dibuat, {updated} receipt diupdate, {error} line error.'
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.

@@ -420,6 +420,12 @@ class ImportStockItemWizard(models.TransientModel):
                 'ALL FETCH STOCK ITEM RETRY FAILED: %s',
                 last_error
             )
+            self.env["acumatica.webhook.error.service"].send_error(
+                webhook_type="fetch",
+                webhook_name="Stock Item",
+                error=f"Gagal fetch Stock Item setelah {max_retry} percobaan.",
+                error_type="http",
+            )
 
             raise UserError(last_error)
 

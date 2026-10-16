@@ -281,7 +281,7 @@ class ImportCustomerWizard(models.TransientModel):
                             AcumaticaErrorService.send_error(
                                 webhook_type="fetch",
                                 webhook_name="customer",
-                                error=last_error,
+                                error=f"Gagal fetch Customer dari Acumatica (HTTP {response.status_code}).",
                                 error_type="http",
                             )
 
@@ -494,7 +494,7 @@ class ImportCustomerWizard(models.TransientModel):
                         AcumaticaErrorService.send_error(
                             webhook_type="fetch",
                             webhook_name="customer",
-                            error=last_error,
+                            error="Koneksi fetch Customer ke Acumatica gagal setelah seluruh percobaan ulang.",
                             error_type="connection",
                         )
 
@@ -524,7 +524,7 @@ class ImportCustomerWizard(models.TransientModel):
                         AcumaticaErrorService.send_error(
                             webhook_type="fetch",
                             webhook_name="customer",
-                            error=last_error,
+                            error="Fetch Customer ke Acumatica mengalami timeout setelah seluruh percobaan ulang.",
                             error_type="timeout",
                         )
 
@@ -547,7 +547,7 @@ class ImportCustomerWizard(models.TransientModel):
                         AcumaticaErrorService.send_error(
                             webhook_type="fetch",
                             webhook_name="customer",
-                            error=last_error,
+                            error="Fetch Customer ke Acumatica gagal setelah seluruh percobaan ulang.",
                             error_type="unknown",
                         )
 

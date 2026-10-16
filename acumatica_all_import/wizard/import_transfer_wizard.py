@@ -211,6 +211,12 @@ class ImportTransferWizard(models.TransientModel):
             )
 
             if response.status_code != 200:
+                self.env["acumatica.webhook.error.service"].send_error(
+                    webhook_type="fetch",
+                    webhook_name="Transfer",
+                    error=f"Gagal fetch Transfer dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
                 raise UserError(
                     f'Gagal ambil data Transfer Receipt '
                     f'(HTTP {response.status_code}): '
@@ -356,6 +362,12 @@ class ImportTransferWizard(models.TransientModel):
                         ),
                         'receipt_nbr': receipt_nbr,
                         'document_only': document_only,
+                        'stock_lebih': (
+                            self._bool_val(item, 'WMSRelated')
+                            or self._bool_val(item, 'wms_related')
+                            or self._bool_val(item, 'StockLebih')
+                            or self._bool_val(item, 'stock_lebih')
+                        ),
                         'status': self._val(
                             item,
                             'Status',
@@ -618,6 +630,12 @@ class ImportTransferWizard(models.TransientModel):
                 timeout=300,
             )
             if response.status_code != 200:
+                self.env["acumatica.webhook.error.service"].send_error(
+                    webhook_type="fetch",
+                    webhook_name="Transfer",
+                    error=f"Gagal fetch Transfer dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
                 raise UserError(
                     f'Gagal ambil data Destination Warehouse '
                     f'(HTTP {response.status_code}): '

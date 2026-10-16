@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Create the root before other view files add child menus beneath it. -->
+    <menuitem id="menu_acumatica_all_import_root"
+        web_icon="acumatica_all_import,static/description/icon.png"
+        name="API Data Hub"
+        sequence="83"
+        groups="base.group_system,stock.group_stock_manager"/>
+</odoo>

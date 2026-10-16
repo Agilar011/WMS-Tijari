@@ -9,8 +9,9 @@ import logging
 import json
 import requests
 from collections import defaultdict
+from lxml import etree
 from odoo import models, api, fields, _
-from odoo.exceptions import ValidationError, UserError
+from odoo.exceptions import AccessError, ValidationError, UserError
 from odoo.tools import float_compare
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 from odoo.tools.float_utils import float_is_zero
@@ -18,7 +19,202 @@ from odoo.tools.float_utils import float_is_zero
 _logger = logging.getLogger(__name__)
 
 class StockPicking(models.Model):
-    _inherit = 'stock.picking'
+    _name = 'stock.picking'
+    _inherit = ['stock.picking', 'approval.mixin']
+
+    @api.model
+    def get_view(self, view_id=None, view_type='form', **options):
+        result = super().get_view(view_id=view_id, view_type=view_type, **options)
+        restricted_list = self.env.ref(
+            'tijari_wms_18.view_stock_picking_list_no_manual_create',
+            raise_if_not_found=False,
+        )
+        if (
+            view_type == 'list'
+            and restricted_list
+            and view_id == restricted_list.id
+            and (
+                self.env.user.has_group('stock.group_stock_manager')
+                or self.env.user.has_group('base.group_system')
+            )
+        ):
+            arch = etree.fromstring(result['arch'].encode())
+            arch.set('create', 'true')
+            result['arch'] = etree.tostring(arch, encoding='unicode')
+
+        # Matrix read access applies to the picking document itself. Operators
+        # may edit only the notebook pages granted to their role; list/form
+        # creation and top-level workflow buttons stay unavailable.
+        elevated_groups = (
+            'tijari_wms_18.group_warehouse_manager',
+            'tijari_wms_18.group_warehouse_head',
+            'tijari_wms_18.group_warehouse_admin',
+            'tijari_wms_18.group_it_staff',
+            'stock.group_stock_manager',
+            'base.group_system',
+        )
+        is_limited_operator = (
+            self.env.user.has_group('tijari_wms_18.group_operator')
+            and not any(self.env.user.has_group(group) for group in elevated_groups)
+        )
+        # Creation on stock.picking and edits outside permitted notebook pages
+        # stay restricted even when an action does not preserve its context.
+        if view_type in ('list', 'form') and is_limited_operator:
+            arch = etree.fromstring(result['arch'].encode())
+            arch.set('create', 'false')
+            if view_type == 'list':
+                arch.set('edit', 'false')
+                arch.set('delete', 'false')
+                for button in arch.xpath('.//header//button'):
+                    button.set('invisible', '1')
+                result['arch'] = etree.tostring(arch, encoding='unicode')
+                return result
+
+            writable_pages = {
+                'page_picker', 'page_packer_operation', 'page_putaway',
+                'detail_product', 'packed_items', 'note', 'Notes', 'extra',
+                'extra_info', 'additional_info', 'page_notes',
+            }
+            writable_page_labels = {
+                'Unpacked Item Details', 'Packed Items', 'Additional Info',
+                'Additional Information', 'Notes',
+            }
+            for field_node in arch.xpath('.//field'):
+                page = field_node.getparent()
+                while page is not None and page.tag != 'page':
+                    page = page.getparent()
+                if page is None or (
+                    page.get('name') not in writable_pages
+                    and page.get('string') not in writable_page_labels
+                ):
+                    field_node.set('readonly', '1')
+            for button in arch.xpath('.//header//button'):
+                button.set('invisible', '1')
+            result['arch'] = etree.tostring(arch, encoding='unicode')
+        return result
+
+    @api.model
+    def default_get(self, fields_list):
+        vals = super().default_get(fields_list)
+        if (
+            self.env.context.get('default_stock_lebih')
+            and 'approval_type_id' in fields_list
+            and not vals.get('approval_type_id')
+        ):
+            approval_type = self.env.ref(
+                'tijari_wms_18.approval_type_over_receipt', raise_if_not_found=False,
+            )
+            if approval_type:
+                vals['approval_type_id'] = approval_type.id
+        if self.env.context.get('default_stock_lebih') and 'picking_type_id' in fields_list and not vals.get('picking_type_id'):
+            # The Over-Receipt menu creates a normal inbound receipt.
+            warehouse_id = (
+                self.env.context.get('default_warehouse_id')
+                or self.env.user.warehouse_id.id
+            )
+            domain = [
+                ('code', '=', 'incoming'),
+                ('name', '=', 'Receipts'),
+                ('operation_category', '=', 'receive'),
+                ('company_id', '=', self.env.company.id),
+            ]
+            PickingType = self.env['stock.picking.type']
+            picking_type = PickingType.search(
+                domain + ([('warehouse_id', '=', warehouse_id)] if warehouse_id else []),
+                limit=1,
+            )
+            if not picking_type:
+                picking_type = PickingType.search(domain, order='warehouse_id, id', limit=1)
+            if picking_type:
+                vals['picking_type_id'] = picking_type.id
+        if (
+            self.env.context.get('default_stock_lebih')
+            and 'location_id' in fields_list
+            and not vals.get('location_id')
+            and not self.env.context.get('default_location_id')
+        ):
+            picking_type_id = (
+                vals.get('picking_type_id')
+                or self.env.context.get('default_picking_type_id')
+            )
+            picking_type = self.env['stock.picking.type'].browse(picking_type_id).exists()
+            source_location = picking_type.default_location_src_id if picking_type else False
+            if not source_location:
+                source_location = self.env.ref(
+                    'stock.stock_location_suppliers', raise_if_not_found=False,
+                )
+            if source_location:
+                vals['location_id'] = source_location.id
+        if self.env.context.get('default_stock_lebih') and 'location_dest_id' in fields_list and not self.env.context.get('default_location_dest_id'):
+            warehouse_id = self.env.context.get('default_warehouse_id') or self.env.user.warehouse_id.id
+            location_domain = [
+                ('usage', '=', 'internal'),
+                ('name', 'ilike', 'Finish Good'),
+                ('company_id', 'in', [self.env.company.id, False]),
+            ]
+            if warehouse_id:
+                location_domain.append(('warehouse_id', '=', warehouse_id))
+            finish_goods = self.env['stock.location'].search(location_domain, order='id', limit=1)
+            if finish_goods:
+                vals['location_dest_id'] = finish_goods.id
+        return vals
+
+    @api.depends('picking_type_id', 'partner_id', 'stock_lebih')
+    def _compute_location_id(self):
+        super()._compute_location_id()
+        for picking in self:
+            if not picking.stock_lebih or picking.state in ('done', 'cancel'):
+                continue
+            warehouse_id = (
+                picking.picking_type_id.warehouse_id.id
+                or self.env.context.get('default_warehouse_id')
+                or self.env.user.warehouse_id.id
+            )
+            domain = [
+                ('usage', '=', 'internal'),
+                ('name', 'ilike', 'Finish Good'),
+                ('company_id', 'in', [picking.company_id.id, False]),
+            ]
+            if warehouse_id:
+                domain.append(('warehouse_id', '=', warehouse_id))
+            finish_goods = self.env['stock.location'].search(
+                domain, order='id', limit=1,
+            )
+            if finish_goods:
+                picking.location_dest_id = finish_goods
+
+    stock_lebih = fields.Boolean(
+        string='Stock Lebih',
+        default=False,
+        copy=False,
+        index=True,
+        help='Dokumen khusus untuk penerimaan SOTR dengan quantity berlebih.',
+    )
+    over_receipt_transaction_type = fields.Selection(
+        [
+            ('receipt_sotr', 'Receipt SOTR'),
+            ('inventory_receive', 'Inventory Receive'),
+        ],
+        string='Tipe Transaksi Over-Receipt',
+        copy=False,
+        tracking=True,
+    )
+    ref_sotr = fields.Char(
+        string='Ref. No. Document',
+        copy=False,
+        tracking=True,
+    )
+    transfer_shipment_discrepancy = fields.Boolean(
+        string='Transfer Shipment Quantity Discrepancy',
+        copy=False,
+        tracking=True,
+    )
+
+    approval_type_id = fields.Many2one(
+        'approval.type',
+        string='Approval Type',
+        domain="[('approval_model_id.model', '=', 'stock.picking')]",
+    )
 
     # Memberi label unik untuk menghindari warning 'Same label: Type (Acumatica)'
     adt_receipt_nbr = fields.Char(string='Receipt Nbr (Acumatica)')
@@ -470,6 +666,37 @@ class StockPicking(models.Model):
         #         "Hanya user non-operator yang dapat mengisi/mengubah Penanggungjawab Pick."
         #     ))
 
+        if (
+            not self.env.su
+            and self.env.user.has_group('tijari_wms_18.group_operator')
+            and not any(self.env.user.has_group(group) for group in (
+                'tijari_wms_18.group_warehouse_manager',
+                'tijari_wms_18.group_warehouse_head',
+                'tijari_wms_18.group_warehouse_admin',
+                'tijari_wms_18.group_it_staff',
+                'stock.group_stock_manager',
+                'base.group_system',
+            ))
+        ):
+            protected_pickings = self.filtered(
+                lambda picking: not picking.internal_transfer_order_id
+            )
+            allowed_operator_fields = {
+                'note', 'desc_note', 'note_ba', 'carrier_id',
+                'carrier_tracking_ref', 'weight', 'shipping_weight',
+                'move_type', 'sale_id', 'batch_id', 'user_ids',
+                'pick_responsible_ids', 'pack_responsible_ids',
+                'do_responsible_ids', 'putaway_responsible_ids',
+                'picker_scan_code', 'picker_product_id', 'picker_lot_id',
+                'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id',
+                'package_scan_code', 'scanned_package_id',
+            }
+            if protected_pickings and set(vals) - allowed_operator_fields:
+                raise AccessError(_(
+                    'Warehouse Operator hanya dapat mengubah field pada notebook '
+                    'yang diizinkan; field dokumen lainnya hanya dapat dibaca.'
+                ))
+
         result = super().write(vals)
         if import_audit_fields and not self.env.context.get('skip_acumatica_import_log'):
             staging_models = (
@@ -539,6 +766,23 @@ class StockPicking(models.Model):
         ):
             self._set_document_only_picking_type()
         return result
+
+    def unlink(self):
+        if (
+            not self.env.su
+            and self.env.user.has_group('tijari_wms_18.group_operator')
+            and not any(self.env.user.has_group(group) for group in (
+                'tijari_wms_18.group_warehouse_manager',
+                'tijari_wms_18.group_warehouse_head',
+                'tijari_wms_18.group_warehouse_admin',
+                'tijari_wms_18.group_it_staff',
+                'stock.group_stock_manager',
+                'base.group_system',
+            ))
+            and self.filtered(lambda picking: not picking.internal_transfer_order_id)
+        ):
+            raise AccessError(_('Warehouse Operator tidak dapat menghapus dokumen picking.'))
+        return super().unlink()
 
     def _sync_user_ids_from_user_id(self):
         for picking in self.filtered(lambda record: record.user_id and record.user_id not in record.user_ids):
@@ -810,6 +1054,7 @@ class StockPicking(models.Model):
             ('confirmed', 'Waiting'),
             ('assigned', 'Ready'),
             ('waiting_response', 'Waiting For Shipment'),
+            ('waiting_approval', 'Waiting For Approval'),
             ('return_shipment', 'Returned Shipment'),
             ('done', 'Done'),
             ('cancel', 'Cancelled'),
@@ -819,6 +1064,21 @@ class StockPicking(models.Model):
         store=True,
         copy=False,
         tracking=True,
+    )
+    wms_state_over_receipt = fields.Selection(
+        selection=[
+            ('draft', 'Draft'),
+            ('waiting', 'Waiting Another Operation'),
+            ('confirmed', 'Waiting'),
+            ('assigned', 'Ready'),
+            ('waiting_response', 'Waiting For Approval'),
+            ('waiting_approval', 'Waiting For Approval'),
+            ('return_shipment', 'Returned Shipment'),
+            ('done', 'Done'),
+            ('cancel', 'Cancelled'),
+        ],
+        string='Over-Receipt State',
+        compute='_compute_wms_state_over_receipt',
     )
 
     shipment_information = fields.Selection([
@@ -1094,15 +1354,26 @@ class StockPicking(models.Model):
 
     @api.depends(
         "state",
+        "stock_lebih",
+        "approval_request_id",
         "adt_type",
         "internal_transfer_order_id",
         "internal_transfer_order_id.transfer_type",
         "internal_transfer_leg",
         "picking_type_id",
         "picking_type_name",
+        "transfer_shipment_discrepancy",
+        "approval_state",
+        "shipment_information",
     )
     def _compute_wms_state(self):
         for picking in self:
+            is_waiting_over_receipt = bool(
+                picking.stock_lebih
+                and picking.approval_request_id
+                and picking.approval_state != 'rejected'
+                and picking.state in ('confirmed', 'assigned')
+            )
             is_ready_transfer_in_receipt = bool(
                 picking.internal_transfer_order_id
                 and picking.internal_transfer_leg == "receipt"
@@ -1120,17 +1391,34 @@ class StockPicking(models.Model):
                     and picking.picking_type_id.code == "internal"
                 )
             )
+            is_transfer_shipment_discrepancy = bool(
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_leg == "delivery"
+                and picking.picking_type_id.code == "internal"
+                and picking.adt_type == "Transfer Shipment"
+                and picking.transfer_shipment_discrepancy
+                and picking.approval_state != "approved"
+            )
 
-            if is_ready_transfer_in_receipt:
+            if is_transfer_shipment_discrepancy:
+                picking.wms_state = "waiting_approval"
+            elif is_waiting_over_receipt:
+                picking.wms_state = 'waiting_response'
+            elif is_ready_transfer_in_receipt:
                 # A transfer-in receipt is ready to process after Check
                 # Availability, even when its zero-qty working lines cannot
                 # reserve transit stock like a vendor receipt. Do not prefill
                 # the actual received quantity here.
                 picking.wms_state = "assigned"
-            elif not is_waiting_shipment or picking.picking_type_name != "Delivery Orders":
+            elif not is_waiting_shipment or picking.picking_type_name not in ["Delivery Orders", "Internal Transfer"]:
                 picking.wms_state = picking.state
             elif is_waiting_shipment and not picking.shipment_information:
                 picking.wms_state = "assigned"       
+
+    @api.depends('wms_state')
+    def _compute_wms_state_over_receipt(self):
+        for picking in self:
+            picking.wms_state_over_receipt = picking.wms_state
 
     @api.depends(
         'move_line_ids',
@@ -1454,6 +1742,37 @@ class StockPicking(models.Model):
 # Function to foward adt_type from parent picking
     @api.model_create_multi
     def create(self, vals_list):
+        if not self.env.su and not self.env.user.has_group('base.group_system'):
+            can_create_over_receipt = any(self.env.user.has_group(group_xmlid) for group_xmlid in (
+                'tijari_wms_18.group_warehouse_manager',
+                'tijari_wms_18.group_warehouse_head',
+                'tijari_wms_18.group_warehouse_admin',
+                'tijari_wms_18.group_it_staff',
+                'stock.group_stock_manager',
+            ))
+            default_vals = self.default_get(['stock_lebih', 'picking_type_id'])
+            for vals in vals_list:
+                is_over_receipt = vals.get(
+                    'stock_lebih',
+                    self.env.context.get('default_stock_lebih', default_vals.get('stock_lebih')),
+                )
+                picking_type_id = vals.get(
+                    'picking_type_id',
+                    self.env.context.get('default_picking_type_id', default_vals.get('picking_type_id')),
+                )
+                picking_type = self.env['stock.picking.type'].browse(picking_type_id).exists()
+                if not (
+                    can_create_over_receipt
+                    and is_over_receipt
+                    and picking_type
+                    and picking_type.code == 'incoming'
+                    and picking_type.operation_category == 'receive'
+                ):
+                    raise AccessError(_(
+                        'Stock picking hanya dapat dibuat melalui API Data Hub. '
+                        'Pengecualian manual hanya berlaku untuk dokumen Over-Receipt '
+                        'dan Internal Transfer Order yang dibuat melalui alurnya.'
+                    ))
         # print("=" * 100)
         # print("CREATE PICKING")
         # traceback.print_stack(limit=15)        
@@ -1639,6 +1958,13 @@ class StockPicking(models.Model):
         #         )
 
         marked_as_todo = self.filtered(lambda picking: picking.state == 'draft')
+        over_receipt_moves = marked_as_todo.filtered(
+            lambda picking: picking.stock_lebih
+        ).mapped('move_ids').filtered(lambda move: move.product_uom_qty <= 0)
+        if over_receipt_moves:
+            raise ValidationError(_(
+                "Product quantity must be greater than zero before marking an Over Receipt as To Do."
+            ))
         res = super().action_confirm()
 
         # Manufacturing component moves already carry the authoritative
@@ -2667,6 +2993,46 @@ class StockPicking(models.Model):
     def action_confirm_shipment(self):
         self.ensure_one()
 
+        is_transfer_shipment_ito_delivery = bool(
+            self.internal_transfer_order_id
+            and self.internal_transfer_order_id.adt_transaction_type == 'Transfer Shipment'
+            and self.internal_transfer_leg == 'delivery'
+            and self.picking_type_id.code == 'internal'
+            and self.adt_type == 'Transfer Shipment'
+        )
+        has_transfer_shipment_quantity_difference = bool(
+            is_transfer_shipment_ito_delivery
+            and any(
+                float_compare(
+                    move.shipped_qty,
+                    move.quantity,
+                    precision_rounding=move.product_uom.rounding,
+                ) != 0
+                for move in self.move_ids
+            )
+        )
+        from_transfer_shipment_staging = self.env.context.get(
+            'transfer_shipment_completed_from_staging'
+        )
+        if (
+            is_transfer_shipment_ito_delivery
+            and not from_transfer_shipment_staging
+            and self.transfer_shipment_discrepancy
+            and self.approval_state != 'approved'
+        ):
+            raise UserError(_(
+                'Transfer Shipment discrepancy harus disetujui sebelum shipment dapat diselesaikan.'
+            ))
+        if (
+            is_transfer_shipment_ito_delivery
+            and not from_transfer_shipment_staging
+            and not self.transfer_shipment_discrepancy
+            and (self.shipment_information == 'partial' or has_transfer_shipment_quantity_difference)
+        ):
+            raise UserError(_(
+                'Periksa dokumen pada Shipment Transfer Completed dengan tombol Complete Shipment sebelum menyelesaikan quantity yang berbeda.'
+            ))
+
         if not self.shipment_information:
             raise UserError(_("Shipment Information is required."))
 
@@ -2690,9 +3056,10 @@ class StockPicking(models.Model):
             and self.picking_type_id.code == 'internal'
         )
         if is_transfer_shipment_ito_delivery:
-            # Transfer Shipment uses the reported shipped quantity to complete
-            # its receipt; a short shipment does not create a return picking.
-            self.wms_state = "done"
+            # A shortage creates a draft return for the unshipped quantity,
+            # while the transfer receipt is completed at the reported quantity.
+            self._generate_return_from_actual_qty()
+            self.wms_state = "return_shipment"
             self.internal_transfer_order_id.action_auto_validate_transfer_out_receipt(
                 shipment_picking=self,
             )
@@ -2711,7 +3078,249 @@ class StockPicking(models.Model):
                 shipment_picking=self,
             )
 
+    def _get_over_receipt_warehouse_partner(self):
+        self.ensure_one()
+        ref_no = (self.ref_sotr or '').strip()
+        if not ref_no:
+            return self.env['res.partner'].browse()
+
+        transaction_type = self.over_receipt_transaction_type or 'receipt_sotr'
+        if transaction_type == 'receipt_sotr':
+            staging_model, reference_field = 'acumatica.transfer.line', 'receipt_nbr'
+        elif transaction_type == 'inventory_receive':
+            staging_model, reference_field = 'acumatica.inventory.recieved.line', 'reference_nbr'
+        else:
+            return self.env['res.partner'].browse()
+
+        staging = self.env[staging_model].search(
+            [(reference_field, '=', ref_no), ('stock_lebih', '=', True)],
+            order='id desc',
+            limit=1,
+        )
+        if not staging:
+            return self.env['res.partner'].browse()
+
+        # Supplier / Customer partner follows the source Warehouse, not
+        # Warehouse Dest (which is the receipt destination warehouse).
+        source_warehouse_code = (staging.warehouse_code or '').strip().upper()
+        if not source_warehouse_code:
+            return self.env['res.partner'].browse()
+        warehouse_code = source_warehouse_code.split('-', 1)[0].strip()
+        if not warehouse_code:
+            return self.env['res.partner'].browse()
+
+        LocationMapping = self.env['stock.location.acumatica']
+        mapping = LocationMapping.search([
+            ('code', '=', source_warehouse_code),
+            ('is_active', '=', True),
+            ('odoo_building_id', '!=', False),
+        ], limit=1)
+        warehouse = mapping.odoo_building_id
+        if not warehouse:
+            warehouse = self.env['stock.warehouse'].search([
+                ('code', '=', warehouse_code),
+                ('company_id', '=', self.company_id.id),
+            ], limit=1)
+
+        partner = warehouse.partner_id if warehouse else self.env['res.partner'].browse()
+        if partner and partner.partner_type == 'warehouse':
+            return partner
+        return self.env['res.partner'].search([
+            ('name', '=', warehouse_code),
+            ('partner_type', '=', 'warehouse'),
+            ('company_id', 'in', [self.company_id.id, False]),
+        ], limit=1)
+
+    def action_update_over_receipt(self):
+        self.ensure_one()
+        if not self.stock_lebih:
+            raise UserError(_('Update Receipt hanya tersedia untuk dokumen Over-Receipt.'))
+        if self.approval_state != 'approved':
+            raise UserError(_('Dokumen harus disetujui sebelum Update Receipt.'))
+        if not (self.ref_sotr or '').strip():
+            raise UserError(_('Ref. No. Document wajib diisi sebelum Update Receipt.'))
+        if self.wms_state != 'waiting_response':
+            raise UserError(_('Dokumen tidak sedang menunggu approval/penerimaan.'))
+
+        transaction_type = self.over_receipt_transaction_type or 'receipt_sotr'
+        if transaction_type == 'receipt_sotr':
+            staging_model = 'acumatica.transfer.line'
+            reference_field = 'receipt_nbr'
+            source_label = _('SOTR')
+        elif transaction_type == 'inventory_receive':
+            staging_model = 'acumatica.inventory.recieved.line'
+            reference_field = 'reference_nbr'
+            source_label = _('Inventory Receive')
+        else:
+            raise UserError(_('Pilih Tipe Transaksi Over-Receipt terlebih dahulu.'))
+
+        Staging = self.env[staging_model]
+        staging = Staging.search(
+            [(reference_field, '=', self.ref_sotr.strip()), ('stock_lebih', '=', True)],
+            order='id desc',
+            limit=1,
+        )
+        if not staging:
+            return self._over_receipt_quantity_warning(
+                _('Data %s Over-Receipt %s belum ditemukan di staging.')
+                % (source_label, self.ref_sotr)
+            )
+
+        api_quantities = {}
+        for line in staging.product_line_ids:
+            inventory_id = (line.inventory_id or '').strip()
+            if inventory_id:
+                api_quantities[inventory_id] = (
+                    api_quantities.get(inventory_id, 0.0)
+                    + staging._parse_float(line.product_uom_qty)
+                )
+
+        document_quantities = {}
+        for move in self.move_ids:
+            inventory_id = (move.product_id.default_code or '').strip()
+            if inventory_id:
+                document_quantities[inventory_id] = (
+                    document_quantities.get(inventory_id, 0.0) + move.quantity
+                )
+
+        mismatches = []
+        inventory_ids = set(api_quantities) | set(document_quantities)
+        for inventory_id in sorted(inventory_ids):
+            product_moves = self.move_ids.filtered(
+                lambda move: (move.product_id.default_code or '').strip() == inventory_id
+            )
+            product_name = (
+                product_moves[:1].product_id.default_code
+                if product_moves else inventory_id
+            )
+            rounding = product_moves[:1].product_uom.rounding if product_moves else 0.01
+            api_qty = api_quantities.get(inventory_id, 0.0)
+            document_qty = document_quantities.get(inventory_id, 0.0)
+            if float_compare(api_qty, document_qty, precision_rounding=rounding) != 0:
+                mismatches.append(
+                    _('Product: %(product)s\nQty di API: %(api_qty)s\nQty di Dokumen: %(document_qty)s')
+                    % {
+                        'product': product_name,
+                        'api_qty': f'{api_qty:g}',
+                        'document_qty': f'{document_qty:g}',
+                    }
+                )
+
+        if mismatches:
+            message = _(
+                'Dokumen ini tidak bisa di-update karena ada perbedaan quantity:\n\n%s'
+            ) % '\n\n'.join(mismatches)
+            return self._over_receipt_quantity_warning(message)
+
+        return self.with_context(over_receipt_update=True).button_validate()
+
+    def action_approve(self):
+        self.ensure_one()
+        if self.stock_lebih and not (self.ref_sotr or '').strip():
+            raise UserError(_('Ref. No. Document wajib diisi sebelum dokumen Over-Receipt dapat disetujui.'))
+        if self.transfer_shipment_discrepancy and not self.attachment_ids:
+            raise UserError(_(
+                'Lampiran wajib diisi sebelum discrepancy quantity Transfer Shipment dapat disetujui.'
+            ))
+        return super().action_approve()
+
+    def _approval_approved(self):
+        result = super()._approval_approved()
+        for picking in self.filtered('transfer_shipment_discrepancy'):
+            if not picking.attachment_ids:
+                raise UserError(_(
+                    'Lampiran wajib diisi sebelum discrepancy quantity Transfer Shipment dapat disetujui.'
+                ))
+            if picking.shipment_information not in ('partial', 'full_shipment'):
+                raise UserError(_(
+                    'Shipment Information belum ditentukan untuk Transfer Shipment discrepancy.'
+                ))
+            picking.action_confirm_shipment()
+        return result
+
+    def _submit_transfer_shipment_discrepancy_approval(self):
+        self.ensure_one()
+        approval_type = self.approval_type_id or self.env.ref(
+            'tijari_wms_18.approval_type_over_receipt', raise_if_not_found=False,
+        )
+        if not approval_type:
+            raise UserError(_(
+                'Approval Type Discrepancy Quantity belum dikonfigurasi.'
+            ))
+
+        if not self.approval_type_id:
+            self.approval_type_id = approval_type
+        if not approval_type._get_approval_lines(0.0):
+            raise UserError(_(
+                'Tambahkan approver pada Approval Type %s terlebih dahulu.'
+            ) % approval_type.display_name)
+        self.action_submit_approval()
+
+    def action_rollback_over_receipt_approval(self):
+        self.ensure_one()
+        if not self.stock_lebih:
+            raise UserError(_('Rollback approval hanya tersedia untuk dokumen Over-Receipt.'))
+        if not self.env.user.has_group('stock.group_stock_manager'):
+            raise UserError(_('Hanya Stock Manager yang dapat melakukan rollback approval.'))
+        if self.state in ('done', 'cancel'):
+            raise UserError(_('Approval tidak dapat di-rollback setelah dokumen selesai atau dibatalkan.'))
+        request = self.approval_request_id
+        if not request or request.state != 'approved':
+            raise UserError(_('Rollback hanya dapat dilakukan pada dokumen yang sudah disetujui.'))
+
+        request.line_ids.write({'state': 'waiting', 'action_date': False})
+        request.write({'state': 'waiting'})
+        self.message_post(body=_('Approval di-rollback. Ref. No. Document dapat diperiksa dan diperbarui.'))
+        return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+    @api.model
+    def _over_receipt_quantity_warning(self, message):
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('Update Receipt belum dapat diproses'),
+                'message': message,
+                'type': 'warning',
+                'sticky': True,
+            },
+        }
+
     def button_validate(self):
+        if not self.env.context.get('over_receipt_update'):
+            over_receipts = self.filtered('stock_lebih')
+            for picking in over_receipts:
+                if picking.state in ('done', 'cancel'):
+                    continue
+                if picking.approval_state == 'approved':
+                    raise UserError(_(
+                        'Gunakan tombol Update Receipt untuk menyelesaikan dokumen Over-Receipt.'
+                    ))
+                if picking.approval_request_id:
+                    if picking.approval_state != 'rejected':
+                        raise UserError(_(
+                            'Dokumen Over-Receipt sudah dikirim untuk approval dan belum disetujui.'
+                        ))
+                    # Keep the rejected request as history, then let Validate
+                    # create a fresh request for the corrected quantities.
+                    picking.approval_request_id = False
+
+                approval_type = picking.approval_type_id or self.env.ref(
+                    'tijari_wms_18.approval_type_over_receipt', raise_if_not_found=False,
+                )
+                if not approval_type:
+                    raise UserError(_('Approval Type Discrepancy Quantity belum dikonfigurasi.'))
+                if not picking.approval_type_id:
+                    picking.approval_type_id = approval_type
+                if not approval_type._get_approval_lines(0.0):
+                    raise UserError(_(
+                        'Tambahkan approver pada Approval Type %s terlebih dahulu.'
+                    ) % approval_type.display_name)
+                picking.action_submit_approval()
+
+            if over_receipts:
+                return {'type': 'ir.actions.client', 'tag': 'reload'}
+
         document_only_pickings = self.filtered(
             lambda picking: picking.adt_is_document_only
         )
@@ -2749,7 +3358,7 @@ class StockPicking(models.Model):
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
 
-            if picking.picking_type_id.name in ('Delivery Orders'):
+            if picking.picking_type_id.name in ('Delivery Orders', 'Internal Transfer'):
                 picking._check_validate_delivery_requirements()
                 picking._apply_confirmation_qty_to_quantity_delivery()
 
@@ -2844,7 +3453,9 @@ class StockPicking(models.Model):
                     lambda picking: picking.picking_type_name == "Pack"
                 )
                 next_pickings.write({
-                    'adt_actual_qty': rec.adt_actual_qty
+                    # 'adt_actual_qty': rec.adt_actual_qty,
+                    'adt_actual_qty': 0.0,
+                    
                 })
 
                 for move in rec.move_ids:
@@ -2862,7 +3473,8 @@ class StockPicking(models.Model):
                     lambda picking: picking.picking_type_name == "Delivery Orders"
                 )
                 next_pickings.write({
-                    'adt_actual_qty': rec.adt_actual_qty
+                    # 'adt_actual_qty': rec.adt_actual_qty,
+                    'adt_actual_qty': 0.0
                 })
 
                 for move in rec.move_ids:
@@ -2944,6 +3556,32 @@ class StockPicking(models.Model):
                         storage_move.write({
                             "product_note": receipt_move.product_note,
                         })
+
+        if self.env.context.get('over_receipt_update'):
+            completed_over_receipts = self.filtered(
+                lambda picking: picking.stock_lebih and picking.state == 'done'
+            )
+            for picking in completed_over_receipts:
+                ref_no = (picking.ref_sotr or '').strip()
+                vals = {}
+                if ref_no and picking.origin != ref_no:
+                    vals['origin'] = ref_no
+                if not picking.adt_type:
+                    transaction_type_labels = {
+                        'receipt_sotr': _('Receipt SOTR'),
+                        'inventory_receive': _('Inventory Receive'),
+                    }
+                    transaction_type_label = transaction_type_labels.get(
+                        picking.over_receipt_transaction_type
+                    )
+                    if transaction_type_label:
+                        vals['adt_type'] = transaction_type_label
+                if not picking.partner_id:
+                    warehouse_partner = picking._get_over_receipt_warehouse_partner()
+                    if warehouse_partner:
+                        vals['partner_id'] = warehouse_partner.id
+                if vals:
+                    picking.sudo().write(vals)
 
         return res
 
@@ -3338,21 +3976,27 @@ class StockPicking(models.Model):
                     line.line_inventory_id == move.product_id.default_code
             )
 
+            if not staging_lines_for_product:
+                staging_qty = 0.0
+                all_match = False
+
             staging_qty = sum(
                 staging_lines_for_product.mapped('line_quantity')
             )
 
             if not staging_qty:
-                return {
-                    'type': 'ir.actions.client',
-                    'tag': 'display_notification',
-                    'params': {
-                        'title': 'Gagal Melakukan Update',
-                        'message': f'Quantity {move.product_id.display_name} yang diupdate tidak memiliki quantity',
-                        'type': 'warning',
-                        'sticky': False,
-                    }
-                }
+                staging_qty = 0.0
+                all_match = False
+                # return {
+                #     'type': 'ir.actions.client',
+                #     'tag': 'display_notification',
+                #     'params': {
+                #         'title': 'Gagal Melakukan Update',
+                #         'message': f'Quantity {move.product_id.display_name} yang diupdate tidak memiliki quantity',
+                #         'type': 'warning',
+                #         'sticky': False,
+                #     }
+                # }
 
             if staging_qty < move.quantity:
                 all_match = False
@@ -3380,8 +4024,92 @@ class StockPicking(models.Model):
         staging_data.is_used = True
 
         self.action_confirm_shipment()   
+    # transfer shipment lama
+    # def action_complete_transfer_shipment(self):
+    #     self.ensure_one()
+    #     if not (
+    #         self.internal_transfer_order_id
+    #         and self.internal_transfer_leg == 'delivery'
+    #         and self.picking_type_id.code == 'internal'
+    #         and self.adt_type == 'Transfer Shipment'
+    #         and self.wms_state == 'waiting_response'
+    #     ):
+    #         raise UserError(_('Shipment completion is only available for a Transfer Shipment ITO delivery waiting for shipment.'))
 
-    def action_complete_transfer_shipment(self):
+    #     staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
+    #         [('shipment_nbr', '=', self.origin)], limit=1,
+    #     )
+    #     if not staging_data:
+    #         raise UserError(_(
+    #             'Dokumen %(document)s tidak ditemukan di staging Shipment Transfer Completed.'
+    #         ) % {'document': self.origin})
+
+    #     staging_quantities = {}
+    #     staging_matches_document = bool(staging_data)
+    #     if staging_data:
+    #         # Acumatica can return multiple detail rows for the same product.
+    #         # Merge those rows by InventoryID before comparing with the moves.
+    #         for line in staging_data.line_ids:
+    #             inventory_id = (line.line_inventory_id or '').strip()
+    #             if inventory_id:
+    #                 staging_quantities[inventory_id] = (
+    #                     staging_quantities.get(inventory_id, 0.0)
+    #                     + line.line_quantity
+    #                 )
+
+    #     move_quantities = {}
+    #     for move in self.move_ids:
+    #         inventory_id = (move.product_id.default_code or '').strip()
+    #         move_quantities[inventory_id] = (
+    #             move_quantities.get(inventory_id, 0.0) + move.quantity
+    #         )
+
+    #     if not staging_data:
+    #         staging_matches_document = False
+    #     elif set(staging_quantities) != set(move_quantities):
+    #         staging_matches_document = False
+    #     for inventory_id, move_qty in move_quantities.items():
+    #         staging_qty = staging_quantities.get(inventory_id, 0.0)
+    #         product_moves = self.move_ids.filtered(
+    #             lambda move: (move.product_id.default_code or '').strip() == inventory_id
+    #         )
+    #         rounding = product_moves[:1].product_uom.rounding
+    #         if not staging_qty or float_compare(
+    #             staging_qty,
+    #             move_qty,
+    #             precision_rounding=rounding,
+    #         ) != 0:
+    #             staging_matches_document = False
+
+    #     if staging_matches_document:
+    #         if not self.approval_request_id:
+    #             self.transfer_shipment_discrepancy = False
+    #         for move in self.move_ids:
+    #             # The staging total was checked per product above. Distribute
+    #             # the confirmed total to each move using its own document qty.
+    #             move.shipped_qty = move.quantity
+    #         self.shipment_information = 'full_shipment'
+    #         return self.action_confirm_shipment()
+
+    #     all_match = True
+    #     for move in self.move_ids:
+    #         if move.shipped_qty < 0:
+    #             raise UserError(_('Shipped Qty tidak boleh kurang dari nol.'))
+    #         if float_compare(
+    #             move.shipped_qty,
+    #             move.quantity,
+    #             precision_rounding=move.product_uom.rounding,
+    #         ) != 0:
+    #             all_match = False
+
+    #     self.shipment_information = 'full_shipment' if all_match else 'partial'
+    #     self.transfer_shipment_discrepancy = True
+    #     self.wms_state = 'waiting_approval'
+    #     if not self.approval_request_id:
+    #         self._submit_transfer_shipment_discrepancy_approval()
+    #     return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+    def action_get_transfer_shipment_completed_staging(self):
         self.ensure_one()
         if not (
             self.internal_transfer_order_id
@@ -3395,19 +4123,21 @@ class StockPicking(models.Model):
         staging_data = self.env['acumatica.shipment.transfer.completed.staging'].search(
             [('shipment_nbr', '=', self.origin)], limit=1,
         )
+        if not staging_data:
+            raise UserError(_(
+                'Dokumen %(document)s tidak ditemukan di staging Shipment Transfer Completed.'
+            ) % {'document': self.origin})
 
         staging_quantities = {}
-        staging_matches_document = bool(staging_data)
-        if staging_data:
-            # Acumatica can return multiple detail rows for the same product.
-            # Merge those rows by InventoryID before comparing with the moves.
-            for line in staging_data.line_ids:
-                inventory_id = (line.line_inventory_id or '').strip()
-                if inventory_id:
-                    staging_quantities[inventory_id] = (
-                        staging_quantities.get(inventory_id, 0.0)
-                        + line.line_quantity
-                    )
+        # Acumatica can return multiple detail rows for a product. Aggregate
+        # by InventoryID before distributing the reported quantity to moves.
+        for line in staging_data.line_ids:
+            inventory_id = (line.line_inventory_id or '').strip()
+            if inventory_id:
+                staging_quantities[inventory_id] = (
+                    staging_quantities.get(inventory_id, 0.0)
+                    + line.line_quantity
+                )
 
         move_quantities = {}
         for move in self.move_ids:
@@ -3416,53 +4146,64 @@ class StockPicking(models.Model):
                 move_quantities.get(inventory_id, 0.0) + move.quantity
             )
 
-        if not staging_data:
-            staging_matches_document = False
-        elif set(staging_quantities) != set(move_quantities):
-            staging_matches_document = False
+        # Match the normal Shipment Completed behavior: compare every
+        # document product, while ignoring staging-only extra product rows.
+        staging_matches_document = True
         for inventory_id, move_qty in move_quantities.items():
             staging_qty = staging_quantities.get(inventory_id, 0.0)
             product_moves = self.move_ids.filtered(
                 lambda move: (move.product_id.default_code or '').strip() == inventory_id
             )
             rounding = product_moves[:1].product_uom.rounding
-            if not staging_qty or float_compare(
+            if float_compare(
                 staging_qty,
                 move_qty,
                 precision_rounding=rounding,
             ) != 0:
                 staging_matches_document = False
-
-        if staging_matches_document:
-            for move in self.move_ids:
-                # The staging total was checked per product above. Distribute
-                # the confirmed total to each move using its own document qty.
-                move.shipped_qty = move.quantity
-            self.shipment_information = 'full_shipment'
-            return self.action_confirm_shipment()
-
-        if not self.attachment_ids:
-            raise UserError(_(
-                'Lampiran wajib diisi karena quantity staging berbeda dari quantity dokumen.'
-            ))
-
-        all_match = True
-        for move in self.move_ids:
-            if move.shipped_qty < 0:
-                raise UserError(_('Shipped Qty tidak boleh kurang dari nol.'))
             if float_compare(
-                move.shipped_qty,
-                move.quantity,
-                precision_rounding=move.product_uom.rounding,
-            ) != 0:
-                all_match = False
+                staging_qty,
+                move_qty,
+                precision_rounding=rounding,
+            ) > 0:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Gagal Melakukan Update'),
+                        'message': _(
+                            'Quantity %(product)s yang diupdate tidak boleh melebihi quantity barang yang dikirim.'
+                        ) % {'product': product_moves[:1].product_id.display_name},
+                        'type': 'warning',
+                        'sticky': False,
+                    },
+                }
 
-        self.shipment_information = 'full_shipment' if all_match else 'partial'
-        return self.action_confirm_shipment()
+        # Persist the actual shipped quantity from staging, including zero for
+        # products missing from the response.
+        for move in self.move_ids:
+            inventory_id = (move.product_id.default_code or '').strip()
+            product_moves = self.move_ids.filtered(
+                lambda candidate: (candidate.product_id.default_code or '').strip() == inventory_id
+            )
+            total_move_qty = sum(product_moves.mapped('quantity'))
+            total_staging_qty = staging_quantities.get(inventory_id, 0.0)
+            move.shipped_qty = (
+                move.quantity * total_staging_qty / total_move_qty
+                if total_move_qty
+                else 0.0
+            )
 
-    # Keep existing RPC entrypoints compatible while the UI uses one button.
-    def action_get_transfer_shipment_completed_staging(self):
-        return self.action_complete_transfer_shipment()
+        self.shipment_information = 'full_shipment' if staging_matches_document else 'partial'
+        self.transfer_shipment_discrepancy = False
+        return self.with_context(
+            transfer_shipment_completed_from_staging=True,
+        ).action_confirm_shipment()
+
+
+    # Keep existing RPC entrypoints compatible while sharing one completion flow.
+    def action_complete_transfer_shipment(self):
+        return self.action_get_transfer_shipment_completed_staging()
 
     def action_confirm_shipment_manually(self):
         return self.action_complete_transfer_shipment()
@@ -3556,7 +4297,7 @@ class StockPicking(models.Model):
 
         result = wizard.with_context(
             return_from_actual_qty=True
-        ).action_create_returns()
+        ).sudo().action_create_returns()
 
         return result
 
@@ -3899,3 +4640,21 @@ class StockPickingAcumaticaErrorLine(models.Model):
     qty = fields.Float(string="Demand")
     uom = fields.Char()
     payload = fields.Json()
+
+
+class ApprovalRequest(models.Model):
+    _inherit = 'approval.request'
+
+    def action_approve(self):
+        self.ensure_one()
+        if self.source_model == 'stock.picking':
+            picking = self.env['stock.picking'].browse(self.source_id).exists()
+            if picking and picking.stock_lebih and not (picking.ref_sotr or '').strip():
+                raise UserError(
+                    _('Ref. No. Document wajib diisi sebelum dokumen Over-Receipt dapat disetujui.')
+                )
+            if picking and picking.transfer_shipment_discrepancy and not picking.attachment_ids:
+                raise UserError(_(
+                    'Lampiran wajib diisi sebelum discrepancy quantity Transfer Shipment dapat disetujui.'
+                ))
+        return super().action_approve()

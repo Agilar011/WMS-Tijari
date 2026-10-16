@@ -56,6 +56,7 @@
                 <field name="warehouse_code"/>
                 <field name="warehouse_dest_code"/>
                 <field name="document_only"/>
+                <field name="stock_lebih" string="WMSRelated"/>
                 <field name="total_qty"/>
                 <field name="acumatica_write_date" string="Last Modified"/>
                 <field name="import_state" widget="badge"
@@ -63,7 +64,7 @@
                        decoration-muted="import_state == 'staged'"
                        decoration-danger="import_state == 'error'"/>
                 <field name="import_message"/>
-                <button name="action_import_this" string="Import" type="object" icon="fa-upload"/>
+                <button name="action_import_this" string="Import" type="object" icon="fa-upload" invisible="stock_lebih"/>
                 <button name="action_open_picking" string="Open Document" type="object" icon="fa-external-link" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                 <field name="odoo_picking_id" column_invisible="1"/>
                 <field name="odoo_internal_transfer_order_id" column_invisible="1"/>
@@ -77,7 +78,7 @@
         <field name="arch" type="xml">
             <form string="Transfer (In/SOTR)">
                 <header>
-                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged'"/>
+                    <button name="action_import_this" type="object" string="Import This" class="btn-primary" invisible="import_state != 'staged' or stock_lebih"/>
                     <button name="action_open_picking" type="object" string="Open Document" class="btn-secondary" invisible="not odoo_picking_id and not odoo_internal_transfer_order_id"/>
                     <button name="action_reset_pending" type="object" string="Reset Staged" class="btn-secondary" invisible="import_state != 'error'"/>
                     <field name="import_state" widget="statusbar" statusbar_visible="staged,created,updated,rejected,error"/>
@@ -111,6 +112,7 @@
                             <field name="inventory_ref"/>
                             <field name="is_hold"/>
                             <field name="document_only"/>
+                            <field name="stock_lebih" string="WMSRelated"/>
                             <field name="picking_type_id"/>
                             <field name="note"/>
                         </group>

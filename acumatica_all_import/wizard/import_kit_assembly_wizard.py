@@ -215,8 +215,8 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
                 AcumaticaErrorService.send_error(
                     webhook_type="fetch",
-                    webhook_name="issue change item",
-                    error=last_error,
+                    webhook_name="Kit Assembly",
+                    error=f"Gagal fetch Kit Assembly dari Acumatica (HTTP {response.status_code}).",
                     error_type="http",
                 )
                 
@@ -516,6 +516,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
             # Import batch
             lines._do_import()
+            self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
 
             # Commit biar tidak numpuk di memory & tidak freeze
             self.env.cr.commit()
@@ -554,6 +555,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
             raise UserError('Tidak ada data pending untuk diimport.')
 
         lines._do_import()
+        self.env['acumatica.error.transaction']._handle_acumatica_created(lines)
         self.env.cr.commit()
 
         remaining = Line.search_count(domain)
