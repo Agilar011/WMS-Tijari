@@ -372,11 +372,11 @@
                                 <div invisible="picking_type_name in ('Receipts', 'Receipt Internal')">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
                                     <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
-                                        context="{'tijari_stock_picking_product_code_only': True}" invisible="'Pack' in (parent.picking_type_name or '')"/>
+                                        context="{'tijari_stock_picking_product_code_only': True}"/>
                                     <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
                                         groups="stock.group_production_lot"
-                                        invisible="parent.picking_type_name not in ('Pick', 'Pick Internal', 'Pick Components', 'Pack') or 'Pick' in (parent.picking_type_name or '')"/>
+                                        invisible="'Pack' in (parent.picking_type_name or '')"/>
                                     <field name="picker_status"
                                         widget="badge"
                                         decoration-success="picker_status == 'finished'"
@@ -406,16 +406,17 @@
                                 </div>
                                 <div class="d-flex align-items-center gap-1"
                                     groups="stock.group_production_lot"
-                                    invisible="'Receipts' not in (parent.picking_type_name or '') and 'Receipt Internal' not in (parent.picking_type_name or '')">
-                                    <strong>Lot/Serial Number: </strong>
-                                    <field name="lot_id" readonly="0" force_save="1"
-                                        domain="[('id', 'in', available_lot_ids)]"/>
+                                    invisible="'Receipts' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
+                                    <div class="text-muted" invisible="not lot_id">
+                                        <strong>Lot/Serial Number: </strong>
+                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
+                                    </div>
                                 </div>
                                             
-                                <div class="d-flex align-items-center gap-1" invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
+                                <!-- <div class="d-flex align-items-center gap-1" invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
                                     <strong>Pick From: </strong>
                                     <field name="location_id" widget="location_short_many2one" readonly="1" force_save="1" context="{'show_location_short_name': True}"/>
-                                </div>
+                                </div> -->
                                 <!-- <div class="d-flex align-items-center gap-1" invisible="'Pick' in (parent.picking_type_name or '')">
                                     <strong>Lot/Serial Number: </strong>
                                     <field name="lot_id" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
@@ -1382,11 +1383,7 @@
                                 <div class="d-flex justify-content-between align-items-start mb-1">
                                     <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
                                         context="{'tijari_stock_picking_product_code_only': True}"
-                                        invisible="'Receipt' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
-                                    <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
-                                        domain="[('id', 'in', available_lot_ids)]"
-                                        groups="stock.group_production_lot"
-                                        invisible="parent.picking_type_name not in ('Pick', 'Pick Internal', 'Pick Components', 'Pack')"/>
+                                        invisible="'Receipt' in (parent.picking_type_name or '')"/>
                                     <field name="picker_status"
                                         widget="badge"
                                         decoration-success="picker_status == 'finished'"
@@ -1421,10 +1418,11 @@
                                 </div>
                                 <div class="d-flex align-items-center gap-1"
                                     groups="stock.group_production_lot"
-                                    invisible="'Receipts' not in (parent.picking_type_name or '') and 'Receipt Internal' not in (parent.picking_type_name or '')">
-                                    <strong>Lot/Serial Number: </strong>
-                                    <field name="lot_id" readonly="0" force_save="1"
-                                        domain="[('id', 'in', available_lot_ids)]"/>
+                                    invisible="'Receipts' not in (parent.picking_type_name or '') and 'Pick' not in (parent.picking_type_name or '')">
+                                    <div class="text-muted" invisible="not lot_id">
+                                        <strong>Lot/Serial Number: </strong>
+                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
+                                    </div>
                                 </div>
 
                                 <div class="d-flex align-items-center gap-1" invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
@@ -1885,7 +1883,6 @@
                                         decoration-danger="pick_status == 'unfinished'"/>
                                 </div>
                                 <br/>
-                                
                                 <div class="d-flex align-items-center gap-1">
                                     <strong>Pick From: </strong>
                                     <field name="location_id" widget="location_short_many2one" force_save="1" context="{'show_location_short_name': True}"/>
@@ -2921,7 +2918,9 @@
             <xpath expr="//field[@name='move_line_ids']/list/field[@name='product_id']" position="attributes">
                 <attribute name="column_invisible">1</attribute>
             </xpath>
-
+            <xpath expr="//field[@name='move_line_ids']/list/field[@name='result_package_id']" position="attributes">
+                <attribute name="column_invisible">1</attribute>
+            </xpath>
         </field>
     </record>
 
@@ -2942,7 +2941,7 @@
         </field>
     </record>
 
-    <record id="view_stock_move_pick_detail_add_package" model="ir.ui.view">
+    <!-- <record id="view_stock_move_pick_detail_add_package" model="ir.ui.view">
         <field name="name">stock.move.pick.detail.add.package</field>
         <field name="model">stock.move</field>
         <field name="inherit_id" ref="tijari_wms_18.stock_move_pick_detail_view"/>
@@ -2953,7 +2952,7 @@
             </xpath>
 
         </field>
-    </record>
+    </record> -->
     
 
     <record id="wizard_picker_view_mobile" model="ir.ui.view">
