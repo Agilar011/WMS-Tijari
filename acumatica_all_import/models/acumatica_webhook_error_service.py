@@ -141,9 +141,6 @@ class AcumaticaWebhookErrorService(models.AbstractModel):
         """
         webhook_url = self._get_chat_webhook_url_user()
         if not webhook_url:
-            raise ValueError("Google Chat webhook URL is not configured.")
-
-        if not webhook_url:
             _logger.warning(
                 "Google Chat webhook URL is not configured."
             )

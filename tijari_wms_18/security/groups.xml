@@ -36,4 +36,10 @@
         <field name="implied_ids" eval="[(4, ref('stock.group_stock_user')), (4, ref('base.group_system'))]"/>
     </record>
 
+    <record id="group_accounting_stock" model="res.groups">
+        <field name="name">Accounting Stock</field>
+        <field name="category_id" ref="base.module_category_inventory_inventory"/>
+        <field name="implied_ids" eval="[(4, ref('stock.group_stock_user'))]"/>
+    </record>
+
 </odoo>

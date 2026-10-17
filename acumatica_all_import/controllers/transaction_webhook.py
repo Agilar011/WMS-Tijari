@@ -1378,12 +1378,22 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         }
 
     def _credit_memo_consignment_header_vals(self, item, row_number):
-        warehouse_code = self._first_value(item, "LineWarehouse", "Warehouse", "LineWarehouseID", "adt_Warehouse")
-        picking_type = self._env()["stock.picking.type"].sudo().resolve_document_only_picking_type(
-            target_operation_type="direct_delivery_order",
+        building_id = self._first_value(item, "BuildingID", "adt_BuildingID")
+        warehouse_code = self._first_value(
+            item,
+            "LineWarehouse",
+            "Warehouse",
+            "LineWarehouseID",
+            "adt_Warehouse",
+        )
+        picking_type_warehouse = building_id or warehouse_code
+        if not building_id and isinstance(picking_type_warehouse, str):
+            picking_type_warehouse = picking_type_warehouse.split("-", 1)[0].strip()
+        picking_type = self._search_picking_type(
+            picking_type_warehouse,
+            "outgoing",
             api_acumatica="credit_memo_consignment",
-            document_only=True,
-            warehouse_code=warehouse_code,
+            operation_category="delivery",
         )
         return {
             "adt_id": item.get("id") or item.get("adt_id") or "",
@@ -1397,7 +1407,6 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "adt_CustomerOrder": self._first_value(item, "CustomerOrder", "adt_CustomerOrder"),
             "adt_Date": self._first_value(item, "Date", "adt_Date"),
             "adt_Description": self._first_value(item, "Description", "adt_Description"),
-            "adt_DocumentOnly": True,
             "adt_DueDate": self._first_value(item, "DueDate", "adt_DueDate"),
             "adt_ExternalRef": self._first_value(item, "ExternalRef", "adt_ExternalRef"),
             "adt_LastModifiedDateTime": self._first_value(item, "LastModifiedDateTime", "adt_LastModifiedDateTime"),
@@ -1663,6 +1672,11 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
                 ),
                 "processor": self._process_shipment_transfer_completed_webhook,
             },
+            "inventory_adjustment": {
+                "label": "Inventory Adjustment",
+                "records_keys": ("Inserted",),
+                "processor": self._process_inventory_adjustment_webhook,
+            },
             "vendor_return": {
                 "label": "Vendor Return",
                 "records_keys": ("Inserted",),
@@ -1766,6 +1780,8 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
     def _normalize_transaction_type(self, transaction_type):
         key = (transaction_type or "").strip().lower().replace("-", "_")
         aliases = {
+            "inventoryadjustmentgi": "inventory_adjustment",
+            "inventory_adjustment_gi": "inventory_adjustment",
             "inventory_receipt": "inventory_receipt",
             "inventory_received": "inventory_receipt",
             "shipment_so_return": "shipment_return",
@@ -1796,6 +1812,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
     def _config_type_for_transaction_key(self, config_key):
         aliases = {
             "inventory_receipt": "inventory_received",
+            "inventory_adjustment": "inventory_adjustment",
             "shipment_return": "shipment_so",
             "po_return": "issue_po_return",
             "vendor_return": "vendor_return_direct_transfer",
@@ -2009,6 +2026,45 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             "header_ids": header_ids,
             "product_lines": product_lines,
         }
+
+    def _process_inventory_adjustment_webhook(self, payload, config):
+        config_record = self._env()["acumatica.config"].sudo()._get_default_config_for_type("inventory_adjustment")
+        if not config_record:
+            raise UserError(_("No active Acumatica config found for transaction type: inventory_adjustment"))
+        records = self._records_from_payload_keys(payload, config["records_keys"])
+        if not records and isinstance(payload, dict) and payload.get("id"):
+            records = [payload]
+        if not records:
+            raise UserError(_("No Inventory Adjustment records found in payload."))
+        Staging = self._env()["acumatica.inventory.adjustment.staging"].sudo()
+        Detail = self._env()["acumatica.inventory.adjustment.staging.detail"].sudo()
+        ids = []
+        for index, item in enumerate(records, start=1):
+            external_id = str(item.get("id") or item.get("RefNbr") or f"webhook-{index}")
+            record = Staging.search([("acumatica_id", "=", external_id), ("config_id", "=", config_record.id)], limit=1)
+            vals = {"acumatica_id": external_id, "row_number": item.get("rowNumber") or index,
+                    "note": item.get("note") or False, "config_id": config_record.id,
+                    "sync_date": fields.Datetime.now(), "import_state": "staged", "import_message": False}
+            if record:
+                record.write(vals)
+                record.detail_ids.unlink()
+            else:
+                record = Staging.create(vals)
+            details = item.get("InventoryAdjustmentGIDetails") or item.get("Details") or []
+            if isinstance(details, dict):
+                details = details.get("value") or []
+            for line_index, detail in enumerate(details, start=1):
+                ref = detail.get("RefNbr")
+                if isinstance(ref, dict):
+                    ref = ref.get("value")
+                Detail.create({"staging_id": record.id, "acumatica_id": detail.get("id") or False,
+                               "row_number": detail.get("rowNumber") or line_index,
+                               "note": detail.get("note") or False, "ref_nbr": ref or False,
+                               "raw_data": json.dumps(detail, ensure_ascii=False)})
+            ids.append(record.id)
+        return {"transaction_type": "inventory_adjustment", "model": "acumatica.inventory.adjustment.staging",
+                "created": len(ids), "updated": 0, "imported": 0, "errors": 0, "header_ids": ids,
+                "product_lines": 0}
 
     def _transaction_webhook(self, transaction_type, **kwargs):
         ok, err = self._check_api_key()

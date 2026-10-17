@@ -215,6 +215,12 @@
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
+    <record id="menu_acumatica_all_import_staging_invoice_credit_memo_consignment" model="ir.ui.menu">
+        <field name="groups_id" eval="[(6, 0, [
+            ref('base.group_system'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
     <record id="menu_acumatica_all_import_staging_transfer_one_step" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('base.group_system'),

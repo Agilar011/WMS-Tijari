@@ -46,7 +46,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
     adt_CustomerOrder = fields.Char(string="Acumatica CustomerOrder")
     adt_Date = fields.Char(string="Acumatica Date")
     adt_Description = fields.Char(string="Acumatica Description")
-    adt_DocumentOnly = fields.Boolean(string="Acumatica DocumentOnly")
     adt_DueDate = fields.Char(string="Acumatica DueDate")
     adt_ExternalRef = fields.Char(string="Acumatica ExternalRef")
     adt_LastModifiedDateTime = fields.Char(string="Acumatica LastModifiedDateTime")
@@ -230,18 +229,21 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # Jika lines bermasalah, pembuatan picking otomatis dibatalkan bersih (Rollback)
                 with self.env.cr.savepoint():
                     print(f"[Credit Memo Consignment] Processing Document: {origin}")
-
                     staging_line = self.env['acumatica.credit.memo.consignment.staging.line'].search([('receipt_line_id', '=', first.id)], limit=1)
                     if not staging_line:
                         raise UserError(f"Detail line belum ada untuk header staging ID {first.id}.")
 
                     # Tentukan jenis operasi picking (Operation Type)
                     warehouse_code = staging_line.adt_Warehouse
-                    picking_type = self.env['stock.picking.type'].resolve_document_only_picking_type(
-                        target_operation_type='direct_delivery_order',
+                    building_id = first.adt_BuildingID or warehouse_code
+                    if not first.adt_BuildingID and isinstance(building_id, str):
+                        building_id = building_id.split('-', 1)[0].strip()
+                    picking_type = self.env['stock.picking.type'].resolve_picking_type(
+                        building_id=building_id,
+                        code='outgoing',
+                        operation_category='delivery',
                         api_acumatica='credit_memo_consignment',
-                        document_only=True,
-                        warehouse_code=warehouse_code,
+                        transaction_key='credit_memo_consignment',
                         required=False,
                     )
                     if not picking_type:
@@ -413,6 +415,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # Savepoint di atas membatalkan picking/move dokumen yang gagal.
                 error += 1
                 error_text = str(e).lower()
+                error_message = str(e)
                 if 'picking type' in error_text or 'operation type' in error_text:
                     user_message = f"Operation Type untuk Credit Memo Consignment {origin or '-'} belum tersedia. Minta admin memeriksa pengaturan tipe operasi di WMS."
                 elif 'lokasi cons' in error_text or 'consignment' in error_text or 'end user consignment' in error_text:
@@ -421,6 +424,26 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     user_message = f"Produk pada Credit Memo Consignment {origin or '-'} belum terdaftar. Periksa master produk di WMS."
                 elif 'detail line belum ada' in error_text:
                     user_message = f"Credit Memo Consignment {origin or '-'} belum memiliki detail produk. Lengkapi detail transaksi."
+                elif 'no quantities are reserved' in error_text:
+                    reservation_details = []
+                    for line in to_create_move_lines:
+                        sku = line.adt_InventoryID or 'SKU tidak diketahui'
+                        qty = self._parse_float(line.adt_Qty)
+                        uom = line.adt_UOM or 'satuan tidak diketahui'
+                        source = line.adt_Warehouse or 'lokasi CONS tidak diketahui'
+                        reservation_details.append(
+                            f"• Baris {line.adt_rowNumber or '-'} | SKU: {sku} | "
+                            f"Diminta: {qty:g} {uom} | Lokasi sumber: {source}"
+                        )
+                    detail_text = '\n'.join(reservation_details)
+                    error_message = (
+                        f"Credit Memo Consignment {origin or '-'} gagal divalidasi.\n\n"
+                        "Penyebab: tidak ada kuantitas yang berhasil direservasi dari lokasi sumber.\n\n"
+                        "Periksa stok tersedia dan lokasi CONS untuk setiap produk berikut:\n"
+                        f"{detail_text}\n\n"
+                        "Setelah stok dan lokasi sesuai, jalankan proses ulang."
+                    )
+                    user_message = error_message
                 elif 'sudah divalidasi' in error_text or 'update digagalkan' in error_text:
                     user_message = f"Credit Memo Consignment {origin or '-'} tidak dapat diperbarui karena dokumen sudah diproses. Hubungi admin jika perubahan diperlukan."
                 else:
@@ -448,7 +471,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 # Tulis pesan kegagalan ke UI Odoo agar user tahu detail masalahnya
                 first.write({
                     'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
-                    'import_message': str(e),
+                    'import_message': error_message,
                     'odoo_picking_id': False,
                 })
                 if user_message:

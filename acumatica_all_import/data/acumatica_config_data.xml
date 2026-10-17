@@ -132,6 +132,21 @@
             <field name="active">True</field>
             <field name="state">draft</field>
         </record>
+        <record id="acumatica_config_inventory_adjustment_default" model="acumatica.config">
+            <field name="name">Acumatica Inventory Adjustment V2 - Default</field>
+            <field name="base_url">http://staging.aditya.group/acumportal/entity</field>
+            <field name="api_version">25.200.002</field>
+            <field name="username">wms</field>
+            <field name="password">WMSAditya@2026</field>
+            <field name="company_code">asgjkt</field>
+            <field name="config_type">inventory_adjustment</field>
+            <field name="endpoint_name">InventoryAdjustmentGI</field>
+            <field name="odata_expand">InventoryAdjustmentGIDetails</field>
+            <field name="odata_filter" eval="False"/>
+            <field name="is_default">True</field>
+            <field name="active">True</field>
+            <field name="state">draft</field>
+        </record>
         <record id="acumatica_config_issue_po_return_default" model="acumatica.config">
             <field name="name">Acumatica Issue PO Return V2 - Default</field>
             <field name="base_url">http://staging.aditya.group/acumportal/entity</field>

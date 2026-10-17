@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="action_stock_report_velocity_generate" model="ir.actions.act_window">
+        <field name="name">Generate Stock Velocity</field>
+        <field name="res_model">stock.report.velocity.generate</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
     <record id="view_stock_report_velocity_line_list" model="ir.ui.view">
         <field name="name">stock.report.velocity.line.list</field>
         <field name="model">stock.report.velocity.line</field>
@@ -73,10 +80,4 @@
         <field name="view_mode">list,form</field>
     </record>
 
-    <record id="action_stock_report_velocity_generate" model="ir.actions.act_window">
-        <field name="name">Generate Stock Velocity</field>
-        <field name="res_model">stock.report.velocity.generate</field>
-        <field name="view_mode">form</field>
-        <field name="target">new</field>
-    </record>
 </odoo>

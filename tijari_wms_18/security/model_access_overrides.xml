@@ -6,4 +6,29 @@
     <record id="stock.access_stock_picking_user" model="ir.model.access">
         <field name="perm_create" eval="False"/>
     </record>
+
+    <!-- Replace broad stock-user CRUD with the rights defined by the WMS
+         matrix. Role-specific grants are listed in ir.model.access.csv. -->
+    <record id="stock.access_stock_quant_user" model="ir.model.access">
+        <field name="perm_create" eval="False"/>
+    </record>
+    <record id="stock.access_stock_quant_package_stock_user" model="ir.model.access">
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="stock.access_stock_scrap_user" model="ir.model.access">
+        <field name="perm_create" eval="False"/>
+    </record>
+    <record id="stock_inventory.access_stock_inventory_user" model="ir.model.access">
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    <record id="stock.access_stock_inventory_adjustment_name_user" model="ir.model.access">
+        <field name="perm_read" eval="False"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
 </odoo>

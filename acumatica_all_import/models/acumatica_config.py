@@ -384,6 +384,7 @@ class AcumaticaConfig(models.Model):
 
     # ─── Login helper ────────────────────────────────
     def _do_login(self):
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
         self.ensure_one()
         credentials = {
             "name": self.username,
@@ -406,6 +407,13 @@ class AcumaticaConfig(models.Model):
                 _logger.info("Acumatica login berhasil untuk user: %s", self.username)
                 return session
             else:
+                last_error = f'Login gagal (HTTP {response.status_code}): {response.text}'
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="Login Acumatica",
+                    error=last_error,
+                    error_type="http",
+                )
                 raise UserError(
                     f'Login gagal (HTTP {response.status_code}): {response.text}'
                 )

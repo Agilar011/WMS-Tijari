@@ -23,7 +23,8 @@
                           <field name="adt_external_id"/>
                           <field name="adt_acumatica_write_date"/>
                           <field name="adt_item_class"/>
-                          <field name="adt_item_status"/>
+                          <field name="adt_status"/>
+                          <field name="adt_item_status" invisible="1"/>
                       </group>
                       <!-- Stock Item Fields -->
                       <group>
