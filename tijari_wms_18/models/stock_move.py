@@ -615,7 +615,7 @@ class StockMove(models.Model):
                 difference = total_qty - total_confirmation_quantity 
             else:
                 if move.raw_material_production_id:
-                    total_confirmation_quantity = move.mo_confirmation_quantity
+                    total_confirmation_quantity = move.quantity
                     total_qty = move.product_uom_qty
                     difference = total_qty - total_confirmation_quantity
                 else:
@@ -1019,21 +1019,6 @@ class StockMove(models.Model):
             ),
         }
 
-    def action_open_move_mo(self):
-        self.ensure_one()
-
-        return {
-            'type': 'ir.actions.act_window',
-            'name': 'Stock Move',
-            'res_model': 'stock.move',
-            'res_id': self.id,
-            'view_mode': 'form',
-            'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_mo_view'
-            ).id,
-            'target': 'new',
-        }
-
     # Putaway flow scoped to the current stock move. The existing picking and
     # batch Putaway flows continue to use their stock.move.line collections.
     putaway_scan_product_button = fields.Boolean(string='Scan Product')
@@ -1394,10 +1379,52 @@ class StockMove(models.Model):
                 and move.picking_id._is_manual_bad_stock_pick()
             )
         )
-        if moves_to_assign:
-            return super(StockMove, moves_to_assign)._action_assign(
-                force_qty=force_qty
+        if not moves_to_assign:
+            return
+
+        component_moves = moves_to_assign.filtered(
+            lambda move: bool(move.raw_material_production_id)
+        )
+        productions = component_moves.mapped('raw_material_production_id')
+        finished_lines = (
+            productions.move_raw_ids.move_line_ids
+            | component_moves.move_line_ids
+        ).filtered(lambda line: line.mo_status == 'finished')
+        finished_line_values = {
+            line.id: {
+                'quantity': line.quantity,
+                'lot_id': line.lot_id.id,
+                'lot_name': line.lot_name,
+                'picked': line.picked,
+            }
+            for line in finished_lines
+        }
+
+        res = super(StockMove, moves_to_assign)._action_assign(force_qty=force_qty)
+
+        # Assignment may update a reusable move line. Restore finished MO
+        # lines exactly as they were before reservation.
+        for line in finished_lines.exists():
+            previous = finished_line_values[line.id]
+            vals = {
+                field_name: value
+                for field_name, value in previous.items()
+                if line[field_name] != value
+            }
+            if vals:
+                line.write(vals)
+
+        if component_moves:
+            unfinished_lines = component_moves.move_line_ids.filtered(
+                lambda line: (
+                    line.state not in ('done', 'cancel')
+                    and line.mo_status != 'finished'
+                )
             )
+            if unfinished_lines:
+                unfinished_lines.write({'quantity': 0.0})
+
+        return res
 
     def create(self, vals):
         # stock.picking.scheduled_date is computed from stock.move.date.  Odoo

@@ -19,47 +19,37 @@ class StockQuant(models.Model):
         store=True,
     )
 
+    def _get_inventory_move_values(
+        self, qty, location_id, location_dest_id, package_id=False,
+        package_dest_id=False,
+    ):
+        vals = super()._get_inventory_move_values(
+            qty,
+            location_id,
+            location_dest_id,
+            package_id=package_id,
+            package_dest_id=package_dest_id,
+        )
+        if self.current_inventory_id:
+            for command in vals.get("move_line_ids", []):
+                if command[0] == 0:
+                    command[2]["inventory_adjustment_id"] = self.current_inventory_id.id
+        return vals
+
     def _apply_inventory(self):
+        adjustments_to_process = self.filtered(
+            "current_inventory_id"
+        ).mapped("current_inventory_id")
         res = super()._apply_inventory()
-        record_moves = self.env["stock.move.line"]
-        adjustments_to_process = self.env["stock.inventory"]
+        for quant in self.filtered("current_inventory_id"):
+            quant.to_do = False
+            quant.current_inventory_id = False
 
-        for rec in self.filtered("current_inventory_id"):
-            adjustment = rec.current_inventory_id
-            moves = record_moves.search(
-                [
-                    ("product_id", "=", rec.product_id.id),
-                    ("lot_id", "=", rec.lot_id.id),
-                    "|",
-                    ("location_id", "=", rec.location_id.id),
-                    ("location_dest_id", "=", rec.location_id.id),
-                ],
-                order="create_date asc",
-            ).filtered(
-                lambda x, rec=rec: not x.company_id.id
-                or not rec.company_id.id
-                or rec.company_id.id == x.company_id.id
-            )
-            if len(moves) == 0:
-                raise ValueError(self.env._("No move lines have been created"))
-            move = moves[len(moves) - 1]
-            adjustment.stock_move_ids |= move
-            reference = move.reference
-            if adjustment.name and move.reference:
-                reference = adjustment.name + ": " + move.reference
-            elif adjustment.name:
-                reference = adjustment.name
-            move.write(
-                {
-                    "inventory_adjustment_id": adjustment.id,
-                    "reference": reference,
-                }
-            )
-            rec.to_do = False
-            rec.current_inventory_id = False
-            adjustments_to_process |= adjustment
-
-        if adjustments_to_process and self.env.company.stock_inventory_auto_complete:
+        if (
+            adjustments_to_process
+            and self.env.company.stock_inventory_auto_complete
+            and not self.env.context.get("skip_stock_inventory_auto_complete")
+        ):
             for inventory in adjustments_to_process:
                 inventory.action_auto_state_to_done()
         return res

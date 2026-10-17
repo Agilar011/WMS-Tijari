@@ -6,6 +6,7 @@
  'depends': ['base', 'mail', 'contacts', 'product', 'purchase', 'stock', 'uom', 'tijari_wms_18'],
  'data': ['security/ir.model.access.csv',
           'views/acumatica_all_import_root_menu.xml',
+          'views/acumatica_all_import_menu.xml',
           'data/api_dashboard_data.xml',
           'data/acumatica_cron_data.xml',
           'data/ir_config_parameter.xml',
