@@ -3011,8 +3011,12 @@ class StockPicking(models.Model):
                 for move in self.move_ids
             )
         )
+        from_transfer_shipment_staging = self.env.context.get(
+            'transfer_shipment_completed_from_staging'
+        )
         if (
             is_transfer_shipment_ito_delivery
+            and not from_transfer_shipment_staging
             and self.transfer_shipment_discrepancy
             and self.approval_state != 'approved'
         ):
@@ -3021,6 +3025,7 @@ class StockPicking(models.Model):
             ))
         if (
             is_transfer_shipment_ito_delivery
+            and not from_transfer_shipment_staging
             and not self.transfer_shipment_discrepancy
             and (self.shipment_information == 'partial' or has_transfer_shipment_quantity_difference)
         ):
@@ -3051,9 +3056,10 @@ class StockPicking(models.Model):
             and self.picking_type_id.code == 'internal'
         )
         if is_transfer_shipment_ito_delivery:
-            # Transfer Shipment uses the reported shipped quantity to complete
-            # its receipt; a short shipment does not create a return picking.
-            self.wms_state = "done"
+            # A shortage creates a draft return for the unshipped quantity,
+            # while the transfer receipt is completed at the reported quantity.
+            self._generate_return_from_actual_qty()
+            self.wms_state = "return_shipment"
             self.internal_transfer_order_id.action_auto_validate_transfer_out_receipt(
                 shipment_picking=self,
             )
@@ -3352,7 +3358,7 @@ class StockPicking(models.Model):
             if picking.picking_type_id.name in ('Pack'):
                 picking._check_pick_quantity_vs_demand()
 
-            if picking.picking_type_id.name in ('Delivery Orders'):
+            if picking.picking_type_id.name in ('Delivery Orders', 'Internal Transfer'):
                 picking._check_validate_delivery_requirements()
                 picking._apply_confirmation_qty_to_quantity_delivery()
 
@@ -3442,7 +3448,68 @@ class StockPicking(models.Model):
                             "Silakan pastikan scan location dan/atau lot sudah benar."
                         ))
 
-            if "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
+            if (
+                "Pick Components" in (rec.picking_type_name or "")
+                and rec.state == 'done'
+                and (rec.backorder_id or rec.backorder_ids)
+            ):
+                # Raw material moves belong to the MO and may not have a
+                # picking_id. Detect the backorder from this picking, then
+                # create a separate working line on each affected MO move.
+                component_moves = rec.move_ids.move_dest_ids.filtered(
+                    lambda move: bool(move.raw_material_production_id)
+                )
+                for move in component_moves:
+                    finished_lines = move.move_line_ids.filtered(
+                        lambda line: line.mo_status == 'finished'
+                    )
+                    if not finished_lines:
+                        continue
+
+                    working_lines = move.move_line_ids.filtered(
+                        lambda line: (
+                            line.state not in ('done', 'cancel')
+                            and line.mo_status != 'finished'
+                        )
+                    )
+
+                    source_moves = rec.move_ids.filtered(
+                        lambda source_move: move in source_move.move_dest_ids
+                    )
+                    lot_values = {}
+                    for source_line in source_moves.move_line_ids:
+                        lot_id = source_line.lot_id.id or False
+                        lot_name = source_line.lot_id.name or source_line.lot_name or False
+                        lot_values[(lot_id, lot_name)] = True
+
+                    # If the transfer line has no lot, preserve the lot from
+                    # the finished MO line so the new line remains traceable.
+                    if not lot_values:
+                        for finished_line in finished_lines:
+                            lot_id = finished_line.lot_id.id or False
+                            lot_name = finished_line.lot_id.name or finished_line.lot_name or False
+                            lot_values[(lot_id, lot_name)] = True
+
+                    for lot_id, lot_name in lot_values:
+                        matching_working_line = working_lines.filtered(
+                            lambda line: (
+                                line.lot_id.id == lot_id
+                                and (line.lot_id.name or line.lot_name or False) == lot_name
+                            )
+                        )
+                        if matching_working_line:
+                            continue
+                        line_vals = move._prepare_move_line_vals(quantity=0.0)
+                        line_vals.update({
+                            'quantity': 0.0,
+                            'lot_id': lot_id,
+                            'lot_name': lot_name,
+                            'mo_status': 'unfinished',
+                            'picked': False,
+                        })
+                        self.env['stock.move.line'].create(line_vals)
+
+            elif "Pick" in (rec.picking_type_name or "") and "Components" not in (rec.picking_type_name or ""):
                 next_pickings = rec.move_ids.move_dest_ids.mapped("picking_id").filtered(
                     lambda picking: picking.picking_type_name == "Pack"
                 )
@@ -4140,7 +4207,9 @@ class StockPicking(models.Model):
                 move_quantities.get(inventory_id, 0.0) + move.quantity
             )
 
-        staging_matches_document = set(staging_quantities) == set(move_quantities)
+        # Match the normal Shipment Completed behavior: compare every
+        # document product, while ignoring staging-only extra product rows.
+        staging_matches_document = True
         for inventory_id, move_qty in move_quantities.items():
             staging_qty = staging_quantities.get(inventory_id, 0.0)
             product_moves = self.move_ids.filtered(
@@ -4153,10 +4222,26 @@ class StockPicking(models.Model):
                 precision_rounding=rounding,
             ) != 0:
                 staging_matches_document = False
+            if float_compare(
+                staging_qty,
+                move_qty,
+                precision_rounding=rounding,
+            ) > 0:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': _('Gagal Melakukan Update'),
+                        'message': _(
+                            'Quantity %(product)s yang diupdate tidak boleh melebihi quantity barang yang dikirim.'
+                        ) % {'product': product_moves[:1].product_id.display_name},
+                        'type': 'warning',
+                        'sticky': False,
+                    },
+                }
 
         # Persist the actual shipped quantity from staging, including zero for
-        # products missing from the response. A discrepancy is routed through
-        # the existing approval flow below.
+        # products missing from the response.
         for move in self.move_ids:
             inventory_id = (move.product_id.default_code or '').strip()
             product_moves = self.move_ids.filtered(
@@ -4171,17 +4256,11 @@ class StockPicking(models.Model):
             )
 
         self.shipment_information = 'full_shipment' if staging_matches_document else 'partial'
-        if staging_matches_document:
-            self.transfer_shipment_discrepancy = False
-            staging_data.is_used = True
-            return self.action_confirm_shipment()
+        self.transfer_shipment_discrepancy = False
+        return self.with_context(
+            transfer_shipment_completed_from_staging=True,
+        ).action_confirm_shipment()
 
-        self.transfer_shipment_discrepancy = True
-        self.wms_state = 'waiting_approval'
-        if not self.approval_request_id:
-            self._submit_transfer_shipment_discrepancy_approval()
-        staging_data.is_used = True
-        return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     # Keep existing RPC entrypoints compatible while sharing one completion flow.
     def action_complete_transfer_shipment(self):

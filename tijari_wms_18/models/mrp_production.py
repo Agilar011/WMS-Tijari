@@ -223,7 +223,7 @@ class WMSMRPProduction(models.Model):
                 )
             
             for move in production.move_raw_ids:
-                confirmed_qty = move.mo_confirmation_quantity
+                confirmed_qty = move.quantity
 
                 if float_compare(
                     production.qty_producing,
@@ -248,12 +248,12 @@ class WMSMRPProduction(models.Model):
             ):
                 production.action_generate_serial()
 
-            for move in production.move_raw_ids:
-                for line in move.move_line_ids:
-                    confirmation_quantity = line.mo_confirmation_quantity
+            # for move in production.move_raw_ids:
+            #     for line in move.move_line_ids:
+            #         confirmation_quantity = line.mo_confirmation_quantity
 
-                    line.quantity_shadow = line.quantity
-                    line.quantity = confirmation_quantity
+            #         line.quantity_shadow = line.quantity
+            #         line.quantity = confirmation_quantity
 
         res = super().button_mark_done()
 

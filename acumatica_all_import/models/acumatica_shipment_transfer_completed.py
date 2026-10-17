@@ -95,7 +95,6 @@ class AcumaticaShipmentTransferCompletedStaging(models.Model):
                     'import_message': (
                         'Transfer Shipment diproses dari staging Shipment Transfer Completed.'
                     ),
-                    'is_used': True,
                 })
             return True
         except Exception as error:
