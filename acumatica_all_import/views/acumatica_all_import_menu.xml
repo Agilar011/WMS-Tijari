@@ -298,6 +298,7 @@
     <!-- <menuitem id="menu_acumatica_all_import_staging_issue_change_item" name="Issue : Change Item" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_line" sequence="30"/> -->
     <menuitem id="menu_acumatica_all_import_staging_shipment_transfer_completed" name="Shipment Transfer Completed" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_shipment_transfer_completed_staging" sequence="12"/>
     <menuitem id="menu_acumatica_all_import_staging_inventory_issue" name="Inventory Issue" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inventory_issue_line" sequence="40"/>
+    <menuitem id="menu_acumatica_all_import_staging_inventory_adjustment" name="Inventory Adjustment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_inventory_adjustment_staging" sequence="45"/>
     <menuitem id="menu_acumatica_all_import_staging_issue_po_return" name="PO Return" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_po_return_line" sequence="50"/>
     <menuitem id="menu_acumatica_all_import_staging_invoice_consignment" name="Invoice Consignment" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_invoice_consignment" sequence="80"/>
 

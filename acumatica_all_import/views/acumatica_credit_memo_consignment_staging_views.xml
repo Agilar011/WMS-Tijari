@@ -79,7 +79,6 @@
                         </group>
 
                         <group>
-                            <field name="adt_DocumentOnly"/>
                             <field name="adt_DueDate"/>
                             <field name="adt_LastModifiedDateTime"/>
                             <field name="adt_LocationID"/>

@@ -848,7 +848,6 @@ class StockPicking(models.Model):
             ('acumatica.transfer.two.step.line', 'reference_nbr', 'document_only'),
             ('acumatica.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
             ('acumatica.vendor.return.direct.transfer.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
-            ('acumatica.credit.memo.consignment.staging', 'adt_ReferenceNbr', 'adt_DocumentOnly'),
             ('acumatica.receipt.external.line', 'reference_nbr', 'document_only'),
             ('acumatica.toko.pegang.do.line', 'reference_nbr', 'document_only'),
         ]
@@ -4082,8 +4081,6 @@ class StockPicking(models.Model):
             else "partial"
         )
 
-        staging_data.is_used = True
-
         self.action_confirm_shipment()   
     # transfer shipment lama
     # def action_complete_transfer_shipment(self):
@@ -4260,7 +4257,6 @@ class StockPicking(models.Model):
         return self.with_context(
             transfer_shipment_completed_from_staging=True,
         ).action_confirm_shipment()
-
 
     # Keep existing RPC entrypoints compatible while sharing one completion flow.
     def action_complete_transfer_shipment(self):

@@ -1,3 +1,5 @@
+import json
+
 from odoo import fields, models
 from odoo.exceptions import UserError
 from dateutil import parser as dateutil_parser
@@ -88,20 +90,21 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
 
     def _search_picking_type(self, warehouse_code):
         config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
+        if config_picking_type and not config_picking_type.is_document_only_api:
             return config_picking_type
 
         PickingType = self.env['stock.picking.type']
-        document_only_type = PickingType.resolve_document_only_picking_type(
-            target_operation_type='direct_delivery_order',
+        building_id = (warehouse_code or '').strip()
+        if '-' in building_id:
+            building_id = building_id.split('-', 1)[0].strip()
+        return PickingType.resolve_picking_type(
+            building_id=building_id,
+            code='outgoing',
+            operation_category='delivery',
             api_acumatica='credit_memo_consignment',
-            document_only=True,
-            warehouse_code=warehouse_code,
+            transaction_key='credit_memo_consignment',
+            required=False,
         )
-        if document_only_type:
-            return document_only_type
-
-        return PickingType.browse()
 
     def fetch_data(self):
         self.ensure_one()
@@ -172,7 +175,6 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                             'adt_CustomerOrder' : self._val(item, 'CustomerOrder'),
                             'adt_Date' : self._val(item, 'Date'),
                             'adt_Description' : self._val(item, 'Description'),
-                            'adt_DocumentOnly' : True,
                             'adt_ExternalRef' : self._val(item, 'ExternalRef'),
                             'adt_DueDate' : self._val(item, 'DueDate'),
                             'adt_LastModifiedDateTime' : self._val(item, 'LastModifiedDateTime'),
@@ -320,11 +322,131 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                         "Error import Direct Transfer %s",
                         item.get('ReferenceNbr', {}).get('value', '')
                     )
+
+            # Sesudah semua Credit Memo selesai masuk staging, tarik data invoice
+            # berdasarkan OrigRefNbr unik ke staging terpisah.
+            credit_memos = self.env['acumatica.credit.memo.consignment.staging'].browse(
+                list({record.id for record in seen_headers.values() if record})
+            )
+            credit_memos_by_orig_ref = {
+                (record.adt_OrigRefNbr or '').strip(): record
+                for record in credit_memos
+                if (record.adt_OrigRefNbr or '').strip()
+            }
+            for orig_ref_nbr, credit_memo in credit_memos_by_orig_ref.items():
+                try:
+                    self._fetch_invoice_credit_memo_consignment(
+                        session, credit_memo, orig_ref_nbr
+                    )
+                except Exception:
+                    invoice_staging = self.env['acumatica.invoice.credit.memo.consignment.staging'].search([
+                        ('config_id', '=', self.config_id.id),
+                        ('adt_OrigRefNbr', '=', orig_ref_nbr),
+                    ], limit=1)
+                    if invoice_staging:
+                        invoice_staging.write({
+                            'fetch_state': 'error',
+                            'fetch_message': 'Gagal mengambil InvoiceCreditMemoConsignmentGI. Periksa log server.',
+                            'sync_date': fields.Datetime.now(),
+                        })
+                    _logger.exception(
+                        'Gagal fetch InvoiceCreditMemoConsignmentGI untuk OrigRefNbr %s',
+                        orig_ref_nbr,
+                    )
         finally:
             if session:
                 self.config_id._do_logout(session)
         
         return len(result)
+
+    def _fetch_invoice_credit_memo_consignment(self, session, credit_memo, orig_ref_nbr):
+        """Fetch invoice detail for one Credit Memo OrigRefNbr into its own staging."""
+        Staging = self.env['acumatica.invoice.credit.memo.consignment.staging']
+        staging = Staging.search([
+            ('config_id', '=', self.config_id.id),
+            ('adt_OrigRefNbr', '=', orig_ref_nbr),
+        ], limit=1)
+        if not staging:
+            staging = Staging.create({
+                'config_id': self.config_id.id,
+                'credit_memo_staging_id': credit_memo.id,
+                'adt_OrigRefNbr': orig_ref_nbr,
+            })
+
+        endpoint = f"{self.config_id.api_url}/InvoiceCreditMemoConsignmentGI"
+        params = {}
+        if self.config_id.odata_expand:
+            params['$expand'] = 'InvoiceCreditMemoConsignmentGIDetails'
+        # RefNbr adalah key invoice yang dikembalikan oleh GI ini; nilainya
+        # berasal dari OrigRefNbr pada Credit Memo Consignment.
+        response = session.put(
+            endpoint,
+            params=params,
+            json={'RefNbr': {'value': orig_ref_nbr}},
+            timeout=300,
+        )
+        if response.status_code != 200:
+            staging.write({
+                'fetch_state': 'error',
+                'fetch_message': f'HTTP {response.status_code}: {response.text}',
+                'sync_date': fields.Datetime.now(),
+            })
+            return False
+
+        payload = response.json()
+        detail_rows = payload.get('InvoiceCreditMemoConsignmentGIDetails') if isinstance(payload, dict) else None
+        if isinstance(detail_rows, dict):
+            detail_rows = detail_rows.get('value') or []
+        if not isinstance(detail_rows, list):
+            detail_rows = self._normalize_rows(payload)
+        detail_rows = [row for row in detail_rows if isinstance(row, dict)]
+        header_source = detail_rows[0] if detail_rows else (payload if isinstance(payload, dict) else {})
+
+        staging.write({
+            'credit_memo_staging_id': credit_memo.id,
+            'adt_RefNbr': self._val(payload, 'RefNbr') or self._val(header_source, 'ReferenceNbr'),
+            'adt_id': self._val(payload, 'id') or self._val(header_source, 'id'),
+            'adt_rowNumber': self._val(payload, 'rowNumber'),
+            'adt_BuildingID': self._val(header_source, 'BuildingID'),
+            'adt_ConsignmentType': self._val(header_source, 'ConsignmentType'),
+            'adt_CustomerName': self._val(header_source, 'CustomerName'),
+            'adt_CustomerOrder': self._val(header_source, 'CustomerOrder'),
+            'adt_Date': self._val(header_source, 'Date'),
+            'adt_Description': self._val(header_source, 'Description'),
+            'adt_LastModifiedDateTime': self._val(header_source, 'LastModifiedDateTime'),
+            'adt_LocationID': self._val(header_source, 'LocationID'),
+            'adt_LocationName': self._val(header_source, 'LocationName'),
+            'adt_NoteHeaderID': self._val(header_source, 'NoteHeaderID'),
+            'adt_Status': self._val(header_source, 'Status'),
+            'adt_Type': self._val(header_source, 'Type'),
+            'fetch_state': 'staged',
+            'fetch_message': f'{len(detail_rows)} detail berhasil ditarik.',
+            'sync_date': fields.Datetime.now(),
+            'response_json': json.dumps(payload, ensure_ascii=False, indent=2),
+        })
+        staging.line_ids.unlink()
+        if detail_rows:
+            staging.line_ids.create([{
+                'staging_id': staging.id,
+                'adt_id': self._val(row, 'id'),
+                'adt_rowNumber': self._val(row, 'rowNumber'),
+                'adt_Branch': self._val(row, 'LineBranch'),
+                'adt_InventoryID': self._val(row, 'LineInventoryID'),
+                'adt_LineNoteID': self._val(row, 'LineNoteID'),
+                'adt_Qty': self._parse_float(self._val(row, 'LineQty')),
+                'adt_TransactionDescription': self._val(row, 'LineTransactionDescription'),
+                'adt_UOM': self._val(row, 'LineUOM'),
+                'adt_Warehouse': self._val(row, 'LineWarehouse'),
+                'adt_LocationID': self._val(row, 'LocationID'),
+                'adt_LocationName': self._val(row, 'LocationName'),
+                'adt_NoteHeaderID': self._val(row, 'NoteHeaderID'),
+                'adt_ReferenceNbr': self._val(row, 'ReferenceNbr') or self._val(payload, 'RefNbr'),
+                'adt_OrigRefNbr': self._val(row, 'OrigRefNbr'),
+                'adt_Status': self._val(row, 'Status'),
+                'adt_Type': self._val(row, 'Type'),
+                'response_json': json.dumps(row, ensure_ascii=False, indent=2),
+            } for row in detail_rows])
+        return True
 
                         
 

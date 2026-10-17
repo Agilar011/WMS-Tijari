@@ -1449,7 +1449,10 @@ class InternalTransferOrder(models.Model):
             for picking in pickings:
                 if (
                     shipment_picking
-                    and order.adt_transaction_type == 'Shipment Consignment'
+                    and order.adt_transaction_type in (
+                        'Shipment Consignment',
+                        'Transfer Shipment',
+                    )
                     and picking.internal_transfer_leg == 'receipt'
                 ):
                     order._set_consignment_receipt_shipped_quantities(

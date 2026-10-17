@@ -33,6 +33,7 @@ from . import acumatica_invoice_consignment
 from . import acumatica_direct_transfer
 from . import acumatica_vendor_return_direct_transfer
 from . import acumatica_credit_memo_consignment
+from . import acumatica_invoice_credit_memo_consignment
 from . import loginext_model
 from . import acumatica_webhook_key_config
 from . import acumatica_webhook_log
@@ -43,3 +44,4 @@ from . import acumatica_error_transaction
 from . import acumatica_webhook_error_service
 
 from . import acumatica_shipment_transfer_completed
+from . import acumatica_inventory_adjustment_staging

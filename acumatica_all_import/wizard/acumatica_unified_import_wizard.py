@@ -117,6 +117,14 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Inventory Issue dari Acumatica',
             'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
         },
+        'inventory_adjustment': {
+            'label': 'Inventory Adjustment',
+            'wizard_model': 'import.inventory.adjustment.wizard',
+            'line_model': 'acumatica.inventory.adjustment.staging',
+            'result_name': 'Hasil Import Inventory Adjustment',
+            'staging_name': 'Data Inventory Adjustment dari Acumatica',
+            'extra_fields': [],
+        },
         'issue_change_item': {
             'label': 'Issue : Change Item',
             'wizard_model': 'import.issue.wizard',
@@ -257,6 +265,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'shipment_so',
         'so_shipment',
         'inventory_issue',
+        'inventory_adjustment',
         'issue_po_return',
         'so_transfer',
         'transfer_shipment',

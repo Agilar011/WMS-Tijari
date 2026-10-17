@@ -29,6 +29,10 @@ class ProductTemplate(models.Model):
         string='Item Class (Acumatica)',
         help='ItemClass dari Acumatica WMS (contoh: ASSET, RAW, FINISH)',
     )
+    adt_status = fields.Char(
+        string='Item Status (Acumatica)',
+        help='ItemStatus dari Acumatica WMS',
+    )
     adt_item_status = fields.Selection([
         ('Active',      'Active'),
         ('Inactive',    'Inactive'),
