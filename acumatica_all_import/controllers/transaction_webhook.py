@@ -2037,34 +2037,57 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         if not records:
             raise UserError(_("No Inventory Adjustment records found in payload."))
         Staging = self._env()["acumatica.inventory.adjustment.staging"].sudo()
-        Detail = self._env()["acumatica.inventory.adjustment.staging.detail"].sudo()
         ids = []
-        for index, item in enumerate(records, start=1):
-            external_id = str(item.get("id") or item.get("RefNbr") or f"webhook-{index}")
-            record = Staging.search([("acumatica_id", "=", external_id), ("config_id", "=", config_record.id)], limit=1)
-            vals = {"acumatica_id": external_id, "row_number": item.get("rowNumber") or index,
-                    "note": item.get("note") or False, "config_id": config_record.id,
-                    "sync_date": fields.Datetime.now(), "import_state": "staged", "import_message": False}
-            if record:
-                record.write(vals)
-                record.detail_ids.unlink()
-            else:
-                record = Staging.create(vals)
-            details = item.get("InventoryAdjustmentGIDetails") or item.get("Details") or []
+        created = updated = 0
+        for item in records:
+            if not isinstance(item, dict):
+                continue
+            details = item.get("InventoryAdjustmentGIDetails") or []
             if isinstance(details, dict):
                 details = details.get("value") or []
-            for line_index, detail in enumerate(details, start=1):
-                ref = detail.get("RefNbr")
-                if isinstance(ref, dict):
-                    ref = ref.get("value")
-                Detail.create({"staging_id": record.id, "acumatica_id": detail.get("id") or False,
-                               "row_number": detail.get("rowNumber") or line_index,
-                               "note": detail.get("note") or False, "ref_nbr": ref or False,
-                               "raw_data": json.dumps(detail, ensure_ascii=False)})
-            ids.append(record.id)
+            parent_id = str(item.get("id") or item.get("RefNbr") or "")
+
+            for detail_index, detail in enumerate(details, start=1):
+                if not isinstance(detail, dict):
+                    continue
+                row_number = detail.get("rowNumber") or detail_index
+                external_id = str(
+                    detail.get("id") or f'{parent_id or "inventory-adjustment"}:{row_number}'
+                )
+                reference = detail.get("RefNbr")
+                if isinstance(reference, dict):
+                    reference = reference.get("value")
+                vals = {
+                    "acumatica_id": external_id,
+                    "row_number": row_number,
+                    "ref_nbr": reference or False,
+                    "note": detail.get("note") or False,
+                    "raw_data": json.dumps(detail, ensure_ascii=False),
+                    "config_id": config_record.id,
+                    "sync_date": fields.Datetime.now(),
+                    "import_state": "staged",
+                    "import_message": False,
+                }
+                record = Staging.search([
+                    ("acumatica_id", "=", external_id),
+                    ("config_id", "=", config_record.id),
+                ], limit=1)
+                # Reuse the old header record for the first detail on refetch.
+                if not record and detail_index == 1 and parent_id:
+                    record = Staging.search([
+                        ("acumatica_id", "=", parent_id),
+                        ("config_id", "=", config_record.id),
+                    ], limit=1)
+                if record:
+                    record.write(vals)
+                    updated += 1
+                else:
+                    record = Staging.create(vals)
+                    created += 1
+                ids.append(record.id)
         return {"transaction_type": "inventory_adjustment", "model": "acumatica.inventory.adjustment.staging",
-                "created": len(ids), "updated": 0, "imported": 0, "errors": 0, "header_ids": ids,
-                "product_lines": 0}
+                "created": created, "updated": updated, "imported": 0, "errors": 0, "header_ids": ids,
+                "product_lines": len(ids)}
 
     def _transaction_webhook(self, transaction_type, **kwargs):
         ok, err = self._check_api_key()

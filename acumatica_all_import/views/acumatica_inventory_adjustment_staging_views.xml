@@ -4,16 +4,37 @@
         <field name="name">acumatica.inventory.adjustment.staging.list</field>
         <field name="model">acumatica.inventory.adjustment.staging</field>
         <field name="arch" type="xml">
-            <list><field name="acumatica_id"/><field name="row_number"/><field name="note"/><field name="config_id"/><field name="sync_date"/><field name="import_state"/></list>
+            <list>
+                <field name="row_number"/>
+                <field name="ref_nbr" string="Reference Number"/>
+                <field name="acumatica_id"/>
+                <field name="note"/>
+                <field name="config_id"/>
+                <field name="sync_date"/>
+                <field name="is_used"/>
+                <field name="import_state"/>
+            </list>
         </field>
     </record>
     <record id="view_acumatica_inventory_adjustment_staging_form" model="ir.ui.view">
         <field name="name">acumatica.inventory.adjustment.staging.form</field>
         <field name="model">acumatica.inventory.adjustment.staging</field>
         <field name="arch" type="xml">
-            <form><sheet><group><field name="acumatica_id"/><field name="row_number"/><field name="note"/><field name="config_id"/><field name="sync_date"/><field name="import_state"/><field name="import_message"/></group>
-                <notebook><page string="Details"><field name="detail_ids"><list><field name="row_number"/><field name="ref_nbr"/><field name="acumatica_id"/><field name="note"/></list></field></page></notebook>
-            </sheet></form>
+            <form>
+                <sheet>
+                    <group>
+                        <field name="acumatica_id"/>
+                        <field name="row_number"/>
+                        <field name="ref_nbr" string="Reference Number"/>
+                        <field name="note"/>
+                        <field name="config_id"/>
+                        <field name="sync_date"/>
+                        <field name="is_used"/>
+                        <field name="import_state"/>
+                        <field name="import_message"/>
+                    </group>
+                </sheet>
+            </form>
         </field>
     </record>
     <record id="action_acumatica_inventory_adjustment_staging" model="ir.actions.act_window">

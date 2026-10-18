@@ -42,44 +42,51 @@ class ImportInventoryAdjustmentWizard(models.TransientModel):
             rows = rows[:self.fetch_limit]
         Model = self.env['acumatica.inventory.adjustment.staging']
         created = updated = 0
-        for index, row in enumerate(rows, start=1):
+        for row in rows:
             if not isinstance(row, dict):
                 continue
-            external_id = str(row.get('id') or row.get('RefNbr') or f'row-{index}')
-            vals = {
-                'acumatica_id': external_id,
-                'row_number': row.get('rowNumber') or index,
-                'note': row.get('note') or False,
-                'config_id': self.config_id.id,
-                'sync_date': fields.Datetime.now(),
-                'import_state': 'staged',
-                'import_message': False,
-            }
-            record = Model.search([('acumatica_id', '=', external_id), ('config_id', '=', self.config_id.id)], limit=1)
-            if record:
-                record.write(vals)
-                record.detail_ids.unlink()
-                updated += 1
-            else:
-                record = Model.create(vals)
-                created += 1
-            details = row.get(self.config_id.odata_expand or 'InventoryAdjustmentGIDetails') or []
+            details = row.get('InventoryAdjustmentGIDetails') or []
             if isinstance(details, dict):
                 details = details.get('value') or []
+            parent_id = str(row.get('id') or row.get('RefNbr') or '')
+
             for detail_index, detail in enumerate(details, start=1):
                 if not isinstance(detail, dict):
                     continue
-                ref = detail.get('RefNbr')
-                if isinstance(ref, dict):
-                    ref = ref.get('value')
-                self.env['acumatica.inventory.adjustment.staging.detail'].create({
-                    'staging_id': record.id,
-                    'acumatica_id': detail.get('id') or False,
-                    'row_number': detail.get('rowNumber') or detail_index,
+                row_number = detail.get('rowNumber') or detail_index
+                external_id = str(
+                    detail.get('id') or f'{parent_id or "inventory-adjustment"}:{row_number}'
+                )
+                reference = detail.get('RefNbr')
+                if isinstance(reference, dict):
+                    reference = reference.get('value')
+                vals = {
+                    'acumatica_id': external_id,
+                    'row_number': row_number,
+                    'ref_nbr': reference or False,
                     'note': detail.get('note') or False,
-                    'ref_nbr': ref or False,
                     'raw_data': json.dumps(detail, ensure_ascii=False),
-                })
+                    'config_id': self.config_id.id,
+                    'sync_date': fields.Datetime.now(),
+                    'import_state': 'staged',
+                    'import_message': False,
+                }
+                record = Model.search([
+                    ('acumatica_id', '=', external_id),
+                    ('config_id', '=', self.config_id.id),
+                ], limit=1)
+                # Reuse the old header record for the first detail on refetch.
+                if not record and detail_index == 1 and parent_id:
+                    record = Model.search([
+                        ('acumatica_id', '=', parent_id),
+                        ('config_id', '=', self.config_id.id),
+                    ], limit=1)
+                if record:
+                    record.write(vals)
+                    updated += 1
+                else:
+                    Model.create(vals)
+                    created += 1
         self.config_id.last_sync = fields.Datetime.now()
         self.total_fetched = created + updated
         return {
