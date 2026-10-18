@@ -101,6 +101,7 @@ class AcumaticaConfig(models.Model):
             ('transfer_shipment', 'Transfer (Out/Shipment)'),
             ('issue_change_item', 'Issue Change Item'),
             ('inventory_issue', 'Inventory Issue'),
+            ('inventory_adjustment', 'Inventory Adjustment'),
             ('issue_po_return', 'PO Return'),
             ('transfer_one_step', 'Transfer 1 Step'),
             ('transfer_two_step', 'Transfer 2 Step'),

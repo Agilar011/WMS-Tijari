@@ -372,9 +372,28 @@ class InventoryAdjustmentsGroup(models.Model):
         self._check_inventory_adjustments_is_set()
         self.state = "wait_approval"
 
+    def _check_inventory_adjustments_doc(self):
+        self.ensure_one()
+        Staging = self.env['acumatica.inventory.adjustment.staging'].sudo()
+        staging_lines = Staging.search([
+            ('ref_nbr', '=', self.acumatica_ref_doc),
+        ]) if self.acumatica_ref_doc else Staging.browse()
+
+        if not staging_lines:
+            raise UserError((
+                'Data Inventory Adjustment dengan Reference Number %s tidak ditemukan di staging.'
+            ) % (self.acumatica_ref_doc or '-'))
+        if staging_lines.filtered('is_used'):
+            raise UserError((
+                'Data Inventory Adjustment dengan Reference Number %s sudah pernah digunakan.'
+            ) % self.acumatica_ref_doc)
+
+        staging_lines.write({'is_used': True})
+
     def action_state_to_done(self):
         self.ensure_one()
         self._check_inventory_adjustments_is_set()
+        self._check_inventory_adjustments_doc()
 
         stock_quant_ids = self.stock_quant_ids.filtered(
             lambda quant: (
