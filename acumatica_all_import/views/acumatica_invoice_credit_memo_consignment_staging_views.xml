@@ -1,0 +1,89 @@
+<odoo>
+    <record id="view_acumatica_invoice_credit_memo_consignment_list" model="ir.ui.view">
+        <field name="name">acumatica.invoice.credit.memo.consignment.staging.list</field>
+        <field name="model">acumatica.invoice.credit.memo.consignment.staging</field>
+        <field name="arch" type="xml">
+            <list string="Invoice Credit Memo Consignment">
+                <field name="adt_OrigRefNbr"/>
+                <field name="adt_RefNbr"/>
+                <field name="adt_CustomerName"/>
+                <field name="adt_Date"/>
+                <field name="fetch_state" widget="badge" decoration-success="fetch_state == 'staged'" decoration-danger="fetch_state == 'error'"/>
+                <field name="fetch_message"/>
+                <field name="sync_date"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_acumatica_invoice_credit_memo_consignment_form" model="ir.ui.view">
+        <field name="name">acumatica.invoice.credit.memo.consignment.staging.form</field>
+        <field name="model">acumatica.invoice.credit.memo.consignment.staging</field>
+        <field name="arch" type="xml">
+            <form string="Invoice Credit Memo Consignment">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="credit_memo_staging_id"/>
+                            <field name="adt_OrigRefNbr"/>
+                            <field name="adt_RefNbr"/>
+                            <field name="adt_id"/>
+                            <field name="adt_rowNumber"/>
+                            <field name="adt_BuildingID"/>
+                            <field name="adt_ConsignmentType"/>
+                            <field name="adt_Type"/>
+                        </group>
+                        <group>
+                            <field name="adt_CustomerName"/>
+                            <field name="adt_CustomerOrder"/>
+                            <field name="adt_Date"/>
+                            <field name="adt_Description"/>
+                            <field name="adt_LastModifiedDateTime"/>
+                            <field name="adt_LocationID"/>
+                            <field name="adt_LocationName"/>
+                            <field name="adt_Status"/>
+                            <field name="sync_date"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="fetch_state"/>
+                        <field name="fetch_message"/>
+                    </group>
+                    <notebook>
+                        <page string="Details / Lines">
+                            <field name="line_ids">
+                                <list>
+                                    <field name="adt_rowNumber"/>
+                                    <field name="adt_Branch"/>
+                                    <field name="adt_InventoryID"/>
+                                    <field name="adt_TransactionDescription"/>
+                                    <field name="adt_Qty"/>
+                                    <field name="adt_UOM"/>
+                                    <field name="adt_Warehouse"/>
+                                    <field name="adt_LocationID"/>
+                                    <field name="adt_ReferenceNbr"/>
+                                    <field name="adt_OrigRefNbr"/>
+                                    <field name="adt_Status"/>
+                                    <field name="adt_Type"/>
+                                </list>
+                            </field>
+                        </page>
+                        <page string="Raw API Response">
+                            <field name="response_json" widget="text"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_acumatica_invoice_credit_memo_consignment" model="ir.actions.act_window">
+        <field name="name">Invoice Credit Memo Consignment</field>
+        <field name="res_model">acumatica.invoice.credit.memo.consignment.staging</field>
+        <field name="view_mode">list,form</field>
+    </record>
+    <menuitem id="menu_acumatica_all_import_staging_invoice_credit_memo_consignment"
+              name="Invoice Credit Memo Consignment"
+              parent="acumatica_all_import.menu_acumatica_all_import_staging_internal"
+              action="action_acumatica_invoice_credit_memo_consignment"
+              sequence="41"/>
+</odoo>

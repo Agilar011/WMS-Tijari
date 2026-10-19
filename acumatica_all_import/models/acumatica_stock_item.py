@@ -128,7 +128,7 @@ class AcumaticaStockItemLine(models.Model):
 
     def _create_product_and_sku_history(self, line):
         query_product = """
-            INSERT INTO product_template (name, categ_id, default_code, type, uom_id, uom_po_id, adt_external_id, adt_item_class, adt_item_status, adt_valuation_method, adt_acumatica_write_date)
+            INSERT INTO product_template (name, categ_id, default_code, type, uom_id, uom_po_id, adt_external_id, adt_item_class, adt_item_status, adt_status, adt_valuation_method, adt_acumatica_write_date)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """
         params_product = (
@@ -141,6 +141,7 @@ class AcumaticaStockItemLine(models.Model):
             line.external_id or False,
             line.item_class or False,
             self.STATUS_MAP.get(line.item_status or '', False),
+            line.item_status or False,
             self.VALUATION_MAP.get(line.valuation_method or '', False),
             self._parse_dt(line.last_modified_datetime),
         )
@@ -185,6 +186,7 @@ class AcumaticaStockItemLine(models.Model):
                 adt_external_id = %s,
                 adt_item_class = %s,
                 adt_item_status = %s,
+                adt_status = %s,
                 adt_valuation_method = %s,
                 adt_acumatica_write_date = %s
             WHERE adt_external_id = %s and adt_acumatica_write_date != %s RETURNING id, default_code
@@ -198,6 +200,7 @@ class AcumaticaStockItemLine(models.Model):
             line.external_id,
             line.item_class,
             self.STATUS_MAP.get(line.item_status or '', False),
+            line.item_status,
             self.VALUATION_MAP.get(line.valuation_method or '', False),
             self._parse_dt(line.last_modified_datetime),
             line.external_id,
@@ -717,6 +720,7 @@ class AcumaticaStockItemLine(models.Model):
                                 line.item_status or '',
                                 False
                             ),
+                            'adt_status': line.item_status,
                             'adt_valuation_method': self.VALUATION_MAP.get(
                                 line.valuation_method or '',
                                 False
@@ -758,6 +762,7 @@ class AcumaticaStockItemLine(models.Model):
                                     line.item_status or '',
                                     False
                                 ),
+                                line.item_status,
                                 self.VALUATION_MAP.get(
                                     line.valuation_method or '',
                                     False
@@ -934,6 +939,7 @@ class AcumaticaStockItemLine(models.Model):
                             uom_po_id = %s,
                             adt_item_class = %s,
                             adt_item_status = %s,
+                            adt_status = %s,
                             adt_valuation_method = %s,
                             adt_acumatica_write_date = %s
                         WHERE id = %s
@@ -942,8 +948,8 @@ class AcumaticaStockItemLine(models.Model):
                 # product.template.barcode is a computed/inverse field in
                 # Odoo 18; it has no column on product_template. Use ORM so
                 # the inverse writes the barcode to the product variant.
-                # for product_id, barcode in barcode_updates:
-                #     Product.browse(product_id).write({'barcode': barcode})
+                for product_id, barcode in barcode_updates:
+                    Product.browse(product_id).write({'barcode': barcode})
 
                 # Sinkronkan variant secara eksplisit. Stock Item selalu
                 # dibuat sebagai satu variant; fallback ke variant pertama
@@ -957,7 +963,7 @@ class AcumaticaStockItemLine(models.Model):
                     if variant:
                         ProductVariant.browse(variant.id).write({
                             'default_code': default_code,
-                            # 'barcode': barcode,
+                            'barcode': barcode,
                             'adt_external_id': external_id,
                         })
 

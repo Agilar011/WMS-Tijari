@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_acumatica_inventory_adjustment_staging_list" model="ir.ui.view">
+        <field name="name">acumatica.inventory.adjustment.staging.list</field>
+        <field name="model">acumatica.inventory.adjustment.staging</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="row_number"/>
+                <field name="ref_nbr" string="Reference Number"/>
+                <field name="acumatica_id"/>
+                <field name="note"/>
+                <field name="config_id"/>
+                <field name="sync_date"/>
+                <field name="is_used"/>
+                <field name="import_state"/>
+            </list>
+        </field>
+    </record>
+    <record id="view_acumatica_inventory_adjustment_staging_form" model="ir.ui.view">
+        <field name="name">acumatica.inventory.adjustment.staging.form</field>
+        <field name="model">acumatica.inventory.adjustment.staging</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <field name="acumatica_id"/>
+                        <field name="row_number"/>
+                        <field name="ref_nbr" string="Reference Number"/>
+                        <field name="note"/>
+                        <field name="config_id"/>
+                        <field name="sync_date"/>
+                        <field name="is_used"/>
+                        <field name="import_state"/>
+                        <field name="import_message"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="action_acumatica_inventory_adjustment_staging" model="ir.actions.act_window">
+        <field name="name">Inventory Adjustment</field><field name="res_model">acumatica.inventory.adjustment.staging</field><field name="view_mode">list,form</field>
+    </record>
+    <record id="view_import_inventory_adjustment_wizard_form" model="ir.ui.view">
+        <field name="name">import.inventory.adjustment.wizard.form</field>
+        <field name="model">import.inventory.adjustment.wizard</field>
+        <field name="arch" type="xml"><form string="Tarik Inventory Adjustment"><group><field name="config_id"/></group><footer><button name="action_fetch_data" type="object" string="Tarik Data" class="btn-primary"/><button string="Batal" special="cancel" class="btn-secondary"/></footer></form></field>
+    </record>
+    <record id="action_import_inventory_adjustment_wizard" model="ir.actions.act_window">
+        <field name="name">Tarik Inventory Adjustment</field><field name="res_model">import.inventory.adjustment.wizard</field><field name="view_mode">form</field><field name="target">new</field>
+    </record>
+</odoo>

@@ -196,6 +196,7 @@
                     string="Send Email"
                     type="object"
                     class="btn-primary"
+                    groups="stock.group_stock_manager,base.group_system,tijari_wms_18.group_accounting_stock"
                     invisible="state != 'done' or picking_type_name not in ['Receipts', 'Receipt Internal']"/>
 
             </xpath>
@@ -1171,7 +1172,8 @@
                             mode="list,kanban"
                             readonly='0'
                             context="{
-                                'form_view_ref': 'tijari_wms_18.stock_move_pick_view'
+                                'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
+                                'hide_move_line_product_in_packer': True
                             }"
                             
                         >
@@ -1721,13 +1723,6 @@
         <field name="view_mode">list</field>
         <field name="view_id" ref="view_stock_picking_list_no_manual_create"/>
         <field name="act_window_id" ref="stock.action_picking_tree_ready"/>
-    </record>
-
-    <record id="action_stock_operations_pick_no_manual_create" model="ir.actions.act_window.view">
-        <field name="sequence" eval="1"/>
-        <field name="view_mode">list</field>
-        <field name="view_id" ref="view_stock_picking_list_no_manual_create"/>
-        <field name="act_window_id" ref="action_stock_operations_pick"/>
     </record>
 
 </odoo>

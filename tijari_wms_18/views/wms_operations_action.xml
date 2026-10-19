@@ -256,4 +256,13 @@
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
         <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_document_only': 1}</field>
     </record>
+
+    <!-- This action is defined in this file, so bind its list view after the action exists. -->
+    <record id="action_stock_operations_pick_no_manual_create" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_stock_picking_list_no_manual_create"/>
+        <field name="act_window_id" ref="action_stock_operations_pick"/>
+    </record>
+
 </odoo>

@@ -347,6 +347,11 @@ class InventoryAdjustmentsGroup(models.Model):
                 "stock_quant_ids": [(6, 0, quants.ids)],
             }
         )
+        # A new adjustment starts with no counted values. Odoo keeps the
+        # counted quantity separately from the on-hand quantity, and the
+        # inventory_quantity_set flag distinguishes an explicit count of 0
+        # from a quant that has not been counted yet.
+        quants.action_clear_inventory_quantity()
         quants.write(
             {
                 "to_do": True,
@@ -367,14 +372,47 @@ class InventoryAdjustmentsGroup(models.Model):
         self._check_inventory_adjustments_is_set()
         self.state = "wait_approval"
 
+    def _check_inventory_adjustments_doc(self):
+        self.ensure_one()
+        Staging = self.env['acumatica.inventory.adjustment.staging'].sudo()
+        staging_lines = Staging.search([
+            ('ref_nbr', '=', self.acumatica_ref_doc),
+        ]) if self.acumatica_ref_doc else Staging.browse()
+
+        if not staging_lines:
+            raise UserError((
+                'Data Inventory Adjustment dengan Reference Number %s tidak ditemukan di staging.'
+            ) % (self.acumatica_ref_doc or '-'))
+        if staging_lines.filtered('is_used'):
+            raise UserError((
+                'Data Inventory Adjustment dengan Reference Number %s sudah pernah digunakan.'
+            ) % self.acumatica_ref_doc)
+
+        staging_lines.write({'is_used': True})
+
     def action_state_to_done(self):
         self.ensure_one()
         self._check_inventory_adjustments_is_set()
+        self._check_inventory_adjustments_doc()
 
         stock_quant_ids = self.stock_quant_ids.filtered(
-            lambda q: q.inventory_quantity 
-            and q.inventory_diff_quantity != 0
+            lambda quant: (
+                quant.inventory_quantity_set
+                and quant.inventory_diff_quantity != 0
+            )
         )
+        quants_to_clear = self.stock_quant_ids.filtered(
+            lambda quant: quant.current_inventory_id == self
+        )
+
+        outdated_quants = stock_quant_ids.filtered("is_outdated")
+        if outdated_quants:
+            names = ", ".join(outdated_quants.mapped("product_id.display_name"))
+            raise UserError(self.env._(
+                "Some counted stock changed after the count and cannot be applied. "
+                "Recount these products first: %(products)s",
+                products=names,
+            ))
 
         adjustment_date = fields.Datetime.to_datetime(self.date).strftime("%m%d%y")
 
@@ -400,19 +438,41 @@ class InventoryAdjustmentsGroup(models.Model):
                     "lot_id": lot.id,
                 })
 
-            quant.action_apply_inventory()
+            result = quant.with_context(
+                set_inventory_quantity_auto_apply=True,
+                skip_stock_inventory_auto_complete=True,
+            ).action_apply_inventory()
+            if result:
+                raise UserError(self.env._(
+                    "Odoo could not apply the inventory adjustment for %(product)s.",
+                    product=quant.product_id.display_name,
+                ))
+
+        remaining_quants = stock_quant_ids.filtered(
+            lambda quant: quant.inventory_diff_quantity != 0
+        )
+        if remaining_quants:
+            names = ", ".join(remaining_quants.mapped("product_id.display_name"))
+            raise UserError(self.env._(
+                "Some inventory differences remain unapplied: %(products)s",
+                products=names,
+            ))
+
+        # Inventory adjustment moves are completed immediately by Odoo.
+        # Remove stale links left by earlier matching logic that could attach
+        # an unrelated or still-open move line to this adjustment.
+        invalid_move_lines = self.stock_move_ids.filtered(
+            lambda line: line.state != "done" or not line.move_id.is_inventory
+        )
+        invalid_move_lines.write({"inventory_adjustment_id": False})
 
         self.state = "done"
-        self.stock_quant_ids.filtered(
-            lambda q: q.current_inventory_id.id == self.id
-        ).update(
-            {
-                "to_do": False,
-                "user_id": False,
-                "inventory_date": False,
-                "current_inventory_id": False,
-            }
-        )
+        quants_to_clear.write({
+            "to_do": False,
+            "user_id": False,
+            "inventory_date": False,
+            "current_inventory_id": False,
+        })
         return {
                     "type": "ir.actions.client",
                     "tag": "reload",
@@ -421,7 +481,24 @@ class InventoryAdjustmentsGroup(models.Model):
     def action_auto_state_to_done(self):
         self.ensure_one()
         if not any(self.stock_quant_ids.filtered(lambda sq: sq.to_do)):
-            self.action_state_to_done()
+            pending_counted_quants = self.stock_quant_ids.filtered(
+                lambda quant: (
+                    quant.inventory_quantity_set
+                    and quant.inventory_diff_quantity != 0
+                )
+            )
+            if pending_counted_quants:
+                self.action_state_to_done()
+            elif self.state == "approved" and self.count_stock_moves:
+                self.state = "done"
+                self.stock_quant_ids.filtered(
+                    lambda quant: quant.current_inventory_id == self
+                ).write({
+                    "to_do": False,
+                    "user_id": False,
+                    "inventory_date": False,
+                    "current_inventory_id": False,
+                })
         return
 
     def action_state_to_draft(self):
@@ -462,7 +539,12 @@ class InventoryAdjustmentsGroup(models.Model):
 
     def _check_inventory_adjustments_is_set(self):
         for rec in self:
-            adjusted_stock_quant_ids = rec.stock_quant_ids.filtered(lambda q: q.inventory_diff_quantity != 0)
+            adjusted_stock_quant_ids = rec.stock_quant_ids.filtered(
+                lambda quant: (
+                    quant.inventory_quantity_set
+                    and quant.inventory_diff_quantity != 0
+                )
+            )
             if not adjusted_stock_quant_ids:
                 raise UserError(
                     self.env._(
