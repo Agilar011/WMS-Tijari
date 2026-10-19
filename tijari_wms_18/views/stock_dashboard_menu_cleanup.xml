@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Remove the previous Inventory dashboard entries. Inventory now uses
-         the same custom kanban action as the API Data Hub dashboard. -->
-    <record id="menu_stock_picking_dashboard" model="ir.ui.menu">
-        <field name="active">False</field>
-    </record>
+    <!-- Keep the custom Inventory kanban Dashboard and hide the older
+         spreadsheet Dashboard to avoid showing two Dashboard entries. -->
     <record id="menu_inventory_spreadsheet_dashboard" model="ir.ui.menu">
-        <field name="active">False</field>
+        <field name="active" eval="False"/>
     </record>
 </odoo>

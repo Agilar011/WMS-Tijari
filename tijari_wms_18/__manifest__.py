@@ -76,6 +76,7 @@
         'views/operator_menu_security.xml',
         'views/inventory_menu_views.xml',
         'views/access_menu_security.xml',
+        'views/stock_dashboard_menu_cleanup.xml',
     ],
     'assets': {
         'spreadsheet.o_spreadsheet': [

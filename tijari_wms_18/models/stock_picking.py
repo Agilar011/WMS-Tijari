@@ -17,6 +17,7 @@ from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 from odoo.tools.float_utils import float_is_zero
 
 _logger = logging.getLogger(__name__)
+_OPERATOR_VALIDATION_WRITE_TOKEN = object()
 
 class StockPicking(models.Model):
     _name = 'stock.picking'
@@ -89,7 +90,10 @@ class StockPicking(models.Model):
                 ):
                     field_node.set('readonly', '1')
             for button in arch.xpath('.//header//button'):
-                button.set('invisible', '1')
+                # Operators can validate a picking when the normal view
+                # conditions allow it. Keep other workflow buttons hidden.
+                if button.get('name') != 'button_validate':
+                    button.set('invisible', '1')
             result['arch'] = etree.tostring(arch, encoding='unicode')
         return result
 
@@ -606,8 +610,9 @@ class StockPicking(models.Model):
 
     def _sync_adt_quantities_from_moves(self):
         for picking in self:
-                
-            picking.update({
+            picking.with_context(
+                _tijari_operator_validation_write_token=_OPERATOR_VALIDATION_WRITE_TOKEN,
+            ).update({
                 'adt_total_qty': sum(picking.move_ids.mapped('product_uom_qty'))
                 # 'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
             })
@@ -666,8 +671,13 @@ class StockPicking(models.Model):
         #         "Hanya user non-operator yang dapat mengisi/mengubah Penanggungjawab Pick."
         #     ))
 
+        is_operator_validation_write = (
+            self.env.context.get('_tijari_operator_validation_write_token')
+            is _OPERATOR_VALIDATION_WRITE_TOKEN
+        )
         if (
             not self.env.su
+            and not is_operator_validation_write
             and self.env.user.has_group('tijari_wms_18.group_operator')
             and not any(self.env.user.has_group(group) for group in (
                 'tijari_wms_18.group_warehouse_manager',
@@ -3286,6 +3296,13 @@ class StockPicking(models.Model):
         }
 
     def button_validate(self):
+        # Validation performs internal writes on the picking (for example,
+        # updating adt_actual_qty and the picking state). Keep those writes
+        # separate from direct Operator edits, which remain restricted to the
+        # permitted notebook fields in write().
+        self = self.with_context(
+            _tijari_operator_validation_write_token=_OPERATOR_VALIDATION_WRITE_TOKEN,
+        )
         if not self.env.context.get('over_receipt_update'):
             over_receipts = self.filtered('stock_lebih')
             for picking in over_receipts:

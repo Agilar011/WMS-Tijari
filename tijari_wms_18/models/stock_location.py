@@ -64,6 +64,15 @@ class StockLocationAcumatica(models.Model):
     _name = 'stock.location.acumatica'
     _description = 'Location mapping untuk grouping location dari Acumatica ke location di Odoo (untuk kebutuhan import data dari Acumatica). stock.location.acumatica -> stock.location'
 
+    @api.depends('name', 'code')
+    @api.depends_context('show_location_code')
+    def _compute_display_name(self):
+        if not self.env.context.get('show_location_code'):
+            return super()._compute_display_name()
+
+        for record in self:
+            record.display_name = f"{record.name or ''} [{record.code or ''}]"
+
     name = fields.Char(string='Location Name (Acumatica)', required=True)
     code = fields.Char(string='Location Code (Acumatica)', required=True)
     building = fields.Char(string='Building ID (Acumatica)')

@@ -11,6 +11,16 @@ class AcumaticaInventoryStockQuant(models.Model):
     _rec_name = 'product_id'
     _order = 'warehouse_code, inventory_id'
 
+    @api.model
+    def action_open_generate_wizard(self, *args, **kwargs):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Generate Data Stock ERP',
+            'res_model': 'acumatica.inventory.stock.generate.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+        }
+
     product_id = fields.Many2one(
         'product.product', string='Product', compute='_compute_snapshot', search='_search_product_id',
     )
