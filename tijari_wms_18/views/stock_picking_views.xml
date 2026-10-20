@@ -1625,17 +1625,6 @@
         </field>
     </record>
 
-    <record id="view_stock_picking_hide_operations_for_operator" model="ir.ui.view">
-        <field name="name">stock.picking.form.hide.operations.for.operator</field>
-        <field name="model">stock.picking</field>
-        <field name="inherit_id" ref="stock.view_picking_form"/>
-        <field name="arch" type="xml">
-            <xpath expr="//page[@name='operations']" position="attributes">
-                <attribute name="groups">!tijari_wms_18.group_operator</attribute>
-            </xpath>
-        </field>
-    </record>
-
     <record id="view_stock_picking_hide_put_in_pack" model="ir.ui.view">
         <field name="name">stock.picking.form.hide.put.in.pack</field>
         <field name="model">stock.picking</field>

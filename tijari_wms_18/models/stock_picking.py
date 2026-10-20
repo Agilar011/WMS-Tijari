@@ -722,8 +722,10 @@ class StockPicking(models.Model):
                 'pick_responsible_ids', 'pack_responsible_ids',
                 'do_responsible_ids', 'putaway_responsible_ids',
                 'picker_scan_code', 'picker_product_id', 'picker_lot_id',
+                'putaway_scan_code', 'putaway_product_id', 'putaway_lot_id',
                 'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id',
-                'package_scan_code', 'scanned_package_id',
+                'unpacked_lot_code', 'package_scan_code', 'scanned_package_id',
+                'filtered_package_level_id',
             }
             if protected_pickings and set(vals) - allowed_operator_fields:
                 raise AccessError(_(
