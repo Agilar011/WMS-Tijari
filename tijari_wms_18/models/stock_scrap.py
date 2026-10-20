@@ -322,16 +322,24 @@ class WMSStockScrap(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
-            if vals.get("product_id") or not vals.get("scrap_line_ids"):
+            if vals.get("product_id"):
                 continue
 
-            for command in vals["scrap_line_ids"]:
+            # The WMS form selects a product in scrap_product_id and edits
+            # lines through filtered_scrap_line_ids. The standard required
+            # product_id still has to be populated before the parent is made.
+            vals["product_id"] = vals.get("scrap_product_id")
+            line_commands = vals.get("scrap_line_ids") or vals.get("filtered_scrap_line_ids") or []
+            for command in line_commands:
                 if command[0] == Command.CREATE:
                     line_vals = command[2]
+                    vals["product_id"] = line_vals.get("product_id") or vals["product_id"]
+                    vals["product_uom_id"] = line_vals.get("product_uom_id") or vals.get("product_uom_id")
+                    if vals["product_id"]:
+                        break
 
-                    vals["product_id"] = line_vals.get("product_id")
-                    vals["product_uom_id"] = line_vals.get("product_uom_id")
-                    break
+            if not vals.get("product_id"):
+                raise ValidationError(_("Pilih Product sebelum membuat Disposal Document."))
 
         return super().create(vals_list)
 
