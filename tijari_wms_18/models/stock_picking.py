@@ -18,10 +18,34 @@ from odoo.tools.float_utils import float_is_zero
 
 _logger = logging.getLogger(__name__)
 _OPERATOR_VALIDATION_WRITE_TOKEN = object()
+_BACKORDER_CREATE_TOKEN = object()
 
 class StockPicking(models.Model):
     _name = 'stock.picking'
     _inherit = ['stock.picking', 'approval.mixin']
+
+    @api.model
+    def _get_operator_validation_workflow_context(self):
+        """Allow trusted workflow methods to carry internal picking writes.
+
+        The identity token cannot be recreated from a client supplied context;
+        this private helper is used by manufacturing workflow entry points.
+        """
+        if not self.env.user.has_group('tijari_wms_18.group_operator'):
+            return {}
+        elevated_groups = (
+            'tijari_wms_18.group_warehouse_manager',
+            'tijari_wms_18.group_warehouse_head',
+            'tijari_wms_18.group_warehouse_admin',
+            'tijari_wms_18.group_it_staff',
+            'stock.group_stock_manager',
+            'base.group_system',
+        )
+        if any(self.env.user.has_group(group) for group in elevated_groups):
+            return {}
+        return {
+            '_tijari_operator_validation_write_token': _OPERATOR_VALIDATION_WRITE_TOKEN,
+        }
 
     @api.model
     def get_view(self, view_id=None, view_type='form', **options):
@@ -1748,10 +1772,31 @@ class StockPicking(models.Model):
         return True
 
 
+    def _create_backorder_picking(self):
+        """Mark the picking copy as part of Odoo's backorder workflow.
+
+        Backorders are created by copying an existing picking during validation;
+        they must pass the API/manual-document guard without opening general
+        stock.picking creation to the acting user.
+        """
+        self.ensure_one()
+        return super(StockPicking, self.with_context(
+            _tijari_backorder_create_token=_BACKORDER_CREATE_TOKEN,
+        ))._create_backorder_picking()
+
+
 # Function to foward adt_type from parent picking
     @api.model_create_multi
     def create(self, vals_list):
-        if not self.env.su and not self.env.user.has_group('base.group_system'):
+        is_backorder_workflow_create = (
+            self.env.context.get('_tijari_backorder_create_token')
+            is _BACKORDER_CREATE_TOKEN
+        )
+        if (
+            not self.env.su
+            and not self.env.user.has_group('base.group_system')
+            and not is_backorder_workflow_create
+        ):
             can_create_over_receipt = any(self.env.user.has_group(group_xmlid) for group_xmlid in (
                 'tijari_wms_18.group_warehouse_manager',
                 'tijari_wms_18.group_warehouse_head',
