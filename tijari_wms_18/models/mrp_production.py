@@ -191,6 +191,9 @@ class WMSMRPProduction(models.Model):
         self.lot_producing_id = lot or self.env["stock.lot"].create(lot_values)
 
     def action_confirm(self):
+        self = self.with_context(
+            **self.env['stock.picking']._get_operator_validation_workflow_context()
+        )
         res = super().action_confirm()
 
         for production in self:
@@ -205,6 +208,9 @@ class WMSMRPProduction(models.Model):
         return res
 
     def button_mark_done(self):
+        self = self.with_context(
+            **self.env['stock.picking']._get_operator_validation_workflow_context()
+        )
         for production in self:
             unfinished_moves = production.move_raw_ids.filtered(
                 lambda move: move.status_mo_check != 'finished'

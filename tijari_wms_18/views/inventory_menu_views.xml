@@ -84,7 +84,7 @@
             parent="menu_operations_others"
             sequence="2"
             action="action_wms_over_receipt_document"
-            groups="tijari_wms_18.group_warehouse_manager,tijari_wms_18.group_warehouse_head,tijari_wms_18.group_warehouse_admin,tijari_wms_18.group_it_staff,stock.group_stock_manager,base.group_system"/>
+            groups="tijari_wms_18.group_operator,tijari_wms_18.group_warehouse_manager,tijari_wms_18.group_warehouse_head,tijari_wms_18.group_warehouse_admin,tijari_wms_18.group_it_staff,stock.group_stock_manager,base.group_system"/>
         <menuitem id="menu_operations_others_so_consignment_receipts"
             name="Consignment Overview"
             parent="menu_operations_others"

@@ -34,6 +34,7 @@ access_stock_picking_acumatica_error_line_manager,access.stock.picking.acumatica
 access_stock_picking_acumatica_error_it_staff,access.stock.picking.acumatica.error.it.staff,model_stock_picking_acumatica_error,tijari_wms_18.group_it_staff,1,1,1,1
 access_stock_picking_acumatica_error_line_it_staff,access.stock.picking.acumatica.error.line.it.staff,model_stock_picking_acumatica_error_line,tijari_wms_18.group_it_staff,1,1,1,1
 access_stock_valuation_layer_it_staff,access.stock.valuation.layer.it.staff,stock_account.model_stock_valuation_layer,tijari_wms_18.group_it_staff,1,0,0,0
+access_stock_valuation_layer_warehouse_admin,access.stock.valuation.layer.warehouse.admin,stock_account.model_stock_valuation_layer,tijari_wms_18.group_warehouse_admin,1,0,0,0
 access_stock_valuation_layer_accounting_stock,access.stock.valuation.layer.accounting.stock,stock_account.model_stock_valuation_layer,tijari_wms_18.group_accounting_stock,1,0,0,0
 access_stock_move_scan_wizard_operator,access.stock.move.scan.wizard.operator,model_stock_move_scan_wizard,tijari_wms_18.group_operator,1,1,1,1
 access_stock_move_scan_wizard_manager,access.stock.move.scan.wizard.manager,model_stock_move_scan_wizard,stock.group_stock_manager,1,1,1,1
@@ -121,6 +122,7 @@ access_wms_scrap_move_line_warehouse_admin,wms.scrap.move.line.warehouse.admin,m
 access_wms_scrap_move_line_it_staff,wms.scrap.move.line.it.staff,model_wms_scrap_move_line,tijari_wms_18.group_it_staff,1,1,1,1
 
 access_generate_package_wizard_operator,generate.package.wizard.operator,model_generate_package_wizard,tijari_wms_18.group_operator,1,1,1,1
+access_generate_package_wizard_warehouse_admin,generate.package.wizard.warehouse.admin,model_generate_package_wizard,tijari_wms_18.group_warehouse_admin,1,1,1,1
 access_generate_package_wizard_manager,generate.package.wizard.manager,model_generate_package_wizard,stock.group_stock_manager,1,1,1,1
 access_putaway_move_line_wizard_operator,putaway.move.line.wizard.operator,model_putaway_move_line_wizard,tijari_wms_18.group_operator,1,1,1,1
 access_putaway_move_line_wizard_manager,putaway.move.line.wizard.manager,model_putaway_move_line_wizard,stock.group_stock_manager,1,1,1,1
