@@ -346,7 +346,7 @@
                             <field name="is_storable" column_invisible="True"/>
                             <field name="has_tracking" column_invisible="True"/>
                             <field name="product_default_code" string="Product" column_invisible="parent.state == 'draft'"/>
-                            <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0" force_save="1" column_invisible="parent.state != 'draft'"/>
+                            <field name="product_id" context="{'default_is_storable': True}" required="1" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0" force_save="1" column_invisible="parent.state != 'draft'"/>
                             <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
                             <field name="description_picking" string="Description" optional="show"/>
                             <field name="date" optional="hide"/>
@@ -412,7 +412,6 @@
                                 <t t-name="card">
                                     <div class="d-flex justify-content-between align-items-start mb-1">
                                         <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"
-                                            context="{'tijari_stock_picking_product_code_only': True}"
                                         />
                                         
                                         <field 
@@ -424,11 +423,6 @@
                                     </div>
 
                                     <br/>
-
-                                    <div class="d-flex align-items-center gap-1">
-                                        <strong>Description: </strong>
-                                        <field name="description_picking"/>
-                                    </div>
 
                                     <div class="d-flex align-items-center gap-1">
                                         <strong>Qty Total: </strong>
@@ -731,8 +725,7 @@
                     'default_picking_type_id': picking_type_id,
                     'default_location_id': location_id,
                     'default_location_dest_id': location_dest_id,
-                    'default_partner_id': partner_id,
-                    'tijari_stock_picking_product_code_only': True
+                    'default_partner_id': partner_id
                 }</attribute>
             </xpath>
         </field>
@@ -872,7 +865,7 @@
                                 <field name="is_storable" column_invisible="True"/>
                                 <field name="has_tracking" column_invisible="True"/>
                                 <field name="product_default_code" string="Product"/>
-                                <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="0" force_save="1" column_invisible="True"/>
+                                <field name="product_id" context="{'default_is_storable': True}" required="1" readonly="0" force_save="1" column_invisible="True"/>
                                 <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
                                 <field name="description_picking" string="Description" optional="show"/>
                                 <field name="date" optional="hide"/>
@@ -942,7 +935,7 @@
                                     <t t-name="card">
                                         <div class="o_wms_operation_card">
                                             <div class="o_wms_operation_product">
-                                                <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                                <field name="product_id" class="fs-3"/>
                                                 <!-- <field name="status_pick_check"
                                                     widget="badge"
                                                     decoration-success="status_pick_check == 'finished'"
@@ -950,10 +943,6 @@
                                             </div>
                                             <br/>
                                             <div>
-                                                <div>
-                                                    <strong>Description: </strong>
-                                                    <field name="description_picking"/>
-                                                </div>
                                                 <div>
                                                     <strong>Qty Total: </strong>
                                                     <field name="product_uom_qty"/>
@@ -1031,7 +1020,7 @@
                                 <field name="is_storable" column_invisible="True"/>
                                 <field name="has_tracking" column_invisible="True"/>
                                 <field name="product_default_code" string="Product"/>
-                                <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0" force_save="1" column_invisible="True"/>
+                                <field name="product_id" context="{'default_is_storable': True}" required="1" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0" force_save="1" column_invisible="True"/>
                                 <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
                                 <field name="description_picking" string="Description" optional="show"/>
                                 <field name="date" optional="hide"/>
@@ -1107,7 +1096,7 @@
                                     <t t-name="card">
                                         <div class="o_wms_operation_card">
                                             <div class="o_wms_operation_product d-flex justify-content-between align-items-center">
-                                                <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                                <field name="product_id" class="fs-3"/>
                                                 <field name="status_pick_check"
                                                     widget="badge"
                                                     decoration-success="status_pick_check == 'finished'"
@@ -1116,10 +1105,6 @@
                                             
                                             <br/>
                                             <div>
-                                                <div>
-                                                    <strong>Description: </strong>
-                                                    <field name="description_picking"/>
-                                                </div>
                                                 <div>
                                                     <strong>Qty Total: </strong>
                                                     <field name="product_uom_qty"/>
@@ -1199,7 +1184,7 @@
                                 <field name="is_storable" column_invisible="True"/>
                                 <field name="has_tracking" column_invisible="True"/>
                                 <field name="product_default_code" string="Product"/>
-                                <field name="product_id" context="{'default_is_storable': True, 'tijari_stock_picking_product_code_only': True}" required="1" readonly="0" force_save="1" column_invisible="True"/>
+                                <field name="product_id" context="{'default_is_storable': True}" required="1" readonly="0" force_save="1" column_invisible="True"/>
                                 <field name="location_final_id" optional="hide" groups="stock.group_stock_multi_locations"/>
                                 <field name="description_picking" string="Description" optional="show"/>
                                 <field name="date" optional="hide"/>
@@ -1264,8 +1249,7 @@
                                     <t t-name="card">
                                         <div class="o_wms_operation_card">
                                             <div class="o_wms_operation_product">
-                                                <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
-                                                <field name="description_picking"/>
+                                                <field name="product_id" class="fs-3"/>
                                             </div>
                                             <br/>
                                             <div>
@@ -1528,7 +1512,7 @@
                 <page string="Content">
                     <field name="quant_ids">
                         <list>
-                            <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
+                            <field name="product_id"/>
                             <field name="lot_id" groups="stock.group_production_lot"/>
                             <field name="quantity"/>
                             <field name="product_uom_id" groups="uom.group_uom"/>
@@ -1536,7 +1520,7 @@
                         <!-- <kanban class="o_kanban_mobile">
                             <templates>
                                 <t t-name="card">
-                                    <field name="product_id" class="fw-bold" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                    <field name="product_id" class="fw-bold"/>
                                     <field name="lot_id"/>
                                     <div class="d-flex">
                                         <field name="quantity"/>
