@@ -2529,7 +2529,7 @@
                         <field name="so_confirmation_quantity" readonly="status_check == 'finished' or state in ('done', 'cancel')" string="Qty Dikirim"/>
                         <field name="product_uom_id" readonly="1" force_save="1" string="UoM" />
                         <field name="status_check"
-                            string="Satatus"
+                            string="Status"
                             widget="badge"
                             decoration-success="status_check == 'finished'"
                             decoration-danger="status_check == 'unfinished'"
