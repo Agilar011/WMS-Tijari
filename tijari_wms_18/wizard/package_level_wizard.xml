@@ -9,14 +9,14 @@
 
                 <group>
                     <field name="package_level_id" invisible='1' />
+                    <field name="package_id"/>
+                    <field name="package_cat"/>
                     <field 
                         name="status"
                         widget="badge"
                         decoration-success="status == 'finished'"
                         decoration-danger="status == 'unfinished'" 
                     />
-                    <field name="package_cat"/>
-                    <field name="package_id"/>
                 </group>
 
                 <field name="move_line_ids">
@@ -24,7 +24,9 @@
                         <field 
                             name="product_id"
                             context="{'tijari_stock_picking_product_code_only': True}"/>
+                        <field name="description_picking" string="Description"/>
                         <field name="quantity"/>
+                        <field name="product_uom_id" string="UoM"/>
                     </list>
                 </field>
 
