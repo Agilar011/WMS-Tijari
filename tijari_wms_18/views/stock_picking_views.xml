@@ -1264,8 +1264,8 @@
                                     <t t-name="card">
                                         <div class="o_wms_operation_card">
                                             <div class="o_wms_operation_product">
-                                                <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': False}"/>
-                                                <!-- <field name="description_picking"/> -->
+                                                <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                                <field name="description_picking"/>
                                             </div>
                                             <br/>
                                             <div>
