@@ -929,6 +929,7 @@
                                     class="btn-link"
                                 />
                             </list>
+                            <!-- KANBAN PICK NOTEBOOK PICKER  -->
                             <kanban class="o_kanban_mobile">
                                 <templates>
                                     <t t-name="card">
@@ -1242,6 +1243,7 @@
                                     class="o_wms_operation_action"
                                 />
                             </list>
+                            <!-- KANBAN PACK NOTEBOOK PACKER  -->
                             <kanban class="o_kanban_mobile">
                                 <templates>
                                     <t t-name="card">
@@ -1251,6 +1253,10 @@
                                             </div>
                                             <br/>
                                             <div>
+                                                <!-- <div>
+                                                    <strong>Description: </strong>
+                                                    <field name="description_picking"/>
+                                                </div> -->
                                                 <div>
                                                     <strong>Qty Total: </strong>
                                                     <field name="product_uom_qty"/>
@@ -1271,7 +1277,7 @@
                                                 />
                                             <button name="action_open_move_operation"
                                                 type="object"
-                                                string="Pack Detail"
+                                                string="Pack Details"
                                                 class="btn btn-primary btn-sm o_wms_operation_action"
                                             />
                                         </div>

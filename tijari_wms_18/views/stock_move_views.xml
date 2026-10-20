@@ -396,19 +396,14 @@
                                 </div>
 
                                 <br/>
-
+                                <!-- KANBAN PACK WIZARD PACKER -->
                                 <div class="d-flex align-items-center gap-1"
                                     invisible="'Receipts' not in (parent.picking_type_name or '') and 'Receipt Internal' not in (parent.picking_type_name or '')">
                                     <strong>Product ID: </strong>
                                     <field name="product_id" readonly="1" force_save="1"/>
                                 </div>
-                                <div class="d-flex align-items-center gap-1"
-                                    groups="stock.group_production_lot"
-                                    invisible="'Receipts' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
-                                    <div class="text-muted" invisible="not lot_id">
-                                        <strong>Lot/Serial Number: </strong>
-                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
-                                    </div>
+                                <div class="d-flex align-items-center gap-1" invisible="'Pack' not in (parent.picking_type_name or '')">
+                                    <field name="description_picking"/>
                                 </div>
                                             
                                 <!-- <div class="d-flex align-items-center gap-1" invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
@@ -427,11 +422,16 @@
                                     <strong>Packages: </strong>
                                     <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" readonly="1" force_save="1"/>
                                 </div>
-                                
+                                <div class="d-flex align-items-center gap-1" invisible="'Pack' not in (parent.picking_type_name or '')">
+                                    <strong>Total Qty: </strong>
+                                    <field name="product_uom_qty"/>
+                                    <field name="product_uom_id" groups="uom.group_uom" class="ms-1"/>
+                                </div>
+
                                 <div class="d-flex align-items-center gap-1">
                                     <strong invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')">Qty In Pack: </strong>
                                     <strong invisible="'Pack' not in (parent.picking_type_name or '')">Quantity: </strong>
-                                    <strong invisible="'Pick' not in (parent.picking_type_name or '')">Qty Total: </strong>
+                                    <!-- <strong invisible="'Pick' in (parent.picking_type_name or '')">Qty Total: </strong> -->
                                     <field name="quantity" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                     <field name="quantity" readonly="picker_status == 'finished'" invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                                     <field name="quantity" invisible="'Pack' not in (parent.picking_type_name or '')"/>
@@ -1400,7 +1400,7 @@
                                 </div>
 
                                 <br/>
-
+                                <!-- KANBAN PICK WIZARD PICKER -->
                                 <div class="d-flex align-items-center gap-1"
                                     invisible="'Receipts' not in (parent.picking_type_name or '') and 'Receipt Internal' not in (parent.picking_type_name or '')">
                                     <strong>Product ID: </strong>
