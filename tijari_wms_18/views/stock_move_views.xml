@@ -402,9 +402,9 @@
                                     <strong>Product ID: </strong>
                                     <field name="product_id" readonly="1" force_save="1"/>
                                 </div>
-                                <div class="d-flex align-items-center gap-1" invisible="'Pack' not in (parent.picking_type_name or '')">
+                                <!-- <div class="d-flex align-items-center gap-1" invisible="'Pack' not in (parent.picking_type_name or '')">
                                     <field name="description_picking"/>
-                                </div>
+                                </div> -->
                                             
                                 <!-- <div class="d-flex align-items-center gap-1" invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
                                     <strong>Pick From: </strong>
@@ -2562,10 +2562,10 @@
                         <templates>
                             <t t-name="card">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <!-- <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"/> -->
-                                    <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
+                                    <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"/>
+                                    <!-- <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
-                                        groups="stock.group_production_lot"/>
+                                        groups="stock.group_production_lot"/> -->
                                     
                                     <field 
                                         name="status_check"
@@ -2576,14 +2576,17 @@
 
                                 <br/>
 
-                                
+                                <div class="d-flex align-items-center gap-1">
+                                    <strong>LOT No: </strong>
+                                    <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
+                                </div>
                                 <div invisible="1">
                                     <strong>Packages: </strong>
                                     <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" readonly="1" force_save="1"/>
                                 </div>
                                 
                                 <div class="d-flex align-items-center gap-1">
-                                    <strong>Qty Disimpan: </strong>
+                                    <strong>Qty Unpack: </strong>
                                     <field name="quantity" />
                                     <field name="product_uom_id" readonly="1" force_save="1" />
                                     <!-- <field name="product_uom_id" readonly="picker_status == 'finished'" /> -->
