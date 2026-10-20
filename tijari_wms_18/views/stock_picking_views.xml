@@ -424,11 +424,11 @@
 
                                     <br/>
 
-                                    <div class="d-flex align-items-center gap-1">
+                                    <!-- <div class="d-flex align-items-center gap-1">
                                         <strong>Qty Total: </strong>
                                         <field name="product_uom_qty"/>
                                         <field name="product_uom"/>
-                                    </div>
+                                    </div> -->
 
                                     <div class="d-flex align-items-center gap-1">
                                         <strong>Qty Unpack: </strong>
@@ -441,8 +441,18 @@
                                         <field name="so_confirmation_quantity" readonly="state in ('done', 'cancel') or status_check == 'finished'"/>
                                         <field name="product_uom" readonly="state in ('done', 'cancel') or status_check == 'finished'"/>
                                     </div>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <strong>Perbedaan Qty: </strong>
+                                        <field name="difference_quantity"/>
+                                        <field name="product_uom"/>
+                                    </div>
 
                                     <div class="d-flex gap-2 mt-2">
+                                        <button
+                                            name="action_open_note_wizard"
+                                            type="object"
+                                            icon="fa-sticky-note"
+                                            title="Note"/>
                                         <button name="action_open_unpack_detail"
                                             type="object"
                                             string="Open Detail"
