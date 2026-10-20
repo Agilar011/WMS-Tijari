@@ -1035,54 +1035,59 @@ class HandheldScanCodeField extends CharField {
                     }
 
                     try {
-                        await this.props.record.update({
-                            [this.props.name]: value,
-                        });
                         if (
                             this.props.name === "package_scan_code" &&
                             this.props.record.resModel === "stock.picking" &&
                             !this.props.record.isNew
                         ) {
-                            const saved = await this.props.record.save();
-                            if (saved) {
-                                await this.props.record.load();
-                                const applyResult = await callScannedCodeMethod({
-                                    orm: this.orm,
-                                    notification: this.notification,
-                                    resModel: "stock.picking",
-                                    resId: this.props.record.resId,
-                                    methodName: "action_apply_scanned_package",
-                                    title: "Scan Package",
-                                    scannedCode: value,
-                                });
-                                if (applyResult.ok) {
-                                    await reloadRecordSafely(
-                                        this.props.record,
-                                        this.notification
-                                    );
-                                    const wizardId = applyResult.result?.package_detail_wizard_id;
-                                    if (wizardId) {
-                                        await this.action.doAction(
-                                            {
-                                                type: "ir.actions.act_window",
-                                                res_model: "package.level.detail.wizard",
-                                                res_id: wizardId,
-                                                views: [[false, "form"]],
-                                                target: "new",
-                                            },
-                                            {
-                                                onClose: async () => {
-                                                    await reloadRecordSafely(
-                                                        this.props.record,
-                                                        this.notification
-                                                    );
-                                                },
-                                            }
-                                        );
-                                    }
-                                }
+                            // Package scans are applied by the server method below.
+                            // Do not run the generic onchange/save path first: that
+                            // applies the same scan twice and can submit unrelated
+                            // picking fields through the operator write guard.
+                            inputEl.value = "";
+                            const applyResult = await callScannedCodeMethod({
+                                orm: this.orm,
+                                notification: this.notification,
+                                resModel: "stock.picking",
+                                resId: this.props.record.resId,
+                                methodName: "action_apply_scanned_package",
+                                title: "Scan Package",
+                                scannedCode: value,
+                            });
+                            if (!applyResult.ok) {
+                                return;
                             }
+
+                            await reloadRecordSafely(
+                                this.props.record,
+                                this.notification
+                            );
+                            const wizardId = applyResult.result?.package_detail_wizard_id;
+                            if (wizardId) {
+                                await this.action.doAction(
+                                    {
+                                        type: "ir.actions.act_window",
+                                        res_model: "package.level.detail.wizard",
+                                        res_id: wizardId,
+                                        views: [[false, "form"]],
+                                        target: "new",
+                                    },
+                                    {
+                                        onClose: async () => {
+                                            await reloadRecordSafely(
+                                                this.props.record,
+                                                this.notification
+                                            );
+                                        },
+                                    }
+                                );
+                            }
+                            return;
                         }
+
+                        await this.props.record.update({
+                            [this.props.name]: value,
+                        });
                         // The onchange clears the transient field in the
                         // record. Clear the active input too, because the
                         // standard CharField keeps the scanner value while

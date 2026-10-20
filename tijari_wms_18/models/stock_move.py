@@ -1055,6 +1055,12 @@ class StockMove(models.Model):
             compute='_compute_picker_progress_status',
         )
 
+    picker_ordered_move_line_ids = fields.Many2many(
+        comodel_name='stock.move.line',
+        string='Picker Lines (Ordered)',
+        compute='_compute_picker_ordered_move_line_ids',
+    )
+
     putaway_progress_status = fields.Selection(
         [
             ('finished', 'Finished'),
@@ -1170,6 +1176,13 @@ class StockMove(models.Model):
             move.picker_progress_status = (
                 'finished' if lines and all(line.picker_status == 'finished' for line in lines)
                 else 'unfinished'
+            )
+
+    @api.depends('move_line_ids', 'move_line_ids.picker_status')
+    def _compute_picker_ordered_move_line_ids(self):
+        for move in self:
+            move.picker_ordered_move_line_ids = move.move_line_ids.sorted(
+                key=lambda line: (line.picker_status == 'finished', line.id)
             )
 
     @api.depends(
