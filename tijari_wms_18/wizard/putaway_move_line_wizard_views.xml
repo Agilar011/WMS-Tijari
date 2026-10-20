@@ -9,13 +9,6 @@
                 <group>
                     <field name="picking_type_name" invisible="1"/>
                     <field
-                        name="confirmation_location_code"
-                        widget="adt_scan_location_text_button"
-                        string=" "
-                        readonly="1"
-                        invisible="putaway_status == 'finished'"
-                    />
-                    <field
                         name="handheld_location_code"
                         placeholder="Scan handheld atau ketik kode lokasi"
                         invisible="putaway_status == 'finished' or picking_type_name in ['Storage', 'Store Finished Product']"
@@ -50,6 +43,7 @@
                         invisible="picking_type_name in ['Storage', 'Store Finished Product']"/>
                     <field name="quantity" string="Qty Dipindah"
                         invisible="picking_type_name not in ['Storage', 'Store Finished Product']"/>
+                    <field name="remaining_putaway_quantity" readonly="1"/>
                     <field
                         name="confirmation_quantity"
                         string="Qty Disimpan"

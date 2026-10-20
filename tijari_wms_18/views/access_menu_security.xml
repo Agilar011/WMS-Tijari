@@ -339,7 +339,7 @@
         ])]"/>
     </record>
     <record id="stock_account.menu_valuation" model="ir.ui.menu">
-        <field name="groups_id" eval="[(4, ref('tijari_wms_18.group_accounting_stock'))]"/>
+        <field name="groups_id" eval="[(4, ref('tijari_wms_18.group_warehouse_admin')), (4, ref('tijari_wms_18.group_accounting_stock'))]"/>
     </record>
     <record id="stock.menu_action_production_lot_form" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
@@ -599,6 +599,7 @@
     </record>
     <record id="action_wms_over_receipt_document" model="ir.actions.act_window">
         <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),

@@ -76,6 +76,10 @@ class PutawayMoveLineWizard(models.TransientModel):
     confirmation_quantity = fields.Float(
         string='Confirmation Quantity',
     )
+    remaining_putaway_quantity = fields.Float(
+        string='Sisa Qty Putaway',
+        compute='_compute_remaining_putaway_quantity',
+    )
     putaway_status = fields.Selection(
         related='move_line_id.putaway_status',
         readonly=True,
@@ -84,6 +88,13 @@ class PutawayMoveLineWizard(models.TransientModel):
         related='move_line_id.picking_id.state',
         readonly=True,
     )
+
+    @api.depends('quantity', 'confirmation_quantity')
+    def _compute_remaining_putaway_quantity(self):
+        for wizard in self:
+            wizard.remaining_putaway_quantity = (
+                wizard.quantity - wizard.confirmation_quantity
+            )
 
     @staticmethod
     def _reload_action():

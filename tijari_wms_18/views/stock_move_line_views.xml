@@ -273,7 +273,6 @@
                             readonly="1"
                             force_save="1"
                             nolabel="1"
-                            context="{'tijari_stock_picking_product_code_only': True}"
                             class="fw-bold fs-6"/>
                     </group>
 
@@ -283,7 +282,7 @@
                     <!-- ===================================================== -->
 
                     <group groups="stock.group_production_lot"
-                        invisible="not lot_id">
+                        invisible="tracking == 'none' or (not lot_id and not lot_name)">
 
                         <label for="lot_id" string="LOT Number"/>
 
@@ -292,10 +291,38 @@
                             force_save="1"
                             nolabel="1"
                             class="fw-bold fs-6"
+                            invisible="not lot_id"
                             domain="[('id', 'in', available_lot_ids)]"/>
+                        <field name="lot_name"
+                            string="LOT Number"
+                            readonly="1"
+                            force_save="1"
+                            nolabel="1"
+                            class="fw-bold fs-6"
+                            invisible="lot_id or not lot_name"/>
 
                     </group>
 
+                    <!-- ===================================================== -->
+                    <!-- Pick From -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or (
+                        'Pack' in (picking_type_name or '')
+                        or 'Receipts' in (picking_type_name or '')
+                    )">
+
+                        <label for="location_id" string="Pick From"/>
+
+                        <field name="location_id"
+                            widget="location_short_many2one"
+                            readonly="1"
+                            force_save="1"
+                            nolabel="1"
+                            context="{'show_location_short_name': True}"
+                            class="fw-bold fs-6"/>
+
+                    </group>
 
                     <!-- ===================================================== -->
                     <!-- Handheld Scan - Normal Operation -->
@@ -411,35 +438,32 @@
                     <group invisible="is_manufacturing or 'Pack' not in (picking_type_name or '')">
 
                         <label for="result_package_id"
-                            string="Packages"/>
+                            string="Destination Packages"/>
 
                         <field name="result_package_id"
                             force_save="1"
                             nolabel="1"
                             domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"/>
+                            
+                        <label for="product_uom_qty"
+                            string="Qty Total"/>
 
-                    </group>
+                        <div class="o_row">
 
+                            <field name="product_uom_qty"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                class="fw-bold fs-6"/>
 
-                    <!-- ===================================================== -->
-                    <!-- Pick From -->
-                    <!-- ===================================================== -->
+                            <field name="product_uom_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                options="{'no_create': True}"
+                                groups="uom.group_uom"/>
 
-                    <group invisible="is_manufacturing or (
-                        'Pack' in (picking_type_name or '')
-                        or 'Receipts' in (picking_type_name or '')
-                    )">
-
-                        <label for="location_id" string="Pick From"/>
-
-                        <field name="location_id"
-                            widget="location_short_many2one"
-                            readonly="1"
-                            force_save="1"
-                            nolabel="1"
-                            context="{'show_location_short_name': True}"
-                            class="fw-bold fs-6"/>
-
+                        </div>
                     </group>
 
 
@@ -487,7 +511,7 @@
                     <group invisible="is_manufacturing or 'Pack' in (picking_type_name or '')">
 
                         <label for="product_uom_qty"
-                            string="Qty Total"/>
+                            string="Total Qty"/>
 
                         <div class="o_row">
 
@@ -506,6 +530,54 @@
 
                         </div>
 
+                        <label for="quantity"
+                            string="Qty Unpack"
+                            invisible="'Delivery Orders' not in (picking_type_name or '')"/>
+
+                        <div class="o_row" invisible="'Delivery Orders' not in (picking_type_name or '')">
+
+                            <field name="quantity"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                class="fw-bold fs-6"/>
+
+                            <field name="product_uom_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                options="{'no_create': True}"
+                                groups="uom.group_uom"/>
+
+                        </div>
+
+                        <label for="so_confirmation_quantity"
+                            string="Qty Dikirim"
+                            invisible="'Delivery Orders' not in (picking_type_name or '')"/>
+
+                        <div class="o_row" invisible="'Delivery Orders' not in (picking_type_name or '')">
+
+                            <field name="so_confirmation_quantity"
+                                nolabel="1"
+                                class="fw-bold fs-6"/>
+
+                            <field name="product_uom_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                options="{'no_create': True}"
+                                groups="uom.group_uom"/>
+
+                        </div>
+                    </group>
+
+                    <group invisible="picking_type_name not in ('Receipts', 'Receipt Internal')">
+                        <label for="remaining_picker_quantity" string="Sisa Qty Pick"/>
+                        <div class="o_row">
+                            <field name="remaining_picker_quantity" readonly="1" nolabel="1" class="fw-bold fs-6"/>
+                            <field name="product_uom_id" readonly="1" force_save="1" nolabel="1"
+                                options="{'no_create': True}" groups="uom.group_uom"/>
+                        </div>
                     </group>
 
 
@@ -516,7 +588,7 @@
                     <group invisible="is_manufacturing">
 
                         <label for="quantity"
-                            string="Saran Qty"
+                            string="Available Qty"
                             invisible="'Pick' not in (picking_type_name or '')"/>
 
                         <label for="quantity"
@@ -594,7 +666,7 @@
                         'Delivery Orders' not in (picking_type_name or '')
                     )">
 
-                        <label for="so_confirmation_quantity"
+                        <!-- <label for="so_confirmation_quantity"
                             string="Qty Dikirim"/>
 
                         <div class="o_row">
@@ -610,7 +682,7 @@
                                 options="{'no_create': True}"
                                 groups="uom.group_uom"/>
 
-                        </div>
+                        </div> -->
 
                     </group>
 

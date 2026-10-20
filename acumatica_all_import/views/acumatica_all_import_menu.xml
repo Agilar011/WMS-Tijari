@@ -294,6 +294,9 @@
         <field name="view_mode">list,form</field>
         <field name="help" type="html"><p class="o_view_nocontent_smiling_face">Belum ada data Shipment Transfer Completed.</p><p>Gunakan Unified Import dengan konfigurasi Shipment Transfer Completed untuk mengambil data Acumatica.</p></field>
     </record>
+    <record id="action_acumatica_inventory_adjustment_staging" model="ir.actions.act_window">
+        <field name="name">Inventory Adjustment</field><field name="res_model">acumatica.inventory.adjustment.staging</field><field name="view_mode">list,form</field>
+    </record>
     <menuitem id="menu_acumatica_all_import_staging_shipment_completed" name="Shipment Completed" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_shipment_completed_staging" sequence="11"/>
     <!-- <menuitem id="menu_acumatica_all_import_staging_issue_change_item" name="Issue : Change Item" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_issue_line" sequence="30"/> -->
     <menuitem id="menu_acumatica_all_import_staging_shipment_transfer_completed" name="Shipment Transfer Completed" parent="menu_acumatica_all_import_staging_outbound" action="action_acumatica_shipment_transfer_completed_staging" sequence="12"/>

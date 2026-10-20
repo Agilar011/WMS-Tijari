@@ -37,9 +37,6 @@
             </form>
         </field>
     </record>
-    <record id="action_acumatica_inventory_adjustment_staging" model="ir.actions.act_window">
-        <field name="name">Inventory Adjustment</field><field name="res_model">acumatica.inventory.adjustment.staging</field><field name="view_mode">list,form</field>
-    </record>
     <record id="view_import_inventory_adjustment_wizard_form" model="ir.ui.view">
         <field name="name">import.inventory.adjustment.wizard.form</field>
         <field name="model">import.inventory.adjustment.wizard</field>
