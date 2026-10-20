@@ -418,13 +418,32 @@
                     <group invisible="is_manufacturing or 'Pack' not in (picking_type_name or '')">
 
                         <label for="result_package_id"
-                            string="Packages"/>
+                            string="Destination Packages"/>
 
                         <field name="result_package_id"
                             force_save="1"
                             nolabel="1"
                             domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"/>
+                            
+                        <label for="product_uom_qty"
+                            string="Qty Total"/>
 
+                        <div class="o_row">
+
+                            <field name="product_uom_qty"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                class="fw-bold fs-6"/>
+
+                            <field name="product_uom_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                options="{'no_create': True}"
+                                groups="uom.group_uom"/>
+
+                        </div>
                     </group>
 
 
@@ -512,7 +531,42 @@
                                 groups="uom.group_uom"/>
 
                         </div>
+                        <label for="quantity"
+                            string="Qty Unpack"/>
 
+                        <div class="o_row">
+
+                            <field name="quantity"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                class="fw-bold fs-6"/>
+
+                            <field name="product_uom_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                options="{'no_create': True}"
+                                groups="uom.group_uom"/>
+
+                        </div>
+                        <label for="so_confirmation_quantity"
+                            string="Qty Dikirim"/>
+
+                        <div class="o_row">
+
+                            <field name="so_confirmation_quantity"
+                                nolabel="1"
+                                class="fw-bold fs-6"/>
+
+                            <field name="product_uom_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                options="{'no_create': True}"
+                                groups="uom.group_uom"/>
+
+                        </div>
                     </group>
 
                     <group invisible="picking_type_name not in ('Receipts', 'Receipt Internal')">
@@ -610,7 +664,7 @@
                         'Delivery Orders' not in (picking_type_name or '')
                     )">
 
-                        <label for="so_confirmation_quantity"
+                        <!-- <label for="so_confirmation_quantity"
                             string="Qty Dikirim"/>
 
                         <div class="o_row">
@@ -626,7 +680,7 @@
                                 options="{'no_create': True}"
                                 groups="uom.group_uom"/>
 
-                        </div>
+                        </div> -->
 
                     </group>
 
