@@ -27,6 +27,11 @@ class StockMoveLine(models.Model):
         readonly=True,
     )
 
+    remaining_picker_quantity = fields.Float(
+        string="Sisa Qty Pick",
+        related="move_id.remaining_picker_quantity",
+        readonly=True,
+    )
     lot_button = fields.Char(string="Lot Button", compute="_compute_lot_button")
     auto_input_code = fields.Boolean(string="Auto Input Code")
 

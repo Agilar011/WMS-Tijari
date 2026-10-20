@@ -273,7 +273,6 @@
                             readonly="1"
                             force_save="1"
                             nolabel="1"
-                            context="{'tijari_stock_picking_product_code_only': True}"
                             class="fw-bold fs-6"/>
                     </group>
 
@@ -283,7 +282,7 @@
                     <!-- ===================================================== -->
 
                     <group groups="stock.group_production_lot"
-                        invisible="not lot_id">
+                        invisible="tracking == 'none' or (not lot_id and not lot_name)">
 
                         <label for="lot_id" string="LOT Number"/>
 
@@ -292,7 +291,15 @@
                             force_save="1"
                             nolabel="1"
                             class="fw-bold fs-6"
+                            invisible="not lot_id"
                             domain="[('id', 'in', available_lot_ids)]"/>
+                        <field name="lot_name"
+                            string="LOT Number"
+                            readonly="1"
+                            force_save="1"
+                            nolabel="1"
+                            class="fw-bold fs-6"
+                            invisible="lot_id or not lot_name"/>
 
                     </group>
 
@@ -506,6 +513,15 @@
 
                         </div>
 
+                    </group>
+
+                    <group invisible="picking_type_name not in ('Receipts', 'Receipt Internal')">
+                        <label for="remaining_picker_quantity" string="Sisa Qty Pick"/>
+                        <div class="o_row">
+                            <field name="remaining_picker_quantity" readonly="1" nolabel="1" class="fw-bold fs-6"/>
+                            <field name="product_uom_id" readonly="1" force_save="1" nolabel="1"
+                                options="{'no_create': True}" groups="uom.group_uom"/>
+                        </div>
                     </group>
 
 
