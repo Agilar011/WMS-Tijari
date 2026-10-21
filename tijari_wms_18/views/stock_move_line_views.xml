@@ -811,6 +811,8 @@
                             or
                             (picking_type_name == 'Delivery Orders' and status_check != 'finished')
                             or
+                            (picking_type_name == 'Pack')
+                            or
                             (is_manufacturing and mo_status != 'finished')"
                         />
 

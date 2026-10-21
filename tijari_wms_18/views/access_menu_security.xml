@@ -15,8 +15,8 @@
             ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
-    <!-- Inventory Dashboard is available to the three warehouse leadership
-         roles and IT Staff; Operator and Accounting Stock have no dashboard access. -->
+    <!-- Inventory Operations dashboard is available to warehouse leadership
+         and IT Staff; Operator and Accounting Stock have no dashboard access. -->
     <record id="menu_inventory_spreadsheet_dashboard" model="ir.ui.menu">
         <field name="active" eval="True"/>
         <field name="groups_id" eval="[(6, 0, [
@@ -31,8 +31,13 @@
         <field name="group_ids" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
-            ref('tijari_wms_18.group_warehouse_admin'),
             ref('tijari_wms_18.group_it_staff'),
+            ref('stock.group_stock_manager')
+        ])]"/>
+    </record>
+    <record id="spreadsheet_dashboard_inventory_transactions" model="spreadsheet.dashboard">
+        <field name="group_ids" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_admin'),
             ref('stock.group_stock_manager')
         ])]"/>
     </record>
@@ -110,6 +115,7 @@
     </record>
     <record id="menu_operations_others" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
@@ -127,9 +133,8 @@
             ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
-    <!-- A role with at least Read in the workbook must be able to reach its
-         menu. Operator is read-only for both sections; create/edit controls
-         are governed by the model-specific rights and views. -->
+    <!-- Inventory Adjustment menu visibility follows the WMS role matrix;
+         model-specific ACLs and views control the permitted operations. -->
     <record id="stock.menu_stock_adjustments" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_operator'),
@@ -154,6 +159,7 @@
     </record>
     <record id="stock_inventory.action_view_inventory_group_form" model="ir.actions.act_window">
         <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
@@ -165,6 +171,7 @@
     <record id="stock_inventory.menu_action_inventory_tree" model="ir.ui.menu">
         <field name="active" eval="True"/>
         <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_warehouse_head'),
             ref('tijari_wms_18.group_warehouse_admin'),
@@ -233,14 +240,13 @@
     </record>
     <record id="stock.menu_warehouse_config" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
-            ref('tijari_wms_18.group_operator'),
             ref('tijari_wms_18.group_warehouse_manager'),
             ref('tijari_wms_18.group_it_staff'),
             ref('stock.group_stock_manager'), ref('base.group_system')
         ])]"/>
     </record>
 
-    <!-- Operator may reach Configuration only to open the Locations menu. -->
+    <!-- Keep Configuration available without exposing product configuration. -->
     <record id="stock.menu_product_in_config_stock" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
@@ -664,8 +670,8 @@
         ])]"/>
     </record>
 
-    <!-- Operator has Read access to Operations, Packages and Locations in the
-         workbook, so expose the navigation paths and their read actions. -->
+    <!-- Operator has Read access to Operations and Packages in the workbook,
+         so expose those navigation paths and their read actions. -->
     <record id="wms_operations_menu" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
     </record>
@@ -703,13 +709,13 @@
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
     </record>
     <record id="stock.menu_warehouse_config" model="ir.ui.menu">
-        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
     </record>
     <record id="stock.menu_action_location_form" model="ir.ui.menu">
-        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
     </record>
     <record id="stock.action_location_form" model="ir.actions.act_window">
-        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
+        <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
     </record>
     <record id="stock.action_package_view" model="ir.actions.act_window">
         <field name="groups_id" eval="[(6, 0, [ref('tijari_wms_18.group_operator'), ref('tijari_wms_18.group_warehouse_manager'), ref('tijari_wms_18.group_warehouse_head'), ref('tijari_wms_18.group_warehouse_admin'), ref('tijari_wms_18.group_it_staff'), ref('stock.group_stock_manager'), ref('base.group_system')])]"/>
