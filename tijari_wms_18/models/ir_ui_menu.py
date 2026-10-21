@@ -7,6 +7,17 @@ class IrUiMenu(models.Model):
     @api.model
     def get_user_roots(self):
         roots = super().get_user_roots()
+
+        # Warehouse Admin must never receive the Employees app through another
+        # WMS role's menu exception. System administrators retain full access.
+        if (
+            self.env.user.has_group("tijari_wms_18.group_warehouse_admin")
+            and not self.env.user.has_group("base.group_system")
+        ):
+            employees_root = self.env.ref("hr.menu_hr_root", raise_if_not_found=False)
+            if employees_root:
+                roots -= employees_root
+
         if (
             self.env.user.has_group("tijari_wms_18.group_operator")
             and not self.env.user.has_group("base.group_system")

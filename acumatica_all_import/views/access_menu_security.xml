@@ -19,6 +19,7 @@
     <record id="menu_inventory_api_data_hub_kanban" model="ir.ui.menu">
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_it_staff'),
+            ref('tijari_wms_18.group_warehouse_admin'),
             ref('base.group_system'),
             ref('stock.group_stock_manager')
         ])]"/>
