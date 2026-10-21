@@ -108,7 +108,7 @@
     <record id="action_inventory_spreadsheet_dashboard" model="ir.actions.client">
         <field name="name">Inventory Dashboard</field>
         <field name="tag">action_spreadsheet_dashboard</field>
-        <field name="params" eval="{'dashboard_id': ref('tijari_wms_18.spreadsheet_dashboard_inventory_api_data_hub'), 'inventory_dashboard_only': True}"/>
+        <field name="params" eval="{'dashboard_id': ref('tijari_wms_18.spreadsheet_dashboard_inventory_transactions'), 'inventory_dashboard_only': True}"/>
     </record>
 
     <menuitem id="menu_inventory_spreadsheet_dashboard"

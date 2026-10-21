@@ -196,7 +196,7 @@
                     string="Send Email"
                     type="object"
                     class="btn-primary"
-                    groups="stock.group_stock_manager,base.group_system,tijari_wms_18.group_accounting_stock"
+                    groups="stock.group_stock_manager,base.group_system,tijari_wms_18.group_accounting_stock,tijari_wms_18.group_warehouse_admin"
                     invisible="state != 'done' or picking_type_name not in ['Receipts', 'Receipt Internal']"/>
 
             </xpath>
