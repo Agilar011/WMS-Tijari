@@ -950,19 +950,19 @@ class StockMove(models.Model):
         }
 
     def action_open_move_operation(self):
-            self.ensure_one()
-    
-            return {
-                'type': 'ir.actions.act_window',
-                'name': 'Stock Move',
-                'res_model': 'stock.move',
-                'res_id': self.id,
-                'view_mode': 'form',
-                'view_id': self.env.ref(
-                    'tijari_wms_18.stock_move_pick_view'
-                ).id,
-                'target': 'new',
-            }
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Stock Move',
+            'res_model': 'stock.move',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_view'
+            ).id,
+            'target': 'new',
+        }
 
     def action_open_move_pack(self):
         self.ensure_one()
