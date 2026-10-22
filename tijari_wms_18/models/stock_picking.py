@@ -1352,8 +1352,16 @@ class StockPicking(models.Model):
                         _("Product hasil scan tidak ada di dokumen ini.")
                     )
                 picking.unpacked_product_id = product
-                picking.unpacked_lot_id = False
-                picking.unpacked_lot_code = False
+                product_lines = picking._get_unpacked_base_moves().filtered(
+                    lambda move: move.product_id == product
+                ).mapped('move_line_ids')
+                document_lot = product_lines.mapped('lot_id')[:1]
+                lot_codes = product_lines.mapped('lot_name')
+                lot_code = document_lot.name if document_lot else False
+                if not lot_code and lot_codes:
+                    lot_code = lot_codes[0]
+                picking.unpacked_lot_id = document_lot
+                picking.unpacked_lot_code = lot_code
                 picking.unpacked_scan_code = False
                 continue
 
