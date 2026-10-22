@@ -1059,6 +1059,7 @@ class StockMove(models.Model):
         comodel_name='stock.move.line',
         string='Picker Lines (Ordered)',
         compute='_compute_picker_ordered_move_line_ids',
+        readonly=False,
     )
 
     putaway_progress_status = fields.Selection(
