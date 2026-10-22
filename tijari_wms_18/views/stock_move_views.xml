@@ -440,7 +440,7 @@
                                 </div>
 
                                 <div class="d-flex align-items-center gap-1">
-                                    <strong invisible="'Pick' not in (parent.picking_type_name or '')">Saran Qty: </strong>
+                                    <strong invisible="'Pick' not in (parent.picking_type_name or '')">Available Qty: </strong>
                                     <field name="product_uom_qty" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                     <field name="product_uom_id" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                 </div>
@@ -706,7 +706,7 @@
 
                         <field name="lot_id" string="Lot" force_save="1" domain="[('id', 'in', available_lot_ids)]" column_invisible="1"/>
                         <field name="location_id" string="Pick From" widget="location_short_many2one" force_save="1" context="{'show_location_short_name': True}"/>
-                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" optional="hide"/>
+                        <field name="quantity" string="Available Qty" readonly="1" force_save="1" optional="hide"/>
                         <field name="confirmation_quantity" string="Qty Diambil"/>
                         <field name="product_uom_id" string="Unit of Measure"/>
                         <field name="matching_lot_id" string="Confirmed Lot" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]" optional="hide"/>
@@ -753,7 +753,7 @@
                                     <field name="product_uom_id" class="ms-1"/>
                                 </div>
                                 <div class="d-flex align-items-center gap-1">
-                                    <strong>Saran Qty: </strong>
+                                    <strong>Available Qty: </strong>
                                     <field name="quantity"/>
                                     <field name="product_uom_id" class="ms-1"/>
                                 </div>
@@ -798,6 +798,7 @@
                                 string="Scan Handheld"
                                 placeholder="Scan handheld: package"/>
                         <field name="lot_id" string="Lot/Serial Number" domain="[('id', 'in', available_lot_ids)]" force_save="1"/>
+                        <field name="location_dest_id" string="Store To" optional="hide"/>
                         <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" string="Destination Package" force_save="1"/>
                         <field name="quantity" string="Quantity"/>
                         <field name="product_uom_id" string="UoM"/>
@@ -811,6 +812,7 @@
                         <field name="state" invisible="1"/>
                         <field name="is_locked" invisible="1"/>
                         <field name="available_lot_ids" invisible="1"/>
+                        <field name="location_dest_id" invisible="1" force_save="1"/>
                         <templates>
                             <t t-name="card">
                                 <div class="o_wms_operation_card">
@@ -908,7 +910,7 @@
 
                         <field name="quantity" string="Qty In Pack" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="quantity" string="Quantity" readonly="0" force_save="1" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Available Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="UoM" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="Unit of Measure" column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')"/>
@@ -1062,7 +1064,7 @@
                                 </div>
 
                                 <div class="d-flex align-items-center gap-1">
-                                    <strong invisible="'Pick' not in (parent.picking_type_name or '')">Saran Qty: </strong>
+                                    <strong invisible="'Pick' not in (parent.picking_type_name or '')">Available Qty: </strong>
                                     <field name="product_uom_qty" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                     <field name="product_uom_id" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                 </div>
@@ -1239,8 +1241,8 @@
 
                         <field name="quantity" string="Qty Diterima" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="quantity" string="Quantity" readonly="0" force_save="1" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '') or parent.state == 'done'"/>
-                        <field name="quantity_shadow" string="Saran Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '') or parent.state != 'done'"/>
+                        <field name="quantity" string="Available Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '') or parent.state == 'done'"/>
+                        <field name="quantity_shadow" string="Available Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '') or parent.state != 'done'"/>
                         <field name="confirmation_quantity" string="Qty Diambil" readonly="parent.state in ('done', 'cancel')" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="so_confirmation_quantity" string="Qty Dikirim" column_invisible="not context.get('is_unpack')"/>
                         <field name="product_uom_id" string="UoM" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
@@ -1463,7 +1465,7 @@
                                 </div>
 
                                 <div class="d-flex align-items-center gap-1">
-                                    <strong invisible="'Pick' not in (parent.picking_type_name or '')">Saran Qty: </strong>
+                                    <strong invisible="'Pick' not in (parent.picking_type_name or '')">Available Qty: </strong>
                                     <field name="product_uom_qty" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                     <field name="product_uom_id" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                 </div>
@@ -2074,7 +2076,7 @@
 
                         <field name="quantity" string="Qty In Pack" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="quantity" string="Quantity" readonly="0" force_save="1" column_invisible="'Pack' not in (parent.picking_type_name or '')"/>
-                        <field name="quantity" string="Saran Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
+                        <field name="quantity" string="Available Qty" readonly="1" force_save="1" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="confirmation_quantity" string="Qty Diambil" column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="UoM" readonly="picker_status == 'finished'" column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '')"/>
                         <field name="product_uom_id" string="Unit of Measure" column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')"/>
@@ -2187,7 +2189,7 @@
                                 </div>
 
                                 <div class="d-flex align-items-center gap-1">
-                                    <strong invisible="'Pick' not in (parent.picking_type_name or '')">Saran Qty: </strong>
+                                    <strong invisible="'Pick' not in (parent.picking_type_name or '')">Available Qty: </strong>
                                     <field name="product_uom_qty" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                     <field name="product_uom_id" invisible="'Pick' not in (parent.picking_type_name or '')"/>
                                 </div>

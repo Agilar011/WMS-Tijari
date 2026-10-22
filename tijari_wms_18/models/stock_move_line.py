@@ -1353,6 +1353,12 @@ class StockMoveLine(models.Model):
 
         elif (
             self.picking_id
+            and "Pack" in (self.picking_id.picking_type_id.name or "")
+        ):
+            return self.move_id.action_open_move_operation()
+
+        elif (
+            self.picking_id
             and "Delivery Orders" in (self.picking_id.picking_type_id.name or "")
         ):
             self.action_mark_check_unpack_finished()
@@ -1594,7 +1600,7 @@ class StockMoveLine(models.Model):
             raise UserError(f"Qty Diambil lot {self.lot_id.name} tidak boleh 0.")
 
         if comparison > 0:
-            raise UserError("Qty Diambil tidak boleh melebihi Saran Qty")
+            raise UserError("Qty Diambil tidak boleh melebihi Available Qty")
 
         return comparison
 

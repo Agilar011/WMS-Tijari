@@ -6,6 +6,44 @@ import { patch } from "@web/core/utils/patch";
 import { SMLX2ManyField } from "@stock/fields/stock_move_line_x2_many_field";
 
 patch(SMLX2ManyField.prototype, {
+
+    async selectRecord(res_ids) {
+        const pickingTypeName = this.props.record.data.picking_type_name || "";
+        if (pickingTypeName !== "Pack") {
+            return super.selectRecord(...arguments);
+        }
+
+        const move = this.props.record;
+        const moveData = move.data;
+        const fieldContext = this.props.context || {};
+        const addContext = this.pendingLineContext || {};
+        const getId = (value) => (Array.isArray(value) ? value[0] : value) || false;
+        const demand =
+            moveData.product_uom_qty -
+            moveData.move_line_ids.records
+                .map((line) => line.data.quantity)
+                .reduce((sum, quantity) => sum + quantity, 0);
+        const context = {
+            ...fieldContext,
+            ...addContext,
+            default_quant_id: res_ids[0],
+        };
+        if (demand <= 0) {
+            context.default_quantity = 0;
+        } else if (this.dirtyQuantsData.has(res_ids[0])) {
+            context.default_quantity = Math.min(
+                this.dirtyQuantsData.get(res_ids[0]).available_quantity,
+                demand
+            );
+        }
+        this.list.addNewRecord({ context }).then(async (record) => {
+            const destinationId = this.pendingLineDestinationId;
+            if (destinationId) {
+                await record.update({ location_dest_id: this.pendingLineDestination });
+            }
+            record.dirty = true;
+        });
+    },
     
     async onAdd({ context, editable } = {}) {
         
@@ -23,6 +61,60 @@ patch(SMLX2ManyField.prototype, {
             !isManufacturing &&
             !isPackOperation) {
             return super.onAdd(...arguments);
+        }
+
+        if (isPackOperation) {
+            const move = this.props.record;
+            const moveData = move.data;
+            const getId = (value) => (Array.isArray(value) ? value[0] : value) || false;
+            const moveId = move.resId || getId(moveData.id);
+            const [parentMove] = moveId
+                ? await this.orm.read(
+                    "stock.move",
+                    [moveId],
+                    ["picking_id", "product_id", "location_id", "location_dest_id", "company_id"]
+                )
+                : [];
+            const pickingId =
+                getId(moveData.picking_id) ||
+                getId(parentMove?.picking_id) ||
+                getId(context?.default_picking_id);
+            let destinationId =
+                getId(moveData.location_dest_id) ||
+                getId(parentMove?.location_dest_id) ||
+                getId(context?.default_location_dest_id) ||
+                getId(this.props.context?.default_location_dest_id);
+            if (!destinationId && pickingId) {
+                const [picking] = await this.orm.read("stock.picking", [pickingId], ["location_dest_id"]);
+                destinationId = getId(picking?.location_dest_id);
+            }
+            let destination = false;
+            if (destinationId) {
+                const [location] = await this.orm.read(
+                    "stock.location",
+                    [destinationId],
+                    ["display_name", "complete_name", "name"]
+                );
+                const displayName = location?.display_name || location?.complete_name || location?.name;
+                destination = [destinationId, displayName];
+            }
+            context = {
+                ...this.props.context,
+                ...context,
+                default_move_id: moveId || context?.default_move_id,
+                default_picking_id: pickingId,
+                default_product_id:
+                    getId(moveData.product_id) || getId(parentMove?.product_id) || context?.default_product_id,
+                default_location_id:
+                    getId(moveData.location_id) || getId(parentMove?.location_id) || context?.default_location_id,
+                default_location_dest_id: destinationId,
+                default_company_id:
+                    getId(moveData.company_id) || getId(parentMove?.company_id) || context?.default_company_id,
+                active_picking_id: pickingId || context?.active_picking_id,
+            };
+            this.pendingLineContext = context;
+            this.pendingLineDestinationId = destinationId || false;
+            this.pendingLineDestination = destination;
         }
 
         await this.updateDirtyQuantsData();
