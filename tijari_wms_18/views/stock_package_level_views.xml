@@ -28,11 +28,11 @@
                                 type="object"
                                 string="Open Detail"
                                 class="btn-primary"/>
-                            <button name="action_mark_unfinished"
+                            <!-- <button name="action_mark_unfinished"
                                 type="object"
                                 string="Rollback"
                                 class="btn-danger o_wms_auto_save_before_action"
-                                invisible="status == 'unfinished' or state in ('done', 'cancel')"/>
+                                invisible="status == 'unfinished' or state in ('done', 'cancel')"/> -->
                         </div>
 
                     </t>
