@@ -600,16 +600,10 @@
                         <div class="o_row">
 
                             <field name="quantity"
-                                readonly="1"
-                                force_save="1"
-                                nolabel="1"
-                                class="fw-bold fs-6"
-                                invisible="'Pick' not in (picking_type_name or '')"/>
-
-                            <field name="quantity"
                                 nolabel="1"
                                 force_save="1"
                                 class="fw-bold fs-6"
+                                readonly="picker_status == 'finished' or state in ('done', 'cancel')"
                                 invisible="'Pack' not in (picking_type_name or '') and 'Receipts' not in (picking_type_name or '')"/>
 
                             <field name="product_uom_id"
@@ -813,6 +807,13 @@
                             or
                             (is_manufacturing and mo_status != 'finished')"
                         />
+                    <button 
+                        name="action_discard_details"
+                        type="object"
+                        string="Discard"
+                        class="btn-secondary"
+                        invisible="(picking_type_name == 'Receipts' and picker_status != 'finished')"
+                        />
 
                     <!-- <button name="action_save_picker_details"
                         type="object"
@@ -840,9 +841,9 @@
                         type="object"
                         string="Delete"
                         invisible="picking_type_name != 'Receipts' or state in ['done', 'cancel']"/>
-                    <button special="cancel"
+                    <!-- <button special="cancel"
                         string="Discard"
-                        class="btn-secondary"/>
+                        class="btn-secondary"/> -->
                 </footer>
             </xpath>
         </field>

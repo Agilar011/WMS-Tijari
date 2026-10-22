@@ -815,7 +815,7 @@
                             <t t-name="card">
                                 <div class="o_wms_operation_card">
                                     <div class="o_wms_operation_product">
-                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]" class="fs-3"/>
+                                        <field name="product_id" class="fs-3"/>
                                     </div>
                                     <br/>
                                     <div>
@@ -1155,12 +1155,6 @@
 
                     </div>
                 </div>
-                <button name="action_add_picker_line"
-                    type="object"
-                    string="Add Line"
-                    class="btn-secondary"
-                    groups="tijari_wms_18.group_operator"
-                    invisible="picking_type_name not in ['Receipts', 'Receipt Internal']"/>
                 <field name="move_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
@@ -1335,10 +1329,6 @@
                                     invisible="picking_type_name not in ('Receipts', 'Receipt Internal')">
                                     <div class="o_wms_operation_product d-flex justify-content-between align-items-center">
                                         <field name="product_id" class="fs-3"/>
-                                        <field name="picker_status"
-                                            decoration-success="picker_status == 'finished'"
-                                            decoration-danger="picker_status == 'unfinished'"
-                                            widget="badge"/>
                                     </div>
                                     <div class="text-muted" invisible="not lot_id">
                                         <strong>Lot/Serial Number: </strong>
@@ -1367,10 +1357,10 @@
                                             class="btn btn-danger btn-sm o_wms_auto_save_before_action"
                                             string="Rollback"
                                             invisible="picker_status == 'unfinished' or state == 'done'"/>
-                                        <!-- <field name="picker_status"
+                                        <field name="picker_status"
                                             decoration-success="picker_status == 'finished'"
                                             decoration-danger="picker_status == 'unfinished'"
-                                            widget="badge"/> -->
+                                            widget="badge"/>
                                     </div>
                                 </div>
                                 <div invisible="picking_type_name in ('Receipts', 'Receipt Internal')">
@@ -1511,8 +1501,7 @@
                         </templates>
                     </kanban>
                 </field>
-                <field name="picker_ordered_move_line_ids"
-                    readonly="0"
+                <field name="move_line_ids"
                     context="{
                         'form_view_ref': 'tijari_wms_18.view_move_line_mobile_form_picker_save',
                         'default_picking_id': picking_id,
@@ -1527,7 +1516,7 @@
                     mode="list,kanban"
                     groups="tijari_wms_18.group_operator"
                     invisible="'Receipts' not in (picking_type_name or '')">
-                    <kanban class="o_wms_move_pick_kanban" delete="0" can_open="1">
+                    <kanban class="o_wms_move_pick_kanban" delete="0" can_open="1" default_order="picker_status desc, id">
                         <field name="product_id"/>
                         <field name="location_id"/>
                         <field name="lot_id"/>
@@ -1597,7 +1586,7 @@
                         </templates>
                     </kanban>
 
-                    <list editable="bottom" delete="0">
+                    <list editable="bottom" create="1" delete="0" default_order="picker_status desc, id">
                         <field name="company_id" column_invisible="1" force_save="1"/>
                         <field name="picking_id" column_invisible="1" force_save="1"/>
                         <field name="move_id" column_invisible="1" force_save="1"/>
@@ -1639,7 +1628,7 @@
                                 class="btn-primary"
                                 invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
                     </list>
-                    <kanban class="o_kanban_mobile" delete="0" can_open="1">
+                    <kanban class="o_kanban_mobile" delete="0" can_open="1" default_order="picker_status desc, id">
                         <field name="company_id" invisible="1" force_save="1"/>
                         <field name="picking_id" invisible="1" force_save="1"/>
                         <field name="move_id" invisible="1" force_save="1"/>

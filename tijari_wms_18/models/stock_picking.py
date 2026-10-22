@@ -740,7 +740,7 @@ class StockPicking(models.Model):
                 'putaway_move_line_ids',
                 'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id',
                 'unpacked_lot_code', 'package_scan_code', 'scanned_package_id',
-                'filtered_package_level_id', 'filtered_move_ids',
+                'filtered_package_level_id', 'filtered_move_ids', 'filtered_package_level_ids'
             }
             blocked_operator_fields = set(vals) - allowed_operator_fields
             if protected_pickings and blocked_operator_fields:
@@ -1347,7 +1347,7 @@ class StockPicking(models.Model):
 
             product, matched_by = picking._find_product_scan_match(scanned_code)
             if product:
-                if product not in picking.allowed_unpacked_product_ids:
+                if product.id not in picking.allowed_unpacked_product_ids.ids:
                     raise ValidationError(
                         _("Product hasil scan tidak ada di dokumen ini.")
                     )
