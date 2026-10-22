@@ -68,8 +68,8 @@ class StockPicking(models.Model):
             result['arch'] = etree.tostring(arch, encoding='unicode')
 
         # Matrix read access applies to the picking document itself. Operators
-        # may edit only the notebook pages granted to their role; list/form
-        # creation and top-level workflow buttons stay unavailable.
+        # may edit only the notebook pages granted to their role, except in the
+        # dedicated Over-Receipt action, which allows document edits.
         elevated_groups = (
             'tijari_wms_18.group_warehouse_manager',
             'tijari_wms_18.group_warehouse_head',
@@ -87,6 +87,14 @@ class StockPicking(models.Model):
         if view_type in ('list', 'form') and is_limited_operator:
             arch = etree.fromstring(result['arch'].encode())
             arch.set('create', 'false')
+            if self.env.context.get('default_stock_lebih'):
+                # The dedicated Over-Receipt action grants operators access
+                # to edit these documents; other pickings retain the normal
+                # operator restrictions below.
+                arch.set('delete', 'false')
+                arch.set('edit', 'true')
+                result['arch'] = etree.tostring(arch, encoding='unicode')
+                return result
             if view_type == 'list':
                 arch.set('edit', 'false')
                 arch.set('delete', 'false')
@@ -716,7 +724,10 @@ class StockPicking(models.Model):
             ))
         ):
             protected_pickings = self.filtered(
-                lambda picking: not picking.internal_transfer_order_id
+                lambda picking: (
+                    not picking.internal_transfer_order_id
+                    and not picking.stock_lebih
+                )
             )
             allowed_operator_fields = {
                 'note', 'desc_note', 'note_ba', 'carrier_id',

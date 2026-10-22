@@ -18,6 +18,7 @@
         'mrp_account',
         'stock_picking_batch',
         'stock_sms',
+        'stock_delivery',
         'product',
         'stock_inventory',
         'approval_base',

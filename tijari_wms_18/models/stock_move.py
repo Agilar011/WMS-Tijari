@@ -1584,7 +1584,20 @@ class StockMove(models.Model):
             or bool(transfer_in_delivery_moves)
         )
 
+    result_package_ids = fields.Many2many(
+        comodel_name='stock.quant.package',
+        string='Packages',
+        compute='_compute_result_package_ids',
+    )
 
+    @api.depends(
+        'move_line_ids.result_package_id',
+    )
+    def _compute_result_package_ids(self):
+        for move in self:
+            move.result_package_ids = (
+                move.move_line_ids.mapped('result_package_id')
+            )
 class StockMoveScanWizard(models.TransientModel):
     _name = 'stock.move.scan.wizard'
     _description = 'Stock Move Scan Wizard'
