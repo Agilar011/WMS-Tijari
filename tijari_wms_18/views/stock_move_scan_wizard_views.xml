@@ -317,7 +317,7 @@
 		                    </field>
 		                </page>
 
-                <page string="Putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Internal Transfers'] or is_ito_internal_transfer">
+                <page string="Putaway" name="page_putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Internal Transfers'] or is_ito_internal_transfer">
 	                    <group>
                         <field name="putaway_scan_code"
                             widget="adt_handheld_scan_code"
@@ -347,8 +347,8 @@
                         <list editable="bottom" create="0" delete="0" link="0">
                             <field name="product_id" readonly="1"/>
                             <field name="location_dest_id" column_invisible="1"/>
-                            <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
-                            <field name="matching_lot_id" string="Scanned Lot" readonly="1" column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product')"/>
+                            <field name="lot_id" string="Lot/Serial Number" readonly="1" column_invisible="picking_id.picking_type_name not in ('Storage','Store Finished Product')"/>
+                            <field name="matching_lot_id" string="Scanned Lot" readonly="1" column_invisible="picking_id.picking_type_name not in ('Storage','Store Finished Product')"/>
                             <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
                                 string=" "
@@ -393,7 +393,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Putaway"
-                                invisible="putaway_status == 'unfinished' or parent.state == 'done'"/>
+                                invisible="putaway_status == 'unfinished' or picking_id.state == 'done'"/>
 
                         </list>
                     </field>
@@ -438,7 +438,7 @@
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Undo Putaway"
-                                invisible="putaway_status == 'unfinished' or parent.state == 'done'"/>
+                                invisible="putaway_status == 'unfinished' or picking_id.state== 'done'"/>
                         </list>
                     </field>
                     <field name="putaway_move_ids" mode="kanban,list" readonly="1">
@@ -569,7 +569,7 @@
                             <button name="action_mark_putaway_unfinished"
                                 type="object"
                                 class="btn btn-danger btn-sm"
-                                invisible="putaway_status == 'unfinished' or parent.state == 'done'">
+                                invisible="putaway_status == 'unfinished' or picking_id.state== 'done'">
                                 <i class="fa fa-undo"/>
                             </button>
                             <field name="putaway_status"

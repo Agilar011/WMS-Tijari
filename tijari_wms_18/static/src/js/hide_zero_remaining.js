@@ -62,7 +62,7 @@ function observe(container) {
 function boot() {
 
     document
-        .querySelectorAll('div[name="move_ids_without_package"]')
+        .querySelectorAll('div[name="filtered_unpacked_move_ids"]')
         .forEach(observe);
 
     requestAnimationFrame(boot);

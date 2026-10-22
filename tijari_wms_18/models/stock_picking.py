@@ -26,7 +26,7 @@ class StockPicking(models.Model):
 
     @api.model
     def _get_operator_validation_workflow_context(self):
-        """Allow trusted workflow methods to carry internal picking writes.
+        """Allow trusted workflow and scan methods to carry internal writes.
 
         The identity token cannot be recreated from a client supplied context;
         this private helper is used by manufacturing workflow entry points.
@@ -626,7 +626,10 @@ class StockPicking(models.Model):
 
     @api.onchange('package_scan_code')
     def _onchange_package_scan_code(self):
-        for picking in self:
+        scan_records = self.with_context(
+            **self._get_operator_validation_workflow_context(),
+        )
+        for picking in scan_records:
             if not picking.package_scan_code:
                 continue
             values = picking._get_scanned_package_values(picking.package_scan_code)
@@ -734,11 +737,19 @@ class StockPicking(models.Model):
                 'do_responsible_ids', 'putaway_responsible_ids',
                 'picker_scan_code', 'picker_product_id', 'picker_lot_id',
                 'putaway_scan_code', 'putaway_product_id', 'putaway_lot_id',
+                'putaway_move_line_ids',
                 'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id',
                 'unpacked_lot_code', 'package_scan_code', 'scanned_package_id',
-                'filtered_package_level_id',
+                'filtered_package_level_id', 'filtered_move_ids',
             }
-            if protected_pickings and set(vals) - allowed_operator_fields:
+            blocked_operator_fields = set(vals) - allowed_operator_fields
+            if protected_pickings and blocked_operator_fields:
+                _logger.warning(
+                    "Warehouse Operator picking write blocked: uid=%s picking_ids=%s fields=%s",
+                    self.env.uid,
+                    protected_pickings.ids,
+                    sorted(blocked_operator_fields),
+                )
                 raise AccessError(_(
                     'Warehouse Operator hanya dapat mengubah field pada notebook '
                     'yang diizinkan; field dokumen lainnya hanya dapat dibaca.'
@@ -1326,7 +1337,10 @@ class StockPicking(models.Model):
 
     @api.onchange('unpacked_scan_code')
     def _onchange_unpacked_scan_code(self):
-        for picking in self:
+        scan_records = self.with_context(
+            **self._get_operator_validation_workflow_context(),
+        )
+        for picking in scan_records:
             scanned_code = (picking.unpacked_scan_code or '').strip()
             if not scanned_code:
                 continue
@@ -2529,7 +2543,10 @@ class StockPicking(models.Model):
 
     @api.onchange('putaway_scan_code')
     def _onchange_putaway_scan_code(self):
-        for picking in self:
+        scan_records = self.with_context(
+            **self._get_operator_validation_workflow_context(),
+        )
+        for picking in scan_records:
             if not picking.putaway_scan_code:
                 continue
             values = picking._get_putaway_scan_values(picking.putaway_scan_code)
@@ -2637,7 +2654,10 @@ class StockPicking(models.Model):
 
     @api.onchange('picker_scan_code')
     def _onchange_picker_scan_code(self):
-        for picking in self:
+        scan_records = self.with_context(
+            **self._get_operator_validation_workflow_context(),
+        )
+        for picking in scan_records:
             if not picking.picker_scan_code:
                 continue
             values = picking._get_picker_scan_values(picking.picker_scan_code)
