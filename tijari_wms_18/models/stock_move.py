@@ -1283,24 +1283,28 @@ class StockMove(models.Model):
 
     def action_add_picker_line(self):
         self.ensure_one()
-
-        move_line = self.env['stock.move.line'].create(
-            self._prepare_move_line_vals(quantity=0)
-        )
-
         return {
             'type': 'ir.actions.act_window',
-            'name': _('Picker Details'),
+            'name': _('Create Move Line'),
             'res_model': 'stock.move.line',
-            'res_id': move_line.id,
             'view_mode': 'form',
             'view_id': self.env.ref(
-                'tijari_wms_18.wizard_picker_view_mobile'
+                'tijari_wms_18.view_move_line_mobile_form_picker_save'
             ).id,
+            'target': 'new',
             'context': {
+                'default_picking_id': self.picking_id.id,
+                'default_move_id': self.id,
+                'default_product_id': self.product_id.id,
+                'default_product_uom_id': self.product_uom.id,
+                'default_product_uom_qty': self.product_uom_qty,
+                'default_quantity': 0,
+                'default_location_id': self.location_id.id,
+                'default_location_dest_id': self.location_dest_id.id,
+                'default_company_id': self.company_id.id,
+                'active_picking_id': self.picking_id.id,
                 'picker_new_line': True,
             },
-            'target': 'new',
         }
 
     def action_open_move_lines(self):
@@ -1554,7 +1558,9 @@ class StockMove(models.Model):
         ITO already has its Storage move linked explicitly, so the generic
         push chain must not add another operation. Document Only pickings are
         also complete single-document flows and must not spawn a push-rule
-        picking. Other picking flows keep the standard Odoo behavior.
+        picking. Inter-warehouse Transfer IN already owns an explicit receipt
+        leg, so completing its delivery must not spawn another receipt from
+        that delivery move. Other picking flows keep standard Odoo behavior.
         """
         intra_ito_pick = self.filtered(lambda move: (
             move.picking_id
@@ -1565,10 +1571,17 @@ class StockMove(models.Model):
         document_only_moves = self.filtered(
             lambda move: move.picking_id and move.picking_id.adt_is_document_only
         )
+        transfer_in_delivery_moves = self.filtered(lambda move: (
+            move.picking_id
+            and move.picking_id.internal_transfer_order_id
+            and move.picking_id.internal_transfer_order_id.transfer_type == 'transfer_in'
+            and move.picking_id.internal_transfer_leg == 'delivery'
+        ))
         return (
             super()._skip_push()
             or bool(intra_ito_pick)
             or bool(document_only_moves)
+            or bool(transfer_in_delivery_moves)
         )
 
 

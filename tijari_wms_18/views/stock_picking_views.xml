@@ -81,7 +81,7 @@
                     string="Search Document"
                     class="btn-primary"
                     display="always"
-                    invisible="1"/>
+                    />
             </xpath>
         </field>
     </record>

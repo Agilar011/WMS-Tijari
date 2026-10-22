@@ -1443,7 +1443,8 @@ class InternalTransferOrder(models.Model):
     def _auto_validate_pickings_by_leg(self, legs, shipment_picking=False):
         for order in self:
             pickings = order._get_related_pickings().filtered(
-                lambda picking: picking.internal_transfer_leg in legs
+                lambda picking: picking.internal_transfer_order_id == order
+                and picking.internal_transfer_leg in legs
                 and picking.state not in ('done', 'cancel')
             ).sorted(lambda picking: picking.internal_transfer_sequence)
             for picking in pickings:

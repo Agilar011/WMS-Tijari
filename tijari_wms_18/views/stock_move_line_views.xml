@@ -532,9 +532,10 @@
 
                         </div>
                         <label for="quantity"
-                            string="Qty Unpack"/>
+                            string="Qty Unpack"
+                            invisible="'Pick' in (picking_type_name or '')"/>
 
-                        <div class="o_row">
+                        <div class="o_row" invisible="'Pick' in (picking_type_name or '')">
 
                             <field name="quantity"
                                 readonly="1"
@@ -551,9 +552,10 @@
 
                         </div>
                         <label for="so_confirmation_quantity"
-                            string="Qty Dikirim"/>
+                            string="Qty Dikirim"
+                            invisible="'Pick' in (picking_type_name or '')"/>
 
-                        <div class="o_row">
+                        <div class="o_row" invisible="'Pick' in (picking_type_name or '')">
 
                             <field name="so_confirmation_quantity"
                                 nolabel="1"
