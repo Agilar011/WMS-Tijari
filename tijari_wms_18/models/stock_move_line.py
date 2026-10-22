@@ -1422,22 +1422,23 @@ class StockMoveLine(models.Model):
             self.picking_id
             and "Pick" in (self.picking_id.picking_type_id.name or "")
         ):
-            return self.action_mark_check_pick_unfinished_form()
+            return self.move_id.action_open_move_pick()
+
+        elif (
+            self.picking_id
+            and "Pack" in (self.picking_id.picking_type_id.name or "")
+        ):
+            return self.move_id.action_open_move_operation()
         
         elif (
             self.picking_id
             and "Delivery Orders" in (self.picking_id.picking_type_id.name or "")
         ):
-            return self.action_delivery_discard_form()
-            # return self.move_id.action_open_unpack_detail()
+            return self.move_id.action_open_unpack_detail()
 
         elif self.is_manufacturing:
-            return self.action_mark_check_unfinished_mo_form()
-            # return self.move_id.action_open_move_mo()
-            
-        else:
-            self.write({'picker_status': 'finished'})
-
+            return self.move_id.action_open_move_mo()
+        
         return {"type": "ir.actions.act_window_close"}
 
     def action_cancel_picker_details(self):
@@ -1481,10 +1482,6 @@ class StockMoveLine(models.Model):
         self.ensure_one()
         return self.action_open_pick_detail()
 
-    def action_delivery_discard_form(self):
-        self.ensure_one()
-        return self.action_open_unpacked_detail()
-
     def action_delete_picker_line(self):
         self.ensure_one()
 
@@ -1511,6 +1508,17 @@ class StockMoveLine(models.Model):
             ).id,
             'target': 'new',
         }
+
+    def action_delete_packer_line(self):
+        self.ensure_one()
+
+        move = self.move_id
+        if self.state == 'done' or move.state in ('done', 'cancel'):
+            raise ValidationError(_("Line yang sudah Done atau Cancelled tidak boleh dihapus."))
+
+        self.unlink()
+
+        return move.action_open_move_operation()
 
     def action_open_picker_details(self):
         self.ensure_one()
@@ -1585,21 +1593,6 @@ class StockMoveLine(models.Model):
             'target': 'new',
         }
 
-    def action_open_unpacked_detail(self):
-        self.ensure_one()
-
-        move = self.move_id
-        return {
-            'type': 'ir.actions.act_window',
-            'name': _('Stock Move'),
-            'res_model': 'stock.move',
-            'res_id': move.id,
-            'view_mode': 'form',
-            'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_delivery_unpack_view'
-            ).id,
-            'target': 'new',
-        }
 
     def _validate_before_mark_pick_finished(self):
         confirmation_quantity = self.confirmation_quantity

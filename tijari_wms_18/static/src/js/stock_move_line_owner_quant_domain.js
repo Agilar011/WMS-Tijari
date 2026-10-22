@@ -36,13 +36,17 @@ patch(SMLX2ManyField.prototype, {
                 demand
             );
         }
-        this.list.addNewRecord({ context }).then(async (record) => {
-            const destinationId = this.pendingLineDestinationId;
-            if (destinationId) {
-                await record.update({ location_dest_id: this.pendingLineDestination });
-            }
-            record.dirty = true;
-        });
+        const record = await this.list.addNewRecord({ context });
+        const destinationId = this.pendingLineDestinationId;
+        if (destinationId) {
+            await record.update({ location_dest_id: this.pendingLineDestination });
+        }
+        record.dirty = true;
+
+        // Persist the selected quant line before the user opens another line.
+        // Otherwise a later Save & Confirm can reload the move from the server
+        // and discard this still-virtual x2many record.
+        await move.save();
     },
     
     async onAdd({ context, editable } = {}) {
