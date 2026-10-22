@@ -1132,7 +1132,7 @@
                                     invisible="not parent.show_putaway_page or parent.picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"
                                 />
                             </list>
-                            <kanban class="o_kanban_mobile" create="0">
+                            <kanban class="o_kanban_mobile" create="0" can_open="0">
                                 <templates>
                                     <t t-name="card">
                                         <div class="o_wms_operation_card">
@@ -1285,7 +1285,7 @@
                                 />
                             </list>
                             <!-- KANBAN PACK NOTEBOOK PACKER  -->
-                            <kanban class="o_kanban_mobile">
+                            <kanban class="o_kanban_mobile" can_open="0">
                                 <templates>
                                     <t t-name="card">
                                         <div class="o_wms_operation_card">
