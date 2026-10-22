@@ -1512,7 +1512,7 @@
                     </kanban>
                 </field>
                 <field name="picker_ordered_move_line_ids"
-                    readonly="1"
+                    readonly="0"
                     context="{
                         'form_view_ref': 'tijari_wms_18.view_move_line_mobile_form_picker_save',
                         'default_picking_id': picking_id,
