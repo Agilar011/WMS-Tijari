@@ -346,6 +346,17 @@
 
                     </group>
 
+                    <group invisible="1">
+
+                        <label for="location_dest_id"
+                            string="Store To"/>
+
+                        <field name="location_dest_id"
+                            nolabel="1"
+                            class="fw-bold fs-6"/>
+
+                    </group>
+
 
                     <!-- Storage confirmations are shown in the shared form
                          used by both administrators and Group Operation. -->

@@ -31,7 +31,7 @@
                             <button name="action_mark_unfinished"
                                 type="object"
                                 string="Rollback"
-                                class="btn-danger o_wms_auto_save_before_action"
+                                class="btn-danger"
                                 invisible="status == 'unfinished' or state in ('done', 'cancel')"/>
                         </div>
 
