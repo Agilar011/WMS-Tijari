@@ -529,12 +529,11 @@
                                 groups="uom.group_uom"/>
 
                         </div>
-
                         <label for="quantity"
                             string="Qty Unpack"
-                            invisible="'Delivery Orders' not in (picking_type_name or '')"/>
+                            invisible="'Pick' in (picking_type_name or '')"/>
 
-                        <div class="o_row" invisible="'Delivery Orders' not in (picking_type_name or '')">
+                        <div class="o_row" invisible="'Pick' in (picking_type_name or '')">
 
                             <field name="quantity"
                                 readonly="1"
@@ -550,12 +549,11 @@
                                 groups="uom.group_uom"/>
 
                         </div>
-
                         <label for="so_confirmation_quantity"
                             string="Qty Dikirim"
-                            invisible="'Delivery Orders' not in (picking_type_name or '')"/>
+                            invisible="'Pick' in (picking_type_name or '')"/>
 
-                        <div class="o_row" invisible="'Delivery Orders' not in (picking_type_name or '')">
+                        <div class="o_row" invisible="'Pick' in (picking_type_name or '')">
 
                             <field name="so_confirmation_quantity"
                                 nolabel="1"

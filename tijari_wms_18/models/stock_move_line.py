@@ -48,7 +48,6 @@ class StockMoveLine(models.Model):
     putaway_scan_code = fields.Char(
         string='Putaway Scan Code',
         related='picking_id.putaway_scan_code',
-        readonly=True,
     )
     confirmation_lot_code = fields.Char(
         string='Confirmation Lot Code',
@@ -1602,6 +1601,7 @@ class StockMoveLine(models.Model):
             )
 
         expected_lot = self.product_lot_id or self.lot_id
+        current_lot = self.matching_lot_id or self.lot_id
         if not self.matching_lot_id:
             raise UserError(f"Pastikan melakukan konfirmasi lot {self.lot_id.name}")
         if self.matching_lot_id != expected_lot:
