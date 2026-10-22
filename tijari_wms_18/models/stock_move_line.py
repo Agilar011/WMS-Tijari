@@ -244,6 +244,17 @@ class StockMoveLine(models.Model):
         default='unfinished',
     )
 
+    description_picking = fields.Text(
+        string='Description of Picking',
+        compute='_compute_description_picking_from_product',
+        store=False,
+    )
+
+    @api.depends('move_id', 'move_id.description_picking')
+    def _compute_description_picking_from_product(self):
+        for move in self:
+            move.description_picking = move.move_id.description_picking or False
+
     is_manufacturing = fields.Boolean(
         compute="_compute_is_manufacturing",
     )
@@ -1369,29 +1380,29 @@ class StockMoveLine(models.Model):
             self.picking_id
             and self.picking_id.picking_type_id.name == 'Receipts'
         ):
-            self.action_mark_picker_unfinished()
+            return self.action_mark_picker_unfinished_form()
 
         elif (
             self.picking_id
             and "Pick" in (self.picking_id.picking_type_id.name or "")
         ):
-            self.action_mark_check_pick_unfinished()
+            return self.action_mark_check_pick_unfinished_form()
         
         elif (
             self.picking_id
             and "Delivery Orders" in (self.picking_id.picking_type_id.name or "")
         ):
-            self.action_mark_check_unpack_unfinished()
-            return self.move_id.action_open_unpack_detail()
+            return self.action_mark_check_unpack_unfinished_form()
+            # return self.move_id.action_open_unpack_detail()
 
         elif self.is_manufacturing:
-            self.action_mark_check_unfinished_mo()
-            return self.move_id.action_open_move_mo()
+            return self.action_mark_check_unfinished_mo_form()
+            # return self.move_id.action_open_move_mo()
             
         else:
             self.write({'picker_status': 'finished'})
 
-        return self.move_id.action_open_move_pick()
+        return self.action_open_move_pick()
 
     def action_cancel_picker_details(self):
         self.ensure_one()
@@ -1421,6 +1432,14 @@ class StockMoveLine(models.Model):
             ))
         self.write({'picker_status': 'unfinished'})
         return self.move_id.action_open_move_pick()
+
+    def action_mark_picker_unfinished_form(self):
+        if self.putaway_status == 'finished':
+            raise ValidationError(_(
+                "Picker tidak dapat di-rollback karena proses Putaway telah selesai."
+            ))
+        self.write({'picker_status': 'unfinished'})
+        return self.action_open_move_pick()
 
     def action_delete_picker_line(self):
         self.ensure_one()
@@ -1481,6 +1500,31 @@ class StockMoveLine(models.Model):
         self.mapped('move_id.picking_id.move_ids_without_package')._refresh_pick_status_sequence()
         return self.move_id.action_open_move_pick()
 
+    def action_mark_check_pick_unfinished_form(self):
+        self.write({'pick_status': 'unfinished'})
+        self.mapped('move_id.picking_id.move_ids_without_package')._refresh_pick_status_sequence()
+        return self.action_open_move_pick()
+
+    def action_open_move_pick(self):
+        self.ensure_one()
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Move Line',
+            'res_model': 'stock.move.line',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'views': [
+                (
+                    self.env.ref(
+                        'stock.view_move_line_mobile_form'
+                    ).id,
+                    'form',
+                ),
+            ],
+            'target': 'new',
+        }
+
     def _validate_before_mark_pick_finished(self):
         confirmation_quantity = self.confirmation_quantity
         quantity = self.quantity
@@ -1512,6 +1556,10 @@ class StockMoveLine(models.Model):
     def action_mark_check_unpack_unfinished(self):
         self.write({'status_check': 'unfinished'})
         return self.move_id.action_open_unpack_detail()
+
+    def action_mark_check_unpack_unfinished_form(self):
+        self.write({'status_check': 'unfinished'})
+        return self.action_open_move_pick()
 
     def _validate_before_mark_unpack_finished(self):
         confirmation_quantity = self.so_confirmation_quantity
@@ -1586,6 +1634,10 @@ class StockMoveLine(models.Model):
     def action_mark_check_unfinished_mo(self):
         self.write({'mo_status': 'unfinished'})
         return self.move_id.action_open_move_mo()
+
+    def action_mark_check_unfinished_mo_form(self):
+        self.write({'mo_status': 'unfinished'})
+        return self.action_open_move_pick()
 
     def _validate_before_mark_finished_mo(self):
         for line in self:

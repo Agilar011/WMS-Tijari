@@ -43,28 +43,14 @@ class InventoryAdjustmentsGroup(models.Model):
             if root is not None:
                 root.set('create', 'false')
                 root.set('delete', 'false')
-                if view_type == 'list':
-                    root.set('edit', 'false')
-                else:
-                    for field_node in arch.xpath('.//field'):
-                        if field_node.get('name') != 'notes':
-                            field_node.set('readonly', '1')
-                    for button in arch.xpath('.//header//button'):
-                        if button.get('name') != 'action_view_inventory_adjustment':
-                            button.set('invisible', '1')
             result['arch'] = etree.tostring(arch, encoding='unicode')
         return result
 
     @api.model_create_multi
     def create(self, vals_list):
         if not self.env.su and self._is_operator_only():
-            raise AccessError(_('Warehouse Operator hanya memiliki akses baca pada Adjustment Document.'))
+            raise AccessError(_('Warehouse Operator tidak memiliki akses untuk membuat Adjustment Document.'))
         return super().create(vals_list)
-
-    def write(self, vals):
-        if not self.env.su and self._is_operator_only() and set(vals) - {'notes'}:
-            raise AccessError(_('Warehouse Operator hanya dapat mengubah Notes pada Adjustment Document.'))
-        return super().write(vals)
 
     def unlink(self):
         if not self.env.su and self._is_operator_only():

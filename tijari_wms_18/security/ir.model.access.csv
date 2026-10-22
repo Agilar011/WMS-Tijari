@@ -23,6 +23,7 @@ access_stock_report_aging_generate_warehouse_admin,access.stock.report.aging.gen
 access_stock_report_aging_generate_it_staff,access.stock.report.aging.generate.it.staff,model_stock_report_aging_generate,tijari_wms_18.group_it_staff,1,1,1,1
 access_stock_report_aging_line_accounting_stock,access.stock.report.aging.line.accounting.stock,model_stock_report_aging_line,tijari_wms_18.group_accounting_stock,1,0,0,0
 access_stock_report_aging_generate_accounting_stock,access.stock.report.aging.generate.accounting.stock,model_stock_report_aging_generate,tijari_wms_18.group_accounting_stock,1,1,1,1
+access_stock_picking_operator,stock.picking.operator,model_stock_picking,tijari_wms_18.group_operator,1,1,0,0
 
 access_stock_picking_create_warehouse_manager,stock.picking.create.warehouse.manager,model_stock_picking,tijari_wms_18.group_warehouse_manager,1,0,1,0
 access_stock_picking_create_warehouse_head,stock.picking.create.warehouse.head,model_stock_picking,tijari_wms_18.group_warehouse_head,1,0,1,0
@@ -71,6 +72,7 @@ access_wms_scrap_move_line_manager,wms.scrap.move.line.manager,model_wms_scrap_m
 access_wms_scrap_move_line_accounting_stock,wms.scrap.move.line.accounting.stock,model_wms_scrap_move_line,tijari_wms_18.group_accounting_stock,1,1,1,1
 
 access_stock_inventory_accounting_stock,stock.inventory.accounting.stock,stock_inventory.model_stock_inventory,tijari_wms_18.group_accounting_stock,1,1,1,1
+access_stock_inventory_operator,stock.inventory.operator,stock_inventory.model_stock_inventory,tijari_wms_18.group_operator,1,1,0,0
 access_stock_inventory_warning_accounting_stock,stock.inventory.warning.accounting.stock,stock.model_stock_inventory_warning,tijari_wms_18.group_accounting_stock,1,1,1,1
 access_stock_inventory_conflict_accounting_stock,stock.inventory.conflict.accounting.stock,stock.model_stock_inventory_conflict,tijari_wms_18.group_accounting_stock,1,1,1,1
 access_stock_inventory_adjustment_name_accounting_stock,stock.inventory.adjustment.name.accounting.stock,stock.model_stock_inventory_adjustment_name,tijari_wms_18.group_accounting_stock,1,1,1,1

@@ -303,6 +303,26 @@
 
                     </group>
 
+                    <!-- ===================================================== -->
+                    <!-- Pick From -->
+                    <!-- ===================================================== -->
+
+                    <group invisible="is_manufacturing or (
+                        'Pack' in (picking_type_name or '')
+                        or 'Receipts' in (picking_type_name or '')
+                    )">
+
+                        <label for="location_id" string="Pick From"/>
+
+                        <field name="location_id"
+                            widget="location_short_many2one"
+                            readonly="1"
+                            force_save="1"
+                            nolabel="1"
+                            context="{'show_location_short_name': True}"
+                            class="fw-bold fs-6"/>
+
+                    </group>
 
                     <!-- ===================================================== -->
                     <!-- Handheld Scan - Normal Operation -->
@@ -448,28 +468,6 @@
 
 
                     <!-- ===================================================== -->
-                    <!-- Pick From -->
-                    <!-- ===================================================== -->
-
-                    <group invisible="is_manufacturing or (
-                        'Pack' in (picking_type_name or '')
-                        or 'Receipts' in (picking_type_name or '')
-                    )">
-
-                        <label for="location_id" string="Pick From"/>
-
-                        <field name="location_id"
-                            widget="location_short_many2one"
-                            readonly="1"
-                            force_save="1"
-                            nolabel="1"
-                            context="{'show_location_short_name': True}"
-                            class="fw-bold fs-6"/>
-
-                    </group>
-
-
-                    <!-- ===================================================== -->
                     <!-- Manufacturing Pick From -->
                     <!-- ===================================================== -->
 
@@ -513,7 +511,7 @@
                     <group invisible="is_manufacturing or 'Pack' in (picking_type_name or '')">
 
                         <label for="product_uom_qty"
-                            string="Qty Total"/>
+                            string="Total Qty"/>
 
                         <div class="o_row">
 
@@ -531,10 +529,12 @@
                                 groups="uom.group_uom"/>
 
                         </div>
-                        <label for="quantity"
-                            string="Qty Unpack"/>
 
-                        <div class="o_row">
+                        <label for="quantity"
+                            string="Qty Unpack"
+                            invisible="'Delivery Orders' not in (picking_type_name or '')"/>
+
+                        <div class="o_row" invisible="'Delivery Orders' not in (picking_type_name or '')">
 
                             <field name="quantity"
                                 readonly="1"
@@ -550,10 +550,12 @@
                                 groups="uom.group_uom"/>
 
                         </div>
-                        <label for="so_confirmation_quantity"
-                            string="Qty Dikirim"/>
 
-                        <div class="o_row">
+                        <label for="so_confirmation_quantity"
+                            string="Qty Dikirim"
+                            invisible="'Delivery Orders' not in (picking_type_name or '')"/>
+
+                        <div class="o_row" invisible="'Delivery Orders' not in (picking_type_name or '')">
 
                             <field name="so_confirmation_quantity"
                                 nolabel="1"
@@ -586,7 +588,7 @@
                     <group invisible="is_manufacturing">
 
                         <label for="quantity"
-                            string="Saran Qty"
+                            string="Available Qty"
                             invisible="'Pick' not in (picking_type_name or '')"/>
 
                         <label for="quantity"
@@ -808,6 +810,8 @@
                             (picking_type_name in ['Pick', 'Pick Components'] and pick_status != 'finished')
                             or
                             (picking_type_name == 'Delivery Orders' and status_check != 'finished')
+                            or
+                            (picking_type_name == 'Pack')
                             or
                             (is_manufacturing and mo_status != 'finished')"
                         />
