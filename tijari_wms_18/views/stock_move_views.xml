@@ -146,9 +146,8 @@
                 <field name="picking_id" invisible="1"/>
                 <field name="picking_type_name" invisible="1"/>
                 <field name="adt_dest_location_id" invisible="1"/>
-                <div class="grid-container">
+                <div class="grid-container d-none d-md-flex flex-column">
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
-                        
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: top; gap: 5px; width: 100%;">
                             <label for="product_id" style="margin: 0 !important; white-space: nowrap !important;"/>
                             <field name="product_id" readonly="id or move_line_ids"/>
@@ -396,7 +395,7 @@
                                 </div>
 
                                 <br/>
-                                <!-- KANBAN PACK WIZARD PACKER -->
+                                <!-- KANBAN PACK WIZARD PACKER ADM -->
                                 <div class="d-flex align-items-center gap-1"
                                     invisible="'Receipts' not in (parent.picking_type_name or '') and 'Receipt Internal' not in (parent.picking_type_name or '')">
                                     <strong>Product ID: </strong>
@@ -766,6 +765,7 @@
                         </templates>
                     </kanban>
                 </field>
+                <!-- KANBAN WIZARD PACK -->
                 <field name="move_line_ids"
                     readonly="state == 'cancel' or (state == 'done' and is_locked) or not product_id"
                     context="{
@@ -832,7 +832,7 @@
                                             <field name="product_uom_id" groups="uom.group_uom" class="ms-1"/>
                                         </div>
                                         <div>
-                                            <strong>Qty Diambil: </strong>
+                                            <strong>Quantity: </strong>
                                             <field name="quantity"/>
                                             <field name="product_uom_id" groups="uom.group_uom" class="ms-1"/>
                                         </div>
@@ -1117,7 +1117,7 @@
                 <field name="owner_id" invisible="1"/>
                 <field name="picking_type_name" invisible="1"/>
                 <field name="adt_dest_location_id" invisible="1"/>
-                <div class="grid-container">
+                <div class="grid-container d-none d-md-flex flex-column" >
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                         
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: top; gap: 5px; width: 100%;">
@@ -2431,7 +2431,7 @@
                 <field name="owner_id" invisible="1"/>
                 <field name="picking_type_name" invisible="1"/>
                 <field name="adt_dest_location_id" invisible="1"/>
-                <div class="grid-container">
+                <div class="grid-container d-none d-md-flex flex-column">
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                         
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: top; gap: 5px; width: 100%;">
@@ -2691,7 +2691,7 @@
             <form string="Putaway">
                 <field name="picking_type_name" invisible="1"/>
                 <field name="allowed_putaway_product_ids" invisible="1"/>
-                <div class="grid-container">
+                <div class="grid-container d-none d-md-flex flex-column">
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
                             <label for="product_id" style="margin: 0 !important; white-space: nowrap !important;"/>
