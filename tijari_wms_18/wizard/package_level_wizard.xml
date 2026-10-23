@@ -7,7 +7,7 @@
 
             <form create="false" edit="false">
 
-                <group>
+                <group class="grid-container grid d-none d-md-flex flex-column" >
                     <field name="package_level_id" invisible='1' />
                     <field name="package_id"/>
                     <field name="package_cat"/>
