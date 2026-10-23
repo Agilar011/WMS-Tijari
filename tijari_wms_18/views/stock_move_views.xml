@@ -2226,7 +2226,7 @@
         <field name="model">stock.move</field>
         <field name="arch" type="xml">
             <form>
-                <div class="grid-container">
+                <div class="grid-container d-none d-md-flex flex-column">
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                         
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: top; gap: 5px; width: 100%;">
