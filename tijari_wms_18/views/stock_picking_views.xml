@@ -374,7 +374,7 @@
                             <field name="product_packaging_id" string="Packaging" optional="hide" groups="product.group_stock_packaging"
                                 context="{'default_product_id': product_id}"
                                 readonly="not product_id"/>
-                            <field name="product_uom_qty" string="Qty Total" optional="hide" readonly="not is_initial_demand_editable"/>
+                            <field name="product_uom_qty" string="Total Qty" optional="hide" readonly="not is_initial_demand_editable"/>
                             <field name="remaining_package_qty" string="Remaining Product" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders'] or parent.is_ito_internal_transfer"/>
                             <field name="remaining_package_qty" string="Qty Unpack" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders'] or not parent.is_ito_internal_transfer"/>
                             <field name="remaining_package_qty" string="Qty Unpack" readonly="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
@@ -1406,7 +1406,7 @@
                     readonly="has_tracking != 'serial'"
                     column_invisible="parent.state == 'draft'"
                     groups="stock.group_production_lot"
-                    invisible="not show_details_visible or has_tracking == 'none'"
+                    invisible="has_tracking == 'none'"
                     optional="show"
                     options="{'create': [('parent.use_create_lots', '=', True)]}"
                     context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"

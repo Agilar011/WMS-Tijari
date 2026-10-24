@@ -588,9 +588,9 @@
                     </group>
 
                     <group invisible="picking_type_name not in ('Receipts', 'Receipt Internal')">
-                        <label for="remaining_picker_quantity" string="Sisa Qty Pick"/>
+                        <label for="remaining_putaway_quantity" string="Sisa Qty"/>
                         <div class="o_row">
-                            <field name="remaining_picker_quantity" readonly="1" nolabel="1" class="fw-bold fs-6"/>
+                            <field name="remaining_putaway_quantity" readonly="1" nolabel="1" class="fw-bold fs-6"/>
                             <field name="product_uom_id" readonly="1" force_save="1" nolabel="1"
                                 options="{'no_create': True}" groups="uom.group_uom"/>
                         </div>

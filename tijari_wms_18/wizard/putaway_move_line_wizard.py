@@ -17,6 +17,12 @@ class PutawayMoveLineWizard(models.TransientModel):
         related='move_line_id.product_id',
         readonly=True,
     )
+    lot_id = fields.Many2one(
+        'stock.lot',
+        string='Lot/Serial Number',
+        related='move_line_id.lot_id',
+        readonly=True,
+    )
     picking_type_name = fields.Char(
         related='move_line_id.picking_type_name',
         readonly=True,
@@ -77,8 +83,9 @@ class PutawayMoveLineWizard(models.TransientModel):
         string='Confirmation Quantity',
     )
     remaining_putaway_quantity = fields.Float(
-        string='Sisa Qty Putaway',
-        compute='_compute_remaining_putaway_quantity',
+        string='Sisa Qty',
+        related='move_line_id.remaining_putaway_quantity',
+        readonly=True,
     )
     putaway_status = fields.Selection(
         related='move_line_id.putaway_status',
@@ -88,13 +95,6 @@ class PutawayMoveLineWizard(models.TransientModel):
         related='move_line_id.picking_id.state',
         readonly=True,
     )
-
-    @api.depends('quantity', 'confirmation_quantity')
-    def _compute_remaining_putaway_quantity(self):
-        for wizard in self:
-            wizard.remaining_putaway_quantity = (
-                wizard.quantity - wizard.confirmation_quantity
-            )
 
     @staticmethod
     def _reload_action():
