@@ -191,7 +191,7 @@
                             <field name="product_uom_category_id" column_invisible="True"/>
                             <field name="is_storable" column_invisible="True"/>
                             <field name="has_tracking" column_invisible="True"/>
-                            <field name="product_id" string="Product" readonly="1"/>
+                            <field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
                             <field name="picker_sequence" column_invisible="True"/>
                             <field name="description_picking" string="Description" optional="show"/>
                             <field name="lot_ids" widget="many2many_tags"
@@ -220,7 +220,7 @@
                             <field name="adt_dest_location_id" column_invisible="True"/>
                             <field name="quantity" string="Qty Diterima" readonly="1" column_invisible="parent.state=='draft'" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
                             <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show"/>
-                            <field name="difference_quantity" string="Difference Qty" readonly="1" optional="hide" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
+                            <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="hide" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
                             <field name="product_uom" readonly="1" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
                             <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
                             <field 
@@ -295,7 +295,7 @@
                             <field name="state" column_invisible="True"/>
                             <field name="is_locked" column_invisible="True"/>
                             <field name="scrapped" column_invisible="True"/>
-                            <field name="product_id" string="Product" readonly="1"/>
+                            <field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
                             <field name="picker_sequence" column_invisible="True"/>
                             <field name="description_picking" string="Description" optional="show"/>
                             <field name="lot_ids" widget="many2many_tags"
@@ -306,7 +306,7 @@
                             <field name="confirmation_quantity" string="Qty Disimpan" readonly="1"/>
                             <field name="product_uom" readonly="1" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
                             <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
-                            <field name="difference_quantity" string="Difference Qty" readonly="1" optional="hide" decoration-danger="difference_quantity > 0"/>
+                            <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="hide" decoration-danger="difference_quantity > 0"/>
                             <field 
                                 name="picker_progress_status" 
                                 string="Status"
@@ -449,14 +449,14 @@
                     </field>
                     <field name="putaway_move_ids" mode="kanban,list" readonly="1">
                         <list create="0" edit="0" delete="0" default_order="putaway_sequence asc, id">
-                            <field name="product_id" string="Product" readonly="1"/>
+                            <field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
                             <field name="putaway_sequence" column_invisible="True"/>
                             <field name="description_picking" string="Description" optional="show"/>
                             <field name="lot_ids" widget="many2many_tags"
                                         string="Lot/Serial Numbers"
                                         groups="stock.group_production_lot"/>
-                            <field name="product_uom_qty" string="Qty Total" readonly="1"/>
-                            <field name="confirmation_quantity" string="Qty Disimpan" readonly="1"/>
+                            <field name="quantity" string="Qty Diterima" readonly="1"/>
+                            <field name="confirmation_quantity" string="Qty Disimpan" readonly="1" optional="show"/>
                             <field name="difference_quantity" string="Perbedaan Qty" readonly="1" decoration-danger="difference_quantity &gt; 0"/>
                             <field name="product_uom" string="Unit" readonly="1" groups="uom.group_uom"/>
                             <field name="putaway_progress_status" string="Status"
@@ -560,7 +560,6 @@
                                 <strong>Qty Diterima: </strong>
                                 <field name="quantity"/>
                             </div>
-
                             <div invisible="picking_type_name not in ['Receipts']">
                                 <strong>Qty Diambil: </strong>
                                 <field name="confirmation_quantity"/>

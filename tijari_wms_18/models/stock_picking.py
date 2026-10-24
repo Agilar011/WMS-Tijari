@@ -1925,7 +1925,12 @@ class StockPicking(models.Model):
                 move_lines_to_pack=move_lines_to_pack
             )
 
-        if self.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'):
+        if (
+            self.picking_type_id.name in (
+                'Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'
+            )
+            and not self.is_ito_internal_transfer
+        ):
             self._check_putaway_status_requirements()
 
         move_line_ids = self._package_move_lines(
@@ -3499,6 +3504,19 @@ class StockPicking(models.Model):
                         print(f"After write = {line.matching}")
 
                         print(f"After write line {line.id} = {line.matching} for picking: {picking.id}")
+
+        for picking in self.filtered(
+            lambda item: (
+                not item.adt_is_document_only
+                and item.state not in ('done', 'cancel')
+                and item.picking_type_id.name == 'Receipts'
+            )
+        ):
+            move_lines_to_pack = picking._package_move_lines()
+            if move_lines_to_pack:
+                picking.action_put_in_pack(
+                    move_lines_to_pack=move_lines_to_pack
+                )
 
         if document_only_pickings:
             res = super(StockPicking, self.with_context(skip_sanity_check=True)).button_validate()

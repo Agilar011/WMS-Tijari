@@ -115,6 +115,11 @@ class StockMoveLine(models.Model):
         related='move_id.product_uom_qty',
         readonly=True,
     )
+    remaining_putaway_quantity = fields.Float(
+        string='Sisa Qty Putaway',
+        related='move_id.remaining_putaway_quantity',
+        readonly=True,
+    )
     confirmation_quantity = fields.Float(string='Confirmation Qty')
     so_confirmation_quantity = fields.Float(string='Qty Dikirim')
     mo_confirmation_quantity = fields.Float(string='Qty Digunakan')
