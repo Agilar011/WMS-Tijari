@@ -452,10 +452,19 @@ class StockMoveLine(models.Model):
         finished_putaway_lines = self.filtered(
             lambda line: line.putaway_status == 'finished'
         )
+        finished_pick_lines = self.filtered(
+            lambda line: line.pick_status == 'finished'
+        )
         if finished_putaway_lines:
             raise ValidationError(_(
                 "Data tidak bisa dihapus karena Putaway sudah Finished. "
                 "Rollback Putaway terlebih dahulu."
+            ))
+
+        if finished_pick_lines:
+            raise ValidationError(_(
+                "Data tidak bisa dihapus karena Pick sudah Finished. "
+                "Rollback Pick terlebih dahulu."
             ))
 
         pickings = self.mapped('picking_id')
@@ -1495,6 +1504,12 @@ class StockMoveLine(models.Model):
                     "Penerimaan barang tidak dapat dihapus karena proses penyimpanan telah selesai"
                 ))
 
+        elif "Pick"  in (self.picking_id.picking_type_id.name or ""):
+            if self.pick_status == 'finished':
+                raise ValidationError(_(
+                    "Pick barang tidak dapat dihapus karena proses telah selesai"
+                ))
+
         self.unlink()
 
         return {
@@ -1641,14 +1656,14 @@ class StockMoveLine(models.Model):
             precision_rounding=rounding,
         )
 
-        if float_is_zero(
-            confirmation_quantity,
-            precision_rounding=rounding,
-        ):
-            raise UserError(f"Qty Dikirim lot {self.lot_id.name} tidak boleh 0.")
+        # if float_is_zero(
+        #     confirmation_quantity,
+        #     precision_rounding=rounding,
+        # ):
+        #     raise UserError(f"Qty Dikirim lot {self.lot_id.name} tidak boleh 0.")
 
         if comparison > 0:
-            raise UserError("Qty Dikirim tidak boleh melebihi Qty Disimpan")
+            raise UserError("Qty Dikirim tidak boleh melebihi Qty Unpack")
 
         return comparison
                 

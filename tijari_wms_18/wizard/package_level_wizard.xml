@@ -24,9 +24,9 @@
                         <field 
                             name="product_id"
                             context="{'tijari_stock_picking_product_code_only': True}"/>
-                        <field name="description_picking" string="Description"/>
+                        <field name="description_picking" column_invisible="1" string="Description"/>
                         <field name="quantity"/>
-                        <field name="product_uom_id" string="UoM"/>
+                        <field name="product_uom_id" string="UoM" column_invisible="1"/>
                     </list>
                 </field>
 
