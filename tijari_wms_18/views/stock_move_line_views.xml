@@ -612,6 +612,20 @@
 
                             <field name="quantity"
                                 nolabel="1"
+                                readonly="1"
+                                force_save="1"
+                                class="fw-bold fs-6"
+                                invisible="'Pick' not in (picking_type_name or '') or state == 'done'"/>
+                            
+                            <field name="quantity_shadow"
+                                nolabel="1"
+                                readonly="1"
+                                force_save="1"
+                                class="fw-bold fs-6"
+                                invisible="'Pick' not in (picking_type_name or '') or state != 'done'"/>
+
+                            <field name="quantity"
+                                nolabel="1"
                                 force_save="1"
                                 class="fw-bold fs-6"
                                 readonly="picker_status == 'finished' or state in ('done', 'cancel')"
@@ -822,9 +836,7 @@
                         name="action_discard_details"
                         type="object"
                         string="Discard"
-                        class="btn-secondary"
-                        invisible="(picking_type_name == 'Receipts' and picker_status != 'finished')"
-                        />
+                        class="btn-secondary"/>
 
                     <!-- <button name="action_save_picker_details"
                         type="object"
@@ -852,6 +864,14 @@
                         type="object"
                         string="Delete"
                         invisible="picking_type_name != 'Receipts' or state in ['done', 'cancel']"/>
+                    
+                    <button name="action_delete_packer_line"
+                        confirm="Apakah Anda yakin ingin menghapus data ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Packer"
+                        type="object"
+                        string="Delete"
+                        class="btn-danger"
+                        invisible="picking_type_name != 'Pack' or state in ['done', 'cancel']"/>
+
                     <!-- <button special="cancel"
                         string="Discard"
                         class="btn-secondary"/> -->
