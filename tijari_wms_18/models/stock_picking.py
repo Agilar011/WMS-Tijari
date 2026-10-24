@@ -3437,11 +3437,6 @@ class StockPicking(models.Model):
             picking._set_document_only_done_quantities()
 
         for picking in self:
-            # update actual qty
-            if picking.picking_type_id.name not in ("Pack"):
-                picking.update({
-                    'adt_actual_qty': sum(picking.move_ids.mapped('quantity'))
-                })
             
             # if picking.adt_type == 'Toko Pegang DO':
             #     if not picking.owner_id:
@@ -3464,6 +3459,12 @@ class StockPicking(models.Model):
                 picking._check_validate_delivery_requirements()
                 picking._apply_confirmation_qty_to_quantity_delivery()
 
+             # update actual qty
+            if picking.picking_type_id.name not in ("Pack"):
+                picking.update({
+                    'adt_actual_qty': sum(picking.move_ids.mapped('quantity'))
+                })
+            
             # Storage validation only depends on putaway completion. It does
             # not use the receipt/picker status checks.
             if picking.picking_type_id.name in ('Storage', 'Store Finished Product'):

@@ -1511,6 +1511,15 @@ class StockMove(models.Model):
         return res
 
     def unlink(self):
+        finished_pick_lines = self.move_line_ids.filtered(
+            lambda line: line.pick_status == 'finished'
+        )
+        if finished_pick_lines:
+            raise ValidationError(_(
+                "Data tidak bisa dihapus karena Pick sudah Finished. "
+                "Rollback Pick terlebih dahulu."
+            ))
+
         pickings = self.mapped('picking_id')
         res = super().unlink()
         pickings._sync_adt_quantities_from_moves()
