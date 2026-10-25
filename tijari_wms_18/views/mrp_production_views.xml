@@ -12,6 +12,7 @@
             <xpath expr="//field[@name='name']" position="before">
                 <field name="origin" />
             </xpath>
+            
         </field>
     </record>
 
