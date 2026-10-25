@@ -28,7 +28,7 @@ class StockMoveLine(models.Model):
     )
 
     remaining_picker_quantity = fields.Float(
-        string="Sisa Qty Pick",
+        string="Sisa Qty",
         related="move_id.remaining_picker_quantity",
         readonly=True,
     )
@@ -116,7 +116,7 @@ class StockMoveLine(models.Model):
         readonly=True,
     )
     remaining_putaway_quantity = fields.Float(
-        string='Sisa Qty Putaway',
+        string='Sisa Qty',
         related='move_id.remaining_putaway_quantity',
         readonly=True,
     )

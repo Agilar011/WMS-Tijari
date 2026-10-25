@@ -174,6 +174,13 @@
             action="action_stock_operations_pack"
             groups="tijari_wms_18.group_operator,stock.group_stock_manager,base.group_system"/>
 
+  <menuitem id="stock_menu_operations_unbuild"
+            name="Unbuild Orders"
+            parent="stock.menu_stock_transfers"
+            sequence="25"
+            action="mrp.mrp_unbuild"
+            groups="tijari_wms_18.group_operator"/>
+
   <menuitem id="wms_operations_internal_transfer_order"
             name="Internal Transfer Orders"
             parent="stock.menu_stock_transfers"

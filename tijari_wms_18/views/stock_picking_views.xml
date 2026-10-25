@@ -374,7 +374,7 @@
                             <field name="product_packaging_id" string="Packaging" optional="hide" groups="product.group_stock_packaging"
                                 context="{'default_product_id': product_id}"
                                 readonly="not product_id"/>
-                            <field name="product_uom_qty" string="Total Qty" optional="hide" readonly="not is_initial_demand_editable"/>
+                            <field name="product_uom_qty" string="Total Qty" optional="hide" readonly="id"/>
                             <field name="remaining_package_qty" string="Remaining Product" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders'] or parent.is_ito_internal_transfer"/>
                             <field name="remaining_package_qty" string="Qty Unpack" readonly="1" column_invisible="parent.picking_type_name in ['Delivery Orders'] or not parent.is_ito_internal_transfer"/>
                             <field name="remaining_package_qty" string="Qty Unpack" readonly="1" column_invisible="parent.picking_type_name not in ['Delivery Orders']"/>
@@ -489,11 +489,9 @@
                             <field name="available_package_ids" invisible='1' />
                             <field name="package_scan_code"
                                 widget="adt_handheld_scan_code"
-                                placeholder="Scan handheld atau ketik kode package"
                                 invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
                             <field name="scanned_package_id"
                                 string="Package ID"
-                                placeholder="Scan a QR code or select a package..."
                                 domain="[('id', 'in', available_package_ids)]"
                                 options="{'no_create': True, 'no_open': True}"/>
                             <field name="filtered_package_level_id" invisible="1"/>
@@ -586,7 +584,7 @@
             </xpath>
 
             <xpath expr="//page[@name='operations']//field[@name='move_ids_without_package']//list/field[@name='product_uom_qty']" position="attributes">
-                <attribute name="readonly">not is_initial_demand_editable and not (parent.stock_lebih and parent.state == 'assigned' and parent.approval_state == 'rejected')</attribute>
+                <attribute name="readonly">id</attribute>
             </xpath>
 
             <xpath expr="//sheet/*[1]" position="before">
@@ -929,7 +927,7 @@
                                     context="{'default_product_id': product_id}"
                                     readonly="not product_id"
                                     column_invisible="True"/>
-                                <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
+                                <field name="product_uom_qty" string="Total Qty" readonly="id"/>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
                                     invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"
                                     column_invisible="1"/>
@@ -1088,7 +1086,7 @@
                                     context="{'default_product_id': product_id}"
                                     readonly="not product_id"
                                     column_invisible="True"/>
-                                <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
+                                <field name="product_uom_qty" string="Total Qty" readonly="id"/>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
                                     invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"
                                     column_invisible="1"/>
@@ -1100,8 +1098,7 @@
                                     column_invisible="parent.state in ('draft', 'done') or parent.picking_type_code != 'outgoing'" widget="forecast_widget"/>
                                 <field name="product_qty" readonly="1" column_invisible="True"/>
                                 <field name="quantity" string="Saran Qty" readonly="1" force_save="1" optional="hide" decoration-danger="product_uom_qty and quantity > product_uom_qty and parent.state not in ['done', 'cancel']"/>
-                                <field name="confirmation_quantity" string="Qty Diambil" force_save='1' />
-                                <field name="difference_quantity" string="Perbedaan Qty" readonly="1" optional="show" column_invisible="parent.state=='draft'" decoration-danger="difference_quantity > 0"/>
+                                <field name="difference_quantity" string="Perbedaan Qty" readonly="1" decoration-danger="difference_quantity > 0"/>
                                 <field name="product_uom" readonly="state != 'draft' and not additional" options="{'no_open': True, 'no_create': True}" string="Unit" groups="uom.group_uom"/>
                                 <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
                                 <field name="picked" optional="hide" column_invisible="parent.state=='draft'"/>
@@ -1256,7 +1253,7 @@
                                     context="{'default_product_id': product_id}"
                                     readonly="not product_id"
                                     column_invisible="True"/>
-                                <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
+                                <field name="product_uom_qty" string="Total Qty" readonly="id"/>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
                                     invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"/>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart text-danger"
@@ -1407,7 +1404,6 @@
                     column_invisible="parent.state == 'draft'"
                     groups="stock.group_production_lot"
                     invisible="has_tracking == 'none'"
-                    optional="show"
                     options="{'create': [('parent.use_create_lots', '=', True)]}"
                     context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
                     domain="[('product_id','=',product_id)]"

@@ -2025,7 +2025,9 @@ class StockPicking(models.Model):
         return package
 
     def _get_put_in_pack_package(self):
-        return self.env['stock.quant.package'].create({})
+        return self.env['stock.quant.package'].create({
+            'package_cat': 'palet',
+        })
 
     def _check_sync_state(self):
         for picking in self:
@@ -3712,11 +3714,7 @@ class StockPicking(models.Model):
                 ("picking_type_id.code", "=", "internal"),
             ], limit=1)
 
-            total_qty = (
-            sum(rec.move_ids.move_line_ids.mapped('confirmation_quantity')) 
-                if "Pick" in (rec.picking_type_name or "") 
-                else sum(rec.move_ids.move_line_ids.mapped('quantity'))
-            )
+            total_qty = sum(rec.move_ids.mapped('product_uom_qty'))
 
             rec.write({
                 'adt_total_qty': total_qty
