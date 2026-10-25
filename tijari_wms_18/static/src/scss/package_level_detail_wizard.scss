@@ -1,0 +1,10 @@
+@media (max-width: 767px) {
+    .package-level-detail-lines .o_list_renderer {
+        th[data-name="description_picking"],
+        td[name="description_picking"],
+        th[data-name="product_uom_id"],
+        td[name="product_uom_id"] {
+            display: none !important;
+        }
+    }
+}
