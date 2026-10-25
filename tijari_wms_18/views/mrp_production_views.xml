@@ -12,7 +12,6 @@
             <xpath expr="//field[@name='name']" position="before">
                 <field name="origin" />
             </xpath>
-            
         </field>
     </record>
 
@@ -184,7 +183,7 @@
                                 <t t-name="card">
                                     <div class="o_wms_operation_card">
                                         <div class="o_wms_operation_product d-flex justify-content-between align-items-center">
-                                            <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                            <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': False}"/>
                                             <field name="status_mo_check"
                                                     widget="badge"
                                                     decoration-success="status_mo_check == 'finished'"
@@ -193,13 +192,18 @@
                                         <br/>
                                         <div>
                                             <div>
-                                                <strong>To Consume: </strong>
+                                                <strong>Qty Target: </strong>
                                                 <field name="product_uom_qty"/>
                                                 <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
                                             </div>
                                             <div>
                                                 <strong>Qty Digunakan: </strong>
                                                 <field name="quantity"/>
+                                                <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                            </div>
+                                            <div>
+                                                <strong>Qty Perbedaan: </strong>
+                                                <field name="difference_quantity"/>
                                                 <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
                                             </div>
                                             <div invisible="1">
@@ -297,7 +301,7 @@
                         <t t-name="card">
                             <div class="o_wms_operation_card">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': True}"/>
+                                    <field name="product_id" class="fs-3" context="{'tijari_stock_picking_product_code_only': False}"/>
                                     <field name="status_mo_check"
                                         widget="badge"
                                         decoration-success="status_mo_check == 'finished'"
@@ -306,13 +310,18 @@
                                 <br/>
                                 <div>
                                     <div>
-                                        <strong>To Consume: </strong>
+                                        <strong>Qty Target: </strong>
                                         <field name="product_uom_qty"/>
                                         <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
                                     </div>
                                     <div>
                                         <strong>Qty Digunakan: </strong>
                                         <field name="quantity"/>
+                                        <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
+                                    </div>
+                                    <div>
+                                        <strong>Perbedaan Qty: </strong>
+                                        <field name="difference_quantity"/>
                                         <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
                                     </div>
                                     <div invisible="1">
