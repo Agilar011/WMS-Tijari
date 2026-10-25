@@ -701,6 +701,8 @@ class StockMove(models.Model):
 
     @api.depends(
         "quantity",
+        "quantity_shadow",
+        "product_uom_qty",
         "move_line_ids.quantity",
         "move_line_ids.package_id",
     )
@@ -711,8 +713,8 @@ class StockMove(models.Model):
                 for ml in move.move_line_ids
                 if ml.package_id
             )
-
-            move.remaining_package_qty = move.quantity - packaged_qty
+            # qty = move.quantity_shadow if move.quantity_shadow != 0.0 else move.quantity
+            move.remaining_package_qty = move.product_uom_qty - packaged_qty
             
     @api.depends('move_line_ids.lot_id', 'move_line_ids.quantity')
     def _compute_lot_ids(self):
