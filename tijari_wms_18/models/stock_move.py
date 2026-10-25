@@ -182,6 +182,16 @@ class StockMove(models.Model):
         store=True,
     )
 
+    picker_difference_quantity = fields.Float(
+        string='Picker Difference Qty',
+        compute='_compute_picker_difference_quantity',
+    )
+
+    putaway_difference_quantity = fields.Float(
+        string='Putaway Difference Qty',
+        compute='_compute_putaway_difference_quantity',
+    )
+
     remaining_pick_quantity = fields.Float(
         string='Sisa Pemenuhan Qty',
         compute='_compute_remaining_pick_quantity',
@@ -190,7 +200,7 @@ class StockMove(models.Model):
 
 
     remaining_picker_quantity = fields.Float(
-        string='Sisa Qty Pick',
+        string='Sisa Qty',
         compute='_compute_remaining_picker_quantity',
     )
 
@@ -200,7 +210,7 @@ class StockMove(models.Model):
     )
 
     remaining_putaway_quantity = fields.Float(
-        string='Sisa Qty Putaway',
+        string='Sisa Qty',
         compute='_compute_remaining_putaway_quantity',
     )
 
@@ -623,6 +633,18 @@ class StockMove(models.Model):
             move.difference_quantity = difference if difference > 0 else 0.0
 
     @api.depends('product_uom_qty', 'quantity')
+    def _compute_picker_difference_quantity(self):
+        for move in self:
+            difference = move.product_uom_qty - move.quantity
+            move.picker_difference_quantity = difference if difference > 0.0 else 0.0
+
+    @api.depends('quantity', 'confirmation_quantity')
+    def _compute_putaway_difference_quantity(self):
+        for move in self:
+            difference = move.quantity - move.confirmation_quantity
+            move.putaway_difference_quantity = difference if difference > 0 else 0.0
+
+    @api.depends('product_uom_qty', 'quantity')
     def _compute_remaining_picker_quantity(self):
         for move in self:
             move.remaining_picker_quantity = move.product_uom_qty - move.quantity
@@ -637,10 +659,10 @@ class StockMove(models.Model):
         for move in self:
             move.remaining_unpack_quantity = move.remaining_package_qty - move.so_confirmation_quantity
 
-    @api.depends('product_uom_qty', 'confirmation_quantity')
+    @api.depends('quantity', 'confirmation_quantity')
     def _compute_remaining_putaway_quantity(self):
         for move in self:
-            move.remaining_putaway_quantity = move.product_uom_qty - move.confirmation_quantity
+            move.remaining_putaway_quantity = move.quantity - move.confirmation_quantity
 
     @api.depends('product_uom_qty', 'mo_confirmation_quantity')
     def _compute_remaining_mo_quantity(self):

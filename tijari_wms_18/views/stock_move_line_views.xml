@@ -807,6 +807,7 @@
                 <field name="pick_status" invisible="1"/>
                 <field name="status_check" invisible="1"/>
                 <field name="is_manufacturing" invisible="1"/>
+                <field name="state" invisible="1"/>
             </xpath>
             <xpath expr="//form" position="inside">
                 <footer> 
@@ -835,6 +836,8 @@
                             (picking_type_name in ['Pick', 'Pick Components'] and pick_status != 'finished')
                             or
                             (picking_type_name == 'Delivery Orders' and status_check != 'finished')
+                            or
+                            state == 'done'
                             or
                             (picking_type_name == 'Pack')
                             or
