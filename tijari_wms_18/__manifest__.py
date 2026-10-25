@@ -1,7 +1,7 @@
 
 {
     'name': 'WMS from Tijari',
-    'version': '18.0.0.1.0',
+    'version': '18.0.0.2.0',
     'summary': 'WMS',
     'description': 'WMS',
     'category': 'Tools',
@@ -87,6 +87,7 @@
         ],
         'web.assets_backend': [
             'tijari_wms_18/static/src/scss/list_table_auto_layout.scss',
+            'tijari_wms_18/static/src/scss/package_level_detail_wizard.scss',
             'tijari_wms_18/static/src/js/list_table_auto_layout.js',
             'tijari_wms_18/static/src/lib/zxing-browser.min.js',
             'tijari_wms_18/static/src/js/focus_move_line_field.js',

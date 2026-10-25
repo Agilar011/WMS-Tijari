@@ -28,7 +28,7 @@ class StockMoveLine(models.Model):
     )
 
     remaining_picker_quantity = fields.Float(
-        string="Sisa Qty Pick",
+        string="Sisa Qty",
         related="move_id.remaining_picker_quantity",
         readonly=True,
     )
@@ -113,6 +113,11 @@ class StockMoveLine(models.Model):
     product_uom_qty = fields.Float(
         string='Demand',
         related='move_id.product_uom_qty',
+        readonly=True,
+    )
+    remaining_putaway_quantity = fields.Float(
+        string='Sisa Qty',
+        related='move_id.remaining_putaway_quantity',
         readonly=True,
     )
     confirmation_quantity = fields.Float(string='Confirmation Qty')
@@ -452,10 +457,19 @@ class StockMoveLine(models.Model):
         finished_putaway_lines = self.filtered(
             lambda line: line.putaway_status == 'finished'
         )
+        finished_pick_lines = self.filtered(
+            lambda line: line.pick_status == 'finished'
+        )
         if finished_putaway_lines:
             raise ValidationError(_(
                 "Data tidak bisa dihapus karena Putaway sudah Finished. "
                 "Rollback Putaway terlebih dahulu."
+            ))
+
+        if finished_pick_lines:
+            raise ValidationError(_(
+                "Data tidak bisa dihapus karena Pick sudah Finished. "
+                "Rollback Pick terlebih dahulu."
             ))
 
         pickings = self.mapped('picking_id')
@@ -1495,6 +1509,12 @@ class StockMoveLine(models.Model):
                     "Penerimaan barang tidak dapat dihapus karena proses penyimpanan telah selesai"
                 ))
 
+        elif "Pick"  in (self.picking_id.picking_type_id.name or ""):
+            if self.pick_status == 'finished':
+                raise ValidationError(_(
+                    "Pick barang tidak dapat dihapus karena proses telah selesai"
+                ))
+
         self.unlink()
 
         return {
@@ -1518,7 +1538,17 @@ class StockMoveLine(models.Model):
 
         self.unlink()
 
-        return move.action_open_move_operation()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Stock Move'),
+            'res_model': 'stock.move',
+            'res_id': move.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_detail_view'
+            ).id,
+            'target': 'new',
+        }
 
     def action_open_picker_details(self):
         self.ensure_one()
@@ -1648,7 +1678,7 @@ class StockMoveLine(models.Model):
             raise UserError(f"Qty Dikirim lot {self.lot_id.name} tidak boleh 0.")
 
         if comparison > 0:
-            raise UserError("Qty Dikirim tidak boleh melebihi Qty Disimpan")
+            raise UserError("Qty Dikirim tidak boleh melebihi Qty Unpack")
 
         return comparison
                 

@@ -8,24 +8,24 @@
             <form string="Putaway">
                 <group>
                     <field name="picking_type_name" invisible="1"/>
-                    <field
-                        name="handheld_location_code"
-                        placeholder="Scan handheld atau ketik kode lokasi"
-                        invisible="putaway_status == 'finished' or picking_type_name in ['Storage', 'Store Finished Product']"
-                        readonly="picking_state == 'done'"
-                    />
-                    <field name="handheld_scan_code"
-                        widget="adt_handheld_scan_code"
-                        string="Scan Handheld"
-                        placeholder="Scan lot atau lokasi"
-                        invisible="picking_type_name not in ['Storage', 'Store Finished Product'] or putaway_status == 'finished'"
-                        readonly="picking_state == 'done'"/>
                     <field name="move_line_id" invisible="1"/>
                     <field name="adt_dest_location_id" invisible="1"/>
                     <field name="allowed_matching_lot_ids" invisible="1"/>
                     <field name="putaway_status" invisible="1"/>
                     <field name="picking_state" invisible="1"/>
-                    <field name="product_id" context="{'tijari_stock_picking_product_code_only': True}"/>
+                    <field name="product_id"/>
+                    <field name="lot_id"/>
+                    <field
+                        name="handheld_location_code"
+                        string="Scan Handheld"
+                        invisible="picking_type_name in ['Storage', 'Store Finished Product']"
+                        readonly="picking_state == 'done'"
+                    />
+                    <field name="handheld_scan_code"
+                        widget="adt_handheld_scan_code"
+                        string="Scan Handheld"
+                        invisible="picking_type_name not in ['Storage', 'Store Finished Product']"
+                        readonly="picking_state == 'done'"/>
                     <field name="confirmation_lot_code"
                         invisible="1"/>
                     <field name="matching_lot_id"

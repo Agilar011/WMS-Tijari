@@ -7,7 +7,7 @@
 
             <form create="false" edit="false">
 
-                <group>
+                <group class="grid-container grid d-none d-md-grid grid-column" >
                     <field name="package_level_id" invisible='1' />
                     <field name="package_id"/>
                     <field name="package_cat"/>
@@ -19,7 +19,7 @@
                     />
                 </group>
 
-                <field name="move_line_ids">
+                <field name="move_line_ids" class="package-level-detail-lines">
                     <list create="false" delete="false" edit="false">
                         <field 
                             name="product_id"

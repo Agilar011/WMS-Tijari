@@ -208,6 +208,7 @@
                     <field name="matching" invisible="1"/>
                     <field name="is_manufacturing" invisible="1"/>
                     <field name="picking_type_name" invisible="1"/>
+                    <field name="status_check" invisible="1"/>
 
 
                     <!-- ===================================================== -->
@@ -310,6 +311,7 @@
                     <group invisible="is_manufacturing or (
                         'Pack' in (picking_type_name or '')
                         or 'Receipts' in (picking_type_name or '')
+                        or 'Delivery Orders' in (picking_type_name or '')
                     )">
 
                         <label for="location_id" string="Pick From"/>
@@ -342,7 +344,8 @@
                             widget="adt_handheld_scan_code"
                             placeholder="Scan handheld: lot, lokasi, atau package"
                             nolabel="1"
-                            class="fw-bold fs-6"/>
+                            class="fw-bold fs-6"
+                            readonly="pick_status == 'finished' or state in ('done', 'cancel')"/>
 
                     </group>
 
@@ -418,7 +421,8 @@
                             force_save="1"
                             nolabel="1"
                             domain="[('id', 'in', allowed_matching_lot_ids)]"
-                            class="fw-bold fs-6"/>
+                            class="fw-bold fs-6"
+                            readonly="pick_status == 'finished' or state in ('done', 'cancel')"/>
 
                     </group>
 
@@ -482,7 +486,7 @@
                     <!-- Manufacturing Pick From -->
                     <!-- ===================================================== -->
 
-                    <group invisible="not is_manufacturing">
+                    <!-- <group invisible="not is_manufacturing">
 
                         <label for="location_id" string="Pick From"/>
 
@@ -494,7 +498,7 @@
                             context="{'show_location_short_name': True}"
                             class="fw-bold fs-6"/>
 
-                    </group>
+                    </group> -->
 
 
                     <!-- ===================================================== -->
@@ -510,7 +514,8 @@
                             force_save="1"
                             nolabel="1"
                             domain="[('id', 'child_of', adt_dest_location_id)]"
-                            class="fw-bold fs-6"/>
+                            class="fw-bold fs-6"
+                            readonly="pick_status == 'finished' or state in ('done', 'cancel')"/>
 
                     </group>
 
@@ -568,7 +573,9 @@
 
                             <field name="so_confirmation_quantity"
                                 nolabel="1"
-                                class="fw-bold fs-6"/>
+                                class="fw-bold fs-6"
+                                readonly="state in ('done', 'cancel') or status_check =='finished'"
+                            />
 
                             <field name="product_uom_id"
                                 readonly="1"
@@ -581,9 +588,9 @@
                     </group>
 
                     <group invisible="picking_type_name not in ('Receipts', 'Receipt Internal')">
-                        <label for="remaining_picker_quantity" string="Sisa Qty Pick"/>
+                        <label for="remaining_putaway_quantity" string="Sisa Qty"/>
                         <div class="o_row">
-                            <field name="remaining_picker_quantity" readonly="1" nolabel="1" class="fw-bold fs-6"/>
+                            <field name="remaining_putaway_quantity" readonly="1" nolabel="1" class="fw-bold fs-6"/>
                             <field name="product_uom_id" readonly="1" force_save="1" nolabel="1"
                                 options="{'no_create': True}" groups="uom.group_uom"/>
                         </div>
@@ -661,7 +668,8 @@
 
                             <field name="confirmation_quantity"
                                 nolabel="1"
-                                class="fw-bold fs-6"/>
+                                class="fw-bold fs-6"
+                                readonly="pick_status == 'finished' or state in ('done', 'cancel')"/>
                             
                             <field name="product_uom_id"
                                 readonly="1"
@@ -708,10 +716,35 @@
                     <!-- MANUFACTURING -->
                     <!-- ===================================================== -->
 
-                    <group invisible="not is_manufacturing">
+                    <!-- <group invisible="not is_manufacturing">
 
                         <label for="product_uom_qty"
                             string="To Consume"/>
+
+                        <div class="o_row">
+
+                            <field name="product_uom_qty"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                class="fw-bold fs-6"/>
+
+                            <field name="product_uom_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                options="{'no_create': True}"
+                                groups="uom.group_uom"/>
+
+                        </div>
+
+                    </group> -->
+
+
+                    <group invisible="not is_manufacturing">
+
+                        <label for="product_uom_qty"
+                            string="Qty Target"/>
 
                         <div class="o_row">
 
@@ -736,36 +769,11 @@
                     <group invisible="not is_manufacturing">
 
                         <label for="quantity"
-                            string="Qty Target"/>
-
-                        <div class="o_row">
-
-                            <field name="quantity"
-                                readonly="1"
-                                force_save="1"
-                                nolabel="1"
-                                class="fw-bold fs-6"/>
-
-                            <field name="product_uom_id"
-                                readonly="1"
-                                force_save="1"
-                                nolabel="1"
-                                options="{'no_create': True}"
-                                groups="uom.group_uom"/>
-
-                        </div>
-
-                    </group>
-
-
-                    <group invisible="not is_manufacturing">
-
-                        <label for="mo_confirmation_quantity"
                             string="Qty Digunakan"/>
 
                         <div class="o_row">
 
-                            <field name="mo_confirmation_quantity"
+                            <field name="quantity"
                                 nolabel="1"
                                 class="fw-bold fs-6"/>
 
@@ -799,6 +807,7 @@
                 <field name="pick_status" invisible="1"/>
                 <field name="status_check" invisible="1"/>
                 <field name="is_manufacturing" invisible="1"/>
+                <field name="state" invisible="1"/>
             </xpath>
             <xpath expr="//form" position="inside">
                 <footer> 
@@ -827,6 +836,8 @@
                             (picking_type_name in ['Pick', 'Pick Components'] and pick_status != 'finished')
                             or
                             (picking_type_name == 'Delivery Orders' and status_check != 'finished')
+                            or
+                            state == 'done'
                             or
                             (picking_type_name == 'Pack')
                             or
@@ -859,6 +870,13 @@
                         class="btn-danger"
                         invisible="picking_type_name == 'Receipts' or mo_status == 'unfinished' or (picker_status == 'unfinished' and not is_manufacturing)"/> -->
                     
+                    <button name="action_delete_picker_line"
+                        confirm="Apakah Anda yakin ingin menghapus data pick ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Picker"
+                        type="object"
+                        string="Delete"
+                        groups="!tijari_wms_18.group_operator"
+                        invisible="'Pick' not in (picking_type_name or '') or pick_status == 'finished' or state in ['done', 'cancel']"/>
+
                     <button name="action_delete_picker_line"
                         confirm="Apakah Anda yakin ingin menghapus data penerimaan ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Putaway"
                         type="object"

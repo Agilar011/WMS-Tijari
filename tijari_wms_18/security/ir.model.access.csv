@@ -24,6 +24,8 @@ access_stock_report_aging_generate_it_staff,access.stock.report.aging.generate.i
 access_stock_report_aging_line_accounting_stock,access.stock.report.aging.line.accounting.stock,model_stock_report_aging_line,tijari_wms_18.group_accounting_stock,1,0,0,0
 access_stock_report_aging_generate_accounting_stock,access.stock.report.aging.generate.accounting.stock,model_stock_report_aging_generate,tijari_wms_18.group_accounting_stock,1,1,1,1
 access_stock_picking_operator,stock.picking.operator,model_stock_picking,tijari_wms_18.group_operator,1,1,0,0
+access_mrp_unbuild_operator,mrp.unbuild.operator,mrp.model_mrp_unbuild,tijari_wms_18.group_operator,1,1,1,1
+access_mrp_workorder_operator,mrp.workorder.operator,mrp.model_mrp_workorder,tijari_wms_18.group_operator,1,0,0,0
 
 access_stock_picking_create_warehouse_manager,stock.picking.create.warehouse.manager,model_stock_picking,tijari_wms_18.group_warehouse_manager,1,0,1,0
 access_stock_picking_create_warehouse_head,stock.picking.create.warehouse.head,model_stock_picking,tijari_wms_18.group_warehouse_head,1,0,1,0
@@ -84,7 +86,7 @@ access_stock_quant_warehouse_head,stock.quant.warehouse.head,stock.model_stock_q
 access_stock_quant_warehouse_admin,stock.quant.warehouse.admin,stock.model_stock_quant,tijari_wms_18.group_warehouse_admin,1,1,1,1
 access_stock_quant_it_staff,stock.quant.it.staff,stock.model_stock_quant,tijari_wms_18.group_it_staff,1,1,1,1
 
-access_stock_quant_package_operator,stock.quant.package.operator,stock.model_stock_quant_package,tijari_wms_18.group_operator,1,1,0,0
+access_stock_quant_package_operator,stock.quant.package.operator,stock.model_stock_quant_package,tijari_wms_18.group_operator,1,1,1,0
 access_stock_quant_package_warehouse_manager,stock.quant.package.warehouse.manager,stock.model_stock_quant_package,tijari_wms_18.group_warehouse_manager,1,1,1,1
 access_stock_quant_package_warehouse_head,stock.quant.package.warehouse.head,stock.model_stock_quant_package,tijari_wms_18.group_warehouse_head,1,1,1,1
 access_stock_quant_package_warehouse_admin,stock.quant.package.warehouse.admin,stock.model_stock_quant_package,tijari_wms_18.group_warehouse_admin,1,1,1,1
