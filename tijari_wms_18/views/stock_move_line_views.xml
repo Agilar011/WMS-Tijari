@@ -486,7 +486,7 @@
                     <!-- Manufacturing Pick From -->
                     <!-- ===================================================== -->
 
-                    <group invisible="not is_manufacturing">
+                    <!-- <group invisible="not is_manufacturing">
 
                         <label for="location_id" string="Pick From"/>
 
@@ -498,7 +498,7 @@
                             context="{'show_location_short_name': True}"
                             class="fw-bold fs-6"/>
 
-                    </group>
+                    </group> -->
 
 
                     <!-- ===================================================== -->
@@ -716,10 +716,35 @@
                     <!-- MANUFACTURING -->
                     <!-- ===================================================== -->
 
-                    <group invisible="not is_manufacturing">
+                    <!-- <group invisible="not is_manufacturing">
 
                         <label for="product_uom_qty"
                             string="To Consume"/>
+
+                        <div class="o_row">
+
+                            <field name="product_uom_qty"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                class="fw-bold fs-6"/>
+
+                            <field name="product_uom_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                options="{'no_create': True}"
+                                groups="uom.group_uom"/>
+
+                        </div>
+
+                    </group> -->
+
+
+                    <group invisible="not is_manufacturing">
+
+                        <label for="product_uom_qty"
+                            string="Qty Target"/>
 
                         <div class="o_row">
 
@@ -744,36 +769,11 @@
                     <group invisible="not is_manufacturing">
 
                         <label for="quantity"
-                            string="Qty Target"/>
-
-                        <div class="o_row">
-
-                            <field name="quantity"
-                                readonly="1"
-                                force_save="1"
-                                nolabel="1"
-                                class="fw-bold fs-6"/>
-
-                            <field name="product_uom_id"
-                                readonly="1"
-                                force_save="1"
-                                nolabel="1"
-                                options="{'no_create': True}"
-                                groups="uom.group_uom"/>
-
-                        </div>
-
-                    </group>
-
-
-                    <group invisible="not is_manufacturing">
-
-                        <label for="mo_confirmation_quantity"
                             string="Qty Digunakan"/>
 
                         <div class="o_row">
 
-                            <field name="mo_confirmation_quantity"
+                            <field name="quantity"
                                 nolabel="1"
                                 class="fw-bold fs-6"/>
 
