@@ -528,18 +528,6 @@
         </field>
     </record>
 
-    <record id="view_stock_picking_operator_picker_difference_order" model="ir.ui.view">
-        <field name="name">stock.picking.operator.picker.difference.order</field>
-        <field name="model">stock.picking</field>
-        <field name="inherit_id" ref="tijari_wms_18.view_stock_move_line_putaways"/>
-        <field name="priority" eval="100"/>
-        <field name="arch" type="xml">
-            <xpath expr="//field[@name='picker_move_ids'][@groups='tijari_wms_18.group_operator']/list/field[@name='product_uom'][@groups='uom.group_uom']" position="before">
-                <field name="picker_difference_quantity" position="move"/>
-            </xpath>
-        </field>
-    </record>
-
     <record id="view_move_kanban_inherit_confirmation_qty" model="ir.ui.view">
         <field name="name">stock.move.line.kanban.confirmation.qty</field>
         <field name="model">stock.move.line</field>

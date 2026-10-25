@@ -513,7 +513,9 @@
                         <field name="location_id"/>
                         <field name="lot_id"/>
                         <field name="available_lot_ids"/>
+                        <field name="product_uom_qty"/>
                         <field name="quantity"/>
+                        <field name="remaining_picker_quantity"/>
                         <field name="confirmation_quantity"/>
                         <field name="product_uom_id"/>
                         <field name="picking_type_name"/>
@@ -524,22 +526,27 @@
                         <templates>
                             <t t-name="card">
                                 <div class="o_wms_operation_card">
-                                    <div class="o_wms_operation_product">
+                                    <div class="o_wms_operation_product d-flex justify-content-between align-items-center">
                                         <field name="product_id" class="fs-3"/>
-                                    </div>
-                                    <div class="text-muted" invisible="not lot_id">
-                                        <strong>Lot/Serial Number: </strong>
-                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
+                                        <field name="picker_status"
+                                            decoration-success="picker_status == 'finished'"
+                                            decoration-danger="picker_status == 'unfinished'"
+                                            widget="badge"/>
                                     </div>
                                     <div class="o_wms_move_pick_quantities">
                                         <div>
-                                            <strong>Qty In Pack: </strong>
-                                            <field name="quantity"/>
+                                            <strong>Total Qty: </strong>
+                                            <field name="product_uom_qty"/>
                                             <field name="product_uom_id" class="ms-1"/>
                                         </div>
-                                        <div invisible="'Pick' not in (picking_type_name or '')">
-                                            <strong>Qty Diambil: </strong>
-                                            <field name="confirmation_quantity"/>
+                                        <div>
+                                            <strong>Sisa Qty: </strong>
+                                            <field name="remaining_picker_quantity"/>
+                                            <field name="product_uom_id" class="ms-1"/>
+                                        </div>
+                                        <div>
+                                            <strong>Qty Diterima: </strong>
+                                            <field name="quantity"/>
                                             <field name="product_uom_id" class="ms-1"/>
                                         </div>
                                     </div>
@@ -568,10 +575,6 @@
                                             icon="fa-trash" title="Hapus Line"
                                             invisible="state in ['done', 'cancel'] or putaway_status != 'finished' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']">
                                         </button>
-                                        <field name="picker_status"
-                                            decoration-success="picker_status == 'finished'"
-                                            decoration-danger="picker_status == 'unfinished'"
-                                            widget="badge"/>
                                     </div>
 
                                     <!-- <div class="o_wms_operation_actions">
@@ -635,39 +638,50 @@
                         <field name="company_id" invisible="1" force_save="1"/>
                         <field name="picking_id" invisible="1" force_save="1"/>
                         <field name="move_id" invisible="1" force_save="1"/>
+                        <field name="product_id"/>
+                        <field name="product_uom_qty"/>
+                        <field name="remaining_picker_quantity"/>
+                        <field name="quantity"/>
+                        <field name="product_uom_id"/>
+                        <field name="picker_status"/>
                         <field name="product_uom_category_id" invisible="1"/>
                         <field name="tracking" invisible="1"/>
                         <field name="state" invisible="1"/>
                         <field name="is_locked" invisible="1"/>
                         <templates>
                             <t t-name="card">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <strong>Qty In Pack</strong>
+                                <div class="o_wms_operation_card">
+                                    <div class="o_wms_operation_product d-flex justify-content-between align-items-center">
+                                        <field name="product_id" class="fs-3"/>
                                     <field name="picker_status"
                                         widget="badge"
                                         decoration-success="picker_status == 'finished'"
                                         decoration-danger="picker_status == 'unfinished'"/>
-                                </div>
-                                <div class="d-flex align-items-center gap-1">
-                                    <field name="quantity" readonly="picker_status == 'finished'" class="fs-5"/>
-                                    <field name="product_uom_id" readonly="1"/>
-                                </div>
-                                <div class="d-flex gap-2 mt-2">
-                                    <button name="action_open_picker_details"
-                                        type="object"
-                                        string="Pick Details"
-                                        class="btn-primary"
-                                        invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
-                                    <button name="action_mark_picker_finished"
-                                        type="object"
-                                        string="Finish Picker"
-                                        class="btn-success flex-fill o_wms_auto_save_before_action"
-                                        invisible="picker_status == 'finished'"/>
+                                    </div>
+                                    <div class="o_wms_move_pick_quantities">
+                                        <div>
+                                            <strong>Total Qty: </strong>
+                                            <field name="product_uom_qty"/>
+                                            <field name="product_uom_id" class="ms-1"/>
+                                        </div>
+                                        <div>
+                                            <strong>Sisa Qty: </strong>
+                                            <field name="remaining_picker_quantity"/>
+                                            <field name="product_uom_id" class="ms-1"/>
+                                        </div>
+                                        <div>
+                                            <strong>Qty Diterima: </strong>
+                                            <field name="quantity"/>
+                                            <field name="product_uom_id" class="ms-1"/>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2 mt-2">
                                     <button name="action_mark_picker_unfinished"
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger flex-fill"
                                         invisible="picker_status == 'unfinished' or parent.state == 'done'"/>
+                                    </div>
                                 </div>
                             </t>
                         </templates>
