@@ -487,12 +487,17 @@
                                 nolabel="1"
                                 invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
                             <field name="available_package_ids" invisible='1' />
+                            <label for="package_scan_code" class="fw-bold text-dark" style="color: black !important; font-weight: bold !important;"/>
                             <field name="package_scan_code"
                                 widget="adt_handheld_scan_code"
+                                nolabel="1"
                                 placeholder="Scan handheld atau ketik kode package"
                                 invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
+
+                            <label for="scanned_package_id" class="fw-bold text-dark" style="color: black !important; font-weight: bold !important;"/>
                             <field name="scanned_package_id"
                                 string="Package ID"
+                                nolabel="1"
                                 placeholder="Scan a QR code or select a package..."
                                 domain="[('id', 'in', available_package_ids)]"
                                 options="{'no_create': True, 'no_open': True}"/>
