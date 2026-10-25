@@ -1538,7 +1538,17 @@ class StockMoveLine(models.Model):
 
         self.unlink()
 
-        return move.action_open_move_operation()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Stock Move'),
+            'res_model': 'stock.move',
+            'res_id': move.id,
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'tijari_wms_18.stock_move_pick_detail_view'
+            ).id,
+            'target': 'new',
+        }
 
     def action_open_picker_details(self):
         self.ensure_one()
@@ -1661,11 +1671,11 @@ class StockMoveLine(models.Model):
             precision_rounding=rounding,
         )
 
-        # if float_is_zero(
-        #     confirmation_quantity,
-        #     precision_rounding=rounding,
-        # ):
-        #     raise UserError(f"Qty Dikirim lot {self.lot_id.name} tidak boleh 0.")
+        if float_is_zero(
+            confirmation_quantity,
+            precision_rounding=rounding,
+        ):
+            raise UserError(f"Qty Dikirim lot {self.lot_id.name} tidak boleh 0.")
 
         if comparison > 0:
             raise UserError("Qty Dikirim tidak boleh melebihi Qty Unpack")
