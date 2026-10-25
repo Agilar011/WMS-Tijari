@@ -490,13 +490,13 @@
                                         </div>
                                         <div class="o_wms_move_pick_quantities">
                                             <div>
-                                                <strong>Qty Total: </strong>
-                                                <field name="product_uom_qty"/>
+                                                <strong>Qty Diterima: </strong>
+                                                <field name="quantity"/>
                                                 <field name="product_uom" class="ms-1"/>
                                             </div>
                                             <div>
-                                                <strong>Qty Diterima: </strong>
-                                                <field name="quantity"/>
+                                                <strong>Qty Disimpan: </strong>
+                                                <field name="confirmation_quantity"/>
                                                 <field name="product_uom" class="ms-1"/>
                                             </div>
                                             <div>
@@ -514,7 +514,7 @@
 											<button name="action_open_move_putaway"
                                                 type="object"
                                                 class="btn btn-primary btn-sm"
-                                                string="Open Putaway"/>
+                                                string="Putaway Details"/>
                                 
                                         </div>
                                     </div>

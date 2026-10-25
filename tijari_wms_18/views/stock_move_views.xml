@@ -295,14 +295,18 @@
                                 decoration-success="picker_status == 'finished'"
                                 decoration-danger="picker_status == 'unfinished'"
                                 widget="badge"
-                                column_invisible="'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
+                                column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
+                        <field name="pick_status" string="Status"
+                                decoration-success="pick_status == 'finished'"
+                                decoration-danger="pick_status == 'unfinished'"
+                                widget="badge"
+                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
                         <field name="putaway_status" column_invisible="1" force_save="1"/>
                         <field name="matching" string="Status"
                                 decoration-success="matching == 'match'"
                                 decoration-danger="matching == 'not_match'"
                                 widget="badge"
-                                column_invisible="'Pick' not in (parent.picking_type_name or '')"/>
-                        <field name="putaway_status" column_invisible="1" force_save="1"/>
+                                column_invisible="1"/>
                         <button name="action_mark_picker_finished"
                                 type="object"
                                 icon="fa-check"
@@ -709,14 +713,14 @@
                                 column_invisible="1"/>
                         <field name="location_id" string="Pick From" widget="location_short_many2one" force_save="1" context="{'show_location_short_name': True}"/>
                         <field name="lot_id" string="Lot / Serial Number" readonly="pick_status == 'finished' or parent.state in ('done', 'cancel')" force_save="1" domain="[('id', 'in', available_lot_ids)]"/>
-                        <field name="quantity" string="Available Qty" readonly="1" force_save="1"/>
-                       <field 
+                        <field 
                             name="location_dest_id" 
                             string="Store To" 
                             widget="location_short_many2one" 
                             readonly="pick_status == 'finished' or parent.state in ('done', 'cancel')"
                             force_save="1"
-                            context="{'show_location_short_name': True}"/>    
+                            context="{'show_location_short_name': True}"/>
+                        <field name="quantity" string="Available Qty" readonly="1" force_save="1"/>
                         <field name="confirmation_quantity" string="Qty Diambil" readonly="pick_status == 'finished' or parent.state in ('done', 'cancel')"/>
                         <field name="product_uom_id" string="UoM" readonly="pick_status == 'finished' or parent.state in ('done', 'cancel')"/>
                         <field name="pick_status" string="Status"
@@ -802,15 +806,18 @@
                         <field name="is_locked" column_invisible="1"/>
                         <field name="available_lot_ids" column_invisible="1" />
 
-                        <field name="handheld_scan_code"
-                                widget="adt_handheld_scan_code"
-                                string="Scan Handheld"
-                                placeholder="Scan handheld: package"/>
-                        <field name="lot_id" string="Lot/Serial Number" domain="[('id', 'in', available_lot_ids)]" force_save="1"/>
-                        <field name="location_dest_id" string="Store To" optional="hide"/>
-                        <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" string="Destination Package" force_save="1"/>
-                        <field name="quantity" string="Quantity"/>
-                        <field name="product_uom_id" string="UoM"/>
+                        <field name="location_id" 
+                                string="Pick From" 
+                                widget="location_short_many2one" 
+                                column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '') and 'Delivery Orders' not in (parent.picking_type_name or '')" 
+                                readonly="parent.state in ('done', 'cancel')"
+                                force_save="1" 
+                                context="{'show_location_short_name': True}"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="parent.state in ('done', 'cancel')" domain="[('id', 'in', available_lot_ids)]" force_save="1"/>
+                        <field name="location_dest_id" string="Store To" readonly="parent.state in ('done', 'cancel')"/>
+                        <field name="result_package_id" readonly="parent.state in ('done', 'cancel')" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" string="Destination Package" force_save="1"/>
+                        <field name="quantity" string="Quantity" readonly="parent.state in ('done', 'cancel')"/>
+                        <field name="product_uom_id" string="UoM" readonly="parent.state in ('done', 'cancel')"/>
                     </list>
                     <kanban class="o_kanban_mobile">
                         <field name="company_id" invisible="1" force_save="1"/>
@@ -1153,7 +1160,7 @@
                         <field name="location_id" 
                                 string="Pick From" 
                                 widget="location_short_many2one" 
-                                column_invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')" 
+                                column_invisible="'Pick' not in (parent.picking_type_name or '')" 
                                 readonly="pick_status == 'finished' or parent.state in ('done', 'cancel')"
                                 force_save="1" 
                                 context="{'show_location_short_name': True}"/>
@@ -1284,6 +1291,12 @@
                                 icon="fa-trash" title="Hapus Line"
                                 confirm="Apakah Anda yakin ingin menghapus data penerimaan ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Picker"
                                 invisible="state in ['done', 'cancel'] or pick_status == 'finished' or parent.picking_type_name not in ['Pick', 'Pick Components']"/>
+                        <button name="action_delete_packer_line"
+                                type="object"
+                                class="btn btn-link btn-lg p-0"
+                                icon="fa-trash" title="Hapus Line"
+                                confirm="Apakah Anda yakin ingin menghapus data pack ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Packer"
+                                invisible="state in ['done', 'cancel'] or parent.picking_type_name not in ['Pack']"/>
                     </list>
                     <kanban class="o_kanban_mobile o_wms_move_pick_kanban" delete="0" default_order="picker_status desc, id">
                         <field name="company_id" invisible="1" force_save="1"/>
@@ -1845,7 +1858,7 @@
                     mode="list,kanban"
                     groups="tijari_wms_18.group_operator"
                     invisible="'Pack' not in (picking_type_name or '')">
-                    <list editable="bottom" delete="0">
+                    <list editable="bottom" create="1" delete="1">
                         <field name="company_id" column_invisible="1" force_save="1"/>
                         <field name="picking_id" column_invisible="1" force_save="1"/>
                         <field name="move_id" column_invisible="1" force_save="1"/>
@@ -1855,16 +1868,17 @@
                         <field name="is_locked" column_invisible="1"/>
                         <field name="available_lot_ids" column_invisible="1"/>
 
-                        <field name="lot_id" string="Lot/Serial Number" domain="[('id', 'in', available_lot_ids)]" force_save="1"/>
-                        <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" string="Destination Package" force_save="1"/>
-                        <field name="confirmation_package_code"
-                                widget="adt_scan_result_package_button"
-                                string="Scan Package"
-                                readonly="1"/>
-                        <field name="quantity" string="Quantity"/>
-                        <field name="product_uom_id" string="Unit of Measure"/>
+                        <field name="handheld_scan_code"
+                                widget="adt_handheld_scan_code"
+                                string="Scan Handheld"
+                                placeholder="Scan handheld: lot, lokasi, atau package"
+                                readonly="parent.state in ('done', 'cancel')"/>
+                        <field name="lot_id" readonly="parent.state in ('done', 'cancel')" string="Lot/Serial Number" domain="[('id', 'in', available_lot_ids)]" force_save="1"/>
+                        <field name="result_package_id" readonly="parent.state in ('done', 'cancel')" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" string="Destination Package" force_save="1"/>
+                        <field name="quantity" string="Quantity" readonly="parent.state in ('done', 'cancel')"/>
+                        <field name="product_uom_id" string="Unit of Measure" readonly="parent.state in ('done', 'cancel')"/>
                     </list>
-                    <kanban class="o_kanban_mobile">
+                    <kanban class="o_kanban_mobile" >
                         <field name="company_id" invisible="1" force_save="1"/>
                         <field name="picking_id" invisible="1" force_save="1"/>
                         <field name="move_id" invisible="1" force_save="1"/>
@@ -2385,7 +2399,7 @@
                         <field name="available_location_ids" column_invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1" column_invisible="1" />
-                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="status_check == 'finished' or state in ('done', 'cancel')" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
                         <field name="lot_name" readonly="1" force_save="1" column_invisible="1"/>
                         <field 
                             name="location_dest_id" 
@@ -2759,7 +2773,7 @@
                                     <div invisible="parent.picking_type_name in ('Storage','Store Finished Product')">
                                         <div class="o_wms_move_pick_quantities">
                                             <div>
-                                                <strong>Qty Total: </strong>
+                                                <strong>Qty Diterima: </strong>
                                                 <field name="product_uom_qty"/>
                                                 <field name="product_uom_id" class="ms-1"/>
                                             </div>

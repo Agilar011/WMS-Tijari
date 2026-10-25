@@ -236,6 +236,7 @@
             <xpath expr="//field[@name='date_done']" position="after">
                 <field name="shipment_information"
                     invisible="(picking_type_name not in ('Delivery Orders') or adt_type not in ('Sales Order Shipment', 'SO Consignment')) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ('Shipment Consignment', 'Transfer Shipment'))"
+                    readonly="state in ('done','cance')"
                     decoration-success="shipment_information == 'full_shipment'"
                     decoration-warning="shipment_information == 'partial'"
                     decoration-danger="shipment_information == 'canceled'"/>
@@ -487,9 +488,12 @@
                                 nolabel="1"
                                 invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
                             <field name="available_package_ids" invisible='1' />
+                            <label for="package_scan_code" class="fw-bold text-dark" style="color: black !important; font-weight: bold !important;"/>
                             <field name="package_scan_code"
                                 widget="adt_handheld_scan_code"
                                 invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
+
+                            <label for="scanned_package_id" class="fw-bold text-dark" style="color: black !important; font-weight: bold !important;"/>
                             <field name="scanned_package_id"
                                 string="Package ID"
                                 domain="[('id', 'in', available_package_ids)]"
@@ -596,7 +600,7 @@
 
             <xpath expr="//field[@name='picking_type_id']"
                 position="after">
-                <field name="adt_type" string="Tipe Transaksi" />
+                <field name="adt_type" string="Tipe Transaksi" readonly="1" force_save="1" />
 
             </xpath>
 
@@ -653,8 +657,8 @@
             <xpath expr="//field[@name='origin']" position="after">
                 <!-- <field name="adt_type" readonly="1"/> -->
                 <field name="adt_is_document_only" invisible="1"/>
-                <field name="adt_total_qty" string="Total Qty"/>
-                <field name="adt_actual_qty" string="Qty Dipenuhi"/>
+                <field name="adt_total_qty" string="Total Qty" readonly="state in ('done', 'cancel')"/>
+                <field name="adt_actual_qty" string="Qty Dipenuhi" readonly="state in ('done', 'cancel')"/>
                 <field name="adt_change_item_ref_nbr"
                        string="Change Item Ref. Nbr"
                        invisible="adt_type != 'Change Item'"
@@ -667,7 +671,7 @@
                        string="Order Nbr"
                        invisible="adt_type != 'SO Return'"
                        readonly="1"/>
-                <field name="status_ba"/>
+                <field name="status_ba" readonly="state in ('done', 'cancel')"/>
                 <separator string="Dokumen Over Receipt" colspan="2"
                     invisible="not stock_lebih or (wms_state != 'waiting_response' and state != 'done')"/>
                 <field name="over_receipt_transaction_type"
@@ -1237,9 +1241,9 @@
                                     options="{'create': [('parent.use_create_lots', '=', True)]}"
                                     context="{'default_company_id': company_id, 'default_product_id': product_id, 'active_picking_id': parent.id}"
                                     domain="[('product_id','=',product_id)]"
-                                    string="LOT Number"
+                                    string="Lot / Serial Number"
                                 />
-                                <field name="result_package_ids" widget="many2many_tags"/>
+                                <field name="result_package_ids" string="Destination Packages" widget="many2many_tags"/>
                                 <field name="date" optional="hide"/>
                                 <field name="date_deadline" optional="hide"/>
                                 <field name="is_quantity_done_editable" column_invisible="True"/>
@@ -1277,8 +1281,9 @@
                                     type="object"
                                     icon="fa-sticky-note"
                                     title="Note"
+                                    column_invisible="1"
                                 />
-                                <button name="action_open_move_operation"
+                                <button name="action_open_move_pick"
                                     type="object"
                                     title="Pack Details"
                                     string="Pack Details"
@@ -1334,7 +1339,18 @@
                         </field>
                     </page>
                 </xpath>
-
+                <xpath expr="//page[@name='operations']//field[@name='package_level_ids']" position="replace">
+                    <field name="package_level_ids"
+                        context="{'default_location_id': location_id, 'default_location_dest_id': location_dest_id, 'default_company_id': company_id}" 
+                        invisible="not picking_type_entire_packs" 
+                        readonly="state == 'done'"
+                    >
+                        <list>
+                            <field name="package_id" />   
+                            <button name="action_show_package_details" icon="fa-list" title="Pack Details" type="object" />
+                        </list>
+                    </field>
+                </xpath>
         </field>
     </record>
 

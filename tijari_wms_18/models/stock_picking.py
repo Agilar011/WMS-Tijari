@@ -109,7 +109,7 @@ class StockPicking(models.Model):
                 'extra_info', 'additional_info', 'page_notes',
             }
             writable_page_labels = {
-                'Unpacked Item Details', 'Packed Items', 'Additional Info',
+                'Unpacked Item Details', 'Packed Item', 'Additional Info',
                 'Additional Information', 'Notes',
             }
             for field_node in arch.xpath('.//field'):
@@ -3467,10 +3467,14 @@ class StockPicking(models.Model):
                 picking._apply_confirmation_qty_to_quantity_delivery()
 
              # update actual qty
-            if picking.picking_type_id.name not in ("Pack"):
-                picking.update({
-                    'adt_actual_qty': sum(picking.move_ids.mapped('quantity'))
-                })
+            picking.update({
+                'adt_actual_qty': sum(picking.move_ids.mapped('quantity'))
+            })
+
+            if picking.picking_type_id.name in ("Pick", "Pick Components", "Pack", "Delivery Orders"):
+                picking._assign_status_ba()
+                
+                    
             
             # Storage validation only depends on putaway completion. It does
             # not use the receipt/picker status checks.
@@ -3675,13 +3679,9 @@ class StockPicking(models.Model):
                             "unpack_quantity": dest_move.quantity - packaged_qty
                         })
 
-            # if rec.picking_type_name in ("Delivery Orders"):
-            #     for move in rec.move_ids:
-            #         for line in move.filtered_unpack_line_ids:
-            #             confirmation_qty = line.so_confirmation_quantity
-
-            #             line.quantity_shadow = line.quantity
-            #             line.quantity = confirmation_qty
+            elif 'Delivery Orders' in (rec.picking_type_name or ""):
+                for move in rec.move_ids:
+                    move._compute_remaining_package_qty()
 
             if rec.picking_type_name in ['Delivery Orders'] and rec.adt_type in ['Sales Order Shipment', 'SO Shipment']:
                 rec.wms_state = 'waiting_response'
@@ -3783,7 +3783,7 @@ class StockPicking(models.Model):
                 
     def _check_pick_quantity_vs_demand(self):
         for picking in self:
-            has_discrepancy = False
+            # has_discrepancy = False
             for move in picking.move_ids.filtered(lambda item: item.state != 'cancel'):
                 diff_qty = move.difference_quantity
                 demand_qty = move.product_uom_qty
@@ -3810,13 +3810,13 @@ class StockPicking(models.Model):
                         )
                     )
                 
-                if not float_is_zero(
-                    diff_qty,
-                    precision_rounding=rounding,
-                ):
-                    has_discrepancy = True
+            #     if not float_is_zero(
+            #         diff_qty,
+            #         precision_rounding=rounding,
+            #     ):
+            #         has_discrepancy = True
 
-            picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
+            # picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
 
     def _check_pick_confirmation_quantity(self):
         for picking in self:
@@ -3878,6 +3878,20 @@ class StockPicking(models.Model):
 
             picking.status_ba = 'discrepancy' if has_discrepancy else 'conform'
 
+    def _assign_status_ba(self):
+        for picking in self:
+            demand_qty = picking.adt_total_qty
+            picked_qty = picking.adt_actual_qty
+            rounding = 0.01
+            diff_qty = demand_qty - picked_qty
+
+            if not float_is_zero(
+                diff_qty,
+                precision_rounding=rounding,
+            ):
+                picking.status_ba = 'discrepancy'
+            else:
+                picking.status_ba = 'conform'    
     
     def _check_putaway_quantity_vs_demand(self):
         for picking in self:
@@ -4029,19 +4043,19 @@ class StockPicking(models.Model):
 
         error_messages = []
 
-        if unfinished_unpacked_items:
-            products = "\n".join(
-                f"- {move.product_id.display_name}"
-                for move in unfinished_unpacked_items
-            )
+        # if unfinished_unpacked_items:
+        #     products = "\n".join(
+        #         f"- {move.product_id.display_name}"
+        #         for move in unfinished_unpacked_items
+        #     )
 
-            error_messages.append(
-                (
-                    "Pastikan semua status item unpacked sudah 'Finished'.\n"
-                    "Unpacked item yang belum divalidasi:\n%s"
-                )
-                % products
-            )
+        #     error_messages.append(
+        #         (
+        #             "Pastikan semua status item unpacked sudah 'Finished'.\n"
+        #             "Unpacked item yang belum divalidasi:\n%s"
+        #         )
+        #         % products
+        #     )
 
         if unfinished_packed_items:
             packages = "\n".join(
