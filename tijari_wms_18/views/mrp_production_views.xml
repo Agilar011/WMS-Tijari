@@ -202,7 +202,7 @@
                                                 <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
                                             </div>
                                             <div>
-                                                <strong>Qty Perbedaan: </strong>
+                                                <strong> Perbedaan Qty: </strong>
                                                 <field name="difference_quantity"/>
                                                 <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
                                             </div>
