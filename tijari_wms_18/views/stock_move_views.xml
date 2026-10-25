@@ -2275,10 +2275,10 @@
                         <templates>
                             <t t-name="card">
                                 <div class="d-flex justify-content-between align-items-start mb-1">
-                                    <!-- <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"/> -->
-                                    <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
+                                    <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"/>
+                                    <!-- <field name="lot_id" readonly="0" force_save="1" class="fw-bold fs-6"
                                         domain="[('id', 'in', available_lot_ids)]"
-                                        groups="stock.group_production_lot"/>
+                                        groups="stock.group_production_lot"/> -->
                                     <field name="mo_status"
                                         widget="badge"
                                         decoration-success="mo_status == 'finished'"
@@ -2297,14 +2297,14 @@
 
                                 <br/>
 
-                                <div class="d-flex align-items-center gap-1">
+                                <!-- <div class="d-flex align-items-center gap-1">
                                     <strong>Pick From: </strong>
                                     <field name="location_id" widget="location_short_many2one" readonly="1" force_save="1" context="{'show_location_short_name': True}"/>
-                                </div>
-                                <!-- <div class="d-flex align-items-center gap-1" invisible="'Pick' in (parent.picking_type_name or '')">
-                                    <strong>Lot/Serial Number: </strong>
-                                    <field name="lot_id" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
                                 </div> -->
+                                <div class="d-flex align-items-center gap-1" invisible="'Pick' in (parent.picking_type_name or '')">
+                                    <strong>Lot No: </strong>
+                                    <field name="lot_id" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
+                                </div>
                                 <!-- <div invisible="'Pick' not in (parent.picking_type_name or '') and 'Pack' not in (parent.picking_type_name or '')">
                                     <strong>To: </strong>
                                     <field name="location_dest_id" widget="location_short_many2one" readonly="1" force_save="1" context="{'show_location_short_name': True}"/>
@@ -2326,13 +2326,13 @@
                                     <field name="product_uom_id" readonly="parent.state in ('done', 'cancel')"/>
                                 </div>
 
-                                <div class="d-flex gap-2 mt-2">
+                                <!-- <div class="d-flex gap-2 mt-2">
                                     <button name="action_mark_check_unfinished_mo"
                                         type="object"
                                         string="Rollback"
                                         class="btn-danger o_wms_auto_save_before_action"
                                         invisible="mo_status == 'unfinished' or parent.state in ('done','cancel')"/>
-                                </div>
+                                </div> -->
                             </t>
                         </templates>
                     </kanban>
