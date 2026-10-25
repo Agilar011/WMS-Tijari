@@ -2759,7 +2759,7 @@
                                     <div invisible="parent.picking_type_name in ('Storage','Store Finished Product')">
                                         <div class="o_wms_move_pick_quantities">
                                             <div>
-                                                <strong>Qty Total: </strong>
+                                                <strong>Qty Diterima: </strong>
                                                 <field name="product_uom_qty"/>
                                                 <field name="product_uom_id" class="ms-1"/>
                                             </div>

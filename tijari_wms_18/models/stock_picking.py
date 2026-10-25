@@ -109,7 +109,7 @@ class StockPicking(models.Model):
                 'extra_info', 'additional_info', 'page_notes',
             }
             writable_page_labels = {
-                'Unpacked Item Details', 'Packed Items', 'Additional Info',
+                'Unpacked Item Details', 'Packed Item', 'Additional Info',
                 'Additional Information', 'Notes',
             }
             for field_node in arch.xpath('.//field'):
