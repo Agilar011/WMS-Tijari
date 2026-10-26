@@ -5,10 +5,31 @@
         <field name="model">stock.move.line</field>
         <field name="inherit_id" ref="stock_picking_batch.view_move_line_tree_detailed_wave"/>
         <field name="arch" type="xml">
-            <xpath expr="//field[@name='picking_id']" position="replace">
-                <field name="origin" string="Origin"/>
+            <xpath expr="//field[@name='picking_id']" position="after">
+                <field name="origin" string="No Dokumen"/>
             </xpath>
         </field>
+    </record>
+
+    <record id="view_move_line_search_wave_origin" model="ir.ui.view">
+        <field name="name">stock.move.line.search.wave.origin</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.stock_move_line_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search/field[@name='picking_id']" position="after">
+                <field name="origin" string="No Dokumen"/>
+            </xpath>
+            <xpath expr="//filter[@name='by_picking']" position="after">
+                <filter string="No Dokumen" name="by_origin" domain="[]" context="{'group_by': 'origin'}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_batch.action_prepare_wave" model="ir.actions.act_window">
+        <field name="search_view_id" ref="view_move_line_search_wave_origin"/>
+    </record>
+    <record id="stock_picking_batch.action_prepare_wave_for_picking_type" model="ir.actions.act_window">
+        <field name="search_view_id" ref="view_move_line_search_wave_origin"/>
     </record>
 
     <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_standard" model="ir.ui.view">
