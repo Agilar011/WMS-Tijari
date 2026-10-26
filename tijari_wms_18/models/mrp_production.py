@@ -119,6 +119,12 @@ class WMSMRPProduction(models.Model):
             ))
             production.raw_material_product_id = moves.product_id[:1]
 
+    def action_reset_raw_material_filters(self):
+        self.write({
+            'raw_material_product_id': False,
+            'raw_material_lot_id': False,
+        })
+
     def _get_raw_material_scan_values(self, scanned_code):
         self.ensure_one()
         scanned_code = (scanned_code or '').strip()
