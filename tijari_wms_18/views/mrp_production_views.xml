@@ -109,10 +109,19 @@
                         <field name="raw_material_scan_button"
                             widget="adt_scan_picker_product_button"
                             nolabel="1"/>
-                        <field name="raw_material_scan_code"
-                            widget="adt_handheld_scan_code"
-                            placeholder="Scan barcode, SKU, atau lot"
-                            help="Bisa diisi dari scanner handheld atau diketik manual."/>
+                        <div class="o_row w-100 tijari_scan_filter_row" colspan="2">
+                            <label for="raw_material_scan_code" class="mb-0 text-nowrap"/>
+                            <div class="tijari_scan_filter_controls">
+                                <field name="raw_material_scan_code" nolabel="1"
+                                    widget="adt_handheld_scan_code"
+                                    placeholder="Scan barcode, SKU, atau lot"
+                                    help="Bisa diisi dari scanner handheld atau diketik manual."/>
+                                <button name="action_reset_raw_material_filters" type="object"
+                                    string="Reset Filter" icon="fa-undo"
+                                    class="btn-secondary btn-sm"
+                                    title="Reset filter raw material"/>
+                            </div>
+                        </div>
                         <field name="raw_material_product_ids" invisible="1"/>
                         <field name="raw_material_lot_ids" invisible="1"/>
                         <field name="raw_material_product_id"
