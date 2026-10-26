@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_move_line_tree_detailed_wave_origin" model="ir.ui.view">
+        <field name="name">stock.move.line.list.detailed.wave.origin</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock_picking_batch.view_move_line_tree_detailed_wave"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='picking_id']" position="replace">
+                <field name="origin" string="Origin"/>
+            </xpath>
+        </field>
+    </record>
+
     <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_standard" model="ir.ui.view">
         <field name="name">stock.move.line.list.tjr.fifo</field>
         <field name="model">stock.move.line</field>
