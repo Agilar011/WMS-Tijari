@@ -833,6 +833,12 @@
         <field name="priority">1100</field>
         <field name="arch" type="xml">
             <xpath expr="//sheet" position="inside">
+                <field name="batch_id" invisible="1"/>
+            </xpath>
+            <xpath expr="//field[@name='product_id']" position="after">
+                <field name="batch_origin" string="No. Dokumen" readonly="1" invisible="not batch_id"/>
+            </xpath>
+            <xpath expr="//sheet" position="inside">
                 <field name="picking_type_name" invisible="1"/>
                 <field name="mo_status" invisible="1"/>
                 <field name="picker_status" invisible="1"/>
@@ -938,6 +944,89 @@
         <field name="binding_view_types">list</field>
         <field name="state">code</field>
         <field name="code">action = records.action_generate_selected_lot()</field>
+    </record>
+
+    <!-- Prepare Wave: use the Batch Transfer reference columns and let users
+         control their visibility from the list column chooser. -->
+    <record id="view_move_line_tree_detailed_wave_tijari_columns" model="ir.ui.view">
+        <field name="name">stock.move.line.wave.list.tijari.columns</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock_picking_batch.view_move_line_tree_detailed_wave"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/field[@name='scheduled_date']" position="attributes">
+                <attribute name="string">Schedule Date</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='picking_id']" position="attributes">
+                <attribute name="string">Seri Dokumen</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='picking_partner_id']" position="attributes">
+                <attribute name="string">Contact</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='product_id']" position="attributes">
+                <attribute name="string">Product</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='lot_id']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='location_id']" position="attributes">
+                <attribute name="string">From</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='location_dest_id']" position="attributes">
+                <attribute name="string">To</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='package_id']" position="attributes">
+                <attribute name="string">Source Package</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='quantity']" position="attributes">
+                <attribute name="string">Qty</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='product_uom_id']" position="attributes">
+                <attribute name="string">UoM</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='company_id']" position="attributes">
+                <attribute name="optional">hide</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='state']" position="attributes">
+                <attribute name="string">Status</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='batch_id']" position="attributes">
+                <attribute name="string">Batch Transfer</attribute>
+                <attribute name="optional">show</attribute>
+            </xpath>
+            <xpath expr="//list/field[@name='scheduled_date']" position="after">
+                <field name="wave_picking_type_id" string="Operation Type" optional="show"/>
+                <field name="origin" string="No Dokumen" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_move_line_view_search_prepare_wave_operation_type" model="ir.ui.view">
+        <field name="name">stock.move.line.search.prepare.wave.operation.type</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.stock_move_line_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='groupby']/filter[@name='by_location']" position="after">
+                <filter string="Operation Type" name="by_operation_type" domain="[]"
+                    context="{'group_by': 'wave_picking_type_id'}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_batch.action_prepare_wave" model="ir.actions.act_window">
+        <field name="context">{'active_wave_id': False, 'search_default_by_operation_type': True}</field>
+    </record>
+    <record id="stock_picking_batch.action_prepare_wave_for_picking_type" model="ir.actions.act_window">
+        <field name="context">{'active_wave_id': False, 'search_default_by_operation_type': True}</field>
     </record>
 
 </odoo>
