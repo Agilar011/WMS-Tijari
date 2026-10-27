@@ -550,23 +550,27 @@
                             <field name="allowed_matching_lot_ids" column_invisible="True"/>
                             <field name="batch_adt_type" string="Tipe Transaksi" readonly="1"/>
                             <field name="batch_origin" string="No. Dokumen" readonly="1"/>
+                            <field name="handheld_scan_code" widget="adt_handheld_scan_code"
+                                string="Scan Handheld"
+                                placeholder="Scan handheld: lot atau lokasi"/>
+                            <field name="location_id" string="Pick From" widget="location_short_many2one"
+                                context="{'show_location_short_name': True}"/>
                             <field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
-                            <field name="location_id" string="Pick From" widget="location_short_many2one" context="{'show_location_short_name': True}"/>
+                            <field name="description_picking" string="Description" optional="show"/>
                             <field name="lot_id" string="Lot/Serial Number" readonly="1" groups="stock.group_production_lot"/>
                             <field name="lot_name" string="Lot Code" readonly="1" groups="stock.group_production_lot" optional="hide"/>
-                            <field name="matching_loc_dest_id" string="Confirm Location"
-                                readonly="pick_status == 'finished' or state in ('done', 'cancel')"
-                                force_save="1"
-                                domain="[('id', 'child_of', adt_dest_location_id)]"/>
-                            <field name="matching_lot_id" string="Confirmed Lot"
+                            <field name="quantity" string="Available Qty" readonly="1"/>
+                            <field name="confirmation_quantity" string="Qty Diambil"/>
+                            <field name="product_uom_id" string="UoM" readonly="1" groups="uom.group_uom"/>
+                            <field name="matching_lot_id" string="Confirm LOT"
                                 groups="stock.group_production_lot"
                                 readonly="pick_status == 'finished' or state in ('done', 'cancel')"
                                 force_save="1"
                                 domain="[('id', 'in', allowed_matching_lot_ids)]"/>
-                            <field name="product_uom_qty" string="Total Qty" readonly="1"/>
-                            <field name="quantity" string="Available Qty" readonly="1"/>
-                            <field name="confirmation_quantity" string="Qty Diambil"/>
-                            <field name="product_uom_id" string="Unit" readonly="1" groups="uom.group_uom"/>
+                            <field name="matching_loc_dest_id" string="Confirm Loc"
+                                readonly="pick_status == 'finished' or state in ('done', 'cancel')"
+                                force_save="1"
+                                domain="[('id', 'child_of', adt_dest_location_id)]"/>
                             <field name="pick_status" string="Status"
                                 decoration-success="pick_status == 'finished'"
                                 decoration-danger="pick_status == 'unfinished'"
