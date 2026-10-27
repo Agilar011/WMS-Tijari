@@ -50,6 +50,11 @@
         <field name="sequence">2</field>
     </record>
 
+    <!-- Keep the built-in Batch Transfers menu bound to Odoo's batch action. -->
+    <record id="stock_picking_batch.stock_picking_batch_menu" model="ir.ui.menu">
+        <field name="action" ref="stock_picking_batch.stock_picking_batch_action"/>
+    </record>
+
     <record id="stock.menu_stock_adjustments" model="ir.ui.menu">
         <field name="name">Inventory Control</field>
             <field name="sequence">3</field>

@@ -956,6 +956,9 @@ class StockMove(models.Model):
                 'tijari_wms_18.stock_move_pick_detail_view'
             ).id,
             'target': 'new',
+            'context': {
+                'batch_picker_readonly': bool(self.picking_id.batch_id),
+            },
         }
     
     def action_open_move_mo(self):
