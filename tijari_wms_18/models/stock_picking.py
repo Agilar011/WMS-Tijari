@@ -2312,6 +2312,13 @@ class StockPicking(models.Model):
         action['target'] = 'new'
         return action
 
+    def delivery_slip_pack(self):
+        action = {}
+        action['type'] = 'ir.actions.act_url'
+        action['url'] = '/print/delivery_slip_pack_?id=' + str(self.id)
+        action['target'] = 'new'
+        return action
+
     def action_print_warehouse_transfer(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
