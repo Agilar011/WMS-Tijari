@@ -1389,3 +1389,96 @@ class WmsApiController(http.Controller):
             resp = {'msg': msg, 'request_content': str(request_content)}
             resp = json.dumps(resp)
             return request.make_response(resp, [('Content-Type', 'application/json')])
+
+    @http.route('/print/delivery_slip_pack_', type='http', auth='user')
+    def PrintDeliverySlipPack(self, id, **kw):
+        blank_image = create_blank_image()
+        receipt = request.env['stock.picking'].sudo().browse(int(id))
+
+        data = {
+            'type': receipt.adt_type or '',
+            'tgl': format_tanggal_indo(receipt.scheduled_date),
+            'date': format_tanggal_indo(receipt.create_date.date()) if receipt.create_date else '',
+            'no': receipt.origin or '',
+            'name': receipt.name or '',
+            'vendor': receipt.partner_id.name or '',
+            'warehouse': receipt.picking_type_id.name or '',
+            'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
+            'scheduled_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
+            'date_done': receipt.date_done.strftime('%Y-%m-%d %H:%M:%S') if receipt.date_done else '',
+            'penerima': receipt.location_id.complete_name or '',
+            'note': receipt.note_ba or '',
+            'user': receipt.user_id.name or '',
+            'ttd_user':  (receipt.user_id.digital_signature.decode('utf-8') if receipt.user_id.digital_signature else blank_image),
+            'created_by': receipt.created_by_id.name or '',
+            'ttd_created_by': (receipt.created_by_id.partner_id.digital_signature.decode('utf-8') if receipt.created_by_id.partner_id.digital_signature else blank_image),
+            'approved_by': receipt.approved_by_id.name or '',
+            'ttd_approved_by': (receipt.approved_by_id.partner_id.digital_signature.decode('utf-8') if receipt.approved_by_id.partner_id.digital_signature else blank_image),
+            'status_ba': dict(receipt._fields['status_ba'].selection).get(receipt.status_ba, ''),
+            'status_ba_color': 'green' if receipt.status_ba == 'conform' else 'red',
+            'detail': []
+        }
+        package_groups = {}
+
+        for move in receipt.move_ids_without_package:
+            move_lines = receipt.move_line_ids.filtered( lambda ml: ml.move_id.id == move.id)
+
+            if not move_lines:
+                move_lines = [False]
+
+            for line in move_lines:
+                package = line.result_package_id if line else False
+                package_key = package.id if package else False
+
+                if package_key not in package_groups:
+                    package_groups[package_key] = {
+                        'group': (
+                            package.name if package else 'Products with no package assigned'
+                        ),
+                        'detail_dua': []
+                    }
+
+                obj = {
+                    'code': move.product_id.default_code or '',
+                    'product': move.product_id.name or '',
+                    'uom': move.product_uom.name or '',
+                    'qty2': float(move.product_uom_qty or 0),
+                    'qty': float(line.quantity or 0) if line else 0.0,
+                }
+
+                package_groups[package_key]['detail_dua'].append(obj)
+
+        data['detail'] = list(package_groups.values())
+
+        data = json.dumps(data)
+        usrnm = 'jasperadmin'
+        psswd = 't1j4r1s0lut10n'
+        import requests
+        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+            auth=(usrnm, psswd),
+            json={
+                'reportUnitUri': '/Odoo/ADITYA/Delivery_Slip_Pack_',
+                'outputFormat': 'pdf',
+                'parameters': {
+                    'reportParameter': [{
+                        'name': 'data',
+                        'value': [data]
+                    }]
+                }
+            })
+        from lxml import etree
+        xml = etree.XML(execution.content)
+
+        try:
+            request_id = xml.find('.//requestId').text
+            export_id = xml.find('.//export//id').text
+            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            filename = "Delivery_Slip_Pack.pdf"
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+        except:
+            import traceback
+            msg = traceback.format_exc()
+            request_content = execution.content
+            resp = {'msg': msg, 'request_content': str(request_content)}
+            resp = json.dumps(resp)
+            return request.make_response(resp, [('Content-Type', 'application/json')])
