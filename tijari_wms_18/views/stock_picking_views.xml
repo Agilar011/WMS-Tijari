@@ -338,10 +338,16 @@
                         <field name="allowed_unpacked_product_ids" invisible="1"/>
                         <field name="allowed_unpacked_lot_ids" invisible="1"/>
                         <field name="unpacked_lot_code" invisible="1"/>
-                        <field name="unpacked_scan_code"
-                            widget="adt_handheld_scan_code"
-                            placeholder="Scan handheld atau ketik kode"
-                            help="Bisa barcode atau SKU."/>
+                        <div class="o_row w-100 tijari_scan_filter_row" colspan="2">
+                            <label for="unpacked_scan_code" class="mb-0 text-nowrap"/>
+                                <div class="tijari_scan_filter_controls">
+                                    <field name="unpacked_scan_code" nolabel="1"
+                                        widget="adt_handheld_scan_code"
+                                        placeholder="Scan handheld atau ketik kode"
+                                        help="Bisa barcode atau SKU."/>
+                                    <button name="action_reset_scan_filters" type="object" string="Reset Filter" icon="fa-undo" class="btn-secondary btn-sm" title="Reset semua filter scan pada transfer ini"/>
+                                </div>
+                        </div>
                         <field name="unpacked_product_id" string="Product Name"
                             domain="[('id', 'in', allowed_unpacked_product_ids)]"
                             options="{'no_create': True, 'no_open': True}"/>
@@ -530,10 +536,15 @@
                                 nolabel="1"
                                 invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
                             <field name="available_package_ids" invisible='1' />
-                            <label for="package_scan_code" class="fw-bold text-dark" style="color: black !important; font-weight: bold !important;"/>
-                            <field name="package_scan_code"
-                                widget="adt_handheld_scan_code"
-                                invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
+                            <div class="o_row w-100 tijari_scan_filter_row" colspan="2">
+                                <label for="package_scan_code" class="fw-bold text-dark mb-0 text-nowrap" style="color: black !important; font-weight: bold !important;"/>
+                                <div class="tijari_scan_filter_controls">
+                                    <field name="package_scan_code" nolabel="1"
+                                        widget="adt_handheld_scan_code"
+                                        invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
+                                    <button name="action_reset_scan_filters" type="object" string="Reset Filter" icon="fa-undo" class="btn-secondary btn-sm" title="Reset semua filter scan pada transfer ini" invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
+                                </div>
+                            </div>
 
                             <label for="scanned_package_id" class="fw-bold text-dark" style="color: black !important; font-weight: bold !important;"/>
                             <field name="scanned_package_id"
@@ -1066,10 +1077,16 @@
                             <field name="scan_picker_product_button"
                                 widget="adt_scan_picker_product_button"
                                 nolabel="1"/>
-                            <field name="picker_scan_code"
-                                widget="adt_handheld_scan_code"
-                                placeholder="Scan handheld atau ketik kode"
-                                help="Bisa barcode, SKU, atau lot."/>
+                            <div class="o_row w-100 tijari_scan_filter_row" colspan="2">
+                                <label for="picker_scan_code" class="mb-0 text-nowrap"/>
+                                <div class="tijari_scan_filter_controls">
+                                    <field name="picker_scan_code" nolabel="1"
+                                        widget="adt_handheld_scan_code"
+                                        placeholder="Scan handheld atau ketik kode"
+                                        help="Bisa barcode, SKU, atau lot."/>
+                                    <button name="action_reset_scan_filters" type="object" string="Reset Filter" icon="fa-undo" class="btn-secondary btn-sm" title="Reset semua filter scan pada transfer ini"/>
+                                </div>
+                            </div>
                             
                             <field name="allowed_picker_product_ids" invisible="1"/>
                             <field name="allowed_picker_lot_ids" invisible="1"/>
@@ -1232,10 +1249,16 @@
                             <field name="scan_picker_product_button"
                                 widget="adt_scan_picker_product_button"
                                 nolabel="1"/>
-                            <field name="picker_scan_code"
-                                widget="adt_handheld_scan_code"
-                                placeholder="Scan handheld atau ketik kode"
-                                help="Bisa barcode, SKU, atau lot."/>
+                            <div class="o_row w-100 tijari_scan_filter_row" colspan="2">
+                                <label for="picker_scan_code" class="mb-0 text-nowrap"/>
+                                <div class="tijari_scan_filter_controls">
+                                    <field name="picker_scan_code" nolabel="1"
+                                        widget="adt_handheld_scan_code"
+                                        placeholder="Scan handheld atau ketik kode"
+                                        help="Bisa barcode, SKU, atau lot."/>
+                                    <button name="action_reset_scan_filters" type="object" string="Reset Filter" icon="fa-undo" class="btn-secondary btn-sm" title="Reset semua filter scan pada transfer ini"/>
+                                </div>
+                            </div>
                             
                             <field name="allowed_picker_product_ids" invisible="1"/>
                             <field name="allowed_picker_lot_ids" invisible="1"/>

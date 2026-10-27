@@ -660,6 +660,24 @@ class StockPicking(models.Model):
                 # 'adt_actual_qty': sum(picking.move_ids.mapped('quantity')),
             })
 
+    def action_reset_scan_filters(self):
+        """Clear scan inputs and selectors that filter picking operation lines."""
+        self.write({
+            'putaway_scan_code': False,
+            'putaway_product_id': False,
+            'putaway_lot_id': False,
+            'picker_scan_code': False,
+            'picker_product_id': False,
+            'picker_lot_id': False,
+            'unpacked_scan_code': False,
+            'unpacked_product_id': False,
+            'unpacked_lot_id': False,
+            'unpacked_lot_code': False,
+            'package_scan_code': False,
+            'scanned_package_id': False,
+            'filtered_package_level_id': False,
+        })
+
     @api.depends("package_level_ids")
     def _compute_available_package_ids(self):
         for picking in self:

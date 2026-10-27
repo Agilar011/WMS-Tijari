@@ -105,10 +105,16 @@
 	            <xpath expr="//page[@name='operations']" position="after">
                 <page string="Picker" name="page_picker" invisible="not show_picker_page or picking_type_name not in ['Receipts', 'Receipt Internal']">
                     <group>
-                        <field name="picker_scan_code"
-                            widget="adt_handheld_scan_code"
-                            placeholder="Scan handheld atau ketik kode"
-                            help="Bisa barcode, SKU, atau lot."/>
+                        <div class="o_row w-100 tijari_scan_filter_row" colspan="2">
+                            <label for="picker_scan_code" class="mb-0 text-nowrap"/>
+                            <div class="tijari_scan_filter_controls">
+                                <field name="picker_scan_code" nolabel="1"
+                                    widget="adt_handheld_scan_code"
+                                    placeholder="Scan handheld atau ketik kode"
+                                    help="Bisa barcode, SKU, atau lot."/>
+                                <button name="action_reset_scan_filters" type="object" string="Reset Filter" icon="fa-undo" class="btn-secondary btn-sm" title="Reset semua filter scan pada transfer ini"/>
+                            </div>
+                        </div>
                         <field name="scan_picker_product_by_lot_button"
                                 widget="adt_scan_picker_product_by_lot_button"
                                 invisible="1"
@@ -323,10 +329,16 @@
 
                 <page string="Putaway" name="page_putaway" invisible="not show_putaway_page or picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product', 'Internal Transfers'] or is_ito_internal_transfer">
                     <group>
-                        <field name="putaway_scan_code"
-                            widget="adt_handheld_scan_code"
-                            placeholder="Scan handheld atau ketik kode"
-                            help="Bisa barcode, SKU, atau lot."/>
+                        <div class="o_row w-100 tijari_scan_filter_row" colspan="2">
+                            <label for="putaway_scan_code" class="mb-0 text-nowrap"/>
+                            <div class="tijari_scan_filter_controls">
+                                <field name="putaway_scan_code" nolabel="1"
+                                    widget="adt_handheld_scan_code"
+                                    placeholder="Scan handheld atau ketik kode"
+                                    help="Bisa barcode, SKU, atau lot."/>
+                                <button name="action_reset_scan_filters" type="object" string="Reset Filter" icon="fa-undo" class="btn-secondary btn-sm" title="Reset semua filter scan pada transfer ini"/>
+                            </div>
+                        </div>
                         <field name="scan_product_by_lot_button"
                             widget="adt_scan_product_by_lot_button"
                             invisible="1"

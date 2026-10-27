@@ -2164,13 +2164,13 @@
                     <div style="display: flex !important; flex-direction: column !important; gap: 8px; width: 100%;">
                                             
                         <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
-                            <label for="product_uom_qty" string="To Consume" style="margin: 0 !important; white-space: nowrap !important;"/>
+                            <label for="product_uom_qty" string="Demand" style="margin: 0 !important; white-space: nowrap !important;"/>
                             <field name="product_uom_qty" readonly="id" nolabel="1"/>
                             <field name="product_uom" groups="uom.group_uom" readonly="state != 'draft'" nolabel="1" options="{'no_open': True}"/>
                         </div>                        
                     </div>
                     
-                    <div style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
+                    <div invisible="1" style="display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; align-items: center; gap: 5px; width: 100%;">
                         <label for="remaining_mo_quantity" string="Sisa Pemenuhan Qty" style="margin: 0 !important; white-space: nowrap !important;"/>
                         <field name="remaining_mo_quantity" readonly="1" nolabel="1"/>
                         <field name="product_uom" groups="uom.group_uom" readonly="1" nolabel="1" options="{'no_open': True}"/>
@@ -2209,6 +2209,13 @@
                         <field name="available_location_ids" column_invisible="1"/>
                         <field name="quant_id" domain="[('id', 'in', temp_quant_ids)]" column_invisible="1"/>
                         <field name="product_id" readonly="1" force_save="1" column_invisible="1"/>
+                         <field name="location_id" 
+                                string="Pick From" 
+                                widget="location_short_many2one"
+                                column_invisible="not context.get('from_operations')" 
+                                readonly="1"
+                                force_save="1" 
+                                context="{'show_location_short_name': True}"/>
                         <field name="lot_id" string="Lot/Serial Number" readonly="parent.state in ('done', 'cancel') or mo_status == 'finished'" force_save="1" domain="[('id', 'in', available_lot_ids)]" groups="stock.group_production_lot"/>
                         <field name="confirmation_lot_code"
                                 widget="adt_scan_lot_button"
@@ -2240,7 +2247,7 @@
 
                         <field name="quantity" string="Qty Digunakan" readonly="parent.state in ('done', 'cancel') or mo_status == 'finished'" force_save="1" />
                         <field name="mo_confirmation_quantity" string="Qty Digunakan" column_invisible="1" readonly="parent.state in ('done', 'cancel')"/>
-                        <field name="product_uom_id" string="Unit of Measure" readonly="parent.state in ('done', 'cancel') or mo_status == 'finished'"/>
+                        <field name="product_uom_id" string="UoM" readonly="parent.state in ('done', 'cancel') or mo_status == 'finished'"/>
                         
                         <field name="mo_status" string="Status"
                                 decoration-success="mo_status == 'finished'"
@@ -2252,13 +2259,15 @@
                                 icon="fa-check"
                                 class="btn-success o_wms_auto_save_before_action"
                                 title="Finish"
-                                invisible="mo_status == 'finished'"/>
+                                invisible="mo_status == 'finished'"
+                                column_invisible="context.get('from_operations')"/>
                         <button name="action_mark_check_unfinished_mo"
                                 type="object"
                                 icon="fa-undo"
                                 class="btn-danger"
                                 title="Rollback"
-                                invisible="mo_status == 'unfinished' or parent.state in ['done','cancel']"/>
+                                invisible="mo_status == 'unfinished' or parent.state in ['done','cancel']"
+                                column_invisible="context.get('from_operations')"/>
                         
                     </list>
                     <kanban class="o_kanban_mobile">

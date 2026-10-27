@@ -167,7 +167,7 @@ class StockMoveLine(models.Model):
         related='picking_id.origin',
         string='Source Document',
         readonly=True,
-        store=False,
+        store=True,
     )
     matching_lot_id = fields.Many2one(
         comodel_name="stock.lot",
