@@ -1,0 +1,77 @@
+.tijari_scan_filter_row {
+    display: flex !important;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    width: 100%;
+
+    > label {
+        flex: 0 0 auto;
+        margin-bottom: 0;
+        white-space: nowrap;
+    }
+
+    .tijari_scan_filter_controls {
+        display: flex;
+        align-items: center;
+        flex: 1 1 auto;
+        min-width: 0;
+        gap: 0.5rem;
+
+        .o_field_widget {
+            flex: 0 1 24rem;
+            width: 24rem;
+            max-width: 40vw;
+            min-width: 0;
+        }
+
+        button {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+    }
+}
+
+@media (max-width: 575.98px) {
+    .o_form_view .tijari_scan_filter_row {
+        // Override the earlier mobile stacked layout with one compact row.
+        flex-direction: row !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        gap: 0.375rem;
+
+        > label {
+            flex: 0 0 auto;
+            white-space: nowrap;
+        }
+
+        .tijari_scan_filter_controls {
+            display: flex !important;
+            flex: 1 1 0 !important;
+            width: auto !important;
+            min-width: 0 !important;
+            gap: 0.375rem;
+
+            .o_field_widget {
+                display: block !important;
+                flex: 1 1 0 !important;
+                width: 0 !important;
+                max-width: none !important;
+                min-width: 0 !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+
+            input.o_input {
+                display: block !important;
+                width: 100% !important;
+                min-width: 0 !important;
+            }
+
+            button {
+                flex: 0 0 auto !important;
+                white-space: nowrap;
+            }
+        }
+    }
+}

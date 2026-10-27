@@ -1,5 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_move_line_tree_detailed_wave_origin" model="ir.ui.view">
+        <field name="name">stock.move.line.list.detailed.wave.origin</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock_picking_batch.view_move_line_tree_detailed_wave"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='picking_id']" position="after">
+                <field name="origin" string="No Dokumen"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_move_line_search_wave_origin" model="ir.ui.view">
+        <field name="name">stock.move.line.search.wave.origin</field>
+        <field name="model">stock.move.line</field>
+        <field name="inherit_id" ref="stock.stock_move_line_view_search"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search/field[@name='picking_id']" position="after">
+                <field name="origin" string="No Dokumen"/>
+            </xpath>
+            <xpath expr="//filter[@name='by_picking']" position="after">
+                <filter string="No Dokumen" name="by_origin" domain="[]" context="{'group_by': 'origin'}"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_batch.action_prepare_wave" model="ir.actions.act_window">
+        <field name="search_view_id" ref="view_move_line_search_wave_origin"/>
+    </record>
+    <record id="stock_picking_batch.action_prepare_wave_for_picking_type" model="ir.actions.act_window">
+        <field name="search_view_id" ref="view_move_line_search_wave_origin"/>
+    </record>
+
     <record id="view_move_line_nosuggest_form_inherit_tjr_fifo_standard" model="ir.ui.view">
         <field name="name">stock.move.line.list.tjr.fifo</field>
         <field name="model">stock.move.line</field>
@@ -588,9 +620,9 @@
                     </group>
 
                     <group invisible="picking_type_name not in ('Receipts', 'Receipt Internal')">
-                        <label for="remaining_putaway_quantity" string="Sisa Qty"/>
+                        <label for="remaining_picker_quantity" string="Sisa Qty"/>
                         <div class="o_row">
-                            <field name="remaining_putaway_quantity" readonly="1" nolabel="1" class="fw-bold fs-6"/>
+                            <field name="remaining_picker_quantity" readonly="1" nolabel="1" class="fw-bold fs-6"/>
                             <field name="product_uom_id" readonly="1" force_save="1" nolabel="1"
                                 options="{'no_create': True}" groups="uom.group_uom"/>
                         </div>
