@@ -537,7 +537,7 @@
                                 invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
                             <field name="available_package_ids" invisible='1' />
                             <div class="o_row w-100 tijari_scan_filter_row" colspan="2">
-                                <label for="package_scan_code" class="fw-bold text-dark mb-0 text-nowrap" style="color: black !important; font-weight: bold !important;"/>
+                                <!-- <label for="package_scan_code" class="fw-bold text-dark mb-0 text-nowrap" style="color: black !important; font-weight: bold !important;"/> -->
                                 <div class="tijari_scan_filter_controls">
                                     <field name="package_scan_code" nolabel="1"
                                         widget="adt_handheld_scan_code"
@@ -546,7 +546,7 @@
                                 </div>
                             </div>
 
-                            <label for="scanned_package_id" class="fw-bold text-dark" style="color: black !important; font-weight: bold !important;"/>
+                            <!-- <label for="scanned_package_id" class="fw-bold text-dark" style="color: black !important; font-weight: bold !important;"/> -->
                             <field name="scanned_package_id"
                                 string="Package ID"
                                 domain="[('id', 'in', available_package_ids)]"
@@ -1459,7 +1459,13 @@
                     type="object"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
-                
+                    
+                <button name="delivery_slip_pack"
+                    string="Print Delivery Slip"
+                    type="object"
+                    class="btn-primary"
+                    invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
+
                 <button name="action_print_warehouse_pick"
                     string="Print Pick"
                     type="object"
