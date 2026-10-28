@@ -20,11 +20,13 @@
         <field name="domain">
             [
                 '&amp;', ('state', '!=', 'draft'),
-                '|', '|', '|',
+                '|', '|', '|', '|',
                 '&amp;', ('putaway_responsible_ids', 'in', [uid]),
                     ('picking_type_name', 'in', ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']),
                 '&amp;', ('pick_responsible_ids', 'in', [uid]),
                     ('picking_type_name', 'in', ['Pick', 'Pick Internal', 'Pick Components']),
+                '&amp;', ('pick_responsible_ids', 'in', [uid]),
+                    ('picking_type_name', 'in', ['Receipts', 'Receipt Internal']),
                 '&amp;', ('pack_responsible_ids', 'in', [uid]),
                     ('picking_type_name', '=', 'Pack'),
                 '&amp;', ('do_responsible_ids', 'in', [uid]),
