@@ -548,25 +548,29 @@
                             <field name="state" column_invisible="True"/>
                             <field name="adt_dest_location_id" column_invisible="True"/>
                             <field name="allowed_matching_lot_ids" column_invisible="True"/>
-                            <field name="batch_adt_type" string="Tipe Transaksi" readonly="1"/>
-                            <field name="batch_origin" string="No. Dokumen" readonly="1"/>
+                            <field name="batch_adt_type" string="Tipe Transaksi" readonly="1" optional="show"/>
+                            <field name="batch_origin" string="No. Dokumen" readonly="1" optional="show"/>
+                            <field name="handheld_scan_code" widget="adt_handheld_scan_code"
+                                string="Scan Handheld"
+                                placeholder="Scan handheld: lot atau lokasi"/>
+                            <field name="location_id" string="Pick From" widget="location_short_many2one"
+                                context="{'show_location_short_name': True}"/>
                             <field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
-                            <field name="location_id" string="Pick From" widget="location_short_many2one" context="{'show_location_short_name': True}"/>
+                            <field name="description_picking" string="Description" optional="show"/>
                             <field name="lot_id" string="Lot/Serial Number" readonly="1" groups="stock.group_production_lot"/>
                             <field name="lot_name" string="Lot Code" readonly="1" groups="stock.group_production_lot" optional="hide"/>
-                            <field name="matching_loc_dest_id" string="Confirm Location"
-                                readonly="pick_status == 'finished' or state in ('done', 'cancel')"
-                                force_save="1"
-                                domain="[('id', 'child_of', adt_dest_location_id)]"/>
-                            <field name="matching_lot_id" string="Confirmed Lot"
+                            <field name="quantity" string="Available Qty" readonly="1"/>
+                            <field name="confirmation_quantity" string="Qty Diambil"/>
+                            <field name="product_uom_id" string="UoM" readonly="1" groups="uom.group_uom" optional="show"/>
+                            <field name="matching_lot_id" string="Confirm LOT"
                                 groups="stock.group_production_lot"
                                 readonly="pick_status == 'finished' or state in ('done', 'cancel')"
                                 force_save="1"
                                 domain="[('id', 'in', allowed_matching_lot_ids)]"/>
-                            <field name="product_uom_qty" string="Total Qty" readonly="1"/>
-                            <field name="quantity" string="Available Qty" readonly="1"/>
-                            <field name="confirmation_quantity" string="Qty Diambil"/>
-                            <field name="product_uom_id" string="Unit" readonly="1" groups="uom.group_uom"/>
+                            <field name="matching_loc_dest_id" string="Confirm Loc"
+                                readonly="pick_status == 'finished' or state in ('done', 'cancel')"
+                                force_save="1"
+                                domain="[('id', 'child_of', adt_dest_location_id)]"/>
                             <field name="pick_status" string="Status"
                                 decoration-success="pick_status == 'finished'"
                                 decoration-danger="pick_status == 'unfinished'"
@@ -615,12 +619,23 @@
                     <field name="batch_adt_type" string="Tipe Transaksi"/>
                     <field name="batch_origin" string="No. Transaksi"/>
                     <field name="product_id" required="1" context="{'tijari_stock_picking_product_code_only': True}" readonly="(state != 'draft' and not additional) or move_lines_count &gt; 0"/>
-                    <field name="product_uom_qty" string="Qty Total" readonly="not is_initial_demand_editable"/>
-                    <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable"/>
-                    <field name="confirmation_quantity" string="Qty Disimpan"/>
-                    <field name="product_uom" readonly="state != 'draft' and id" options="{'no_open': True, 'no_create': True}" string="UoM" groups="uom.group_uom"/>
+                    <field name="description_picking" string="Description" optional="show"/>
                     <field name="lot_ids" widget="many2many_tags" string="Lot/Serial Number" groups="stock.group_production_lot"/>
-                    <field name="difference_quantity" string="Perbedaan Qty" readonly="1" decoration-danger="difference_quantity &gt; 0"/>
+                    <field name="product_uom_qty" string="Total Qty" readonly="not is_initial_demand_editable"/>
+                    <field name="so_confirmation_quantity" string="Qty Dikirim" readonly="1"
+                        column_invisible="parent.picking_type_name != 'Delivery Orders'"/>
+                    <field name="quantity" string="Quantity" readonly="not is_quantity_done_editable"
+                        column_invisible="parent.picking_type_name not in ['Pack', 'Pack Internal']"/>
+                    <field name="confirmation_quantity" string="Qty Diambil" readonly="1"
+                        column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
+                    <field name="quantity" string="Qty Diterima" readonly="not is_quantity_done_editable"
+                        column_invisible="parent.picking_type_name in ['Pack', 'Pack Internal', 'Pick', 'Pick Internal', 'Pick Components', 'Delivery Orders']"/>
+                    <field name="confirmation_quantity" string="Qty Disimpan"
+                        column_invisible="parent.picking_type_name in ['Pack', 'Pack Internal', 'Pick', 'Pick Internal', 'Pick Components', 'Delivery Orders']"/>
+                    <field name="difference_quantity" string="Perbedaan Qty" readonly="1"
+                        column_invisible="parent.picking_type_name in ['Pack', 'Pack Internal', 'Delivery Orders']"
+                        decoration-danger="difference_quantity &gt; 0"/>
+                    <field name="product_uom" readonly="state != 'draft' and id" options="{'no_open': True, 'no_create': True}" string="UoM" groups="uom.group_uom"/>
                     <button name="action_print_lot_number_line"
                         type="object"
                         icon="fa-print"
@@ -632,11 +647,6 @@
                         icon="fa-sticky-note"
                         title="Note"
                     />
-                    <button name="action_open_move_pick"
-                        type="object"
-                        string="To Process"
-                        title="Open Picker"
-                        invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'] or state == 'draft'"/>
                     <button name="action_open_move_lines"
                         type="object"
                         icon="fa-list"
