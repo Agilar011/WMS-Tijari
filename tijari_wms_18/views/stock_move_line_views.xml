@@ -678,18 +678,6 @@
                                 readonly="picker_status == 'finished' or state in ('done', 'cancel')"
                                 invisible="'Pack' not in (picking_type_name or '') and 'Receipts' not in (picking_type_name or '')"/>
 
-                            <span class="text-muted ms-2"
-                                invisible="'Receipts' not in (picking_type_name or '')">
-                                Qty Disimpan
-                            </span>
-                            <field name="confirmation_quantity"
-                                string="Qty Disimpan"
-                                nolabel="1"
-                                force_save="1"
-                                class="fw-bold fs-6"
-                                readonly="putaway_status == 'finished' or state in ('done', 'cancel')"
-                                invisible="'Receipts' not in (picking_type_name or '')"/>
-
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"
