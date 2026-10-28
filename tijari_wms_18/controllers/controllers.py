@@ -1405,7 +1405,7 @@ class WmsApiController(http.Controller):
             'warehouse': receipt.picking_type_id.name or '',
             'warehouse_id': receipt.picking_type_id.warehouse_id.name or '',
             'scheduled_date': receipt.scheduled_date.strftime('%Y-%m-%d %H:%M:%S') if receipt.scheduled_date else '',
-            'date_done': receipt.date_done.strftime('%Y-%m-%d %H:%M:%S') if receipt.date_done else '',
+            'date_done': format_tanggal_indo(receipt.date_done.date()) if receipt.date_done else '',
             'penerima': receipt.location_id.complete_name or '',
             'note': receipt.note_ba or '',
             'user': receipt.user_id.name or '',
@@ -1433,7 +1433,7 @@ class WmsApiController(http.Controller):
                 if package_key not in package_groups:
                     package_groups[package_key] = {
                         'group': (
-                            package.name if package else 'Products with no package assigned'
+                            package.name if package else 'Products With No Package Assigned'
                         ),
                         'detail_dua': []
                     }
@@ -1449,6 +1449,9 @@ class WmsApiController(http.Controller):
                 package_groups[package_key]['detail_dua'].append(obj)
 
         data['detail'] = list(package_groups.values())
+        lines = receipt.move_line_ids
+        data['total'] = len(lines.mapped('result_package_id'))             # package unik
+        data['undpack'] = len(lines.filtered(lambda l: not l.result_package_id))
 
         data = json.dumps(data)
         usrnm = 'jasperadmin'
