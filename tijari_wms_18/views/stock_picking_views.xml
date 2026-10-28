@@ -537,9 +537,9 @@
                                 invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
                             <field name="available_package_ids" invisible='1' />
                             <div class="o_row w-100 tijari_scan_filter_row" colspan="2">
-                                <!-- <label for="package_scan_code" class="fw-bold text-dark mb-0 text-nowrap" style="color: black !important; font-weight: bold !important;"/> -->
+                                <label for="package_scan_code" class="fw-bold text-dark mb-0 text-nowrap" style="color: black !important; font-weight: bold !important;"/>
                                 <div class="tijari_scan_filter_controls">
-                                    <field name="package_scan_code" nolabel="1"
+                                    <field name="package_scan_code"
                                         widget="adt_handheld_scan_code"
                                         invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
                                     <button name="action_reset_scan_filters" type="object" string="Reset Filter" icon="fa-undo" class="btn-secondary btn-sm" title="Reset semua filter scan pada transfer ini" invisible="picking_type_name != 'Delivery Orders' and not is_ito_internal_transfer"/>
