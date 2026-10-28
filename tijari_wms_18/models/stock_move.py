@@ -989,6 +989,9 @@ class StockMove(models.Model):
                 'tijari_wms_18.stock_move_pick_view'
             ).id,
             'target': 'new',
+            'context': {
+                'wms_operations_popup': True,
+            },
         }
 
     def action_open_move_pack(self):
