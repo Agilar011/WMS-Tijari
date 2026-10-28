@@ -6,7 +6,7 @@
         <field name="inherit_id" ref="stock_picking_batch.view_move_line_tree_detailed_wave"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='picking_id']" position="after">
-                <field name="origin" string="No Dokumen"/>
+                <field name="origin" string="No Dokumen" optional="show"/>
             </xpath>
         </field>
     </record>
@@ -995,10 +995,14 @@
             <xpath expr="//list/field[@name='location_id']" position="attributes">
                 <attribute name="string">From</attribute>
                 <attribute name="optional">show</attribute>
+                <attribute name="widget">location_short_many2one</attribute>
+                <attribute name="context">{'show_location_short_name': True}</attribute>
             </xpath>
             <xpath expr="//list/field[@name='location_dest_id']" position="attributes">
                 <attribute name="string">To</attribute>
                 <attribute name="optional">show</attribute>
+                <attribute name="widget">location_short_many2one</attribute>
+                <attribute name="context">{'show_location_short_name': True}</attribute>
             </xpath>
             <xpath expr="//list/field[@name='package_id']" position="attributes">
                 <attribute name="string">Source Package</attribute>
@@ -1025,7 +1029,6 @@
             </xpath>
             <xpath expr="//list/field[@name='scheduled_date']" position="after">
                 <field name="wave_picking_type_id" string="Operation Type" optional="show"/>
-                <field name="origin" string="No Dokumen" optional="show"/>
             </xpath>
         </field>
     </record>
@@ -1043,10 +1046,10 @@
     </record>
 
     <record id="stock_picking_batch.action_prepare_wave" model="ir.actions.act_window">
-        <field name="context">{'active_wave_id': False, 'search_default_by_operation_type': True}</field>
+        <field name="context">{'active_wave_id': False, 'search_default_by_operation_type': True, 'show_location_short_name': True}</field>
     </record>
     <record id="stock_picking_batch.action_prepare_wave_for_picking_type" model="ir.actions.act_window">
-        <field name="context">{'active_wave_id': False, 'search_default_by_operation_type': True}</field>
+        <field name="context">{'active_wave_id': False, 'search_default_by_operation_type': True, 'show_location_short_name': True}</field>
     </record>
 
 </odoo>
