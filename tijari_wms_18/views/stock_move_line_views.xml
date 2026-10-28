@@ -1046,10 +1046,10 @@
     </record>
 
     <record id="stock_picking_batch.action_prepare_wave" model="ir.actions.act_window">
-        <field name="context">{'active_wave_id': False, 'search_default_by_location': True, 'show_location_short_name': True}</field>
+        <field name="context">{'active_wave_id': False, 'search_default_by_operation_type': True, 'show_location_short_name': True}</field>
     </record>
     <record id="stock_picking_batch.action_prepare_wave_for_picking_type" model="ir.actions.act_window">
-        <field name="context">{'active_wave_id': False, 'search_default_by_location': True, 'show_location_short_name': True}</field>
+        <field name="context">{'active_wave_id': False, 'search_default_by_operation_type': True, 'show_location_short_name': True}</field>
     </record>
 
 </odoo>
