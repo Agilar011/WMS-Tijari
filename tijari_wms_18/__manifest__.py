@@ -1,7 +1,7 @@
 
 {
     'name': 'WMS from Tijari',
-    'version': '18.0.0.2.0',
+    'version': '18.0.0.2.1',
     'summary': 'WMS',
     'description': 'WMS',
     'category': 'Tools',
