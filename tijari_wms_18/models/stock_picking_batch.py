@@ -4,6 +4,114 @@ from odoo.exceptions import UserError, ValidationError
 class StockPickingBatch(models.Model):
     _inherit = 'stock.picking.batch'
 
+    # Batch responsibility selections are stored on the batch and written
+    # through to its pickings when changed.
+    pick_responsible_ids = fields.Many2many(
+        comodel_name='res.users',
+        relation='stock_picking_batch_pick_resp_rel',
+        column1='batch_id',
+        column2='user_id',
+        string='Assigned Picker',
+        domain=[('share', '=', False)],
+    )
+    pack_responsible_ids = fields.Many2many(
+        comodel_name='res.users',
+        relation='stock_picking_batch_pack_resp_rel',
+        column1='batch_id',
+        column2='user_id',
+        string='Assigned Packer',
+        domain=[('share', '=', False)],
+    )
+    do_responsible_ids = fields.Many2many(
+        comodel_name='res.users',
+        relation='stock_picking_batch_do_resp_rel',
+        column1='batch_id',
+        column2='user_id',
+        string='Assigned Loader',
+        domain=[('share', '=', False)],
+    )
+    putaway_responsible_ids = fields.Many2many(
+        comodel_name='res.users',
+        relation='stock_picking_batch_putaway_resp_rel',
+        column1='batch_id',
+        column2='user_id',
+        string='Assigned Putaway',
+        domain=[('share', '=', False)],
+    )
+    batch_responsible_user_ids = fields.Many2many(
+        comodel_name='res.users',
+        relation='stock_picking_batch_user_resp_rel',
+        column1='batch_id',
+        column2='user_id',
+        string='Responsible Users',
+    )
+
+    _RESPONSIBLE_BATCH_TO_PICKING_FIELDS = {
+        'pick_responsible_ids': 'pick_responsible_ids',
+        'pack_responsible_ids': 'pack_responsible_ids',
+        'do_responsible_ids': 'do_responsible_ids',
+        'putaway_responsible_ids': 'putaway_responsible_ids',
+    }
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        batches = super().create(vals_list)
+        for batch in batches.filtered('picking_ids'):
+            responsible_vals = {
+                field_name: [(6, 0, batch.picking_ids.mapped(picking_field).ids)]
+                for field_name, picking_field
+                in batch._RESPONSIBLE_BATCH_TO_PICKING_FIELDS.items()
+            }
+            batch.with_context(skip_batch_responsible_sync=True).write(
+                responsible_vals
+            )
+        return batches
+
+    def write(self, vals):
+        result = super().write(vals)
+        responsible_fields = self._RESPONSIBLE_BATCH_TO_PICKING_FIELDS
+        changed_responsible_fields = responsible_fields.keys() & vals.keys()
+        skip_picking_sync = self.env.context.get('skip_batch_responsible_sync')
+
+        for batch in self:
+            if changed_responsible_fields and not skip_picking_sync:
+                picking_vals = {
+                    responsible_fields[field_name]: [(6, 0, batch[field_name].ids)]
+                    for field_name in changed_responsible_fields
+                }
+                if batch.picking_ids:
+                    batch.picking_ids.with_context(
+                        tijari_responsible_sync=True,
+                    ).write(picking_vals)
+
+            if changed_responsible_fields or 'picking_ids' in vals:
+                if 'picking_ids' in vals and not changed_responsible_fields:
+                    batch_responsible_vals = {
+                        field_name: [(6, 0, batch.picking_ids.mapped(picking_field).ids)]
+                        for field_name, picking_field
+                        in responsible_fields.items()
+                    }
+                    responsible_users = batch.picking_ids.mapped(
+                        'pick_responsible_ids'
+                    ) | batch.picking_ids.mapped('pack_responsible_ids')
+                    responsible_users |= batch.picking_ids.mapped('do_responsible_ids')
+                    responsible_users |= batch.picking_ids.mapped('putaway_responsible_ids')
+                else:
+                    batch_responsible_vals = {}
+                    responsible_users = (
+                        batch.pick_responsible_ids
+                        | batch.pack_responsible_ids
+                        | batch.do_responsible_ids
+                        | batch.putaway_responsible_ids
+                    )
+                batch_responsible_vals['batch_responsible_user_ids'] = [
+                    (6, 0, responsible_users.ids)
+                ]
+                super(StockPickingBatch, batch).write({
+                    **batch_responsible_vals,
+                })
+        return result
+
     allowed_putaway_product_ids = fields.Many2many(
         'product.product',
         compute='_compute_allowed_putaway_product_ids',
@@ -1229,6 +1337,14 @@ class StockPickingToBatchInherit(models.TransientModel):
             ],
         })
 
+        # Keep the batch form initialized from the real picking assignments.
+        # Subsequent edits on the batch are propagated back to its pickings.
+        batch.with_context(skip_batch_responsible_sync=True).write({
+            field_name: [(6, 0, batch.picking_ids.mapped(picking_field).ids)]
+            for field_name, picking_field
+            in batch._RESPONSIBLE_BATCH_TO_PICKING_FIELDS.items()
+        })
+
         if self.mode == 'new' and not self.is_create_draft:
             batch.action_confirm()
 
@@ -1239,3 +1355,72 @@ class StockPickingToBatchInherit(models.TransientModel):
             'type': 'ir.actions.act_window',
             'res_id': batch.id,
         }
+
+
+class StockAddToWaveInherit(models.TransientModel):
+    _inherit = 'stock.add.to.wave'
+
+    operation_type_name = fields.Char(string='Operation Type', readonly=True)
+    pick_responsible_ids = fields.Many2many(
+        'res.users', 'stock_add_to_wave_pick_resp_rel', 'wizard_id', 'user_id',
+        string='Assigned Picker', domain=[('share', '=', False)],
+    )
+    pack_responsible_ids = fields.Many2many(
+        'res.users', 'stock_add_to_wave_pack_resp_rel', 'wizard_id', 'user_id',
+        string='Assigned Packer', domain=[('share', '=', False)],
+    )
+    do_responsible_ids = fields.Many2many(
+        'res.users', 'stock_add_to_wave_do_resp_rel', 'wizard_id', 'user_id',
+        string='Assigned Loader', domain=[('share', '=', False)],
+    )
+    putaway_responsible_ids = fields.Many2many(
+        'res.users', 'stock_add_to_wave_putaway_resp_rel', 'wizard_id', 'user_id',
+        string='Assigned Putaway', domain=[('share', '=', False)],
+    )
+
+    @api.model
+    def default_get(self, fields_list):
+        vals = super().default_get(fields_list)
+        active_ids = self.env.context.get('active_ids', [])
+        if self.env.context.get('active_model') == 'stock.move.line':
+            operation_types = self.env['stock.move.line'].browse(active_ids).mapped('picking_type_id')
+        else:
+            operation_types = self.env['stock.picking'].browse(active_ids).mapped('picking_type_id')
+        vals['operation_type_name'] = operation_types.name if len(operation_types) == 1 else False
+        return vals
+
+    def attach_pickings(self):
+        self.ensure_one()
+        responsible_values = {
+            'pick_responsible_ids': self.pick_responsible_ids.ids,
+            'pack_responsible_ids': self.pack_responsible_ids.ids,
+            'do_responsible_ids': self.do_responsible_ids.ids,
+            'putaway_responsible_ids': self.putaway_responsible_ids.ids,
+        }
+        operation_responsible_ids = (
+            self.putaway_responsible_ids
+            if self.operation_type_name in ('Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product')
+            else self.pick_responsible_ids
+        )
+        return super(StockAddToWaveInherit, self.with_context(
+            tijari_wave_responsible_values=responsible_values,
+            active_owner_id=operation_responsible_ids[:1].id or self.user_id.id,
+        )).attach_pickings()
+
+
+class StockMoveLineWaveResponsible(models.Model):
+    _inherit = 'stock.move.line'
+
+    def _add_to_wave(self, wave=False, description=False):
+        result = super()._add_to_wave(wave=wave, description=description)
+        responsible_values = self.env.context.get('tijari_wave_responsible_values')
+        if responsible_values:
+            transferred_pickings = self.mapped('picking_id').filtered(
+                lambda picking: picking.batch_id and picking.batch_id.is_wave
+            )
+            if transferred_pickings:
+                transferred_pickings.with_context(tijari_responsible_sync=True).write({
+                    field_name: [(6, 0, user_ids)]
+                    for field_name, user_ids in responsible_values.items()
+                })
+        return result

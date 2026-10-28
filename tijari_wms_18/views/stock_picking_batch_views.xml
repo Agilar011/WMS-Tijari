@@ -44,6 +44,38 @@
                 <attribute name="string">Transaksi</attribute>
             </xpath>
 
+            <xpath expr="//page[@name='page_transfers']" position="after">
+                <page string="Additional Info" name="page_batch_additional_info">
+                    <group>
+                        <group name="batch_responsible_info" string="Responsible Information">
+                            <field name="pick_responsible_ids"
+                                widget="many2many_avatar_user"
+                                readonly="state in ('cancel', 'done')"/>
+                            <field name="pack_responsible_ids"
+                                widget="many2many_avatar_user"
+                                readonly="state in ('cancel', 'done')"
+                                invisible="picking_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+                            <field name="do_responsible_ids"
+                                widget="many2many_avatar_user"
+                                readonly="state in ('cancel', 'done')"
+                                invisible="picking_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+                            <field name="putaway_responsible_ids"
+                                widget="many2many_avatar_user"
+                                readonly="state in ('cancel', 'done')"
+                                invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"/>
+                            <field name="batch_responsible_user_ids"
+                                widget="many2many_avatar_user"
+                                readonly="1"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+
+            <!-- The same batch form is used for waves; keep this tab available there too. -->
+            <xpath expr="//page[@name='page_batch_additional_info']" position="attributes">
+                <attribute name="invisible">False</attribute>
+            </xpath>
+
             <xpath expr="//field[@name='picking_ids']" position="attributes">
                 <attribute name="string">Transaksi</attribute>
             </xpath>
@@ -346,7 +378,7 @@
                                         </div>
                                         <div class="o_wms_operation_actions mt-2" style="display: flex !important; justify-content: flex-start !important; align-items: center !important; gap: 7px !important;">
                                             <button name="action_open_note_wizard" type="object" icon="fa-sticky-note" title="Note"/>
-                                            <button name="action_open_move_operation" type="object" string="Pack Details" class="btn btn-primary btn-sm o_wms_operation_action"/>
+                                            <button name="action_open_move_operation" type="object" string="Pack Details" class="btn btn-primary btn-sm o_wms_operation_action" context="{'wms_operations_popup': True}"/>
                                         </div>
                                     </div>
                                 </t>
@@ -361,7 +393,7 @@
                             <field name="difference_quantity" string="Perbedaan Qty" readonly="1"/>
                             <field name="product_uom" string="Unit" groups="uom.group_uom"/>
                             <field name="result_package_ids" string="Destination Packages" widget="many2many_tags"/>
-                            <button name="action_open_move_operation" type="object" string="Pack Details" class="btn-primary"/>
+                            <button name="action_open_move_operation" type="object" string="Pack Details" class="btn-primary" context="{'wms_operations_popup': True}"/>
                         </list>
                     </field>
                 </page>
@@ -444,15 +476,15 @@
                         <list create="0" delete="0" edit="0" default_order="picker_sequence asc, id">
                             <field name="state" column_invisible="True"/>
                             <field name="picking_id" column_invisible="True"/>
+                            <field name="picker_sequence" column_invisible="True"/>
                             <field name="batch_adt_type" string="Tipe Transaksi" readonly="1"/>
                             <field name="batch_origin" string="No. Transaksi" readonly="1"/>
-                            <field name="product_id" string="Product" readonly="1" context="{'tijari_stock_picking_product_code_only': True}"/>
-                            <field name="picker_sequence" column_invisible="True"/>
-                            <field name="description_picking" string="Description" optional="show"/>
-                            <field name="lot_ids" widget="many2many_tags" string="Lot/Serial Numbers" groups="stock.group_production_lot"/>
+                            <field name="product_default_code" string="Product" readonly="1"/>
+                            <field name="description_picking" string="Description" readonly="1" optional="show"/>
+                            <field name="lot_ids" widget="many2many_tags" string="Lot" groups="stock.group_production_lot"/>
                             <field name="product_uom_qty" string="Total Qty" readonly="1"/>
                             <field name="quantity" string="Qty Diterima" readonly="1"/>
-                            <field name="picker_difference_quantity" string="Perbedaan Qty" readonly="1" decoration-danger="picker_difference_quantity &gt; 0"/>
+                            <field name="picker_difference_quantity" string="Perbedaan Qty" readonly="1"/>
                             <field name="product_uom" string="Unit" readonly="1" groups="uom.group_uom"/>
                             <field name="product_uom" groups="!uom.group_uom" column_invisible="True"/>
                             <field name="picker_progress_status" string="Status"
@@ -586,6 +618,11 @@
                 </page>
             </xpath>
 
+            <!-- Keep Additional Info as the last batch tab. -->
+            <xpath expr="//page[@name='page_putaway']" position="after">
+                <xpath expr="//page[@name='page_batch_additional_info']" position="move"/>
+            </xpath>
+
         </field>
     </record>
 
@@ -647,9 +684,10 @@
                         icon="fa-sticky-note"
                         title="Note"
                     />
-                    <button name="action_open_move_lines"
+                    <button name="action_open_move_operation"
                         type="object"
                         icon="fa-list"
+                        context="{'wms_operations_popup': True}"
                         title="Open Move Lines"/>
                 </list>
             </xpath>
@@ -706,6 +744,24 @@
 
             </xpath>
 
+        </field>
+    </record>
+
+    <record id="stock_add_to_wave_form_inherit_tijari" model="ir.ui.view">
+        <field name="name">stock.add.to.wave.form.inherit.tijari</field>
+        <field name="model">stock.add.to.wave</field>
+        <field name="inherit_id" ref="stock_picking_batch.stock_add_to_wave_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='user_id']" position="replace">
+                <field name="operation_type_name" invisible="1"/>
+                <field name="pick_responsible_ids" widget="many2many_avatar_user"/>
+                <field name="pack_responsible_ids" widget="many2many_avatar_user"
+                    invisible="operation_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+                <field name="do_responsible_ids" widget="many2many_avatar_user"
+                    invisible="operation_type_name not in ('Pick', 'Pick Internal', 'Pack', 'Delivery Orders')"/>
+                <field name="putaway_responsible_ids" widget="many2many_avatar_user"
+                    invisible="operation_type_name not in ['Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product']"/>
+            </xpath>
         </field>
     </record>
 

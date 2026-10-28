@@ -800,6 +800,7 @@
                     'default_date': scheduled_date,
                     'default_date_deadline': date_deadline,
                     'picking_type_code': picking_type_code,
+                    'wms_operations_popup': True,
                     'default_picking_id': id,
                     'form_view_ref': 'tijari_wms_18.stock_move_pick_view',
                     'address_in_id': partner_id,
@@ -1022,6 +1023,7 @@
                                     title="Open Move"
                                     icon="fa-list"
                                     class="btn-link"
+                                    context="{'wms_operations_popup': True}"
                                 />
                             </list>
                             <!-- KANBAN PICK NOTEBOOK PICKER  -->
@@ -1396,6 +1398,7 @@
                                                 type="object"
                                                 string="Pack Details"
                                                 class="btn btn-primary btn-sm o_wms_operation_action"
+                                                context="{'wms_operations_popup': True}"
                                             />
                                         </div>
                                     </t>
