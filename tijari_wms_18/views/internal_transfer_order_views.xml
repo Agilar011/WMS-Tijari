@@ -277,7 +277,7 @@
         <field name="name">Internal Transfer Orders</field>
         <field name="res_model">internal.transfer.order</field>
         <field name="view_mode">list,kanban,form</field>
-        <field name="context">{'search_default_ready': 1, 'search_default_group_transaction_type': 1}</field>
+        <field name="context">{'search_default_ready': 1}</field>
     </record>
 
 </odoo>
