@@ -639,19 +639,27 @@ class WmsApiController(http.Controller):
             return request.make_response(resp, [('Content-Type', 'application/json')])
 
     @http.route('/print/lot_number', type='http', auth='user')
-    def PrintLotNumber(self, id, **kw):
+    def PrintLotNumber(self, ids=None, id=None, **kw):
         blank_image = create_blank_image()
-        lot = request.env['stock.lot'].sudo().browse(int(id))
-        data = {
-            'lot_name': lot.name or '',
-            'product': lot.product_id.name if lot.product_id.name else "",
-            'product_code': lot.product_id.default_code if lot.product_id.default_code else "",
-            'ref': lot.ref if lot.ref else "",
-            'docs': "",
-            'date': format_tanggal_indo(lot.create_date) if lot.create_date else '',
-            'qrcode': (lot.qr_code_image.decode('utf-8') if lot.qr_code_image else blank_image),
-        #     'detail': []
-        }
+        raw = ids or id or ''
+        lot_ids = [int(x) for x in str(raw).split(',') if x]
+        lots = request.env['stock.lot'].sudo().browse(lot_ids).exists()
+
+        data = {'detail': []}
+
+        for move_detail in lots:
+            obj = {
+                'lot_name': move_detail.name or '',
+                'product': move_detail.product_id.name or '',
+                'product_code': move_detail.product_id.default_code or '',
+                'ref': move_detail.ref or '',
+                'date': format_tanggal_indo(move_detail.create_date) if move_detail.create_date else '',
+                'qrcode': (
+                    move_detail.qr_code_image.decode('utf-8')
+                    if move_detail.qr_code_image else blank_image
+                ),
+            }
+            data['detail'].append(obj)
 
         data = json.dumps(data)
         usrnm = 'jasperadmin'
@@ -660,7 +668,7 @@ class WmsApiController(http.Controller):
         execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
-                'reportUnitUri': '/Odoo/ADITYA/Lot_Number',
+                'reportUnitUri': '/Odoo/ADITYA/Lot_line_list',
                 'outputFormat': 'pdf',
                 'parameters': {
                     'reportParameter': [{
