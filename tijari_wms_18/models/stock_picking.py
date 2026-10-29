@@ -122,9 +122,16 @@ class StockPicking(models.Model):
                 ):
                     field_node.set('readonly', '1')
             for button in arch.xpath('.//header//button'):
-                # Operators can validate a picking when the normal view
-                # conditions allow it. Keep other workflow buttons hidden.
-                if button.get('name') != 'button_validate':
+                if button.get('name') == 'button_validate':
+                    # A picker-only operator must not validate the picking.
+                    # Operators assigned to Putaway (including Picker +
+                    # Putaway users) retain the normal validation conditions.
+                    invisible = button.get('invisible')
+                    button.set(
+                        'invisible',
+                        f"({invisible}) or not show_putaway_page" if invisible else "not show_putaway_page",
+                    )
+                else:
                     button.set('invisible', '1')
             result['arch'] = etree.tostring(arch, encoding='unicode')
         return result
