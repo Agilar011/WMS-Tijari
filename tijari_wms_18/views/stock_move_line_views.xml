@@ -347,7 +347,7 @@
                         </group>
                     </group>
 
-                    <group invisible="is_manufacturing or picking_type_name not in ('Receipts', 'Receipt Internal')">
+                    <group invisible="is_manufacturing or picking_type_name != 'Receipt Internal'">
                         <field name="result_package_id"
                             string="Packages"
                             options="{'no_create': True, 'no_open': True}"/>

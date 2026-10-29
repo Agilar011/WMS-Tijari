@@ -31,8 +31,7 @@
             'contact_display': 'partner_address',
             'restricted_picking_type_code': 'internal',
             'search_default_internal': 1,
-            'search_default_tijari_internal_transfer': 1,
-            'search_default_my_transfers': 1
+            'search_default_tijari_internal_transfer': 1
         }</field>
     </record>
 
@@ -40,8 +39,7 @@
     <record id="stock.action_picking_tree_all" model="ir.actions.act_window">
         <field name="context">{
             'contact_display': 'partner_address',
-            'default_company_id': allowed_company_ids[0],
-            'search_default_my_transfers': 1
+            'default_company_id': allowed_company_ids[0]
         }</field>
     </record>
 
@@ -52,6 +50,11 @@
             'search_default_in_progress': True,
             'search_default_my_transfers': 1
         }</field>
+    </record>
+
+    <!-- Keep My Transfers enabled on Wave Transfer lists as well. -->
+    <record id="stock_picking_batch.action_picking_tree_wave" model="ir.actions.act_window">
+        <field name="context">{'search_default_my_transfers': 1}</field>
     </record>
 
     <menuitem
