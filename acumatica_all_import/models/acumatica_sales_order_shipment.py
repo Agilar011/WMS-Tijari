@@ -182,7 +182,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 staging_rec,
                 [message],
                 api_acumatica='so_shipment',
-                operation_type='delivery',
+                operation_type='pick',
                 origin=staging_rec.adt_ShipmentNbr,
                 partner=staging_rec.adt_CustomerID or False,
                 location=staging_rec.adt_WarehouseID or staging_rec.adt_LocationID or False,
@@ -231,7 +231,7 @@ class AcumaticaShipmentGIStaging(models.Model):
 
                     picking_type = shipment._adt_reresolve_picking_type()
                     if not picking_type:
-                        raise UserError(f"Operation Type Incoming untuk gudang {warehouse.name} tidak ditemukan.")
+                        raise UserError(f"Operation Type Pick untuk gudang {warehouse.name} tidak ditemukan.")
 
                     partner = self._find_partner(shipment.adt_CustomerID)
                     if not partner:
@@ -431,7 +431,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                         shipment,
                         [str(e)],
                         api_acumatica='so_shipment',
-                        operation_type='delivery',
+                        operation_type='pick',
                         origin=shipment.adt_ShipmentNbr,
                         partner=shipment.adt_CustomerID or False,
                         location=shipment.adt_WarehouseID or shipment.adt_LocationID or False,

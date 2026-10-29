@@ -110,7 +110,7 @@
                     name="second_matching"
                     decoration-success="second_matching == 'Match'"
                     decoration-danger="second_matching == 'Not Match'" 
-                    column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal', 'Manufacturing']"
+                    column_invisible="1"
                     readonly="1" 
                     force_save="1"/>
 
@@ -347,7 +347,7 @@
                         </group>
                     </group>
 
-                    <group invisible="is_manufacturing or picking_type_name not in ('Receipts', 'Receipt Internal')">
+                    <group invisible="is_manufacturing or picking_type_name != 'Receipt Internal'">
                         <field name="result_package_id"
                             string="Packages"
                             options="{'no_create': True, 'no_open': True}"/>
@@ -677,18 +677,6 @@
                                 class="fw-bold fs-6"
                                 readonly="picker_status == 'finished' or state in ('done', 'cancel')"
                                 invisible="'Pack' not in (picking_type_name or '') and 'Receipts' not in (picking_type_name or '')"/>
-
-                            <span class="text-muted ms-2"
-                                invisible="'Receipts' not in (picking_type_name or '')">
-                                Qty Disimpan
-                            </span>
-                            <field name="confirmation_quantity"
-                                string="Qty Disimpan"
-                                nolabel="1"
-                                force_save="1"
-                                class="fw-bold fs-6"
-                                readonly="putaway_status == 'finished' or state in ('done', 'cancel')"
-                                invisible="'Receipts' not in (picking_type_name or '')"/>
 
                             <field name="product_uom_id"
                                 readonly="1"

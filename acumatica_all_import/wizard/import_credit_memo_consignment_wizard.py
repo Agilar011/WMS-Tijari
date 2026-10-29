@@ -90,7 +90,12 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
 
     def _search_picking_type(self, warehouse_code):
         config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type and not config_picking_type.is_document_only_api:
+        if (
+            config_picking_type
+            and not config_picking_type.is_document_only_api
+            and config_picking_type.code == 'internal'
+            and config_picking_type.operation_category == 'pick'
+        ):
             return config_picking_type
 
         PickingType = self.env['stock.picking.type']
@@ -99,8 +104,8 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
             building_id = building_id.split('-', 1)[0].strip()
         return PickingType.resolve_picking_type(
             building_id=building_id,
-            code='outgoing',
-            operation_category='delivery',
+            code='internal',
+            operation_category='pick',
             api_acumatica='credit_memo_consignment',
             transaction_key='credit_memo_consignment',
             required=False,

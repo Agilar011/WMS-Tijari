@@ -17,6 +17,7 @@
                 <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', 'in', ['Internal Transfer', 'Internal Transfers', 'Transfer Internal'])]"/>
                 <filter name="tijari_document_only" string="Document Only" domain="[('adt_is_document_only', '=', True)]"/>
                 <separator/>
+                <filter name="group_by_adt_type" string="By Tipe Transaksi" context="{'group_by': 'adt_type'}"/>
             </xpath>
         </field>
     </record>
@@ -86,9 +87,8 @@
         </field>
     </record>
 
-    <!-- Keep My Worklist ordering scoped to its own action. Odoo's assigned
-         state is displayed as Ready; descending state order places it after
-         the active picking states. -->
+    <!-- Keep My Worklist ordering scoped to its own action. Ascending state
+         order places Done after Ready for delivery worklists. -->
     <record id="stock_picking_my_worklist_kanban" model="ir.ui.view">
         <field name="name">stock.picking.my.worklist.kanban</field>
         <field name="model">stock.picking</field>
@@ -97,7 +97,7 @@
         <field name="arch" type="xml">
             <xpath expr="//kanban" position="attributes">
                 <attribute name="create">0</attribute>
-                <attribute name="default_order">state desc, id</attribute>
+                <attribute name="default_order">state asc, id</attribute>
             </xpath>
         </field>
     </record>
@@ -109,7 +109,7 @@
         <field name="mode">primary</field>
         <field name="arch" type="xml">
             <xpath expr="//list" position="attributes">
-                <attribute name="default_order">state desc, id</attribute>
+                <attribute name="default_order">state asc, id</attribute>
             </xpath>
         </field>
     </record>

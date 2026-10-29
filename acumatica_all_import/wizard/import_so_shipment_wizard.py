@@ -675,7 +675,9 @@ class ImportSOShipmentWizard(models.TransientModel):
 
     def _search_picking_type(self, building_id, code, document_only=False):
         config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
+        if code == 'CO' and config_picking_type and config_picking_type.code == 'internal' and config_picking_type.operation_category == 'internal':
+            return config_picking_type
+        if code != 'CO' and config_picking_type and config_picking_type.code == 'internal' and config_picking_type.operation_category == 'pick':
             return config_picking_type
 
         PickingType = self.env['stock.picking.type']

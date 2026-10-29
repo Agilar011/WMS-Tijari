@@ -1618,6 +1618,29 @@ class StockMoveLine(models.Model):
         if self.matching == 'not_match':
             self._check_matching_status_pick()
 
+        pick_matching_types = {
+            'Pick', 'Pick Internal', 'Pick Components',
+            'Internal Transfers', 'Internal Transfer', 'Transfer Internal',
+        }
+        matching_lines = self.filtered(
+            lambda line: line.picking_id
+            and (
+                line.picking_id.picking_type_id.name in pick_matching_types
+                or line.picking_id.is_ito_internal_transfer
+            )
+        )
+        for line in matching_lines:
+            # onchange updates the visible status while editing, but the
+            # authoritative result must be recomputed and stored server-side
+            # before Finish so a stale stored value cannot return afterward.
+            matching = line._get_matching_status()
+            if matching != 'match':
+                line._check_matching_status_pick()
+            line.write({
+                'matching': 'match',
+                'second_matching': 'Match',
+            })
+
         self.write({'pick_status': 'finished'})
         # Refresh every move in the picking so the list order reflects status
         # changes and any older rows with stale sequence values.

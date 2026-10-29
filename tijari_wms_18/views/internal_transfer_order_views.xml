@@ -265,7 +265,7 @@
                 <filter string="Ready" name="ready" domain="[('state', '=', 'ready')]"/>
                 <filter string="Done" name="done" domain="[('state', '=', 'done')]"/>
                 <group expand="0" string="Group By">
-                    <filter string="Transaction Type" name="group_transaction_type" context="{'group_by': 'transaction_type'}"/>
+                    <filter string="By Tipe Transaksi" name="group_transaction_type" context="{'group_by': 'transaction_type'}"/>
                     <filter string="Transfer Type" name="group_transfer_type" context="{'group_by': 'transfer_type'}"/>
                     <filter string="Status" name="group_state" context="{'group_by': 'state'}"/>
                 </group>
