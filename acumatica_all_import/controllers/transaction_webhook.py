@@ -107,14 +107,6 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             api_acumatica=api_acumatica,
         )
 
-    def _search_outgoing_picking_type(self, warehouse_code, document_only=False, api_acumatica=False):
-        return self._search_picking_type(
-            warehouse_code,
-            "outgoing",
-            document_only=document_only,
-            api_acumatica=api_acumatica,
-        )
-
     def _search_outbound_pick_picking_type(self, warehouse_code, document_only=False, api_acumatica=False):
         PickingType = self._env()["stock.picking.type"].sudo()
         target_picking_type = PickingType.resolve_document_only_picking_type(
@@ -162,7 +154,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             return PickingType.browse()
 
         picking_type = warehouse.pick_type_id
-        if picking_type and picking_type.active and picking_type.code == "internal":
+        if (
+            picking_type
+            and picking_type.active
+            and picking_type.code == "internal"
+            and picking_type.operation_category == "pick"
+        ):
             return picking_type
 
         return PickingType.search([
@@ -250,7 +247,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
     def _po_return_header_vals(self, item, row_number):
         warehouse_code = self._first_value(item, "Warehouse", "WarehouseID", "LineWarehouseID", "warehouse_code")
         document_only = self._bool_value(item, "DocumentOnly", "document_only")
-        picking_type = self._search_outgoing_picking_type(
+        picking_type = self._search_outbound_pick_picking_type(
             warehouse_code,
             document_only=document_only,
             api_acumatica="issue_po_return",
@@ -1409,9 +1406,9 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             picking_type_warehouse = picking_type_warehouse.split("-", 1)[0].strip()
         picking_type = self._search_picking_type(
             picking_type_warehouse,
-            "outgoing",
+            "internal",
             api_acumatica="credit_memo_consignment",
-            operation_category="delivery",
+            operation_category="pick",
         )
         return {
             "adt_id": item.get("id") or item.get("adt_id") or "",
@@ -1489,7 +1486,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         vals["adt_NoteID"] = self._first_value(item, "NoteID", "adt_NoteID")
         return vals
 
-    def _so_shipment_header_vals(self, item, row_number, picking_code="outgoing"):
+    def _so_shipment_header_vals(self, item, row_number, picking_code="internal", operation_category="pick"):
         # Acumatica webhook ini tidak mengirim row-level ``id``.  NoteHeaderID
         # adalah identifier stabil untuk header shipment.
         acumatica_id = self._first_value(
@@ -1511,6 +1508,7 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
             picking_code,
             document_only=document_only,
             api_acumatica="so_shipment",
+            operation_category=operation_category,
         )
         return {
             "acumatica_id": acumatica_id,
@@ -1551,7 +1549,12 @@ class AcumaticaTransactionWebhookController(AcumaticaWebhookController):
         return self._so_shipment_header_vals(item, row_number, picking_code="internal")
 
     def _so_shipment_outgoing_header_vals(self, item, row_number):
-        return self._so_shipment_header_vals(item, row_number, picking_code="outgoing")
+        return self._so_shipment_header_vals(
+            item,
+            row_number,
+            picking_code="internal",
+            operation_category="pick",
+        )
 
     def _so_shipment_line_vals(self, item, header):
         acumatica_id = self._first_value(

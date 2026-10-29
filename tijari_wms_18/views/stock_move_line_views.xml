@@ -110,7 +110,7 @@
                     name="second_matching"
                     decoration-success="second_matching == 'Match'"
                     decoration-danger="second_matching == 'Not Match'" 
-                    column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal', 'Manufacturing']"
+                    column_invisible="1"
                     readonly="1" 
                     force_save="1"/>
 

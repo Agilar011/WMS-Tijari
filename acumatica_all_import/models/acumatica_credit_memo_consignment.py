@@ -240,8 +240,8 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         building_id = building_id.split('-', 1)[0].strip()
                     picking_type = self.env['stock.picking.type'].resolve_picking_type(
                         building_id=building_id,
-                        code='outgoing',
-                        operation_category='delivery',
+                        code='internal',
+                        operation_category='pick',
                         api_acumatica='credit_memo_consignment',
                         transaction_key='credit_memo_consignment',
                         required=False,
@@ -452,7 +452,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     first,
                     [str(e)],
                     api_acumatica='credit_memo_consignment',
-                    operation_type='delivery',
+                    operation_type='pick',
                     origin=reference_nbr,
                     partner=getattr(first, 'adt_CustomerID', False) or False,
                     location=getattr(first, 'adt_WarehouseID', False) or getattr(first, 'adt_LocationID', False) or False,

@@ -340,7 +340,7 @@ class AcumaticaIssueLine(models.Model):
                     first,
                     [str(e)],
                     api_acumatica='issue_change_item',
-                    operation_type='delivery',
+                    operation_type='pick',
                     origin=issue_key,
                     location=first.warehouse_code or False,
                     location_dest=dest_location.display_name if 'dest_location' in locals() and dest_location else False,

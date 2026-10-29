@@ -627,7 +627,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     first,
                     [str(e)],
                     api_acumatica='inventory_issue',
-                    operation_type='delivery',
+                    operation_type='pick',
                     origin=first.reference_nbr or issue_key,
                     partner=first.customer_id or False,
                     location=first.warehouse_code or False,

@@ -603,6 +603,10 @@
                                 readonly="pick_status == 'finished' or state in ('done', 'cancel')"
                                 force_save="1"
                                 domain="[('id', 'child_of', adt_dest_location_id)]"/>
+                            <field name="matching" string="Matching"
+                                decoration-success="matching == 'match'"
+                                decoration-danger="matching == 'not_match'"
+                                widget="badge" readonly="1" column_invisible="1"/>
                             <field name="pick_status" string="Status"
                                 decoration-success="pick_status == 'finished'"
                                 decoration-danger="pick_status == 'unfinished'"
