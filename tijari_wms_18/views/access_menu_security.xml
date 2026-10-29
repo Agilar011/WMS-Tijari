@@ -782,10 +782,10 @@
         <field name="context">{'tijari_operator_readonly': True}</field>
     </record>
     <record id="action_stock_operations_pick" model="ir.actions.act_window">
-        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pick': 1, 'tijari_operator_readonly': True}</field>
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pick': 1, 'search_default_group_by_adt_type': 1, 'tijari_operator_readonly': True}</field>
     </record>
     <record id="action_stock_operations_pack" model="ir.actions.act_window">
-        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pack': 1, 'tijari_operator_readonly': True}</field>
+        <field name="context">{'contact_display': 'partner_address', 'search_default_tijari_pack': 1, 'search_default_group_by_adt_type': 1, 'tijari_operator_readonly': True}</field>
     </record>
 
 </odoo>

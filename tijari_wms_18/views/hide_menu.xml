@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-  <!-- <record id="sale.sale_menu_root" model="ir.ui.menu">
-      <field name="active" eval="True"/>
+  <record id="sale.sale_menu_root" model="ir.ui.menu">
+      <field name="active" eval="False"/>
   </record>
 
   <record id="purchase.menu_purchase_root" model="ir.ui.menu">
-      <field name="active" eval="True"/>
+      <field name="active" eval="False"/>
   </record>
 
   <record id="account.menu_finance" model="ir.ui.menu">
-      <field name="active" eval="True"/>
+      <field name="active" eval="False"/>
   </record>
 
   <record id="utm.menu_link_tracker_root" model="ir.ui.menu">
-      <field name="active" eval="True"/>
-  </record> -->
+      <field name="active" eval="False"/>
+  </record>
 
 </odoo>

@@ -17,6 +17,7 @@
                 <filter name="tijari_internal_transfer" string="Internal Transfers" domain="[('picking_type_id.name', 'in', ['Internal Transfer', 'Internal Transfers', 'Transfer Internal'])]"/>
                 <filter name="tijari_document_only" string="Document Only" domain="[('adt_is_document_only', '=', True)]"/>
                 <separator/>
+                <filter name="group_by_adt_type" string="By Tipe Transaksi" context="{'group_by': 'adt_type'}"/>
             </xpath>
         </field>
     </record>

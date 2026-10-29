@@ -2676,7 +2676,7 @@
                         'form_view_ref': 'tijari_wms_18.view_move_line_form_inherit_tijari'
                     }"
                 >
-                    <list editable="bottom" create="0" delete="0" open_form_view="1" default_order="putaway_status desc, id">
+                    <list editable="bottom" create="0" delete="0" open_form_view="1" default_order="putaway_status desc, quantity desc, id">
                         <field name="product_id" column_invisible="1" readonly="1"/>
                         <field name="state" column_invisible="1"/>
                         <field name="handheld_scan_code"
@@ -2753,7 +2753,7 @@
                             class="btn-danger"
                             invisible="putaway_status == 'unfinished' or state == 'done'"/>
                     </list>
-                    <kanban class="o_wms_putaway_kanban" create="0" edit="0" delete="0" can_open="1" action="action_open_putaway_details" type="object" default_order="putaway_status desc, id">
+                    <kanban class="o_wms_putaway_kanban" create="0" edit="0" delete="0" can_open="1" action="action_open_putaway_details" type="object" default_order="putaway_status desc, quantity desc, id">
                         <field name="product_id" readonly="1"/>
                         <field name="lot_id"/>
                         <field name="location_id"/>
