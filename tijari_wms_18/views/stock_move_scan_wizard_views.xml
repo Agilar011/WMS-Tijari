@@ -346,7 +346,11 @@
                         <field name="allowed_putaway_product_ids" invisible="1"/>
                         <field name="allowed_putaway_lot_ids" invisible="1"/>
                         <field name="putaway_product_id" domain="[('id', 'in', allowed_putaway_product_ids)]"/>
-                        <field name="putaway_lot_id" domain="[('id', 'in', allowed_putaway_lot_ids)]"/>
+                        <field name="putaway_lot_id"
+                            domain="[('id', 'in', allowed_putaway_lot_ids)]"
+                            invisible="putaway_lot_code and not putaway_lot_id"/>
+                        <field name="putaway_lot_code"
+                            invisible="not putaway_lot_code or putaway_lot_id"/>
                         <field name="putaway_qty_finish" readonly="1"/>
                     <!-- <field name="putaway_progress_status" string="Status"
                         decoration-success="putaway_progress_status == 'finished'"
