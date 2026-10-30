@@ -17,6 +17,16 @@ class PutawayMoveLineWizard(models.TransientModel):
         related='move_line_id.product_id',
         readonly=True,
     )
+    batch_id = fields.Many2one(
+        'stock.picking.batch',
+        related='move_line_id.picking_id.batch_id',
+        readonly=True,
+    )
+    batch_origin = fields.Char(
+        string='No. Dokumen',
+        related='move_line_id.batch_origin',
+        readonly=True,
+    )
     lot_id = fields.Many2one(
         'stock.lot',
         string='Lot/Serial Number',

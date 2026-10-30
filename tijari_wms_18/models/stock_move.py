@@ -948,7 +948,7 @@ class StockMove(models.Model):
 
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Stock Move',
+            'name': 'Picker' if self.picking_type_name in ('Receipts', 'Receipt Internal') else 'Stock Move',
             'res_model': 'stock.move',
             'res_id': self.id,
             'view_mode': 'form',
@@ -1026,6 +1026,7 @@ class StockMove(models.Model):
                 self.env.context,
                 unpacked_lot_id=self.env.context.get('unpacked_lot_id'),
                 unpacked_lot_code=self.env.context.get('unpacked_lot_code'),
+                unpacked_move_line_form=True,
             ),
         }
 
@@ -1084,13 +1085,6 @@ class StockMove(models.Model):
             string='Status',
             compute='_compute_picker_progress_status',
         )
-
-    picker_ordered_move_line_ids = fields.Many2many(
-        comodel_name='stock.move.line',
-        string='Picker Lines (Ordered)',
-        compute='_compute_picker_ordered_move_line_ids',
-        readonly=False,
-    )
 
     putaway_progress_status = fields.Selection(
         [
@@ -1207,13 +1201,6 @@ class StockMove(models.Model):
             move.picker_progress_status = (
                 'finished' if lines and all(line.picker_status == 'finished' for line in lines)
                 else 'unfinished'
-            )
-
-    @api.depends('move_line_ids', 'move_line_ids.picker_status')
-    def _compute_picker_ordered_move_line_ids(self):
-        for move in self:
-            move.picker_ordered_move_line_ids = move.move_line_ids.sorted(
-                key=lambda line: (line.picker_status == 'finished', line.id)
             )
 
     @api.depends(

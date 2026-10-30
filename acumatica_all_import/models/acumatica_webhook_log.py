@@ -192,16 +192,14 @@ class AcumaticaWebhookLog(models.Model):
             payload = rec._loads_payload(rec.payload)
             processing_payload = rec._processing_payload(payload)
             try:
-                if rec.webhook_type == 'master':
-                    from ..controllers.master_webhook import AcumaticaMasterWebhookController
-                    controller = AcumaticaMasterWebhookController()
+                if rec.webhook_type in ('master', 'transaction'):
+                    from ..controllers.webhook import AcumaticaWebhookController
+                    controller = AcumaticaWebhookController()
                     controller.env = self.env
-                    result = controller._process_master_payload(rec.webhook_name, processing_payload)
-                elif rec.webhook_type == 'transaction':
-                    from ..controllers.transaction_webhook import AcumaticaTransactionWebhookController
-                    controller = AcumaticaTransactionWebhookController()
-                    controller.env = self.env
-                    result = controller._process_transaction_payload(rec.webhook_name, processing_payload)
+                    if rec.webhook_type == 'master':
+                        result = controller._process_master_payload(rec.webhook_name, processing_payload)
+                    else:
+                        result = controller._process_transaction_payload(rec.webhook_name, processing_payload)
                 else:
                     raise UserError(_('Webhook type tidak valid: %s') % rec.webhook_type)
 

@@ -1,16 +1,9 @@
 # -*- coding: utf-8 -*-
-import logging
-
-from odoo import _, fields, http
+from odoo import _, fields
 from odoo.exceptions import UserError
 
-from .webhook import AcumaticaWebhookController
 
-
-_logger = logging.getLogger(__name__)
-
-
-class AcumaticaMasterWebhookController(AcumaticaWebhookController):
+class MasterMappingMixin:
     def _customer_vals(self, item, row_number):
         b_account_id = self._first_value(item, "BAccountID", "b_account_id")
         b_account_id = str(b_account_id).strip() if b_account_id not in (False, None, "") else ""
@@ -211,52 +204,3 @@ class AcumaticaMasterWebhookController(AcumaticaWebhookController):
             "label": config["label"],
         })
         return result
-
-    def _master_webhook(self, master_key, **kwargs):
-        ok, err = self._check_api_key()
-        if not ok:
-            return self._json_response("error", err, http_status=401)
-
-        try:
-            payload = self._raw_payload(kwargs)
-            config_key = self._normalize_master_key(master_key)
-            if config_key not in self._master_configs():
-                raise UserError(_("Unknown master webhook: %s") % master_key)
-            log = self._create_webhook_log("master", config_key, payload)
-            return self._json_response(
-                "success",
-                _("Webhook logged as pending. Process it from Webhook Logs."),
-                log_id=log.id,
-                webhook_type="master",
-                webhook_name=config_key,
-                state=log.state,
-            )
-        except UserError as exc:
-            return self._json_response("error", str(exc), http_status=400)
-        except Exception as exc:
-            _logger.exception("Unexpected error in master webhook")
-            return self._json_response("error", _("Unexpected server error: %s") % str(exc), http_status=500)
-
-    @http.route(["/acumatica/webhook/customer", "/acumatica/customer/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
-    def acumatica_customer_webhook(self, **kwargs):
-        return self._master_webhook("customer", **kwargs)
-
-    @http.route(["/acumatica/webhook/vendor", "/acumatica/vendor/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
-    def acumatica_vendor_webhook(self, **kwargs):
-        return self._master_webhook("vendor", **kwargs)
-
-    @http.route(["/acumatica/webhook/uom", "/acumatica/uom/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
-    def acumatica_uom_webhook(self, **kwargs):
-        return self._master_webhook("uom", **kwargs)
-
-    @http.route(["/acumatica/webhook/warehouse", "/acumatica/warehouse/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
-    def acumatica_warehouse_webhook(self, **kwargs):
-        return self._master_webhook("warehouse", **kwargs)
-
-    @http.route(["/acumatica/webhook/stock-item", "/acumatica/stock-item/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
-    def acumatica_stock_item_webhook(self, **kwargs):
-        return self._master_webhook("stock_item", **kwargs)
-
-    @http.route(["/acumatica/webhook/non-stock-item", "/acumatica/non-stock-item/line/webhook"], type="http", auth="public", methods=["POST"], csrf=False)
-    def acumatica_non_stock_item_webhook(self, **kwargs):
-        return self._master_webhook("non_stock_item", **kwargs)

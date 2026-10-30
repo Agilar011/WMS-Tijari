@@ -4,6 +4,11 @@ class ProductProduct(models.Model):
     """ Extend of Product_product"""
     _inherit = 'product.product'
 
+    @api.constrains('barcode')
+    def _check_barcode_uniqueness(self):
+        """Allow the same barcode to be assigned to multiple products."""
+        return
+
     @api.depends('name', 'default_code', 'product_tmpl_id')
     @api.depends_context(
         'display_default_code',
