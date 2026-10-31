@@ -24,6 +24,31 @@ class StockPicking(models.Model):
     _name = 'stock.picking'
     _inherit = ['stock.picking', 'approval.mixin']
 
+    wave_split_parent_id = fields.Many2one(
+        'stock.picking', string='Wave Split From', copy=False, readonly=True,
+        index=True, ondelete='set null',
+    )
+    wave_split_ids = fields.One2many(
+        'stock.picking', 'wave_split_parent_id', string='Wave Split Transfers',
+        copy=False,
+    )
+    has_wave_splits = fields.Boolean(
+        string='Has Wave Splits', compute='_compute_wave_split_status', store=True,
+    )
+    has_incomplete_wave_splits = fields.Boolean(
+        string='Has Incomplete Wave Splits',
+        compute='_compute_wave_split_status', store=True,
+    )
+
+    @api.depends('state', 'wave_split_ids', 'wave_split_ids.state')
+    def _compute_wave_split_status(self):
+        for picking in self:
+            picking.has_wave_splits = bool(picking.wave_split_ids)
+            picking.has_incomplete_wave_splits = bool(picking.wave_split_ids) and any(
+                split.state not in ('done', 'cancel')
+                for split in (picking | picking.wave_split_ids)
+            )
+
     @api.model
     def _get_operator_validation_workflow_context(self):
         """Allow trusted workflow and scan methods to carry internal writes.
@@ -3548,6 +3573,72 @@ class StockPicking(models.Model):
             },
         }
 
+    def _check_delivery_orders_pack_wave_splits(self):
+        """Wait for unfinished Pick/Pack fragments created by wave splitting.
+
+        Wave split siblings are tracked explicitly on ``stock.picking``. Using
+        that relation avoids treating unrelated pickings with similar move
+        links as fragments of the same wave split.
+        """
+        for delivery in self.filtered(
+            lambda picking: (
+                picking.picking_type_id.name == 'Delivery Orders'
+                and picking.state not in ('done', 'cancel')
+            )
+        ):
+            source_pack_moves = delivery.move_ids.move_orig_ids.filtered(
+                lambda move: move.picking_id.picking_type_id.name == 'Pack'
+            )
+            source_pack_pickings = source_pack_moves.mapped('picking_id')
+            wave_pack_pickings = self.env['stock.picking']
+            for source_pack in source_pack_pickings:
+                split_root = source_pack.wave_split_parent_id or source_pack
+                if split_root.has_wave_splits:
+                    wave_pack_pickings |= split_root | split_root.wave_split_ids
+            wave_pack_moves = wave_pack_pickings.mapped('move_ids').filtered(
+                lambda move: move.picking_id.picking_type_id.name == 'Pack'
+            )
+
+            # Traverse the direct Pack source even when it was not itself
+            # split, so we can detect whether its originating Pick was split.
+            source_pick_moves = (source_pack_moves | wave_pack_moves).mapped(
+                'move_orig_ids'
+            ).filtered(lambda move: move.picking_id.picking_type_id.name == 'Pick')
+            wave_pick_pickings = self.env['stock.picking']
+            source_pickings = source_pick_moves.mapped('picking_id')
+            for source_pick in source_pickings:
+                split_root = source_pick.wave_split_parent_id or source_pick
+                if split_root.has_wave_splits:
+                    wave_pick_pickings |= split_root | split_root.wave_split_ids
+            wave_pick_moves = wave_pick_pickings.mapped('move_ids').filtered(
+                lambda move: move.picking_id.picking_type_id.name == 'Pick'
+            )
+            wave_pack_moves |= wave_pick_moves.mapped(
+                'move_dest_ids'
+            ).filtered(lambda move: move.picking_id.picking_type_id.name == 'Pack')
+
+            wave_pack_pickings |= wave_pack_moves.mapped('picking_id')
+            wave_pickings = wave_pick_pickings
+
+            wave_pickings_to_check = (wave_pickings | wave_pack_pickings).filtered(
+                lambda picking: (
+                    picking.picking_type_id.name in ('Pick', 'Pack')
+                )
+            )
+            unfinished_pickings = wave_pickings_to_check.filtered(
+                lambda picking: picking.state not in ('done', 'cancel')
+            )
+
+            if unfinished_pickings:
+                transfer_names = '\n'.join(
+                    f'- Origin: {picking.origin or "-"}, Seri Dokumen: {picking.name}'
+                    for picking in unfinished_pickings.sorted('name')
+                )
+                raise UserError(_(
+                    "Delivery Orders belum dapat divalidasi. Selesaikan semua "
+                    "pecahan transfer Pick dan Pack terkait terlebih dahulu:\n%s"
+                ) % transfer_names)
+
     def button_validate(self):
         # Validation performs internal writes on the picking (for example,
         # updating adt_actual_qty and the picking state). Keep those writes
@@ -3556,6 +3647,7 @@ class StockPicking(models.Model):
         self = self.with_context(
             _tijari_operator_validation_write_token=_OPERATOR_VALIDATION_WRITE_TOKEN,
         )
+        self._check_delivery_orders_pack_wave_splits()
         if not self.env.context.get('over_receipt_update'):
             over_receipts = self.filtered('stock_lebih')
             for picking in over_receipts:
