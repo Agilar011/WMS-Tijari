@@ -1152,6 +1152,7 @@
                                     readonly="not product_id"
                                     column_invisible="True"/>
                                 <field name="product_uom_qty" string="Total Qty" readonly="id"/>
+                                <field name="confirmation_quantity" string="Qty Diambil" readonly="1" optional="show"/>
                                 <button type="object" name="action_product_forecast_report" title="Forecast Report" icon="fa-area-chart"
                                     invisible="not product_id or product_uom_qty == 0 or quantity == 0 and forecast_availability &lt;= 0 or (parent.picking_type_code == 'outgoing' and state != 'draft')"
                                     column_invisible="1"/>
@@ -1372,7 +1373,7 @@
                                                     <field name="description_picking"/>
                                                 </div> -->
                                                 <div>
-                                                    <strong>Qty Total: </strong>
+                                                    <strong>Total Qty: </strong>
                                                     <field name="product_uom_qty"/>
                                                     <field name="product_uom" groups="uom.group_uom" class="ms-1"/>
                                                 </div>

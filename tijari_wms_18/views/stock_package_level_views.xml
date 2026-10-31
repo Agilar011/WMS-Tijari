@@ -5,7 +5,7 @@
         <field name="name">stock.package_level.view.kanban</field>
         <field name="model">stock.package_level</field>
         <field name="arch" type="xml">
-            <kanban class="o_kanban_mobile" can_open="0">
+            <kanban class="o_kanban_mobile" can_open="0" default_order="status desc, id">
                 <field name="package_id" invisible="1"/>
                 <field name="status" invisible="1"/>
                 <field name="state" invisible='1' />

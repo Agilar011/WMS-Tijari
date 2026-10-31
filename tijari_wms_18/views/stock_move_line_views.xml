@@ -316,6 +316,7 @@
                             'Pack' in (picking_type_name or '')
                             or 'Receipts' in (picking_type_name or '')
                             or 'Delivery Orders' in (picking_type_name or '')
+                            or 'Pick' in (picking_type_name or '')
                         ">
                             <label for="location_id" string="Pick From"/>
                             <field name="location_id"
@@ -328,7 +329,7 @@
                         </group>
 
                         <group groups="stock.group_production_lot"
-                            invisible="tracking == 'none' or (not lot_id and not lot_name)">
+                            invisible="tracking == 'none' or (not lot_id and not lot_name) or 'Pick' in (picking_type_name or '')">
                             <label for="lot_id" string="LOT Number"/>
                             <field name="lot_id"
                                 readonly="1"
@@ -345,9 +346,45 @@
                                 class="fw-bold fs-6"
                                 invisible="lot_id or not lot_name"/>
                         </group>
+
+                        <!-- Pick form: show LOT Number before Pick From. -->
+                        <group groups="stock.group_production_lot"
+                            invisible="'Pick' not in (picking_type_name or '') or tracking == 'none' or (not lot_id and not lot_name)">
+                            <label for="lot_id" string="LOT Number"/>
+                            <field name="lot_id"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                class="fw-bold fs-6"
+                                invisible="not lot_id"
+                                domain="[('id', 'in', available_lot_ids)]"/>
+                            <field name="lot_name"
+                                string="LOT Number"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                class="fw-bold fs-6"
+                                invisible="lot_id or not lot_name"/>
+                        </group>
+
+                        <group invisible="'Pick' not in (picking_type_name or '')">
+                            <label for="location_id" string="Pick From"/>
+                            <field name="location_id"
+                                widget="location_short_many2one"
+                                readonly="1"
+                                force_save="1"
+                                nolabel="1"
+                                context="{'show_location_short_name': True}"
+                                class="fw-bold fs-6"/>
+                        </group>
                     </group>
 
-                    <group invisible="is_manufacturing or picking_type_name != 'Receipt Internal'">
+                    <group invisible="is_manufacturing or (
+                        'Pack' in (picking_type_name or '')
+                        or 'Pick' in (picking_type_name or '')
+                        or 'Receipts' in (picking_type_name or '')
+                        or 'Delivery Orders' in (picking_type_name or '')
+                    )">
                         <field name="result_package_id"
                             string="Packages"
                             options="{'no_create': True, 'no_open': True}"/>
@@ -490,12 +527,14 @@
                             <field name="location_dest_id"
                                 string="Store To"
                                 options="{'no_create': True}"
-                                context="{'show_location_short_name': True}"/>
+                                context="{'show_location_short_name': True}"
+                                invisible="context.get('unpacked_move_line_form') or context.get('unpacked_lot_id')"/>
 
                             <field name="result_package_id"
                                 string="Destination Packages"
                                 force_save="1"
-                                domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"/>
+                                domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"
+                                invisible="context.get('unpacked_move_line_form') or context.get('unpacked_lot_id')"/>
                         </group>
 
                         <group invisible="'Pack' not in (picking_type_name or '')">

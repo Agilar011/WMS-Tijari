@@ -3,10 +3,39 @@
 import { _t } from "@web/core/l10n/translation";
 import { Domain } from "@web/core/domain";
 import { patch } from "@web/core/utils/patch";
+import { onMounted } from "@odoo/owl";
+import { X2ManyField } from "@web/views/fields/x2many/x2many_field";
 import { SMLX2ManyField } from "@stock/fields/stock_move_line_x2_many_field";
 
-patch(SMLX2ManyField.prototype, {
+patch(X2ManyField.prototype, {
+    setup() {
+        super.setup(...arguments);
+        onMounted(async () => {
+            if (!this.props.context?.sort_picker_status) {
+                return;
+            }
 
+            const moveLines = this.list;
+            if (!moveLines?.records?.some((line) => "picker_status" in line.data)) {
+                return;
+            }
+
+            // Static x2many kanban records retain their relation order on first
+            // render, so explicitly put Unfinished lines before Finished ones.
+            const currentOrder = moveLines.orderBy?.[0];
+            if (currentOrder?.name === "picker_status") {
+                if (currentOrder.asc) {
+                    await moveLines.sortBy("picker_status");
+                }
+            } else {
+                await moveLines.sortBy("picker_status");
+                await moveLines.sortBy("picker_status");
+            }
+        });
+    },
+});
+
+patch(SMLX2ManyField.prototype, {
     async selectRecord(res_ids) {
         const pickingTypeName = this.props.record.data.picking_type_name || "";
         if (pickingTypeName !== "Pack") {

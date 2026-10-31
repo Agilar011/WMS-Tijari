@@ -810,9 +810,24 @@ class StockMove(models.Model):
                     _logger.info("unfiltered_dest: %s", item.unfiltered_dest)
 
     def _search_picking_for_assignation(self):
-        """Always create a new picking instead of reusing an existing one."""
+        """Reuse a ready picking with the same operation type and origin."""
         self.ensure_one()
-        return self.env['stock.picking']
+
+        # New chained transfers display the origin of their predecessor
+        # picking (see _get_new_picking_values), so use the same origin when
+        # searching for a picking to reuse.
+        origin_picking = self.move_orig_ids.mapped('picking_id').filtered(
+            lambda picking: picking.origin
+        )[:1]
+        origin = origin_picking.origin if origin_picking else self.origin
+        if not origin or not self.picking_type_id:
+            return self.env['stock.picking']
+
+        return self.env['stock.picking'].search([
+            ('picking_type_id', '=', self.picking_type_id.id),
+            ('origin', '=', origin),
+            ('state', '=', 'assigned'),
+        ], limit=1)
 
 
     def _get_new_picking_values(self):
@@ -854,6 +869,24 @@ class StockMove(models.Model):
                 source_ids = predecessor_pickings.mapped(field_name)
                 if source_ids:
                     vals[field_name] = [(6, 0, source_ids.ids)]
+
+        return vals
+
+    def _assign_picking_values(self, picking):
+        vals = super()._assign_picking_values(picking)
+
+        # For chained transfers, the picking origin follows the predecessor
+        # picking, while stock.move.origin can still refer to the original
+        # sale/procurement document. Odoo normally appends that move origin
+        # when reusing a picking, which would turn e.g. "S26-...-Test" into
+        # "S26-...-Test,S26-...". Keep the predecessor picking origin when
+        # every incoming move belongs to that same origin chain.
+        predecessor_pickings = self.mapped('move_orig_ids.picking_id').filtered(
+            lambda predecessor: predecessor.origin
+        )
+        predecessor_origins = set(predecessor_pickings.mapped('origin'))
+        if predecessor_origins == {picking.origin}:
+            vals.pop('origin', None)
 
         return vals
 
@@ -948,7 +981,7 @@ class StockMove(models.Model):
 
         return {
             'type': 'ir.actions.act_window',
-            'name': 'Stock Move',
+            'name': 'Picker' if self.picking_type_name in ('Receipts', 'Receipt Internal') else 'Stock Move',
             'res_model': 'stock.move',
             'res_id': self.id,
             'view_mode': 'form',
@@ -1026,6 +1059,7 @@ class StockMove(models.Model):
                 self.env.context,
                 unpacked_lot_id=self.env.context.get('unpacked_lot_id'),
                 unpacked_lot_code=self.env.context.get('unpacked_lot_code'),
+                unpacked_move_line_form=True,
             ),
         }
 
@@ -1084,13 +1118,6 @@ class StockMove(models.Model):
             string='Status',
             compute='_compute_picker_progress_status',
         )
-
-    picker_ordered_move_line_ids = fields.Many2many(
-        comodel_name='stock.move.line',
-        string='Picker Lines (Ordered)',
-        compute='_compute_picker_ordered_move_line_ids',
-        readonly=False,
-    )
 
     putaway_progress_status = fields.Selection(
         [
@@ -1207,13 +1234,6 @@ class StockMove(models.Model):
             move.picker_progress_status = (
                 'finished' if lines and all(line.picker_status == 'finished' for line in lines)
                 else 'unfinished'
-            )
-
-    @api.depends('move_line_ids', 'move_line_ids.picker_status')
-    def _compute_picker_ordered_move_line_ids(self):
-        for move in self:
-            move.picker_ordered_move_line_ids = move.move_line_ids.sorted(
-                key=lambda line: (line.picker_status == 'finished', line.id)
             )
 
     @api.depends(

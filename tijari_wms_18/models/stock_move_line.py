@@ -1389,7 +1389,7 @@ class StockMoveLine(models.Model):
 
         if (
             self.picking_id
-            and self.picking_id.picking_type_id.name == 'Receipts'
+            and 'Receipts' in (self.picking_id.picking_type_id.name or '')
         ):
             self.action_mark_picker_finished()
 
@@ -1427,6 +1427,14 @@ class StockMoveLine(models.Model):
             self.write({'picker_status': 'finished'})
 
         if is_batch_view:
+            # Receipt picker lines are opened from the batch's Stock Move
+            # popup. Reopen that parent view after confirming the line instead
+            # of returning None, which leaves the picker form in place.
+            if (
+                self.picking_id
+                and 'Receipts' in (self.picking_id.picking_type_id.name or '')
+            ):
+                return self.move_id.action_open_move_operation()
             return
         return self.move_id.action_open_move_pick()
     

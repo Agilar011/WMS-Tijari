@@ -1412,7 +1412,28 @@ class StockMoveLineWaveResponsible(models.Model):
     _inherit = 'stock.move.line'
 
     def _add_to_wave(self, wave=False, description=False):
+        source_pickings_by_line = {
+            line.id: line.picking_id
+            for line in self
+            if line.picking_id
+        }
         result = super()._add_to_wave(wave=wave, description=description)
+
+        # Odoo creates a new picking when only part of a picking is added to a
+        # wave. Record that parent/fragment relationship explicitly; full
+        # pickings moved into a wave keep their original picking record.
+        source_pickings = self.env['stock.picking'].browse(
+            list({picking.id for picking in source_pickings_by_line.values()})
+        )
+        for source_picking in source_pickings:
+            selected_lines = self.filtered(
+                lambda line: source_pickings_by_line.get(line.id) == source_picking
+            )
+            split_pickings = selected_lines.mapped('picking_id') - source_picking
+            if split_pickings:
+                split_root = source_picking.wave_split_parent_id or source_picking
+                split_pickings.write({'wave_split_parent_id': split_root.id})
+
         responsible_values = self.env.context.get('tijari_wave_responsible_values')
         if responsible_values:
             transferred_pickings = self.mapped('picking_id').filtered(
