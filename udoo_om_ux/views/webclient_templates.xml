@@ -3,10 +3,10 @@
     <template id="webclient_login" inherit_id="web.login_layout">
         <xpath expr="//t[@t-call='web.frontend_layout']/t[last()]" position="after">
             <t t-set="body_classname" t-value="'light-dm o_home_menu_background'"/>
-            <t t-set="login_bg" t-value="request.env.company.sudo().login_bg or request.env.ref('base.main_company').sudo().login_bg"/>
-            <style t-if="login_bg">
+            <t t-set="login_company" t-value="request.env.company.sudo() if request.env.company.sudo().login_bg else request.env.ref('base.main_company').sudo()"/>
+            <style t-if="login_company.login_bg">
                 body.light-dm {
-                    --homeMenu-bg-image: url("<t t-out="image_data_uri(login_bg)"/>");
+                    --homeMenu-bg-image: url("/web/image/res.company/<t t-out="login_company.id"/>/login_bg");
                 }
             </style>
         </xpath>
@@ -72,5 +72,9 @@
             <t t-elif="color_shade == 'yellow'" t-call-assets="web.assets_web_yellow_dark"/>
             <t t-elif="color_shade == 'orange'" t-call-assets="web.assets_web_orange_dark"/>
         </xpath>
+    </template>
+
+    <template id="remove_powered_by_odoo" inherit_id="web.login_layout">
+        <xpath expr="//a[contains(@href, 'odoo.com?utm_source=db')]" position="replace"/>
     </template>
 </odoo>
