@@ -73,4 +73,8 @@
             <t t-elif="color_shade == 'orange'" t-call-assets="web.assets_web_orange_dark"/>
         </xpath>
     </template>
+
+    <template id="remove_powered_by_odoo" inherit_id="web.login_layout">
+        <xpath expr="//a[contains(@href, 'odoo.com?utm_source=db')]" position="replace"/>
+    </template>
 </odoo>
