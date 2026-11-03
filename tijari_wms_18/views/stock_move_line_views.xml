@@ -193,7 +193,8 @@
                     <button name="action_generate_selected_lot"
                         type="object"
                         string="Generate Lot"
-                        class="btn-warning"/>
+                        class="btn-warning"
+                        invisible="context.get('picking_type_name') != 'Receipts'"/>
                 </header>
             </xpath>
 

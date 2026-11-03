@@ -5,7 +5,7 @@
       id="menu_stock_location_acumatica"
       name="Location Acumatica"
       parent="stock.menu_warehouse_config"
-      action="action_stock_location_acumatica"
+      action="server_action_open_stock_location_acumatica"
       sequence="3"/>
 
     <!-- <menuitem
