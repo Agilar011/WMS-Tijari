@@ -69,6 +69,23 @@ class StockLocationAcumatica(models.Model):
     _name = 'stock.location.acumatica'
     _description = 'Location mapping untuk grouping location dari Acumatica ke location di Odoo (untuk kebutuhan import data dari Acumatica). stock.location.acumatica -> stock.location'
 
+    @api.model
+    def action_open_acumatica_locations(self):
+        """Open mappings with WH33 selected only for an SOP Aditya warehouse."""
+        action = self.env.ref(
+            'tijari_wms_18.action_stock_location_acumatica'
+        ).read()[0]
+        action_context = {'search_default_not_is_error': 1}
+        sop_warehouse = self.env['stock.warehouse'].sudo().search([
+            ('company_id', '=', self.env.company.id),
+            ('code', '=', 'WH33'),
+            ('adt_api_picking_type_enabled', '=', True),
+        ], limit=1)
+        if sop_warehouse:
+            action_context['search_default_wh33'] = 1
+        action['context'] = action_context
+        return action
+
     @api.depends('name', 'code')
     @api.depends_context('show_location_code')
     def _compute_display_name(self):

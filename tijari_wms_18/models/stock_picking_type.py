@@ -41,14 +41,33 @@ class StockPickingType(models.Model):
             'direct receipt': 'receive',
             'direct delivery order/transfer': 'delivery',
         }
-        picking_types = self.search([('warehouse_id.code', '=', 'WH33')])
+        picking_types = self.with_context(active_test=False).search([
+            ('warehouse_id.code', '=', 'WH33'),
+        ])
         for picking_type in picking_types:
             type_name = (picking_type.name or '').strip().casefold()
             group_view = group_by_type_name.get(type_name)
             if group_view is not None and picking_type.group_view != group_view:
                 picking_type.group_view = group_view
+            if type_name == 'storage' and not picking_type.active:
+                picking_type.active = True
+            if type_name in (
+                'delivery orders', 'direct delivery order', 'internal transfer',
+            ) and not picking_type.show_entire_packs:
+                picking_type.show_entire_packs = True
             if type_name in ('direct receipt', 'direct delivery order/transfer'):
                 picking_type.automatic_process = True
+
+        preproduction_locations = self.env['stock.location'].with_context(
+            active_test=False,
+        ).search([
+            ('warehouse_id.code', '=', 'WH33'),
+        ])
+        for location in preproduction_locations:
+            if (location.name or '').strip().casefold() in (
+                'pre-production', 'pre production',
+            ) and not location.is_location_mapping:
+                location.is_location_mapping = True
 
     is_default_api = fields.Boolean(string="Default Picking Type For API")
     is_api_config = fields.Boolean(string="Picking Type API Config")

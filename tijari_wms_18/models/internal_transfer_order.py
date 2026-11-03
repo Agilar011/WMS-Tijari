@@ -2066,8 +2066,10 @@ class StockMove(models.Model):
             lambda item: item.internal_transfer_order_id and not item.picking_id
         ):
             order = move.internal_transfer_order_id
-            move.location_id = order.location_id
-            move.location_dest_id = order.location_dest_id
+            move.location_id = order.intra_location_id or order.location_id
+            move.location_dest_id = (
+                order.intra_location_dest_id or order.location_dest_id
+            )
             move.internal_transfer_scan_lot_ids = move.internal_transfer_scan_lot_ids.filtered(
                 lambda lot: lot.product_id == move.product_id
             )

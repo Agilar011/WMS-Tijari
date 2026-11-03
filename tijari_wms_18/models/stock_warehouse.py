@@ -24,7 +24,8 @@ class StockWarehouse(models.Model):
     adt_api_picking_type_enabled = fields.Boolean(
         string='SOP Aditya',
         help=(
-            'Apply SOP Aditya: incoming 1 step, outgoing 3 steps, '
+            'Apply SOP Aditya: incoming 2 steps, outgoing 3 steps, '
+            'manufacturing 3 steps, '
             'internal transfer active, document-only active, and use '
             'standard Pick, Pack, Internal Transfers, and Receipts operation types.'
         ),
@@ -77,14 +78,17 @@ class StockWarehouse(models.Model):
         for vals in vals_list:
             if vals.get('adt_api_picking_type_enabled'):
                 vals.update({
-                    'reception_steps': 'one_step',
+                    # Two-step receipts create Odoo's standard Storage
+                    # operation type (Receipts -> Storage).
+                    'reception_steps': 'two_steps',
                     'delivery_steps': 'pick_pack_ship',
+                    'manufacture_steps': 'pbm_sam',
                     'adt_internal_transfer_enabled': True,
                     'adt_document_only_enabled': True,
                 })
         warehouses = super().create(vals_list)
         warehouses._adt_sync_shipment_configuration()
-        warehouses.filtered('adt_api_picking_type_enabled')._adt_sync_api_picking_type_configuration()
+        warehouses.filtered('adt_api_picking_type_enabled')._adt_apply_sop_aditya()
         return warehouses
 
     def write(self, vals):
@@ -118,8 +122,9 @@ class StockWarehouse(models.Model):
         warehouses = self.filtered('adt_api_picking_type_enabled')
         for warehouse in warehouses:
             sop_values = {
-                'reception_steps': 'one_step',
+                'reception_steps': 'two_steps',
                 'delivery_steps': 'pick_pack_ship',
+                'manufacture_steps': 'pbm_sam',
                 'adt_internal_transfer_enabled': True,
                 'adt_document_only_enabled': True,
             }
@@ -127,6 +132,68 @@ class StockWarehouse(models.Model):
                 warehouse.with_context(skip_adt_sop_sync=True).write(sop_values)
             warehouse._adt_sync_shipment_configuration()
             warehouse._adt_sync_api_picking_type_configuration()
+            warehouse._adt_apply_sop_operation_type_defaults()
+
+    @api.model
+    def _adt_apply_sop_aditya_to_enabled_warehouses(self):
+        """Reapply SOP values during module installation or upgrade."""
+        warehouses = self.search([('adt_api_picking_type_enabled', '=', True)])
+        warehouses._adt_apply_sop_aditya()
+        return True
+
+    def _adt_apply_sop_operation_type_defaults(self):
+        """Apply SOP defaults to operation types created for this warehouse."""
+        group_by_type_name = {
+            'receipts': 'receive',
+            'receipt': 'receive',
+            'receipt internal': 'receive',
+            'storage': 'receive',
+            'pick': 'pick',
+            'pick internal': 'pick',
+            'pick components': 'pick',
+            'pack': 'pack',
+            'pack internal': 'pack',
+            'internal transfer': 'delivery',
+            'internal transfers': 'delivery',
+            'transfer internal': 'delivery',
+            'delivery orders': 'delivery',
+            'manufacturing': 'manufacture',
+            'store finished product': 'receive',
+            'direct receipt': 'receive',
+            'direct delivery order': 'delivery',
+            'direct delivery order/transfer': 'delivery',
+        }
+        operation_types = self.env['stock.picking.type'].with_context(
+            active_test=False,
+        ).search([('warehouse_id', '=', self.id)])
+        for operation_type in operation_types:
+            name = (operation_type.name or '').strip().casefold()
+            values = {}
+            group_view = group_by_type_name.get(name)
+            if group_view and operation_type.group_view != group_view:
+                values['group_view'] = group_view
+            if name == 'storage' and not operation_type.active:
+                values['active'] = True
+            if (
+                name in ('delivery orders', 'internal transfer', 'internal transfers')
+                and not operation_type.show_entire_packs
+            ):
+                values['show_entire_packs'] = True
+            if values:
+                operation_type.write(values)
+
+        if self.view_location_id:
+            preproduction_locations = self.env['stock.location'].with_context(
+                active_test=False,
+            ).search([
+                ('id', 'child_of', self.view_location_id.id),
+                ('name', 'ilike', 'pre-production'),
+            ])
+            for location in preproduction_locations:
+                if (location.name or '').strip().casefold() in (
+                    'pre-production', 'pre production',
+                ) and not location.is_location_mapping:
+                    location.is_location_mapping = True
 
     def _adt_check_can_disable_internal_transfer(self):
         for warehouse in self:

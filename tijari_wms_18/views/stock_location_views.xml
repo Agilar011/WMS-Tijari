@@ -20,6 +20,12 @@
                     string="Non-Error"
                     domain="[('is_error', '=', False)]"
                 />
+                <separator/>
+                <filter
+                    name="wh33"
+                    string="WH33"
+                    domain="[('building', '=', 'WH33')]"
+                />
             </search>
         </field>
     </record>

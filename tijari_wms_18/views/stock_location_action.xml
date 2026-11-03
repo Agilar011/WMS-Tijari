@@ -9,6 +9,13 @@
       <field name="domain">[]</field>
     </record>
 
+    <record id="server_action_open_stock_location_acumatica" model="ir.actions.server">
+      <field name="name">Open Location Acumatica</field>
+      <field name="model_id" ref="model_stock_location_acumatica"/>
+      <field name="state">code</field>
+      <field name="code">action = model.action_open_acumatica_locations()</field>
+    </record>
+
     <!-- <record id="action_stock_location_acumatica_error" model="ir.actions.act_window">
       <field name="name">Location Acumatica Error</field>
       <field name="res_model">stock.location.acumatica</field>
