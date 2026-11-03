@@ -38,7 +38,7 @@
                     <button name="%(action_scan_stock_picking_by_origin)d"
                         type="action"
                         string="Search Document"
-                        class="btn-primary"
+                        class="btn-primary adt_search_document_qr"
                         display="always"
                         invisible="1"/>
                 </header>
@@ -98,6 +98,10 @@
             <xpath expr="//kanban" position="attributes">
                 <attribute name="create">0</attribute>
                 <attribute name="default_order">state asc, id</attribute>
+            </xpath>
+            <xpath expr="//kanban/header/button[hasclass('adt_search_document_qr')]" position="attributes">
+                <attribute name="string">Search Document by QR</attribute>
+                <attribute name="invisible">0</attribute>
             </xpath>
         </field>
     </record>
