@@ -2250,7 +2250,6 @@
                         <field
                             name="result_package_id"
                             string="Destination Package"
-                            domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"
                             force_save="1"
                             column_invisible="not context.get('from_operations')"
                             readonly="parent.state in ('done', 'cancel')"/>
