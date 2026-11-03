@@ -1512,13 +1512,24 @@ class StockMove(models.Model):
             if ito_id and not move_vals.get('picking_id'):
                 order = self.env['internal.transfer.order'].browse(ito_id).exists()
                 if order:
-                    if not move_vals.get('location_id') and order.location_id:
-                        move_vals = dict(move_vals, location_id=order.location_id.id)
-                    if not move_vals.get('location_dest_id') and order.location_dest_id:
+                    source_location = order.intra_location_id or order.location_id
+                    destination_location = (
+                        order.intra_location_dest_id or order.location_dest_id
+                    )
+                    if not move_vals.get('location_id') and source_location:
+                        move_vals = dict(move_vals, location_id=source_location.id)
+                    if not move_vals.get('location_dest_id') and destination_location:
                         move_vals = dict(
                             move_vals,
-                            location_dest_id=order.location_dest_id.id,
+                            location_dest_id=destination_location.id,
                         )
+                    # Fail with a readable business validation before the
+                    # database reports a stock_move.location_id not-null error.
+                    if move_vals.get('product_id') and not move_vals.get('location_id'):
+                        raise ValidationError(_(
+                            'Source Location wajib diisi pada Internal Transfer Order %s '
+                            'sebelum operation disimpan.'
+                        ) % order.display_name)
             if not move_vals.get('date') and move_vals.get('picking_id'):
                 picking = self.env['stock.picking'].browse(move_vals['picking_id'])
                 if picking.exists() and picking.scheduled_date:

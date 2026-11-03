@@ -2066,8 +2066,10 @@ class StockMove(models.Model):
             lambda item: item.internal_transfer_order_id and not item.picking_id
         ):
             order = move.internal_transfer_order_id
-            move.location_id = order.location_id
-            move.location_dest_id = order.location_dest_id
+            move.location_id = order.intra_location_id or order.location_id
+            move.location_dest_id = (
+                order.intra_location_dest_id or order.location_dest_id
+            )
             move.internal_transfer_scan_lot_ids = move.internal_transfer_scan_lot_ids.filtered(
                 lambda lot: lot.product_id == move.product_id
             )
@@ -2087,27 +2089,31 @@ class StockMove(models.Model):
             order = move.internal_transfer_order_id
             scanned_lot = Lot.browse()
             if not product and order:
-                lot_domain = [
-                    ('name', '=', code),
-                    ('product_id.tracking', 'in', ('lot', 'serial')),
-                ]
-                if order.company_id:
-                    lot_domain.append(('company_id', 'in', [False, order.company_id.id]))
-                candidate_lots = Lot.search(lot_domain)
-                if (
-                    order.transaction_type == 'intra_warehouse'
-                    and order.intra_transfer_type == 'intra_group_transfer'
-                ):
-                    source_location = order.intra_location_id or order.location_id
-                    available_products = order._get_available_source_products(source_location)
-                    candidate_lots = candidate_lots.filtered(
-                        lambda lot: lot.product_id in available_products
-                    )
                 source_location = (
                     (order.intra_location_id or order.location_id)
                     if order.transaction_type == 'intra_warehouse'
                     else order.location_id
                 )
+                source_company = (
+                    source_location.company_id if source_location else self.env.company
+                )
+                lot_domain = [
+                    ('name', '=', code),
+                    ('product_id.tracking', 'in', ('lot', 'serial')),
+                ]
+                if source_company:
+                    lot_domain.append((
+                        'company_id', 'in', [False, source_company.id]
+                    ))
+                candidate_lots = Lot.search(lot_domain)
+                if (
+                    order.transaction_type == 'intra_warehouse'
+                    and order.intra_transfer_type == 'intra_group_transfer'
+                ):
+                    available_products = order._get_available_source_products(source_location)
+                    candidate_lots = candidate_lots.filtered(
+                        lambda lot: lot.product_id in available_products
+                    )
                 if source_location and source_location.usage in ('internal', 'transit'):
                     candidate_lots = candidate_lots.filtered(
                         lambda lot: sum(Quant.search([

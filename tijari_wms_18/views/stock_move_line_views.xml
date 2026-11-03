@@ -193,7 +193,8 @@
                     <button name="action_generate_selected_lot"
                         type="object"
                         string="Generate Lot"
-                        class="btn-warning"/>
+                        class="btn-warning"
+                        invisible="context.get('picking_type_name') != 'Receipts'"/>
                 </header>
             </xpath>
 
@@ -687,8 +688,13 @@
                             invisible="'Pick' not in (picking_type_name or '')"/>
 
                         <label for="quantity"
-                            string="Quantity"
-                            invisible="'Pack' not in (picking_type_name or '')"/>
+                            string="Qty Unpack"
+                            invisible="'Pack' not in (picking_type_name or '') or result_package_id"/>
+                        
+                        <label for="quantity"
+                            string="Qty Pack"
+                            invisible="'Pack' not in (picking_type_name or '') or not result_package_id"/>
+                        
 
                         <label for="quantity"
                             string="Qty Diterima"
