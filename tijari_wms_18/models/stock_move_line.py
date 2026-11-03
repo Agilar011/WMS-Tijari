@@ -1528,6 +1528,8 @@ class StockMoveLine(models.Model):
                 "Picker tidak dapat di-rollback karena proses Putaway telah selesai."
             ))
         self.write({'picker_status': 'unfinished'})
+        if self.filtered('picking_id.batch_id'):
+            return
         return self.move_id.action_open_move_pick()
 
     def action_mark_picker_unfinished_form(self):

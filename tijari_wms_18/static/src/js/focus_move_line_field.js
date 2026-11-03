@@ -136,6 +136,10 @@ function isCameraRetryableError(error) {
     return CAMERA_RETRYABLE_ERROR_NAMES.includes(error?.name || "");
 }
 
+function isScannerCancelledError(error) {
+    return error?.name === "ScannerCancelledError";
+}
+
 function notifyScannerError(envOrService, error) {
     const notification = envOrService?.services?.notification || envOrService;
     notification?.add?.(getScannerErrorMessage(error), {
@@ -517,7 +521,7 @@ async function scanQrFromCamera(title) {
     try {
         return await scanQrWithZxing(title);
     } catch (zxingError) {
-        if (isCameraAccessError(zxingError)) {
+        if (isCameraAccessError(zxingError) || isScannerCancelledError(zxingError)) {
             throw zxingError;
         }
         if (!window.BarcodeDetector) {
@@ -552,7 +556,11 @@ async function scanQrWithBarcodeDetector(title) {
         await dialog.video.play();
 
         return await new Promise((resolve, reject) => {
-            dialog.closeButton.addEventListener("click", () => reject(new Error("Scan dibatalkan.")), {
+            dialog.closeButton.addEventListener("click", () => {
+                const error = new Error("Scan dibatalkan.");
+                error.name = "ScannerCancelledError";
+                reject(error);
+            }, {
                 once: true,
             });
 
@@ -607,7 +615,11 @@ async function scanQrWithZxing(title) {
         const constraintsCandidates = getVideoConstraintCandidates();
 
         return await new Promise((resolve, reject) => {
-            dialog.closeButton.addEventListener("click", () => reject(new Error("Scan dibatalkan.")), {
+            dialog.closeButton.addEventListener("click", () => {
+                const error = new Error("Scan dibatalkan.");
+                error.name = "ScannerCancelledError";
+                reject(error);
+            }, {
                 once: true,
             });
 
@@ -767,7 +779,17 @@ async function scanQrToPickingOrigin(env, action) {
     const params = action.params || {};
 
     try {
-        const scannedCode = await scanQrFromCamera(params.title || "Search Document");
+        let scannedCode;
+        while (!scannedCode) {
+            try {
+                scannedCode = await scanQrFromCamera(params.title || "Search Document");
+            } catch (error) {
+                if (!isScannerCancelledError(error)) {
+                    throw error;
+                }
+            }
+        }
+
         const result = await env.services.orm.call(
             "stock.picking",
             "action_open_by_scanned_origin",
