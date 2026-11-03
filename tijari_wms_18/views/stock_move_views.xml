@@ -1150,7 +1150,7 @@
                                 widget="adt_handheld_scan_code"
                                 string="Scan Handheld"
                                 placeholder="Scan handheld: lot, lokasi, atau package"
-                                column_invisible="'Pick' in (parent.picking_type_name or '') or 'Delivery Orders' in (parent.picking_type_name or '') or parent.picking_type_name in ['Receipts', 'Receipt Internal']"
+                                column_invisible="'Delivery Orders' in (parent.picking_type_name or '') or parent.picking_type_name in ['Receipts', 'Receipt Internal']"
                                 readonly="pick_status == 'finished' or parent.state in ('done', 'cancel')"/>
                         <field name="location_id" 
                                 string="Pick From" 
