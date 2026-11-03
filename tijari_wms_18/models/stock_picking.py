@@ -1943,41 +1943,41 @@ class StockPicking(models.Model):
             self.env.context.get('_tijari_backorder_create_token')
             is _BACKORDER_CREATE_TOKEN
         )
-        if (
-            not self.env.su
-            and not self.env.user.has_group('base.group_system')
-            and not is_backorder_workflow_create
-        ):
-            can_create_over_receipt = any(self.env.user.has_group(group_xmlid) for group_xmlid in (
-                'tijari_wms_18.group_warehouse_manager',
-                'tijari_wms_18.group_warehouse_head',
-                'tijari_wms_18.group_warehouse_admin',
-                'tijari_wms_18.group_it_staff',
-                'stock.group_stock_manager',
-            ))
-            default_vals = self.default_get(['stock_lebih', 'picking_type_id'])
-            for vals in vals_list:
-                is_over_receipt = vals.get(
-                    'stock_lebih',
-                    self.env.context.get('default_stock_lebih', default_vals.get('stock_lebih')),
-                )
-                picking_type_id = vals.get(
-                    'picking_type_id',
-                    self.env.context.get('default_picking_type_id', default_vals.get('picking_type_id')),
-                )
-                picking_type = self.env['stock.picking.type'].browse(picking_type_id).exists()
-                if not (
-                    can_create_over_receipt
-                    and is_over_receipt
-                    and picking_type
-                    and picking_type.code == 'incoming'
-                    and picking_type.operation_category == 'receive'
-                ):
-                    raise AccessError(_(
-                        'Stock picking hanya dapat dibuat melalui API Data Hub. '
-                        'Pengecualian manual hanya berlaku untuk dokumen Over-Receipt '
-                        'dan Internal Transfer Order yang dibuat melalui alurnya.'
-                    ))
+        # if (
+        #     not self.env.su
+        #     and not self.env.user.has_group('base.group_system')
+        #     and not is_backorder_workflow_create
+        # ):
+        #     can_create_over_receipt = any(self.env.user.has_group(group_xmlid) for group_xmlid in (
+        #         'tijari_wms_18.group_warehouse_manager',
+        #         'tijari_wms_18.group_warehouse_head',
+        #         'tijari_wms_18.group_warehouse_admin',
+        #         'tijari_wms_18.group_it_staff',
+        #         'stock.group_stock_manager',
+        #     ))
+        #     default_vals = self.default_get(['stock_lebih', 'picking_type_id'])
+        #     for vals in vals_list:
+        #         is_over_receipt = vals.get(
+        #             'stock_lebih',
+        #             self.env.context.get('default_stock_lebih', default_vals.get('stock_lebih')),
+        #         )
+        #         picking_type_id = vals.get(
+        #             'picking_type_id',
+        #             self.env.context.get('default_picking_type_id', default_vals.get('picking_type_id')),
+        #         )
+        #         picking_type = self.env['stock.picking.type'].browse(picking_type_id).exists()
+        #         if not (
+        #             can_create_over_receipt
+        #             and is_over_receipt
+        #             and picking_type
+        #             and picking_type.code == 'incoming'
+        #             and picking_type.operation_category == 'receive'
+        #         ):
+        #             raise AccessError(_(
+        #                 'Stock picking hanya dapat dibuat melalui API Data Hub. '
+        #                 'Pengecualian manual hanya berlaku untuk dokumen Over-Receipt '
+        #                 'dan Internal Transfer Order yang dibuat melalui alurnya.'
+        #             ))
         # print("=" * 100)
         # print("CREATE PICKING")
         # traceback.print_stack(limit=15)        
