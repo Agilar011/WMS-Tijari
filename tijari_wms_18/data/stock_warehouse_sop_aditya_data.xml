@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <function model="stock.warehouse" name="_adt_apply_sop_aditya_to_enabled_warehouses"/>
+</odoo>
