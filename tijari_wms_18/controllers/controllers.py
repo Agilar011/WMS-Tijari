@@ -868,7 +868,8 @@ class WmsApiController(http.Controller):
         execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
-                'reportUnitUri': '/Odoo/ADITYA/Lot_package',
+                # 'reportUnitUri': '/Odoo/ADITYA/Lot_package',
+                'reportUnitUri': '/Odoo/ADITYA/Lot_package_fiks',
                 'outputFormat': 'pdf',
                 'parameters': {
                     'reportParameter': [{
@@ -1450,6 +1451,7 @@ class WmsApiController(http.Controller):
                     'code': move.product_id.default_code or '',
                     'product': move.product_id.name or '',
                     'uom': move.product_uom.name or '',
+                    'note': move.product_note or '',
                     'qty2': float(move.product_uom_qty or 0),
                     'qty': float(line.quantity or 0) if line else 0.0,
                 }
@@ -1458,7 +1460,7 @@ class WmsApiController(http.Controller):
 
         data['detail'] = list(package_groups.values())
         lines = receipt.move_line_ids
-        data['total'] = len(lines.mapped('result_package_id'))             # package unik
+        data['total'] = len(lines.mapped('result_package_id'))             
         data['undpack'] = len(lines.filtered(lambda l: not l.result_package_id))
 
         data = json.dumps(data)
