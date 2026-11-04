@@ -1952,7 +1952,10 @@ class InternalTransferOrder(models.Model):
                     pickings.filtered(
                         lambda picking: (
                             picking.internal_transfer_leg == 'receipt'
-                            and picking.picking_type_id.operation_category == 'put'
+                            and (
+                                picking.picking_type_id.operation_category == 'put'
+                                or picking.picking_type_name in ('Storage', 'Store Finished Product')
+                            )
                             and not picking.putaway_responsible_ids
                         )
                     ),
