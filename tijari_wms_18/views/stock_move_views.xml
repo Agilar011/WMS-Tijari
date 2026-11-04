@@ -345,6 +345,7 @@
                         <field name="lot_name" readonly="1" force_save="1" invisible="1"/>
                         <field name="picking_type_name" invisible="1"/>
                         <field name="description_picking" invisible="1"/>
+                        <field name="result_package_id" invisible="1"/>
                         <templates>
                             <t t-name="card">
                                 <div class="o_wms_operation_card"
@@ -423,7 +424,7 @@
                                     <strong>To: </strong>
                                     <field name="location_dest_id" widget="location_short_many2one" readonly="1" force_save="1" context="{'show_location_short_name': True}"/>
                                 </div> -->
-                                <div class="d-flex align-items-center gap-1" invisible="'Pack' not in (parent.picking_type_name or '')">
+                                <div class="d-flex align-items-center gap-1" invisible="'Pack' not in (parent.picking_type_name or '') or not result_package_id">
                                     <strong>Packages: </strong>
                                     <field name="result_package_id" domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]" readonly="1" force_save="1"/>
                                 </div>
@@ -828,6 +829,7 @@
                         <field name="is_locked" invisible="1"/>
                         <field name="available_lot_ids" invisible="1"/>
                         <field name="location_dest_id" invisible="1" force_save="1"/>
+                        <field name="result_package_id" invisible="1"/>
                         <templates>
                             <t t-name="card">
                                 <div class="o_wms_operation_card">
@@ -836,7 +838,7 @@
                                     </div>
                                     <br/>
                                     <div>
-                                        <div>
+                                        <div invisible="not result_package_id">
                                             <strong>Packages: </strong>
                                             <field name="result_package_id"/>
                                         </div>
@@ -2248,9 +2250,8 @@
                         <field
                             name="result_package_id"
                             string="Destination Package"
-                            domain="[('package_cat', '=', 'box'), ('is_empty', '=', True)]"
                             force_save="1"
-                            optional="hide"
+                            column_invisible="not context.get('from_operations')"
                             readonly="parent.state in ('done', 'cancel')"/>
 
                         <field name="quantity" string="Qty Digunakan" readonly="parent.state in ('done', 'cancel') or mo_status == 'finished'" force_save="1" />

@@ -24,8 +24,24 @@ access_stock_report_aging_generate_it_staff,access.stock.report.aging.generate.i
 access_stock_report_aging_line_accounting_stock,access.stock.report.aging.line.accounting.stock,model_stock_report_aging_line,tijari_wms_18.group_accounting_stock,1,0,0,0
 access_stock_report_aging_generate_accounting_stock,access.stock.report.aging.generate.accounting.stock,model_stock_report_aging_generate,tijari_wms_18.group_accounting_stock,1,1,1,1
 access_stock_picking_operator,stock.picking.operator,model_stock_picking,tijari_wms_18.group_operator,1,1,0,0
+access_mrp_unbuild_manager,mrp.unbuild.manager,mrp.model_mrp_unbuild,tijari_wms_18.group_warehouse_manager,1,1,1,1
+access_mrp_unbuild_head,mrp.unbuild.head,mrp.model_mrp_unbuild,tijari_wms_18.group_warehouse_head,1,1,1,1
+access_mrp_unbuild_admin,mrp.unbuild.admin,mrp.model_mrp_unbuild,tijari_wms_18.group_warehouse_admin,1,1,1,1
 access_mrp_unbuild_operator,mrp.unbuild.operator,mrp.model_mrp_unbuild,tijari_wms_18.group_operator,1,1,1,1
-access_mrp_workorder_operator,mrp.workorder.operator,mrp.model_mrp_workorder,tijari_wms_18.group_operator,1,0,0,0
+access_mrp_workorder_manager,mrp.workorder.manager,mrp.model_mrp_workorder,tijari_wms_18.group_warehouse_manager,1,1,1,1
+access_mrp_workorder_head,mrp.workorder.head,mrp.model_mrp_workorder,tijari_wms_18.group_warehouse_head,1,1,1,1
+access_mrp_workorder_admin,mrp.workorder.admin,mrp.model_mrp_workorder,tijari_wms_18.group_warehouse_admin,1,1,1,1
+access_mrp_workorder_operator,mrp.workorder.operator,mrp.model_mrp_workorder,tijari_wms_18.group_operator,1,1,0,0
+
+access_mrp_production_manager,mrp.production.manager,mrp.model_mrp_production,tijari_wms_18.group_warehouse_manager,1,1,1,1
+access_mrp_production_head,mrp.production.head,mrp.model_mrp_production,tijari_wms_18.group_warehouse_head,1,1,1,1
+access_mrp_production_admin,mrp.production.admin,mrp.model_mrp_production,tijari_wms_18.group_warehouse_admin,1,1,1,1
+access_mrp_production_operator,mrp.production.operator,mrp.model_mrp_production,tijari_wms_18.group_operator,1,1,0,0
+
+access_mrp_workcenter_productivity_manager,mrp.workcenter.productivity.manager,mrp.model_mrp_workcenter_productivity,tijari_wms_18.group_warehouse_manager,1,1,1,1
+access_mrp_workcenter_productivity_head,mrp.workcenter.productivity.head,mrp.model_mrp_workcenter_productivity,tijari_wms_18.group_warehouse_head,1,1,1,1
+access_mrp_workcenter_productivity_admin,mrp.workcenter.productivity.admin,mrp.model_mrp_workcenter_productivity,tijari_wms_18.group_warehouse_admin,1,1,1,1
+access_mrp_workcenter_productivity_operator,mrp.workcenter.productivity.operator,mrp.model_mrp_workcenter_productivity,tijari_wms_18.group_operator,1,1,0,0
 
 access_stock_picking_create_warehouse_manager,stock.picking.create.warehouse.manager,model_stock_picking,tijari_wms_18.group_warehouse_manager,1,0,1,0
 access_stock_picking_create_warehouse_head,stock.picking.create.warehouse.head,model_stock_picking,tijari_wms_18.group_warehouse_head,1,0,1,0

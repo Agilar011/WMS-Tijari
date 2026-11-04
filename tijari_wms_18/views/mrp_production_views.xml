@@ -104,7 +104,7 @@
             </xpath>
 
             <xpath expr="//page[@name='components']" position="after">
-                <page name="raw_material" string="Raw Material">
+                <page name="raw_material" string="Components">
                     <group>
                         <field name="raw_material_scan_button"
                             widget="adt_scan_picker_product_button"
@@ -194,6 +194,11 @@
                             <field name="group_id" column_invisible="True"/>
                             <field name="difference_quantity" string="Difference Qty" optional="hide" readonly="1"/>
                             <field name="status_mo_check" widget="badge" decoration-success="status_mo_check == 'finished'" decoration-danger="status_mo_check == 'unfinished'"/>
+                            <button
+                                name="action_open_note_wizard"
+                                type="object"
+                                icon="fa-sticky-note"
+                                title="Note"/>
                             <button name="action_open_move_mo"
                                 type="object"
                                 class="btn-primary"
@@ -251,6 +256,10 @@
                         </kanban>
                     </field>
                 </page>
+            </xpath>
+
+            <xpath expr="//page[@name='components']" position="attributes">
+                <attribute name="string">Operations</attribute>
             </xpath>
 
             <xpath expr="//header" position="inside">
