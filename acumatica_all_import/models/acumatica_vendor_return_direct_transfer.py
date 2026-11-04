@@ -1,6 +1,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
-from dateutil import parser as dateutil_parser
+from ..utils import acumatica_data as _data
+
 
 
 class AcumaticaVendorReturnDirectTransferStaging(models.Model):
@@ -282,7 +283,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
                             existing_order,
                             {'location_id': source_location.id, 'location_dest_id': dest_location.id,
-                             'schedule_date': self._parse_dt(first.adt_Date) or fields.Datetime.now(),
+                             'schedule_date': _data.acumatica_datetime(first.adt_Date) or fields.Datetime.now(),
                              'note': first.adt_note or False, 'description': first.adt_Description or False,
                              'adt_transaction_type': 'Vendor Return', 'document_only': bool(first.adt_DocumentOnly)},
                             field_names={'location_id', 'location_dest_id', 'schedule_date', 'note', 'description', 'adt_transaction_type', 'document_only'},
@@ -295,7 +296,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         source_location,
                         dest_location,
                         'inter_warehouse',
-                        self._parse_dt(first.adt_Date),
+                        _data.acumatica_datetime(first.adt_Date),
                         first.adt_note or False,
                         description=first.adt_Description or False,
                         transfer_type='transfer_in',
@@ -471,14 +472,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         except Exception:
             return 0.0
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     def action_open_picking(self):
         self.ensure_one()

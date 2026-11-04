@@ -3,6 +3,8 @@ from odoo.exceptions import UserError
 import requests
 import time
 import logging
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -23,12 +25,6 @@ class ImportStockItemWizard(models.TransientModel):
     total_new      = fields.Integer(string='Item Baru', readonly=True)
     total_existing = fields.Integer(string='Sudah Ada (akan diupdate)', readonly=True)
 
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get("value", "") or ""
-        return value or ""
 
     def _extract_barcode(self, item):
         cross_references = item.get("CrossReferences") or []
@@ -40,10 +36,10 @@ class ImportStockItemWizard(models.TransientModel):
         for cross_reference in cross_references:
             if not isinstance(cross_reference, dict):
                 continue
-            alternate_type = self._val(cross_reference, "AlternateType")
+            alternate_type = _data.acumatica_value(cross_reference, "AlternateType")
             if (alternate_type or "").strip().lower() != "barcode":
                 continue
-            return self._val(cross_reference, "AlternateID")
+            return _data.acumatica_value(cross_reference, "AlternateID")
         return ""
 
     def action_fetch_data(self):
@@ -259,14 +255,14 @@ class ImportStockItemWizard(models.TransientModel):
                         parsed_vals = {
                             'external_id': item.get("id", "") or "",
                             'row_number': item.get("rowNumber", 0),
-                            'inventory_id': self._val(item, "InventoryID"),
-                            'description': self._val(item, "Description"),
-                            'item_type': self._val(item, "ItemType"),
-                            'item_class': self._val(item, "ItemClass"),
-                            'item_status': self._val(item, "ItemStatus"),
-                            'base_uom': self._val(item, "BaseUOM"),
-                            'valuation_method': self._val(item, "ValuationMethod"),
-                            'last_modified_datetime': self._val(item, "LastModifiedDateTime"),
+                            'inventory_id': _data.acumatica_value(item, "InventoryID"),
+                            'description': _data.acumatica_value(item, "Description"),
+                            'item_type': _data.acumatica_value(item, "ItemType"),
+                            'item_class': _data.acumatica_value(item, "ItemClass"),
+                            'item_status': _data.acumatica_value(item, "ItemStatus"),
+                            'base_uom': _data.acumatica_value(item, "BaseUOM"),
+                            'valuation_method': _data.acumatica_value(item, "ValuationMethod"),
+                            'last_modified_datetime': _data.acumatica_value(item, "LastModifiedDateTime"),
                             'barcode': self._extract_barcode(item),
                         }
 
@@ -293,51 +289,33 @@ class ImportStockItemWizard(models.TransientModel):
                     )
 
                     Product = self.env['product.template']
-                    Staging = self.env['acumatica.stock.item.line']
+                    Staging = self.env['acumatica.stock.item.line'].with_context(
+                        tracking_disable=True,
+                        mail_create_nolog=True,
+                        mail_notrack=True,
+                        mail_create_nosubscribe=True,
+                    )
 
-                    query = """
-                        INSERT INTO acumatica_stock_item_line (
-                            config_id,
-                            row_number,
-                            external_id,
-                            inventory_id,
-                            description,
-                            item_type,
-                            item_class,
-                            item_status,
-                            barcode,
-                            base_uom,
-                            valuation_method,
-                            last_modified_datetime,
-                            import_state,
-                            import_message,
-                            odoo_product_id,
-                            sync_date
-                        ) 
-                        VALUES (
-                            %s, %s, %s, %s,
-                            %s, %s, %s, %s,
-                            %s, %s, %s, %s,
-                            %s,
-                            %s, %s, %s
-                        )
-                    """
-
+                    external_ids = list({
+                        item['external_id']
+                        for item in all_results
+                        if item['external_id']
+                    })
                     product_by_inventory = {
-                        p.adt_external_id: p.id
-                        for p in Product.search([
-                            ('adt_external_id', '!=', False)
+                        product.adt_external_id: product.id
+                        for product in Product.search([
+                            ('adt_external_id', 'in', external_ids)
                         ])
-                    }
+                    } if external_ids else {}
 
                     staging_by_inventory = {
-                        p.external_id: p.id
-                        for p in Staging.search([
-                            ('external_id', '!=', False)
+                        staging.external_id: staging.id
+                        for staging in Staging.search([
+                            ('external_id', 'in', external_ids)
                         ])
-                    }
+                    } if external_ids else {}
 
-                    params_list = []
+                    staging_vals_list = []
                     for item in all_results:
                         existing_staging = False
                         if item['external_id']:
@@ -354,26 +332,27 @@ class ImportStockItemWizard(models.TransientModel):
                         state = 'staged'
 
 
-                        params_list.append((
-                            self.config_id.id,
-                            item['row_number'],
-                            item['external_id'],
-                            item['inventory_id'],
-                            item['description'],
-                            item['item_type'],
-                            item['item_class'],
-                            item['item_status'],
-                            item['barcode'],
-                            item['base_uom'],
-                            item['valuation_method'],
-                            item['last_modified_datetime'],
-                            state,
-                            msg,
-                            existing_product or None,
-                            fields.Datetime.now(),
-                        ))
+                        staging_vals_list.append({
+                            'config_id': self.config_id.id,
+                            'row_number': item['row_number'],
+                            'external_id': item['external_id'],
+                            'inventory_id': item['inventory_id'],
+                            'description': item['description'],
+                            'item_type': item['item_type'],
+                            'item_class': item['item_class'],
+                            'item_status': item['item_status'],
+                            'barcode': item['barcode'],
+                            'base_uom': item['base_uom'],
+                            'valuation_method': item['valuation_method'],
+                            'last_modified_datetime': item['last_modified_datetime'],
+                            'import_state': state,
+                            'import_message': msg,
+                            'odoo_product_id': existing_product or False,
+                            'sync_date': fields.Datetime.now(),
+                        })
 
-                    self.env.cr.executemany(query, params_list)
+                    if staging_vals_list:
+                        Staging.create(staging_vals_list)
                     return len(all_results)
 
                 except requests.exceptions.ConnectionError as e:

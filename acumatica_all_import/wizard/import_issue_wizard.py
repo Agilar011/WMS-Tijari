@@ -2,6 +2,8 @@
 from odoo import fields, models
 from odoo.exceptions import UserError
 import logging
+from ..utils import acumatica_data as _data
+
 _logger = logging.getLogger(__name__)
 
 
@@ -69,7 +71,7 @@ class ImportIssueWizard(models.TransientModel):
                 
                 raise UserError(last_error)
                 
-            raw_data = self._normalize_rows(response.json())
+            raw_data = _data.acumatica_rows(response.json())
             print(f"Get Inventory Issue data from Acumatica: {len(raw_data)} records fetched")
             
             issue_model = self.env['acumatica.issue.line']
@@ -77,7 +79,7 @@ class ImportIssueWizard(models.TransientModel):
             
             for item in raw_data:
                 external_id = item.get('id', '') or ''
-                ref_nbr = self._val(item, 'ShipmentNbr')
+                ref_nbr = _data.acumatica_value(item, 'ShipmentNbr')
                 
                 # CHECKPOINT 1: Mulai transaksi tersendiri per Header menggunakan Try-Except
                 try:
@@ -90,20 +92,20 @@ class ImportIssueWizard(models.TransientModel):
                         'external_id': external_id,
                         'row_number': item.get('rowNumber', '') or '',
                         'note': item.get('note', {}).get('', '') or '',
-                        'actual_amount': self._val(item, 'ControlQty'),
-                        'actual_qty': self._val(item, 'ControlQty'),
-                        'scheduled_date': self._val(item, 'ShipmentDate'),
-                        'description': self._val(item, 'Description'),
-                        'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
+                        'actual_amount': _data.acumatica_value(item, 'ControlQty'),
+                        'actual_qty': _data.acumatica_value(item, 'ControlQty'),
+                        'scheduled_date': _data.acumatica_value(item, 'ShipmentDate'),
+                        'description': _data.acumatica_value(item, 'Description'),
+                        'acumatica_write_date': _data.acumatica_value(item, 'LastModifiedDateTime'),
                         'reference_nbr': ref_nbr,
-                        'status': self._val(item, 'Status'),
-                        'total_qty': self._val(item, 'ShippedQty'),
-                        'trans_type': self._val(item, 'Type'),
-                        'customer_id': self._val(item, 'CustomerID'),
-                        'customer_name': self._val(item, 'CustomerName'),
+                        'status': _data.acumatica_value(item, 'Status'),
+                        'total_qty': _data.acumatica_value(item, 'ShippedQty'),
+                        'trans_type': _data.acumatica_value(item, 'Type'),
+                        'customer_id': _data.acumatica_value(item, 'CustomerID'),
+                        'customer_name': _data.acumatica_value(item, 'CustomerName'),
                         'picking_type_id': picking_type_id,
-                        'warehouse_code': self._val(item, 'WarehouseID'),
-                        'branch_warehouse': self._val(item, 'WarehouseName'),
+                        'warehouse_code': _data.acumatica_value(item, 'WarehouseID'),
+                        'branch_warehouse': _data.acumatica_value(item, 'WarehouseName'),
                         'config_id': self.config_id.id,
                         'import_state': 'staged',
                         'import_message': 'Data API Imported',
@@ -151,22 +153,22 @@ class ImportIssueWizard(models.TransientModel):
                         
                         # CHECKPOINT 2: Sub-transaksi untuk Detail
                         try:
-                            line_nbr = self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr') or detail.get('rowNumber') or 0
+                            line_nbr = _data.acumatica_value(detail, 'LineNumber') or _data.acumatica_value(detail, 'LineNbr') or detail.get('rowNumber') or 0
                             
                             detail_vals = {
                                 'issue_shipment_id': issue_record.id,
                                 'external_id': external_id,
                                 'line_external_id': line_external_id,
                                 'note': detail.get('note', {}).get('value', '') or '',
-                                'branch': self._val(detail, 'Branch'),
-                                'description': self._val(detail, 'Description'),
-                                'inventory_id': self._val(detail, 'InventoryID'),
+                                'branch': _data.acumatica_value(detail, 'Branch'),
+                                'description': _data.acumatica_value(detail, 'Description'),
+                                'inventory_id': _data.acumatica_value(detail, 'InventoryID'),
                                 'line_number': str(line_nbr),
-                                'location_code': self._val(detail, 'Location'),
-                                'product_uom_qty': self._val(detail, 'Qty'),
-                                'trans_type': self._val(detail, 'TranType'),
-                                'uom_code': self._val(detail, 'UOM'),
-                                'warehouse_code': self._val(detail, 'WarehouseID'),
+                                'location_code': _data.acumatica_value(detail, 'Location'),
+                                'product_uom_qty': _data.acumatica_value(detail, 'Qty'),
+                                'trans_type': _data.acumatica_value(detail, 'TranType'),
+                                'uom_code': _data.acumatica_value(detail, 'UOM'),
+                                'warehouse_code': _data.acumatica_value(detail, 'WarehouseID'),
                             }
                             
                             product_model.create(detail_vals)
@@ -332,31 +334,8 @@ class ImportIssueWizard(models.TransientModel):
             'domain': [('config_id', '=', self.config_id.id)],
         }
 
-    def _normalize_rows(self, payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
 
-    def _val(self, item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
 
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
     def _search_picking_type(self, header):
         PickingType = self.env['stock.picking.type']
@@ -366,7 +345,7 @@ class ImportIssueWizard(models.TransientModel):
 
         document_only_type = PickingType.resolve_document_only_picking_type(
             api_acumatica='issue_change_item',
-            document_only=self._bool_value(header.get('DocumentOnly')),
+            document_only=_data.acumatica_bool(header.get('DocumentOnly'), true_values=_data.DOCUMENT_ONLY_TRUE_VALUES),
             warehouse_code=warehouse_code,
         )
         if document_only_type:

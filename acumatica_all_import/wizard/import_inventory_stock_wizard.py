@@ -2,6 +2,8 @@ import logging
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -53,24 +55,7 @@ class ImportInventoryStockWizard(models.TransientModel):
         if 'request_inventory_id_value' in self.config_id._fields:
             self.inventory_id_value = self.config_id.request_inventory_id_value or self.inventory_id_value
 
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
 
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-            return [payload]
-        return []
 
     @staticmethod
     def _parse_float(value):
@@ -129,7 +114,7 @@ class ImportInventoryStockWizard(models.TransientModel):
                 
                 raise UserError(last_error)
 
-            raw_data = self._normalize_rows(response.json())
+            raw_data = _data.acumatica_rows(response.json(), single_record=True)
             result = []
             for row_number, item in enumerate(raw_data, start=1):
                 details = item.get('InventorySiteInquiryDetails') or []
@@ -147,17 +132,17 @@ class ImportInventoryStockWizard(models.TransientModel):
                         'row_number': item.get('rowNumber', row_number) or row_number,
                         'line_external_id': detail.get('id', '') or '',
                         'line_row_number': detail.get('rowNumber', 0) or 0,
-                        'note': self._val(detail, 'note') or self._val(item, 'note'),
-                        'warehouse_code': self._val(detail, 'WarehouseID') or self._val(item, 'WarehouseID') or '',
-                        'inventory_id': self._val(detail, 'InventoryID') or self._val(item, 'InventoryID'),
-                        'description': self._val(detail, 'Description'),
-                        'last_modified_datetime': self._val(detail, 'LastModifiedDateTime') or self._val(item, 'LastModifiedDateTime'),
-                        'branch': self._val(detail, 'Branch'),
-                        'item_status': self._val(detail, 'ItemStatus'),
-                        'kode_barang_dan_jasa': self._val(detail, 'KodeBarangdanJasa'),
-                        'product_group': self._val(detail, 'ProductGroup'),
-                        'available': self._parse_float(self._val(detail, 'Available')),
-                        'on_hand_acumatica': self._parse_float(self._val(detail, 'OnHand')),
+                        'note': _data.acumatica_value(detail, 'note') or _data.acumatica_value(item, 'note'),
+                        'warehouse_code': _data.acumatica_value(detail, 'WarehouseID') or _data.acumatica_value(item, 'WarehouseID') or '',
+                        'inventory_id': _data.acumatica_value(detail, 'InventoryID') or _data.acumatica_value(item, 'InventoryID'),
+                        'description': _data.acumatica_value(detail, 'Description'),
+                        'last_modified_datetime': _data.acumatica_value(detail, 'LastModifiedDateTime') or _data.acumatica_value(item, 'LastModifiedDateTime'),
+                        'branch': _data.acumatica_value(detail, 'Branch'),
+                        'item_status': _data.acumatica_value(detail, 'ItemStatus'),
+                        'kode_barang_dan_jasa': _data.acumatica_value(detail, 'KodeBarangdanJasa'),
+                        'product_group': _data.acumatica_value(detail, 'ProductGroup'),
+                        'available': self._parse_float(_data.acumatica_value(detail, 'Available')),
+                        'on_hand_acumatica': self._parse_float(_data.acumatica_value(detail, 'OnHand')),
                         'sync_date': fields.Datetime.now(),
                     })
 

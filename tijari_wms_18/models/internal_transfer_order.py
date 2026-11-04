@@ -135,6 +135,7 @@ class InternalTransferOrder(models.Model):
         comodel_name='product.product',
         string='Products Available at Source Location',
         compute='_compute_available_source_product_ids',
+        store=True,
     )
     intra_location_id = fields.Many2one(
         comodel_name='stock.location',
@@ -367,11 +368,6 @@ class InternalTransferOrder(models.Model):
         ], limit=1)
 
     @api.depends(
-        'transaction_type',
-        'transfer_type',
-        'intra_transfer_type',
-        'location_group_id',
-        'location_id',
         'intra_location_id',
     )
     def _compute_available_source_product_ids(self):
@@ -383,20 +379,6 @@ class InternalTransferOrder(models.Model):
             )
             order.available_source_product_ids = order._get_available_source_products(
                 source_location
-            )
-
-    @api.onchange(
-        'transaction_type', 'intra_transfer_type', 'location_id', 'intra_location_id'
-    )
-    def _onchange_available_source_product_ids(self):
-        for order in self:
-            location = (
-                order.intra_location_id
-                if order.transaction_type == 'intra_warehouse'
-                else order.location_id
-            )
-            order.available_source_product_ids = order._get_available_source_products(
-                location
             )
 
     def _get_available_source_products(self, location):
@@ -1931,7 +1913,57 @@ class InternalTransferOrder(models.Model):
         existing_orders = self - orders_to_generate
         if existing_orders:
             existing_orders.write({'state': 'ready'})
+        for order in self.filtered(
+            lambda item: (
+                item.transaction_type == 'intra_warehouse'
+                and item.transfer_type == 'intra_group_transfer'
+            )
+        ):
+            order._assign_intra_group_operation_responsibles()
+            pick_operations = order._get_related_pickings().filtered(
+                lambda picking: (
+                    picking.internal_transfer_leg == 'pick'
+                    and picking.picking_type_id.operation_category == 'pick'
+                )
+            )
+            if pick_operations:
+                pick_operations.action_mark_todo_and_check_availability()
         return True
+
+    def _assign_intra_group_operation_responsibles(self):
+        for order in self:
+            creator = order.create_uid
+            if not creator:
+                continue
+
+            pickings = order._get_related_pickings()
+            operation_assignments = (
+                (
+                    pickings.filtered(
+                        lambda picking: (
+                            picking.internal_transfer_leg == 'pick'
+                            and picking.picking_type_id.operation_category == 'pick'
+                            and not picking.pick_responsible_ids
+                        )
+                    ),
+                    'pick_responsible_ids',
+                ),
+                (
+                    pickings.filtered(
+                        lambda picking: (
+                            picking.internal_transfer_leg == 'receipt'
+                            and picking.picking_type_id.operation_category == 'put'
+                            and not picking.putaway_responsible_ids
+                        )
+                    ),
+                    'putaway_responsible_ids',
+                ),
+            )
+            for operation_pickings, responsible_field in operation_assignments:
+                if operation_pickings:
+                    operation_pickings.sudo().write({
+                        responsible_field: [(4, creator.id)],
+                    })
 
     def _is_bad_stock_destination(self):
         self.ensure_one()
@@ -2019,7 +2051,9 @@ class InternalTransferOrder(models.Model):
             (self.env.ref(
                 'tijari_wms_18.stock_picking_tree_internal_transfer_order_columns'
             ).id, 'list'),
-            (False, 'kanban'),
+            (self.env.ref(
+                'tijari_wms_18.stock_picking_kanban_internal_transfer_order'
+            ).id, 'kanban'),
             (False, 'form'),
         ]
         return action
@@ -2041,6 +2075,11 @@ class StockMove(models.Model):
         string='Scanned Lot/Serial Numbers',
         copy=False,
     )
+    internal_transfer_available_lot_ids = fields.Many2many(
+        comodel_name='stock.lot',
+        string='Available ITO Lots',
+        compute='_compute_internal_transfer_available_lot_ids',
+    )
 
     internal_transfer_order_id = fields.Many2one(
         comodel_name='internal.transfer.order',
@@ -2060,7 +2099,38 @@ class StockMove(models.Model):
         related='internal_transfer_order_id.intra_transfer_type',
     )
 
-    @api.onchange('product_id', 'internal_transfer_order_id')
+    @api.depends('product_id', 'location_id', 'company_id')
+    def _compute_internal_transfer_available_lot_ids(self):
+        Quant = self.env['stock.quant']
+        for move in self:
+            move.internal_transfer_available_lot_ids = False
+            if not move.product_id or not move.location_id:
+                continue
+
+            domain = [
+                ('product_id', '=', move.product_id.id),
+                ('location_id', 'child_of', move.location_id.id),
+                ('lot_id', '!=', False),
+                ('quantity', '>', 0),
+            ]
+            if move.company_id:
+                domain.append(('company_id', '=', move.company_id.id))
+
+            quants = Quant.search(domain)
+            available_by_lot = {}
+            for quant in quants:
+                available_by_lot[quant.lot_id.id] = (
+                    available_by_lot.get(quant.lot_id.id, 0.0)
+                    + quant.available_quantity
+                )
+            rounding = move.product_id.uom_id.rounding
+            available_lot_ids = [
+                lot_id for lot_id, quantity in available_by_lot.items()
+                if float_compare(quantity, 0.0, precision_rounding=rounding) > 0
+            ]
+            move.internal_transfer_available_lot_ids = [(6, 0, available_lot_ids)]
+
+    @api.onchange('product_id', 'internal_transfer_order_id', 'location_id')
     def _onchange_internal_transfer_order_locations(self):
         for move in self.filtered(
             lambda item: item.internal_transfer_order_id and not item.picking_id
@@ -2070,8 +2140,9 @@ class StockMove(models.Model):
             move.location_dest_id = (
                 order.intra_location_dest_id or order.location_dest_id
             )
-            move.internal_transfer_scan_lot_ids = move.internal_transfer_scan_lot_ids.filtered(
-                lambda lot: lot.product_id == move.product_id
+            allowed_lots = move.internal_transfer_available_lot_ids
+            move.internal_transfer_scan_lot_ids = (
+                move.internal_transfer_scan_lot_ids & allowed_lots
             )
 
     @api.onchange('internal_transfer_product_scan_code')
@@ -2106,6 +2177,34 @@ class StockMove(models.Model):
                         'company_id', 'in', [False, source_company.id]
                     ))
                 candidate_lots = Lot.search(lot_domain)
+                if candidate_lots and source_location:
+                    source_quants = Quant.search([
+                        ('lot_id', 'in', candidate_lots.ids),
+                        ('location_id', 'child_of', source_location.id),
+                        ('quantity', '>', 0),
+                    ])
+                    available_by_lot = {}
+                    for quant in source_quants:
+                        available_by_lot[quant.lot_id.id] = (
+                            available_by_lot.get(quant.lot_id.id, 0.0)
+                            + quant.available_quantity
+                        )
+                    available_lots = candidate_lots.filtered(
+                        lambda lot: float_compare(
+                            available_by_lot.get(lot.id, 0.0),
+                            0.0,
+                            precision_rounding=lot.product_id.uom_id.rounding,
+                        ) > 0
+                    )
+                    if not available_lots:
+                        raise ValidationError(_(
+                            'Lot/serial %(lot)s terdaftar, tetapi tidak memiliki '
+                            'stok tersedia di Source Location "%(location)s".'
+                        ) % {
+                            'lot': code,
+                            'location': source_location.display_name,
+                        })
+                    candidate_lots = available_lots
                 if (
                     order.transaction_type == 'intra_warehouse'
                     and order.intra_transfer_type == 'intra_group_transfer'
@@ -2113,15 +2212,6 @@ class StockMove(models.Model):
                     available_products = order._get_available_source_products(source_location)
                     candidate_lots = candidate_lots.filtered(
                         lambda lot: lot.product_id in available_products
-                    )
-                if source_location and source_location.usage in ('internal', 'transit'):
-                    candidate_lots = candidate_lots.filtered(
-                        lambda lot: sum(Quant.search([
-                            ('product_id', '=', lot.product_id.id),
-                            ('lot_id', '=', lot.id),
-                            ('location_id', 'child_of', source_location.id),
-                            ('quantity', '>', 0),
-                        ]).mapped('available_quantity')) > 0
                     )
                 if len(candidate_lots) > 1:
                     raise ValidationError(

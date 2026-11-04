@@ -260,32 +260,6 @@ class AcumaticaInventoryStockLine(models.Model):
         acumatica_err_id.error_msg = err_msg
         acumatica_err_id.import_state = state
 
-    def _get_changed_fields(self, record, vals):
-        changed_fields = []
-
-        for field_name, new_value in vals.items():
-            field = record._fields.get(field_name)
-
-            if not field:
-                continue
-
-            old_value = record[field_name]
-
-            if field.type == 'many2one':
-                old_value = old_value.id if old_value else False
-                
-            old_value = old_value or False
-            new_value = new_value or False
-
-            if old_value != new_value:
-                changed_fields.append({
-                    'field_name': field_name,
-                    'field_label': field.string,
-                    'old_value': old_value,
-                    'new_value': new_value,
-                })
-
-        return changed_fields
     
     def _log_import_result(
         self,

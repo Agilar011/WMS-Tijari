@@ -1,10 +1,11 @@
-from dateutil import parser as dateutil_parser
 import logging
 import requests
 import logging
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -72,14 +73,6 @@ class AcumaticaInvoiceConsignment(models.Model):
         for rec in self:
             rec.exists_in_odoo = bool(rec.adt_ReferenceNbr and Picking.search_count([('origin', '=', rec.adt_ReferenceNbr)]))
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_int(value):
@@ -381,14 +374,14 @@ class AcumaticaInvoiceConsignment(models.Model):
                         'picking_type_id': picking_type.id,
                         'location_id': source_location.id,
                         'location_dest_id': dest_location.id,
-                        'scheduled_date': self._parse_dt(first.adt_Date),
+                        'scheduled_date': _data.acumatica_datetime(first.adt_Date),
                         'origin': origin,
                         'note': first.adt_note or False,
                         'adt_receipt_nbr': first.adt_ReferenceNbr or False,
                         'adt_vendor_code': first.adt_CustomerName or False,
                         'adt_partner_ref': first.adt_LocationName or False,
                         'adt_branch_warehouse': branch_warehouse or False,
-                        'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
+                        'adt_acumatica_write_date': _data.acumatica_datetime(first.adt_LastModifiedDateTime),
                         'adt_status': first.adt_Status or False,
                         'adt_type': first.adt_Type or False,
                         'adt_is_document_only': False,

@@ -3,7 +3,6 @@ from odoo import models, fields, api
 from odoo.fields import Datetime
 from odoo.exceptions import UserError
 
-from dateutil import parser as dateutil_parser
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -702,14 +701,6 @@ class AcumaticaKitAssemblyLine(models.Model):
 
 
     # ─── Helpers ─────────────────────────────────────
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     # ItemType Acumatica → type Odoo
     # 'consu' = storable/consumable (Odoo 17/18 pakai 'consu' untuk goods)

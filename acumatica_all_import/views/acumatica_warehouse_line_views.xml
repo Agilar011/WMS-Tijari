@@ -26,6 +26,8 @@
                 <field name="description"   string="Description"/>
                 <filter string="Staged" name="staged"
                         domain="[('import_state','=','staged')]"/>
+                <filter string="WH33" name="wh33"
+                        domain="[('warehouse_id','=','WH33')]"/>
                 <filter string="Sudah Dibuat"   name="created"
                         domain="[('import_state','=','created')]"/>
                 <filter string="Updated"       name="updated"
@@ -192,7 +194,7 @@
         <field name="res_model">acumatica.warehouse.line</field>
         <field name="view_mode">list,form</field>
         <field name="search_view_id" ref="view_acumatica_warehouse_line_search"/>
-        <field name="context">{'search_default_staged': 1}</field>
+        <field name="context">{'search_default_staged': 1, 'search_default_wh33': 1}</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 Belum ada data. Gunakan menu "Import Warehouse" untuk menarik data dari Acumatica.
