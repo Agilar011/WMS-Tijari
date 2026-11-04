@@ -1,6 +1,5 @@
 import logging
 import time
-from dateutil import parser as dateutil_parser
 from docutils.nodes import note
 import requests
 import ast
@@ -1001,14 +1000,6 @@ class AcumaticaShipmentGIStaging(models.Model):
                     Picking.search_count([('origin', '=', rec.adt_ShipmentNbr)])
                 )
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_int(value):
@@ -1380,14 +1371,6 @@ class AcumaticaSalesOrderShipmentStaging(models.Model):
         for rec in self:
             rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('origin', '=', rec.receipt_nbr)]))
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_int(value):

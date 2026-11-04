@@ -1,9 +1,10 @@
 import logging
-from dateutil import parser as dateutil_parser
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 import requests
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -152,14 +153,6 @@ class AcumaticaTransferLine(models.Model):
                 )
             )
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_float(value):
@@ -382,7 +375,7 @@ class AcumaticaTransferLine(models.Model):
                         'transfer_type': 'transfer_in',
                         'location_id': source_location.id,
                         'location_dest_id': destination_location.id,
-                        'schedule_date': receipt._parse_dt(receipt.scheduled_date) or fields.Datetime.now(),
+                        'schedule_date': _data.acumatica_datetime(receipt.scheduled_date) or fields.Datetime.now(),
                         'note': receipt.note or False,
                         'description': receipt.description or False,
                         'adt_transaction_type': 'SOTR',
@@ -404,7 +397,7 @@ class AcumaticaTransferLine(models.Model):
                 source_location,
                 destination_location,
                 transfer_info['transaction_type'],
-                schedule_date=receipt._parse_dt(receipt.scheduled_date),
+                schedule_date=_data.acumatica_datetime(receipt.scheduled_date),
                 note=receipt.note or False,
                 description=receipt.description or False,
                 transfer_type='transfer_in',
@@ -662,7 +655,7 @@ class AcumaticaTransferLine(models.Model):
             'picking_type_id': picking_type_id,
             'location_dest_id': dest_location.id if dest_location else False,
             'adt_dest_location_id': dest_location.id if dest_location else False,
-            'scheduled_date': receipt._parse_dt(receipt.scheduled_date),
+            'scheduled_date': _data.acumatica_datetime(receipt.scheduled_date),
             'origin': origin,
             'note': receipt.note or False,
             'adt_receipt_nbr': receipt.receipt_nbr or False,
@@ -672,7 +665,7 @@ class AcumaticaTransferLine(models.Model):
             'adt_actual_qty': receipt._parse_float(receipt.actual_qty),
             'adt_is_hold': str(receipt.is_hold or '').lower() in ('true', '1', 'yes'),
             'adt_inventory_ref': receipt.inventory_ref or False,
-            'adt_acumatica_write_date': receipt._parse_dt(receipt.acumatica_write_date),
+            'adt_acumatica_write_date': _data.acumatica_datetime(receipt.acumatica_write_date),
             'adt_header_location_code': receipt.header_location_code or False,
             'adt_post_period': receipt.post_period or False,
             'adt_status': receipt.status or False,

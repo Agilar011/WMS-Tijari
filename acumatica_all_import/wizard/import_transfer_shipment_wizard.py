@@ -3,6 +3,8 @@ from odoo import fields, models
 from odoo.exceptions import UserError
 
 import logging
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -34,12 +36,6 @@ class ImportTransferShipmentWizard(models.TransientModel):
     total_existing = fields.Integer(string='Sudah Ada (akan ditambah)', readonly=True)
     fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
 
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
 
     @staticmethod
     def _last_modified_value(item):
@@ -51,7 +47,7 @@ class ImportTransferShipmentWizard(models.TransientModel):
             'last_modified_datetime',
         )
         for key in candidates:
-            value = ImportTransferShipmentWizard._val(item, key)
+            value = _data.acumatica_value(item, key)
             if value not in (False, None, ''):
                 return str(value)
 
@@ -65,29 +61,8 @@ class ImportTransferShipmentWizard(models.TransientModel):
                     return str(value)
         return ''
 
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
-    def _bool_val(self, item, key):
-        return self._bool_value(item.get(key, {}))
 
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
 
     def fetch_transfer_shipment_data(self):
         self.ensure_one()
@@ -147,48 +122,48 @@ class ImportTransferShipmentWizard(models.TransientModel):
             seen_shipments = set()
 
             for row_number, item in enumerate(raw_data, start=1):
-                shipment_nbr = self._val(item, "ShipmentNbr")
+                shipment_nbr = _data.acumatica_value(item, "ShipmentNbr")
 
                 if shipment_nbr and shipment_nbr not in seen_shipments:
                     seen_shipments.add(shipment_nbr)
                     type = self._search_picking_type({
-                        'warehouse_code': self._val(item, 'WarehouseID') or self._val(item, 'LineWarehouseID'),
-                        'document_only': self._bool_val(item, 'DocumentOnly'),
+                        'warehouse_code': _data.acumatica_value(item, 'WarehouseID') or _data.acumatica_value(item, 'LineWarehouseID'),
+                        'document_only': _data.acumatica_bool(item, 'DocumentOnly'),
                     })
 
                     result.append({
                         'external_id': item.get('id', '') or '',
                         'row_number': row_number,
-                        'note': self._val(item, 'NoteHeader') or '',
-                        'building_code': self._val(item, 'BuildingID'),
-                        'actual_qty': self._val(item, 'ControlQty') or self._val(item, 'ShipmentQty'),
-                        'partner_code': self._val(item, 'CustomerID'),
-                        'customer_name': self._val(item, 'CustomerName'),
-                        'description': self._val(item, 'Description') or self._val(item, 'LineDescription'),
-                        'fob_point': self._val(item, 'FOBPoint'),
-                        'is_hold': self._val(item, 'Hold'),
-                        'is_insurance': self._val(item, 'Insurance'),
-                        'document_only': self._bool_val(item, 'DocumentOnly'),
+                        'note': _data.acumatica_value(item, 'NoteHeader') or '',
+                        'building_code': _data.acumatica_value(item, 'BuildingID'),
+                        'actual_qty': _data.acumatica_value(item, 'ControlQty') or _data.acumatica_value(item, 'ShipmentQty'),
+                        'partner_code': _data.acumatica_value(item, 'CustomerID'),
+                        'customer_name': _data.acumatica_value(item, 'CustomerName'),
+                        'description': _data.acumatica_value(item, 'Description') or _data.acumatica_value(item, 'LineDescription'),
+                        'fob_point': _data.acumatica_value(item, 'FOBPoint'),
+                        'is_hold': _data.acumatica_value(item, 'Hold'),
+                        'is_insurance': _data.acumatica_value(item, 'Insurance'),
+                        'document_only': _data.acumatica_bool(item, 'DocumentOnly'),
                         'acumatica_write_date': self._last_modified_value(item),
-                        'header_location_code': self._val(item, 'LocationID'),
-                        'location_name': self._val(item, 'LocationName'),
-                        'operation': self._val(item, 'Operation'),
-                        'package_count': self._val(item, 'PackageCount'),
-                        'package_weight': self._val(item, 'PackageWeight'),
-                        'is_picked': self._val(item, 'Picked'),
-                        'scheduled_date': self._val(item, 'ShipmentDate') or self._val(item, 'ShipDate'),
+                        'header_location_code': _data.acumatica_value(item, 'LocationID'),
+                        'location_name': _data.acumatica_value(item, 'LocationName'),
+                        'operation': _data.acumatica_value(item, 'Operation'),
+                        'package_count': _data.acumatica_value(item, 'PackageCount'),
+                        'package_weight': _data.acumatica_value(item, 'PackageWeight'),
+                        'is_picked': _data.acumatica_value(item, 'Picked'),
+                        'scheduled_date': _data.acumatica_value(item, 'ShipmentDate') or _data.acumatica_value(item, 'ShipDate'),
                         'shipment_nbr': shipment_nbr,
-                        'shipped_qty': self._val(item, 'ShippedQty') or self._val(item, 'ShipmentQty'),
-                        'shipped_volume': self._val(item, 'ShippedVolume') or self._val(item, 'ShipmentVolume'),
-                        'shipped_weight': self._val(item, 'ShippedWeight') or self._val(item, 'ShipmentWeight'),
-                        'shipping_terms': self._val(item, 'ShippingTerms'),
-                        'shipping_zone': self._val(item, 'ShippingZoneID'),
-                        'ship_via': self._val(item, 'ShipVia'),
-                        'status': self._val(item, 'Status'),
-                        'warehouse_dest_code': self._val(item, 'ToWarehouseID'),
-                        'shipment_type': self._val(item, 'Type') or self._val(item, 'ShipmentType'),
-                        'warehouse_code': self._val(item, 'WarehouseID') or self._val(item, 'LineWarehouseID'),
-                        'is_unlimited_packages': self._val(item, 'UnlimitedPackages'),
+                        'shipped_qty': _data.acumatica_value(item, 'ShippedQty') or _data.acumatica_value(item, 'ShipmentQty'),
+                        'shipped_volume': _data.acumatica_value(item, 'ShippedVolume') or _data.acumatica_value(item, 'ShipmentVolume'),
+                        'shipped_weight': _data.acumatica_value(item, 'ShippedWeight') or _data.acumatica_value(item, 'ShipmentWeight'),
+                        'shipping_terms': _data.acumatica_value(item, 'ShippingTerms'),
+                        'shipping_zone': _data.acumatica_value(item, 'ShippingZoneID'),
+                        'ship_via': _data.acumatica_value(item, 'ShipVia'),
+                        'status': _data.acumatica_value(item, 'Status'),
+                        'warehouse_dest_code': _data.acumatica_value(item, 'ToWarehouseID'),
+                        'shipment_type': _data.acumatica_value(item, 'Type') or _data.acumatica_value(item, 'ShipmentType'),
+                        'warehouse_code': _data.acumatica_value(item, 'WarehouseID') or _data.acumatica_value(item, 'LineWarehouseID'),
+                        'is_unlimited_packages': _data.acumatica_value(item, 'UnlimitedPackages'),
                         'picking_type_id': type.id if type else None,
 
                     })
@@ -196,22 +171,22 @@ class ImportTransferShipmentWizard(models.TransientModel):
                 result_line.append({
                     'shipment_nbr': shipment_nbr,
                     'line_external_id': item.get('id', '') or '',
-                    'line_note': self._val(item, 'LineNote'),
+                    'line_note': _data.acumatica_value(item, 'LineNote'),
                     'line_row_number': item.get('rowNumber') or '',
-                    'line_description': self._val(item, 'LineDescription'),
-                    'is_free_item': self._val(item, 'LineFreeItem'),
-                    'inventory_id': self._val(item, 'LineInventoryID'),
-                    'line_nbr': str(self._val(item, 'LineNbr') or item.get('rowNumber') or 0),
-                    'location_dest_code': self._val(item, 'LineLocationID') or self._val(item, 'LineLocation'),
-                    'open_qty': self._val(item, 'LineOpenQty'),
-                    'order_qty': self._val(item, 'LineOrderedQty') or self._val(item, 'LineQuantity'),
-                    'order_line_number': self._val(item, 'LineOrderLineNbr'),
-                    'order_number': self._val(item, 'LineOrderNbr') or self._val(item, 'OrderNbr'),
-                    'order_type': self._val(item, 'LineOrderType') or self._val(item, 'OrderType'),
-                    'original_qty': self._val(item, 'LineOriginalQty'),
-                    'product_uom_qty': self._val(item, 'LineShippedQty') or self._val(item, 'ShippedQty') or self._val(item, 'LineQuantity'),
-                    'uom_code': self._val(item, 'LineUOM'),
-                    'line_warehouse_code': self._val(item, 'LineWarehouseID') or self._val(item, 'WarehouseID'),
+                    'line_description': _data.acumatica_value(item, 'LineDescription'),
+                    'is_free_item': _data.acumatica_value(item, 'LineFreeItem'),
+                    'inventory_id': _data.acumatica_value(item, 'LineInventoryID'),
+                    'line_nbr': str(_data.acumatica_value(item, 'LineNbr') or item.get('rowNumber') or 0),
+                    'location_dest_code': _data.acumatica_value(item, 'LineLocationID') or _data.acumatica_value(item, 'LineLocation'),
+                    'open_qty': _data.acumatica_value(item, 'LineOpenQty'),
+                    'order_qty': _data.acumatica_value(item, 'LineOrderedQty') or _data.acumatica_value(item, 'LineQuantity'),
+                    'order_line_number': _data.acumatica_value(item, 'LineOrderLineNbr'),
+                    'order_number': _data.acumatica_value(item, 'LineOrderNbr') or _data.acumatica_value(item, 'OrderNbr'),
+                    'order_type': _data.acumatica_value(item, 'LineOrderType') or _data.acumatica_value(item, 'OrderType'),
+                    'original_qty': _data.acumatica_value(item, 'LineOriginalQty'),
+                    'product_uom_qty': _data.acumatica_value(item, 'LineShippedQty') or _data.acumatica_value(item, 'ShippedQty') or _data.acumatica_value(item, 'LineQuantity'),
+                    'uom_code': _data.acumatica_value(item, 'LineUOM'),
+                    'line_warehouse_code': _data.acumatica_value(item, 'LineWarehouseID') or _data.acumatica_value(item, 'WarehouseID'),
                 })
 
             return result, result_line

@@ -1,9 +1,10 @@
 import logging
-from dateutil import parser as dateutil_parser
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 import requests
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -100,14 +101,6 @@ class AcumaticaTransferShipmentLine(models.Model):
                 and InternalTransferOrder.search_count([('external_ref', '=', rec.shipment_nbr)])
             )
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_float(value):
@@ -385,7 +378,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                 update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
                     existing_order,
                     {'location_id': src_location.id, 'location_dest_id': dest_location.id,
-                     'schedule_date': shipment._parse_dt(shipment.scheduled_date) or fields.Datetime.now(),
+                     'schedule_date': _data.acumatica_datetime(shipment.scheduled_date) or fields.Datetime.now(),
                      'note': shipment.note or shipment.description or False,
                      'description': shipment.description or False,
                      'adt_transaction_type': 'Transfer Shipment', 'document_only': shipment.document_only},
@@ -398,7 +391,7 @@ class AcumaticaTransferShipmentLine(models.Model):
                 src_location,
                 dest_location,
                 'inter_warehouse',
-                shipment._parse_dt(shipment.scheduled_date),
+                _data.acumatica_datetime(shipment.scheduled_date),
                 shipment.note or shipment.description or False,
                 description=shipment.description or False,
                 transfer_type='transfer_out',
@@ -520,7 +513,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             'location_id': src_location.id,
             'location_dest_id': dest_location.id,
             'adt_dest_location_id': dest_location.id,
-            'scheduled_date': shipment._parse_dt(shipment.scheduled_date),
+            'scheduled_date': _data.acumatica_datetime(shipment.scheduled_date),
             'note': shipment.note or shipment.description or False,
             'adt_description': shipment.description or False,
             # 'adt_actual_qty': shipment._parse_float(shipment.actual_qty),
@@ -531,7 +524,7 @@ class AcumaticaTransferShipmentLine(models.Model):
             'adt_to_warehouse_code': shipment.warehouse_dest_code or False,
             'adt_external_id': shipment.external_id or False,
             'adt_header_location_code': shipment.header_location_code or False,
-            'adt_acumatica_write_date': shipment._parse_dt(shipment.acumatica_write_date),
+            'adt_acumatica_write_date': _data.acumatica_datetime(shipment.acumatica_write_date),
             'adt_is_document_only': shipment.document_only,
         }
         picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}

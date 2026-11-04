@@ -1,6 +1,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
-from dateutil import parser as dateutil_parser
+from ..utils import acumatica_data as _data
+
 
 
 class AcumaticaDirectTransferStaging(models.Model):
@@ -194,7 +195,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                                 'transfer_type': 'transfer_in',
                                 'location_id': source_location.id,
                                 'location_dest_id': destination_location.id,
-                                'schedule_date': self._parse_dt(first.adt_Date) or fields.Datetime.now(),
+                                'schedule_date': _data.acumatica_datetime(first.adt_Date) or fields.Datetime.now(),
                                 'note': first.adt_note or False,
                                 'description': first.adt_Description or False,
                                 'adt_transaction_type': 'Vendor Return Document',
@@ -215,7 +216,7 @@ class AcumaticaDirectTransferStaging(models.Model):
                         source_location,
                         destination_location,
                         'inter_warehouse',
-                        self._parse_dt(first.adt_Date),
+                        _data.acumatica_datetime(first.adt_Date),
                         first.adt_note or False,
                         description=first.adt_Description or False,
                         transfer_type='transfer_in',
@@ -441,14 +442,14 @@ class AcumaticaDirectTransferStaging(models.Model):
                         'picking_type_id': picking_type.id,
                         'location_id': source_location.id,
                         'location_dest_id': dest_location.id,
-                        'scheduled_date': self._parse_dt(first.adt_Date),
+                        'scheduled_date': _data.acumatica_datetime(first.adt_Date),
                         'origin': origin,
                         'note': first.adt_note or False,
                         
                         # Sinkronisasi Field Kustom ke Tabel stock.picking (jika kolomnya eksis)
                         'adt_receipt_nbr': origin,
                         'adt_branch_warehouse': first.adt_PostPeriod or False,
-                        'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
+                        'adt_acumatica_write_date': _data.acumatica_datetime(first.adt_LastModifiedDateTime),
                         'adt_status': first.adt_Status or False,
                         # 'adt_type': first.adt_Type or False,
                         'adt_external_id': first.adt_id or False,
@@ -595,14 +596,6 @@ class AcumaticaDirectTransferStaging(models.Model):
         return product
 
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
         
     def _parse_float(self, value):
         try:

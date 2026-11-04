@@ -1,11 +1,12 @@
 import logging
-from dateutil import parser as dateutil_parser
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 import requests
+from ..utils import acumatica_data as _data
+
 
 
 class InventoryImportError(Exception):
@@ -115,14 +116,6 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 )
             )
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_float(value):
@@ -323,7 +316,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 {'external_ref_in': receive.reference_nbr or False, 'external_ref_out': receive.transfer_nbr or False,
                  'transaction_type': transfer_info['transaction_type'], 'transfer_type': 'transfer_in',
                  'location_id': source_location.id, 'location_dest_id': destination_location.id,
-                 'schedule_date': receive._parse_dt(receive.scheduled_date) or fields.Datetime.now(),
+                 'schedule_date': _data.acumatica_datetime(receive.scheduled_date) or fields.Datetime.now(),
                  'note': receive.note or False, 'description': receive.description or False,
                  'adt_transaction_type': receive.transfer_type or receive.doc_type or False,
                  'document_only': bool(receive.document_only)},
@@ -336,7 +329,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                 source_location,
                 destination_location,
                 transfer_info['transaction_type'],
-                schedule_date=receive._parse_dt(receive.scheduled_date),
+                schedule_date=_data.acumatica_datetime(receive.scheduled_date),
                 note=receive.note or False,
                 description=receive.description or False,
                 transfer_type='transfer_in',
@@ -602,13 +595,13 @@ class AcumaticaInventoryRecievedLine(models.Model):
             'origin': origin,
             'picking_type_id': picking_type.id,
             'adt_dest_location_id': dest_location.id if dest_location else False,
-            'scheduled_date': receive._parse_dt(receive.scheduled_date),
+            'scheduled_date': _data.acumatica_datetime(receive.scheduled_date),
             'note': receive.note or False,
             'owner_id': owner.id if owner else False,
 
             'adt_branch_warehouse': receive.branch_warehouse or False,
             # 'adt_actual_qty': self._parse_float(receive.actual_qty),
-            'adt_acumatica_write_date': self._parse_dt(receive.acumatica_write_date),
+            'adt_acumatica_write_date': _data.acumatica_datetime(receive.acumatica_write_date),
             'adt_post_period': receive.post_period or False,
             'adt_total_qty': self._parse_float(receive.total_qty),
             'adt_type': receive.transfer_type or False,

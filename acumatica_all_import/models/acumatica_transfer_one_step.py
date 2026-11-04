@@ -1,9 +1,10 @@
-from dateutil import parser as dateutil_parser
 import logging
 import requests
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -126,14 +127,6 @@ class AcumaticaTransferOneStepLine(models.Model):
                 and is_one_step
             )
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_float(value):
@@ -351,7 +344,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                          'document_only': bool(first.document_only),
                          'location_group_id': transfer_info.get('location_group').id if transfer_info.get('location_group') else False,
                          'location_id': source_location.id, 'location_dest_id': destination_location.id,
-                         'schedule_date': self._parse_dt(first.scheduled_date) or fields.Datetime.now(),
+                         'schedule_date': _data.acumatica_datetime(first.scheduled_date) or fields.Datetime.now(),
                          'note': first.note or False, 'description': first.description or False},
                         field_names={'transaction_type', 'transfer_type', 'adt_transaction_type', 'document_only', 'location_group_id', 'location_id', 'location_dest_id', 'schedule_date', 'note', 'description'},
                         prefix='Header',
@@ -368,7 +361,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                         'location_id': source_location.id,
                         'location_dest_id': destination_location.id,
                         'transit_location_id': transfer_service.get_or_create_transit_location().id,
-                        'schedule_date': self._parse_dt(first.scheduled_date),
+                        'schedule_date': _data.acumatica_datetime(first.scheduled_date),
                         'validation_policy': 'validate_all',
                         'note': first.note or False,
                         'description': first.description or False,
@@ -380,7 +373,7 @@ class AcumaticaTransferOneStepLine(models.Model):
                         source_location,
                         destination_location,
                         transfer_info['transaction_type'],
-                        self._parse_dt(first.scheduled_date),
+                        _data.acumatica_datetime(first.scheduled_date),
                         first.note or False,
                         description=first.description or False,
                         transfer_type=transfer_info['transfer_type'],

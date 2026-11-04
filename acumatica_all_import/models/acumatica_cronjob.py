@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, time, timedelta, timezone
 
-from odoo import fields, models, api
+from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
@@ -10,6 +10,140 @@ _logger = logging.getLogger(__name__)
 class AcumaticaCronJob(models.Model):
     _inherit = 'acumatica.config'
     _description = 'Cronjob'
+
+    def _run_scheduler_data_types(self, data_types, phase):
+        """Run selected Import Data types from an API Data Hub scheduler job."""
+        ImportWizard = self.env['acumatica.unified.import.wizard']
+        category = self.env.context.get('api_scheduler_data_category')
+        results = {}
+
+        if phase == 'import' and not self.env.context.get('api_scheduler_combined_run'):
+            job_type = self.env.context.get('api_scheduler_job_type')
+            fetch_job_type = {
+                'import_all_master': 'fetch_all_master',
+                'import_all_transaction': 'fetch_all_transaction',
+                'import_selected': 'fetch_selected',
+            }.get(job_type)
+            fetch_jobs = self.env['api.scheduler.job'].search([
+                ('job_type', '=', fetch_job_type),
+            ]) if fetch_job_type else self.env['api.scheduler.job']
+            if job_type == 'import_selected':
+                fetch_jobs = fetch_jobs.filtered(
+                    lambda job: job.selected_data_category == category
+                    and set(data_types).intersection(job.selected_data_type_ids.mapped('code'))
+                )
+            fetch_logs = self.env['api.scheduler.log'].search(
+                [('scheduler_job_id', 'in', fetch_jobs.ids)],
+                order='execution_time desc, id desc',
+            )
+            if fetch_logs and fetch_logs[0].status == 'running':
+                return {'fetch': self._cron_result(
+                    success=False, records_errors=1,
+                    message='Import ditahan: scheduler fetch masih berjalan.',
+                )}
+            if not fetch_logs:
+                return {'fetch': self._cron_result(
+                    success=False, records_errors=1,
+                    message='Import ditahan: belum ada log fetch untuk kategori ini.',
+                )}
+            successful_types = set(
+                fetch_logs[0].detail_ids.filtered(
+                    lambda detail: not detail.records_errors and detail.data_retrieved > 0
+                )
+                .mapped('acumatica_data')
+            )
+            data_types = [key for key in data_types if key in successful_types]
+            if not data_types:
+                return {'fetch': self._cron_result(
+                    success=False, records_errors=1,
+                    message='Import ditahan: tidak ada tipe data yang berhasil di-fetch pada run terakhir.',
+                )}
+
+        for key in data_types:
+            info = ImportWizard.IMPORT_MAP.get(key)
+            if not info:
+                results[key] = self._cron_result(
+                    success=False, records_errors=1,
+                    message='Unsupported Import Data type: %s' % key,
+                )
+                self._update_live_scheduler_log(key, results[key])
+                continue
+
+            type_category = 'master' if key in ImportWizard.MASTER_DATA_TYPES else 'transaction'
+            if category and category != type_category:
+                results[key] = self._cron_result(
+                    success=False, records_errors=1,
+                    message='Data type category does not match scheduler selection.',
+                )
+                self._update_live_scheduler_log(key, results[key])
+                continue
+
+            config = self._get_default_config_for_type(key)
+            if not config:
+                results[key] = self._cron_result(
+                    success=False, records_errors=1,
+                    message='No active API configuration found for %s.' % info['label'],
+                )
+                self._update_live_scheduler_log(key, results[key])
+                continue
+
+            Line = self.env[info['line_model']]
+            wizard_values = {
+                'import_category': type_category,
+                'import_type': key,
+                'import_type_master': key if type_category == 'master' else 'customer',
+                'import_type_transaction': key if type_category == 'transaction' else 'po_receipt',
+                'config_id': config.id,
+                'fetch_limit': 5000,
+                'batch_size': 1000,
+                'fetch_skip': 0,
+            }
+            try:
+                with self.env.cr.savepoint():
+                    wizard = ImportWizard.create(wizard_values)
+                    if phase == 'fetch':
+                        try:
+                            wizard.action_fetch_data()
+                        except UserError as exc:
+                            if 'Tidak ada data' not in str(exc):
+                                raise
+                        results[key] = self._cron_result(
+                            data_retrieved=wizard.total_fetched or 0,
+                        )
+                    else:
+                        domain = [('import_state', '=', 'staged')]
+                        if 'config_id' in Line._fields:
+                            domain.append(('config_id', '=', config.id))
+                        pending = Line.search(domain, order='id')
+                        if not pending:
+                            results[key] = self._cron_result()
+                        elif not hasattr(pending, '_do_import'):
+                            results[key] = self._cron_result(
+                                data_retrieved=len(pending),
+                                records_skipped=len(pending),
+                                message='Staging model has no import handler.',
+                            )
+                        else:
+                            pending_ids = pending.ids
+                            wizard.action_import_pending_batch()
+                            counts = self._get_import_counts(
+                                info['line_model'], pending_ids, skipped_states=['rejected'],
+                            )
+                            results[key] = self._cron_result(
+                                data_retrieved=len(pending_ids),
+                                records_created=counts[0] + counts[1],
+                                records_errors=counts[2],
+                                records_skipped=counts[3],
+                            )
+            except Exception as exc:
+                _logger.exception('API Data Hub scheduler failed for data type %s.', key)
+                results[key] = self._cron_result(
+                    success=False, records_errors=1, records_skipped=1,
+                    message=str(exc),
+                )
+            self._update_live_scheduler_log(key, results[key])
+
+        return results
 
     def _cron_result(self, success=True, data_retrieved=0, records_created=0, records_errors=0, records_skipped=0, message=False):
         return {
@@ -22,14 +156,11 @@ class AcumaticaCronJob(models.Model):
         }
 
     def _run_import_step(self, key, runner, batch_size=1000, fetch_skip=0):
+        """Run one legacy import step and persist its scheduler progress."""
         try:
             result = runner(batch_size=batch_size, fetch_skip=fetch_skip)
-            if isinstance(result, dict):
-                self._update_live_scheduler_log(key, result)
-                return result
-            result = self._cron_result(success=bool(result))
-            self._update_live_scheduler_log(key, result)
-            return result
+            if not isinstance(result, dict):
+                result = self._cron_result(success=bool(result))
         except Exception as exc:
             self.env.cr.rollback()
             _logger.exception("Cron import %s skipped because of an error.", key)
@@ -39,8 +170,8 @@ class AcumaticaCronJob(models.Model):
                 records_skipped=1,
                 message=str(exc),
             )
-            self._update_live_scheduler_log(key, result)
-            return result
+        self._update_live_scheduler_log(key, result)
+        return result
 
     def _update_live_scheduler_log(self, key, result):
         """Persist one completed data-type result to the scheduler's live log."""
@@ -55,12 +186,15 @@ class AcumaticaCronJob(models.Model):
         values = result if isinstance(result, dict) else {}
         detail = log.detail_ids.filtered(lambda item: item.acumatica_data == key)[:1]
         detail_values = {
-            'data_type': log.scheduler_job_id.acumatica_data_type,
+            'data_type': log.scheduler_job_id._get_scheduler_data_category(),
             'acumatica_data': key,
             'data_retrieved': max(values.get('data_retrieved', 0), 0),
             'staging_created': max(
                 values.get('data_retrieved', 0)
-                if log.scheduler_job_id.process_phase in ('fetch', 'combined')
+                if log.scheduler_job_id.job_type in (
+                    'fetch_all_master', 'fetch_all_transaction', 'fetch_selected',
+                    'fetch_import_all_master', 'fetch_import_all_transaction',
+                )
                 else 0,
                 0,
             ),
@@ -68,6 +202,11 @@ class AcumaticaCronJob(models.Model):
             'records_errors': max(values.get('records_errors', 0), 0),
             'records_skipped': max(values.get('records_skipped', 0), 0),
         }
+        if self.env.context.get('api_scheduler_combined_phase') == 'import' and detail:
+            # A combined run keeps the fetch totals and adds the import outcome
+            # to the same per-type detail row.
+            detail_values['data_retrieved'] = detail.data_retrieved
+            detail_values['staging_created'] = detail.staging_created
         if detail:
             detail.write(detail_values)
         else:

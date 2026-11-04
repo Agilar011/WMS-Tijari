@@ -1,8 +1,9 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
-from dateutil import parser as dateutil_parser
 from markupsafe import Markup, escape
 import logging
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -76,14 +77,6 @@ class AcumaticaWarehouseLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ─── Helpers ─────────────────────────────────────
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
 
     def _find_existing_location(self, rec):
@@ -472,7 +465,7 @@ class AcumaticaWarehouseLine(models.Model):
                     # Tetap update mapping lama berdasarkan WarehouseID. Ini penting
                     # ketika fetch pertama BuildingID kosong lalu fetch berikutnya
                     # sudah membawa BuildingID.
-                    changed_fields = line._get_changed_fields(
+                    changed_fields = _data.changed_import_fields(
                         existing,
                         vals,
                     )
@@ -659,32 +652,6 @@ class AcumaticaWarehouseLine(models.Model):
             'view_mode': 'form',
         }
 
-    def _get_changed_fields(self, record, vals):
-        changed_fields = []
-
-        for field_name, new_value in vals.items():
-            field = record._fields.get(field_name)
-
-            if not field:
-                continue
-
-            old_value = record[field_name]
-
-            if field.type == 'many2one':
-                old_value = old_value.id if old_value else False
-                
-            old_value = old_value or False
-            new_value = new_value or False
-
-            if old_value != new_value:
-                changed_fields.append({
-                    'field_name': field_name,
-                    'field_label': field.string,
-                    'old_value': old_value,
-                    'new_value': new_value,
-                })
-
-        return changed_fields
         
     def _log_import_result(
         self,

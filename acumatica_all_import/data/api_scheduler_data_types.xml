@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="api_scheduler_data_type_uom" model="api.scheduler.data.type">
+            <field name="name">UoM</field>
+            <field name="code">uom</field>
+            <field name="data_category">master</field>
+            <field name="sequence">50</field>
+        </record>
+        <record id="api_scheduler_data_type_customer" model="api.scheduler.data.type">
+            <field name="name">Customer</field>
+            <field name="code">customer</field>
+            <field name="data_category">master</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="api_scheduler_data_type_vendor" model="api.scheduler.data.type">
+            <field name="name">Vendor</field>
+            <field name="code">vendor</field>
+            <field name="data_category">master</field>
+            <field name="sequence">60</field>
+        </record>
+        <record id="api_scheduler_data_type_warehouse" model="api.scheduler.data.type">
+            <field name="name">Warehouse &amp; Location</field>
+            <field name="code">warehouse</field>
+            <field name="data_category">master</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="api_scheduler_data_type_stock_item" model="api.scheduler.data.type">
+            <field name="name">Stock Item</field>
+            <field name="code">stock_item</field>
+            <field name="data_category">master</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="api_scheduler_data_type_non_stock_item" model="api.scheduler.data.type">
+            <field name="name">Non-Stock Item</field>
+            <field name="code">non_stock_item</field>
+            <field name="data_category">master</field>
+            <field name="sequence">40</field>
+        </record>
+        <record id="api_scheduler_data_type_inventory_stock" model="api.scheduler.data.type">
+            <field name="name">Detail Stock Acumatica</field>
+            <field name="code">inventory_stock</field>
+            <field name="data_category">master</field>
+            <field name="sequence">70</field>
+        </record>
+        <record id="api_scheduler_data_type_po_receipt" model="api.scheduler.data.type">
+            <field name="name">Purchase Order</field>
+            <field name="code">po_receipt</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">110</field>
+        </record>
+        <record id="api_scheduler_data_type_issue_po_return" model="api.scheduler.data.type">
+            <field name="name">Vendor Return</field>
+            <field name="code">issue_po_return</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">170</field>
+        </record>
+        <record id="api_scheduler_data_type_transfer_one_step" model="api.scheduler.data.type">
+            <field name="name">Transfer 1 Step</field>
+            <field name="code">transfer_one_step</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">200</field>
+        </record>
+        <record id="api_scheduler_data_type_transfer_two_step" model="api.scheduler.data.type">
+            <field name="name">Transfer 2 Step</field>
+            <field name="code">transfer_two_step</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">210</field>
+        </record>
+        <record id="api_scheduler_data_type_inventory_received" model="api.scheduler.data.type">
+            <field name="name">Inventory Receipt</field>
+            <field name="code">inventory_received</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">120</field>
+        </record>
+        <record id="api_scheduler_data_type_inventory_issue" model="api.scheduler.data.type">
+            <field name="name">Inventory Issue</field>
+            <field name="code">inventory_issue</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">150</field>
+        </record>
+        <record id="api_scheduler_data_type_inventory_adjustment" model="api.scheduler.data.type">
+            <field name="name">Inventory Adjustment</field>
+            <field name="code">inventory_adjustment</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">160</field>
+        </record>
+        <record id="api_scheduler_data_type_shipment_so" model="api.scheduler.data.type">
+            <field name="name">SO Return</field>
+            <field name="code">shipment_so</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">130</field>
+        </record>
+        <record id="api_scheduler_data_type_so_shipment" model="api.scheduler.data.type">
+            <field name="name">SO Shipment</field>
+            <field name="code">so_shipment</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">140</field>
+        </record>
+        <record id="api_scheduler_data_type_shipment_completed" model="api.scheduler.data.type">
+            <field name="name">Update SO completed</field>
+            <field name="code">shipment_completed</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">240</field>
+        </record>
+        <record id="api_scheduler_data_type_shipment_transfer_completed" model="api.scheduler.data.type">
+            <field name="name">Shipment Transfer Completed</field>
+            <field name="code">shipment_transfer_completed</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">250</field>
+        </record>
+        <record id="api_scheduler_data_type_so_transfer" model="api.scheduler.data.type">
+            <field name="name">Transfer (In/SOTR)</field>
+            <field name="code">so_transfer</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">180</field>
+        </record>
+        <record id="api_scheduler_data_type_transfer_shipment" model="api.scheduler.data.type">
+            <field name="name">Transfer (Out/shipment)</field>
+            <field name="code">transfer_shipment</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">190</field>
+        </record>
+        <record id="api_scheduler_data_type_kit_assembly" model="api.scheduler.data.type">
+            <field name="name">Kit Assembly</field>
+            <field name="code">kit_assembly</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">260</field>
+        </record>
+        <record id="api_scheduler_data_type_invoice_consignment" model="api.scheduler.data.type">
+            <field name="name">Invoice Consignment</field>
+            <field name="code">invoice_consignment</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">220</field>
+        </record>
+        <record id="api_scheduler_data_type_vendor_return_direct_transfer" model="api.scheduler.data.type">
+            <field name="name">Return Consignment</field>
+            <field name="code">vendor_return_direct_transfer</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">270</field>
+        </record>
+        <record id="api_scheduler_data_type_vendor_return_document_direct_transfer" model="api.scheduler.data.type">
+            <field name="name">Return Consignment Document</field>
+            <field name="code">vendor_return_document_direct_transfer</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">280</field>
+        </record>
+        <record id="api_scheduler_data_type_credit_memo_consignment" model="api.scheduler.data.type">
+            <field name="name">Credit Memo Consignment</field>
+            <field name="code">credit_memo_consignment</field>
+            <field name="data_category">transaction</field>
+            <field name="sequence">230</field>
+        </record>
+    </data>
+</odoo>

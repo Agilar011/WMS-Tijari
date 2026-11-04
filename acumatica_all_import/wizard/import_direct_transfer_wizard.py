@@ -1,8 +1,9 @@
 from odoo import fields, models
 from odoo.exceptions import UserError
-from dateutil import parser as dateutil_parser
 
 import logging
+from ..utils import acumatica_data as _data
+
 _logger = logging.getLogger(__name__)
 
 
@@ -61,43 +62,9 @@ class ImportDirectTransferWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
 
-    @staticmethod
-    def _bool_val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            return value.strip().lower() in ('1', 'true', 'yes', 'y')
-        return bool(value)
 
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
         
     def _parse_float(self, value):
         try:
@@ -240,18 +207,18 @@ class ImportDirectTransferWizard(models.TransientModel):
             if isinstance(rows, list):
                 return rows
 
-        return self._normalize_rows(payload)
+        return _data.acumatica_rows(payload)
 
     def _filter_response_rows(self, rows, reference_nbr=False, odata_filter=False):
         if reference_nbr:
             rows = [
                 item for item in rows
-                if self._val(item, 'ReferenceNbr') == reference_nbr
+                if _data.acumatica_value(item, 'ReferenceNbr') == reference_nbr
             ]
         if self.last_modified_from:
             rows = [
                 item for item in rows
-                if self._val(item, 'LastModifiedDateTime') >= self.last_modified_from
+                if _data.acumatica_value(item, 'LastModifiedDateTime') >= self.last_modified_from
             ]
         return rows
 
@@ -273,22 +240,22 @@ class ImportDirectTransferWizard(models.TransientModel):
         header = {
             'adt_id': item.get('id', '') or '',
             'adt_rowNumber': self._parse_int(item.get('rowNumber') or row_number),
-            'adt_note': self._val(item, 'note'),
-            'adt_Date': self._val(item, 'Date'),
-            'adt_Description': self._val(item, 'Description'),
+            'adt_note': _data.acumatica_value(item, 'note'),
+            'adt_Date': _data.acumatica_value(item, 'Date'),
+            'adt_Description': _data.acumatica_value(item, 'Description'),
             # This wizard is dedicated to Return Transfer Document, which is
             # always handled through the Document Only flow.
             'adt_DocumentOnly': True,
-            'adt_ExternalRef': self._val(item, 'ExternalRef'),
-            'adt_LastModifiedDateTime': self._val(item, 'LastModifiedDateTime'),
-            'adt_PostPeriod': str(self._val(item, 'PostPeriod') or ''),
-            'adt_ReferenceNbr': self._val(item, 'ReferenceNbr'),
-            'adt_ReturnType': self._val(item, 'ReturnType'),
-            'adt_Status': self._val(item, 'Status'),
-            'adt_TotalQty': self._parse_float(self._val(item, 'TotalQty')),
-            'adt_TransferType': self._val(item, 'TransferType'),
-            'adt_FromWarehouseID': self._val(item, 'FromWarehouseID'),
-            'adt_ToWarehouseID': self._val(item, 'ToWarehouseID'),
+            'adt_ExternalRef': _data.acumatica_value(item, 'ExternalRef'),
+            'adt_LastModifiedDateTime': _data.acumatica_value(item, 'LastModifiedDateTime'),
+            'adt_PostPeriod': str(_data.acumatica_value(item, 'PostPeriod') or ''),
+            'adt_ReferenceNbr': _data.acumatica_value(item, 'ReferenceNbr'),
+            'adt_ReturnType': _data.acumatica_value(item, 'ReturnType'),
+            'adt_Status': _data.acumatica_value(item, 'Status'),
+            'adt_TotalQty': self._parse_float(_data.acumatica_value(item, 'TotalQty')),
+            'adt_TransferType': _data.acumatica_value(item, 'TransferType'),
+            'adt_FromWarehouseID': _data.acumatica_value(item, 'FromWarehouseID'),
+            'adt_ToWarehouseID': _data.acumatica_value(item, 'ToWarehouseID'),
             'config_id': self.config_id.id,
             'import_state': 'staged',
             'selected': True,
@@ -304,18 +271,18 @@ class ImportDirectTransferWizard(models.TransientModel):
             'reference_nbr': reference_nbr,
             'adt_id': item.get('id', '') or '',
             'adt_rowNumber': self._parse_int(item.get('rowNumber')),
-            'adt_note': self._val(item, 'note'),
-            'adt_Description': self._val(item, 'LineDescription') or self._val(item, 'Description'),
-            'adt_FromLocationID': self._val(item, 'LineFromLocationID') or self._val(item, 'FromLocationID'),
-            'adt_InventoryID': self._val(item, 'LineInventoryID') or self._val(item, 'InventoryID'),
-            'adt_LineNumber': self._parse_int(self._val(item, 'LineNumber') or self._val(item, 'LineNbr')),
-            'adt_NoteID': self._val(item, 'LineNoteID') or self._val(item, 'NoteID'),
-            'adt_Quantity': self._parse_float(self._val(item, 'LineQuantity') or self._val(item, 'Quantity')),
-            'adt_SOOrderNbr': self._val(item, 'LineSOOrderNbr') or self._val(item, 'SOOrderNbr'),
-            'adt_SOOrderType': self._val(item, 'LineSOOrderType') or self._val(item, 'SOOrderType'),
-            'adt_SOShipmentNbr': self._val(item, 'LineSOShipmentNbr') or self._val(item, 'SOShipmentNbr'),
-            'adt_ToLocationID': self._val(item, 'LineToLocationID') or self._val(item, 'ToLocationID'),
-            'adt_UOM': self._val(item, 'LineUOM') or self._val(item, 'UOM'),
+            'adt_note': _data.acumatica_value(item, 'note'),
+            'adt_Description': _data.acumatica_value(item, 'LineDescription') or _data.acumatica_value(item, 'Description'),
+            'adt_FromLocationID': _data.acumatica_value(item, 'LineFromLocationID') or _data.acumatica_value(item, 'FromLocationID'),
+            'adt_InventoryID': _data.acumatica_value(item, 'LineInventoryID') or _data.acumatica_value(item, 'InventoryID'),
+            'adt_LineNumber': self._parse_int(_data.acumatica_value(item, 'LineNumber') or _data.acumatica_value(item, 'LineNbr')),
+            'adt_NoteID': _data.acumatica_value(item, 'LineNoteID') or _data.acumatica_value(item, 'NoteID'),
+            'adt_Quantity': self._parse_float(_data.acumatica_value(item, 'LineQuantity') or _data.acumatica_value(item, 'Quantity')),
+            'adt_SOOrderNbr': _data.acumatica_value(item, 'LineSOOrderNbr') or _data.acumatica_value(item, 'SOOrderNbr'),
+            'adt_SOOrderType': _data.acumatica_value(item, 'LineSOOrderType') or _data.acumatica_value(item, 'SOOrderType'),
+            'adt_SOShipmentNbr': _data.acumatica_value(item, 'LineSOShipmentNbr') or _data.acumatica_value(item, 'SOShipmentNbr'),
+            'adt_ToLocationID': _data.acumatica_value(item, 'LineToLocationID') or _data.acumatica_value(item, 'ToLocationID'),
+            'adt_UOM': _data.acumatica_value(item, 'LineUOM') or _data.acumatica_value(item, 'UOM'),
         }
 
     def _upsert_direct_transfer_staging(self, headers, details):

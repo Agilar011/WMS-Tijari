@@ -2,9 +2,10 @@ import json
 
 from odoo import fields, models
 from odoo.exceptions import UserError
-from dateutil import parser as dateutil_parser
 
 import logging
+from ..utils import acumatica_data as _data
+
 _logger = logging.getLogger(__name__)
 
 
@@ -54,32 +55,8 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
 
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
         
     def _parse_float(self, value):
         try:
@@ -158,7 +135,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                 raw_payload.get('CreditMemoConsignmentGIDetails')
                 or raw_payload.get('InvoiceGIDetails')
             ) if isinstance(raw_payload, dict) else None
-            raw_data = flat_data or self._normalize_rows(raw_payload)
+            raw_data = flat_data or _data.acumatica_rows(raw_payload)
             print(f"Raw Data: {raw_data}")
             result = []
             seen_headers = {}
@@ -169,33 +146,33 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                         # PERBAIKAN: Mapping diselaraskan dengan key JSON Direct Transfer asli Anda
                         header = {
 
-                            'adt_id' : self._val(item, 'id'),
-                            'adt_rowNumber' : self._val(item, 'rowNumber'),
-                            'adt_note' : self._val(item, 'NoteHeader') or self._val(item, 'note'),
-                            'adt_BuildingID' : self._val(item, 'BuildingID'),
-                            'adt_ConsignmentType' : self._val(item, 'ConsignmentType'),
-                            'adt_CreatedDateTime' : self._val(item, 'CreatedDateTime'),
-                            'adt_CustomerID' : self._val(item, 'CustomerID'),
-                            'adt_CustomerName' : self._val(item, 'CustomerName'),
-                            'adt_CustomerOrder' : self._val(item, 'CustomerOrder'),
-                            'adt_Date' : self._val(item, 'Date'),
-                            'adt_Description' : self._val(item, 'Description'),
-                            'adt_ExternalRef' : self._val(item, 'ExternalRef'),
-                            'adt_DueDate' : self._val(item, 'DueDate'),
-                            'adt_LastModifiedDateTime' : self._val(item, 'LastModifiedDateTime'),
-                            'adt_LocationID' : self._val(item, 'LocationID'),
-                            'adt_LocationName' : self._val(item, 'LocationName'),
-                            'adt_NoteHeaderID' : self._val(item, 'NoteHeaderID'),
-                            'adt_OrigRefNbr' : self._val(item, 'OrigRefNbr'),
-                            'adt_PostPeriod' : self._val(item, 'PostPeriod'),
-                            'adt_ReferenceNbr' : self._val(item, 'ReferenceNbr'),
-                            'adt_Status' : self._val(item, 'Status'),
-                            'adt_Type' : self._val(item, 'Type'),                                       
+                            'adt_id' : _data.acumatica_value(item, 'id'),
+                            'adt_rowNumber' : _data.acumatica_value(item, 'rowNumber'),
+                            'adt_note' : _data.acumatica_value(item, 'NoteHeader') or _data.acumatica_value(item, 'note'),
+                            'adt_BuildingID' : _data.acumatica_value(item, 'BuildingID'),
+                            'adt_ConsignmentType' : _data.acumatica_value(item, 'ConsignmentType'),
+                            'adt_CreatedDateTime' : _data.acumatica_value(item, 'CreatedDateTime'),
+                            'adt_CustomerID' : _data.acumatica_value(item, 'CustomerID'),
+                            'adt_CustomerName' : _data.acumatica_value(item, 'CustomerName'),
+                            'adt_CustomerOrder' : _data.acumatica_value(item, 'CustomerOrder'),
+                            'adt_Date' : _data.acumatica_value(item, 'Date'),
+                            'adt_Description' : _data.acumatica_value(item, 'Description'),
+                            'adt_ExternalRef' : _data.acumatica_value(item, 'ExternalRef'),
+                            'adt_DueDate' : _data.acumatica_value(item, 'DueDate'),
+                            'adt_LastModifiedDateTime' : _data.acumatica_value(item, 'LastModifiedDateTime'),
+                            'adt_LocationID' : _data.acumatica_value(item, 'LocationID'),
+                            'adt_LocationName' : _data.acumatica_value(item, 'LocationName'),
+                            'adt_NoteHeaderID' : _data.acumatica_value(item, 'NoteHeaderID'),
+                            'adt_OrigRefNbr' : _data.acumatica_value(item, 'OrigRefNbr'),
+                            'adt_PostPeriod' : _data.acumatica_value(item, 'PostPeriod'),
+                            'adt_ReferenceNbr' : _data.acumatica_value(item, 'ReferenceNbr'),
+                            'adt_Status' : _data.acumatica_value(item, 'Status'),
+                            'adt_Type' : _data.acumatica_value(item, 'Type'),
                         }
 
 
                             
-                        header_key = self._val(item, 'ReferenceNbr') or item.get('id', '') or str(row_number)
+                        header_key = _data.acumatica_value(item, 'ReferenceNbr') or item.get('id', '') or str(row_number)
                         print(f"header : {header}")
                         if header_key in seen_headers:
                             created_header = seen_headers[header_key]
@@ -248,7 +225,7 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                     
                         # print(f"Header: {header}")
 
-                        if not details and self._val(item, 'LineInventoryID'):
+                        if not details and _data.acumatica_value(item, 'LineInventoryID'):
                             details = [item]
                         if not details:
                             raise UserError('Data Detail tidak ditemukan')
@@ -259,15 +236,15 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
                             vals = {
                                 'receipt_line_id' : created_header.id,
                                 'adt_id' : detail.get('id', ''),
-                                'adt_rowNumber' :  self._val(detail, 'rowNumber'), 
-                                'adt_note' :  self._val(detail, 'LineNote') or self._val(detail, 'note'),
-                                'adt_Branch' :  self._val(detail, 'LineBranch') or self._val(detail, 'Branch'),
-                                'adt_InventoryID' :  self._val(detail, 'LineInventoryID') or self._val(detail, 'InventoryID'),
-                                'adt_LineNoteID' : self._val(detail, 'LineNoteID'),
-                                'adt_Qty' :  self._val(detail, 'LineQty') or self._val(detail, 'Qty'),
-                                'adt_TransactionDescription' :  self._val(detail, 'LineTransactionDescription') or self._val(detail, 'TransactionDescription'),
-                                'adt_UOM' :  self._val(detail, 'LineUOM') or self._val(detail, 'UOM'),
-                                'adt_Warehouse' :  self._val(detail, 'LineWarehouse') or self._val(detail, 'LineWarehouseID') or self._val(detail, 'Warehouse'),
+                                'adt_rowNumber' :  _data.acumatica_value(detail, 'rowNumber'),
+                                'adt_note' :  _data.acumatica_value(detail, 'LineNote') or _data.acumatica_value(detail, 'note'),
+                                'adt_Branch' :  _data.acumatica_value(detail, 'LineBranch') or _data.acumatica_value(detail, 'Branch'),
+                                'adt_InventoryID' :  _data.acumatica_value(detail, 'LineInventoryID') or _data.acumatica_value(detail, 'InventoryID'),
+                                'adt_LineNoteID' : _data.acumatica_value(detail, 'LineNoteID'),
+                                'adt_Qty' :  _data.acumatica_value(detail, 'LineQty') or _data.acumatica_value(detail, 'Qty'),
+                                'adt_TransactionDescription' :  _data.acumatica_value(detail, 'LineTransactionDescription') or _data.acumatica_value(detail, 'TransactionDescription'),
+                                'adt_UOM' :  _data.acumatica_value(detail, 'LineUOM') or _data.acumatica_value(detail, 'UOM'),
+                                'adt_Warehouse' :  _data.acumatica_value(detail, 'LineWarehouse') or _data.acumatica_value(detail, 'LineWarehouseID') or _data.acumatica_value(detail, 'Warehouse'),
                             }
 
                             detail_result.append(vals)
@@ -403,27 +380,27 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
         if isinstance(detail_rows, dict):
             detail_rows = detail_rows.get('value') or []
         if not isinstance(detail_rows, list):
-            detail_rows = self._normalize_rows(payload)
+            detail_rows = _data.acumatica_rows(payload)
         detail_rows = [row for row in detail_rows if isinstance(row, dict)]
         header_source = detail_rows[0] if detail_rows else (payload if isinstance(payload, dict) else {})
 
         staging.write({
             'credit_memo_staging_id': credit_memo.id,
-            'adt_RefNbr': self._val(payload, 'RefNbr') or self._val(header_source, 'ReferenceNbr'),
-            'adt_id': self._val(payload, 'id') or self._val(header_source, 'id'),
-            'adt_rowNumber': self._val(payload, 'rowNumber'),
-            'adt_BuildingID': self._val(header_source, 'BuildingID'),
-            'adt_ConsignmentType': self._val(header_source, 'ConsignmentType'),
-            'adt_CustomerName': self._val(header_source, 'CustomerName'),
-            'adt_CustomerOrder': self._val(header_source, 'CustomerOrder'),
-            'adt_Date': self._val(header_source, 'Date'),
-            'adt_Description': self._val(header_source, 'Description'),
-            'adt_LastModifiedDateTime': self._val(header_source, 'LastModifiedDateTime'),
-            'adt_LocationID': self._val(header_source, 'LocationID'),
-            'adt_LocationName': self._val(header_source, 'LocationName'),
-            'adt_NoteHeaderID': self._val(header_source, 'NoteHeaderID'),
-            'adt_Status': self._val(header_source, 'Status'),
-            'adt_Type': self._val(header_source, 'Type'),
+            'adt_RefNbr': _data.acumatica_value(payload, 'RefNbr') or _data.acumatica_value(header_source, 'ReferenceNbr'),
+            'adt_id': _data.acumatica_value(payload, 'id') or _data.acumatica_value(header_source, 'id'),
+            'adt_rowNumber': _data.acumatica_value(payload, 'rowNumber'),
+            'adt_BuildingID': _data.acumatica_value(header_source, 'BuildingID'),
+            'adt_ConsignmentType': _data.acumatica_value(header_source, 'ConsignmentType'),
+            'adt_CustomerName': _data.acumatica_value(header_source, 'CustomerName'),
+            'adt_CustomerOrder': _data.acumatica_value(header_source, 'CustomerOrder'),
+            'adt_Date': _data.acumatica_value(header_source, 'Date'),
+            'adt_Description': _data.acumatica_value(header_source, 'Description'),
+            'adt_LastModifiedDateTime': _data.acumatica_value(header_source, 'LastModifiedDateTime'),
+            'adt_LocationID': _data.acumatica_value(header_source, 'LocationID'),
+            'adt_LocationName': _data.acumatica_value(header_source, 'LocationName'),
+            'adt_NoteHeaderID': _data.acumatica_value(header_source, 'NoteHeaderID'),
+            'adt_Status': _data.acumatica_value(header_source, 'Status'),
+            'adt_Type': _data.acumatica_value(header_source, 'Type'),
             'fetch_state': 'staged',
             'fetch_message': f'{len(detail_rows)} detail berhasil ditarik.',
             'sync_date': fields.Datetime.now(),
@@ -433,22 +410,22 @@ class ImportCreditMemoConsignmentWizard(models.TransientModel):
         if detail_rows:
             staging.line_ids.create([{
                 'staging_id': staging.id,
-                'adt_id': self._val(row, 'id'),
-                'adt_rowNumber': self._val(row, 'rowNumber'),
-                'adt_Branch': self._val(row, 'LineBranch'),
-                'adt_InventoryID': self._val(row, 'LineInventoryID'),
-                'adt_LineNoteID': self._val(row, 'LineNoteID'),
-                'adt_Qty': self._parse_float(self._val(row, 'LineQty')),
-                'adt_TransactionDescription': self._val(row, 'LineTransactionDescription'),
-                'adt_UOM': self._val(row, 'LineUOM'),
-                'adt_Warehouse': self._val(row, 'LineWarehouse'),
-                'adt_LocationID': self._val(row, 'LocationID'),
-                'adt_LocationName': self._val(row, 'LocationName'),
-                'adt_NoteHeaderID': self._val(row, 'NoteHeaderID'),
-                'adt_ReferenceNbr': self._val(row, 'ReferenceNbr') or self._val(payload, 'RefNbr'),
-                'adt_OrigRefNbr': self._val(row, 'OrigRefNbr'),
-                'adt_Status': self._val(row, 'Status'),
-                'adt_Type': self._val(row, 'Type'),
+                'adt_id': _data.acumatica_value(row, 'id'),
+                'adt_rowNumber': _data.acumatica_value(row, 'rowNumber'),
+                'adt_Branch': _data.acumatica_value(row, 'LineBranch'),
+                'adt_InventoryID': _data.acumatica_value(row, 'LineInventoryID'),
+                'adt_LineNoteID': _data.acumatica_value(row, 'LineNoteID'),
+                'adt_Qty': self._parse_float(_data.acumatica_value(row, 'LineQty')),
+                'adt_TransactionDescription': _data.acumatica_value(row, 'LineTransactionDescription'),
+                'adt_UOM': _data.acumatica_value(row, 'LineUOM'),
+                'adt_Warehouse': _data.acumatica_value(row, 'LineWarehouse'),
+                'adt_LocationID': _data.acumatica_value(row, 'LocationID'),
+                'adt_LocationName': _data.acumatica_value(row, 'LocationName'),
+                'adt_NoteHeaderID': _data.acumatica_value(row, 'NoteHeaderID'),
+                'adt_ReferenceNbr': _data.acumatica_value(row, 'ReferenceNbr') or _data.acumatica_value(payload, 'RefNbr'),
+                'adt_OrigRefNbr': _data.acumatica_value(row, 'OrigRefNbr'),
+                'adt_Status': _data.acumatica_value(row, 'Status'),
+                'adt_Type': _data.acumatica_value(row, 'Type'),
                 'response_json': json.dumps(row, ensure_ascii=False, indent=2),
             } for row in detail_rows])
         return True

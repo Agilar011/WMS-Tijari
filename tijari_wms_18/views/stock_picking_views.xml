@@ -71,6 +71,33 @@
         </field>
     </record>
 
+    <!-- Dedicated mobile kanban for pickings opened from an Internal Transfer
+         Order, matching the operation and transfer columns in its list view. -->
+    <record id="stock_picking_kanban_internal_transfer_order" model="ir.ui.view">
+        <field name="name">stock.picking.kanban.internal.transfer.order</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock_picking_kanban_show_origin_without_activity"/>
+        <field name="mode">primary</field>
+        <field name="arch" type="xml">
+            <xpath expr="//kanban/field[@name='adt_type']" position="after">
+                <field name="internal_transfer_leg"/>
+            </xpath>
+            <xpath expr="//templates/t[@t-name='card']//div[@t-if='record.adt_type.raw_value']/span" position="replace">
+                <span class="fw-semibold">Tipe Transaksi: </span>
+            </xpath>
+            <xpath expr="//templates/t[@t-name='card']//div[@t-if='record.adt_type.raw_value']" position="after">
+                <div t-if="record.internal_transfer_leg.raw_value">
+                    <span class="fw-semibold">Tipe Transfer: </span>
+                    <field name="internal_transfer_leg"/>
+                </div>
+                <div t-if="record.picking_type_id.raw_value">
+                    <span class="fw-semibold">Tipe Operasi: </span>
+                    <field name="picking_type_id"/>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
     <record id="stock_picking_list_my_worklist_search_document_button" model="ir.ui.view">
         <field name="name">stock.picking.list.my.worklist.search.document.button</field>
         <field name="model">stock.picking</field>
@@ -883,6 +910,7 @@
                 <field name="internal_transfer_leg" string="Tipe Transfer" widget="badge"
                     decoration-info="internal_transfer_leg == 'receipt'"
                     decoration-warning="internal_transfer_leg == 'delivery'"/>
+                <field name="picking_type_id" string="Tipe Operasi"/>
             </xpath>
         </field>
     </record>

@@ -1,8 +1,9 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
-from dateutil import parser as dateutil_parser
 from markupsafe import Markup, escape
 import logging
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -70,15 +71,6 @@ class AcumaticaVendorLine(models.Model):
     sync_date = fields.Datetime(string='Tanggal Sync')
 
     # ─── Helpers ─────────────────────────────────────
-    @staticmethod
-    def _parse_dt(dt_str):
-        """Parse ISO datetime string dari Acumatica, return datetime atau False."""
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     def _find_existing_partner(self, rec):
         """Cari vendor berdasarkan External ID lalu BAccount ID Acumatica."""
@@ -228,7 +220,7 @@ class AcumaticaVendorLine(models.Model):
                     'adt_external_id': line.external_id or False,
                     'adt_fob_point': line.fob_point or False,
                     'adt_lead_time_days': line.lead_time_days or 0,
-                    'adt_acumatica_write_date': self._parse_dt(line.last_modified_datetime),
+                    'adt_acumatica_write_date': _data.acumatica_datetime(line.last_modified_datetime),
                     'adt_vendor_id': line.vendor_id or False,
                     # 'adt_account_ref': line.account_ref or False,
                     'adt_note': line.note or False,
@@ -243,7 +235,7 @@ class AcumaticaVendorLine(models.Model):
                 if existing:
                     old_vendor_id = existing.adt_vendor_id or False
 
-                    changed_fields = line._get_changed_fields(
+                    changed_fields = _data.changed_import_fields(
                         existing,
                         vals,
                     )
@@ -344,32 +336,6 @@ class AcumaticaVendorLine(models.Model):
             'view_mode': 'form',
         }
 
-    def _get_changed_fields(self, record, vals):
-        changed_fields = []
-
-        for field_name, new_value in vals.items():
-            field = record._fields.get(field_name)
-
-            if not field:
-                continue
-
-            old_value = record[field_name]
-
-            if field.type == 'many2one':
-                old_value = old_value.id if old_value else False
-                
-            old_value = old_value or False
-            new_value = new_value or False
-
-            if old_value != new_value:
-                changed_fields.append({
-                    'field_name': field_name,
-                    'field_label': field.string,
-                    'old_value': old_value,
-                    'new_value': new_value,
-                })
-
-        return changed_fields
     
     def _log_import_result(
         self,

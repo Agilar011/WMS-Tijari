@@ -32,6 +32,7 @@
         'data/ir_actions_server.xml',
         'data/document_only_picking_type_data.xml',
         'data/stock_picking_type_group_view_data.xml',
+        'data/stock_warehouse_sop_aditya_data.xml',
         'data/stock_location_consignment_data.xml',
         'data/ir.sequence.xml',
         'data/mail_template_stock_inventory_approval.xml',

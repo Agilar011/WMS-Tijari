@@ -1,8 +1,9 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
-from dateutil import parser as dateutil_parser
 import logging
 import requests
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -142,14 +143,6 @@ class AcumaticaReceiptLine(models.Model):
         for rec in self:
             rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('origin', '=', rec.receipt_nbr)]))
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_float(value):
@@ -366,7 +359,7 @@ class AcumaticaReceiptLine(models.Model):
                 user_message="\n".join(user_messages),
             )
 
-        scheduled_date = receipt._parse_dt(receipt.scheduled_date)
+        scheduled_date = _data.acumatica_datetime(receipt.scheduled_date)
         picking_vals = {
             'partner_id': vendor.id if vendor else False,
             'picking_type_id': picking_type.id,
@@ -381,7 +374,7 @@ class AcumaticaReceiptLine(models.Model):
             # 'adt_actual_qty': receipt._parse_float(receipt.actual_qty),
             'adt_is_hold': str(receipt.is_hold or '').lower() in ('true', '1', 'yes'),
             'adt_inventory_ref': receipt.inventory_ref or False,
-            'adt_acumatica_write_date': receipt._parse_dt(receipt.acumatica_write_date),
+            'adt_acumatica_write_date': _data.acumatica_datetime(receipt.acumatica_write_date),
             'adt_header_location_code': receipt.header_location_code or False,
             'adt_post_period': receipt.post_period or False,
             'adt_status': receipt.status or False,
