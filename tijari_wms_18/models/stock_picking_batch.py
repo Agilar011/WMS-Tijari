@@ -1264,6 +1264,15 @@ class StockPickingToBatchInherit(models.TransientModel):
 
         return vals
 
+    @api.onchange('batch_id')
+    def _onchange_batch_id_responsibles(self):
+        """Prefill empty wizard assignments from the selected existing batch."""
+        if not self.batch_id or self.mode != 'existing':
+            return
+        for field_name in self.batch_id._RESPONSIBLE_BATCH_TO_PICKING_FIELDS:
+            if not self[field_name]:
+                self[field_name] = self.batch_id[field_name]
+
     def attach_pickings(self):
         self.ensure_one()
 
@@ -1314,27 +1323,23 @@ class StockPickingToBatchInherit(models.TransientModel):
         else:
             batch = self.batch_id
 
+        responsible_values = {
+            field_name: (
+                self[field_name].ids
+                or (batch[field_name].ids if self.mode == 'existing' else [])
+            )
+            for field_name in batch._RESPONSIBLE_BATCH_TO_PICKING_FIELDS
+        }
+
         # Assign responsible users exactly as selected in the wizard.
         pickings.with_context(
             tijari_responsible_sync=True
         ).write({
             'batch_id': batch.id,
-
-            'pick_responsible_ids': [
-                (6, 0, self.pick_responsible_ids.ids)
-            ],
-
-            'pack_responsible_ids': [
-                (6, 0, self.pack_responsible_ids.ids)
-            ],
-
-            'do_responsible_ids': [
-                (6, 0, self.do_responsible_ids.ids)
-            ],
-
-            'putaway_responsible_ids': [
-                (6, 0, self.putaway_responsible_ids.ids)
-            ],
+            **{
+                field_name: [(6, 0, user_ids)]
+                for field_name, user_ids in responsible_values.items()
+            },
         })
 
         # Keep the batch form initialized from the real picking assignments.
@@ -1389,13 +1394,27 @@ class StockAddToWaveInherit(models.TransientModel):
         vals['operation_type_name'] = operation_types.name if len(operation_types) == 1 else False
         return vals
 
+    @api.onchange('wave_id')
+    def _onchange_wave_id_responsibles(self):
+        """Prefill empty wizard assignments from the selected existing wave."""
+        if not self.wave_id or self.mode != 'existing':
+            return
+        for field_name in self.wave_id._RESPONSIBLE_BATCH_TO_PICKING_FIELDS:
+            if not self[field_name]:
+                self[field_name] = self.wave_id[field_name]
+
     def attach_pickings(self):
         self.ensure_one()
+        wave = self.wave_id if self.mode == 'existing' else self.env['stock.picking.batch']
         responsible_values = {
-            'pick_responsible_ids': self.pick_responsible_ids.ids,
-            'pack_responsible_ids': self.pack_responsible_ids.ids,
-            'do_responsible_ids': self.do_responsible_ids.ids,
-            'putaway_responsible_ids': self.putaway_responsible_ids.ids,
+            field_name: (
+                self[field_name].ids
+                or wave[field_name].ids
+            )
+            for field_name in (
+                'pick_responsible_ids', 'pack_responsible_ids',
+                'do_responsible_ids', 'putaway_responsible_ids',
+            )
         }
         operation_responsible_ids = (
             self.putaway_responsible_ids

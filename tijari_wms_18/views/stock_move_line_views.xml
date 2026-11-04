@@ -392,7 +392,8 @@
                         <field name="location_putaway_id"
                             string="Store To"
                             domain="[('id', 'child_of', adt_dest_location_id)]"
-                            context="{'show_location_short_name': True}"/>
+                            context="{'show_location_short_name': True}"
+                            readonly="pick_status == 'finished' or putaway_status == 'finished' or state in ('done', 'cancel')"/>
                     </group>
 
                     <!-- ===================================================== -->
@@ -414,7 +415,7 @@
                             placeholder="Scan handheld: lot, lokasi, atau package"
                             nolabel="1"
                             class="fw-bold fs-6"
-                            readonly="pick_status == 'finished' or state in ('done', 'cancel')"/>
+                            readonly="pick_status == 'finished' or putaway_status == 'finished' or state in ('done', 'cancel')"/>
 
                     </group>
 
@@ -453,7 +454,8 @@
                             nolabel="1"
                             domain="[('id', 'child_of', adt_dest_location_id)]"
                             context="{'show_location_short_name': True}"
-                            class="fw-bold fs-6"/>
+                            class="fw-bold fs-6"
+                            readonly="putaway_status == 'finished' or state in ('done', 'cancel')"/>
 
                     </group>
 
@@ -472,7 +474,8 @@
                             widget="adt_handheld_scan_code"
                             placeholder="Scan handheld: lot atau lokasi"
                             nolabel="1"
-                            class="fw-bold fs-6"/>
+                            class="fw-bold fs-6"
+                            readonly="putaway_status == 'finished' or state in ('done', 'cancel')"/>
 
                     </group>
 

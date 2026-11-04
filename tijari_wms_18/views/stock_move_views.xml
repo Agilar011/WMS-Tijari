@@ -1283,10 +1283,10 @@
                         <button name="action_mark_picker_unfinished"
                                 type="object"
                                 icon="fa-undo"
-                                class="btn-danger"
+                                class="btn-danger o_wms_auto_save_before_action"
                                 title="Undo Picker"
-                                invisible="context.get('batch_picker_readonly') or picker_status == 'unfinished' or parent.state == 'done'"
-                                column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
+                                invisible="picker_status == 'unfinished' or parent.state == 'done'"
+                                column_invisible="'Pick' in (parent.picking_type_name or '') or 'Pack' in (parent.picking_type_name or '') or 'Delivery' in (parent.picking_type_name or '')"/>
                         <button name="action_delete_picker_line"
                                 type="object"
                                 class="btn btn-link btn-lg p-0"
@@ -2677,7 +2677,7 @@
                             widget="adt_handheld_scan_code"
                             string="Scan Handheld"
                             placeholder="Scan handheld: lot atau lokasi"
-                            readonly="0"
+                            readonly="putaway_status == 'finished' or state in ('done', 'cancel')"
                             force_save="1"
                             invisible="putaway_status == 'finished'"
                             column_invisible="parent.picking_type_name not in ('Storage','Store Finished Product','Receipts','Receipt Internal')"/>
@@ -2695,6 +2695,7 @@
                             string="Store To"
                             context="{'show_location_short_name': True}"
                             domain="[('id', 'child_of', adt_dest_location_id)]"
+                            readonly="putaway_status == 'finished' or state in ('done', 'cancel')"
                             optional="show"/>
                         <field name="location_id"
                             string="Pick From"
@@ -2752,10 +2753,10 @@
                         <field name="lot_id"/>
                         <field name="location_id"/>
                         <field name="adt_dest_location_id"/>
-                        <field name="location_putaway_id" domain="[('id', 'child_of', adt_dest_location_id)]" context="{'show_location_short_name': True}"/>
+                        <field name="location_putaway_id" domain="[('id', 'child_of', adt_dest_location_id)]" context="{'show_location_short_name': True}" readonly="putaway_status == 'finished' or state in ('done', 'cancel')"/>
                         <field name="confirmation_lot_code"/>
                         <field name="confirmation_location_code"/>
-                        <field name="handheld_scan_code"/>
+                        <field name="handheld_scan_code" readonly="putaway_status == 'finished' or state in ('done', 'cancel')"/>
                         <field name="matching_lot_id"/>
                         <field name="quantity"/>
                         <field name="product_uom_qty"/>
@@ -2782,7 +2783,8 @@
                                             <field name="handheld_scan_code"
                                                 widget="adt_handheld_scan_code"
                                                 string="Scan Handheld"
-                                                placeholder="Scan handheld: lot atau lokasi"/>
+                                                placeholder="Scan handheld: lot atau lokasi"
+                                                readonly="putaway_status == 'finished' or state in ('done', 'cancel')"/>
                                         </div>
                                         <div invisible="putaway_status == 'finished'">
                                             <field name="confirmation_location_code" widget="adt_scan_location_button" readonly="1"/>
