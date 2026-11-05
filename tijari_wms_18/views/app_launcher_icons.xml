@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="mail.menu_root_discuss" model="ir.ui.menu">
+        <field name="web_icon">tijari_wms_18,static/description/app_icons/discuss.png</field>
+    </record>
+    <record id="contacts.menu_contacts" model="ir.ui.menu">
+        <field name="web_icon">tijari_wms_18,static/description/app_icons/contacts.png</field>
+    </record>
+    <record id="spreadsheet_dashboard.spreadsheet_dashboard_menu_root" model="ir.ui.menu">
+        <field name="web_icon">tijari_wms_18,static/description/app_icons/dashboard.png</field>
+    </record>
+    <record id="approval_base.menu_approval_root" model="ir.ui.menu">
+        <field name="web_icon">tijari_wms_18,static/description/app_icons/approval.png</field>
+    </record>
+    <record id="stock.menu_stock_root" model="ir.ui.menu">
+        <field name="web_icon">tijari_wms_18,static/description/app_icons/inventory.png</field>
+    </record>
+    <record id="mrp.menu_mrp_root" model="ir.ui.menu">
+        <field name="web_icon">tijari_wms_18,static/description/app_icons/manufacturing.png</field>
+    </record>
+    <record id="hr.menu_hr_root" model="ir.ui.menu">
+        <field name="web_icon">tijari_wms_18,static/description/app_icons/employees.png</field>
+    </record>
+    <record id="base.menu_management" model="ir.ui.menu">
+        <field name="web_icon">tijari_wms_18,static/description/app_icons/apps.png</field>
+    </record>
+    <record id="base.menu_administration" model="ir.ui.menu">
+        <field name="web_icon">tijari_wms_18,static/description/app_icons/settings.png</field>
+    </record>
+</odoo>

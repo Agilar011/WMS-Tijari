@@ -169,7 +169,7 @@
                 <field name="wms_state"
                     widget="statusbar"
                     statusbar_visible="draft,assigned,done"
-                    invisible="stock_lebih or ((picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment']) and not (internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment'])) and not (internal_transfer_order_id and internal_transfer_leg == 'receipt')"
+                    invisible="stock_lebih or ((picking_type_name not in ['Delivery Orders', 'Internal Transfers'] or adt_type not in ['Sales Order Shipment', 'Shipment Consignment', 'Transfer Shipment']))"
                 />
                 <field name="wms_state_over_receipt"
                     widget="statusbar"
@@ -193,7 +193,7 @@
                 <field name="state"
                     widget="statusbar"
                     statusbar_visible="draft,confirmed,assigned,done"
-                    invisible="stock_lebih or adt_type in ['Sales Order Shipment'] and picking_type_name in ['Delivery Orders'] or internal_transfer_order_id and internal_transfer_leg == 'delivery' and picking_type_code == 'internal' and adt_type in ['Shipment Consignment', 'Transfer Shipment'] or internal_transfer_order_id and internal_transfer_leg == 'receipt'"/>
+                    invisible="stock_lebih or (picking_type_name in ['Delivery Orders' , 'Internal Transfers'] and adt_type in ['Sales Order Shipment', 'Shipment Consignment', 'Transfer Shipment'])"/>
 
             </xpath>            
 
