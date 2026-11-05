@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <menuitem id="menu_acumatica_all_import_root" web_icon="acumatica_all_import,static/description/icon.png" name="API Data Hub" action="action_acumatica_config" sequence="83" groups="base.group_system,stock.group_stock_manager"/>
+    <menuitem id="menu_acumatica_all_import_root" web_icon="tijari_wms_18,static/description/app_icons/api_data_hub.png" name="API Data Hub" action="action_acumatica_config" sequence="83" groups="base.group_system,stock.group_stock_manager"/>
     <record id="action_acumatica_api_data_hub_dashboard" model="ir.actions.client">
         <field name="name">Dashboard</field>
         <field name="tag">action_spreadsheet_dashboard</field>
