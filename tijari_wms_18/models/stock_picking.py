@@ -15,6 +15,7 @@ from odoo.exceptions import AccessError, ValidationError, UserError
 from odoo.tools import float_compare
 from odoo.addons.tijari_wms_18.controllers.controllers import WmsApiController
 from odoo.tools.float_utils import float_is_zero
+from odoo.tools import SQL
 
 _logger = logging.getLogger(__name__)
 _OPERATOR_VALIDATION_WRITE_TOKEN = object()
@@ -39,6 +40,38 @@ class StockPicking(models.Model):
         string='Has Incomplete Wave Splits',
         compute='_compute_wave_split_status', store=True,
     )
+
+    _STATE_SORT_ORDER = [
+        'draft',
+        'waiting',
+        'confirmed',
+        'assigned',
+        'waiting_response',
+        'waiting_approval',
+        'return_shipment',
+        'done',
+        'cancel',
+    ]
+
+    def _order_to_sql(self, order, query, alias=None, reverse=False):
+        sql = super()._order_to_sql(order, query, alias=alias, reverse=reverse)
+        if order == self._order:
+            alias = alias or self._table
+            direction = SQL('DESC') if reverse else SQL('ASC')
+            whens = SQL(' ').join(
+                SQL("WHEN %s THEN %s", key, idx)
+                for idx, key in enumerate(self._STATE_SORT_ORDER)
+            )
+            state_sort = SQL(
+                "CASE COALESCE(%s, %s) %s ELSE %s END %s",
+                SQL.identifier(alias, 'wms_state'),
+                SQL.identifier(alias, 'state'),
+                whens,
+                len(self._STATE_SORT_ORDER),
+                direction,
+            )
+            return SQL("%s, %s", state_sort, sql)
+        return sql
 
     @api.depends('state', 'wave_split_ids', 'wave_split_ids.state')
     def _compute_wave_split_status(self):
