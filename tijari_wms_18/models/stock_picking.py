@@ -1584,7 +1584,9 @@ class StockPicking(models.Model):
             elif not is_waiting_shipment or picking.picking_type_name not in ["Delivery Orders", "Internal Transfer"]:
                 picking.wms_state = picking.state
             elif is_waiting_shipment and not picking.shipment_information:
-                picking.wms_state = "assigned"       
+                picking.wms_state = "assigned"
+            else:
+                picking.wms_state = picking.state
 
     @api.depends('wms_state')
     def _compute_wms_state_over_receipt(self):

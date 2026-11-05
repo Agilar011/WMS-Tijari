@@ -13,8 +13,10 @@
     'depends': [
         'base', 
         'mail',
+        'contacts',
         'stock',
         'mrp',
+        'hr',
         'mrp_account',
         'stock_picking_batch',
         'stock_sms',
@@ -79,6 +81,7 @@
         'views/inventory_menu_views.xml',
         'views/access_menu_security.xml',
         'views/stock_dashboard_menu_cleanup.xml',
+        'views/app_launcher_icons.xml',
     ],
     'assets': {
         'spreadsheet.o_spreadsheet': [

@@ -8,8 +8,17 @@ patch(OmuxNavBar.prototype, {
     setup() {
         super.setup();
 
-        onWillStart(() => {
-            this.ownBrandBg = `background-image: url('/web/image/res.company/${this.ui.cpyId()}/${this.ui.color_scheme == 'dark' ? 'bg_lui' : 'bg_dui'}');background-size: cover;background-repeat: no-repeat;background-position: center;`;
+        onWillStart(async () => {
+            const companyId = this.ui.cpyId();
+            const mobile = this.isMobileOS || this.env.isSmall;
+            const backgroundField = await this.orm.call(
+                'res.company',
+                'get_home_background_field',
+                [companyId, this.ui.color_scheme, mobile],
+            );
+            this.ownBrandBg = backgroundField
+                ? `background-image: url('/web/image/res.company/${companyId}/${backgroundField}');background-size: cover;background-repeat: no-repeat;background-position: center;`
+                : false;
         });
     },
 });
