@@ -3,6 +3,9 @@
         <template id="email_layout_picking_plain" name="Picking email layout without document link">
             <t t-out="message.body"/>
         </template>
+        <template id="remove_signup_link" inherit_id="auth_signup.login">
+            <xpath expr="//a[contains(@t-attf-href, '/web/signup')]/parent::p" position="replace"/>
+        </template>
 <!--
         <template id="listing">
           <ul>

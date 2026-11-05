@@ -72,3 +72,7 @@ body.light-dm {
         }
     }
 }
+body.light-dm .oe_login_form .o_user_switch_btn,
+body.light-dm .oe_login_form a[href*="/web/reset_password"] {
+    display: none !important;
+}
