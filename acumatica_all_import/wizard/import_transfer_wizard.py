@@ -1,9 +1,10 @@
 from odoo import fields, models
 from odoo.exceptions import UserError
-from dateutil import parser as dateutil_parser
 from datetime import datetime
 
 import logging
+from ..utils import acumatica_data as _data
+
 _logger = logging.getLogger(__name__)
 
 
@@ -124,45 +125,10 @@ class ImportTransferWizard(models.TransientModel):
 
         return picking_type or False
 
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
 
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
-    def _bool_val(self, item, key):
-        return self._bool_value(item.get(key, {}))
 
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
     
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
 
     def fetch_transfer_data(self):
@@ -237,7 +203,7 @@ class ImportTransferWizard(models.TransientModel):
 
             raw_data = (
                 flat_data
-                or self._normalize_rows(raw_payload)
+                or _data.acumatica_rows(raw_payload)
             )
 
             result = []
@@ -254,12 +220,12 @@ class ImportTransferWizard(models.TransientModel):
                 raw_data,
                 start=1,
             ):
-                receipt_nbr = self._val(
+                receipt_nbr = _data.acumatica_value(
                     item,
                     "ReceiptNbr",
                 )
 
-                transfer_shipment_nbr = self._val(
+                transfer_shipment_nbr = _data.acumatica_value(
                     item,
                     'LineTransferShipmentNbr',
                 )
@@ -293,12 +259,12 @@ class ImportTransferWizard(models.TransientModel):
                 if receipt_nbr not in seen_receipts:
                     seen_receipts.add(receipt_nbr)
 
-                    building_code = self._val(
+                    building_code = _data.acumatica_value(
                         item,
                         "BuildingID",
                     )
 
-                    document_only = self._bool_val(
+                    document_only = _data.acumatica_bool(
                         item,
                         'DocumentOnly',
                     )
@@ -323,77 +289,77 @@ class ImportTransferWizard(models.TransientModel):
                             ).get('value', '')
                             or ''
                         ),
-                        'note_header_id': self._val(
+                        'note_header_id': _data.acumatica_value(
                             item,
                             'NoteHeaderID',
                         ),
-                        'branch_warehouse': self._val(
+                        'branch_warehouse': _data.acumatica_value(
                             item,
                             'Branch',
                         ),
                         'building_code': building_code,
-                        'actual_qty': self._val(
+                        'actual_qty': _data.acumatica_value(
                             item,
                             'ControlQty',
                         ),
-                        'scheduled_date': self._val(
+                        'scheduled_date': _data.acumatica_value(
                             item,
                             'Date',
                         ),
-                        'is_hold': self._val(
+                        'is_hold': _data.acumatica_value(
                             item,
                             'Hold',
                         ),
-                        'inventory_ref': self._val(
+                        'inventory_ref': _data.acumatica_value(
                             item,
                             'InventoryRefNbr',
                         ),
-                        'acumatica_write_date': self._val(
+                        'acumatica_write_date': _data.acumatica_value(
                             item,
                             'LastModifiedDateTime',
                         ),
-                        'header_location_code': self._val(
+                        'header_location_code': _data.acumatica_value(
                             item,
                             'Location',
                         ),
-                        'post_period': self._val(
+                        'post_period': _data.acumatica_value(
                             item,
                             'PostPeriod',
                         ),
                         'receipt_nbr': receipt_nbr,
                         'document_only': document_only,
                         'stock_lebih': (
-                            self._bool_val(item, 'WMSRelated')
-                            or self._bool_val(item, 'wms_related')
-                            or self._bool_val(item, 'StockLebih')
-                            or self._bool_val(item, 'stock_lebih')
+                            _data.acumatica_bool(item, 'WMSRelated')
+                            or _data.acumatica_bool(item, 'wms_related')
+                            or _data.acumatica_bool(item, 'StockLebih')
+                            or _data.acumatica_bool(item, 'stock_lebih')
                         ),
-                        'status': self._val(
+                        'status': _data.acumatica_value(
                             item,
                             'Status',
                         ),
-                        'total_qty': self._val(
+                        'total_qty': _data.acumatica_value(
                             item,
                             'TotalQty',
                         ),
-                        'receipt_type': self._val(
+                        'receipt_type': _data.acumatica_value(
                             item,
                             'Type',
                         ),
-                        'vendor_code': self._val(
+                        'vendor_code': _data.acumatica_value(
                             item,
                             'VendorID',
                         ),
-                        'vendor_name': self._val(
+                        'vendor_name': _data.acumatica_value(
                             item,
                             'VendorName',
                         ),
                         'partner_ref': (
-                            self._val(
+                            _data.acumatica_value(
                                 item,
                                 'VendorRef',
                             )
-                            or self._val(
+                            or _data.acumatica_value(
                                 item,
                                 'VendorName',
                             )
@@ -402,15 +368,15 @@ class ImportTransferWizard(models.TransientModel):
                             shipment_warehouse.get(
                                 'source_warehouse'
                             )
-                            or self._val(
+                            or _data.acumatica_value(
                                 item,
                                 'FromWarehouseID',
                             )
-                            or self._val(
+                            or _data.acumatica_value(
                                 item,
                                 'WarehouseID',
                             )
-                            or self._val(
+                            or _data.acumatica_value(
                                 item,
                                 'LineFromWarehouseID',
                             )
@@ -419,15 +385,15 @@ class ImportTransferWizard(models.TransientModel):
                             shipment_warehouse.get(
                                 'dest_warehouse'
                             )
-                            or self._val(
+                            or _data.acumatica_value(
                                 item,
                                 'ToWarehouseID',
                             )
-                            or self._val(
+                            or _data.acumatica_value(
                                 item,
                                 'Warehouse'
                             )
-                            or self._val(
+                            or _data.acumatica_value(
                                 item,
                                 'LineWarehouseID'
                             )
@@ -461,75 +427,75 @@ class ImportTransferWizard(models.TransientModel):
                         ).get('value', '')
                         or ''
                     ),
-                    'line_note_id': self._val(
+                    'line_note_id': _data.acumatica_value(
                         item,
                         'LineNoteID',
                     ),
-                    'line_branch': self._val(
+                    'line_branch': _data.acumatica_value(
                         item,
                         'LineBranch',
                     ),
-                    'description': self._val(
+                    'description': _data.acumatica_value(
                         item,
                         'LineDescription',
                     ),
-                    'inventory_id': self._val(
+                    'inventory_id': _data.acumatica_value(
                         item,
                         'LineInventoryID',
                     ),
-                    'line_nbr': self._val(
+                    'line_nbr': _data.acumatica_value(
                         item,
                         'LineNbr',
                     ),
-                    'line_type': self._val(
+                    'line_type': _data.acumatica_value(
                         item,
                         'LineType',
                     ),
-                    'location_dest_code': self._val(
+                    'location_dest_code': _data.acumatica_value(
                         item,
                         'LineLocation',
                     ),
-                    'open_qty': self._val(
+                    'open_qty': _data.acumatica_value(
                         item,
                         'LineOpenQty',
                     ),
-                    'order_qty': self._val(
+                    'order_qty': _data.acumatica_value(
                         item,
                         'LineOrderedQty',
                     ),
-                    'po_line_number': self._val(
+                    'po_line_number': _data.acumatica_value(
                         item,
                         'LinePOLineNbr',
                     ),
-                    'po_number': self._val(
+                    'po_number': _data.acumatica_value(
                         item,
                         'LinePOOrderNbr',
                     ),
-                    'po_type': self._val(
+                    'po_type': _data.acumatica_value(
                         item,
                         'LinePOOrderType',
                     ),
-                    'po_receipt_number': self._val(
+                    'po_receipt_number': _data.acumatica_value(
                         item,
                         'LinePOReceiptNbr',
                     ),
-                    'product_uom_qty': self._val(
+                    'product_uom_qty': _data.acumatica_value(
                         item,
                         'LineReceiptQty',
                     ),
                     'transfer_shipment_number': (
                         transfer_shipment_nbr
                     ),
-                    'uom_code': self._val(
+                    'uom_code': _data.acumatica_value(
                         item,
                         'LineUOM',
                     ),
                     'warehouse_dest_code': (
-                        self._val(
+                        _data.acumatica_value(
                             item,
                             'ToWarehouseID',
                         )
-                        or self._val(
+                        or _data.acumatica_value(
                             item,
                             'LineWarehouseID',
                         )
@@ -642,7 +608,7 @@ class ImportTransferWizard(models.TransientModel):
                     f'{response.text}'
                 )
 
-            raw_data = self._normalize_rows(
+            raw_data = _data.acumatica_rows(
                 response.json()
             )
 
@@ -657,15 +623,15 @@ class ImportTransferWizard(models.TransientModel):
             item = raw_data[0]
 
             result = {
-                'shipment_number': self._val(
+                'shipment_number': _data.acumatica_value(
                     item,
                     'ShipmentNbr',
                 ),
-                'dest_warehouse': self._val(
+                'dest_warehouse': _data.acumatica_value(
                     item,
                     'ToWarehouseID',
                 ),
-                'source_warehouse': self._val(
+                'source_warehouse': _data.acumatica_value(
                     item,
                     'WarehouseID',
                 ),

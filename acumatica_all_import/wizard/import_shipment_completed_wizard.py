@@ -6,6 +6,8 @@ import requests
 
 from odoo import fields, models
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 
 _logger = logging.getLogger(__name__)
@@ -211,7 +213,7 @@ class ImportShipmentCompletedWizard(models.TransientModel):
 
             response_data = response.json()
 
-            rows = self._normalize_rows(response_data)
+            rows = _data.acumatica_rows(response_data, extra_keys=("ShipmentCompletedGIDetails",))
 
             _logger.info(
                 'Shipment Completed received %s rows',
@@ -271,7 +273,7 @@ class ImportShipmentCompletedWizard(models.TransientModel):
         shipments = {}
 
         for item in api_data:
-            shipment_nbr = self._val(item, 'ShipmentNbr')
+            shipment_nbr = _data.acumatica_value(item, 'ShipmentNbr')
 
             if not shipment_nbr:
                 _logger.warning(
@@ -374,28 +376,28 @@ class ImportShipmentCompletedWizard(models.TransientModel):
             # Acumatica Identifier
             'acumatica_id': item.get('id'),
             'row_number': item.get('rowNumber'),
-            'note': self._val(item, 'note'),
-            'issue_nbr': self._val(item, 'IssueNbr'),
-            'fob_point': self._val(item, 'FOBPoint'),
-            'fob_point_description': self._val(item, 'FOBPointDescription'),
-            'location_id': self._val(item, 'LocationID'),
-            'note_header': self._val(item, 'NoteHeader'),
-            'note_header_id': self._val(item, 'NoteHeaderID'),
-            'phone': self._val(item, 'Phone'),
-            'site_id_description': self._val(item, 'SiteIDDescription'),
+            'note': _data.acumatica_value(item, 'note'),
+            'issue_nbr': _data.acumatica_value(item, 'IssueNbr'),
+            'fob_point': _data.acumatica_value(item, 'FOBPoint'),
+            'fob_point_description': _data.acumatica_value(item, 'FOBPointDescription'),
+            'location_id': _data.acumatica_value(item, 'LocationID'),
+            'note_header': _data.acumatica_value(item, 'NoteHeader'),
+            'note_header_id': _data.acumatica_value(item, 'NoteHeaderID'),
+            'phone': _data.acumatica_value(item, 'Phone'),
+            'site_id_description': _data.acumatica_value(item, 'SiteIDDescription'),
 
             # Shipment
-            'order_type': self._val(item, 'OrderType'),
-            'shipment_nbr': self._val(item, 'ShipmentNbr'),
-            'inventory_nbr': self._val(item, 'InvtRefNbr'),
+            'order_type': _data.acumatica_value(item, 'OrderType'),
+            'shipment_nbr': _data.acumatica_value(item, 'ShipmentNbr'),
+            'inventory_nbr': _data.acumatica_value(item, 'InvtRefNbr'),
             'ship_date': self._parse_datetime(
-                self._val(item, 'ShipDate')
+                _data.acumatica_value(item, 'ShipDate')
             ),
             'shipment_qty': self._float_val(
                 item,
                 'ShipmentQty'
             ),
-            'shipment_type': self._val(
+            'shipment_type': _data.acumatica_value(
                 item,
                 'ShipmentType'
             ),
@@ -407,72 +409,72 @@ class ImportShipmentCompletedWizard(models.TransientModel):
                 item,
                 'ShipmentWeight'
             ),
-            'shipment_via': self._val(
+            'shipment_via': _data.acumatica_value(
                 item,
                 'ShipVia'
             ),
             'last_modified_datetime': self._parse_datetime(
-                self._val(item, 'LastModifiedDateTime')
+                _data.acumatica_value(item, 'LastModifiedDateTime')
             ),
-            'status': self._val(
+            'status': _data.acumatica_value(
                 item,
                 'Status'
             ),
 
             # Customer
-            'customer_id': self._val(
+            'customer_id': _data.acumatica_value(
                 item,
                 'CustomerID'
             ),
-            'customer_name': self._val(
+            'customer_name': _data.acumatica_value(
                 item,
                 'CustomerName'
             ),
 
             # Warehouse
-            'warehouse_id': self._val(
+            'warehouse_id': _data.acumatica_value(
                 item,
                 'WarehouseID'
             ),
-            'to_warehouse_id': self._val(
+            'to_warehouse_id': _data.acumatica_value(
                 item,
                 'ToWarehouseID'
             ),
 
             # Address
-            'address_id': self._val(
+            'address_id': _data.acumatica_value(
                 item,
                 'AddressID'
             ),
-            'address_line': self._val(
+            'address_line': _data.acumatica_value(
                 item,
                 'AddressLine'
             ),
-            'building_id': self._val(
+            'building_id': _data.acumatica_value(
                 item,
                 'BuildingID'
             ),
-            'city': self._val(
+            'city': _data.acumatica_value(
                 item,
                 'City'
             ),
-            'country': self._val(
+            'country': _data.acumatica_value(
                 item,
                 'Country'
             ),
-            'country_name': self._val(
+            'country_name': _data.acumatica_value(
                 item,
                 'CountryName'
             ),
-            'state': self._val(
+            'state': _data.acumatica_value(
                 item,
                 'State'
             ),
-            'state_name': self._val(
+            'state_name': _data.acumatica_value(
                 item,
                 'StateName'
             ),
-            'postal_code': self._val(
+            'postal_code': _data.acumatica_value(
                 item,
                 'PostalCode'
             ),
@@ -493,36 +495,36 @@ class ImportShipmentCompletedWizard(models.TransientModel):
         return {
             'acumatica_id': item.get('id'),
             'row_number': item.get('rowNumber'),
-            'note': self._val(item, 'note'),
+            'note': _data.acumatica_value(item, 'note'),
 
             'line_nbr': self._int_val(
                 item, 'LineNbr'
             ),
-            'line_inventory_id': self._val(
+            'line_inventory_id': _data.acumatica_value(
                 item, 'LineInventoryID'
             ),
-            'line_description': self._val(
+            'line_description': _data.acumatica_value(
                 item, 'LineDescription'
             ),
-            'line_free_item': self._bool_val(
+            'line_free_item': _data.acumatica_bool(
                 item, 'LineFreeItem'
-            ),
+            , true_values=_data.DEFAULT_TRUE_VALUES),
             'line_quantity': self._float_val(
                 item, 'LineQuantity'
             ),
-            'line_uom': self._val(
+            'line_uom': _data.acumatica_value(
                 item, 'LineUOM'
             ),
-            'location_id': self._val(
+            'location_id': _data.acumatica_value(
                 item, 'LineLocation'
             ),
-            'location_name': self._val(
+            'location_name': _data.acumatica_value(
                 item, 'LocationName'
             ),
-            'line_note': self._val(
+            'line_note': _data.acumatica_value(
                 item, 'LineNote'
             ),
-            'line_note_id': self._val(
+            'line_note_id': _data.acumatica_value(
                 item, 'LineNoteID'
             ),
         }
@@ -582,20 +584,11 @@ class ImportShipmentCompletedWizard(models.TransientModel):
     # HELPER
     # =========================================================
 
-    @staticmethod
-    def _val(item, key):
-
-        value = item.get(key, {})
-
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-
-        return value or ''
 
     @classmethod
     def _float_val(cls, item, key):
 
-        value = cls._val(item, key)
+        value = _data.acumatica_value(item, key)
 
         if value in (None, ''):
             return 0.0
@@ -609,7 +602,7 @@ class ImportShipmentCompletedWizard(models.TransientModel):
     @classmethod
     def _int_val(cls, item, key):
 
-        value = cls._val(item, key)
+        value = _data.acumatica_value(item, key)
 
         if value in (None, ''):
             return 0
@@ -620,20 +613,6 @@ class ImportShipmentCompletedWizard(models.TransientModel):
         except (TypeError, ValueError):
             return 0
 
-    @classmethod
-    def _bool_val(cls, item, key):
-
-        value = cls._val(item, key)
-
-        if isinstance(value, bool):
-            return value
-
-        return str(value).strip().lower() in (
-            'true',
-            '1',
-            'yes',
-            'y',
-        )
 
     @staticmethod
     def _parse_datetime(value):
@@ -651,24 +630,3 @@ class ImportShipmentCompletedWizard(models.TransientModel):
         except Exception:
 
             return False
-
-    @staticmethod
-    def _normalize_rows(payload):
-
-        if isinstance(payload, list):
-            return payload
-
-        if isinstance(payload, dict):
-
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-
-            if isinstance(payload.get('ShipmentCompletedGIDetails'), list):
-                return payload.get(
-                    'ShipmentCompletedGIDetails'
-                )
-
-        return []

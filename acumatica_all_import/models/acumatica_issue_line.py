@@ -1,10 +1,11 @@
 
 import logging
-from dateutil import parser as dateutil_parser
 import requests
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -86,14 +87,6 @@ class AcumaticaIssueLine(models.Model):
         for rec in self:
             rec.exists_in_odoo = bool(rec.reference_nbr and Picking.search_count([('origin', '=', rec.reference_nbr)]))
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_int(value):
@@ -218,13 +211,13 @@ class AcumaticaIssueLine(models.Model):
                     'picking_type_id': picking_type.id,
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,
-                    'scheduled_date': self._parse_dt(first.scheduled_date),
+                    'scheduled_date': _data.acumatica_datetime(first.scheduled_date),
                     'note': first.note or first.description or False,
 
                     'adt_receipt_nbr': first.reference_nbr or False,
                     'adt_branch_warehouse': first.branch_warehouse or False,
                     # 'adt_actual_qty': self._parse_int(first.actual_qty),
-                    'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
+                    'adt_acumatica_write_date': _data.acumatica_datetime(first.acumatica_write_date),
                     'adt_post_period': first.post_period or False,
                     'adt_total_qty': self._parse_int(first.total_qty),
                     'adt_type': first.trans_type or False,

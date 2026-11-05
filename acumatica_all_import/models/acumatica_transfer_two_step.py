@@ -1,9 +1,10 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError
 
-from dateutil import parser as dateutil_parser
 import logging
 import requests
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -82,14 +83,6 @@ class AcumaticaTransferTwoStepLine(models.Model):
                 and InternalTransferOrder.search_count([('external_ref', '=', rec.reference_nbr)])
             )
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_float(value):
@@ -256,7 +249,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         existing_order,
                         {'location_id': transfer_info['source_location'].id,
                          'location_dest_id': transfer_info['destination_location'].id,
-                         'schedule_date': self._parse_dt(first.scheduled_date) or fields.Datetime.now(),
+                         'schedule_date': _data.acumatica_datetime(first.scheduled_date) or fields.Datetime.now(),
                          'note': first.note or False, 'description': first.description or False,
                          'adt_transaction_type': 'Transfer 2 Step', 'document_only': bool(first.document_only)},
                         field_names={'location_id', 'location_dest_id', 'schedule_date', 'note', 'description', 'adt_transaction_type', 'document_only'},
@@ -271,7 +264,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     transfer_info['source_location'],
                     transfer_info['destination_location'],
                     transfer_info['transaction_type'],
-                    self._parse_dt(first.scheduled_date),
+                    _data.acumatica_datetime(first.scheduled_date),
                     first.note or False,
                     description=first.description or False,
                     transfer_type='transfer_out',
@@ -375,7 +368,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
                         else self.env.ref('stock.stock_location_suppliers').id
                     ),
                     # 'location_dest_id': dest_location.id,
-                    'scheduled_date': self._parse_dt(first.scheduled_date),
+                    'scheduled_date': _data.acumatica_datetime(first.scheduled_date),
                     'origin': origin,
                     'note': first.note or False,
                     # reference_nbr = 
@@ -383,7 +376,7 @@ class AcumaticaTransferTwoStepLine(models.Model):
 
                     # field custom, kalau ada di model
                     'adt_is_hold': str(first.is_hold or '').lower() in ('true', '1', 'yes'),
-                    'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
+                    'adt_acumatica_write_date': _data.acumatica_datetime(first.acumatica_write_date),
                     'adt_post_period': first.post_period or False,
                     'adt_status': first.status or False,
                     'adt_total_qty': self._parse_float(first.total_qty),

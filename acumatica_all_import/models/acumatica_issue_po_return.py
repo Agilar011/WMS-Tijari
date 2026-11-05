@@ -1,10 +1,11 @@
-from dateutil import parser as dateutil_parser
 import logging
 import requests
 import logging
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -109,14 +110,6 @@ class AcumaticaIssuePoReturnLine(models.Model):
         for rec in self:
             rec.exists_in_odoo = bool(rec.receipt_nbr and Picking.search_count([('adt_receipt_nbr', '=', rec.receipt_nbr)]))
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_int(value):
@@ -329,7 +322,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                             else self.env.ref('stock.stock_location_suppliers').id
                         ),
                         'location_dest_id': dest_location.id,
-                        'scheduled_date': self._parse_dt(first.scheduled_date) if hasattr(first, 'scheduled_date') and first.scheduled_date else fields.Datetime.now(),
+                        'scheduled_date': _data.acumatica_datetime(first.scheduled_date) if hasattr(first, 'scheduled_date') and first.scheduled_date else fields.Datetime.now(),
                         'origin': origin,
                         'note': first.note or False,
 
@@ -340,7 +333,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                         'adt_branch_warehouse': first.branch_warehouse or False,
                         'adt_is_hold': str(first.is_hold or '').lower() in ('true', '1', 'yes'),
                         'adt_inventory_ref': first.inventory_ref or False,
-                        'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date) if hasattr(first, 'acumatica_write_date') else False,
+                        'adt_acumatica_write_date': _data.acumatica_datetime(first.acumatica_write_date) if hasattr(first, 'acumatica_write_date') else False,
                         'adt_header_location_code': first.header_location_code or False,
                         'adt_post_period': first.post_period or False,
                         'adt_status': first.status or False,

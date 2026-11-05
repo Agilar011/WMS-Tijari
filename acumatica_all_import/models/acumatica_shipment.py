@@ -1,5 +1,4 @@
 import logging
-from dateutil import parser as dateutil_parser
 from docutils.nodes import note
 
 from odoo import api, fields, models
@@ -9,6 +8,8 @@ import logging
 _logger = logging.getLogger(__name__)
 
 import requests
+from ..utils import acumatica_data as _data
+
 
 
 class ShipmentImportError(Exception):
@@ -130,14 +131,6 @@ class AcumaticaShipmentLine(models.Model):
         for rec in self:
             rec.exists_in_odoo = bool(rec.shipment_nbr and Picking.search_count([('origin', '=', rec.shipment_nbr)]))
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_float(value):
@@ -325,10 +318,10 @@ class AcumaticaShipmentLine(models.Model):
             'partner_id': partner.id if partner else False,
             'picking_type_id': picking_type.id,
             'adt_dest_location_id': dest_location.id if dest_location else False,
-            'scheduled_date': shipment._parse_dt(shipment.scheduled_date),
+            'scheduled_date': _data.acumatica_datetime(shipment.scheduled_date),
             'origin': origin,
             'note': shipment.note or False,
-            'adt_acumatica_write_date': self._parse_dt(shipment.acumatica_write_date),
+            'adt_acumatica_write_date': _data.acumatica_datetime(shipment.acumatica_write_date),
             'adt_total_qty': self._parse_float(shipment.actual_qty),
             # 'adt_actual_qty': self._parse_float(shipment.actual_qty),
             'adt_type': adt_type,

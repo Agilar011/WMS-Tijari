@@ -267,6 +267,21 @@ class WMSMRPProduction(models.Model):
             #         line.quantity_shadow = line.quantity
             #         line.quantity = confirmation_quantity
 
+        # Odoo splits product_qty and raw move demand when a backorder is
+        # created. Keep the original values on the completed MO, while leaving
+        # the newly created backorder quantities as calculated by Odoo.
+        mo_ids_to_backorder = set(self.env.context.get('mo_ids_to_backorder') or [])
+        backorder_restore_values = {}
+        for production in self.filtered(lambda mo: mo.id in mo_ids_to_backorder):
+            raw_move_values = {
+                move.id: move.product_uom_qty
+                for move in production.move_raw_ids
+            }
+            backorder_restore_values[production.id] = {
+                'product_qty': production.product_qty,
+                'raw_move_values': raw_move_values,
+            }
+
         res = super().button_mark_done()
 
         for production in self:
@@ -277,6 +292,19 @@ class WMSMRPProduction(models.Model):
             production.picking_ids.filtered(
                 lambda picking: picking.picking_type_name == "Store Finished Product"
             ).write({"adt_type": "Kit Assembly"})
+
+            restore_values = backorder_restore_values.get(production.id)
+            if not restore_values or production.state != 'done':
+                continue
+
+            production.with_context(skip_compute_move_raw_ids=True).write({
+                'product_qty': restore_values['product_qty'],
+            })
+            original_raw_moves = self.env['stock.move'].browse(
+                list(restore_values['raw_move_values'])
+            ).filtered(lambda move: move.raw_material_production_id == production)
+            for move in original_raw_moves:
+                move.product_uom_qty = restore_values['raw_move_values'][move.id]
         
         return res
 

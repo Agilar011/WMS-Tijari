@@ -2,10 +2,42 @@ import logging
 import time
 
 from odoo import api, fields, models
-from odoo.addons.base.models.res_partner import _tz_get
 from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
+
+_SCHEDULER_JOB_TYPES = {
+    'fetch_all_master': ('master', 'fetch'),
+    'import_all_master': ('master', 'import'),
+    'fetch_import_all_master': ('master', 'combined'),
+    'fetch_all_transaction': ('transaction', 'fetch'),
+    'import_all_transaction': ('transaction', 'import'),
+    'fetch_import_all_transaction': ('transaction', 'combined'),
+    'fetch_selected': (None, 'fetch'),
+    'import_selected': (None, 'import'),
+}
+
+
+class ApiSchedulerDataType(models.Model):
+    _name = 'api.scheduler.data.type'
+    _description = 'API Scheduler Data Type'
+    _order = 'data_category, sequence, name'
+
+    name = fields.Char(required=True)
+    code = fields.Char(required=True, index=True)
+    data_category = fields.Selection(
+        [('master', 'Master Data'), ('transaction', 'Master Transaction')],
+        required=True,
+    )
+    sequence = fields.Integer(default=10)
+
+    _sql_constraints = [
+        ('code_unique', 'unique(code)', 'Data type code must be unique.'),
+    ]
+
+    @api.model
+    def get_selection(self):
+        return [(record.code, record.name) for record in self.search([])]
 
 
 class ApiSchedulerJob(models.Model):
@@ -16,67 +48,66 @@ class ApiSchedulerJob(models.Model):
     name = fields.Char(string='Job Name', required=True)
     code = fields.Char(string='Code / Technical Name', required=True)
     description = fields.Text()
-    active = fields.Boolean(default=True)
-    acumatica_import = fields.Boolean(string='Acumatica Import')
-    acumatica_data_type = fields.Selection(
+    active = fields.Boolean(default=True, string='Scheduler Available')
+    job_type = fields.Selection(
         [
-            ('master', 'Data Master'),
-            ('transaction', 'Data Transaksi'),
+            ('fetch_all_master', 'Fetch All Master'),
+            ('import_all_master', 'Import All Master'),
+            ('fetch_import_all_master', 'Fetch & Import All Master'),
+            ('fetch_all_transaction', 'Fetch All Transaction'),
+            ('import_all_transaction', 'Import All Transaction'),
+            ('fetch_import_all_transaction', 'Fetch & Import All Transaction'),
+            ('fetch_selected', 'Single Fetch'),
+            ('import_selected', 'Single Import'),
+            ('generate_webhook', 'Generate Webhook'),
         ],
-        string='Acumatica Data',
-    )
-    process_phase = fields.Selection(
-        [
-            ('combined', 'Fetch and Import'),
-            ('fetch', 'Fetch Only'),
-            ('import', 'Import Only'),
-        ],
-        string='Process Phase',
-        default='combined',
+        string='Scheduler Type',
         required=True,
-        help='Controls whether this scheduler fetches staging data, imports it, or runs the legacy combined flow.',
+        default='fetch_all_master',
     )
-
-    execution_interval = fields.Selection(
-        [
-            ('recurring', 'Recurring'),
-            ('manual', 'Manual'),
-        ],
-        string='Execution Interval',
-        default='recurring',
-        required=True,
+    selected_data_category = fields.Selection(
+        [('master', 'Master Data'), ('transaction', 'Master Transaction')],
+        string='Data Category',
+        default='transaction',
     )
-    interval_value = fields.Integer(string='Interval Value', default=1)
-    interval_unit = fields.Selection(
-        [
-            ('minutes', 'Minutes'),
-            ('hours', 'Hours'),
-            ('days', 'Days'),
-            ('weeks', 'Weeks'),
-            ('months', 'Months'),
-        ],
-        string='Interval Unit',
-        default='days',
-        required=True,
+    selected_data_type_ids = fields.Many2many(
+        'api.scheduler.data.type',
+        'api_scheduler_job_data_type_rel',
+        'scheduler_job_id',
+        'data_type_id',
+        string='Data',
     )
-    next_execution = fields.Datetime(string='Next Execution', default=fields.Datetime.now)
-    timezone = fields.Selection(_tz_get, string='Timezone', default=lambda self: self.env.user.tz or 'UTC')
     do_not_overlap = fields.Boolean(string='Do Not Overlap', default=True)
     is_running = fields.Boolean(readonly=True, copy=False)
 
     ir_cron_id = fields.Many2one('ir.cron', string='Odoo Cron', readonly=True, copy=False)
+    cron_active = fields.Boolean(related='ir_cron_id.active', readonly=False, string='Odoo Cron Active')
+    cron_interval_number = fields.Integer(related='ir_cron_id.interval_number', readonly=False, string='Interval Value')
+    cron_interval_type = fields.Selection(related='ir_cron_id.interval_type', readonly=False, string='Interval Unit')
+    cron_nextcall = fields.Datetime(related='ir_cron_id.nextcall', readonly=False, string='Next Execution')
+    cron_user_id = fields.Many2one(related='ir_cron_id.user_id', readonly=False, string='Run As')
     log_ids = fields.One2many('api.scheduler.log', 'scheduler_job_id', string='Log Activity', readonly=True)
 
     _sql_constraints = [
         ('code_unique', 'unique(code)', 'Code / Technical Name must be unique.'),
-        ('interval_value_positive', 'CHECK(interval_value > 0)', 'Interval Value must be greater than zero.'),
     ]
 
-    @api.constrains('acumatica_import', 'acumatica_data_type')
-    def _check_acumatica_data_type(self):
+    @api.onchange('selected_data_category')
+    def _onchange_selected_data_category(self):
         for job in self:
-            if job.acumatica_import and not job.acumatica_data_type:
-                raise ValidationError('Acumatica Data is required when Acumatica Import is enabled.')
+            if any(item.data_category != job.selected_data_category for item in job.selected_data_type_ids):
+                job.selected_data_type_ids = [(5, 0, 0)]
+
+    @api.constrains('job_type', 'selected_data_category', 'selected_data_type_ids')
+    def _check_selected_data_category(self):
+        for job in self:
+            if job.job_type not in ('fetch_selected', 'import_selected'):
+                continue
+            wrong_types = job.selected_data_type_ids.filtered(
+                lambda item: item.data_category != job.selected_data_category
+            )
+            if wrong_types:
+                raise ValidationError('Selected data must match the selected Data Category.')
 
     def action_run_now(self):
         for job in self:
@@ -163,19 +194,6 @@ class ApiSchedulerJob(models.Model):
                     message=message,
                 )
             self.write({'is_running': False})
-            if (
-                self.process_phase == 'fetch'
-                and self.acumatica_data_type in ('master', 'transaction')
-                and self.code in ('acumatica_master_fetch', 'acumatica_transaction_fetch')
-            ):
-                successful_types = [
-                    key for key, result in (process_result or {}).items()
-                    if isinstance(result, dict)
-                    and result.get('success', False)
-                    and result.get('data_retrieved', 0) > 0
-                ]
-                if successful_types:
-                    self._trigger_import(successful_types)
         return status == 'success'
 
     def _replace_log_details(self, log, details):
@@ -190,53 +208,83 @@ class ApiSchedulerJob(models.Model):
             'detail_ids': [(0, 0, item) for item in details],
         })
 
-    def _trigger_import(self, successful_types):
-        """Start import for data types whose fetch phase completed successfully."""
-        import_code = (
-            'acumatica_master_import'
-            if self.acumatica_data_type == 'master'
-            else 'acumatica_transaction_import'
-        )
-        import_job = self.search([
-            ('code', '=', import_code),
-            ('active', '=', True),
-        ], limit=1)
-        if not import_job:
-            _logger.warning(
-                'Fetch succeeded, but no active %s job was found.', import_code,
-            )
-            return False
-
-        # Persist the successful fetch log and staging rows before import starts.
-        # This keeps an import failure from rolling back the completed fetch phase.
-        self.env.cr.commit()
-        _logger.info('Master fetch succeeded; triggering Master import job.')
-        context_key = (
-            'acumatica_successful_master_types'
-            if self.acumatica_data_type == 'master'
-            else 'acumatica_successful_transaction_types'
-        )
-        return import_job.with_context(**{context_key: successful_types}).run_from_cron()
-
     def _run_configured_process(self):
         self.ensure_one()
-        if self.code == 'acumatica_webhook_process':
+        if self.job_type == 'generate_webhook':
             return self.env['acumatica.webhook.log'].cron_process_pending_webhook_logs()
-        if not self.acumatica_import:
-            raise UserError('No process is configured for this scheduler.')
-        if self.acumatica_data_type == 'master':
-            return self.env['acumatica.config'].with_context(
-                acumatica_process_phase=self.process_phase,
-                acumatica_scheduler_code=self.code,
-                api_scheduler_log_id=self.env.context.get('api_scheduler_log_id'),
-            )._cron_import_master_data()
-        if self.acumatica_data_type == 'transaction':
-            return self.env['acumatica.config'].with_context(
-                acumatica_process_phase=self.process_phase,
-                acumatica_scheduler_code=self.code,
-                api_scheduler_log_id=self.env.context.get('api_scheduler_log_id'),
-            )._cron_import_transaction_data()
-        raise UserError('Acumatica Data is not configured.')
+
+        ImportWizard = self.env['acumatica.unified.import.wizard']
+        scheduler_type = _SCHEDULER_JOB_TYPES.get(self.job_type)
+        if not scheduler_type:
+            raise UserError('Scheduler Type is not configured.')
+
+        category, phase = scheduler_type
+        if category is None:
+            category = self.selected_data_category
+            data_types = self.selected_data_type_ids.mapped('code')
+            if not data_types:
+                raise UserError('Pilih minimal satu Data untuk scheduler ini.')
+        else:
+            data_types = (
+                ImportWizard.MASTER_DATA_TYPES
+                if category == 'master'
+                else ImportWizard.TRANSACTION_TYPES
+            )
+
+        config_model = self.env['acumatica.config'].with_context(
+            api_scheduler_log_id=self.env.context.get('api_scheduler_log_id'),
+            api_scheduler_job_type=self.job_type,
+            api_scheduler_data_category=category,
+        )
+        if phase != 'combined':
+            return config_model._run_scheduler_data_types(data_types, phase)
+
+        return self._run_combined_scheduler_process(config_model, data_types)
+
+    def _run_combined_scheduler_process(self, config_model, data_types):
+        """Fetch each type, then import only types fetched successfully with data."""
+        fetch_results = config_model.with_context(
+            api_scheduler_combined_phase='fetch',
+        )._run_scheduler_data_types(data_types, 'fetch')
+        successful_fetch_types = [
+            key for key in data_types
+            if fetch_results.get(key, {}).get('success', False)
+            and fetch_results.get(key, {}).get('data_retrieved', 0) > 0
+        ]
+        import_results = {}
+        if successful_fetch_types:
+            import_results = config_model.with_context(
+                api_scheduler_combined_phase='import',
+                api_scheduler_combined_run=True,
+            )._run_scheduler_data_types(successful_fetch_types, 'import')
+
+        combined_results = {}
+        for key in data_types:
+            fetch_result = fetch_results.get(key, {})
+            import_result = import_results.get(key, {})
+            messages = [
+                result.get('message') for result in (fetch_result, import_result)
+                if result.get('message')
+            ]
+            combined_results[key] = {
+                'success': fetch_result.get('success', False)
+                and import_result.get('success', True),
+                'data_retrieved': fetch_result.get('data_retrieved', 0),
+                'records_created': import_result.get('records_created', 0),
+                'records_errors': fetch_result.get('records_errors', 0)
+                + import_result.get('records_errors', 0),
+                'records_skipped': fetch_result.get('records_skipped', 0)
+                + import_result.get('records_skipped', 0),
+                'message': '\n'.join(messages) or False,
+            }
+        return combined_results
+
+    def _get_scheduler_data_category(self):
+        self.ensure_one()
+        category = _SCHEDULER_JOB_TYPES.get(self.job_type, (None, None))[0]
+        if category is None and self.job_type in ('fetch_selected', 'import_selected'):
+            return self.selected_data_category
+        return category or False
 
     def _is_process_result_success(self, process_result):
         if not isinstance(process_result, dict):
@@ -264,34 +312,19 @@ class ApiSchedulerJob(models.Model):
         return '\n'.join(messages) if messages else False
 
     def _get_acumatica_data_definitions(self):
-        master_defs = [
-            ('customer', 'Customer', 'acumatica.customer.line'),
-            ('vendor', 'Vendor', 'acumatica.vendor.line'),
-            ('uom', 'Unit of Measure', 'acumatica.uom.line'),
-            ('warehouse', 'Warehouse', 'acumatica.warehouse.line'),
-            ('stock_item', 'Stock Item', 'acumatica.stock.item.line'),
-            ('non_stock_item', 'Non Stock Item', 'acumatica.non.stock.item.line'),
+        self.ensure_one()
+        category = self._get_scheduler_data_category()
+        if category not in ('master', 'transaction'):
+            return []
+        Wizard = self.env['acumatica.unified.import.wizard']
+        if self.job_type in ('fetch_selected', 'import_selected'):
+            keys = self.selected_data_type_ids.mapped('code')
+        else:
+            keys = Wizard.MASTER_DATA_TYPES if category == 'master' else Wizard.TRANSACTION_TYPES
+        return [
+            (key, Wizard.IMPORT_MAP[key]['label'], Wizard.IMPORT_MAP[key]['line_model'])
+            for key in keys if key in Wizard.IMPORT_MAP
         ]
-        if self.acumatica_data_type == 'master':
-            return master_defs
-        if self.acumatica_data_type == 'transaction':
-            return [
-                ('po_receipt', 'PO Receipt', 'acumatica.receipt.line'),
-                ('so_transfer', 'Transfer (In/SOTR)', 'acumatica.transfer.line'),
-                ('inventory_received', 'Receipt : Inventory Receipt', 'acumatica.inventory.recieved.line'),
-                ('shipment_so', 'SO Return', 'acumatica.shipment.line'),
-                ('so_shipment', 'SO Shipment', 'acumatica.shipment.gi.staging'),
-                ('transfer_shipment', 'Transfer (Out/Shipment)', 'acumatica.transfer.shipment.line'),
-                ('inventory_issue', 'Issue : Inventory Issue', 'acumatica.inventory.issue.line'),
-                ('issue_po_return', 'PO Return', 'acumatica.issue.po.return.line'),
-                ('transfer_one_step', 'Transfer 1 Step', 'acumatica.transfer.one.step.line'),
-                ('transfer_two_step', 'Transfer 2 Step', 'acumatica.transfer.two.step.line'),
-                ('shipment_completed', 'Update SO completed', 'acumatica.shipment.completed.staging'),
-                ('kit_assembly', 'Manufacturing Order', 'acumatica.kit.assembly'),
-                ('invoice_consignment', 'Invoice Consignment', 'acumatica.invoice.consignment.staging'),
-                ('credit_memo_consignment', 'Credit Memo Consignment', 'acumatica.credit.memo.consignment.staging'),
-            ]
-        return []
 
     def _snapshot_stats(self):
         stats = {}
@@ -328,6 +361,8 @@ class ApiSchedulerJob(models.Model):
             data_retrieved = result.get('data_retrieved', staging_created)
             records_created = result.get('records_created', records_created)
             records_errors = result.get('records_errors', values.get('error', 0) - previous.get('error', 0))
+            if isinstance(process_result, dict) and acumatica_data not in process_result:
+                records_errors = max(records_errors, 1)
             if result and not result.get('success', True) and not records_errors:
                 records_errors = 1
             records_skipped = result.get(
@@ -335,7 +370,7 @@ class ApiSchedulerJob(models.Model):
                 data_retrieved - records_created - records_errors,
             )
             details.append({
-                'data_type': self.acumatica_data_type,
+                'data_type': self._get_scheduler_data_category(),
                 'acumatica_data': acumatica_data,
                 'data_retrieved': max(data_retrieved, 0),
                 'staging_created': max(staging_created, 0),
@@ -417,28 +452,7 @@ class ApiSchedulerLogDetail(models.Model):
         readonly=True,
     )
     acumatica_data = fields.Selection(
-        [
-            ('customer', 'Customer'),
-            ('vendor', 'Vendor'),
-            ('uom', 'Unit of Measure'),
-            ('warehouse', 'Warehouse'),
-            ('stock_item', 'Stock Item'),
-            ('non_stock_item', 'Non Stock Item'),
-            ('po_receipt', 'PO Receipt'),
-            ('so_transfer', 'Transfer (In/SOTR)'),
-            ('inventory_received', 'Receipt : Inventory Receipt'),
-            ('shipment_so', 'SO Return'),
-                ('so_shipment', 'SO Shipment'),
-                ('transfer_shipment', 'Transfer (Out/Shipment)'),
-                ('inventory_issue', 'Issue : Inventory Issue'),
-                ('issue_po_return', 'PO Return'),
-                ('transfer_one_step', 'Transfer 1 Step'),
-                ('transfer_two_step', 'Transfer 2 Step'),
-                ('shipment_completed', 'Update SO completed'),
-                ('kit_assembly', 'Manufacturing Order'),
-                ('invoice_consignment', 'Invoice Consignment'),
-                ('credit_memo_consignment', 'Credit Memo Consignment'),
-            ],
+        selection=lambda self: self.env['api.scheduler.data.type'].sudo().get_selection(),
         string='Acumatica Data',
         readonly=True,
     )

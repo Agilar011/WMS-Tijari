@@ -1,9 +1,10 @@
 
-from dateutil import parser as dateutil_parser
 from datetime import datetime, time, timezone
 
 from odoo import fields, models
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 
 class ImportInventoryIssueWizard(models.TransientModel):
@@ -79,7 +80,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
 
     def _coalesce_val(self, item, *keys):
         for key in keys:
-            value = self._val(item, key)
+            value = _data.acumatica_value(item, key)
             if value not in (False, None, ''):
                 return value
         return ''
@@ -127,7 +128,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
             for row_number, item in enumerate(data, start=1):
                 print('='*100)
                 # print(f"ROW Data: {item}")
-                ref = self._val(item, 'ReferenceNbr')
+                ref = _data.acumatica_value(item, 'ReferenceNbr')
                 if reference_nbr and ref != reference_nbr:
                     continue
 
@@ -276,7 +277,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
     # ---------------------------------------------------------
 
     def _build_inventory_issue_header(self, row_number, item, header_id, warehouse_code):
-        is_disposal = (self._val(item, 'TransType') or '').strip().casefold() == 'disposal'
+        is_disposal = (_data.acumatica_value(item, 'TransType') or '').strip().casefold() == 'disposal'
         type = False
         fallback_warehouse_code = warehouse_code
         if not is_disposal:
@@ -288,38 +289,38 @@ class ImportInventoryIssueWizard(models.TransientModel):
         if not type:
             type = None
             print("="*80)
-            print('Picking Type ID tidak ditemukan untuk warehouse code:', self._val(item, 'WarehouseID'))
+            print('Picking Type ID tidak ditemukan untuk warehouse code:', _data.acumatica_value(item, 'WarehouseID'))
 
         return {
             'external_id': header_id or item.get('id', '') or '',
             'row_number': row_number,
-            'note': self._val(item, 'NoteHeader'),
-            'note_header_id': self._val(item, 'NoteHeaderID'),
-            'building_code': self._val(item, 'BuildingID'),
-            'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
-            'actual_qty': self._val(item, 'ControlQty'),
-            'total_qty': str(self._val(item, 'TotalQty')),
-            'scheduled_date': self._val(item, 'Date'),
-            'description': self._val(item, 'Description'),
-            'doc_type': self._val(item, 'DocType'),
-            'header_location_code': self._val(item, 'Location'),
-            'post_period': str(self._val(item, 'PostPeriod')),
-            'reference_nbr': self._val(item, 'ReferenceNbr'),
-            'status': self._val(item, 'Status'),
-            'trans_type': self._val(item, 'TransType'),
+            'note': _data.acumatica_value(item, 'NoteHeader'),
+            'note_header_id': _data.acumatica_value(item, 'NoteHeaderID'),
+            'building_code': _data.acumatica_value(item, 'BuildingID'),
+            'change_item_ref_nbr': _data.acumatica_value(item, 'ChangeItemRefNbr'),
+            'actual_qty': _data.acumatica_value(item, 'ControlQty'),
+            'total_qty': str(_data.acumatica_value(item, 'TotalQty')),
+            'scheduled_date': _data.acumatica_value(item, 'Date'),
+            'description': _data.acumatica_value(item, 'Description'),
+            'doc_type': _data.acumatica_value(item, 'DocType'),
+            'header_location_code': _data.acumatica_value(item, 'Location'),
+            'post_period': str(_data.acumatica_value(item, 'PostPeriod')),
+            'reference_nbr': _data.acumatica_value(item, 'ReferenceNbr'),
+            'status': _data.acumatica_value(item, 'Status'),
+            'trans_type': _data.acumatica_value(item, 'TransType'),
             'warehouse_code': warehouse_code,
             'picking_type_id': type,
-            'external_ref': self._val(item, 'ExternalRef'),
-            'document_only': self._bool_val(item, 'DocumentOnly'),
-            'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-            'actual_amount': self._val(item, 'ControlAmount'),
-            'total_amount': self._val(item, 'TotalAmount'),
-            'customer_id': self._val(item, 'CustomerID'),
-            'customer_name': self._val(item, 'CustomerName'),
-            'customer_location_id': self._val(item, 'CustomerLocationID'),
-            'customer_location_name': self._val(item, 'CustomerLocationName'),
-            'shipment_nbr': self._val(item, 'ShipmentNbr'),
-            'transfer_nbr': self._val(item, 'TransferNbr'),
+            'external_ref': _data.acumatica_value(item, 'ExternalRef'),
+            'document_only': _data.acumatica_bool(item, 'DocumentOnly'),
+            'acumatica_write_date': _data.acumatica_value(item, 'LastModifiedDateTime'),
+            'actual_amount': _data.acumatica_value(item, 'ControlAmount'),
+            'total_amount': _data.acumatica_value(item, 'TotalAmount'),
+            'customer_id': _data.acumatica_value(item, 'CustomerID'),
+            'customer_name': _data.acumatica_value(item, 'CustomerName'),
+            'customer_location_id': _data.acumatica_value(item, 'CustomerLocationID'),
+            'customer_location_name': _data.acumatica_value(item, 'CustomerLocationName'),
+            'shipment_nbr': _data.acumatica_value(item, 'ShipmentNbr'),
+            'transfer_nbr': _data.acumatica_value(item, 'TransferNbr'),
         }
 
 
@@ -417,7 +418,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
     # ---------------------------------------------------------
     
     def _build_inventory_issue_detail(self, header_id, detail, warehouse_code=None):
-        product_owner = self._val(detail, 'CustomerID'),
+        product_owner = _data.acumatica_value(detail, 'CustomerID'),
         if product_owner:
             print(f"Product Owner from API: {product_owner}")
 
@@ -425,20 +426,20 @@ class ImportInventoryIssueWizard(models.TransientModel):
         return {
             'header_external_id': header_id,
             'line_external_id': detail.get('id', '') or '',
-            'line_nbr': str(self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr')),
-            'line_note': self._val(detail, 'LineNote'),
-            'line_note_id': self._val(detail, 'LineNoteID'),
-            'branch_warehouse': self._val(detail, 'LineBranch'),
-            'line_description': self._val(detail, 'LineInventoryName'),
-            'inventory_id': self._val(detail, 'LineInventoryID'),
-            'location_code': self._val(detail, 'LineLocation'),
-            'line_location_name': self._val(detail, 'LineLocationName'),
-            'product_uom_qty': str(self._val(detail, 'LineQuantity')),
-            'line_trans_type': self._val(detail, 'LineTranType'),
-            'uom_code': self._val(detail, 'LineUOM'),
-            'warehouse_code': self._val(detail, 'LineWarehouse') or warehouse_code,
-            'line_warehouse_name': self._val(detail, 'LineWarehouseName'),
-            'customer_id': self._val(detail, 'CustomerID'),
+            'line_nbr': str(_data.acumatica_value(detail, 'LineNumber') or _data.acumatica_value(detail, 'LineNbr')),
+            'line_note': _data.acumatica_value(detail, 'LineNote'),
+            'line_note_id': _data.acumatica_value(detail, 'LineNoteID'),
+            'branch_warehouse': _data.acumatica_value(detail, 'LineBranch'),
+            'line_description': _data.acumatica_value(detail, 'LineInventoryName'),
+            'inventory_id': _data.acumatica_value(detail, 'LineInventoryID'),
+            'location_code': _data.acumatica_value(detail, 'LineLocation'),
+            'line_location_name': _data.acumatica_value(detail, 'LineLocationName'),
+            'product_uom_qty': str(_data.acumatica_value(detail, 'LineQuantity')),
+            'line_trans_type': _data.acumatica_value(detail, 'LineTranType'),
+            'uom_code': _data.acumatica_value(detail, 'LineUOM'),
+            'warehouse_code': _data.acumatica_value(detail, 'LineWarehouse') or warehouse_code,
+            'line_warehouse_name': _data.acumatica_value(detail, 'LineWarehouseName'),
+            'customer_id': _data.acumatica_value(detail, 'CustomerID'),
         }
         
 
@@ -519,55 +520,10 @@ class ImportInventoryIssueWizard(models.TransientModel):
     # HELPERS
     # ---------------------------------------------------------    
 
-    def _normalize_rows(self, payload):
-        print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: _normalize_rows")
-        print("="*80)
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
     
-    def _val(self, item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            
-            # print("="*80)
-            # print(f"[DEBUG] MASUK proses formating: {value}")
-            # print("="*80)
-            
-            return value.get('value', '') or ''
-        # print(value)
-        return value or ''
 
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
-    def _bool_val(self, item, key):
-        return self._bool_value(item.get(key, {}))
     
-    @staticmethod
-    def _parse_dt(dt_str):
-        print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: _parse_dt")
-        print("="*80)
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
 
     def action_view_staging(self):
@@ -712,7 +668,7 @@ class ImportInventoryIssueWizard(models.TransientModel):
         type = False
         trans_type = self._coalesce_val(header, 'TransType', 'trans_type')
         is_toko_pegang_do = (trans_type or '').strip().casefold() == 'toko pegang do'
-        document_only = self._bool_val(header, 'DocumentOnly')
+        document_only = _data.acumatica_bool(header, 'DocumentOnly')
 
         if is_toko_pegang_do:
             location = Location.search([

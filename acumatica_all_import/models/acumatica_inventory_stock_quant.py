@@ -1,4 +1,5 @@
-from odoo import api, fields, models, tools
+from odoo import _, api, fields, models, tools
+from odoo.exceptions import UserError
 from odoo.tools import float_compare
 
 
@@ -21,15 +22,87 @@ class AcumaticaInventoryStockQuant(models.Model):
             'target': 'new',
         }
 
+    def action_create_opname(self):
+        """Create a draft opname from the current comparison search results."""
+        domain = self.env.context.get('active_domain') or []
+        records = self.search(domain, order='id')
+        if not records:
+            raise UserError(_("There are no Inventory Stock Comparison rows to create an opname."))
+
+        rows = records.read([
+            'inventory_id', 'description', 'api_on_hand', 'location_id',
+        ])
+        inventory_codes = list({row['inventory_id'] for row in rows if row['inventory_id']})
+        descriptions = list({row['description'] for row in rows if row['description']})
+        Product = self.env['product.product']
+        products_by_code = Product.search([
+            '|', ('default_code', 'in', inventory_codes),
+            ('barcode', 'in', inventory_codes),
+        ], order='id') if inventory_codes else Product.browse()
+        products_by_name = Product.search(
+            [('name', 'in', descriptions)], order='id'
+        ) if descriptions else Product.browse()
+        code_by_default = {product.default_code: product for product in products_by_code if product.default_code}
+        code_by_barcode = {product.barcode: product for product in products_by_code if product.barcode}
+        product_by_name = {product.name: product for product in products_by_name}
+
+        opname_rows = []
+        missing_location = 0
+        for row in rows:
+            code = row['inventory_id']
+            product = code_by_default.get(code) or code_by_barcode.get(code)
+            if not product and row['description']:
+                product = product_by_name.get(row['description'])
+            location = row['location_id']
+            if not location:
+                missing_location += 1
+            if product and location:
+                opname_rows.append({
+                    'product_id': product.id,
+                    'location_id': location[0],
+                    'api_on_hand': row['api_on_hand'] or 0.0,
+                })
+
+        if missing_location:
+            raise UserError(_(
+                "Cannot create the opname because the current filter contains "
+                "%(location_count)s row(s) without a mapped location. Resolve these "
+                "comparison rows first.",
+                location_count=missing_location,
+            ))
+
+        if not opname_rows:
+            raise UserError(_(
+                "No opname lines could be created. All rows in the current filter "
+                "have products that are not matched to Odoo products."
+            ))
+
+        products = Product.browse(list({row['product_id'] for row in opname_rows}))
+        locations = self.env['stock.location'].browse(
+            list({row['location_id'] for row in opname_rows})
+        )
+        inventory = self.env['stock.inventory'].create({
+            'product_selection': 'manual',
+            'product_ids': [(6, 0, products.ids)],
+            'location_ids': [(6, 0, locations.ids)],
+            'exclude_sublocation': True,
+            'acumatica_stock_comparison_data': opname_rows,
+        })
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Create Opname'),
+            'res_model': 'stock.inventory',
+            'view_mode': 'form',
+            'views': [(self.env.ref('stock_inventory.view_inventory_group_form').id, 'form')],
+            'res_id': inventory.id,
+            'target': 'current',
+        }
+
     product_id = fields.Many2one(
         'product.product', string='Product', compute='_compute_snapshot', search='_search_product_id',
     )
-    location_id = fields.Many2one(
-        'stock.location', string='Location', compute='_compute_snapshot', search='_search_location_id',
-    )
-    location_mapping_id = fields.Many2one(
-        'stock.location.acumatica', string='Location Mapping', compute='_compute_snapshot',
-    )
+    location_id = fields.Many2one('stock.location', string='Location')
+    location_mapping_id = fields.Many2one('stock.location.acumatica', string='Location Mapping')
     config_id = fields.Many2one('acumatica.config', string='API Configuration')
     warehouse_code = fields.Char(string='Warehouse Code')
     inventory_id = fields.Char(string='InventoryID')
@@ -54,20 +127,51 @@ class AcumaticaInventoryStockQuant(models.Model):
         tools.drop_view_if_exists(self.env.cr, self._table)
         self.env.cr.execute(f"""
             CREATE OR REPLACE VIEW {self._table} AS (
+                WITH location_mapping AS (
+                    SELECT DISTINCT ON (mapping.code)
+                        mapping.code AS warehouse_code,
+                        mapping.id AS location_mapping_id,
+                        COALESCE(mapping.odoo_location_id, warehouse.lot_stock_id) AS location_id
+                    FROM stock_location_acumatica mapping
+                    LEFT JOIN stock_warehouse warehouse
+                        ON warehouse.id = mapping.odoo_building_id
+                    WHERE mapping.active IS TRUE
+                      AND mapping.code IS NOT NULL
+                    ORDER BY mapping.code, mapping.id
+                ), mapped_lines AS (
+                    SELECT
+                        line.*,
+                        mapping.location_mapping_id AS resolved_mapping_id,
+                        mapping.location_id,
+                        CASE
+                            WHEN mapping.location_id IS NOT NULL
+                                THEN 'location:' || mapping.location_id::text
+                            ELSE 'warehouse:' || line.warehouse_code
+                        END AS location_group_key
+                    FROM acumatica_inventory_stock_line line
+                    LEFT JOIN location_mapping mapping
+                        ON mapping.warehouse_code = line.warehouse_code
+                    WHERE line.warehouse_code IS NOT NULL
+                      AND line.inventory_id IS NOT NULL
+                )
                 SELECT
                     MIN(line.id) AS id,
                     line.config_id AS config_id,
-                    line.warehouse_code AS warehouse_code,
+                    string_agg(DISTINCT line.warehouse_code, ', ' ORDER BY line.warehouse_code) AS warehouse_code,
                     line.inventory_id AS inventory_id,
                     MAX(line.description) AS description,
                     SUM(line.on_hand_acumatica) AS api_on_hand,
                     SUM(line.available) AS api_available,
                     COUNT(line.id) AS source_line_count,
-                    MAX(line.sync_date) AS sync_date
-                FROM acumatica_inventory_stock_line line
-                WHERE line.warehouse_code IS NOT NULL
-                  AND line.inventory_id IS NOT NULL
-                GROUP BY line.config_id, line.warehouse_code, line.inventory_id
+                    MAX(line.sync_date) AS sync_date,
+                    line.location_id AS location_id,
+                    MIN(line.resolved_mapping_id) AS location_mapping_id
+                FROM mapped_lines line
+                GROUP BY
+                    line.config_id,
+                    line.inventory_id,
+                    line.location_group_key,
+                    line.location_id
             )
         """)
 
@@ -83,18 +187,6 @@ class AcumaticaInventoryStockQuant(models.Model):
             product = Product.search([('name', '=', self.description)], limit=1)
         return product
 
-    def _get_location(self):
-        self.ensure_one()
-        mapping = self.env['stock.location.acumatica'].search([
-            ('code', '=', self.warehouse_code),
-            ('active', '=', True),
-        ], limit=1)
-        if mapping.odoo_location_id:
-            return mapping, mapping.odoo_location_id
-        if mapping.odoo_building_id and mapping.odoo_building_id.lot_stock_id:
-            return mapping, mapping.odoo_building_id.lot_stock_id
-        return mapping, self.env['stock.location'].browse()
-
     def _search_snapshot_value(self, field_name, operator, value):
         records = self.search([])
         if operator in ('=', '=='):
@@ -108,9 +200,6 @@ class AcumaticaInventoryStockQuant(models.Model):
     def _search_product_id(self, operator, value):
         return self._search_snapshot_value('product_id', operator, value)
 
-    def _search_location_id(self, operator, value):
-        return self._search_snapshot_value('location_id', operator, value)
-
     def _search_match_status(self, operator, value):
         records = self.search([])
         if operator in ('=', '=='):
@@ -121,15 +210,13 @@ class AcumaticaInventoryStockQuant(models.Model):
             records = records.filtered(lambda record: record.match_status == value)
         return [('id', 'in', records.ids)]
 
-    @api.depends('inventory_id', 'warehouse_code', 'description', 'api_on_hand')
+    @api.depends('inventory_id', 'warehouse_code', 'description', 'api_on_hand', 'location_id')
     def _compute_snapshot(self):
         Quant = self.env['stock.quant'].sudo()
         for record in self:
             product = record._get_product()
-            mapping, location = record._get_location()
+            location = record.location_id
             record.product_id = product
-            record.location_id = location
-            record.location_mapping_id = mapping
             record.odoo_quantity = 0.0
             record.odoo_reserved_quantity = 0.0
             record.odoo_available_quantity = 0.0
@@ -156,3 +243,103 @@ class AcumaticaInventoryStockQuant(models.Model):
                 if float_compare(record.api_on_hand, record.odoo_quantity, precision_rounding=precision) == 0
                 else 'not_match'
             )
+
+
+class StockInventory(models.Model):
+    _inherit = 'stock.inventory'
+
+    acumatica_stock_comparison_data = fields.Json(copy=False)
+
+    def action_state_to_in_progress(self):
+        inventories = self.filtered('acumatica_stock_comparison_data')
+        for inventory in inventories:
+            inventory._ensure_acumatica_stock_comparison_quants()
+        result = super().action_state_to_in_progress()
+        for inventory in inventories:
+            inventory._apply_acumatica_stock_comparison_counts()
+        return result
+
+    def _ensure_acumatica_stock_comparison_quants(self):
+        """Create empty internal quants for API rows with no existing stock."""
+        self.ensure_one()
+        Quant = self.env['stock.quant'].sudo()
+        Product = self.env['product.product'].sudo()
+        Location = self.env['stock.location'].sudo()
+        for row in self.acumatica_stock_comparison_data:
+            api_on_hand = row.get('api_on_hand') or 0.0
+            if not api_on_hand:
+                continue
+
+            product = Product.browse(row.get('product_id')).exists()
+            location = Location.browse(row.get('location_id')).exists()
+            if not product or not location:
+                continue
+
+            quant_domain = self._acumatica_stock_comparison_quant_domain(product, location)
+            quants = Quant.search(quant_domain)
+            if not quants:
+                Quant.create({
+                    'product_id': product.id,
+                    'location_id': location.id,
+                    'quantity': 0.0,
+                })
+
+    def _acumatica_stock_comparison_quant_domain(self, product, location):
+        """Match the quant scope used by this inventory adjustment."""
+        location_domain = (
+            [('location_id', '=', location.id)]
+            if self.exclude_sublocation
+            else [('location_id', 'child_of', location.id)]
+        )
+        return [('product_id', '=', product.id)] + location_domain
+
+    def _apply_acumatica_stock_comparison_counts(self):
+        self.ensure_one()
+        # A comparison row for a parent location covers its internal child
+        # locations too. Resolve the broadest scopes first so a parent total
+        # cannot be added on top of a child total for the same stock.
+        candidates = []
+        for row in self.acumatica_stock_comparison_data:
+            product = self.env['product.product'].browse(row['product_id'])
+            location = self.env['stock.location'].browse(row['location_id'])
+            if not product.exists() or not location.exists():
+                continue
+            quant_domain = self._acumatica_stock_comparison_quant_domain(product, location)
+            quants = self.stock_quant_ids.filtered_domain(quant_domain)
+            if not quants:
+                if row['api_on_hand']:
+                    raise UserError(_(
+                        "No stocsumpk quant exists for %(product)s under %(location)s, "
+                        "so its Stock API quantity cannot be assigned to an opname quant.",
+                        product=product.display_name,
+                        location=location.display_name,
+                    ))
+                continue
+
+            candidates.append({
+                'product': product,
+                'location': location,
+                'quants': quants,
+                'api_on_hand': row['api_on_hand'] or 0.0,
+            })
+
+        candidates.sort(key=lambda item: (
+            item['location'].parent_path.count('/'),
+            -len(item['quants']),
+            item['location'].id,
+            item['product'].id,
+        ))
+        assigned_quant_ids = set()
+        for item in candidates:
+            # If this row overlaps a broader row already applied, skip the
+            # entire row: its API total may include the same stock, so applying
+            # only the remaining quants would still double-count that total.
+            if assigned_quant_ids.intersection(item['quants'].ids):
+                continue
+            quants = item['quants']
+            assigned_quant_ids.update(quants.ids)
+            # The API provides only a product/location total. Put that total on
+            # one deterministic quant and count the other quants at zero.
+            quants = quants.sorted(key=lambda quant: (-quant.quantity, quant.id))
+            quants.write({'inventory_quantity': 0.0})
+            quants[:1].inventory_quantity = item['api_on_hand']

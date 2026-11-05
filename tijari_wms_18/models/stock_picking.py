@@ -3290,6 +3290,19 @@ class StockPicking(models.Model):
         return res
 
     def action_mark_todo_and_check_availability(self):
+        storage_receipts_without_putaway = self.filtered(
+            lambda picking: (
+                picking.internal_transfer_order_id
+                and picking.internal_transfer_leg == 'receipt'
+                and picking.picking_type_name in ('Storage', 'Store Finished Product')
+                and not picking.putaway_responsible_ids
+            )
+        )
+        for picking in storage_receipts_without_putaway:
+            creator = picking.internal_transfer_order_id.create_uid
+            if creator:
+                picking.sudo().write({'putaway_responsible_ids': [(4, creator.id)]})
+
         to_confirm = self.filtered(lambda picking: picking.state == 'draft')
         if to_confirm:
             to_confirm.action_confirm()

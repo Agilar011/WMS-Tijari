@@ -9,6 +9,8 @@ from collections import defaultdict
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -127,7 +129,7 @@ class ImportSOShipmentWizard(models.TransientModel):
                     f"Gagal ambil Shipment (HTTP {response.status_code}): {response.text}"
                 )
 
-            all_raw_data = self._normalize_rows(response.json())
+            all_raw_data = _data.acumatica_rows(response.json())
 
             # =====================================================
             # 3. PROSES PEMETAAN DATA (LOGIKA ASLI ANDA)
@@ -142,33 +144,33 @@ class ImportSOShipmentWizard(models.TransientModel):
                     "header": {
                         "acumatica_id":item.get("id"),
                         "rownumber":item.get("rowNumber"),
-                        "note":self._val(item, "note"),
-                        "controlqty":self._val(item, "ControlQty"),
-                        "customerid":self._val(item, "CustomerID"),
-                        "description":self._val(item, "Description"),
-                        "fobpoint":self._val(item, "FOBPoint"),
-                        "fobpointdescription":self._val(item,"FOBPointDescription"),
-                        "hold":self._val(item, "Hold"),
-                        "insurance":self._val(item, "Insurance"),
-                        "lastmodifieddatetime":self._val(item,"LastModifiedDateTime"),
-                        "locationid":self._val(item, "LocationID"),
-                        "locationname":self._val(item, "LocationName"),
-                        "operation":self._val(item, "Operation"),
-                        "packagecount":self._val(item, "PackageCount"),
-                        "packageweight":self._val(item, "PackageWeight"),
-                        "shipmentdate":self._parse_dt(self._val(item,"ShipmentDate")),
-                        "shipmentnbr":self._val(item, "ShipmentNbr"),
-                        "shippedqty":self._val(item, "ShippedQty"),
-                        "shippedvolume":self._val(item, "ShippedVolume"),
-                        "shippedweight":self._val(item, "ShippedWeight"),
-                        "shippingzoneid":self._val(item, "ShippingZoneID"),
-                        "shipvia":self._val(item, "ShipVia"),
-                        "status":self._val(item, "Status"),
-                        "towarehouseid":self._val(item, "ToWarehouseID"),
-                        "type":self._val(item, "Type"),
-                        "unlimitedpackages":self._val(item, "UnlimitedPackages"),
-                        "warehouseid":self._val(item, "WarehouseID"),
-                        "warehousename":self._val(item, "WarehouseName"),
+                        "note":_data.acumatica_value(item, "note"),
+                        "controlqty":_data.acumatica_value(item, "ControlQty"),
+                        "customerid":_data.acumatica_value(item, "CustomerID"),
+                        "description":_data.acumatica_value(item, "Description"),
+                        "fobpoint":_data.acumatica_value(item, "FOBPoint"),
+                        "fobpointdescription":_data.acumatica_value(item,"FOBPointDescription"),
+                        "hold":_data.acumatica_value(item, "Hold"),
+                        "insurance":_data.acumatica_value(item, "Insurance"),
+                        "lastmodifieddatetime":_data.acumatica_value(item,"LastModifiedDateTime"),
+                        "locationid":_data.acumatica_value(item, "LocationID"),
+                        "locationname":_data.acumatica_value(item, "LocationName"),
+                        "operation":_data.acumatica_value(item, "Operation"),
+                        "packagecount":_data.acumatica_value(item, "PackageCount"),
+                        "packageweight":_data.acumatica_value(item, "PackageWeight"),
+                        "shipmentdate":_data.acumatica_datetime(_data.acumatica_value(item,"ShipmentDate")),
+                        "shipmentnbr":_data.acumatica_value(item, "ShipmentNbr"),
+                        "shippedqty":_data.acumatica_value(item, "ShippedQty"),
+                        "shippedvolume":_data.acumatica_value(item, "ShippedVolume"),
+                        "shippedweight":_data.acumatica_value(item, "ShippedWeight"),
+                        "shippingzoneid":_data.acumatica_value(item, "ShippingZoneID"),
+                        "shipvia":_data.acumatica_value(item, "ShipVia"),
+                        "status":_data.acumatica_value(item, "Status"),
+                        "towarehouseid":_data.acumatica_value(item, "ToWarehouseID"),
+                        "type":_data.acumatica_value(item, "Type"),
+                        "unlimitedpackages":_data.acumatica_value(item, "UnlimitedPackages"),
+                        "warehouseid":_data.acumatica_value(item, "WarehouseID"),
+                        "warehousename":_data.acumatica_value(item, "WarehouseName"),
                     },
 
                     "shipto_address": {},
@@ -195,13 +197,13 @@ class ImportSOShipmentWizard(models.TransientModel):
                     shipment_dict[
                         "shipto_address"
                     ] = {
-                        "addressline1":self._val(shipto,"AddressLine1"),
-                        "addressline2":self._val(shipto,"AddressLine2"),
-                        "city":self._val(shipto,"City"),
-                        "country":self._val(shipto,"Country"),
-                        "countryname":self._val(shipto,"CountryName"),
-                        "postalcode":self._val(shipto,"PostalCode"),
-                        "state":self._val(shipto,"State"),
+                        "addressline1":_data.acumatica_value(shipto,"AddressLine1"),
+                        "addressline2":_data.acumatica_value(shipto,"AddressLine2"),
+                        "city":_data.acumatica_value(shipto,"City"),
+                        "country":_data.acumatica_value(shipto,"Country"),
+                        "countryname":_data.acumatica_value(shipto,"CountryName"),
+                        "postalcode":_data.acumatica_value(shipto,"PostalCode"),
+                        "state":_data.acumatica_value(shipto,"State"),
                     }
 
                 # =================================================
@@ -222,20 +224,20 @@ class ImportSOShipmentWizard(models.TransientModel):
                         "detail": {
                             "acumatica_id": detail.get("id"),
                             "rownumber": detail.get("rowNumber"),
-                            "note": self._val(detail, "note"),
-                            "description": self._val(detail, "Description"),
-                            "freeitem": self._val(detail, "FreeItem"),
-                            "inventoryid": self._val(detail, "InventoryID"),
-                            "linenbr": self._val(detail, "LineNbr"),
-                            "location": self._val(detail, "Location"),
-                            "openorderqty": self._val(detail, "OpenOrderQty"),
-                            "orderedqty": self._val(detail, "OrderedQty"),
-                            "orderlinenbr": self._val(detail, "OrderLineNbr"),
-                            "ordernbr": self._val(detail, "OrderNbr"),
-                            "ordertype": self._val(detail, "OrderType"),
-                            "shippedqty": self._val(detail, "ShippedQty"),
-                            "uom": self._val(detail, "UOM"),
-                            "warehouseid": self._val(detail, "WarehouseID"),
+                            "note": _data.acumatica_value(detail, "note"),
+                            "description": _data.acumatica_value(detail, "Description"),
+                            "freeitem": _data.acumatica_value(detail, "FreeItem"),
+                            "inventoryid": _data.acumatica_value(detail, "InventoryID"),
+                            "linenbr": _data.acumatica_value(detail, "LineNbr"),
+                            "location": _data.acumatica_value(detail, "Location"),
+                            "openorderqty": _data.acumatica_value(detail, "OpenOrderQty"),
+                            "orderedqty": _data.acumatica_value(detail, "OrderedQty"),
+                            "orderlinenbr": _data.acumatica_value(detail, "OrderLineNbr"),
+                            "ordernbr": _data.acumatica_value(detail, "OrderNbr"),
+                            "ordertype": _data.acumatica_value(detail, "OrderType"),
+                            "shippedqty": _data.acumatica_value(detail, "ShippedQty"),
+                            "uom": _data.acumatica_value(detail, "UOM"),
+                            "warehouseid": _data.acumatica_value(detail, "WarehouseID"),
                         },
 
                         "allocations": []
@@ -251,13 +253,13 @@ class ImportSOShipmentWizard(models.TransientModel):
                         {
                             "acumatica_id": alloc.get("id"),
                             "rownumber": alloc.get("rowNumber"),
-                            "note": self._val(alloc, "note"),
-                            "description": self._val(alloc, "Description"),
-                            "inventoryid": self._val(alloc, "InventoryID"),
-                            "location": self._val(alloc, "Location"),
-                            "quantity": self._val(alloc, "Quantity"),
-                            "splitlinenbr": self._val(alloc, "SplitLineNbr"),
-                            "uom": self._val(alloc, "UOM"),
+                            "note": _data.acumatica_value(alloc, "note"),
+                            "description": _data.acumatica_value(alloc, "Description"),
+                            "inventoryid": _data.acumatica_value(alloc, "InventoryID"),
+                            "location": _data.acumatica_value(alloc, "Location"),
+                            "quantity": _data.acumatica_value(alloc, "Quantity"),
+                            "splitlinenbr": _data.acumatica_value(alloc, "SplitLineNbr"),
+                            "uom": _data.acumatica_value(alloc, "UOM"),
                         })
 
                     shipment_dict["details"].append(detail_dict)
@@ -330,13 +332,13 @@ class ImportSOShipmentWizard(models.TransientModel):
             shipment_numbers = []
 
             for item in details:
-                ship_date = self._val(item, "ShipDate")
+                ship_date = _data.acumatica_value(item, "ShipDate")
                 phrase_date = dateutil_parser.parse(ship_date).replace(tzinfo=None)
                 if phrase_date:
                     print(phrase_date)
-                warehouse_id = self._val(item, "WarehouseID")
-                building_id = self._val(item, "BuildingID") or warehouse_id
-                OrderType = self._val(item, "OrderType")
+                warehouse_id = _data.acumatica_value(item, "WarehouseID")
+                building_id = _data.acumatica_value(item, "BuildingID") or warehouse_id
+                OrderType = _data.acumatica_value(item, "OrderType")
                 # print(f"Warehouse ID : {warehouse_id}")
 
                 # if OrderType == 'CO':
@@ -346,7 +348,7 @@ class ImportSOShipmentWizard(models.TransientModel):
 
                 # print(f"Transaction Type: {code}")
 
-                document_only = self._bool_val(item, 'DocumentOnly')
+                document_only = _data.acumatica_bool(item, 'DocumentOnly')
                 picking_type = self._search_picking_type(
                     building_id,
                     OrderType,
@@ -360,55 +362,55 @@ class ImportSOShipmentWizard(models.TransientModel):
                     'acumatica_id' : item.get('id'),
                     'adt_rowNumber' : item.get('rowNumber'),
                     'adt_note' : item.get('note'),
-                    'adt_Description' : self._val(item, "Description"),
-                    'adt_AddressID' : self._val(item, "AddressID"),
-                    'adt_AddressLine' : self._val(item, "AddressLine"),
-                    'adt_BuildingID' : self._val(item, "BuildingID"),
-                    'adt_City' : self._val(item, "City"),
-                    'adt_Country' : self._val(item, "Country"),
-                    'adt_CountryName' : self._val(item, "CountryName"),
-                    'adt_CustomerID' : self._val(item, "CustomerID"),
-                    'adt_CustomerName' : self._val(item, "CustomerName"),
-                    'adt_DocumentOnly' : self._bool_val(item, "DocumentOnly"),
-                    'adt_FOBPoint' : self._val(item, "FOBPoint"),
-                    'adt_FOBPointDescription' : self._val(item, "FOBPointDescription"),
-                    'adt_LineDescription' : self._val(item, "LineDescription"),
-                    'adt_LineFreeItem' : self._val(item, "LineFreeItem"),
-                    'adt_LineInventoryID' : self._val(item, "LineInventoryID"),
-                    'adt_LineLocation' : self._val(item, "LineLocation"),
-                    'adt_LineNbr' : self._val(item, "LineNbr"),
-                    'adt_LineNote' : self._val(item, "LineNote"),
-                    'adt_LineNoteID' : self._val(item, "LineNoteID"),
-                    'adt_LineQuantity' : self._val(item, "LineQuantity"),
-                    'adt_LineUOM' : self._val(item, "LineUOM"),
-                    'adt_LocationID' : self._val(item, "LocationID"),
-                    'adt_LocationName' : self._val(item, "LocationName"),
-                    'adt_NoteHeader' : self._val(item, "NoteHeader"),
-                    'adt_NoteHeaderID' : self._val(item, "NoteHeaderID"),
-                    'adt_OrderType' : self._val(item, "OrderType"),
-                    'adt_Phone' : self._val(item, "Phone"),
-                    'adt_PostalCode' : self._val(item, "PostalCode"),
-                    'adt_ShipDate' : self._val(item, "ShipDate"),
-                    'adt_IssueNbr' : self._val(item, "IssueNbr"),
-                    'adt_ShipmentNbr' : self._val(item, "ShipmentNbr"),
-                    'adt_ShipmentQty' : self._val(item, "ShipmentQty"),
-                    'adt_LineQty' : self._val(item, "LineQuantity"),
-                    'adt_ShipmentType' : self._val(item, "ShipmentType"),
-                    'adt_ShipmentVolume' : self._val(item, "ShipmentVolume"),
-                    'adt_ShipmentWeight' : self._val(item, "ShipmentWeight"),
-                    'adt_ShipVia' : self._val(item, "ShipVia"),
-                    'adt_SiteIDDescription' : self._val(item, "SiteIDDescription"),
-                    'adt_State' : self._val(item, "State"),
-                    'adt_StateName' : self._val(item, "StateName"),
-                    'adt_Status' : self._val(item, "Status"),
-                    'lastmodifieddatetime' : self._val(item, "LastModifiedDateTime"),
-                    'adt_ToWarehouseID' : self._val(item, "ToWarehouseID"),
-                    'adt_WarehouseID' : self._val(item, "WarehouseID"),
+                    'adt_Description' : _data.acumatica_value(item, "Description"),
+                    'adt_AddressID' : _data.acumatica_value(item, "AddressID"),
+                    'adt_AddressLine' : _data.acumatica_value(item, "AddressLine"),
+                    'adt_BuildingID' : _data.acumatica_value(item, "BuildingID"),
+                    'adt_City' : _data.acumatica_value(item, "City"),
+                    'adt_Country' : _data.acumatica_value(item, "Country"),
+                    'adt_CountryName' : _data.acumatica_value(item, "CountryName"),
+                    'adt_CustomerID' : _data.acumatica_value(item, "CustomerID"),
+                    'adt_CustomerName' : _data.acumatica_value(item, "CustomerName"),
+                    'adt_DocumentOnly' : _data.acumatica_bool(item, "DocumentOnly"),
+                    'adt_FOBPoint' : _data.acumatica_value(item, "FOBPoint"),
+                    'adt_FOBPointDescription' : _data.acumatica_value(item, "FOBPointDescription"),
+                    'adt_LineDescription' : _data.acumatica_value(item, "LineDescription"),
+                    'adt_LineFreeItem' : _data.acumatica_value(item, "LineFreeItem"),
+                    'adt_LineInventoryID' : _data.acumatica_value(item, "LineInventoryID"),
+                    'adt_LineLocation' : _data.acumatica_value(item, "LineLocation"),
+                    'adt_LineNbr' : _data.acumatica_value(item, "LineNbr"),
+                    'adt_LineNote' : _data.acumatica_value(item, "LineNote"),
+                    'adt_LineNoteID' : _data.acumatica_value(item, "LineNoteID"),
+                    'adt_LineQuantity' : _data.acumatica_value(item, "LineQuantity"),
+                    'adt_LineUOM' : _data.acumatica_value(item, "LineUOM"),
+                    'adt_LocationID' : _data.acumatica_value(item, "LocationID"),
+                    'adt_LocationName' : _data.acumatica_value(item, "LocationName"),
+                    'adt_NoteHeader' : _data.acumatica_value(item, "NoteHeader"),
+                    'adt_NoteHeaderID' : _data.acumatica_value(item, "NoteHeaderID"),
+                    'adt_OrderType' : _data.acumatica_value(item, "OrderType"),
+                    'adt_Phone' : _data.acumatica_value(item, "Phone"),
+                    'adt_PostalCode' : _data.acumatica_value(item, "PostalCode"),
+                    'adt_ShipDate' : _data.acumatica_value(item, "ShipDate"),
+                    'adt_IssueNbr' : _data.acumatica_value(item, "IssueNbr"),
+                    'adt_ShipmentNbr' : _data.acumatica_value(item, "ShipmentNbr"),
+                    'adt_ShipmentQty' : _data.acumatica_value(item, "ShipmentQty"),
+                    'adt_LineQty' : _data.acumatica_value(item, "LineQuantity"),
+                    'adt_ShipmentType' : _data.acumatica_value(item, "ShipmentType"),
+                    'adt_ShipmentVolume' : _data.acumatica_value(item, "ShipmentVolume"),
+                    'adt_ShipmentWeight' : _data.acumatica_value(item, "ShipmentWeight"),
+                    'adt_ShipVia' : _data.acumatica_value(item, "ShipVia"),
+                    'adt_SiteIDDescription' : _data.acumatica_value(item, "SiteIDDescription"),
+                    'adt_State' : _data.acumatica_value(item, "State"),
+                    'adt_StateName' : _data.acumatica_value(item, "StateName"),
+                    'adt_Status' : _data.acumatica_value(item, "Status"),
+                    'lastmodifieddatetime' : _data.acumatica_value(item, "LastModifiedDateTime"),
+                    'adt_ToWarehouseID' : _data.acumatica_value(item, "ToWarehouseID"),
+                    'adt_WarehouseID' : _data.acumatica_value(item, "WarehouseID"),
                     'picking_type_id' : picking_type_id,
 
                 }
 
-                shipment_numbers.append(self._val(item, "ShipmentNbr"))
+                shipment_numbers.append(_data.acumatica_value(item, "ShipmentNbr"))
 
                 shipment_gi_data.append(vals)
 
@@ -714,46 +716,10 @@ class ImportSOShipmentWizard(models.TransientModel):
 
         return type if type else None
 
-    @staticmethod
-    def _val(item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''    
 
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
-    @classmethod
-    def _bool_val(cls, item, key):
-        return cls._bool_value(item.get(key, {}))
 
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
 
 

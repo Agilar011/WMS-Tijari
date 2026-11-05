@@ -1,6 +1,7 @@
 from odoo import models, fields, api
 from odoo.exceptions import UserError, ValidationError
-from dateutil import parser as dateutil_parser
+from ..utils import acumatica_data as _data
+
 
 
 class AcumaticaVendorReturnDirectTransferStaging(models.Model):
@@ -266,14 +267,14 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         'picking_type_id': picking_type.id,
                         'location_id': source_location.id,
                         'location_dest_id': dest_location.id,
-                        'scheduled_date': self._parse_dt(first.adt_Date),
+                        'scheduled_date': _data.acumatica_datetime(first.adt_Date),
                         'origin': origin,
                         'note': first.adt_note or False,
                         
                         # Sinkronisasi Field Kustom ke Tabel stock.picking (jika kolomnya eksis)
                         'adt_receipt_nbr': origin,
                         # 'adt_branch_warehouse': first.adt_PostPeriod or False,
-                        'adt_acumatica_write_date': self._parse_dt(first.adt_LastModifiedDateTime),
+                        'adt_acumatica_write_date': _data.acumatica_datetime(first.adt_LastModifiedDateTime),
                         'adt_status': first.adt_Status or False,
                         'adt_type': first.adt_Type or 'Credit Memo Consignment',
                         'adt_is_document_only': False,
@@ -539,14 +540,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
         except Exception:
             return 0.0
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     def action_open_picking(self):
         self.ensure_one()

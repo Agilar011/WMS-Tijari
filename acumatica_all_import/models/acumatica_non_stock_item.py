@@ -1,8 +1,9 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
-from dateutil import parser as dateutil_parser
 from markupsafe import Markup, escape
 import logging
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -111,14 +112,6 @@ class AcumaticaNonStockItemLine(models.Model):
     #     print("=" * 100 + "\n")
         
     # ─── Helpers ─────────────────────────────────────
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
 
     def _find_existing_product(self, rec):
@@ -235,32 +228,6 @@ class AcumaticaNonStockItemLine(models.Model):
         acumatica_err_id.error_msg = err_msg
         acumatica_err_id.import_state = state
 
-    def _get_changed_fields(self, record, vals):
-        changed_fields = []
-
-        for field_name, new_value in vals.items():
-            field = record._fields.get(field_name)
-
-            if not field:
-                continue
-
-            old_value = record[field_name]
-
-            if field.type == 'many2one':
-                old_value = old_value.id if old_value else False
-                
-            old_value = old_value or False
-            new_value = new_value or False
-
-            if old_value != new_value:
-                changed_fields.append({
-                    'field_name': field_name,
-                    'field_label': field.string,
-                    'old_value': old_value,
-                    'new_value': new_value,
-                })
-
-        return changed_fields
     
     def _log_import_result(
         self,
@@ -382,7 +349,7 @@ class AcumaticaNonStockItemLine(models.Model):
                     'adt_status' : line.item_status or False,
                     # 'adt_item_status': item_status or False,
                     'adt_item_type':  line.item_type or False,
-                    'adt_acumatica_write_date': self._parse_dt(line.last_modified_datetime),
+                    'adt_acumatica_write_date': _data.acumatica_datetime(line.last_modified_datetime),
                     'adt_note_id': line.note_id or False,
                     'adt_posting_class': line.posting_class or False,
                     'adt_price_class': line.price_class or False,
@@ -396,7 +363,7 @@ class AcumaticaNonStockItemLine(models.Model):
 
                 if existing:
                     old_sku = existing.default_code or False
-                    changed_fields = line._get_changed_fields(
+                    changed_fields = _data.changed_import_fields(
                         existing,
                         vals,
                     )       

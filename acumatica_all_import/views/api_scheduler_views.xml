@@ -8,13 +8,8 @@
                 <field name="name"/>
                 <field name="code"/>
                 <field name="active"/>
-                <field name="acumatica_import"/>
-                <field name="acumatica_data_type"/>
-                <field name="process_phase"/>
-                <field name="execution_interval"/>
-                <field name="interval_value"/>
-                <field name="interval_unit"/>
-                <field name="next_execution"/>
+                <field name="job_type"/>
+                <field name="cron_active" groups="base.group_system"/>
                 <field name="is_running"/>
             </list>
         </field>
@@ -27,7 +22,7 @@
             <form>
                 <header>
                     <button name="action_run_now" string="Run Now" type="object" class="btn-primary"/>
-                    <button name="action_open_ir_cron" string="Open Odoo Cron" type="object"/>
+                    <button name="action_open_ir_cron" string="Open Odoo Cron" type="object" groups="base.group_system"/>
                 </header>
                 <sheet>
                     <group string="General Information">
@@ -38,25 +33,30 @@
                         </group>
                         <group>
                             <field name="active"/>
-                            <field name="acumatica_import"/>
-                            <field name="acumatica_data_type" invisible="not acumatica_import" required="acumatica_import"/>
-                            <field name="process_phase" invisible="not acumatica_import"/>
+                            <field name="job_type"/>
+                            <field name="selected_data_category"
+                                   invisible="job_type not in ['fetch_selected', 'import_selected']"/>
+                            <field name="selected_data_type_ids"
+                                   widget="many2many_tags"
+                                   options="{'no_create': True, 'no_open': True}"
+                                   domain="[('data_category', '=', selected_data_category)]"
+                                   invisible="job_type not in ['fetch_selected', 'import_selected']"/>
                             <field name="is_running" readonly="1"/>
-                            <field name="ir_cron_id" readonly="1"/>
+                            <field name="cron_active" groups="base.group_system"/>
+                            <field name="do_not_overlap" string="Prevent Overlapping Runs" help="Prevent overlapping executions of this scheduler job."/>
+                            <field name="ir_cron_id" readonly="1" groups="base.group_system"/>
                         </group>
                     </group>
                     <notebook>
                         <page string="Schedule">
                             <group>
                                 <group>
-                                    <field name="execution_interval"/>
-                                    <field name="interval_value"/>
-                                    <field name="interval_unit"/>
+                                    <field name="cron_interval_number" groups="base.group_system"/>
+                                    <field name="cron_interval_type" groups="base.group_system"/>
+                                    <field name="cron_user_id" groups="base.group_system"/>
                                 </group>
                                 <group>
-                                    <field name="next_execution"/>
-                                    <field name="timezone"/>
-                                    <field name="do_not_overlap"/>
+                                    <field name="cron_nextcall" groups="base.group_system"/>
                                 </group>
                             </group>
                         </page>
