@@ -1,9 +1,10 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
-from dateutil import parser as dateutil_parser
 from datetime import datetime, time, timezone
 
 import logging
+from ..utils import acumatica_data as _data
+
 _logger = logging.getLogger(__name__)
 
 
@@ -71,43 +72,10 @@ class ImportReceiptWizard(models.TransientModel):
             'target': 'new',
         }
 
-    def _val(self, item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
 
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
-    def _bool_val(self, item, key):
-        return self._bool_value(item.get(key, {}))
 
-    def _normalize_rows(self, payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     def _search_picking_type(self, building_code, document_only=False):
         config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
@@ -187,7 +155,7 @@ class ImportReceiptWizard(models.TransientModel):
 
             seen_receipts = set()
 
-            data = self._normalize_rows(raw_data.get("PurchaseReceiptGIDetails", []))
+            data = _data.acumatica_rows(raw_data.get("PurchaseReceiptGIDetails", []))
 
             # PurchaseReceiptGI is a custom PUT endpoint and does not honor
             # OData $top/$skip. Apply the wizard pagination at receipt level
@@ -210,61 +178,61 @@ class ImportReceiptWizard(models.TransientModel):
             # ]
 
             for row_number, item in enumerate(data, start=1):
-                receipt_nbr = self._val(item, "ReceiptNbr")
+                receipt_nbr = _data.acumatica_value(item, "ReceiptNbr")
 
                 if receipt_nbr not in seen_receipts:
                     seen_receipts.add(receipt_nbr)
-                    building_code = self._val(item, "BuildingID")
-                    document_only = self._bool_val(item, 'DocumentOnly')
+                    building_code = _data.acumatica_value(item, "BuildingID")
+                    document_only = _data.acumatica_bool(item, 'DocumentOnly')
                     type = self._search_picking_type(building_code, document_only=document_only)
                     result.append({
                         'external_id': item.get('id', '') or '',
                         'row_number': row_number,
                         'note': item.get('NoteHeader', {}).get('value', '') or '',
-                        'branch_warehouse': self._val(item, 'Branch'),
+                        'branch_warehouse': _data.acumatica_value(item, 'Branch'),
                         'building_code': building_code,
-                        'actual_qty': self._val(item, 'ControlQty'),
-                        'scheduled_date': self._val(item, 'Date'),
-                        'is_hold': self._val(item, 'Hold'),
-                        'inventory_ref': self._val(item, 'InventoryRefNbr'),
-                        'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                        'header_location_code': self._val(item, 'Location'),
-                        'note_header_id': self._val(item, 'NoteHeaderID'),
-                        'post_period': self._val(item, 'PostPeriod'),
-                        'receipt_nbr': self._val(item, 'ReceiptNbr'),
+                        'actual_qty': _data.acumatica_value(item, 'ControlQty'),
+                        'scheduled_date': _data.acumatica_value(item, 'Date'),
+                        'is_hold': _data.acumatica_value(item, 'Hold'),
+                        'inventory_ref': _data.acumatica_value(item, 'InventoryRefNbr'),
+                        'acumatica_write_date': _data.acumatica_value(item, 'LastModifiedDateTime'),
+                        'header_location_code': _data.acumatica_value(item, 'Location'),
+                        'note_header_id': _data.acumatica_value(item, 'NoteHeaderID'),
+                        'post_period': _data.acumatica_value(item, 'PostPeriod'),
+                        'receipt_nbr': _data.acumatica_value(item, 'ReceiptNbr'),
                         'document_only': document_only,
-                        'status': self._val(item, 'Status'),
-                        'total_qty': self._val(item, 'TotalQty'),
-                        'receipt_type': self._val(item, 'Type'),
-                        'vendor_code': self._val(item, 'VendorID'),
-                        'vendor_name': self._val(item, 'VendorName'),
-                        'partner_ref': self._val(item, 'VendorRef'),
-                        'warehouse_code': self._val(item, 'LineWarehouseID') or self._val(item, 'Warehouse'),
+                        'status': _data.acumatica_value(item, 'Status'),
+                        'total_qty': _data.acumatica_value(item, 'TotalQty'),
+                        'receipt_type': _data.acumatica_value(item, 'Type'),
+                        'vendor_code': _data.acumatica_value(item, 'VendorID'),
+                        'vendor_name': _data.acumatica_value(item, 'VendorName'),
+                        'partner_ref': _data.acumatica_value(item, 'VendorRef'),
+                        'warehouse_code': _data.acumatica_value(item, 'LineWarehouseID') or _data.acumatica_value(item, 'Warehouse'),
                         'picking_type_id': type.id if type else None,
                     })
 
                 detail_result.append({
                     'header_external_id': item.get('id', '') or '',
                     # 'line_external_id': item.get('id', '') or '',
-                    'receipt_nbr': self._val(item, 'ReceiptNbr'),
+                    'receipt_nbr': _data.acumatica_value(item, 'ReceiptNbr'),
                     'line_note': item.get('LineNote', {}).get('value', '') or '',
-                    'line_note_id': self._val(item, 'LineNoteID'),
-                    'line_branch': self._val(item, 'LineBranch'),
-                    'description': self._val(item, 'LineDescription'),
-                    'inventory_id': self._val(item, 'LineInventoryID'),
-                    'line_nbr': self._val(item, 'LineNbr'),
-                    'line_type': self._val(item, 'LineType'),
-                    'location_dest_code': self._val(item, 'LineLocation'),
-                    'open_qty': self._val(item, 'LineOpenQty'),
-                    'order_qty': self._val(item, 'LineOrderedQty'),
-                    'po_line_number': self._val(item, 'LinePOLineNbr'),
-                    'po_number': self._val(item, 'LinePOOrderNbr'),
-                    'po_type': self._val(item, 'LinePOOrderType'),
-                    'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
-                    'product_uom_qty': self._val(item, 'LineReceiptQty'),
-                    'transfer_shipment_number': self._val(item, 'LineTransferShipmentNbr'),
-                    'uom_code': self._val(item, 'LineUOM'),
-                    'warehouse_dest_code': self._val(item, 'LineWarehouseID'),
+                    'line_note_id': _data.acumatica_value(item, 'LineNoteID'),
+                    'line_branch': _data.acumatica_value(item, 'LineBranch'),
+                    'description': _data.acumatica_value(item, 'LineDescription'),
+                    'inventory_id': _data.acumatica_value(item, 'LineInventoryID'),
+                    'line_nbr': _data.acumatica_value(item, 'LineNbr'),
+                    'line_type': _data.acumatica_value(item, 'LineType'),
+                    'location_dest_code': _data.acumatica_value(item, 'LineLocation'),
+                    'open_qty': _data.acumatica_value(item, 'LineOpenQty'),
+                    'order_qty': _data.acumatica_value(item, 'LineOrderedQty'),
+                    'po_line_number': _data.acumatica_value(item, 'LinePOLineNbr'),
+                    'po_number': _data.acumatica_value(item, 'LinePOOrderNbr'),
+                    'po_type': _data.acumatica_value(item, 'LinePOOrderType'),
+                    'po_receipt_number': _data.acumatica_value(item, 'LinePOReceiptNbr'),
+                    'product_uom_qty': _data.acumatica_value(item, 'LineReceiptQty'),
+                    'transfer_shipment_number': _data.acumatica_value(item, 'LineTransferShipmentNbr'),
+                    'uom_code': _data.acumatica_value(item, 'LineUOM'),
+                    'warehouse_dest_code': _data.acumatica_value(item, 'LineWarehouseID'),
                 })
 
 

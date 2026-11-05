@@ -176,6 +176,15 @@ class StockMove(models.Model):
         readonly=True
     )
 
+    qty_pack = fields.Float(
+        string='Qty Pack',
+        compute='_compute_qty_pack_unpack',
+    )
+    qty_unpack = fields.Float(
+        string='Qty Unpack',
+        compute='_compute_qty_pack_unpack',
+    )
+
     difference_quantity = fields.Float(
         string='Difference Qty',
         compute='_compute_difference_quantity',
@@ -737,6 +746,20 @@ class StockMove(models.Model):
             )
             # qty = move.quantity_shadow if move.quantity_shadow != 0.0 else move.quantity
             move.remaining_package_qty = move.product_uom_qty - packaged_qty
+
+    @api.depends('move_line_ids.quantity', 'move_line_ids.result_package_id')
+    def _compute_qty_pack_unpack(self):
+        for move in self:
+            move.qty_pack = sum(
+                line.quantity
+                for line in move.move_line_ids
+                if line.result_package_id
+            )
+            move.qty_unpack = sum(
+                line.quantity
+                for line in move.move_line_ids
+                if not line.result_package_id
+            )
             
     @api.depends('move_line_ids.lot_id', 'move_line_ids.quantity')
     def _compute_lot_ids(self):

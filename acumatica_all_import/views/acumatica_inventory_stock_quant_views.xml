@@ -24,6 +24,7 @@
             <list string="Inventory Stock Comparison" create="false" edit="false" delete="false">
                 <header>
                     <button name="action_open_generate_wizard" string="Generate" type="object" class="btn-primary" display="always"/>
+                    <button name="action_create_opname" string="Create Opname" type="object" display="always"/>
                 </header>
                 <field name="product_id"/>
                 <field name="location_id"/>

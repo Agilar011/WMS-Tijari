@@ -3,6 +3,8 @@ from odoo.exceptions import UserError
 import logging
 
 from psycopg2 import IntegrityError
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -233,7 +235,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 elif isinstance(details, dict):
                     raw_data = details.get('value') or details.get('rows') or []
             if not raw_data:
-                raw_data = self.config_id._normalize_rows(payload)
+                raw_data = _data.acumatica_rows(payload)
             raw_data = [item for item in raw_data if isinstance(item, dict)]
             result = []
             assemblies_by_reference = {}
@@ -242,31 +244,31 @@ class ImportKitAssemblyWizard(models.TransientModel):
 
             for item_index, item in enumerate(raw_data):
 
-                last_modified_datetime = self._val(item, 'LastModifiedDateTime')
+                last_modified_datetime = _data.acumatica_value(item, 'LastModifiedDateTime')
                 print(f"Last Modified Date Time: :{last_modified_datetime}")
-                print(self._val(item, 'Warehouse'))
+                print(_data.acumatica_value(item, 'Warehouse'))
                 header = {
-                    'name': self._val(item, 'ReferenceNbr'),
+                    'name': _data.acumatica_value(item, 'ReferenceNbr'),
                     'external_id': item.get('id', '') or '',
                     'row_number': item.get('rowNumber', 0) or 0,
-                    'description': self._val(item, 'Description'),
-                    'inventory_id': self._val(item, 'InventoryID'),
+                    'description': _data.acumatica_value(item, 'Description'),
+                    'inventory_id': _data.acumatica_value(item, 'InventoryID'),
                     'last_modified_datetime': last_modified_datetime,
-                    'location': self._val(item, 'Location'),
-                    'building_id': self._val(item, 'BuildingID'),
-                    'note_header': self._val(item, 'NoteHeader'),
-                    'note_header_id': self._val(item, 'NoteHeaderID'),
-                    'post_period': self._val(item, 'PostPeriod'),
-                    'date': self._val(item, 'Date'),
-                    'quantity': self._val(item, 'Qty'),
-                    'reason_code': self._val(item, 'ReasonCode'),
-                    'reference_nbr': self._val(item, 'ReferenceNbr'),
-                    'requested_on': self._val(item, 'RequestedOn'),
-                    'revision': self._val(item, 'Revision'),
-                    'status': self._val(item, 'Status'),
-                    'type': self._val(item, 'Type'),
-                    'uom': self._val(item, 'UOM'),
-                    'warehouse': self._val(item, 'Warehouse'),
+                    'location': _data.acumatica_value(item, 'Location'),
+                    'building_id': _data.acumatica_value(item, 'BuildingID'),
+                    'note_header': _data.acumatica_value(item, 'NoteHeader'),
+                    'note_header_id': _data.acumatica_value(item, 'NoteHeaderID'),
+                    'post_period': _data.acumatica_value(item, 'PostPeriod'),
+                    'date': _data.acumatica_value(item, 'Date'),
+                    'quantity': _data.acumatica_value(item, 'Qty'),
+                    'reason_code': _data.acumatica_value(item, 'ReasonCode'),
+                    'reference_nbr': _data.acumatica_value(item, 'ReferenceNbr'),
+                    'requested_on': _data.acumatica_value(item, 'RequestedOn'),
+                    'revision': _data.acumatica_value(item, 'Revision'),
+                    'status': _data.acumatica_value(item, 'Status'),
+                    'type': _data.acumatica_value(item, 'Type'),
+                    'uom': _data.acumatica_value(item, 'UOM'),
+                    'warehouse': _data.acumatica_value(item, 'Warehouse'),
                     'config_id': self.config_id.id,
                     'import_state': 'staged',
                     'import_message': 'Data API Imported',
@@ -338,7 +340,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     if isinstance(component, dict)
                 ]
 
-                if not stock_components and self._val(item, 'LineStockInventoryID'):
+                if not stock_components and _data.acumatica_value(item, 'LineStockInventoryID'):
                     stock_components = [item]
 
                 if not stock_components:
@@ -350,7 +352,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
                 # === PRINT DATA COMPONENT ===
                 # print("COMPONENTS:")
                 for component in stock_components:
-                    line_nbr = self._val(component, 'LineNbr') or component.get('rowNumber') or 0
+                    line_nbr = _data.acumatica_value(component, 'LineNbr') or component.get('rowNumber') or 0
                     component_external_id = component.get('id', '') or ''
                     component_key = component_external_id or (f'line-{line_nbr}' if line_nbr else False)
                     seen_component_keys = components_seen_by_reference.setdefault(assembly_key, set())
@@ -362,16 +364,16 @@ class ImportKitAssemblyWizard(models.TransientModel):
                     # Buat dictionary component data untuk mempermudah perulangan print
                     component_data = {
                         'line_external_id': component.get('id', '') or '',
-                        'line_note': self._val(component, 'LineNote') or self._val(component, 'note'),
-                        'line_note_id': self._val(component, 'LineNoteID'),
-                        'line_inventory_id': self._val(component, 'LineInventoryID') or self._val(component, 'InventoryID'),
-                        'line_component_qty': self._val(component, 'ComponentQty'),
+                        'line_note': _data.acumatica_value(component, 'LineNote') or _data.acumatica_value(component, 'note'),
+                        'line_note_id': _data.acumatica_value(component, 'LineNoteID'),
+                        'line_inventory_id': _data.acumatica_value(component, 'LineInventoryID') or _data.acumatica_value(component, 'InventoryID'),
+                        'line_component_qty': _data.acumatica_value(component, 'ComponentQty'),
                         'line_nbr': str(line_nbr),
-                        'line_location_id': self._val(component, 'LineLocationID') or self._val(component, 'LocationID'),
-                        'line_quantity': self._val(component, 'LineQty') or self._val(component, 'Qty'),
-                        'line_reason_code': self._val(component, 'ReasonCode'),
-                        'stock_inventory_id': self._val(component, 'LineStockInventoryID') or self._val(component, 'StockInventoryID'),
-                        'line_uom': self._val(component, 'LineUOM') or self._val(component, 'UOM'),
+                        'line_location_id': _data.acumatica_value(component, 'LineLocationID') or _data.acumatica_value(component, 'LocationID'),
+                        'line_quantity': _data.acumatica_value(component, 'LineQty') or _data.acumatica_value(component, 'Qty'),
+                        'line_reason_code': _data.acumatica_value(component, 'ReasonCode'),
+                        'stock_inventory_id': _data.acumatica_value(component, 'LineStockInventoryID') or _data.acumatica_value(component, 'StockInventoryID'),
+                        'line_uom': _data.acumatica_value(component, 'LineUOM') or _data.acumatica_value(component, 'UOM'),
                         'assembly_id': assembly.id,  # Simpan component dengan relasi ke header yang sudah dibuat, bisa dihapus jika tidak perlu
                     }
                     
@@ -448,25 +450,7 @@ class ImportKitAssemblyWizard(models.TransientModel):
             self.config_id._do_logout(session)
             self.config_id.last_sync = fields.Datetime.now()
 
-    @staticmethod
-    def _val(item, key):
-        if not isinstance(item, dict):
-            return ''
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
 
-    @staticmethod
-    def _normalize_rows(payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
 
     def action_view_staging(self):
         self.ensure_one()

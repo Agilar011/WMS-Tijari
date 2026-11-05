@@ -135,6 +135,7 @@
                                     <field name="state" column_invisible="1"/>
                                     <field name="location_id" column_invisible="1"/>
                                     <field name="location_dest_id" column_invisible="1"/>
+                                    <field name="internal_transfer_available_lot_ids" column_invisible="1"/>
                                     <field name="product_uom_category_id" column_invisible="1"/>
                                     <field name="internal_transfer_order_id" column_invisible="1"/>
                                     <field name="internal_transfer_product_scan_code"
@@ -151,13 +152,14 @@
                                         options="{'no_open': True, 'no_create': True}"/>
                                     <field name="internal_transfer_scan_lot_ids" widget="many2many_tags"
                                         string="Lot/Serial Number"
-                                        domain="[('product_id', '=', product_id)]"
+                                        domain="[('id', 'in', internal_transfer_available_lot_ids)]"
                                         groups="stock.group_production_lot"/>
                                 </list>
                                 <kanban>
                                     <field name="product_id"
                                         context="{'tijari_stock_picking_product_code_only': True}"
                                         domain="[('id', 'in', parent.available_source_product_ids)] if parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer' else []"/>
+                                    <field name="internal_transfer_available_lot_ids"/>
                                     <field name="internal_transfer_product_scan_code"/>
                                     <field name="product_uom_qty"/>
                                     <field name="product_uom" groups="uom.group_uom"/>
@@ -184,7 +186,7 @@
                                                 <div class="mt-2" groups="stock.group_production_lot">
                                                     <span class="text-muted">Lot/Serial: </span>
                                                     <field name="internal_transfer_scan_lot_ids" widget="many2many_tags"
-                                                        domain="[('product_id', '=', product_id)]"
+                                                        domain="[('id', 'in', internal_transfer_available_lot_ids)]"
                                                         groups="stock.group_production_lot"/>
                                                 </div>
                                             </div>
@@ -223,6 +225,7 @@
                     <field name="product_uom_category_id" invisible="1"/>
                     <field name="internal_transfer_order_id" invisible="1"/>
                     <field name="internal_transfer_available_source_product_ids" invisible="1"/>
+                    <field name="internal_transfer_available_lot_ids" invisible="1"/>
                     <field name="internal_transfer_transaction_type" invisible="1"/>
                     <field name="internal_transfer_intra_transfer_type" invisible="1"/>
                     <group>
@@ -243,7 +246,7 @@
                         </div>
                         <field name="internal_transfer_scan_lot_ids" widget="many2many_tags"
                             string="Lot/Serial Number"
-                            domain="[('product_id', '=', product_id)]"
+                            domain="[('id', 'in', internal_transfer_available_lot_ids)]"
                             groups="stock.group_production_lot"/>
                     </group>
                 </sheet>

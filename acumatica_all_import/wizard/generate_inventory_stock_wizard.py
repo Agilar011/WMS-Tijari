@@ -52,5 +52,23 @@ class AcumaticaInventoryStockGenerateWizard(models.TransientModel):
         action = self.env.ref(
             "acumatica_all_import.action_acumatica_inventory_stock_quant"
         ).sudo().read()[0]
-        action["domain"] = [("warehouse_code", "in", mappings.mapped("code"))]
+        mapped_locations = mappings.mapped("odoo_location_id")
+        mapped_locations |= mappings.mapped("odoo_building_id.lot_stock_id")
+        unmapped_codes = mappings.filtered(
+            lambda mapping: not mapping.odoo_location_id
+            and not mapping.odoo_building_id.lot_stock_id
+        ).mapped("code")
+
+        domain = [("config_id", "=", config.id)]
+        if mapped_locations and unmapped_codes:
+            domain.extend([
+                "|",
+                ("location_id", "in", mapped_locations.ids),
+                ("warehouse_code", "in", unmapped_codes),
+            ])
+        elif mapped_locations:
+            domain.append(("location_id", "in", mapped_locations.ids))
+        else:
+            domain.append(("warehouse_code", "in", unmapped_codes))
+        action["domain"] = domain
         return action

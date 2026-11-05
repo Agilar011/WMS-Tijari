@@ -2,6 +2,8 @@ import logging
 
 from odoo import models, fields
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -243,12 +245,12 @@ class ImportTransferTwoStepWizard(models.TransientModel):
             if self.reference_nbr:
                 detail_rows = [
                     item for item in detail_rows
-                    if self._val(item, 'ReferenceNbr') == self.reference_nbr
+                    if _data.acumatica_value(item, 'ReferenceNbr') == self.reference_nbr
                 ]
             if self.last_modified_from:
                 detail_rows = [
                     item for item in detail_rows
-                    if self._val(item, 'LastModifiedDateTime') >= self.last_modified_from
+                    if _data.acumatica_value(item, 'LastModifiedDateTime') >= self.last_modified_from
                 ]
             if self.fetch_skip:
                 detail_rows = detail_rows[self.fetch_skip:]
@@ -259,9 +261,9 @@ class ImportTransferTwoStepWizard(models.TransientModel):
             header_order = []
 
             for row_number, item in enumerate(detail_rows, start=1):
-                reference_nbr = self._val(item, 'ReferenceNbr')
+                reference_nbr = _data.acumatica_value(item, 'ReferenceNbr')
                 header_id = (
-                    self._val(item, 'NoteHeaderID')
+                    _data.acumatica_value(item, 'NoteHeaderID')
                     or raw_data.get('id')
                     or reference_nbr
                     or item.get('id')
@@ -272,25 +274,25 @@ class ImportTransferTwoStepWizard(models.TransientModel):
                     headers_by_ref[reference_nbr] = {
                         'external_id': header_id,
                         'row_number': row_number,
-                        'note': self._val(item, 'NoteHeader') or item.get('note', '') or '',
-                        'scheduled_date': self._val(item, 'Date'),
-                        'external_ref': self._val(item, 'ExternalRef'),
-                        'is_hold': self._val(item, 'Hold'),
-                        'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-                        'note_header_id': self._val(item, 'NoteHeaderID'),
-                        'post_period': self._val(item, 'PostPeriod'),
-                        'status': self._val(item, 'Status'),
-                        'total_qty': self._val(item, 'TotalQty'),
-                        'transfer_type': self._val(item, 'TransferType'),
-                        'return_type': self._val(item, 'ReturnType'),
+                        'note': _data.acumatica_value(item, 'NoteHeader') or item.get('note', '') or '',
+                        'scheduled_date': _data.acumatica_value(item, 'Date'),
+                        'external_ref': _data.acumatica_value(item, 'ExternalRef'),
+                        'is_hold': _data.acumatica_value(item, 'Hold'),
+                        'acumatica_write_date': _data.acumatica_value(item, 'LastModifiedDateTime'),
+                        'note_header_id': _data.acumatica_value(item, 'NoteHeaderID'),
+                        'post_period': _data.acumatica_value(item, 'PostPeriod'),
+                        'status': _data.acumatica_value(item, 'Status'),
+                        'total_qty': _data.acumatica_value(item, 'TotalQty'),
+                        'transfer_type': _data.acumatica_value(item, 'TransferType'),
+                        'return_type': _data.acumatica_value(item, 'ReturnType'),
                         'reference_nbr': reference_nbr,
-                        'to_warehouse_code': self._val(item, 'ToWarehouseID'),
-                        'to_warehouse_name': self._val(item, 'ToWarehouseName'),
-                        'from_warehouse_code': self._val(item, 'FromWarehouseID'),
-                        'from_warehouse_name': self._val(item, 'FromWarehouseName'),
-                        'description': self._val(item, 'Description'),
-                        'document_only': self._bool_val(item, 'DocumentOnly'),
-                        'trans_type': self._val(item, 'TransType'),
+                        'to_warehouse_code': _data.acumatica_value(item, 'ToWarehouseID'),
+                        'to_warehouse_name': _data.acumatica_value(item, 'ToWarehouseName'),
+                        'from_warehouse_code': _data.acumatica_value(item, 'FromWarehouseID'),
+                        'from_warehouse_name': _data.acumatica_value(item, 'FromWarehouseName'),
+                        'description': _data.acumatica_value(item, 'Description'),
+                        'document_only': _data.acumatica_bool(item, 'DocumentOnly'),
+                        'trans_type': _data.acumatica_value(item, 'TransType'),
                     }
 
                     if headers_by_ref[reference_nbr].get('from_warehouse_code'):
@@ -298,8 +300,8 @@ class ImportTransferTwoStepWizard(models.TransientModel):
                         headers_by_ref[reference_nbr]['picking_type_id'] = type_record.id if type_record else False
 
                 line_number = (
-                    self._val(item, 'LineNumber')
-                    or self._val(item, 'LineNbr')
+                    _data.acumatica_value(item, 'LineNumber')
+                    or _data.acumatica_value(item, 'LineNbr')
                     or item.get('rowNumber')
                     or 0
                 )
@@ -307,19 +309,19 @@ class ImportTransferTwoStepWizard(models.TransientModel):
                     'acumatica_header_id': reference_nbr,
                     'reference_nbr': reference_nbr,
                     'adt_rowNumber': str(line_number),
-                    'adt_note': self._val(item, 'LineNote') or item.get('note', '') or '',
-                    'adt_Description': self._val(item, 'LineDescription') or self._val(item, 'Description'),
-                    'adt_FromLocationID': self._val(item, 'LineFromLocationID') or self._val(item, 'FromLocationID'),
-                    'adt_InventoryID': self._val(item, 'LineInventoryID') or self._val(item, 'InventoryID'),
+                    'adt_note': _data.acumatica_value(item, 'LineNote') or item.get('note', '') or '',
+                    'adt_Description': _data.acumatica_value(item, 'LineDescription') or _data.acumatica_value(item, 'Description'),
+                    'adt_FromLocationID': _data.acumatica_value(item, 'LineFromLocationID') or _data.acumatica_value(item, 'FromLocationID'),
+                    'adt_InventoryID': _data.acumatica_value(item, 'LineInventoryID') or _data.acumatica_value(item, 'InventoryID'),
                     'adt_LineNumber': str(line_number),
-                    'adt_NoteID': self._val(item, 'LineNoteID'),
-                    'adt_LineNoteID': self._val(item, 'LineNoteID'),
-                    'adt_Quantity': self._val(item, 'LineQuantity') or self._val(item, 'Quantity'),
-                    'adt_SOOrderNbr': self._val(item, 'LineSOOrderNbr'),
-                    'adt_SOOrderType': self._val(item, 'LineSOOrderType'),
-                    'adt_SOShipmentNbr': self._val(item, 'LineSOShipmentNbr'),
-                    'adt_ToLocationID': self._val(item, 'LineToLocationID') or self._val(item, 'ToLocationID'),
-                    'adt_UOM': self._val(item, 'LineUOM') or self._val(item, 'UOM'),
+                    'adt_NoteID': _data.acumatica_value(item, 'LineNoteID'),
+                    'adt_LineNoteID': _data.acumatica_value(item, 'LineNoteID'),
+                    'adt_Quantity': _data.acumatica_value(item, 'LineQuantity') or _data.acumatica_value(item, 'Quantity'),
+                    'adt_SOOrderNbr': _data.acumatica_value(item, 'LineSOOrderNbr'),
+                    'adt_SOOrderType': _data.acumatica_value(item, 'LineSOOrderType'),
+                    'adt_SOShipmentNbr': _data.acumatica_value(item, 'LineSOShipmentNbr'),
+                    'adt_ToLocationID': _data.acumatica_value(item, 'LineToLocationID') or _data.acumatica_value(item, 'ToLocationID'),
+                    'adt_UOM': _data.acumatica_value(item, 'LineUOM') or _data.acumatica_value(item, 'UOM'),
                 })
 
             result = [headers_by_ref[reference_nbr] for reference_nbr in header_order]
@@ -330,34 +332,9 @@ class ImportTransferTwoStepWizard(models.TransientModel):
             self.config_id._do_logout(session)
             self.config_id.last_sync = fields.Datetime.now()
 
-    def _val(self, item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            return value.get('value', '') or ''
-        return value or ''
 
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
-    def _bool_val(self, item, key):
-        return self._bool_value(item.get(key, {}))
 
-    def _normalize_rows(self, payload):
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
 
     def _search_picking_type(self, header):
         config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False

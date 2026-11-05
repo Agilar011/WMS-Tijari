@@ -1,6 +1,5 @@
 import logging
 import time
-from dateutil import parser as dateutil_parser
 import requests
 
 from odoo import fields, models

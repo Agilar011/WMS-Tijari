@@ -1,10 +1,11 @@
 import logging
 from collections import defaultdict
-from dateutil import parser as dateutil_parser
 import requests
 
 from odoo import _, fields, models, api
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 _logger = logging.getLogger(__name__)
 
@@ -185,7 +186,7 @@ class AcumaticaInventoryIssueLine(models.Model):
             source_location,
             dest_location,
             'intra_warehouse',
-            schedule_date=self._parse_dt(first.scheduled_date),
+            schedule_date=_data.acumatica_datetime(first.scheduled_date),
             note=first.note or first.description or False,
             transfer_type='transfer_out',
         )
@@ -313,7 +314,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                         update_messages.extend(self.env['acumatica.webhook.error.service']._get_user_facing_field_changes(
                             existing_scrap,
                             {'location_id': dest_location.id, 'scrap_location_id': target_scrap_location.id,
-                             'scheduled_date': self._parse_dt(first.scheduled_date)},
+                             'scheduled_date': _data.acumatica_datetime(first.scheduled_date)},
                             field_names={'location_id', 'scrap_location_id', 'scheduled_date'},
                             prefix='Header',
                         ))
@@ -407,11 +408,11 @@ class AcumaticaInventoryIssueLine(models.Model):
                     'location_id': source_location.id,
                     'location_dest_id': dest_location.id,
                     'adt_dest_location_id': adt_dest_location.id,
-                    'scheduled_date': self._parse_dt(first.scheduled_date),
+                    'scheduled_date': _data.acumatica_datetime(first.scheduled_date),
                     'note': first.note or first.description or False,
                     'adt_receipt_nbr': first.reference_nbr or False,
                     'adt_branch_warehouse': first.branch_warehouse or False,
-                    'adt_acumatica_write_date': self._parse_dt(first.acumatica_write_date),
+                    'adt_acumatica_write_date': _data.acumatica_datetime(first.acumatica_write_date),
                     'adt_post_period': first.post_period or False,
                     'adt_status': first.status or False,
                     'adt_total_qty': self._parse_int(first.total_qty),
@@ -743,7 +744,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                 "company_id": warehouse.company_id.id,
                 "location_id": source_location.id,
                 "scrap_location_id": scrap_location.id,
-                "scheduled_date": self._parse_dt(first.scheduled_date),
+                "scheduled_date": _data.acumatica_datetime(first.scheduled_date),
 
                 # Header / dummy
                 "product_id": scrap_lines[0]["product_id"].id,
@@ -834,14 +835,6 @@ class AcumaticaInventoryIssueLine(models.Model):
                 )
             )
 
-    @staticmethod
-    def _parse_dt(dt_str):
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
     @staticmethod
     def _parse_int(value):

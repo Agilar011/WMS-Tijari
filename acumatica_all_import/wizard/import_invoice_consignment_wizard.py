@@ -1,5 +1,7 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
+from ..utils import acumatica_data as _data
+
 
 
 class ImportInvoiceCongsignmentWizard(models.TransientModel):
@@ -113,7 +115,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
 
             raw_payload = response.json()
             flat_data = (raw_payload.get('InvoiceConsignmentGIDetails') or raw_payload.get('InvoiceGIDetails')) if isinstance(raw_payload, dict) else None
-            raw_data = flat_data or self._normalize_rows(raw_payload)
+            raw_data = flat_data or _data.acumatica_rows(raw_payload)
             
             # PINDAHKAN KE LUAR PERULANGAN: Agar total record terhitung dengan benar
             total_imported_headers = 0 
@@ -122,7 +124,7 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             seen_headers = {}
 
             for row_number, item in enumerate(raw_data, start=1):
-                header_id = (self._val(item, 'ReferenceNbr') or item.get('id', '')) if flat_data is not None else item.get('id', '')
+                header_id = (_data.acumatica_value(item, 'ReferenceNbr') or item.get('id', '')) if flat_data is not None else item.get('id', '')
                 header = self._build_header_values(row_number, item)
                 if flat_data is not None:
                     header['adt_id'] = header_id
@@ -304,31 +306,31 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
 
         # header['picking_type_id'] = type.id if type else None        
         print("Created header value")
-        print(f"Receipt number in header : {self._val(item, 'ReferenceNbr')}")
+        print(f"Receipt number in header : {_data.acumatica_value(item, 'ReferenceNbr')}")
 
         return {
 
-            'adt_id' : self._val(item, 'id'),
+            'adt_id' : _data.acumatica_value(item, 'id'),
             'adt_rowNumber' : item.get('RowNumber'),
-            'adt_note' : self._val(item, 'Note'),
-            'adt_ConsignmentType' : self._val(item, 'ConsignmentType'),
-            'adt_CreatedDateTime' : self._val(item, 'CreatedDateTime'),
-            'adt_CustomerID' : self._val(item, 'CustomerID'),
-            'adt_CustomerName' : self._val(item, 'CustomerName'),
-            'adt_CustomerOrder' : self._val(item, 'CustomerOrder'),
-            'adt_Date' : self._val(item, 'Date'),
-            'adt_BuildingID' : self._val(item, 'BuildingID'),
-            'adt_Description' : self._val(item, 'Description'),
-            'adt_DueDate' : self._val(item, 'DueDate'),
-            'adt_LastModifiedDateTime' : self._val(item, 'LastModifiedDateTime'),
-            'adt_LocationID' : self._val(item, 'LocationID'),
-            'adt_LocationName' : self._val(item, 'LocationName'),
-            'adt_NoteHeaderID' : self._val(item, 'NoteHeaderID'),
-            'adt_NoteID' : self._val(item, 'NoteID'),
-            'adt_OrigRefNbr' : self._val(item, 'OrigRefNbr'),
-            'adt_ReferenceNbr' : self._val(item, 'ReferenceNbr'),
-            'adt_Status' : self._val(item, 'Status'),
-            'adt_Type' : self._val(item, 'Type'),            
+            'adt_note' : _data.acumatica_value(item, 'Note'),
+            'adt_ConsignmentType' : _data.acumatica_value(item, 'ConsignmentType'),
+            'adt_CreatedDateTime' : _data.acumatica_value(item, 'CreatedDateTime'),
+            'adt_CustomerID' : _data.acumatica_value(item, 'CustomerID'),
+            'adt_CustomerName' : _data.acumatica_value(item, 'CustomerName'),
+            'adt_CustomerOrder' : _data.acumatica_value(item, 'CustomerOrder'),
+            'adt_Date' : _data.acumatica_value(item, 'Date'),
+            'adt_BuildingID' : _data.acumatica_value(item, 'BuildingID'),
+            'adt_Description' : _data.acumatica_value(item, 'Description'),
+            'adt_DueDate' : _data.acumatica_value(item, 'DueDate'),
+            'adt_LastModifiedDateTime' : _data.acumatica_value(item, 'LastModifiedDateTime'),
+            'adt_LocationID' : _data.acumatica_value(item, 'LocationID'),
+            'adt_LocationName' : _data.acumatica_value(item, 'LocationName'),
+            'adt_NoteHeaderID' : _data.acumatica_value(item, 'NoteHeaderID'),
+            'adt_NoteID' : _data.acumatica_value(item, 'NoteID'),
+            'adt_OrigRefNbr' : _data.acumatica_value(item, 'OrigRefNbr'),
+            'adt_ReferenceNbr' : _data.acumatica_value(item, 'ReferenceNbr'),
+            'adt_Status' : _data.acumatica_value(item, 'Status'),
+            'adt_Type' : _data.acumatica_value(item, 'Type'),
             # 'external_id': item.get('id', '') or '',
             # 'row_number': row_number,
             # 'note': item.get('note', {}).get('value', '') or '',
@@ -454,18 +456,18 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
         
 
         return {
-            'adt_id': detail.get('id') or self._val(detail, 'id'),
-            'adt_rowNumber': detail.get('rowNumber') or self._val(detail, 'rowNumber'),
-            'adt_note': self._val(detail, 'LineNote') or self._val(detail, 'Note'),
-            'adt_Branch': self._val(detail, 'LineBranchID') or self._val(detail, 'Branch'),
-            'adt_LineBranchName': self._val(detail, 'LineBranchName'),
-            'adt_InventoryID': self._val(detail, 'LineInventoryID') or self._val(detail, 'InventoryID'),
-            'adt_LineNoteID': self._val(detail, 'LineNoteID'),
-            'adt_NoteID': self._val(detail, 'NoteID'),
-            'adt_Qty': self._val(detail, 'LineQty') or self._val(detail, 'Qty'),
-            'adt_TransactionDescription': self._val(detail, 'LineTransactionDescription') or self._val(detail, 'TransactionDescription'),
-            'adt_UOM': self._val(detail, 'LineUOM') or self._val(detail, 'UOM'),
-            'adt_Warehouse': self._val(detail, 'LineWarehouseID') or self._val(detail, 'Warehouse'),
+            'adt_id': detail.get('id') or _data.acumatica_value(detail, 'id'),
+            'adt_rowNumber': detail.get('rowNumber') or _data.acumatica_value(detail, 'rowNumber'),
+            'adt_note': _data.acumatica_value(detail, 'LineNote') or _data.acumatica_value(detail, 'Note'),
+            'adt_Branch': _data.acumatica_value(detail, 'LineBranchID') or _data.acumatica_value(detail, 'Branch'),
+            'adt_LineBranchName': _data.acumatica_value(detail, 'LineBranchName'),
+            'adt_InventoryID': _data.acumatica_value(detail, 'LineInventoryID') or _data.acumatica_value(detail, 'InventoryID'),
+            'adt_LineNoteID': _data.acumatica_value(detail, 'LineNoteID'),
+            'adt_NoteID': _data.acumatica_value(detail, 'NoteID'),
+            'adt_Qty': _data.acumatica_value(detail, 'LineQty') or _data.acumatica_value(detail, 'Qty'),
+            'adt_TransactionDescription': _data.acumatica_value(detail, 'LineTransactionDescription') or _data.acumatica_value(detail, 'TransactionDescription'),
+            'adt_UOM': _data.acumatica_value(detail, 'LineUOM') or _data.acumatica_value(detail, 'UOM'),
+            'adt_Warehouse': _data.acumatica_value(detail, 'LineWarehouseID') or _data.acumatica_value(detail, 'Warehouse'),
             'adt_external_id': header_id_id,
             # 'line_external_id': detail.get('id', '') or '',
             # 'line_note': detail.get('note', {}).get('value', '') or '',
@@ -564,42 +566,8 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
             required=False,
         )
 
-    def _normalize_rows(self, payload):
-        print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: _normalize_rows")
-        print("="*80)
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
     
-    def _val(self, item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            
-            # print("="*80)
-            # print(f"[DEBUG] MASUK proses formating: {value}")
-            # print("="*80)
-            
-            return value.get('value', '') or ''
-        # print(value)
-        return value or ''
     
-    @staticmethod
-    def _parse_dt(dt_str):
-        print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: _parse_dt")
-        print("="*80)
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
 
     def action_view_staging(self):

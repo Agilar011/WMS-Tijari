@@ -160,9 +160,9 @@ class AcumaticaErrorTransaction(models.Model):
         return update_data
 
     def _handle_acumatica_created(self, records):
-        """Create one Created/Updated log per staging record, without duplicates."""
+        """Create one Updated log per staging record, without duplicates."""
         for record in records:
-            if 'import_state' not in record._fields or record.import_state not in ('created', 'updated'):
+            if 'import_state' not in record._fields or record.import_state != 'updated':
                 continue
             name = self._get_transaction_name(record)
             log = self.search([

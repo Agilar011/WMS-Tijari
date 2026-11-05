@@ -1,6 +1,7 @@
 from odoo import models, fields
 from odoo.exceptions import UserError
-from dateutil import parser as dateutil_parser
+from ..utils import acumatica_data as _data
+
 
 
 class ImportReceiptWizard(models.TransientModel):
@@ -141,7 +142,7 @@ class ImportReceiptWizard(models.TransientModel):
                 raw_payload.get('PurchaseReceiptReturnGIDetails')
                 if isinstance(raw_payload, dict)
                 else None
-            ) or self._normalize_rows(raw_payload)
+            ) or _data.acumatica_rows(raw_payload)
             result = []
             detail_result = []
             seen_receipts = set()
@@ -296,7 +297,7 @@ class ImportReceiptWizard(models.TransientModel):
         if not type:
             type = None
             print("="*80)
-            print('Picking Type ID tidak ditemukan untuk warehouse code:', self._val(item, 'Warehouse'))
+            print('Picking Type ID tidak ditemukan untuk warehouse code:', _data.acumatica_value(item, 'Warehouse'))
 
         # header['picking_type_id'] = type.id if type else None        
         # print("Created header value")
@@ -305,64 +306,64 @@ class ImportReceiptWizard(models.TransientModel):
         return {
             'external_id': item.get('id', '') or '',
             'row_number': row_number,
-            'note': self._val(item, 'NoteHeader')  or '',
-            'note_header_id': self._val(item, 'NoteHeaderID'),
-            'branch_warehouse': self._val(item, 'Branch'),
-            'building_code': self._val(item, 'BuildingID'),
-            'change_item_ref_nbr': self._val(item, 'ChangeItemRefNbr'),
-            'customer_id': self._val(item, 'CustomerID'),
-            'customer_location_id': self._val(item, 'CustomerLocationID'),
-            'customer_location_name': self._val(item, 'CustomerLocationName'),
-            'customer_name': self._val(item, 'CustomerName'),
-            'actual_qty': self._val(item, 'ControlQty'),
-            'total_qty': self._val(item, 'TotalQty'),
-            'scheduled_date': self._val(item, 'Date'),
-            'warehouse_code': self._val(item, 'Warehouse') or self._val(item, 'LineWarehouseID'),
-            'header_location_code': self._val(item, 'Location'),
+            'note': _data.acumatica_value(item, 'NoteHeader')  or '',
+            'note_header_id': _data.acumatica_value(item, 'NoteHeaderID'),
+            'branch_warehouse': _data.acumatica_value(item, 'Branch'),
+            'building_code': _data.acumatica_value(item, 'BuildingID'),
+            'change_item_ref_nbr': _data.acumatica_value(item, 'ChangeItemRefNbr'),
+            'customer_id': _data.acumatica_value(item, 'CustomerID'),
+            'customer_location_id': _data.acumatica_value(item, 'CustomerLocationID'),
+            'customer_location_name': _data.acumatica_value(item, 'CustomerLocationName'),
+            'customer_name': _data.acumatica_value(item, 'CustomerName'),
+            'actual_qty': _data.acumatica_value(item, 'ControlQty'),
+            'total_qty': _data.acumatica_value(item, 'TotalQty'),
+            'scheduled_date': _data.acumatica_value(item, 'Date'),
+            'warehouse_code': _data.acumatica_value(item, 'Warehouse') or _data.acumatica_value(item, 'LineWarehouseID'),
+            'header_location_code': _data.acumatica_value(item, 'Location'),
             # 'external_ref': self._val(item, 'ExternalRef'),
-            'document_only': self._bool_val(item, 'DocumentOnly'),
-            'doc_type': self._val(item, 'DocType'),
-            'external_ref': self._val(item, 'ExternalRef'),
-            'is_hold': self._val(item, 'Hold'),
-            'inventory_ref': self._val(item, 'InventoryRefNbr'),
-            'acumatica_write_date': self._val(item, 'LastModifiedDateTime'),
-            'post_period': self._val(item, 'PostPeriod'),
-            'receipt_nbr': self._val(item, 'ReceiptNbr'),
-            'status': self._val(item, 'Status'),
+            'document_only': _data.acumatica_bool(item, 'DocumentOnly'),
+            'doc_type': _data.acumatica_value(item, 'DocType'),
+            'external_ref': _data.acumatica_value(item, 'ExternalRef'),
+            'is_hold': _data.acumatica_value(item, 'Hold'),
+            'inventory_ref': _data.acumatica_value(item, 'InventoryRefNbr'),
+            'acumatica_write_date': _data.acumatica_value(item, 'LastModifiedDateTime'),
+            'post_period': _data.acumatica_value(item, 'PostPeriod'),
+            'receipt_nbr': _data.acumatica_value(item, 'ReceiptNbr'),
+            'status': _data.acumatica_value(item, 'Status'),
             # 'total_amount': self._val(item, 'TotalAmount'),
             # 'total_qty': self._val(item, 'TotalQty'),
-            'receipt_type': self._val(item, 'Type'),
-            'trans_type': self._val(item, 'TransType'),
-            'shipment_nbr': self._val(item, 'ShipmentNbr'),
-            'transfer_nbr': self._val(item, 'TransferNbr'),
-            'vendor_code' : self._val(item, 'VendorID'),
-            'partner_ref' : self._val(item, 'VendorRef') or self._val(item, 'VendorName'),
-            'line_nbr': self._val(item, 'LineNumber') or self._val(item, 'LineNbr'),
-            'description': self._val(item, 'LineDescription') or self._val(item, 'LineInventoryName'),
-            'transaction_description': self._val(item, 'LineDescription') or self._val(item, 'LineInventoryName'),
-            'line_inventory_name': self._val(item, 'LineInventoryName'),
-            'line_location_name': self._val(item, 'LineLocationName'),
-            'line_note_id': self._val(item, 'LineNoteID'),
-            'inventory_id': self._val(item, 'LineInventoryID'),
-            'line_type': self._val(item, 'LineType'),
-            'location_dest_code': self._val(item, 'LineLocation'),
-            'open_qty': self._val(item, 'LineOpenQty'),
-            'order_qty': self._val(item, 'LineOrderedQty'),
-            'po_line_number': self._val(item, 'LinePOLineNbr'),
-            'po_number': self._val(item, 'LinePOOrderNbr'),
-            'po_type': self._val(item, 'LinePOOrderType') or self._val(item, 'Type'),
-            'po_receipt_line_number': self._val(item, 'LinePOReceiptLineNbr'),
-            'po_receipt_number': self._val(item, 'LinePOReceiptNbr'),
-            'product_uom_qty': self._val(item, 'LineQuantity') or self._val(item, 'LineReceiptQty'),
-            'transfer_order_line_number': self._val(item, 'LineTransferOrderLineNbr'),
-            'transfer_order_number': self._val(item, 'LineTransferOrderNbr'),
-            'transfer_order_type': self._val(item, 'LineTransferOrderType'),
-            'transfer_shipment_number': self._val(item, 'LineTransferShipmentNbr'),
-            'uom_code': self._val(item, 'LineUOM'),
-            'warehouse_code': self._val(item, 'LineWarehouse') or self._val(item, 'LineWarehouseID'),
-            'line_warehouse': self._val(item, 'LineWarehouse'),
-            'line_warehouse_name': self._val(item, 'LineWarehouseName'),
-            'warehouse_dest_code': self._val(item, 'LineWarehouseID') or self._val(item, 'LineWarehouse'),
+            'receipt_type': _data.acumatica_value(item, 'Type'),
+            'trans_type': _data.acumatica_value(item, 'TransType'),
+            'shipment_nbr': _data.acumatica_value(item, 'ShipmentNbr'),
+            'transfer_nbr': _data.acumatica_value(item, 'TransferNbr'),
+            'vendor_code' : _data.acumatica_value(item, 'VendorID'),
+            'partner_ref' : _data.acumatica_value(item, 'VendorRef') or _data.acumatica_value(item, 'VendorName'),
+            'line_nbr': _data.acumatica_value(item, 'LineNumber') or _data.acumatica_value(item, 'LineNbr'),
+            'description': _data.acumatica_value(item, 'LineDescription') or _data.acumatica_value(item, 'LineInventoryName'),
+            'transaction_description': _data.acumatica_value(item, 'LineDescription') or _data.acumatica_value(item, 'LineInventoryName'),
+            'line_inventory_name': _data.acumatica_value(item, 'LineInventoryName'),
+            'line_location_name': _data.acumatica_value(item, 'LineLocationName'),
+            'line_note_id': _data.acumatica_value(item, 'LineNoteID'),
+            'inventory_id': _data.acumatica_value(item, 'LineInventoryID'),
+            'line_type': _data.acumatica_value(item, 'LineType'),
+            'location_dest_code': _data.acumatica_value(item, 'LineLocation'),
+            'open_qty': _data.acumatica_value(item, 'LineOpenQty'),
+            'order_qty': _data.acumatica_value(item, 'LineOrderedQty'),
+            'po_line_number': _data.acumatica_value(item, 'LinePOLineNbr'),
+            'po_number': _data.acumatica_value(item, 'LinePOOrderNbr'),
+            'po_type': _data.acumatica_value(item, 'LinePOOrderType') or _data.acumatica_value(item, 'Type'),
+            'po_receipt_line_number': _data.acumatica_value(item, 'LinePOReceiptLineNbr'),
+            'po_receipt_number': _data.acumatica_value(item, 'LinePOReceiptNbr'),
+            'product_uom_qty': _data.acumatica_value(item, 'LineQuantity') or _data.acumatica_value(item, 'LineReceiptQty'),
+            'transfer_order_line_number': _data.acumatica_value(item, 'LineTransferOrderLineNbr'),
+            'transfer_order_number': _data.acumatica_value(item, 'LineTransferOrderNbr'),
+            'transfer_order_type': _data.acumatica_value(item, 'LineTransferOrderType'),
+            'transfer_shipment_number': _data.acumatica_value(item, 'LineTransferShipmentNbr'),
+            'uom_code': _data.acumatica_value(item, 'LineUOM'),
+            'warehouse_code': _data.acumatica_value(item, 'LineWarehouse') or _data.acumatica_value(item, 'LineWarehouseID'),
+            'line_warehouse': _data.acumatica_value(item, 'LineWarehouse'),
+            'line_warehouse_name': _data.acumatica_value(item, 'LineWarehouseName'),
+            'warehouse_dest_code': _data.acumatica_value(item, 'LineWarehouseID') or _data.acumatica_value(item, 'LineWarehouse'),
             'picking_type_id': type
 
             }
@@ -468,20 +469,20 @@ class ImportReceiptWizard(models.TransientModel):
         return {
             'header_external_id': header_id,
             'line_external_id': detail.get('id', '') or '',
-            'line_note': self._val(detail, 'LineNote') or '',
-            'line_note_id': self._val(detail, 'LineNoteID') or '',
-            'branch_warehouse': self._val(detail, 'LineBranch') or '',
-            'line_description': self._val(detail, 'LineDescription') or self._val(detail, 'LineInventoryName') or '',
-            'line_inventory_name': self._val(detail, 'LineInventoryName') or '',
-            'line_location_name': self._val(detail, 'LineLocationName') or '',
-            'inventory_id': self._val(detail, 'LineInventoryID') or '',
-            'line_nbr': self._val(detail, 'LineNumber') or self._val(detail, 'LineNbr'),
-            'location_code': self._val(detail, 'LineLocation') or '',
-            'order_qty': self._val(detail, 'LineOrderedQty') or '',
-            'product_uom_qty': self._val(detail, 'LineReceiptQty') or '',
-            'uom_code': self._val(detail, 'LineUOM') or '',
-            'warehouse_code': self._val(detail, 'LineWarehouse') or self._val(detail, 'LineWarehouseID') or '',
-            'line_warehouse_name': self._val(detail, 'LineWarehouseName') or '',
+            'line_note': _data.acumatica_value(detail, 'LineNote') or '',
+            'line_note_id': _data.acumatica_value(detail, 'LineNoteID') or '',
+            'branch_warehouse': _data.acumatica_value(detail, 'LineBranch') or '',
+            'line_description': _data.acumatica_value(detail, 'LineDescription') or _data.acumatica_value(detail, 'LineInventoryName') or '',
+            'line_inventory_name': _data.acumatica_value(detail, 'LineInventoryName') or '',
+            'line_location_name': _data.acumatica_value(detail, 'LineLocationName') or '',
+            'inventory_id': _data.acumatica_value(detail, 'LineInventoryID') or '',
+            'line_nbr': _data.acumatica_value(detail, 'LineNumber') or _data.acumatica_value(detail, 'LineNbr'),
+            'location_code': _data.acumatica_value(detail, 'LineLocation') or '',
+            'order_qty': _data.acumatica_value(detail, 'LineOrderedQty') or '',
+            'product_uom_qty': _data.acumatica_value(detail, 'LineReceiptQty') or '',
+            'uom_code': _data.acumatica_value(detail, 'LineUOM') or '',
+            'warehouse_code': _data.acumatica_value(detail, 'LineWarehouse') or _data.acumatica_value(detail, 'LineWarehouseID') or '',
+            'line_warehouse_name': _data.acumatica_value(detail, 'LineWarehouseName') or '',
         }
 
         
@@ -565,18 +566,18 @@ class ImportReceiptWizard(models.TransientModel):
         Location = self.env['stock.location.acumatica']
         warehouse_code = (
             header.get('warehouse_code')
-            or self._val(header, 'Warehouse')
-            or self._val(header, 'LineWarehouseID')
+            or _data.acumatica_value(header, 'Warehouse')
+            or _data.acumatica_value(header, 'LineWarehouseID')
         )
         # details = header.get('Details') or []
         document_only = header.get('document_only')
         if document_only is None:
-            document_only = self._bool_val(header, 'DocumentOnly')
+            document_only = _data.acumatica_bool(header, 'DocumentOnly')
 
         document_only_type = PickingType.resolve_document_only_picking_type(
             api_acumatica='issue_po_return',
             document_only=document_only,
-            warehouse_code=warehouse_code or self._val(header, 'Warehouse'),
+            warehouse_code=warehouse_code or _data.acumatica_value(header, 'Warehouse'),
         )
         if document_only_type:
             return document_only_type
@@ -611,55 +612,10 @@ class ImportReceiptWizard(models.TransientModel):
 
         return config_picking_type or PickingType.browse()
 
-    def _normalize_rows(self, payload):
-        print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: _normalize_rows")
-        print("="*80)
-        if isinstance(payload, list):
-            return payload
-        if isinstance(payload, dict):
-            if isinstance(payload.get('value'), list):
-                return payload.get('value')
-            if isinstance(payload.get('rows'), list):
-                return payload.get('rows')
-        return []
     
-    def _val(self, item, key):
-        value = item.get(key, {})
-        if isinstance(value, dict):
-            
-            # print("="*80)
-            # print(f"[DEBUG] MASUK proses formating: {value}")
-            # print("="*80)
-            
-            return value.get('value', '') or ''
-        # print(value)
-        return value or ''
 
-    @staticmethod
-    def _bool_value(value):
-        if isinstance(value, dict):
-            value = value.get('value')
-        if isinstance(value, bool):
-            return value
-        if value in (False, None, ''):
-            return False
-        return str(value).strip().lower() in ('true', '1', 'yes', 'y', 'document only')
 
-    def _bool_val(self, item, key):
-        return self._bool_value(item.get(key, {}))
     
-    @staticmethod
-    def _parse_dt(dt_str):
-        print("="*80)
-        print("[DEBUG] MASUK KE FUNGSI: _parse_dt")
-        print("="*80)
-        if not dt_str:
-            return False
-        try:
-            return dateutil_parser.parse(dt_str).replace(tzinfo=None)
-        except Exception:
-            return False
 
 
     def action_view_staging(self):
