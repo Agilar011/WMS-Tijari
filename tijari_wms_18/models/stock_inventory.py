@@ -56,6 +56,44 @@ class InventoryAdjustmentsGroup(models.Model):
         if not self.env.su and self._is_operator_only():
             raise AccessError(_('Warehouse Operator tidak memiliki akses untuk menghapus Adjustment Document.'))
         return super().unlink()
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        inventories = super().create(vals_list)
+        if 'responsible_id' in self._fields:
+            notifier = self.env['wms.assignment.notification.mixin']
+            empty_user_ids = {
+                inventory.id: {'responsible_id': set()}
+                for inventory in inventories
+            }
+            documents_by_user = notifier._group_new_responsible_users(
+                inventories, ['responsible_id'], empty_user_ids,
+            )
+            notifier._send_assignment_chat_notifications(documents_by_user)
+        return inventories
+
+    def write(self, vals):
+        should_notify = (
+            'responsible_id' in vals
+            and 'responsible_id' in self._fields
+            and not self.env.context.get('skip_assignment_chat_notification')
+        )
+        old_user_ids = {
+            inventory.id: {
+                'responsible_id': set(inventory.responsible_id.ids),
+            }
+            for inventory in self
+        } if should_notify else {}
+
+        result = super().write(vals)
+        if should_notify:
+            notifier = self.env['wms.assignment.notification.mixin']
+            documents_by_user = notifier._group_new_responsible_users(
+                self, ['responsible_id'], old_user_ids,
+            )
+            notifier._send_assignment_chat_notifications(documents_by_user)
+        return result
+
     def action_print_stok_opname(self):
         action = {}
         action['type'] = 'ir.actions.act_url'
