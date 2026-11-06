@@ -30,45 +30,29 @@ class AcumaticaInventoryStockGenerateWizard(models.TransientModel):
         if not mappings:
             raise UserError(_("Mapping yang dipilih belum memiliki Warehouse Code."))
 
-        ImportWizard = self.env["import.inventory.stock.wizard"].sudo()
+        Job = self.env["acumatica.inventory.stock.generate.job"].sudo()
+        queued = Job.browse()
         for mapping in mappings:
-            fetch_wizard = ImportWizard.create({
+            active_job = Job.search([
+                ("config_id", "=", config.id),
+                ("location_mapping_id", "=", mapping.id),
+                ("state", "in", ("queued", "running")),
+            ], limit=1)
+            queued |= active_job or Job.create({
                 "config_id": config.id,
-                "warehouse_value": mapping.code,
-                "inventory_id_value": (
-                    config.request_inventory_id_value
-                    if "request_inventory_id_value" in config._fields
-                    else False
-                ),
-                "odata_expand": config.odata_expand or "InventorySiteInquiryDetails",
-                "odata_top": (
-                    config.odata_top
-                    if "odata_top" in config._fields and config.odata_top
-                    else 0
-                ),
+                "location_mapping_id": mapping.id,
+                "requested_by_id": self.env.user.id,
             })
-            fetch_wizard.action_fetch_data()
+
+        cron = self.env.ref(
+            "acumatica_all_import.ir_cron_inventory_stock_generate_jobs",
+            raise_if_not_found=False,
+        )
+        if cron:
+            cron._trigger()
 
         action = self.env.ref(
-            "acumatica_all_import.action_acumatica_inventory_stock_quant"
+            "acumatica_all_import.action_inventory_stock_generate_job"
         ).sudo().read()[0]
-        mapped_locations = mappings.mapped("odoo_location_id")
-        mapped_locations |= mappings.mapped("odoo_building_id.lot_stock_id")
-        unmapped_codes = mappings.filtered(
-            lambda mapping: not mapping.odoo_location_id
-            and not mapping.odoo_building_id.lot_stock_id
-        ).mapped("code")
-
-        domain = [("config_id", "=", config.id)]
-        if mapped_locations and unmapped_codes:
-            domain.extend([
-                "|",
-                ("location_id", "in", mapped_locations.ids),
-                ("warehouse_code", "in", unmapped_codes),
-            ])
-        elif mapped_locations:
-            domain.append(("location_id", "in", mapped_locations.ids))
-        else:
-            domain.append(("warehouse_code", "in", unmapped_codes))
-        action["domain"] = domain
+        action["domain"] = [("id", "in", queued.ids)]
         return action

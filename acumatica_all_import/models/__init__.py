@@ -45,3 +45,4 @@ from . import acumatica_webhook_error_service
 
 from . import acumatica_shipment_transfer_completed
 from . import acumatica_inventory_adjustment_staging
+from . import acumatica_inventory_stock_generate_job
