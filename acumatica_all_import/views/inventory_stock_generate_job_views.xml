@@ -1,0 +1,76 @@
+<odoo>
+    <record id="view_inventory_stock_generate_job_search" model="ir.ui.view">
+        <field name="name">inventory.stock.generate.job.search</field>
+        <field name="model">acumatica.inventory.stock.generate.job</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="warehouse_code"/>
+                <field name="state"/>
+                <filter name="active_jobs" string="Active" domain="[('state', 'in', ('queued', 'running'))]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_by_state" string="Status" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_inventory_stock_generate_job_list" model="ir.ui.view">
+        <field name="name">inventory.stock.generate.job.list</field>
+        <field name="model">acumatica.inventory.stock.generate.job</field>
+        <field name="arch" type="xml">
+            <list create="false" delete="false" decoration-success="state == 'done'" decoration-danger="state == 'failed'" decoration-info="state in ('queued', 'running')">
+                <field name="warehouse_code"/>
+                <field name="state" widget="badge"/>
+                <field name="requested_by_id"/>
+                <field name="started_at"/>
+                <field name="finished_at"/>
+                <field name="total_fetched"/>
+                <field name="total_new"/>
+                <field name="total_updated"/>
+                <field name="attempt_count"/>
+                <field name="next_attempt_at" optional="hide"/>
+                <button name="action_retry" string="Retry" type="object" invisible="state != 'failed'"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_inventory_stock_generate_job_form" model="ir.ui.view">
+        <field name="name">inventory.stock.generate.job.form</field>
+        <field name="model">acumatica.inventory.stock.generate.job</field>
+        <field name="arch" type="xml">
+            <form create="false" delete="false">
+                <header>
+                    <button name="action_retry" string="Retry" type="object" class="btn-primary" invisible="state != 'failed'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="queued,running,done,failed"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="warehouse_code"/>
+                            <field name="location_mapping_id"/>
+                            <field name="config_id"/>
+                            <field name="requested_by_id"/>
+                        </group>
+                        <group>
+                            <field name="started_at"/>
+                            <field name="finished_at"/>
+                            <field name="total_fetched"/>
+                            <field name="total_new"/>
+                            <field name="total_updated"/>
+                            <field name="attempt_count"/>
+                            <field name="next_attempt_at"/>
+                        </group>
+                    </group>
+                    <field name="error_message" invisible="not error_message"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_inventory_stock_generate_job" model="ir.actions.act_window">
+        <field name="name">Inventory Stock Generate Jobs</field>
+        <field name="res_model">acumatica.inventory.stock.generate.job</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>
+

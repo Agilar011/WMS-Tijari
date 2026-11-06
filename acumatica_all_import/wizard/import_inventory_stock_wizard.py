@@ -164,18 +164,52 @@ class ImportInventoryStockWizard(models.TransientModel):
         if not raw_list:
             raise UserError('Tidak ada data yang diterima dari API Acumatica.')
 
-        Line = self.env['acumatica.inventory.stock.line']
+        Line = self.env['acumatica.inventory.stock.line'].sudo()
         new_count = 0
         existing_count = 0
         now = fields.Datetime.now()
 
+        # Read all possible matches once. The old implementation performed one
+        # SELECT (and often one INSERT) per API row, which is very expensive on
+        # a remote database for inventories containing thousands of lines.
+        # API UUIDs are not stable between calls. Warehouse + InventoryID is
+        # the business key of an InventorySiteInquiry detail and prevents a
+        # refresh from duplicating/summing the same stock a second time.
+        raw_by_key = {}
         for item in raw_list:
-            domain = [
-                ('config_id', '=', self.config_id.id),
-                ('external_id', '=', item.get('external_id', '') or ''),
-                ('line_external_id', '=', item.get('line_external_id', '') or ''),
-            ]
-            existing = Line.search(domain, limit=1)
+            key = (
+                item.get('warehouse_code', '') or self.warehouse_value or '',
+                item.get('inventory_id', '') or '',
+            )
+            if key[0] and key[1]:
+                raw_by_key[key] = item
+        raw_list = list(raw_by_key.values())
+        keys = set(raw_by_key)
+        warehouse_codes = list({key[0] for key in keys})
+        inventory_ids = list({key[1] for key in keys})
+        existing_records = Line.search([
+            ('config_id', '=', self.config_id.id),
+            ('warehouse_code', 'in', warehouse_codes),
+            ('inventory_id', 'in', inventory_ids),
+        ], order='id desc') if keys else Line.browse()
+        existing_by_key = {}
+        duplicate_records = Line.browse()
+        for line in existing_records:
+            key = (line.warehouse_code or '', line.inventory_id or '')
+            if key in existing_by_key:
+                duplicate_records |= line
+            else:
+                existing_by_key[key] = line
+        if duplicate_records:
+            duplicate_records.unlink()
+        create_vals = []
+
+        for item in raw_list:
+            key = (
+                item.get('warehouse_code', '') or self.warehouse_value or '',
+                item.get('inventory_id', '') or '',
+            )
+            existing = existing_by_key.get(key)
             vals = dict(item)
             vals.update({
                 'config_id': self.config_id.id,
@@ -189,8 +223,14 @@ class ImportInventoryStockWizard(models.TransientModel):
                 existing.write(vals)
                 existing_count += 1
             else:
-                Line.create(vals)
+                create_vals.append(vals)
                 new_count += 1
+
+        # ORM multi-create lets PostgreSQL handle the insert in batches rather
+        # than paying a network round-trip for every line.
+        batch_size = max(self.batch_size or 500, 100)
+        for offset in range(0, len(create_vals), batch_size):
+            Line.create(create_vals[offset:offset + batch_size])
 
         self.write({
             'state': 'fetched',
