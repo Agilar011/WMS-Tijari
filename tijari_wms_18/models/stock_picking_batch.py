@@ -265,12 +265,12 @@ class StockPickingBatch(models.Model):
             lambda move: move.state != 'cancel' and bool(move.product_id)
         )
 
-    @api.depends('move_ids.product_id', 'move_ids.state')
+    @api.depends('picking_ids.move_ids.product_id', 'picking_ids.move_ids.state')
     def _compute_allowed_unpacked_product_ids(self):
         for batch in self:
             batch.allowed_unpacked_product_ids = batch._get_unpacked_base_moves().product_id
 
-    @api.depends('move_ids.move_line_ids.lot_id', 'move_ids.move_line_ids.lot_name')
+    @api.depends('picking_ids.move_ids.move_line_ids.lot_id', 'picking_ids.move_ids.move_line_ids.lot_name')
     def _compute_allowed_unpacked_lot_ids(self):
         for batch in self:
             lines = batch._get_unpacked_base_moves().mapped('move_line_ids')
@@ -286,8 +286,8 @@ class StockPickingBatch(models.Model):
 
     @api.depends(
         'unpacked_product_id', 'unpacked_lot_id', 'unpacked_lot_code',
-        'move_ids.product_id', 'move_ids.state', 'move_ids.move_line_ids.lot_id',
-        'move_ids.move_line_ids.lot_name',
+        'picking_ids.move_ids.product_id', 'picking_ids.move_ids.state', 'picking_ids.move_ids.move_line_ids.lot_id',
+        'picking_ids.move_ids.move_line_ids.lot_name',
     )
     def _compute_filtered_unpacked_move_ids(self):
         for batch in self:
@@ -662,14 +662,14 @@ class StockPickingBatch(models.Model):
         return self.move_ids.move_line_ids
 
     @api.depends(
-        'move_ids',
-        'move_ids.product_id',
-        'move_ids.move_line_ids',
-        'move_ids.move_line_ids.product_id',
-        'move_ids.move_line_ids.lot_id',
-        'move_ids.move_line_ids.quantity',
-        'move_ids.move_line_ids.confirmation_quantity',
-        'move_ids.move_line_ids.picker_status',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.product_id',
+        'picking_ids.move_ids.move_line_ids',
+        'picking_ids.move_ids.move_line_ids.product_id',
+        'picking_ids.move_ids.move_line_ids.lot_id',
+        'picking_ids.move_ids.move_line_ids.quantity',
+        'picking_ids.move_ids.move_line_ids.confirmation_quantity',
+        'picking_ids.move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_product_ids(self):
         for batch in self:
@@ -678,14 +678,14 @@ class StockPickingBatch(models.Model):
     @api.depends(
         'putaway_product_id',
         'putaway_lot_id',
-        'move_ids',
-        'move_ids.move_line_ids',
-        'move_ids.move_line_ids.product_id',
-        'move_ids.move_line_ids.lot_id',
-        'move_ids.move_line_ids.lot_name',
-        'move_ids.move_line_ids.quantity',
-        'move_ids.move_line_ids.confirmation_quantity',
-        'move_ids.move_line_ids.picker_status',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.move_line_ids',
+        'picking_ids.move_ids.move_line_ids.product_id',
+        'picking_ids.move_ids.move_line_ids.lot_id',
+        'picking_ids.move_ids.move_line_ids.lot_name',
+        'picking_ids.move_ids.move_line_ids.quantity',
+        'picking_ids.move_ids.move_line_ids.confirmation_quantity',
+        'picking_ids.move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_lot_ids(self):
         for batch in self:
@@ -694,13 +694,13 @@ class StockPickingBatch(models.Model):
     @api.depends(
         'putaway_product_id',
         'putaway_lot_id',
-        'move_ids',
-        'move_ids.move_line_ids',
-        'move_ids.move_line_ids.product_id',
-        'move_ids.move_line_ids.lot_id',
-        'move_ids.move_line_ids.quantity',
-        'move_ids.move_line_ids.confirmation_quantity',
-        'move_ids.move_line_ids.picker_status',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.move_line_ids',
+        'picking_ids.move_ids.move_line_ids.product_id',
+        'picking_ids.move_ids.move_line_ids.lot_id',
+        'picking_ids.move_ids.move_line_ids.quantity',
+        'picking_ids.move_ids.move_line_ids.confirmation_quantity',
+        'picking_ids.move_ids.move_line_ids.picker_status',
     )
     def _compute_allowed_putaway_move_line_ids(self):
         for batch in self:
@@ -709,13 +709,13 @@ class StockPickingBatch(models.Model):
     @api.depends(
         'putaway_product_id',
         'putaway_lot_id',
-        'move_ids',
-        'move_ids.move_line_ids',
-        'move_ids.move_line_ids.product_id',
-        'move_ids.move_line_ids.lot_id',
-        'move_ids.move_line_ids.quantity',
-        'move_ids.move_line_ids.confirmation_quantity',
-        'move_ids.move_line_ids.picker_status',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.move_line_ids',
+        'picking_ids.move_ids.move_line_ids.product_id',
+        'picking_ids.move_ids.move_line_ids.lot_id',
+        'picking_ids.move_ids.move_line_ids.quantity',
+        'picking_ids.move_ids.move_line_ids.confirmation_quantity',
+        'picking_ids.move_ids.move_line_ids.picker_status',
     )
     def _compute_putaway_values(self):
         for batch in self:
@@ -725,17 +725,17 @@ class StockPickingBatch(models.Model):
     @api.depends(
         'putaway_product_id',
         'putaway_lot_id',
-        'move_ids',
-        'move_ids.product_id',
-        'move_ids.state',
-        'move_ids.putaway_sequence',
-        'move_ids.move_line_ids',
-        'move_ids.move_line_ids.lot_id',
-        'move_ids.move_line_ids.lot_name',
-        'move_ids.move_line_ids.quantity',
-        'move_ids.move_line_ids.confirmation_quantity',
-        'move_ids.move_line_ids.picker_status',
-        'move_ids.move_line_ids.putaway_status',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.product_id',
+        'picking_ids.move_ids.state',
+        'picking_ids.move_ids.putaway_sequence',
+        'picking_ids.move_ids.move_line_ids',
+        'picking_ids.move_ids.move_line_ids.lot_id',
+        'picking_ids.move_ids.move_line_ids.lot_name',
+        'picking_ids.move_ids.move_line_ids.quantity',
+        'picking_ids.move_ids.move_line_ids.confirmation_quantity',
+        'picking_ids.move_ids.move_line_ids.picker_status',
+        'picking_ids.move_ids.move_line_ids.putaway_status',
     )
     def _compute_putaway_move_ids(self):
         for batch in self:
@@ -744,14 +744,14 @@ class StockPickingBatch(models.Model):
     @api.depends(
         'putaway_product_id',
         'putaway_lot_id',
-        'move_ids',
-        'move_ids.move_line_ids',
-        'move_ids.move_line_ids.product_id',
-        'move_ids.move_line_ids.lot_id',
-        'move_ids.move_line_ids.lot_name',
-        'move_ids.move_line_ids.quantity',
-        'move_ids.move_line_ids.confirmation_quantity',
-        'move_ids.move_line_ids.picker_status',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.move_line_ids',
+        'picking_ids.move_ids.move_line_ids.product_id',
+        'picking_ids.move_ids.move_line_ids.lot_id',
+        'picking_ids.move_ids.move_line_ids.lot_name',
+        'picking_ids.move_ids.move_line_ids.quantity',
+        'picking_ids.move_ids.move_line_ids.confirmation_quantity',
+        'picking_ids.move_ids.move_line_ids.picker_status',
     )
     def _compute_putaway_qty_finish(self):
         for batch in self:
@@ -760,9 +760,9 @@ class StockPickingBatch(models.Model):
             )
 
     @api.depends(
-        'move_ids',
-        'move_ids.product_id',
-        'move_ids.state',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.product_id',
+        'picking_ids.move_ids.state',
     )
     def _compute_allowed_picker_product_ids(self):
         for batch in self:
@@ -770,12 +770,12 @@ class StockPickingBatch(models.Model):
 
     @api.depends(
         'picker_product_id',
-        'move_ids',
-        'move_ids.product_id',
-        'move_ids.state',
-        'move_ids.lot_ids',
-        'move_ids.move_line_ids.lot_id',
-        'move_ids.move_line_ids.lot_name',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.product_id',
+        'picking_ids.move_ids.state',
+        'picking_ids.move_ids.lot_ids',
+        'picking_ids.move_ids.move_line_ids.lot_id',
+        'picking_ids.move_ids.move_line_ids.lot_name',
     )
     def _compute_allowed_picker_lot_ids(self):
         for batch in self:
@@ -786,11 +786,11 @@ class StockPickingBatch(models.Model):
         'picker_lot_id',
         'picker_sort_by_location',
         'picker_sort_by_product',
-        'move_ids',
-        'move_ids.product_id',
-        'move_ids.location_id',
-        'move_ids.state',
-        'move_ids.pick_status_sequence',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.product_id',
+        'picking_ids.move_ids.location_id',
+        'picking_ids.move_ids.state',
+        'picking_ids.move_ids.pick_status_sequence',
     )
     def _compute_picker_values(self):
         for batch in self:
@@ -798,10 +798,10 @@ class StockPickingBatch(models.Model):
 
     @api.depends(
         'picker_product_id', 'picker_lot_id', 'picker_sort_by_location',
-        'picker_sort_by_product', 'move_ids.move_line_ids',
-        'move_ids.move_line_ids.product_id', 'move_ids.move_line_ids.lot_id',
-        'move_ids.move_line_ids.lot_name', 'move_ids.move_line_ids.pick_status',
-        'move_ids.move_line_ids.location_id', 'move_ids.move_line_ids.quantity',
+        'picker_sort_by_product', 'picking_ids.move_ids.move_line_ids',
+        'picking_ids.move_ids.move_line_ids.product_id', 'picking_ids.move_ids.move_line_ids.lot_id',
+        'picking_ids.move_ids.move_line_ids.lot_name', 'picking_ids.move_ids.move_line_ids.pick_status',
+        'picking_ids.move_ids.move_line_ids.location_id', 'picking_ids.move_ids.move_line_ids.quantity',
     )
     def _compute_picker_move_line_values(self):
         for batch in self:
@@ -810,10 +810,10 @@ class StockPickingBatch(models.Model):
     @api.depends(
         'picker_product_id',
         'picker_lot_id',
-        'move_ids',
-        'move_ids.product_id',
-        'move_ids.quantity',
-        'move_ids.state',
+        'picking_ids.move_ids',
+        'picking_ids.move_ids.product_id',
+        'picking_ids.move_ids.quantity',
+        'picking_ids.move_ids.state',
     )
     def _compute_picker_qty_finish(self):
         for batch in self:

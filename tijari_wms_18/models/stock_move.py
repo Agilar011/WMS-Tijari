@@ -700,9 +700,9 @@ class StockMove(models.Model):
 
     def action_generate_lot(self):
         for move in self:
-            print(move.product_id)
-            print(move.product_uom)
-            print(move.product_id.uom_id)
+            pass  # debug print removed for performance
+            pass  # debug print removed for performance
+            pass  # debug print removed for performance
             move.move_line_ids.generate_lot()
 
     @api.onchange("move_line_ids")
@@ -773,7 +773,7 @@ class StockMove(models.Model):
                 line._compute_auto_input_code()
                 
     def action_validate_lot(self):
-        print('action_validate_lot')
+        pass  # debug print removed for performance
 
         for move in self:
             picking_type = move.picking_id.picking_type_id
@@ -795,7 +795,7 @@ class StockMove(models.Model):
                 self._check_match_status()
 
     def _check_match_status(self):
-        print('_check_match_status')
+        pass  # debug print removed for performance
         for move in self.move_line_ids:
             move.matching = move._get_matching_status()
 
@@ -856,7 +856,7 @@ class StockMove(models.Model):
     def _get_new_picking_values(self):
         vals = super()._get_new_picking_values()
 
-        print("_get_new_picking_values")
+        pass  # debug print removed for performance
 
         origin_picking = (
             self.move_orig_ids
@@ -868,15 +868,15 @@ class StockMove(models.Model):
             vals['origin'] = origin_picking.origin
 
         for item in self:
-            print("move:", item)
-            print("move adt_type:", item.adt_type)
-            print("move transaction_type:", item.transaction_type)
-            print("vals before:", vals)
+            pass  # debug print removed for performance
+            pass  # debug print removed for performance
+            pass  # debug print removed for performance
+            pass  # debug print removed for performance
 
             vals['adt_type'] = item.adt_type
             vals['transaction_type'] = item.transaction_type
 
-            print("vals after:", vals)
+            pass  # debug print removed for performance
 
         # Carry pick/pack/do responsible + user_ids forward from the
         # predecessor transfer(s) onto this brand-new transfer, so users
@@ -1422,8 +1422,8 @@ class StockMove(models.Model):
         }        
 
     def _action_confirm(self, merge=True, merge_into=False):
-        _logger.warning("=== CUSTOM _action_confirm ===")
-        _logger.warning("SELF: %s", self.ids)
+        _logger.debug("=== CUSTOM _action_confirm ===")
+        _logger.debug("SELF: %s", self.ids)
 
         moves_no_merge = self.filtered(
             lambda m: m.picking_id
@@ -1435,8 +1435,8 @@ class StockMove(models.Model):
 
         moves_normal = self - moves_no_merge
 
-        _logger.warning("MOVES NO MERGE: %s", moves_no_merge.ids)
-        _logger.warning("MOVES NORMAL: %s", moves_normal.ids)
+        _logger.debug("MOVES NO MERGE: %s", moves_no_merge.ids)
+        _logger.debug("MOVES NORMAL: %s", moves_normal.ids)
 
         res = self.browse()
 
@@ -1451,7 +1451,7 @@ class StockMove(models.Model):
                 merge=False,
                 merge_into=False
             )
-        _logger.warning("RESULT: %s", res.ids)
+        _logger.debug("RESULT: %s", res.ids)
         return res
 
     def _should_assign_at_confirm(self):

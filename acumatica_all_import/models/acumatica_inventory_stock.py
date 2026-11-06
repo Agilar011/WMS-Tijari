@@ -115,68 +115,133 @@ class AcumaticaInventoryStockLine(models.Model):
 
     @api.depends('inventory_id', 'warehouse_code', 'description', 'on_hand_acumatica')
     def _compute_stock_snapshot(self):
-        Quant = self.env['stock.quant']
-        Product = self.env['product.product']
+        Product = self.env['product.product'].sudo()
+        Mapping = self.env['stock.location.acumatica'].sudo()
+        Location = self.env['stock.location'].sudo()
+        Quant = self.env['stock.quant'].sudo()
+
+        inventory_ids = list({value for value in self.mapped('inventory_id') if value})
+        descriptions = list({value for value in self.mapped('description') if value})
+        warehouse_codes = list({value for value in self.mapped('warehouse_code') if value})
+
+        product_domain = []
+        if inventory_ids and descriptions:
+            product_domain = [
+                '|', '|',
+                ('default_code', 'in', inventory_ids),
+                ('barcode', 'in', inventory_ids),
+                ('name', 'in', descriptions),
+            ]
+        elif inventory_ids:
+            product_domain = [
+                '|', ('default_code', 'in', inventory_ids),
+                ('barcode', 'in', inventory_ids),
+            ]
+        elif descriptions:
+            product_domain = [('name', 'in', descriptions)]
+
+        products = Product.search(product_domain, order='id') if product_domain else Product.browse()
+        product_by_code = {}
+        product_by_name = {}
+        for product in products:
+            if product.default_code:
+                product_by_code.setdefault(product.default_code, product)
+            if product.barcode:
+                product_by_code.setdefault(product.barcode, product)
+            if product.name:
+                product_by_name.setdefault(product.name, product)
+
+        mappings = Mapping.search([
+            ('code', 'in', warehouse_codes), ('active', '=', True),
+        ], order='id') if warehouse_codes else Mapping.browse()
+        mapping_by_code = {}
+        location_by_code = {}
+        for mapping in mappings:
+            mapping_by_code.setdefault(mapping.code, mapping)
+            location = mapping.odoo_location_id or mapping.odoo_building_id.lot_stock_id
+            if location:
+                location_by_code.setdefault(mapping.code, location)
+
+        # Resolve descendants once per root location and aggregate all relevant
+        # quants in one query. The former implementation searched products,
+        # mappings and quants separately for every imported line.
+        root_locations = Location.browse(list({loc.id for loc in location_by_code.values()}))
+        descendants_by_root = {}
+        all_descendant_ids = set()
+        for root in root_locations:
+            descendant_ids = set(Location.search([('id', 'child_of', root.id)]).ids)
+            descendants_by_root[root.id] = descendant_ids
+            all_descendant_ids.update(descendant_ids)
+
+        product_ids = products.ids
+        quant_totals = {}
+        if product_ids and all_descendant_ids:
+            groups = Quant.read_group(
+                [
+                    ('product_id', 'in', product_ids),
+                    ('location_id', 'in', list(all_descendant_ids)),
+                ],
+                ['product_id', 'location_id', 'quantity:sum', 'reserved_quantity:sum'],
+                ['product_id', 'location_id'],
+                lazy=False,
+            )
+            by_product_location = {
+                (group['product_id'][0], group['location_id'][0]): (
+                    group.get('quantity', 0.0) or 0.0,
+                    group.get('reserved_quantity', 0.0) or 0.0,
+                )
+                for group in groups
+                if group.get('product_id') and group.get('location_id')
+            }
+            for root in root_locations:
+                descendant_ids = descendants_by_root[root.id]
+                for product in products:
+                    quantity = 0.0
+                    reserved = 0.0
+                    for location_id in descendant_ids:
+                        values = by_product_location.get((product.id, location_id))
+                        if values:
+                            quantity += values[0]
+                            reserved += values[1]
+                    if quantity or reserved:
+                        quant_totals[(product.id, root.id)] = (quantity, reserved)
 
         for rec in self:
-            product = False
-            location = False
-            mapping = self.env['stock.location.acumatica'].browse()
-            match_status = 'error'
-            odoo_on_hand = 0.0
-            odoo_reserved = 0.0
-
-            if rec.inventory_id:
-                product = Product.search([
-                    '|',
-                    ('default_code', '=', rec.inventory_id),
-                    ('barcode', '=', rec.inventory_id),
-                ], limit=1)
-                if not product:
-                    product = Product.search([('name', '=', rec.description)], limit=1) if rec.description else False
-
-            if rec.warehouse_code:
-                mapping, location = rec._get_mapped_location()
+            product = product_by_code.get(rec.inventory_id) or product_by_name.get(rec.description)
+            mapping = mapping_by_code.get(rec.warehouse_code)
+            location = location_by_code.get(rec.warehouse_code)
+            on_hand = 0.0
+            reserved = 0.0
 
             rec.odoo_product_id = product.id if product else False
             rec.odoo_location_id = location.id if location else False
             rec.location_mapping_id = mapping.id if mapping else False
             rec.exists_in_odoo = bool(product and location)
-            rec.odoo_on_hand = 0.0
-            rec.odoo_quantity = 0.0
-            rec.odoo_reserved_quantity = 0.0
-            rec.odoo_available_quantity = 0.0
-            rec.stock_difference = rec.on_hand_acumatica
+
+            if product and location:
+                on_hand, reserved = quant_totals.get((product.id, location.id), (0.0, 0.0))
+
+            rec.odoo_on_hand = on_hand
+            rec.odoo_quantity = on_hand
+            rec.odoo_reserved_quantity = reserved
+            rec.odoo_available_quantity = on_hand - reserved
+            rec.stock_difference = rec.on_hand_acumatica - on_hand
 
             if not product:
                 rec.match_status = 'missing_product'
-                continue
-            if not location:
+            elif not location:
                 rec.match_status = 'missing_location'
-                continue
-
-            try:
-                odoo_on_hand = Quant._get_available_quantity(product, location, strict=False)
-                quants = Quant.search([
-                    ('product_id', '=', product.id),
-                    ('location_id', 'child_of', location.id),
-                ])
-                odoo_reserved = sum(quants.mapped('reserved_quantity'))
-            except Exception:
-                odoo_on_hand = 0.0
-                odoo_reserved = 0.0
-
-            rec.odoo_on_hand = odoo_on_hand
-            rec.odoo_quantity = odoo_on_hand
-            rec.odoo_reserved_quantity = odoo_reserved
-            rec.odoo_available_quantity = odoo_on_hand - odoo_reserved
-            rec.stock_difference = rec.on_hand_acumatica - odoo_on_hand
-            precision = product.uom_id.rounding if product.uom_id else 0.01
-            if float_compare(rec.on_hand_acumatica, odoo_on_hand, precision_rounding=precision) == 0:
-                match_status = 'match'
             else:
-                match_status = 'not_match'
-            rec.match_status = match_status
+                precision = product.uom_id.rounding if product.uom_id else 0.01
+                rec.match_status = (
+                    'match'
+                    if float_compare(
+                        rec.on_hand_acumatica,
+                        on_hand,
+                        precision_rounding=precision,
+                    ) == 0
+                    else 'not_match'
+                )
 
     def action_select_all(self):
         self.search([('import_state', '=', 'staged')]).write({'selected': True})
