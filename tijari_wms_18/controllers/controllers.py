@@ -22,6 +22,16 @@ import qrcode
 import io
 import base64
 
+def _wms_http_post(*args, **kwargs):
+    import requests
+    kwargs.setdefault("timeout", (5, 60))
+    return requests.post(*args, **kwargs)
+
+def _wms_http_get(*args, **kwargs):
+    import requests
+    kwargs.setdefault("timeout", (5, 60))
+    return requests.get(*args, **kwargs)
+
 def create_blank_image():
     blank_image = Image.new(mode="RGB", size=(200, 200), color=(255, 255, 255))
     img_bytes = io.BytesIO()
@@ -123,7 +133,7 @@ def generate_stok_opname_pdf(stock):
     data = json.dumps(data)
     usrnm = 'jasperadmin'
     psswd = 't1j4r1s0lut10n'
-    execution = requests.post(
+    execution = _wms_http_post(
         'http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
         auth=('jasperadmin', 't1j4r1s0lut10n'),
         json={
@@ -137,7 +147,7 @@ def generate_stok_opname_pdf(stock):
     xml = etree.XML(execution.content)
     request_id = xml.find('.//requestId').text
     export_id = xml.find('.//export//id').text
-    result = requests.get(
+    result = _wms_http_get(
         'http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/'
         f'{request_id}/exports/{export_id}/outputResource',
         cookies=execution.cookies,
@@ -615,7 +625,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/Penerimaan_Barang',
@@ -633,7 +643,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "warehouse_receipt.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -671,7 +681,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/Lot_line_list',
@@ -689,7 +699,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "warehouse_receipt.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -744,7 +754,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/Lot_line',
@@ -762,7 +772,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "warehouse_receipt.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -818,7 +828,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/PACKING_LIST',
@@ -836,7 +846,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "PACKING_LIST.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -871,7 +881,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 # 'reportUnitUri': '/Odoo/ADITYA/Lot_package',
@@ -890,7 +900,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "PACKING_LIST.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -963,7 +973,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_STOCK_OPNAME',
@@ -981,7 +991,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "Stok Opname.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -1035,7 +1045,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_SCRAP_ORDER',
@@ -1053,7 +1063,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "stok_scrab.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -1135,7 +1145,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/BERITA_ACARA_HASIL_MANUFACTURING',
@@ -1153,7 +1163,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "berita_acara_hasil_manufacturing.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except Exception:
@@ -1224,7 +1234,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/warehouse_pick',
@@ -1242,7 +1252,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "warehouse_receipt.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -1313,7 +1323,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/warehouse_pack',
@@ -1331,7 +1341,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "warehouse_pack.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -1402,7 +1412,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/warehouse_pack',
@@ -1420,7 +1430,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "warehouse_transfer.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
@@ -1505,7 +1515,7 @@ class WmsApiController(http.Controller):
         usrnm = 'jasperadmin'
         psswd = 't1j4r1s0lut10n'
         import requests
-        execution = requests.post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
+        execution = _wms_http_post('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions',
             auth=(usrnm, psswd),
             json={
                 'reportUnitUri': '/Odoo/ADITYA/Delivery_Slip_Pack_',
@@ -1523,7 +1533,7 @@ class WmsApiController(http.Controller):
         try:
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
-            result = requests.get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
+            result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
             filename = "Delivery_Slip_Pack.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:

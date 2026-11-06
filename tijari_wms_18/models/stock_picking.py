@@ -791,6 +791,53 @@ class StockPicking(models.Model):
                     )
                 )
 
+    def _find_import_staging_by_picking(self, staging_models):
+        """Return the first linked staging record per picking in model order.
+
+        A single UNION replaces the former model-by-model searches.  This is
+        especially important with remote AlloyDB, where even an empty lookup
+        has a network cost.
+        """
+        picking_ids = self.ids
+        if not picking_ids:
+            return {}
+        union_parts = []
+        params = []
+        model_by_name = {}
+        for priority, model_name in enumerate(staging_models):
+            if model_name not in self.env.registry.models:
+                continue
+            Model = self.env[model_name]
+            field = Model._fields.get('odoo_picking_id')
+            table = Model._table
+            column = field.name if field and field.store else None
+            if not column or not all(
+                re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', value)
+                for value in (table, column)
+            ):
+                continue
+            model_by_name[model_name] = Model
+            union_parts.append(
+                f'SELECT %s::integer AS priority, %s::text AS model_name, '
+                f'"id" AS staging_id, "{column}" AS picking_id '
+                f'FROM "{table}" WHERE "{column}" = ANY(%s)'
+            )
+            params.extend([priority, model_name, picking_ids])
+        if not union_parts:
+            return {}
+        self.env.cr.execute(
+            'SELECT priority, model_name, staging_id, picking_id FROM ('
+            + ' UNION ALL '.join(union_parts)
+            + ') AS linked_staging ORDER BY priority, staging_id',
+            params,
+        )
+        result = {}
+        for _priority, model_name, staging_id, picking_id in self.env.cr.fetchall():
+            result.setdefault(
+                picking_id, model_by_name[model_name].browse(staging_id)
+            )
+        return result
+
     def write(self, vals):
         import_audit_fields = {
             field_name for field_name in vals
@@ -878,17 +925,11 @@ class StockPicking(models.Model):
                 'acumatica.shipment.completed.staging',
                 'acumatica.sales.order.shipment.staging',
             )
+            staging_by_picking = self._find_import_staging_by_picking(
+                staging_models
+            )
             for picking in self:
-                staging = self.env['acumatica.import.log.mixin'].browse()
-                for model_name in staging_models:
-                    try:
-                        model = self.env[model_name]
-                    except KeyError:
-                        continue
-                    if model and 'odoo_picking_id' in model._fields:
-                        staging = model.search([('odoo_picking_id', '=', picking.id)], limit=1)
-                        if staging:
-                            break
+                staging = staging_by_picking.get(picking.id)
                 if not staging or not hasattr(staging, '_acumatica_post_import_log'):
                     continue
                 changed_fields = []
@@ -1017,22 +1058,49 @@ class StockPicking(models.Model):
             ('acumatica.receipt.external.line', 'reference_nbr', 'document_only'),
             ('acumatica.toko.pegang.do.line', 'reference_nbr', 'document_only'),
         ]
-        for picking in self:
-            if picking.adt_is_document_only or not picking.origin:
-                continue
-            is_document_only = False
+        candidates = self.filtered(
+            lambda picking: not picking.adt_is_document_only and picking.origin
+        )
+        document_only_origins = set()
+        origins = list(set(candidates.mapped('origin')))
+        if origins:
+            # The old implementation issued one ORM search for every staging
+            # model and every picking.  These are fixed internal model/field
+            # names, so one UNION query preserves the same existence check
+            # while avoiding a long chain of network round trips to AlloyDB.
+            union_parts = []
+            params = []
+            accepted_values = ['true', '1', 'yes', 'y', 'document only']
             for model_name, reference_field, document_field in staging_specs:
                 if model_name not in self.env.registry.models:
                     continue
                 Model = self.env[model_name].sudo()
                 if reference_field not in Model._fields or document_field not in Model._fields:
                     continue
-                staging = Model.search([(reference_field, '=', picking.origin)], limit=1)
-                if staging and self._document_only_value(staging[document_field]):
-                    is_document_only = True
-                    break
-            if is_document_only:
-                picking.sudo().with_context(skip_document_only_sync=True).write({'adt_is_document_only': True})
+                table = Model._table
+                reference_column = Model._fields[reference_field].name
+                document_column = Model._fields[document_field].name
+                identifiers = (table, reference_column, document_column)
+                if not all(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', value) for value in identifiers):
+                    continue
+                union_parts.append(
+                    f'SELECT "{reference_column}"::text AS origin '
+                    f'FROM "{table}" '
+                    f'WHERE "{reference_column}" = ANY(%s) '
+                    f'AND lower(trim("{document_column}"::text)) = ANY(%s)'
+                )
+                params.extend([origins, accepted_values])
+            if union_parts:
+                self.env.cr.execute(' UNION ALL '.join(union_parts), params)
+                document_only_origins = {row[0] for row in self.env.cr.fetchall()}
+
+        to_mark = candidates.filtered(
+            lambda picking: picking.origin in document_only_origins
+        )
+        if to_mark:
+            to_mark.sudo().with_context(skip_document_only_sync=True).write({
+                'adt_is_document_only': True,
+            })
         self._set_document_only_picking_type()
 
     def _get_document_only_operation(self):
@@ -2016,11 +2084,11 @@ class StockPicking(models.Model):
         # print("=" * 100)
         # print("CREATE PICKING")
         # traceback.print_stack(limit=15)        
-        print('=' * 100)
-        print("@api.model_create_multi")
+        pass  # debug print removed for performance
+        pass  # debug print removed for performance
 
-        print(f"Self: {self}")
-        print(f"Vals List: {vals_list}")
+        pass  # debug print removed for performance
+        pass  # debug print removed for performance
 
         # Karena vals_list adalah sebuah LIST, kita harus melakukan looping
         # for vals in vals_list:
@@ -2048,18 +2116,21 @@ class StockPicking(models.Model):
             if self._get_responsible_carry_over_fields_set() & set(vals):
                 picking._propagate_responsible_to_next_transfers()
 
-            picking.with_context(
-                mail_create_nosubscribe=True,
-                mail_post_autofollow=False,
-            ).message_post(
-                body=f"{description} created",
-                message_type='notification',
-                subtype_xmlid='mail.mt_note',
-            )
+            # Avoid creating an empty "created" chatter message for generic
+            # pickings. Imported documents still keep the useful ADT message.
+            if description:
+                picking.with_context(
+                    mail_create_nosubscribe=True,
+                    mail_post_autofollow=False,
+                ).message_post(
+                    body=f"{description} created",
+                    message_type='notification',
+                    subtype_xmlid='mail.mt_note',
+                )
             
         pickings._set_acumatica_document_only_flag()
         pickings._set_document_only_picking_type()
-        print(pickings)
+        pass  # debug print removed for performance
         return pickings
 
 
@@ -2192,7 +2263,7 @@ class StockPicking(models.Model):
     #     return super().action_confirm()
     
     def action_confirm(self):
-        _logger.info(">>> action_confirm CALLED %s", self.ids)
+        _logger.debug(">>> action_confirm CALLED %s", self.ids)
         # for picking in self:
         #     if (
         #         picking.picking_type_name == 'Internal Transfers'
@@ -2250,21 +2321,26 @@ class StockPicking(models.Model):
             if active_moves:
                 receipt.action_assign()
         
-        for picking in self:
-                    for move in picking.move_ids:
-                        for line in move.move_line_ids:
-                            print(line)
-                            if line.lot_id:
-                                print(line.lot_id)
-                                print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
-                                line.write({
-                                    'source_location_id': line.lot_id.location_id.id or line.location_id.id,
-                                    'product_lot_id': line.lot_id.id,
-                                })        
+        lot_line_groups = defaultdict(lambda: self.env['stock.move.line'])
+        for line in self.move_line_ids.filtered('lot_id'):
+            source_location = line.lot_id.location_id or line.location_id
+            values = (source_location.id, line.lot_id.id)
+            if (
+                line.source_location_id.id != values[0]
+                or line.product_lot_id.id != values[1]
+            ):
+                lot_line_groups[values] |= line
+        for (source_location_id, product_lot_id), lines in lot_line_groups.items():
+            lines.write({
+                'source_location_id': source_location_id,
+                'product_lot_id': product_lot_id,
+            })
 
         return res
 
     def _adt_apply_dest_location_to_move_lines(self):
+        move_groups = defaultdict(lambda: self.env['stock.move'])
+        line_groups = defaultdict(lambda: self.env['stock.move.line'])
         for picking in self:
             if not picking.adt_dest_location_id:
                 continue
@@ -2275,21 +2351,25 @@ class StockPicking(models.Model):
                     continue
 
                 if not move.adt_dest_location_id:
-                    move.location_dest_id = picking.adt_dest_location_id
-                    move.adt_dest_location_id = picking.adt_dest_location_id
+                    move_groups[picking.adt_dest_location_id.id] |= move
 
                 if move.move_line_ids:
-                    move.move_line_ids.write({
-                        'location_dest_id': final_dest_location.id,
-                    })
+                    line_groups[final_dest_location.id] |= move.move_line_ids
+        for destination_id, moves in move_groups.items():
+            moves.write({
+                'location_dest_id': destination_id,
+                'adt_dest_location_id': destination_id,
+            })
+        for destination_id, lines in line_groups.items():
+            lines.write({'location_dest_id': destination_id})
 
     def _remove_qty_move_line(self):
         # for move in self.move_ids:
         #     move.action_generate_lot()
         #     for line in move.move_line_ids:
         #         line.quantity = 0
-        for move in self.move_line_ids:
-            move.quantity = 0
+        if self.move_line_ids:
+            self.move_line_ids.write({'quantity': 0})
 
     adt_dest_location_id = fields.Many2one(
         "stock.location",
@@ -3172,7 +3252,7 @@ class StockPicking(models.Model):
         #     raise UserError(f"Loginext API Error\n\n{e}")
 
     def action_assign(self):
-        _logger.info(">>> action_assign CALLED %s", self.ids)
+        _logger.debug(">>> action_assign CALLED %s", self.ids)
 
         transfer_out_pickings = self.filtered(
             lambda picking: (
@@ -3260,15 +3340,15 @@ class StockPicking(models.Model):
 
             for move in picking.move_ids:
                 for line in move.move_line_ids:
-                    print(line)
+                    pass  # debug print removed for performance
                     if line.lot_id:
-                        print(line.lot_id)
+                        pass  # debug print removed for performance
                         # vals = {
                         #     'source_location_id': line.lot_id.location_id.id or line.location_id.id,
                         # }
                         # vals['product_lot_id'] = line.lot_id.id
                         # line.write(vals)
-                        print(f"write source_location: {line.lot_id.location_id.id} product_lot_id: {line.lot_id.id,}")
+                        pass  # debug print removed for performance
                         line.write({
                             'source_location_id': line.lot_id.location_id.id or line.location_id.id,
                             'product_lot_id': line.lot_id.id,
@@ -3792,7 +3872,7 @@ class StockPicking(models.Model):
                 picking._check_picker_status_requirements()
 
             if picking.picking_type_id.name not in ('Pick', 'Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product'):
-                print(f"Run validate all except pick and receipt")
+                pass  # debug print removed for performance
                 # Lakukan perulangan untuk setiap stock.move yang ada di dalam picking
                 for move in picking.move_ids:
                     # Jika move memiliki move_line_ids, lakukan update massal di level DB
@@ -3804,13 +3884,13 @@ class StockPicking(models.Model):
                             'confirmation_lot_code': product_code,
                             'matching': 'match',
                         }
-                        print(f"Write vals = {vals}")
+                        pass  # debug print removed for performance
 
                         line.write(vals)
 
-                        print(f"After write = {line.matching}")
+                        pass  # debug print removed for performance
 
-                        print(f"After write line {line.id} = {line.matching} for picking: {picking.id}")
+                        pass  # debug print removed for performance
 
         for picking in self.filtered(
             lambda item: (
@@ -3836,17 +3916,17 @@ class StockPicking(models.Model):
             is_document_only = rec.adt_is_document_only
             if is_document_only:
                 continue
-            print(rec.picking_type_id.name)
+            pass  # debug print removed for performance
             is_receipt_putaway = (
                 rec.picking_type_id.name in ('Receipts', 'Receipt Internal', 'Storage', 'Store Finished Product')
                 and not rec.is_ito_internal_transfer
             )
             for line in rec.move_line_ids:
-                print(f">>> Validating line {line.id} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id},Picking id: {line.picking_id.id}, Picking Type: {line.picking_id.picking_type_id.name}, Status product: {line.picking_id.picking_type_id.operation_category}, Matching Status: {line.matching}") # Cek di terminal Odoo
+                pass  # debug print removed for performance
                 if not is_receipt_putaway:
                     line.lot_name = line.lot_id.name if line.lot_id else line.lot_name
                 if not is_receipt_putaway and not line.lot_name:
-                    print(f"Missing lot: {line}")
+                    pass  # debug print removed for performance
                     raise UserError(_("Validation blocked.\n Lot not Found Please generate lot for all lines before validating the picking."))
                 
             if is_receipt_putaway:
@@ -3856,15 +3936,15 @@ class StockPicking(models.Model):
             else:
                 rec._check_validate_requirements()
             operation_category = rec.picking_type_id.operation_category
-            print(f">>> Validating picking {rec.id} - Picking Type: {rec.picking_type_id.name}, Operation Category: {operation_category}") # Cek di terminal Odoo
+            pass  # debug print removed for performance
 
             # Hanya enforce untuk PUT dan DELIVERY
             if not is_receipt_putaway and operation_category in ['put', 'delivery']:
                 for line in rec.move_line_ids:
                     # Jika belum dicek (invisible), tidak dianggap ok
-                    print(f">>> Checking line {line.matching} - Product: {line.product_id.display_name}, Lot Name: {line.lot_id.name if line.lot_id else 'N/A'}") # Cek di terminal Odoo
+                    pass  # debug print removed for performance
                     # line.matching = 'match'
-                    print(f">>> Matching status for line {line.id}: {line.matching}") # Cek di terminal Odoo
+                    pass  # debug print removed for performance
                     if line.matching != 'match':
                         raise UserError(_(
                             "Validation blocked.\n\n"
@@ -5021,14 +5101,14 @@ class StockRule(models.Model):
     # Override method _push_prepare_move_copy_values untuk mengubah lokasi tujuan push berdasarkan adt_dest_location_id di stock.picking jika picking type incoming dan adt_dest_location_id terisi, sehingga bisa push ke lokasi selain location_dest_id yang sudah ditentukan di stock.rule
     def _push_prepare_move_copy_values(self, move_to_copy, new_date,):
         vals = super(StockRule, self)._push_prepare_move_copy_values(move_to_copy, new_date)
-        print('='*300)
-        print("_push_prepare_move_copy_values")
-        print(f"Vals to create new picking: {vals}")
+        pass  # debug print removed for performance
+        pass  # debug print removed for performance
+        pass  # debug print removed for performance
         # print(f"Parent Picking: {move_to_copy}")
 
         picking = move_to_copy.picking_id
 
-        print(picking)
+        pass  # debug print removed for performance
         if picking:
             # print("=== DAFTAR FIELD DAN NILAI ===")
             # for field_name, field_object in picking._fields.items():
@@ -5065,7 +5145,7 @@ class StockRule(models.Model):
             if mapped_destination:
                 vals["adt_dest_location_id"] = mapped_destination.id
 
-        print(f"vals to update: {vals}")
+        pass  # debug print removed for performance
 
         return vals
 

@@ -721,7 +721,7 @@ class StockScrapLine(models.Model):
 
     @api.onchange('product_id')
     def _onchange_product_id(self):
-        print(f"Scrap_id nya {self.scrap_id}")
+        pass  # debug print removed for performance
 
     product_uom_id = fields.Many2one(
         "uom.uom",
