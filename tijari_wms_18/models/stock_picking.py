@@ -488,6 +488,15 @@ class StockPicking(models.Model):
             'user_ids',
         ]
 
+    @api.model
+    def _get_assignment_notification_fields(self):
+        return (
+            'pick_responsible_ids',
+            'pack_responsible_ids',
+            'do_responsible_ids',
+            'putaway_responsible_ids',
+        )
+
     @api.onchange('pick_responsible_ids')
     def _onchange_pick_responsible_ids(self):
         for picking in self:
@@ -839,6 +848,23 @@ class StockPicking(models.Model):
         return result
 
     def write(self, vals):
+        changed_assignment_fields = [
+            field_name for field_name in self._get_assignment_notification_fields()
+            if field_name in vals and not self.env.context.get(
+                'skip_assignment_chat_notification'
+            )
+        ]
+        assignment_fields = (
+            list(self._get_assignment_notification_fields())
+            if changed_assignment_fields else []
+        )
+        old_assignment_user_ids = {
+            picking.id: {
+                field_name: set(picking[field_name].ids)
+                for field_name in assignment_fields
+            }
+            for picking in self
+        }
         import_audit_fields = {
             field_name for field_name in vals
             if field_name in self._fields and field_name not in {
@@ -972,6 +998,12 @@ class StockPicking(models.Model):
             {'adt_is_document_only', 'picking_type_id', 'origin', 'adt_type'} & set(vals)
         ):
             self._set_document_only_picking_type()
+        if assignment_fields:
+            notifier = self.env['wms.assignment.notification.mixin']
+            documents_by_user = notifier._group_new_responsible_users(
+                self, assignment_fields, old_assignment_user_ids,
+            )
+            notifier._send_assignment_chat_notifications(documents_by_user)
         return result
 
     def unlink(self):
@@ -1023,7 +1055,10 @@ class StockPicking(models.Model):
                         continue
                     vals[field_name] = [(6, 0, source_ids)]
                 if vals:
-                    target.with_context(tijari_responsible_sync=True).write(vals)
+                    target.with_context(
+                        tijari_responsible_sync=True,
+                        skip_assignment_chat_notification=True,
+                    ).write(vals)
 
     def action_detailed_operations(self):
         action = super().action_detailed_operations()
@@ -2130,6 +2165,16 @@ class StockPicking(models.Model):
             
         pickings._set_acumatica_document_only_flag()
         pickings._set_document_only_picking_type()
+        assignment_fields = self._get_assignment_notification_fields()
+        empty_assignment_user_ids = {
+            picking.id: {field_name: set() for field_name in assignment_fields}
+            for picking in pickings
+        }
+        notifier = self.env['wms.assignment.notification.mixin']
+        documents_by_user = notifier._group_new_responsible_users(
+            pickings, assignment_fields, empty_assignment_user_ids,
+        )
+        notifier._send_assignment_chat_notifications(documents_by_user)
         pass  # debug print removed for performance
         return pickings
 
