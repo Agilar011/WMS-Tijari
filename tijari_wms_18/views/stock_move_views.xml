@@ -87,7 +87,7 @@
                         type="object"
                         icon="fa-print"
                         invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage','Store Finished Product']"
-                        title="Print Lot"/>
+                        title="Lot"/>
                     <!-- <button
                         name="action_open_note_wizard"
                         type="object"
@@ -129,7 +129,19 @@
         <field name="arch" type="xml">
             <form string="Product Note">
                 <group>
-                    <field name="product_note" nolabel="1"/>
+                    <field name="product_note" string="Notes"/>
+                </group>
+            </form>
+        </field>
+    </record>
+
+    <record id="stock_move_manufacturing_note_form_view" model="ir.ui.view">
+        <field name="name">stock.move.manufacturing.note.popup</field>
+        <field name="model">stock.move</field>
+        <field name="arch" type="xml">
+            <form string="Manufacturing Note">
+                <group>
+                    <field name="product_note" string="Notes"/>
                     <field name="difference_note"/>
                 </group>
             </form>

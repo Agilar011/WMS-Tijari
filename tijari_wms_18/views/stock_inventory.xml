@@ -8,8 +8,10 @@
             <xpath expr="//header" position="inside">
                 <button
                     name="action_print_stok_opname"
-                    string="Print"
                     type="object"
+                    string="Stock Opname"
+                    icon="fa-print"
+                    title="Stock Opname"
                     class="btn-primary"
                     invisible="state not in ['in_progress', 'wait_approval']"
                 />
@@ -46,8 +48,10 @@
             <xpath expr="//header" position="inside">
                 <button
                     name="action_print_stok_scrab"
-                    string="Print"
                     type="object"
+                    string="Scrap Document"
+                    icon="fa-print"
+                    title="Scrap Document"
                     class="btn-primary"
                 />
             </xpath>
