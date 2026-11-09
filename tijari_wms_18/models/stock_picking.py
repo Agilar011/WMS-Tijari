@@ -488,6 +488,15 @@ class StockPicking(models.Model):
             'user_ids',
         ]
 
+    @api.model
+    def _get_assignment_notification_fields(self):
+        return (
+            'pick_responsible_ids',
+            'pack_responsible_ids',
+            'do_responsible_ids',
+            'putaway_responsible_ids',
+        )
+
     @api.onchange('pick_responsible_ids')
     def _onchange_pick_responsible_ids(self):
         for picking in self:
@@ -791,64 +800,21 @@ class StockPicking(models.Model):
                     )
                 )
 
-    def _find_import_staging_by_picking(self, staging_models):
-        """Return the first linked staging record per picking in model order.
-
-        A single UNION replaces the former model-by-model searches.  This is
-        especially important with remote AlloyDB, where even an empty lookup
-        has a network cost.
-        """
-        picking_ids = self.ids
-        if not picking_ids:
-            return {}
-        union_parts = []
-        params = []
-        model_by_name = {}
-        for priority, model_name in enumerate(staging_models):
-            if model_name not in self.env.registry.models:
-                continue
-            Model = self.env[model_name]
-            field = Model._fields.get('odoo_picking_id')
-            table = Model._table
-            column = field.name if field and field.store else None
-            if not column or not all(
-                re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', value)
-                for value in (table, column)
-            ):
-                continue
-            model_by_name[model_name] = Model
-            union_parts.append(
-                f'SELECT %s::integer AS priority, %s::text AS model_name, '
-                f'"id" AS staging_id, "{column}" AS picking_id '
-                f'FROM "{table}" WHERE "{column}" = ANY(%s)'
-            )
-            params.extend([priority, model_name, picking_ids])
-        if not union_parts:
-            return {}
-        self.env.cr.execute(
-            'SELECT priority, model_name, staging_id, picking_id FROM ('
-            + ' UNION ALL '.join(union_parts)
-            + ') AS linked_staging ORDER BY priority, staging_id',
-            params,
-        )
-        result = {}
-        for _priority, model_name, staging_id, picking_id in self.env.cr.fetchall():
-            result.setdefault(
-                picking_id, model_by_name[model_name].browse(staging_id)
-            )
-        return result
-
     def write(self, vals):
-        import_audit_fields = {
-            field_name for field_name in vals
-            if field_name in self._fields and field_name not in {
-                'write_uid', 'write_date', 'message_follower_ids', 'activity_ids',
-            }
-        }
-        import_audit_before = {
+        changed_assignment_fields = [
+            field_name for field_name in self._get_assignment_notification_fields()
+            if field_name in vals and not self.env.context.get(
+                'skip_assignment_chat_notification'
+            )
+        ]
+        assignment_fields = (
+            list(self._get_assignment_notification_fields())
+            if changed_assignment_fields else []
+        )
+        old_assignment_user_ids = {
             picking.id: {
-                field_name: picking[field_name]
-                for field_name in import_audit_fields
+                field_name: set(picking[field_name].ids)
+                for field_name in assignment_fields
             }
             for picking in self
         }
@@ -911,52 +877,6 @@ class StockPicking(models.Model):
                 ))
 
         result = super().write(vals)
-        if import_audit_fields and not self.env.context.get('skip_acumatica_import_log'):
-            staging_models = (
-                'acumatica.receipt.line', 'acumatica.inventory.recieved.line',
-                'acumatica.transfer.line', 'acumatica.shipment.line',
-                'acumatica.transfer.shipment.line', 'acumatica.transfer.one.step.line',
-                'acumatica.transfer.two.step.line', 'acumatica.direct.transfer.staging',
-                'acumatica.vendor.return.direct.transfer.staging',
-                'acumatica.credit.memo.consignment.staging',
-                'acumatica.invoice.consignment.staging', 'acumatica.inventory.issue.line',
-                'acumatica.issue.line', 'acumatica.issue.po.return.line',
-                'acumatica.kit.assembly', 'acumatica.shipment.gi.staging',
-                'acumatica.shipment.completed.staging',
-                'acumatica.sales.order.shipment.staging',
-            )
-            staging_by_picking = self._find_import_staging_by_picking(
-                staging_models
-            )
-            for picking in self:
-                staging = staging_by_picking.get(picking.id)
-                if not staging or not hasattr(staging, '_acumatica_post_import_log'):
-                    continue
-                changed_fields = []
-                for field_name in import_audit_fields:
-                    old_value = import_audit_before[picking.id].get(field_name)
-                    new_value = picking[field_name]
-                    field = picking._fields[field_name]
-                    if field.type == 'many2one':
-                        old_value = old_value.display_name if old_value else False
-                        new_value = new_value.display_name if new_value else False
-                    elif field.type in ('many2many', 'one2many'):
-                        old_value = ', '.join(old_value.mapped('display_name'))
-                        new_value = ', '.join(new_value.mapped('display_name'))
-                    if old_value != new_value:
-                        changed_fields.append({
-                            'field_name': field_name,
-                            'field_label': field.string,
-                            'old_value': old_value,
-                            'new_value': new_value,
-                        })
-                if changed_fields:
-                    staging._acumatica_post_import_log(
-                        'updated',
-                        'Data stock.picking diperbarui dari import transaksi.',
-                        picking,
-                        changed_fields,
-                    )
         if (
             not self.env.context.get('skip_user_ids_sync')
             and 'user_id' in vals
@@ -972,6 +892,12 @@ class StockPicking(models.Model):
             {'adt_is_document_only', 'picking_type_id', 'origin', 'adt_type'} & set(vals)
         ):
             self._set_document_only_picking_type()
+        if assignment_fields:
+            notifier = self.env['wms.assignment.notification.mixin']
+            documents_by_user = notifier._group_new_responsible_users(
+                self, assignment_fields, old_assignment_user_ids,
+            )
+            notifier._send_assignment_chat_notifications(documents_by_user)
         return result
 
     def unlink(self):
@@ -1023,7 +949,10 @@ class StockPicking(models.Model):
                         continue
                     vals[field_name] = [(6, 0, source_ids)]
                 if vals:
-                    target.with_context(tijari_responsible_sync=True).write(vals)
+                    target.with_context(
+                        tijari_responsible_sync=True,
+                        skip_assignment_chat_notification=True,
+                    ).write(vals)
 
     def action_detailed_operations(self):
         action = super().action_detailed_operations()
@@ -2130,6 +2059,16 @@ class StockPicking(models.Model):
             
         pickings._set_acumatica_document_only_flag()
         pickings._set_document_only_picking_type()
+        assignment_fields = self._get_assignment_notification_fields()
+        empty_assignment_user_ids = {
+            picking.id: {field_name: set() for field_name in assignment_fields}
+            for picking in pickings
+        }
+        notifier = self.env['wms.assignment.notification.mixin']
+        documents_by_user = notifier._group_new_responsible_users(
+            pickings, assignment_fields, empty_assignment_user_ids,
+        )
+        notifier._send_assignment_chat_notifications(documents_by_user)
         pass  # debug print removed for performance
         return pickings
 
