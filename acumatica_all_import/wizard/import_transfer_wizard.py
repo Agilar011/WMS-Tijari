@@ -73,57 +73,20 @@ class ImportTransferWizard(models.TransientModel):
         if picking_type_cache is None:
             picking_type_cache = {}
 
-        cache_key = (
-            building_code,
-            document_only,
-        )
-
-        if cache_key in picking_type_cache:
-            return picking_type_cache[cache_key]
-
-        config_picking_type = (
-            self.config_id._get_config_picking_type()
-            if self.config_id
-            else False
-        )
-
-        if config_picking_type:
-            picking_type_cache[cache_key] = config_picking_type
-            return config_picking_type
-
-        PickingType = self.env['stock.picking.type']
-        Warehouse = self.env['stock.warehouse']
-
-        document_only_type = PickingType.resolve_document_only_picking_type(
-            api_acumatica='so_transfer',
-            document_only=document_only,
-            warehouse_code=building_code,
-        )
-
-        if document_only_type:
-            picking_type_cache[cache_key] = document_only_type
-            return document_only_type
-
-        warehouse = Warehouse.search(
-            [('code', '=', building_code)],
-            limit=1,
-        )
-
-        picking_type = False
-
-        if warehouse:
-            picking_type = PickingType.search(
-                [
-                    ('warehouse_id', '=', warehouse.id),
-                    ('code', '=', 'incoming'),
-                    ('is_default_api', '=', True),
-                ],
-                limit=1,
-            )
-
-        picking_type_cache[cache_key] = picking_type or False
-
-        return picking_type or False
+        cache_key = (building_code, document_only)
+        if cache_key not in picking_type_cache:
+            picking_type_cache[cache_key] = self.env['acumatica.config']._resolve_transaction_picking_type(
+                config=self.config_id,
+                warehouse_code=building_code,
+                code='incoming',
+                operation_category='receive',
+                api_acumatica='so_transfer',
+                transaction_key='so_transfer',
+                document_only=document_only,
+                config_policy='always',
+                default_api_only=True,
+            ) or False
+        return picking_type_cache[cache_key]
 
 
 

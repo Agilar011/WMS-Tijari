@@ -263,6 +263,105 @@ class AcumaticaConfig(models.Model):
         self.ensure_one()
         return self.picking_type_ids[:1] if self.picking_type_ids else self.env['stock.picking.type'].browse()
 
+    @api.model
+    def _resolve_transaction_picking_type(
+        self,
+        config=False,
+        building_id=False,
+        warehouse_code=False,
+        code=False,
+        operation_category=False,
+        api_acumatica=False,
+        transaction_key=False,
+        document_only=False,
+        target_operation_type=False,
+        config_policy='never',
+        document_only_first=False,
+        exclude_document_only_config=False,
+        require_location_mapping=False,
+        location_must_be_active=False,
+        stop_after_document_only_miss=False,
+        default_api_only=False,
+        required=False,
+    ):
+        """Resolve a transaction operation type using the shared lookup order.
+
+        ``config_policy`` may be ``never``, ``always``, or ``matching``. The
+        caller still owns transaction-specific warehouse and operation mapping.
+        """
+        PickingType = self.env['stock.picking.type']
+        config = config if config else self.env['acumatica.config'].browse()
+
+        def configured_picking_type():
+            if not config or config_policy == 'never':
+                return PickingType.browse()
+            candidate = config._get_config_picking_type()
+            if not candidate:
+                return PickingType.browse()
+            if config_policy == 'matching':
+                if exclude_document_only_config and candidate.is_document_only_api:
+                    return PickingType.browse()
+                if code and candidate.code != code:
+                    return PickingType.browse()
+                if operation_category and candidate.operation_category != operation_category:
+                    return PickingType.browse()
+            return candidate
+
+        if not document_only_first:
+            candidate = configured_picking_type()
+            if candidate:
+                return candidate
+
+        document_type = PickingType.resolve_document_only_picking_type(
+            target_operation_type=target_operation_type,
+            api_acumatica=api_acumatica,
+            document_only=document_only,
+            building_id=building_id or warehouse_code,
+            warehouse_code=warehouse_code,
+            required=required if (document_only or target_operation_type) else False,
+        )
+        if document_type:
+            return document_type
+        if document_only and stop_after_document_only_miss:
+            return PickingType.browse()
+
+        if require_location_mapping:
+            location_domain = [('code', '=', warehouse_code or building_id)]
+            if location_must_be_active:
+                location_domain.append(('is_active', '=', True))
+            location = self.env['stock.location.acumatica'].search(location_domain, limit=1)
+            if not location:
+                return PickingType.browse()
+
+        candidate = configured_picking_type()
+        if candidate:
+            return candidate
+
+        if default_api_only:
+            warehouse = self.env['stock.warehouse'].search(
+                [('code', '=', warehouse_code or building_id)],
+                limit=1,
+            )
+            if not warehouse:
+                return PickingType.browse()
+            return PickingType.search([
+                ('warehouse_id', '=', warehouse.id),
+                ('code', '=', code),
+                ('is_default_api', '=', True),
+            ], limit=1)
+
+        if not code and not operation_category:
+            return PickingType.browse()
+        return PickingType.resolve_picking_type(
+            building_id=building_id,
+            warehouse_code=warehouse_code,
+            code=code,
+            operation_category=operation_category,
+            api_acumatica=api_acumatica,
+            transaction_key=transaction_key or api_acumatica,
+            required=required,
+        )
+
     def _resolve_inventory_receive_picking_type(self, transfer_type=False, warehouse_code=False, document_only=False):
         self.ensure_one()
         PickingType = self.env['stock.picking.type']

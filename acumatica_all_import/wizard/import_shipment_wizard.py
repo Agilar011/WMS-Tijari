@@ -183,22 +183,15 @@ class ImportShipmentWizard(models.TransientModel):
 
 
     def _search_picking_type(self, building_code):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
-            return config_picking_type
-
-        PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
-        type = PickingType.resolve_picking_type(
+        return self.env['acumatica.config']._resolve_transaction_picking_type(
+            config=self.config_id,
             building_id=building_code,
             code='incoming',
             operation_category='receive',
             api_acumatica='shipment_so',
             transaction_key='shipment_so',
-            required=False,
-        )
-
-        return type if type else None
+            config_policy='always',
+        ) or None
 
     def fetch_shipment_data(self, limit=50, offset=0, shipment_nbr=False, last_modified_from=False, odata_filter=False):
         self.ensure_one()

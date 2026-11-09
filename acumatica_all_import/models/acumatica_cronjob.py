@@ -11,11 +11,43 @@ class AcumaticaCronJob(models.Model):
     _inherit = 'acumatica.config'
     _description = 'Cronjob'
 
+    def _get_scheduler_fetch_options(self):
+        """Read bounded scheduler fetch settings from Odoo system parameters."""
+        params = self.env['ir.config_parameter'].sudo()
+        raw_limit = params.get_param(
+            'acumatica_all_import.scheduler_fetch_limit_per_type', default='5000',
+        )
+        raw_batch_size = params.get_param(
+            'acumatica_all_import.scheduler_batch_size', default='1000',
+        )
+        try:
+            fetch_limit = int(raw_limit)
+            batch_size = int(raw_batch_size)
+        except (TypeError, ValueError) as exc:
+            raise UserError(
+                'API Data Hub scheduler_fetch_limit_per_type and scheduler_batch_size '
+                'must be positive integers.'
+            ) from exc
+
+        if fetch_limit <= 0:
+            raise UserError('API Data Hub scheduler_fetch_limit_per_type must be greater than zero.')
+        if batch_size <= 0 or batch_size > 1000:
+            raise UserError(
+                'API Data Hub scheduler_batch_size must be between 1 and 1000 '
+                'to keep each request and ORM batch bounded.'
+            )
+        if batch_size > fetch_limit:
+            raise UserError(
+                'API Data Hub scheduler_batch_size cannot exceed scheduler_fetch_limit_per_type.'
+            )
+        return fetch_limit, batch_size
+
     def _run_scheduler_data_types(self, data_types, phase):
         """Run selected Import Data types from an API Data Hub scheduler job."""
         ImportWizard = self.env['acumatica.unified.import.wizard']
         category = self.env.context.get('api_scheduler_data_category')
         results = {}
+        fetch_limit, batch_size = self._get_scheduler_fetch_options()
 
         if phase == 'import' and not self.env.context.get('api_scheduler_combined_run'):
             job_type = self.env.context.get('api_scheduler_job_type')
@@ -94,48 +126,58 @@ class AcumaticaCronJob(models.Model):
                 'import_type_master': key if type_category == 'master' else 'customer',
                 'import_type_transaction': key if type_category == 'transaction' else 'po_receipt',
                 'config_id': config.id,
-                'fetch_limit': 5000,
-                'batch_size': 1000,
+                'fetch_limit': fetch_limit,
+                'batch_size': batch_size,
                 'fetch_skip': 0,
             }
-            try:
-                with self.env.cr.savepoint():
-                    wizard = ImportWizard.create(wizard_values)
-                    if phase == 'fetch':
-                        try:
-                            wizard.action_fetch_data()
-                        except UserError as exc:
-                            if 'Tidak ada data' not in str(exc):
-                                raise
+            def process_data_type():
+                wizard = ImportWizard.create(wizard_values)
+                if phase == 'fetch':
+                    try:
+                        wizard.action_fetch_data()
+                    except UserError as exc:
+                        if 'Tidak ada data' not in str(exc):
+                            raise
+                    results[key] = self._cron_result(
+                        data_retrieved=wizard.total_fetched or 0,
+                    )
+                else:
+                    domain = [('import_state', '=', 'staged')]
+                    if 'config_id' in Line._fields:
+                        domain.append(('config_id', '=', config.id))
+                    pending = Line.search(domain, order='id')
+                    if not pending:
+                        results[key] = self._cron_result()
+                    elif not hasattr(pending, '_do_import'):
                         results[key] = self._cron_result(
-                            data_retrieved=wizard.total_fetched or 0,
+                            data_retrieved=len(pending),
+                            records_skipped=len(pending),
+                            message='Staging model has no import handler.',
                         )
                     else:
-                        domain = [('import_state', '=', 'staged')]
-                        if 'config_id' in Line._fields:
-                            domain.append(('config_id', '=', config.id))
-                        pending = Line.search(domain, order='id')
-                        if not pending:
-                            results[key] = self._cron_result()
-                        elif not hasattr(pending, '_do_import'):
-                            results[key] = self._cron_result(
-                                data_retrieved=len(pending),
-                                records_skipped=len(pending),
-                                message='Staging model has no import handler.',
-                            )
-                        else:
-                            pending_ids = pending.ids
-                            wizard.action_import_pending_batch()
-                            counts = self._get_import_counts(
-                                info['line_model'], pending_ids, skipped_states=['rejected'],
-                            )
-                            results[key] = self._cron_result(
-                                data_retrieved=len(pending_ids),
-                                records_created=counts[0] + counts[1],
-                                records_errors=counts[2],
-                                records_skipped=counts[3],
-                            )
+                        pending_ids = pending.ids
+                        wizard.action_import_pending_batch()
+                        counts = self._get_import_counts(
+                            info['line_model'], pending_ids, skipped_states=['rejected'],
+                        )
+                        results[key] = self._cron_result(
+                            data_retrieved=len(pending_ids),
+                            records_created=counts[0] + counts[1],
+                            records_errors=counts[2],
+                            records_skipped=counts[3],
+                        )
+
+            try:
+                # Fetch and import handlers may commit internally. An outer
+                # savepoint would be invalidated by those commits and could
+                # leave the cursor transaction aborted on error.
+                process_data_type()
             except Exception as exc:
+                # Clear any failed SQL transaction before persisting the
+                # per-type failure result. Completed internal commits remain
+                # durable; only work since the most recent commit is rolled back.
+                self.env.cr.rollback()
+                self.env.invalidate_all()
                 _logger.exception('API Data Hub scheduler failed for data type %s.', key)
                 results[key] = self._cron_result(
                     success=False, records_errors=1, records_skipped=1,

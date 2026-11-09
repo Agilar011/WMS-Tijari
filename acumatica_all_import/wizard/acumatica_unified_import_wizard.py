@@ -256,7 +256,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'non_stock_item',
         'uom',
         'vendor',
-        'inventory_stock',
     ]
 
     TRANSACTION_TYPES = [
@@ -470,9 +469,9 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         return vals
 
     def _get_pending_lines(self, info, config):
-        return self.env[info['line_model']].search([
-            ('import_state', '=', 'staged'),
-        ], order='id')
+        return self.env[info['line_model']].search(
+            self._get_pending_domain(config), order='id',
+        )
     
     def _get_pending_domain(self, config):
         return [
@@ -524,26 +523,19 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             source_wizard.action_fetch_data()
             print("Fetch data action called on source wizard")
 
-            pending_lines = self._get_pending_lines(info, config)
-            print(f"Pending lines fetched: {len(pending_lines)}")
-
-            print(f"Model: {info['line_model']}")
-            print(f"Config ID: {config}")
-
-            total_data = len(self.env[info['line_model']].search([]))
-            print(f"Total Data in staging: {total_data}")
-
+            Line = self.env[info['line_model']]
+            pending_count = Line.search_count(self._get_pending_domain(config))
+            total_data = Line.search_count([('config_id', '=', config.id)])
             total_fetched = source_wizard.total_fetched
-            print(f"Total fetched: {total_fetched}")
 
 
             self.write({
                 'state': 'fetched',
                 'total_fetched': total_fetched,
-                'total_pending': len(pending_lines),
+                'total_pending': pending_count,
                 'total_imported': 0,
                 'batch_count': 0,
-                'last_message': _('Fetch complete. %s data is already in staging, %s data has been retrieved, and %s staged data is ready to be generated.') % (total_data, total_fetched, len(pending_lines)),
+                'last_message': _('Fetch complete. %s data is already in staging, %s data has been retrieved, and %s staged data is ready to be generated.') % (total_data, total_fetched, pending_count),
             })
             return self._reopen()
 

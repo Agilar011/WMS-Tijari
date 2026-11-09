@@ -819,10 +819,33 @@ class AcumaticaKitAssemblyLine(models.Model):
         updated = 0
         error = 0
 
-        # proses per reference number
-        for reference_nbr in self.mapped('reference_nbr'):
+        # Load headers and components once for the import batch while keeping
+        # each document's existing savepoint and error handling independent.
+        reference_numbers = list(dict.fromkeys(self.mapped('reference_nbr')))
+        headers = header_reference.search(
+            [('reference_nbr', 'in', reference_numbers)], order='id asc',
+        ) if reference_numbers else header_reference
+        headers_by_reference = {}
+        for header_record in headers:
+            headers_by_reference.setdefault(header_record.reference_nbr, header_record)
+        all_components = component_reference.search(
+            [('assembly_id', 'in', headers.ids)],
+        ) if headers else component_reference
+        components_by_header = {}
+        for component in all_components:
+            components_by_header.setdefault(component.assembly_id.id, []).append(component.id)
+        component_products_by_code = {}
+
+        def get_component_product(inventory_id):
+            if inventory_id not in component_products_by_code:
+                component_products_by_code[inventory_id] = self.env['product.product'].search([
+                    ('default_code', '=', inventory_id),
+                ], limit=1)
+            return component_products_by_code[inventory_id]
+
+        for reference_nbr in reference_numbers:
             records = self.filtered(lambda line: line.reference_nbr == reference_nbr)
-            header = header_reference.search([('reference_nbr', '=', reference_nbr)], limit=1)
+            header = headers_by_reference.get(reference_nbr, header_reference.browse())
             component_lines = component_reference
             update_messages = []
             old_components = {}
@@ -871,11 +894,12 @@ class AcumaticaKitAssemblyLine(models.Model):
                             f"{warehouse.display_name}"
                         )
 
-                    component_lines = component_reference.search([('assembly_id', '=', header.id)])
+                    component_lines = components_by_header.get(
+                        header.id, [],
+                    )
+                    component_lines = component_reference.browse(component_lines)
                     for item in component_lines:
-                        component_product = self.env['product.product'].search([
-                            ('default_code', '=', item.stock_inventory_id),
-                        ], limit=1)
+                        component_product = get_component_product(item.stock_inventory_id)
                         if not component_product:
                             raise UserError(
                                 f"Component product tidak ditemukan untuk InventoryID: "
@@ -921,9 +945,7 @@ class AcumaticaKitAssemblyLine(models.Model):
 
                     raw_move_vals = []
                     for item in component_lines:
-                        component_product = self.env['product.product'].search([
-                            ('default_code', '=', item.stock_inventory_id),
-                        ], limit=1)
+                        component_product = get_component_product(item.stock_inventory_id)
                         raw_move_vals.append({
                             'name': component_product.display_name,
                             'product_id': component_product.id,
@@ -946,7 +968,7 @@ class AcumaticaKitAssemblyLine(models.Model):
                             old = old_group.pop(0) if old_group else False
                             if not old_group:
                                 old_components.pop(key, None)
-                            component_product = self.env['product.product'].search([('default_code', '=', key)], limit=1)
+                            component_product = get_component_product(key)
                             label = item.line_inventory_id or item.inventory_id or key or '?'
                             current = {'Produk': component_product.display_name if component_product else key or '—', 'Jumlah': f'{(item.line_quantity or item.quantity):g}', 'Satuan': component_product.uom_id.display_name if component_product else item.line_uom or item.uom or '—', 'Catatan': item.line_note or '—'}
                             if old:

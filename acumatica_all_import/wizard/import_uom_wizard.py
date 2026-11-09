@@ -54,9 +54,14 @@ class ImportUomWizard(models.TransientModel):
         raw_list = 0
         loop_count = math.ceil(self.fetch_limit / 200) if self.fetch_limit else 0
         for i in range(loop_count):
-            offset = i * 200
-            batch_data = self.fetch_uom_data(limit=200, offset=offset)
+            offset = self.fetch_skip + (i * 200)
+            request_limit = min(200, self.fetch_limit - (i * 200))
+            batch_data = self.fetch_uom_data(limit=request_limit, offset=offset)
             raw_list += batch_data
+            # Acumatica may return a partial page (or no records) before the
+            # configured fetch limit. Do not keep requesting empty offsets.
+            if batch_data < request_limit:
+                break
 
         self.total_fetched = raw_list
 

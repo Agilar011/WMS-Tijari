@@ -213,6 +213,14 @@ class AcumaticaShipmentGIStaging(models.Model):
             ('adt_ShipmentNbr', 'not in', processed_picking)
         ])
 
+        shipment_lines_by_gi = {}
+        shipment_ids = valid_shipments.ids
+        all_shipment_lines = shipment_line.search(
+            [('gi_id', 'in', shipment_ids)],
+        ) if shipment_ids else shipment_line
+        for shipment_detail in all_shipment_lines:
+            shipment_lines_by_gi.setdefault(shipment_detail.gi_id.id, []).append(shipment_detail.id)
+
         for shipment in valid_shipments:
             # Ambil sub-transaksi database tingkat dokumen
             with self.env.cr.savepoint():
@@ -303,15 +311,27 @@ class AcumaticaShipmentGIStaging(models.Model):
 
                         print(f"SUCCESS CREATING NEW PICKING ID: {picking.id}")
 
-                    move_items = shipment_line.search([
-                        ('gi_id', '=', shipment.id)
-                    ])
+                    move_items = shipment_line.browse(shipment_lines_by_gi.get(shipment.id, []))
+
+                    shipment_product_codes = list(dict.fromkeys(
+                        move_items.mapped('adt_LineInventoryID'),
+                    ))
+                    shipment_products = Product.search([
+                        ('default_code', 'in', [code for code in shipment_product_codes if code]),
+                    ]) if any(shipment_product_codes) else Product.browse()
+                    shipment_products_by_code = {}
+                    for shipment_product in shipment_products:
+                        shipment_products_by_code.setdefault(shipment_product.default_code, shipment_product)
+                    if False in shipment_product_codes:
+                        shipment_products_by_code[False] = Product.search(
+                            [('default_code', '=', False)], limit=1,
+                        )
 
                     move_count = 0
 
                     for item in move_items:
                         move_count += 1
-                        product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
+                        product = shipment_products_by_code.get(item.adt_LineInventoryID)
                         if not product:
                             raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
 

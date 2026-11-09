@@ -178,7 +178,14 @@
                         <div class="o_kanban_card p-3" style="border-left: 3px solid #875a9c; min-height: 320px;">
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <div>
-                                    <h3 class="mb-1" style="color: #087f8c;"><field name="name"/></h3>
+                                    <t t-if="record.dashboard_scope.raw_value == 'inventory'">
+                                        <button name="action_open_metric" type="object" context="{'dashboard_metric': 'card'}" class="btn btn-link p-0 text-start text-decoration-none" style="color: inherit;">
+                                            <h3 class="mb-1" style="color: #087f8c;"><field name="name"/></h3>
+                                        </button>
+                                    </t>
+                                    <t t-else="">
+                                        <h3 class="mb-1" style="color: #087f8c;"><field name="name"/></h3>
+                                    </t>
                                     <small class="text-muted" t-if="record.card_type.raw_value == 'transactions'">All API transaction staging</small>
                                     <small class="text-muted" t-if="record.card_type.raw_value == 'master'">All API master data staging</small>
                                     <small class="text-muted" t-if="record.card_type.raw_value == 'webhook'">Webhook activity by date</small>
@@ -188,16 +195,23 @@
                                     <span>Refresh</span>
                                 </button>
                             </div>
-                            <div class="display-4 fw-bold mb-3"><field name="total"/></div>
+                            <t t-if="record.dashboard_scope.raw_value == 'inventory'">
+                                <button name="action_open_metric" type="object" context="{'dashboard_metric': 'card'}" class="btn btn-link p-0 border-0 bg-transparent display-4 fw-bold mb-3 text-start" style="color: inherit;">
+                                    <field name="total"/>
+                                </button>
+                            </t>
+                            <t t-else="">
+                                <div class="display-4 fw-bold mb-3"><field name="total"/></div>
+                            </t>
                             <t t-if="record.dashboard_scope.raw_value == 'inventory'">
                                 <small class="text-muted">Monitoring stock operations</small>
                                 <t t-if="record.card_type.raw_value == 'operation_status'">
                                     <div class="o_api_dashboard_chart d-flex align-items-end border-bottom mb-2 mt-2" style="height: 145px; gap: 8px;">
-                                        <div class="flex-fill text-center"><div class="bg-secondary" t-att-style="'height:' + record.staged_bar.value + 'px;'"/><small>Waiting</small><br/><strong><field name="waiting"/></strong></div>
-                                        <div class="flex-fill text-center"><div class="bg-primary" t-att-style="'height:' + record.created_bar.value + 'px;'"/><small>Ready</small><br/><strong><field name="ready"/></strong></div>
-                                        <div class="flex-fill text-center"><div class="bg-warning" t-att-style="'height:' + record.updated_bar.value + 'px;'"/><small>In Progress</small><br/><strong><field name="in_progress"/></strong></div>
-                                        <div class="flex-fill text-center"><div class="bg-success" t-att-style="'height:' + record.errors_bar.value + 'px;'"/><small>Done</small><br/><strong><field name="done_count"/></strong></div>
-                                        <div class="flex-fill text-center"><div class="bg-danger" t-att-style="'height:' + record.cancelled_bar.value + 'px;'"/><small>Cancelled</small><br/><strong><field name="cancelled"/></strong></div>
+                                        <button name="action_open_metric" type="object" context="{'dashboard_metric': 'waiting'}" class="btn btn-link flex-fill text-center p-0 border-0 text-reset text-decoration-none"><div class="bg-secondary" t-att-style="'height:' + record.staged_bar.value + 'px;'"/><small>Waiting</small><br/><strong><field name="waiting"/></strong></button>
+                                        <button name="action_open_metric" type="object" context="{'dashboard_metric': 'ready'}" class="btn btn-link flex-fill text-center p-0 border-0 text-reset text-decoration-none"><div class="bg-primary" t-att-style="'height:' + record.created_bar.value + 'px;'"/><small>Ready</small><br/><strong><field name="ready"/></strong></button>
+                                        <button name="action_open_metric" type="object" context="{'dashboard_metric': 'in_progress'}" class="btn btn-link flex-fill text-center p-0 border-0 text-reset text-decoration-none"><div class="bg-warning" t-att-style="'height:' + record.updated_bar.value + 'px;'"/><small>In Progress</small><br/><strong><field name="in_progress"/></strong></button>
+                                        <button name="action_open_metric" type="object" context="{'dashboard_metric': 'done'}" class="btn btn-link flex-fill text-center p-0 border-0 text-reset text-decoration-none"><div class="bg-success" t-att-style="'height:' + record.errors_bar.value + 'px;'"/><small>Done</small><br/><strong><field name="done_count"/></strong></button>
+                                        <button name="action_open_metric" type="object" context="{'dashboard_metric': 'cancelled'}" class="btn btn-link flex-fill text-center p-0 border-0 text-reset text-decoration-none"><div class="bg-danger" t-att-style="'height:' + record.cancelled_bar.value + 'px;'"/><small>Cancelled</small><br/><strong><field name="cancelled"/></strong></button>
                                     </div>
                                 </t>
                                 <t t-if="record.card_type.raw_value == 'delayed_operation'">

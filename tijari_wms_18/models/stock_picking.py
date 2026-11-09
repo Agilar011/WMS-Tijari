@@ -5111,9 +5111,6 @@ class StockPicking(models.Model):
 
         return base64.b64encode(buffer.getvalue()).decode()
 
-    def action_test_function(self):
-        return True
-    
 class StockReturnPicking(models.TransientModel):
     _inherit = 'stock.return.picking'
 

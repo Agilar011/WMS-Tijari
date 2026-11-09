@@ -70,13 +70,9 @@ access_acumatica_non_stock_item_line_user,acumatica.non.stock.item.line,model_ac
 access_import_non_stock_item_wizard_user,import.non.stock.item.wizard,model_import_non_stock_item_wizard,tijari_wms_18.group_it_staff,1,1,1,1
 access_acumatica_uom_line_user,acumatica.uom.line,model_acumatica_uom_line,tijari_wms_18.group_it_staff,1,1,1,1
 access_import_uom_wizard_user,import.uom.wizard,model_import_uom_wizard,tijari_wms_18.group_it_staff,1,1,1,1
-access_acumatica_transfer_line_user,acumatica.transfer.line,model_acumatica_transfer_line,tijari_wms_18.group_it_staff,1,1,1,1
 access_acumatica_transfer_product_line_user,acumatica.transfer.product.line,model_acumatica_transfer_product_line,tijari_wms_18.group_it_staff,1,1,1,1
-access_import_transfer_wizard_user,import.transfer.wizard,model_import_transfer_wizard,tijari_wms_18.group_it_staff,1,1,1,1
 
-access_acumatica_transfer_line_user,acumatica.transfer.line,model_acumatica_transfer_line,tijari_wms_18.group_it_staff,1,1,1,1
 access_acumatica_inventory_recieved_product_line_user,acumatica.inventory.recieved.product.line,model_acumatica_inventory_recieved_product_line,tijari_wms_18.group_it_staff,1,1,1,1
-access_import_transfer_wizard_user,import.transfer.wizard,model_import_transfer_wizard,tijari_wms_18.group_it_staff,1,1,1,1
 
 access_acumatica_shipment_product_line_user,acumatica.shipment.product.line,model_acumatica_shipment_product_line,tijari_wms_18.group_it_staff,1,1,1,1
 
@@ -117,7 +113,6 @@ access_acumatica_invoice_credit_memo_consignment_staging_stock_manager,acumatica
 access_acumatica_invoice_credit_memo_consignment_staging_line_stock_manager,acumatica.invoice.credit.memo.consignment.staging.line.stock.manager,model_acumatica_invoice_credit_memo_consignment_staging_line,stock.group_stock_manager,1,1,1,1
 
 access_acumatica_transfer_one_step_product_user,acumatica.transfer.one.step.product.user,model_acumatica_transfer_one_step_product,tijari_wms_18.group_it_staff,1,1,1,1
-access_acumatica_transfer_one_step_line_user,acumatica.transfer.one.step.line.user,model_acumatica_transfer_one_step_line,tijari_wms_18.group_it_staff,1,1,1,1
 
 
 access_loginext_staging_data_user,loginext.staging.data,model_loginext_staging_data,tijari_wms_18.group_it_staff,1,1,1,1
