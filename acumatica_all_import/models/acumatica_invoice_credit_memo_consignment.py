@@ -48,7 +48,7 @@ class AcumaticaInvoiceCreditMemoConsignmentStaging(models.Model):
     _sql_constraints = [
         (
             'unique_config_orig_ref',
-            'unique(config_id, adt_OrigRefNbr)',
+            'unique(config_id, "adt_OrigRefNbr")',
             'Data Invoice Credit Memo untuk OrigRefNbr ini sudah ada.',
         ),
     ]

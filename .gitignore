@@ -4,3 +4,4 @@ __pycache__/
 **/.DS_Store
 stock_inventory/tests/__init__.py
 stock_inventory/tests/test_stock_inventory.py
+tijari_wms_18/data/inject_stock.sql

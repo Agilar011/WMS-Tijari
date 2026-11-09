@@ -24,6 +24,8 @@ access_stock_report_aging_generate_it_staff,access.stock.report.aging.generate.i
 access_stock_report_aging_line_accounting_stock,access.stock.report.aging.line.accounting.stock,model_stock_report_aging_line,tijari_wms_18.group_accounting_stock,1,0,0,0
 access_stock_report_aging_generate_accounting_stock,access.stock.report.aging.generate.accounting.stock,model_stock_report_aging_generate,tijari_wms_18.group_accounting_stock,1,1,1,1
 access_stock_picking_operator,stock.picking.operator,model_stock_picking,tijari_wms_18.group_operator,1,1,0,0
+access_stock_picking_job_manager,stock.picking.job.manager,model_stock_picking_job,stock.group_stock_manager,1,1,1,0
+access_stock_picking_job_attempt_manager,stock.picking.job.attempt.manager,model_stock_picking_job_attempt,stock.group_stock_manager,1,0,0,0
 access_mrp_unbuild_manager,mrp.unbuild.manager,mrp.model_mrp_unbuild,tijari_wms_18.group_warehouse_manager,1,1,1,1
 access_mrp_unbuild_head,mrp.unbuild.head,mrp.model_mrp_unbuild,tijari_wms_18.group_warehouse_head,1,1,1,1
 access_mrp_unbuild_admin,mrp.unbuild.admin,mrp.model_mrp_unbuild,tijari_wms_18.group_warehouse_admin,1,1,1,1
