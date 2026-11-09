@@ -485,7 +485,7 @@ class StockMove(models.Model):
         # ======================================================
         # CUSTOM : TOKO PEGANG DO
         # ======================================================
-        if self.picking_id.adt_type == "Toko Pegang DO":
+        if self.picking_id.adt_type == "Toko Pegang DO" and self.picking_id.picking_type_name != 'Receipts':
             if not self.owner_id:
                 raise UserError(
                     _("Owner is required for Toko Pegang DO.")
