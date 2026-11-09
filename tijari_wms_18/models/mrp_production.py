@@ -12,6 +12,19 @@ class WMSMRPProduction(models.Model):
     _inherit = "mrp.production"
     _description = "WMSMRPProduction"
 
+    def action_view_mo_delivery(self):
+        action = super().action_view_mo_delivery()
+        if len(self.picking_ids) > 1:
+            list_view = self.env.ref(
+                'tijari_wms_18.stock_picking_tree_mo_delivery',
+            )
+            action['views'] = [
+                (list_view.id, view_type) if view_type == 'list'
+                else (view_id, view_type)
+                for view_id, view_type in action.get('views', [])
+            ]
+        return action
+
     picking_type_name = fields.Char(
         related="picking_type_id.name",
         store=False,

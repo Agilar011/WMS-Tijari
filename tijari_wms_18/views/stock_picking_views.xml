@@ -899,6 +899,19 @@
         </field>
     </record>
 
+    <record id="stock_picking_tree_mo_delivery" model="ir.ui.view">
+        <field name="name">stock.picking.list.mo.delivery</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock_picking_tree_transaction_columns"/>
+        <field name="mode">primary</field>
+        <field name="priority" eval="1210"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/field[@name='adt_type']" position="before">
+                <field name="picking_type_name" string="Operation Type"/>
+            </xpath>
+        </field>
+    </record>
+
     <record id="stock_picking_tree_internal_transfer_order_columns" model="ir.ui.view">
         <field name="name">stock.picking.list.internal.transfer.order.columns</field>
         <field name="model">stock.picking</field>
