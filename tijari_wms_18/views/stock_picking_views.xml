@@ -165,6 +165,9 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
 
+            <!-- (Action ID 210). -->
+            <xpath expr="//button[@name='%(stock.action_report_delivery)d']" position="replace"/>
+
             <xpath expr="//field[@name='state']" position="after">
                 <field name="wms_state"
                     widget="statusbar"
@@ -260,8 +263,10 @@
                     invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state != 'return_shipment'"/>
 
                 <button name="action_print_warehouse_receipt"
-                    string="Print Receipt"
                     type="object"
+                    string="Receipt"
+                    icon="fa-print"
+                    title="Receipt"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Receipts', 'Receipt Internal']"/>
 
@@ -1498,26 +1503,34 @@
                         data-hotkey="q"/>
 
                 <button name="action_print_warehouse_pack"
-                    string="Print Pack"
+                    string="Pack"
                     type="object"
+                    icon="fa-print"
+                    title="Pack"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
                     
                 <button name="delivery_slip_pack"
-                    string="Print Delivery Slip"
+                    string="Delivery Slip"
                     type="object"
+                    icon="fa-print"
+                    title="Delivery Slip"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
 
                 <button name="action_print_warehouse_pick"
-                    string="Print Pick"
+                    string="Pick"
                     type="object"
+                    icon="fa-print"
+                    title="Pick"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pick', 'Pick Internal']"/>
                 
                 <button name="action_print_warehouse_transfer"
-                    string="Print Transfer"
+                    string="Internal Transfer"
                     type="object"
+                    icon="fa-print"
+                    title="Internal Transfer"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Transfer', 'Transfer Internal']"/>
 
@@ -1684,8 +1697,8 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='unpack']" position="after">
-                <button name="action_print_packing_list" type="object" class="btn-primary" icon="fa-print" title="Print Package List"/>
-                <button name="action_print_packing_package" string="Print Package" type="object" class="btn-primary"/>
+                <button name="action_print_packing_list" string="Package List" type="object" class="btn-primary" icon="fa-print" title="Package List"/>
+                <button name="action_print_packing_package" string="Package" type="object" icon="fa-print" title="Package" class="btn-primary"/>
             </xpath>
             <xpath expr="//field[@name='package_type_id']" position="before">
                 <field name="package_cat" />
@@ -1764,8 +1777,9 @@
                 <button
                     name="action_print_packing_list"
                     type="object"
+                    string="Package List"
                     icon="fa-print"
-                    string="Print"/>
+                    title="Package List"/>
             </xpath>
 
         </field>

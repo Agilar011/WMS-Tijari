@@ -265,8 +265,10 @@
             <xpath expr="//header" position="inside">
                 <button
                     name="action_print_hasil_manufacturing"
-                    string="Print"
                     type="object"
+                    string="Hasil Manufacturing"
+                    icon="fa-print"
+                    title="Hasil Manufacturing"
                     class="btn-primary"
                 />
                 <button

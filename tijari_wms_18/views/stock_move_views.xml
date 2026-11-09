@@ -87,7 +87,7 @@
                         type="object"
                         icon="fa-print"
                         invisible="picking_type_name not in ['Receipts', 'Receipt Internal', 'Storage','Store Finished Product']"
-                        title="Print Lot"/>
+                        title="Lot"/>
                     <!-- <button
                         name="action_open_note_wizard"
                         type="object"
