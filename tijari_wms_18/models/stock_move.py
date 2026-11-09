@@ -1387,6 +1387,22 @@ class StockMove(models.Model):
 
     def action_open_note_wizard(self):
         self.ensure_one()
+        return self._get_note_wizard_action(include_difference_note=False)
+
+    def action_open_manufacturing_note_wizard(self):
+        self.ensure_one()
+        return self._get_note_wizard_action(include_difference_note=True)
+
+    def _get_note_wizard_action(self, include_difference_note=False):
+        self.ensure_one()
+        view_xmlid = 'tijari_wms_18.stock_move_note_form_view'
+        if include_difference_note and (
+            self.raw_material_production_id or self.production_id
+        ):
+            view_xmlid = 'tijari_wms_18.stock_move_manufacturing_note_form_view'
+        note_view = self.env.ref(view_xmlid, raise_if_not_found=False)
+        if not note_view:
+            note_view = self.env.ref('tijari_wms_18.stock_move_note_form_view')
 
         return {
             'type': 'ir.actions.act_window',
@@ -1394,9 +1410,7 @@ class StockMove(models.Model):
             'res_model': 'stock.move',
             'res_id': self.id,
             'view_mode': 'form',
-            'view_id': self.env.ref(
-                'tijari_wms_18.stock_move_note_form_view'
-            ).id,
+            'view_id': note_view.id,
             'target': 'new',
         }
 

@@ -195,7 +195,7 @@
                             <field name="group_id" column_invisible="True"/>
                             <field name="status_mo_check" widget="badge" decoration-success="status_mo_check == 'finished'" decoration-danger="status_mo_check == 'unfinished'"/>
                             <button
-                                name="action_open_note_wizard"
+                                name="action_open_manufacturing_note_wizard"
                                 type="object"
                                 icon="fa-sticky-note"
                                 title="Note"/>
@@ -241,7 +241,7 @@
                                         </div>
                                         <br/>
                                         <button
-                                            name="action_open_note_wizard"
+                                            name="action_open_manufacturing_note_wizard"
                                             type="object"
                                             icon="fa-sticky-note"
                                             title="Note"/>
@@ -265,8 +265,10 @@
             <xpath expr="//header" position="inside">
                 <button
                     name="action_print_hasil_manufacturing"
-                    string="Print"
                     type="object"
+                    string="Hasil Manufacturing"
+                    icon="fa-print"
+                    title="Hasil Manufacturing"
                     class="btn-primary"
                 />
                 <button
@@ -364,7 +366,7 @@
                                 </div>
                                 <br/>
                                 <button
-                                    name="action_open_note_wizard"
+                                    name="action_open_manufacturing_note_wizard"
                                     type="object"
                                     icon="fa-sticky-note"
                                     title="Note"/>
@@ -396,7 +398,7 @@
                     force_save="1"/>
                 
                 <button
-                    name="action_open_note_wizard"
+                    name="action_open_manufacturing_note_wizard"
                     type="object"
                     icon="fa-sticky-note"
                     title="Note"/>
