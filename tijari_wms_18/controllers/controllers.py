@@ -730,7 +730,7 @@ class WmsApiController(http.Controller):
             'product_code': move.product_id.default_code or '',
             'ref': "",
             'docs': move.picking_id.origin or '',
-            'date': format_tanggal_indo(move.create_date) if move.create_date else '',
+            'date': format_tanggal_indo(move.lot_ids.create_date) if move.lot_ids.create_date else '',
             'qrcode': (move.qr_code_image.decode('utf-8') if move.qr_code_image else blank_image),
             # 'detail': []
         }
