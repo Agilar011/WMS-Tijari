@@ -626,7 +626,7 @@ class StockMove(models.Model):
                 difference = move.product_uom_qty - total_confirmation_quantity
             elif move.picking_type_name in ['Pick', 'Pick Internal', 'Pick Components']:
                 total_confirmation_quantity = move.confirmation_quantity
-                total_qty = (move.quantity_shadow if move.quantity_shadow > 0.0 else move.quantity )
+                total_qty = move.product_uom_qty
                 difference = total_qty - total_confirmation_quantity
             elif move.picking_type_name in ['Delivery Orders']:
                 total_confirmation_quantity = move.do_confirmation_quantity
