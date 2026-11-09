@@ -369,6 +369,7 @@
                                     name="action_open_note_wizard"
                                     type="object"
                                     icon="fa-sticky-note"
+                                    context="{'show_difference_note_in_mrp_operations': True}"
                                     title="Note"/>
                                 <button name="action_open_move_mo"
                                     type="object"
@@ -401,6 +402,7 @@
                     name="action_open_note_wizard"
                     type="object"
                     icon="fa-sticky-note"
+                    context="{'show_difference_note_in_mrp_operations': True}"
                     title="Note"/>
             </xpath>
         </field>

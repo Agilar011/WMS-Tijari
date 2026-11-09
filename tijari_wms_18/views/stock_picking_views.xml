@@ -1777,7 +1777,6 @@
                 <button
                     name="action_print_packing_list"
                     type="object"
-                    string="Package List"
                     icon="fa-print"
                     title="Package List"/>
             </xpath>

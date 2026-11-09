@@ -130,6 +130,18 @@
             <form string="Product Note">
                 <group>
                     <field name="product_note" nolabel="1"/>
+                </group>
+            </form>
+        </field>
+    </record>
+
+    <record id="stock_move_manufacturing_note_form_view" model="ir.ui.view">
+        <field name="name">stock.move.manufacturing.note.popup</field>
+        <field name="model">stock.move</field>
+        <field name="arch" type="xml">
+            <form string="Manufacturing Note">
+                <group>
+                    <field name="product_note" nolabel="1"/>
                     <field name="difference_note"/>
                 </group>
             </form>
