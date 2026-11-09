@@ -62,15 +62,54 @@ class StockPickingBatch(models.Model):
                 for field_name, picking_field
                 in batch._RESPONSIBLE_BATCH_TO_PICKING_FIELDS.items()
             }
-            batch.with_context(skip_batch_responsible_sync=True).write(
-                responsible_vals
+            batch.with_context(
+                skip_batch_responsible_sync=True,
+                skip_assignment_chat_notification=True,
+            ).write(responsible_vals)
+
+        documents_by_user = {}
+        for batch, vals in zip(batches, vals_list):
+            if batch.picking_ids:
+                continue
+            explicitly_assigned_fields = [
+                field_name for field_name in self._RESPONSIBLE_BATCH_TO_PICKING_FIELDS
+                if field_name in vals
+            ]
+            if not explicitly_assigned_fields:
+                continue
+            empty_user_ids = {
+                batch.id: {
+                    field_name: set()
+                    for field_name in self._RESPONSIBLE_BATCH_TO_PICKING_FIELDS
+                }
+            }
+            notifier = self.env['wms.assignment.notification.mixin']
+            batch_users = notifier._group_new_responsible_users(
+                batch, list(self._RESPONSIBLE_BATCH_TO_PICKING_FIELDS), empty_user_ids,
             )
+            for user_id, documents in batch_users.items():
+                documents_by_user.setdefault(user_id, []).extend(documents)
+        self.env['wms.assignment.notification.mixin']._send_assignment_chat_notifications(
+            documents_by_user
+        )
         return batches
 
     def write(self, vals):
-        result = super().write(vals)
         responsible_fields = self._RESPONSIBLE_BATCH_TO_PICKING_FIELDS
         changed_responsible_fields = responsible_fields.keys() & vals.keys()
+        should_notify = (
+            changed_responsible_fields
+            and not self.env.context.get('skip_assignment_chat_notification')
+        )
+        old_assignment_user_ids = {
+            batch.id: {
+                field_name: set(batch[field_name].ids)
+                for field_name in responsible_fields
+            }
+            for batch in self
+        } if should_notify else {}
+
+        result = super().write(vals)
         skip_picking_sync = self.env.context.get('skip_batch_responsible_sync')
 
         for batch in self:
@@ -82,6 +121,7 @@ class StockPickingBatch(models.Model):
                 if batch.picking_ids:
                     batch.picking_ids.with_context(
                         tijari_responsible_sync=True,
+                        skip_assignment_chat_notification=True,
                     ).write(picking_vals)
 
             if changed_responsible_fields or 'picking_ids' in vals:
@@ -110,6 +150,13 @@ class StockPickingBatch(models.Model):
                 super(StockPickingBatch, batch).write({
                     **batch_responsible_vals,
                 })
+
+        if should_notify:
+            notifier = self.env['wms.assignment.notification.mixin']
+            documents_by_user = notifier._group_new_responsible_users(
+                self, list(responsible_fields), old_assignment_user_ids,
+            )
+            notifier._send_assignment_chat_notifications(documents_by_user)
         return result
 
     allowed_putaway_product_ids = fields.Many2many(
@@ -1349,7 +1396,10 @@ class StockPickingToBatchInherit(models.TransientModel):
 
         # Keep the batch form initialized from the real picking assignments.
         # Subsequent edits on the batch are propagated back to its pickings.
-        batch.with_context(skip_batch_responsible_sync=True).write({
+        batch.with_context(
+            skip_batch_responsible_sync=True,
+            skip_assignment_chat_notification=True,
+        ).write({
             field_name: [(6, 0, batch.picking_ids.mapped(picking_field).ids)]
             for field_name, picking_field
             in batch._RESPONSIBLE_BATCH_TO_PICKING_FIELDS.items()
