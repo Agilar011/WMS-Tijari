@@ -1132,6 +1132,15 @@ class StockMove(models.Model):
         'move_id',
         string='Putaway Move Lines',
     )
+    putaway_display_move_line_ids = fields.Many2many(
+        'stock.move.line',
+        'stock_move_putaway_display_line_rel',
+        'move_id',
+        'move_line_id',
+        string='Putaway Move Lines',
+        compute='_compute_putaway_display_move_line_ids',
+        readonly=False,
+    )
 
     picker_progress_status = fields.Selection(
             [
@@ -1195,8 +1204,25 @@ class StockMove(models.Model):
                 (line.lot_id or line.lot_name)
                 and line.quantity > 0
                 and line.state != 'cancel'
+                and (
+                    line.picking_type_name not in ('Receipts', 'Receipt Internal')
+                    or line.picker_status == 'finished'
+                )
             )
         )
+
+    @api.depends(
+        'move_line_ids',
+        'move_line_ids.lot_id',
+        'move_line_ids.lot_name',
+        'move_line_ids.quantity',
+        'move_line_ids.state',
+        'move_line_ids.picker_status',
+        'move_line_ids.picking_type_name',
+    )
+    def _compute_putaway_display_move_line_ids(self):
+        for move in self:
+            move.putaway_display_move_line_ids = move._get_putaway_base_move_lines()
 
     def _get_putaway_move_lines(self):
         self.ensure_one()

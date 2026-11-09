@@ -1348,6 +1348,10 @@ class StockPicking(models.Model):
                 lambda line: (
                     line.quantity > 0
                     and (line.lot_id or line.lot_name)
+                    and (
+                        line.picking_type_name not in ('Receipts', 'Receipt Internal')
+                        or line.picker_status == 'finished'
+                    )
                 )
             )
 

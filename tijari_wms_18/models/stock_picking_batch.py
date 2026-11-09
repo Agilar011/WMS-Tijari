@@ -578,6 +578,10 @@ class StockPickingBatch(models.Model):
                 (line.lot_id or line.lot_name)
                 and line.quantity > 0
                 and (
+                    line.picking_type_name not in ('Receipts', 'Receipt Internal')
+                    or line.picker_status == 'finished'
+                )
+                and (
                     line.picker_status == 'finished'
                     or line.confirmation_quantity > 0
                 )
@@ -1013,6 +1017,7 @@ class StockPickingBatch(models.Model):
                 'default_company_id': self.company_id.id,
                 'show_lots_text': False,
                 'picking_code': self.picking_type_code,
+                'picking_type_name': self.picking_type_name,
                 'create': self.state not in ('done', 'cancel'),
             },
         }
