@@ -315,42 +315,20 @@ class ImportTransferShipmentWizard(models.TransientModel):
         }
     
     def _search_picking_type(self, header):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
-            return config_picking_type
-
-        PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
         warehouse_code = header.get('warehouse_code') or header.get('line_warehouse_code')
-        type = False
-
-        document_only_type = PickingType.resolve_document_only_picking_type(
-            api_acumatica='transfer_shipment',
-            document_only=header.get('document_only'),
+        return self.env['acumatica.config']._resolve_transaction_picking_type(
+            config=self.config_id,
             warehouse_code=warehouse_code,
-        )
-        if document_only_type:
-            return document_only_type
-        if header.get('document_only'):
-            return None
-
-        location = Location.search([
-            ('code', '=', warehouse_code),
-            ('is_active', '=', True),
-        ], limit=1)
-
-        
-        if location:
-            type = PickingType.resolve_picking_type(
-                warehouse_code=warehouse_code,
-                code='internal',
-                operation_category='internal',
-                api_acumatica='transfer_shipment',
-                transaction_key='transfer_shipment',
-                required=False,
-            )
-
-        return type if type else None
+            code='internal',
+            operation_category='internal',
+            api_acumatica='transfer_shipment',
+            transaction_key='transfer_shipment',
+            document_only=header.get('document_only'),
+            config_policy='always',
+            require_location_mapping=True,
+            location_must_be_active=True,
+            stop_after_document_only_miss=True,
+        ) or None
 
 
     def action_view_staging(self):

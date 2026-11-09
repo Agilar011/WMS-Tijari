@@ -39,7 +39,7 @@
                             <field name="selected_data_type_ids"
                                    widget="many2many_tags"
                                    options="{'no_create': True, 'no_open': True}"
-                                   domain="[('data_category', '=', selected_data_category)]"
+                                   domain="[('data_category', '=', selected_data_category), ('code', '!=', 'inventory_stock')]"
                                    invisible="job_type not in ['fetch_selected', 'import_selected']"/>
                             <field name="is_running" readonly="1"/>
                             <field name="cron_active" groups="base.group_system"/>
@@ -62,7 +62,7 @@
                         </page>
                         <page string="Log Activity">
                             <field name="log_ids" readonly="1">
-                                <list create="false" edit="false" delete="false" decoration-success="status == 'success'" decoration-danger="status == 'failed'" decoration-warning="status == 'running'" class="o_list_table_auto_layout">
+                                <list create="false" edit="false" delete="false" decoration-success="status == 'success'" decoration-danger="status == 'failed'" decoration-warning="status == 'running' or status == 'queued'" class="o_list_table_auto_layout">
                                     <field name="execution_time"/>
                                     <field name="duration"/>
                                     <field name="data_retrieved"/>
@@ -70,7 +70,7 @@
                                     <field name="records_created"/>
                                     <field name="records_errors"/>
                                     <field name="records_skipped"/>
-                                    <field name="status" widget="badge" decoration-success="status == 'success'" decoration-danger="status == 'failed'"/>
+                                    <field name="status" widget="badge" decoration-success="status == 'success'" decoration-danger="status == 'failed'" decoration-warning="status == 'queued'"/>
                                     <button name="action_view_details" string="Open Detail" type="object" icon="fa-external-link" title="View Details"/>
                                 </list>
                             </field>
@@ -101,7 +101,7 @@
         <field name="name">api.scheduler.log.list</field>
         <field name="model">api.scheduler.log</field>
         <field name="arch" type="xml">
-                <list create="false" edit="false" delete="false" decoration-success="status == 'success'" decoration-danger="status == 'failed'" decoration-warning="status == 'running'">
+                <list create="false" edit="false" delete="false" decoration-success="status == 'success'" decoration-danger="status == 'failed'" decoration-warning="status == 'running' or status == 'queued'">
                 <field name="scheduler_job_id"/>
                 <field name="execution_time"/>
                 <field name="duration"/>
@@ -110,7 +110,7 @@
                 <field name="records_created"/>
                 <field name="records_errors"/>
                 <field name="records_skipped"/>
-                <field name="status" widget="badge" decoration-success="status == 'success'" decoration-danger="status == 'failed'"/>
+                <field name="status" widget="badge" decoration-success="status == 'success'" decoration-danger="status == 'failed'" decoration-warning="status == 'queued'"/>
                 <button name="action_view_details" type="object" icon="fa-list" title="View Details"/>
             </list>
         </field>

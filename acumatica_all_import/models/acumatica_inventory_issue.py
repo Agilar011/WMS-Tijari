@@ -240,6 +240,17 @@ class AcumaticaInventoryIssueLine(models.Model):
             if line.reference_nbr and line.import_state == 'staged':
                 lines_by_reference[line.reference_nbr] |= line
 
+        issue_product_model = self.env['acumatica.inventory.issue.product']
+        issue_product_lines_by_header = {}
+        issue_header_ids = self.ids
+        all_issue_product_lines = issue_product_model.search(
+            [('receipt_line_id', 'in', issue_header_ids)],
+        ) if issue_header_ids else issue_product_model
+        for product_line in all_issue_product_lines:
+            issue_product_lines_by_header.setdefault(
+                product_line.receipt_line_id.id, [],
+            ).append(product_line.id)
+
         for issue_key, issue_lines in lines_by_reference.items():
             print(f'Processing Inventory Issue with reference_nbr: {issue_key}')
             
@@ -457,7 +468,10 @@ class AcumaticaInventoryIssueLine(models.Model):
                 if action_state == 'updated':
                     picking.move_ids.unlink()
 
-                to_create_move = self.env['acumatica.inventory.issue.product'].search([('receipt_line_id', '=', first.id)])
+                to_create_move = issue_product_model.browse(
+                    issue_product_lines_by_header.get(first.id, []),
+                )
+                products_by_key = {}
                 location_errors = []
                     
                 for line in to_create_move:
@@ -479,7 +493,14 @@ class AcumaticaInventoryIssueLine(models.Model):
                     else:
                         owner_id = customer.id if customer else False
 
-                    product = self._find_product(line)
+                    product_key = (
+                        ('inventory', line.inventory_id)
+                        if line.inventory_id else
+                        ('description', line.line_description)
+                    )
+                    if product_key not in products_by_key:
+                        products_by_key[product_key] = self._find_product(line)
+                    product = products_by_key[product_key]
                     if not product:
                         raise UserError(
                             f'Product tidak ditemukan untuk InventoryID: '

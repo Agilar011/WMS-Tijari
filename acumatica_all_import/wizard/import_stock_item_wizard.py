@@ -268,15 +268,6 @@ class ImportStockItemWizard(models.TransientModel):
 
                         all_results.append(parsed_vals)
 
-                        print('--------------------------------------------------')
-                        print(f'ITEM NO      : {item_no}')
-                        print(f'EXTERNAL ID  : {parsed_vals["external_id"]}')
-                        print(f'INVENTORY ID : {parsed_vals["inventory_id"]}')
-                        print(f'DESCRIPTION  : {parsed_vals["description"]}')
-                        print(f'ITEM TYPE    : {parsed_vals["item_type"]}')
-                        print(f'STATUS       : {parsed_vals["item_status"]}')
-                        print('--------------------------------------------------')
-
                     _logger.info(
                         'OFFSET %s | SKIP %s | '
                         'REAL SKIP %s | LIMIT %s | '

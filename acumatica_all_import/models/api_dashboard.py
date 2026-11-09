@@ -1,6 +1,7 @@
 from datetime import datetime, time, timedelta
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 
 class ApiDataHubDashboardCard(models.Model):
@@ -101,6 +102,7 @@ class ApiDataHubDashboardCard(models.Model):
         today_start = datetime.combine(fields.Date.context_today(self), time.min)
         yesterday_start = today_start - timedelta(days=1)
         week_start = today_start - timedelta(days=6)
+        import_metrics_by_model = {}
         for card in self:
             values = {field: 0 for field in (
                 'total', 'staged', 'created', 'updated', 'rejected', 'errors',
@@ -124,10 +126,25 @@ class ApiDataHubDashboardCard(models.Model):
                     Model = self.env.get(model_name)
                     if Model is None:
                         continue
-                    values['total'] += Model.search_count([])
-                    for state in ('staged', 'created', 'updated', 'rejected', 'error'):
-                        key = 'errors' if state == 'error' else state
-                        values[key] += Model.search_count([('import_state', '=', state)])
+                    if model_name not in import_metrics_by_model:
+                        metrics = {key: 0 for key in (
+                            'total', 'staged', 'created', 'updated', 'rejected', 'errors',
+                        )}
+                        if 'import_state' in Model._fields:
+                            grouped_counts = Model._read_group(
+                                [], ['import_state'], ['__count'],
+                            )
+                            for state, count in grouped_counts:
+                                metrics['total'] += count
+                                key = 'errors' if state == 'error' else state
+                                if key in metrics and state:
+                                    metrics[key] += count
+                        else:
+                            metrics['total'] = Model.search_count([])
+                        import_metrics_by_model[model_name] = metrics
+
+                    for key, count in import_metrics_by_model[model_name].items():
+                        values[key] += count
             elif card.card_type == 'webhook':
                 Model = self.env.get('acumatica.webhook.log')
                 if Model is not None:
@@ -287,3 +304,72 @@ class ApiDataHubDashboardCard(models.Model):
 
     def action_refresh(self):
         return {'type': 'ir.actions.client', 'tag': 'reload'}
+
+    def action_open_metric(self):
+        self.ensure_one()
+        if self.dashboard_scope != 'inventory':
+            raise UserError('Drill-down ini hanya tersedia untuk kartu Inventory Dashboard.')
+
+        metric = self.env.context.get('dashboard_metric', 'card')
+        now = fields.Datetime.now()
+        today_start = datetime.combine(fields.Date.context_today(self), time.min)
+        today_end = today_start + timedelta(days=1)
+        active_states = ('done', 'cancel')
+        model_name = 'stock.picking'
+        domain = []
+
+        if self.card_type == 'operation_status':
+            if metric == 'waiting':
+                domain = [('wms_state', 'in', ('draft', 'waiting', 'confirmed', 'waiting_response'))]
+            elif metric == 'ready':
+                assigned = self.env[model_name].search([('state', '=', 'assigned')])
+                ready_ids = assigned.filtered(
+                    lambda picking: not any(getattr(move, 'quantity', 0) for move in picking.move_ids)
+                ).ids
+                domain = [('id', 'in', ready_ids)]
+            elif metric == 'in_progress':
+                domain = [('state', 'not in', active_states), ('move_ids.quantity', '>', 0)]
+            elif metric == 'done':
+                domain = [('state', '=', 'done')]
+            elif metric == 'cancelled':
+                domain = [('state', '=', 'cancel')]
+        elif self.card_type == 'delayed_operation':
+            domain = [('state', 'not in', active_states), ('scheduled_date', '<', now)]
+        elif self.card_type == 'operation_schedule':
+            if metric == 'card':
+                domain = [
+                    '|',
+                    '&', ('state', 'not in', active_states), ('scheduled_date', '<', now),
+                    '|',
+                    '&', ('scheduled_date', '>=', today_start), ('scheduled_date', '<', today_end),
+                    ('scheduled_date', '>=', today_end),
+                ]
+            elif metric == 'overdue':
+                domain = [('state', 'not in', active_states), ('scheduled_date', '<', now)]
+            elif metric == 'today':
+                domain = [('scheduled_date', '>=', today_start), ('scheduled_date', '<', today_end)]
+            elif metric == 'upcoming':
+                domain = [('scheduled_date', '>=', today_end)]
+        elif self.card_type == 'partial_discrepancy':
+            domain = [('shipment_information', '=', 'partial')]
+        elif self.card_type == 'inventory_adjustment':
+            model_name = 'stock.inventory'
+        elif self.card_type == 'scrap_monitoring':
+            model_name = 'stock.scrap'
+            scrap_states = {'draft': 'draft', 'ready': 'ready', 'done': 'done'}
+            if metric in scrap_states:
+                domain = [('state', '=', scrap_states[metric])]
+        elif self.card_type != 'operation_progress':
+            raise UserError('Jenis kartu ini belum memiliki daftar detail.')
+
+        if self.env.get(model_name) is None:
+            raise UserError('Model detail untuk kartu ini tidak tersedia.')
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': f'{self.name} - {metric.replace("_", " ").title()}',
+            'res_model': model_name,
+            'view_mode': 'list,form',
+            'domain': domain,
+            'target': 'current',
+        }

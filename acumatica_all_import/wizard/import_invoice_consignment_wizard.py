@@ -558,11 +558,13 @@ class ImportInvoiceCongsignmentWizard(models.TransientModel):
     # HELPERS
     # ---------------------------------------------------------    
     def _search_picking_type(self, header):
-        return self.env['stock.picking.type'].resolve_document_only_picking_type(
+        return self.env['acumatica.config']._resolve_transaction_picking_type(
             target_operation_type='direct_delivery_order',
             api_acumatica='invoice_consignment',
             document_only=True,
             warehouse_code=header,
+            document_only_first=True,
+            stop_after_document_only_miss=True,
             required=False,
         )
 

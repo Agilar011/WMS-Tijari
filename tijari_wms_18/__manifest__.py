@@ -30,6 +30,7 @@
     'data': [
         'security/groups.xml',
         'security/ir.model.access.csv',
+        'security/stock_picking_job_rules.xml',
         'security/model_access_overrides.xml',
         'data/ir_actions_server.xml',
         'data/document_only_picking_type_data.xml',

@@ -288,20 +288,6 @@ class AcumaticaInventoryStockLine(models.Model):
         _mapping, location = self._get_mapped_location()
         return location
 
-    def _sync_stock_quant_snapshot(self, product, location, on_hand_acumatica, status, message):
-        Quant = self.env['stock.quant'].sudo()
-        quant_domain = [
-            ('product_id', '=', product.id),
-            ('location_id', 'child_of', location.id),
-        ]
-        quants = Quant.search(quant_domain)
-        if quants:
-            quants.write({
-                'adt_inventory_stock_status': status,
-                'adt_inventory_stock_message': message,
-                'adt_inventory_stock_sync_date': fields.Datetime.now(),
-            })
-
     def _handle_acumatica_error(self, err_msg=False):
         AcumaticaError = self.env['acumatica.error.master']
         acumatica_err_id = self.acumatica_err_id
@@ -477,8 +463,6 @@ class AcumaticaInventoryStockLine(models.Model):
                     created += 1
 
                 new_qty = Quant._get_available_quantity(product, location, strict=False)
-                match_status = 'match' if float_compare(new_qty, target_qty, precision_rounding=precision) == 0 else 'not_match'
-                self._sync_stock_quant_snapshot(product, location, target_qty, match_status, message)
                 _logger.info(
                     "Inventory Stock import result %s / %s | old_on_hand=%.4f new_on_hand=%.4f target_on_hand=%.4f",
                     product.display_name,

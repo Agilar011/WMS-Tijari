@@ -78,32 +78,16 @@ class ImportReceiptWizard(models.TransientModel):
 
 
     def _search_picking_type(self, building_code, document_only=False):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
-            return config_picking_type
-
-        PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
-        type = False
-
-        document_only_type = PickingType.resolve_document_only_picking_type(
-            api_acumatica='po_receipt',
-            document_only=document_only,
-            building_id=building_code,
-        )
-        if document_only_type:
-            return document_only_type
-
-        type = PickingType.resolve_picking_type(
+        return self.env['acumatica.config']._resolve_transaction_picking_type(
+            config=self.config_id,
             building_id=building_code,
             code='incoming',
             operation_category='receive',
             api_acumatica='po_receipt',
             transaction_key='po_receipt',
-            required=False,
-        )
-
-        return type if type else None
+            document_only=document_only,
+            config_policy='always',
+        ) or None
 
     def fetch_receipt_data(self, limit=50, offset=0, receipt_nbr=False, odata_filter=False):
         self.ensure_one()

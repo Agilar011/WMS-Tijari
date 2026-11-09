@@ -659,7 +659,10 @@ class StockMoveLine(models.Model):
         for line in self:
             line.generate_lot()
 
-        return True
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'reload',
+        }
         
     def generate_lot(self):
         for line in self:

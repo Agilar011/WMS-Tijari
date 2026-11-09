@@ -269,12 +269,41 @@ class AcumaticaIssuePoReturnLine(models.Model):
         # Menggunakan self.mapped('receipt_nbr') untuk mendapatkan daftar nomor unik
         unique_receipt_numbers = list(set([nbr for nbr in self.mapped('receipt_nbr') if nbr]))
 
+        receipt_line_model = self.env['acumatica.issue.po.return.line']
+        receipt_lines_by_number = {}
+        all_receipt_lines = receipt_line_model.search([
+            ('receipt_nbr', 'in', unique_receipt_numbers),
+            ('import_state', '=', 'staged'),
+        ]) if unique_receipt_numbers else receipt_line_model
+        for receipt_line in all_receipt_lines:
+            receipt_lines_by_number.setdefault(receipt_line.receipt_nbr, []).append(receipt_line.id)
+
+        product_line_model = self.env['acumatica.issue.po.return.product']
+        all_receipt_line_ids = all_receipt_lines.ids
+        product_lines_by_number = {}
+        all_product_lines = product_line_model.search([
+            ('receipt_line_id', 'in', all_receipt_line_ids),
+        ], order='id asc') if all_receipt_line_ids else product_line_model
+        for product_line in all_product_lines:
+            receipt_nbr = product_line.receipt_line_id.receipt_nbr
+            product_lines_by_number.setdefault(receipt_nbr, []).append(product_line.id)
+        inventory_ids = list(dict.fromkeys(all_product_lines.mapped('inventory_id')))
+        products_by_inventory_id = {}
+        products = ProductModel.search([
+            ('default_code', 'in', [inventory_id for inventory_id in inventory_ids if inventory_id]),
+        ]) if any(inventory_ids) else ProductModel.browse()
+        for product in products:
+            products_by_inventory_id.setdefault(product.default_code, product)
+        if False in inventory_ids:
+            products_by_inventory_id[False] = ProductModel.search(
+                [('default_code', '=', False)], limit=1,
+            )
+
         for receipt_nbr in unique_receipt_numbers:
             # Cari seluruh record induk staging yang memiliki receipt_nbr yang sama dan berstatus pending
-            receipt_lines = self.env['acumatica.issue.po.return.line'].search([
-                ('receipt_nbr', '=', receipt_nbr),
-                ('import_state', '=', 'staged')
-            ])
+            receipt_lines = receipt_line_model.browse(
+                receipt_lines_by_number.get(receipt_nbr, []),
+            )
             
             if not receipt_lines:
                 continue
@@ -381,9 +410,9 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     # 2. ITERASI PRODUK BERDASARKAN RELASI KE MODEL ANAK
                     # =====================================================
                     # Menarik semua baris detail produk (acumatica.issue.po.return.product) yang terikat dengan seluruh receipt_lines ini
-                    product_lines = self.env['acumatica.issue.po.return.product'].search([
-                        ('receipt_line_id', 'in', receipt_lines.ids)
-                    ], order='id asc')
+                    product_lines = product_line_model.browse(
+                        product_lines_by_number.get(receipt_nbr, []),
+                    )
 
                     unique_product_lines = self.env['acumatica.issue.po.return.product'].browse()
                     seen_line_keys = set()
@@ -403,7 +432,7 @@ class AcumaticaIssuePoReturnLine(models.Model):
                     print(f"Memproses {len(product_lines)} baris produk untuk Receipt: {origin}")
                     
                     for item in product_lines:
-                        product = ProductModel.search([('default_code', '=', item.inventory_id)], limit=1)
+                        product = products_by_inventory_id.get(item.inventory_id)
                         if not product:
                             raise UserError(f'Product tidak ditemukan untuk InventoryID: {item.inventory_id or "-"}')
 

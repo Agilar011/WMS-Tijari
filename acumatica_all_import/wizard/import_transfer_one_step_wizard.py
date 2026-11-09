@@ -457,42 +457,17 @@ class ImportTransferOneStepWizard(models.TransientModel):
 
 
     def _search_picking_type(self, header):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
-            return config_picking_type
-
-        PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
-        type = False
-
-        document_only_type = PickingType.resolve_document_only_picking_type(
-            api_acumatica='transfer_one_step',
-            document_only=header.get('document_only'),
+        return self.env['acumatica.config']._resolve_transaction_picking_type(
+            config=self.config_id,
             warehouse_code=header.get('from_warehouse_code'),
-        )
-        if document_only_type:
-            return document_only_type
-
-        print(f"Warehouse: {header['from_warehouse_code']}")
-
-        location = Location.search([
-            ('code', '=', header['from_warehouse_code'])
-        ])
-
-            
-        if location:
-            type = PickingType.resolve_picking_type(
-                warehouse_code=header['from_warehouse_code'],
-                code='internal',
-                operation_category='internal',
-                api_acumatica='transfer_one_step',
-                transaction_key='transfer_one_step',
-                required=False,
-            )
-
-            print(f"Type: {type}")
-
-        return type if type else None
+            code='internal',
+            operation_category='internal',
+            api_acumatica='transfer_one_step',
+            transaction_key='transfer_one_step',
+            document_only=header.get('document_only'),
+            config_policy='always',
+            require_location_mapping=True,
+        ) or None
 
 
     def action_view_staging(self):
