@@ -195,7 +195,7 @@
                             <field name="difference_quantity" string="Difference Qty" optional="hide" readonly="1"/>
                             <field name="status_mo_check" widget="badge" decoration-success="status_mo_check == 'finished'" decoration-danger="status_mo_check == 'unfinished'"/>
                             <button
-                                name="action_open_note_wizard"
+                                name="action_open_manufacturing_note_wizard"
                                 type="object"
                                 icon="fa-sticky-note"
                                 title="Note"/>
@@ -241,7 +241,7 @@
                                         </div>
                                         <br/>
                                         <button
-                                            name="action_open_note_wizard"
+                                            name="action_open_manufacturing_note_wizard"
                                             type="object"
                                             icon="fa-sticky-note"
                                             title="Note"/>
@@ -366,10 +366,9 @@
                                 </div>
                                 <br/>
                                 <button
-                                    name="action_open_note_wizard"
+                                    name="action_open_manufacturing_note_wizard"
                                     type="object"
                                     icon="fa-sticky-note"
-                                    context="{'show_difference_note_in_mrp_operations': True}"
                                     title="Note"/>
                                 <button name="action_open_move_mo"
                                     type="object"
@@ -399,10 +398,9 @@
                     force_save="1"/>
                 
                 <button
-                    name="action_open_note_wizard"
+                    name="action_open_manufacturing_note_wizard"
                     type="object"
                     icon="fa-sticky-note"
-                    context="{'show_difference_note_in_mrp_operations': True}"
                     title="Note"/>
             </xpath>
         </field>

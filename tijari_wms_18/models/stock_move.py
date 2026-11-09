@@ -1387,17 +1387,19 @@ class StockMove(models.Model):
 
     def action_open_note_wizard(self):
         self.ensure_one()
+        return self._get_note_wizard_action(include_difference_note=False)
 
-        show_difference_note = (
-            self.env.context.get('show_difference_note_in_mrp_operations')
-            and (self.raw_material_production_id or self.production_id)
-        )
-        view_xmlid = (
-            'tijari_wms_18.stock_move_manufacturing_note_form_view'
-            if show_difference_note
-            else 'tijari_wms_18.stock_move_note_form_view'
-        )
+    def action_open_manufacturing_note_wizard(self):
+        self.ensure_one()
+        return self._get_note_wizard_action(include_difference_note=True)
 
+    def _get_note_wizard_action(self, include_difference_note=False):
+        self.ensure_one()
+        view_xmlid = 'tijari_wms_18.stock_move_note_form_view'
+        if include_difference_note and (
+            self.raw_material_production_id or self.production_id
+        ):
+            view_xmlid = 'tijari_wms_18.stock_move_manufacturing_note_form_view'
         note_view = self.env.ref(view_xmlid, raise_if_not_found=False)
         if not note_view:
             note_view = self.env.ref('tijari_wms_18.stock_move_note_form_view')

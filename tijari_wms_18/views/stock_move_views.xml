@@ -129,7 +129,7 @@
         <field name="arch" type="xml">
             <form string="Product Note">
                 <group>
-                    <field name="product_note" nolabel="1"/>
+                    <field name="product_note" string="Notes"/>
                 </group>
             </form>
         </field>
@@ -141,7 +141,7 @@
         <field name="arch" type="xml">
             <form string="Manufacturing Note">
                 <group>
-                    <field name="product_note" nolabel="1"/>
+                    <field name="product_note" string="Notes"/>
                     <field name="difference_note"/>
                 </group>
             </form>
