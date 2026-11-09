@@ -20,6 +20,15 @@ from odoo.tools import SQL
 _logger = logging.getLogger(__name__)
 _OPERATOR_VALIDATION_WRITE_TOKEN = object()
 _BACKORDER_CREATE_TOKEN = object()
+_IMPORT_AUDIT_SCAN_FILTER_FIELDS = frozenset({
+    'picker_scan_code', 'picker_product_id', 'picker_lot_id',
+    'putaway_scan_code', 'putaway_product_id', 'putaway_lot_id', 'putaway_lot_code',
+    'putaway_move_line_ids',
+    'unpacked_scan_code', 'unpacked_product_id', 'unpacked_lot_id', 'unpacked_lot_code',
+    'package_scan_code', 'scanned_package_id', 'filtered_package_level_id',
+    'filtered_package_level_ids', 'filtered_move_ids', 'filtered_unpacked_move_ids',
+    'filtered_picker_move_ids',
+})
 
 class StockPicking(models.Model):
     _name = 'stock.picking'
@@ -839,7 +848,13 @@ class StockPicking(models.Model):
         return result
 
     def write(self, vals):
-        import_audit_fields = {
+        # Scan/filter form updates are operational UI state, not changes from an
+        # Acumatica import. Skip this audit hook for the whole write so extra
+        # form values cannot cause a chatter post to a restricted staging record.
+        is_scan_filter_write = bool(
+            _IMPORT_AUDIT_SCAN_FILTER_FIELDS.intersection(vals)
+        )
+        import_audit_fields = set() if is_scan_filter_write else {
             field_name for field_name in vals
             if field_name in self._fields and field_name not in {
                 'write_uid', 'write_date', 'message_follower_ids', 'activity_ids',
@@ -931,6 +946,16 @@ class StockPicking(models.Model):
             for picking in self:
                 staging = staging_by_picking.get(picking.id)
                 if not staging or not hasattr(staging, '_acumatica_post_import_log'):
+                    continue
+                # Import audit chatter is optional. Operators can update a
+                # picking without having access to its restricted staging row;
+                # attempting message_post there raises mail.message AccessError
+                # and rolls back the picking operation.
+                if not staging.check_access_rights('write', raise_exception=False):
+                    continue
+                try:
+                    staging.check_access_rule('write')
+                except AccessError:
                     continue
                 changed_fields = []
                 for field_name in import_audit_fields:
