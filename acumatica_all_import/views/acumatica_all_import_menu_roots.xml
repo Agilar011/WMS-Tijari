@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Parent menus are registered before staging views reference them. -->
+    <menuitem id="menu_acumatica_all_import_staging_root"
+        name="Data Transaksi"
+        parent="menu_acumatica_all_import_root"
+        sequence="30"/>
+    <menuitem id="menu_acumatica_all_import_staging_internal"
+        name="Internal Transfer"
+        parent="menu_acumatica_all_import_staging_root"
+        sequence="30"/>
+</odoo>

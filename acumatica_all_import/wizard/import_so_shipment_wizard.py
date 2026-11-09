@@ -676,45 +676,18 @@ class ImportSOShipmentWizard(models.TransientModel):
         )
 
     def _search_picking_type(self, building_id, code, document_only=False):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if code == 'CO' and config_picking_type and config_picking_type.code == 'internal' and config_picking_type.operation_category == 'internal':
-            return config_picking_type
-        if code != 'CO' and config_picking_type and config_picking_type.code == 'internal' and config_picking_type.operation_category == 'pick':
-            return config_picking_type
-
-        PickingType = self.env['stock.picking.type']
-
-        document_only_type = PickingType.resolve_document_only_picking_type(
-            api_acumatica='so_shipment',
-            document_only=document_only,
+        operation_category = 'internal' if code == 'CO' else 'pick'
+        transaction_key = 'so_shipment_co' if code == 'CO' else 'so_shipment'
+        return self.env['acumatica.config']._resolve_transaction_picking_type(
+            config=self.config_id,
             building_id=building_id,
-        )
-        if document_only_type:
-            return document_only_type
-
-        if code == 'CO':
-            type = PickingType.resolve_picking_type(
-                building_id=building_id,
-                code='internal',
-                operation_category='internal',
-                api_acumatica='so_shipment',
-                transaction_key='so_shipment_co',
-                required=False,
-            )
-
-        else:
-            type = PickingType.resolve_picking_type(
-                building_id=building_id,
-                code='internal',
-                operation_category='pick',
-                api_acumatica='so_shipment',
-                transaction_key='so_shipment',
-                required=False,
-            )
-
-        
-
-        return type if type else None
+            code='internal',
+            operation_category=operation_category,
+            api_acumatica='so_shipment',
+            transaction_key=transaction_key,
+            document_only=document_only,
+            config_policy='matching',
+        ) or None
 
 
 

@@ -323,6 +323,16 @@ class AcumaticaInvoiceConsignment(models.Model):
         ]).mapped('origin')
         
         print(f"Picking to skip: {picking_to_skip}")
+
+        # Read the selected headers' detail rows once and reuse them below.
+        invoice_lines_by_header = {}
+        invoice_header_ids = self.ids
+        invoice_line_model = self.env['acumatica.invoice.consignment.staging.line']
+        all_invoice_lines = invoice_line_model.search(
+            [('receipt_line_id', 'in', invoice_header_ids)],
+        ) if invoice_header_ids else invoice_line_model
+        for invoice_line in all_invoice_lines:
+            invoice_lines_by_header.setdefault(invoice_line.receipt_line_id.id, []).append(invoice_line.id)
         
         # PERULANGAN UTAMA PER DOKUMEN STAGING
         for first in self:
@@ -338,9 +348,8 @@ class AcumaticaInvoiceConsignment(models.Model):
                     if not vendor:
                         print(f"Vendor not found: {first.adt_CustomerName}")
 
-                    staging_line = self.env['acumatica.invoice.consignment.staging.line'].search([
-                        ('receipt_line_id', '=', first.id)
-                    ], limit=1)
+                    invoice_lines = invoice_line_model.browse(invoice_lines_by_header.get(first.id, []))
+                    staging_line = invoice_lines[:1]
 
                     branch_warehouse = staging_line.adt_Branch if staging_line else False
 
@@ -416,21 +425,27 @@ class AcumaticaInvoiceConsignment(models.Model):
                         picking = Picking.sudo().create(vals)
                         action_state = 'created'
 
-                    to_create_move = self.env['acumatica.invoice.consignment.staging.line'].search([
-                        ('receipt_line_id', '=', first.id)
-                    ])
+                    to_create_move = invoice_lines
 
                     print(f"Processing {len(to_create_move)} lines for receipt {first_reference}")
 
                     # Inisialisasi list kosong sebelum loop lines dimulai
                     moves_to_create = []
                     update_line_snapshots = []
+                    products_by_key = {}
 
                     print(f"Processing {len(to_create_move)} lines for receipt {first_reference}")
 
                     # PERULANGAN LINES
                     for line in to_create_move:
-                        product = self._find_product(line)
+                        product_key = (
+                            ('inventory', line.adt_InventoryID)
+                            if line.adt_InventoryID else
+                            ('description', line.adt_TransactionDescription)
+                        )
+                        if product_key not in products_by_key:
+                            products_by_key[product_key] = self._find_product(line)
+                        product = products_by_key[product_key]
                         if not product:
                             # Jika produk tidak ketemu, raise error ini akan membatalkan (rollback) pembuatan picking!
                             raise UserError(

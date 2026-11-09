@@ -7,7 +7,7 @@
  'data': ['security/ir.model.access.csv',
           'data/inventory_stock_generate_job_cron.xml',
           'views/acumatica_all_import_root_menu.xml',
-          'views/acumatica_all_import_menu.xml',
+          'views/acumatica_all_import_menu_roots.xml',
           'data/api_dashboard_data.xml',
           'data/api_scheduler_data_types.xml',
           'data/acumatica_cron_data.xml',

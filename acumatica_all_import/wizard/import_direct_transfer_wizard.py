@@ -80,46 +80,24 @@ class ImportDirectTransferWizard(models.TransientModel):
 
 
     def _search_picking_type(self, header):
-        config_picking_type = self.config_id._get_config_picking_type() if self.config_id else False
-        if config_picking_type:
-            return config_picking_type
-
-        PickingType = self.env['stock.picking.type']
-        Location = self.env['stock.location.acumatica']
-        type = False
-
-        if self.config_id.config_type == 'vendor_return_document_direct_transfer':
-            document_only_type = PickingType.resolve_document_only_picking_type(
-                target_operation_type='direct_delivery_order',
-                api_acumatica='vendor_return',
-                document_only=header.get('adt_DocumentOnly'),
-                warehouse_code=header.get('adt_FromWarehouseID'),
-                required=False,
-            )
-            if document_only_type:
-                return document_only_type
-            if header.get('adt_DocumentOnly'):
-                return None
-
-        print(f"Warehouse: {header['adt_FromWarehouseID']}")
-
-        location = Location.search([
-            ('code', '=', header['adt_FromWarehouseID'])
-        ])
-
-        if location:
-            type = PickingType.resolve_picking_type(
-                warehouse_code=header['adt_FromWarehouseID'],
-                code='internal',
-                operation_category='internal',
-                api_acumatica='vendor_return',
-                transaction_key='vendor_return_document_direct_transfer',
-                required=False,
-            )
-
-            print(f"Type: {type}")
-
-        return type if type else None
+        is_document_transfer = (
+            self.config_id.config_type == 'vendor_return_document_direct_transfer'
+        )
+        return self.env['acumatica.config']._resolve_transaction_picking_type(
+            config=self.config_id,
+            warehouse_code=header.get('adt_FromWarehouseID'),
+            code='internal',
+            operation_category='internal',
+            api_acumatica='vendor_return',
+            transaction_key='vendor_return_document_direct_transfer',
+            target_operation_type='direct_delivery_order' if is_document_transfer else False,
+            document_only=header.get('adt_DocumentOnly') if is_document_transfer else False,
+            config_policy='always',
+            require_location_mapping=True,
+            stop_after_document_only_miss=(
+                is_document_transfer and bool(header.get('adt_DocumentOnly'))
+            ),
+        ) or None
 
     def fetch_data(self, limit=50, offset=0, reference_nbr=False, odata_filter=False):
         self.ensure_one()

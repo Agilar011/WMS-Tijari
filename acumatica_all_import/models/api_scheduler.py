@@ -4,6 +4,9 @@ import time
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
 
+
+_DATA_HUB_LOCK_KEY = (1379729474, 1)
+
 _logger = logging.getLogger(__name__)
 
 _SCHEDULER_JOB_TYPES = {
@@ -79,6 +82,12 @@ class ApiSchedulerJob(models.Model):
     )
     do_not_overlap = fields.Boolean(string='Do Not Overlap', default=True)
     is_running = fields.Boolean(readonly=True, copy=False)
+    pending_run = fields.Boolean(readonly=True, copy=False)
+    pending_since = fields.Datetime(readonly=True, copy=False)
+    pending_log_id = fields.Many2one(
+        'api.scheduler.log', readonly=True, copy=False, ondelete='set null',
+    )
+    pending_request_count = fields.Integer(readonly=True, copy=False, default=0)
 
     ir_cron_id = fields.Many2one('ir.cron', string='Odoo Cron', readonly=True, copy=False)
     cron_active = fields.Boolean(related='ir_cron_id.active', readonly=False, string='Odoo Cron Active')
@@ -133,18 +142,186 @@ class ApiSchedulerJob(models.Model):
         return True
 
     def _run_single_job(self):
+        """Run one Data Hub job while holding a database-wide advisory lock."""
         self.ensure_one()
         if not self.active:
             return False
-        if self.do_not_overlap and self.is_running:
-            self._create_log(
-                status='failed',
-                execution_time=fields.Datetime.now(),
+
+        lock_acquired = False
+        if self.do_not_overlap:
+            self.env.cr.execute(
+                'SELECT pg_try_advisory_lock(%s, %s)',
+                _DATA_HUB_LOCK_KEY,
+            )
+            lock_acquired = bool(self.env.cr.fetchone()[0])
+            if not lock_acquired:
+                self._queue_run_request()
+                return True
+
+        try:
+            result = self._run_single_job_locked()
+            if lock_acquired:
+                try:
+                    self._drain_pending_queue_locked()
+                except Exception:
+                    self.env.cr.rollback()
+                    self.env.invalidate_all()
+                    _logger.exception('Failed to drain queued API Data Hub scheduler jobs.')
+            return result
+        finally:
+            if lock_acquired:
+                # Session-level locks survive the commits used to publish
+                # progress. PostgreSQL releases the lock if a worker exits.
+                self.env.cr.commit()
+                self.env.cr.execute(
+                    'SELECT pg_advisory_unlock(%s, %s)',
+                    _DATA_HUB_LOCK_KEY,
+                )
+                self.env.cr.fetchone()
+
+    def _queue_run_request(self):
+        """Persist one pending run, coalescing repeated requests for this job."""
+        self.ensure_one()
+        self.env.cr.execute(
+            'SELECT id FROM api_scheduler_job WHERE id = %s FOR UPDATE',
+            (self.id,),
+        )
+        self.invalidate_recordset([
+            'pending_run', 'pending_since', 'pending_log_id', 'pending_request_count',
+        ])
+
+        if self.pending_run and self.pending_log_id:
+            request_count = self.pending_request_count + 1
+            self.write({'pending_request_count': request_count})
+            self.pending_log_id.write({
+                'message': (
+                    'Queued: waiting for the current API Data Hub job to finish. '
+                    'Repeated requests for this job were coalesced (%s total).'
+                ) % request_count,
+            })
+        else:
+            now = fields.Datetime.now()
+            log = self._create_log(
+                status='queued',
+                execution_time=now,
                 duration=0.0,
                 details=[],
-                message='Skipped because the previous execution is still running.',
+                message='Queued: waiting for the current API Data Hub job to finish.',
             )
+            self.write({
+                'pending_run': True,
+                'pending_since': now,
+                'pending_log_id': log.id,
+                'pending_request_count': 1,
+            })
+        self.env.cr.commit()
+
+    def _take_next_queued_job(self):
+        """Lock and return the oldest queued job without clearing its queue marker."""
+        self.env.cr.execute("""
+            SELECT id
+              FROM api_scheduler_job
+             WHERE pending_run IS TRUE
+             ORDER BY pending_since, id
+             LIMIT 1
+             FOR UPDATE SKIP LOCKED
+        """)
+        row = self.env.cr.fetchone()
+        if not row:
+            return self.browse(), self.env['api.scheduler.log'].browse()
+
+        job = self.sudo().browse(row[0])
+        job.invalidate_recordset([
+            'active', 'is_running', 'pending_run', 'pending_since',
+            'pending_log_id', 'pending_request_count',
+        ])
+        return job, job.pending_log_id
+
+    def _drain_pending_queue_locked(self):
+        """Run queued jobs in FIFO order while the global advisory lock is held."""
+        while True:
+            job, queued_log = self._take_next_queued_job()
+            if not job:
+                self.env.cr.commit()
+                return
+
+            if not job.active:
+                if queued_log:
+                    queued_log.write({
+                        'status': 'failed',
+                        'execution_time': fields.Datetime.now(),
+                        'message': 'Queued job was not run because the scheduler is disabled.',
+                    })
+                job.write({
+                    'pending_run': False,
+                    'pending_since': False,
+                    'pending_log_id': False,
+                    'pending_request_count': 0,
+                })
+                self.env.cr.commit()
+                continue
+
+            # Keep pending_run set during execution. If a worker exits
+            # unexpectedly, the queue dispatcher can recover and retry it.
+            self.env.cr.commit()
+            try:
+                job._run_single_job_locked(activity_log=queued_log)
+            except Exception:
+                self.env.cr.rollback()
+                self.env.invalidate_all()
+                job.invalidate_recordset(['is_running', 'pending_run', 'pending_log_id'])
+                if job.is_running:
+                    job._recover_interrupted_run()
+                if queued_log:
+                    queued_log.write({
+                        'status': 'queued',
+                        'message': 'Queued job will be retried after an unexpected worker error.',
+                    })
+                job.write({'pending_run': True})
+                self.env.cr.commit()
+                _logger.exception('Queued API Data Hub scheduler job %s will be retried.', job.code)
+                return
+
+            job.write({
+                'pending_run': False,
+                'pending_since': False,
+                'pending_log_id': False,
+                'pending_request_count': 0,
+            })
+            self.env.cr.commit()
+
+    @api.model
+    def process_pending_queue(self):
+        """Periodic fallback dispatcher for requests queued during a race at unlock."""
+        self.env.cr.execute(
+            'SELECT pg_try_advisory_lock(%s, %s)',
+            _DATA_HUB_LOCK_KEY,
+        )
+        if not self.env.cr.fetchone()[0]:
             return False
+
+        try:
+            self._drain_pending_queue_locked()
+        finally:
+            self.env.cr.commit()
+            self.env.cr.execute(
+                'SELECT pg_advisory_unlock(%s, %s)',
+                _DATA_HUB_LOCK_KEY,
+            )
+            self.env.cr.fetchone()
+        return True
+
+    def _run_single_job_locked(self, activity_log=False):
+        self.ensure_one()
+        if not self.active:
+            return False
+        if self.do_not_overlap:
+            # The advisory lock is authoritative across workers/instances. If
+            # it was acquired but the row still says running, the old worker
+            # exited without finalizing; mark its log failed and allow retry.
+            self.invalidate_recordset(['is_running'])
+            if self.is_running:
+                self._recover_interrupted_run()
 
         execution_time = fields.Datetime.now()
         started = time.monotonic()
@@ -152,17 +329,25 @@ class ApiSchedulerJob(models.Model):
         status = 'success'
         message = False
         process_result = {}
-        activity_log = False
+        activity_log = activity_log or False
 
         try:
             self.write({'is_running': True})
-            activity_log = self._create_log(
-                status='running',
-                execution_time=execution_time,
-                duration=0.0,
-                details=[],
-                message='Job sedang berjalan.',
-            )
+            if activity_log:
+                activity_log.write({
+                    'status': 'running',
+                    'execution_time': execution_time,
+                    'duration': 0.0,
+                    'message': 'Queued job started after the previous API Data Hub run.',
+                })
+            else:
+                activity_log = self._create_log(
+                    status='running',
+                    execution_time=execution_time,
+                    duration=0.0,
+                    details=[],
+                    message='Job sedang berjalan.',
+                )
             self.env.cr.commit()
             process_result = self.with_context(
                 api_scheduler_log_id=activity_log.id,
@@ -173,6 +358,11 @@ class ApiSchedulerJob(models.Model):
         except Exception as exc:
             status = 'failed'
             message = str(exc)
+            # Restore a usable cursor before logging and before the final
+            # statistics/log updates below. The failure may have come from a
+            # data-type handler that performed SQL outside a savepoint.
+            self.env.cr.rollback()
+            self.env.invalidate_all()
             _logger.exception("API Scheduler %s failed.", self.code)
         finally:
             after = self._snapshot_stats()
@@ -195,6 +385,21 @@ class ApiSchedulerJob(models.Model):
                 )
             self.write({'is_running': False})
         return status == 'success'
+
+    def _recover_interrupted_run(self):
+        """Clear stale running state after acquiring the cross-worker lock."""
+        self.ensure_one()
+        running_logs = self.env['api.scheduler.log'].sudo().search([
+            ('scheduler_job_id', '=', self.id),
+            ('status', '=', 'running'),
+        ])
+        if running_logs:
+            running_logs.write({
+                'status': 'failed',
+                'message': 'Previous execution stopped before finalizing; retry is allowed.',
+            })
+        self.write({'is_running': False})
+        self.env.cr.commit()
 
     def _replace_log_details(self, log, details):
         """Replace detail rows and refresh aggregate counters on a live log."""
@@ -222,6 +427,13 @@ class ApiSchedulerJob(models.Model):
         if category is None:
             category = self.selected_data_category
             data_types = self.selected_data_type_ids.mapped('code')
+            if category == 'master':
+                # Ignore legacy selections that are no longer part of the
+                # Master Data scheduler catalog.
+                data_types = [
+                    code for code in data_types
+                    if code in ImportWizard.MASTER_DATA_TYPES
+                ]
             if not data_types:
                 raise UserError('Pilih minimal satu Data untuk scheduler ini.')
         else:
@@ -319,8 +531,14 @@ class ApiSchedulerJob(models.Model):
         Wizard = self.env['acumatica.unified.import.wizard']
         if self.job_type in ('fetch_selected', 'import_selected'):
             keys = self.selected_data_type_ids.mapped('code')
+            if category == 'master':
+                keys = [key for key in keys if key in Wizard.MASTER_DATA_TYPES]
         else:
-            keys = Wizard.MASTER_DATA_TYPES if category == 'master' else Wizard.TRANSACTION_TYPES
+            keys = (
+                Wizard.MASTER_DATA_TYPES
+                if category == 'master'
+                else Wizard.TRANSACTION_TYPES
+            )
         return [
             (key, Wizard.IMPORT_MAP[key]['label'], Wizard.IMPORT_MAP[key]['line_model'])
             for key in keys if key in Wizard.IMPORT_MAP
@@ -412,6 +630,7 @@ class ApiSchedulerLog(models.Model):
     records_skipped = fields.Integer(string='Records Skipped', readonly=True)
     status = fields.Selection(
         [
+            ('queued', 'Queued'),
             ('running', 'Running'),
             ('success', 'Success'),
             ('failed', 'Failed'),

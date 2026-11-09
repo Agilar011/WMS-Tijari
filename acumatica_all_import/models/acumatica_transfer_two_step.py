@@ -191,8 +191,16 @@ class AcumaticaTransferTwoStepLine(models.Model):
         updated = 0
         error = 0
 
-        # proses per receipt number
-        # print(f"self mapped: {self.mapped('reference_nbr')}")
+        # Fetch detail rows once; each transfer remains in its own processing
+        # block and keeps the existing error handling.
+        transfer_lines_by_header = {}
+        transfer_header_ids = self.ids
+        transfer_line_model = self.env['acumatica.transfer.two.step.line.product']
+        all_transfer_lines = transfer_line_model.search(
+            [('header_id', 'in', transfer_header_ids)],
+        ) if transfer_header_ids else transfer_line_model
+        for transfer_line in all_transfer_lines:
+            transfer_lines_by_header.setdefault(transfer_line.header_id.id, []).append(transfer_line.id)
 
     
         for reference_nbr in self.mapped('reference_nbr'):
@@ -272,9 +280,17 @@ class AcumaticaTransferTwoStepLine(models.Model):
                     document_only=first.document_only,
                 )
 
-                to_create_move = self.env['acumatica.transfer.two.step.line.product'].search([('header_id', '=', first.id)])
+                to_create_move = transfer_line_model.browse(transfer_lines_by_header.get(first.id, []))
+                products_by_key = {}
                 for line in to_create_move:
-                    product = self._find_product(line)
+                    product_key = (
+                        ('inventory', line.adt_InventoryID)
+                        if line.adt_InventoryID else
+                        ('description', line.adt_Description or line.description)
+                    )
+                    if product_key not in products_by_key:
+                        products_by_key[product_key] = self._find_product(line)
+                    product = products_by_key[product_key]
                     if not product:
                         raise UserError(f'Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or "-"}')
                     uom = self._find_uom(line, product)

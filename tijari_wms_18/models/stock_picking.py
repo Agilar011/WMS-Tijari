@@ -20,7 +20,6 @@ from odoo.tools import SQL
 _logger = logging.getLogger(__name__)
 _OPERATOR_VALIDATION_WRITE_TOKEN = object()
 _BACKORDER_CREATE_TOKEN = object()
-
 class StockPicking(models.Model):
     _name = 'stock.picking'
     _inherit = ['stock.picking', 'approval.mixin']
@@ -1277,6 +1276,10 @@ class StockPicking(models.Model):
                 lambda line: (
                     line.quantity > 0
                     and (line.lot_id or line.lot_name)
+                    and (
+                        line.picking_type_name not in ('Receipts', 'Receipt Internal')
+                        or line.picker_status == 'finished'
+                    )
                 )
             )
 
@@ -5021,9 +5024,6 @@ class StockPicking(models.Model):
 
         return base64.b64encode(buffer.getvalue()).decode()
 
-    def action_test_function(self):
-        return True
-    
 class StockReturnPicking(models.TransientModel):
     _inherit = 'stock.return.picking'
 

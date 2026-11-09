@@ -1329,13 +1329,13 @@
                                 icon="fa-trash" title="Hapus Line"
                                 confirm="Apakah Anda yakin ingin menghapus data penerimaan ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Putaway"
                                 invisible="state in ['done', 'cancel'] or putaway_status == 'finished' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']"
-                                column_invisible="parent.picking_type_name in ['Receipts', 'Receipt Internal']"/>
+                                column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
                         <button name="action_delete_picker_line"
                                 type="object"
                                 class="btn btn-link btn-lg p-0"
                                 icon="fa-trash" title="Hapus Line"
                                 invisible="state in ['done', 'cancel'] or putaway_status != 'finished' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']"
-                                column_invisible="parent.picking_type_name in ['Receipts', 'Receipt Internal']"/>
+                                column_invisible="parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
                         <button name="action_delete_picker_line"
                                 type="object"
                                 class="btn btn-link btn-lg p-0"
@@ -2699,9 +2699,14 @@
                         decoration-danger="putaway_progress_status == 'unfinished'"
                         widget="badge"/>
                 </group> -->
-                <field name="putaway_move_line_ids" 
+                <field name="putaway_move_line_ids" invisible="1">
+                    <list open_form_view="1">
+                        <field name="result_package_id"/>
+                    </list>
+                </field>
+                <field name="putaway_display_move_line_ids"
                     mode="list,kanban" 
-                    domain="['&amp;', '&amp;', '&amp;', ('quantity', '&gt;', 0), ('state', '!=', 'cancel'), '|', ('picker_status', '=', 'finished'), ('confirmation_quantity', '&gt;', 0), '|', ('lot_id', '!=', False), ('lot_name', '!=', False)]"
+                    domain="['&amp;', '&amp;', '&amp;', '&amp;', ('quantity', '&gt;', 0), ('state', '!=', 'cancel'), '|', ('picking_id.picking_type_id.name', 'not in', ['Receipts', 'Receipt Internal']), ('picker_status', '=', 'finished'), '|', ('picker_status', '=', 'finished'), ('confirmation_quantity', '&gt;', 0), '|', ('lot_id', '!=', False), ('lot_name', '!=', False)]"
                     context="{
                         'form_view_ref': 'tijari_wms_18.view_move_line_form_inherit_tijari'
                     }"
@@ -2935,11 +2940,11 @@
         <field name="inherit_id" ref="tijari_wms_18.stock_move_putaway_view"/>
         <field name="arch" type="xml">
             
-            <xpath expr="//field[@name='putaway_move_line_ids']/list" position="attributes">
+            <xpath expr="//field[@name='putaway_display_move_line_ids']/list" position="attributes">
                 <attribute name="open_form_view">0</attribute>
             </xpath>
 
-            <xpath expr="//field[@name='putaway_move_line_ids']/list/field[@name='result_package_id']" position="attributes">
+            <xpath expr="//field[@name='putaway_display_move_line_ids']/list/field[@name='result_package_id']" position="attributes">
                 <attribute name="column_invisible">1</attribute>
             </xpath>
 
