@@ -260,6 +260,9 @@ class StockInventory(models.Model):
     acumatica_stock_comparison_data = fields.Json(copy=False)
 
     def action_state_to_in_progress(self):
+        if not self.env.context.get("skip_inventory_operation_queue"):
+            self.ensure_one()
+            return self._queue_inventory_operation("begin")
         started_at = perf_counter()
         inventories = self.filtered('acumatica_stock_comparison_data')
         _logger.info("Inventory adjustment begin inventories=%s comparison_count=%s", self.ids, len(inventories))

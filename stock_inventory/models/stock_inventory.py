@@ -336,6 +336,8 @@ class InventoryAdjustmentsGroup(models.Model):
 
     def action_state_to_in_progress(self):
         self.ensure_one()
+        if not self.env.context.get("skip_inventory_operation_queue"):
+            return self._queue_inventory_operation("begin")
         if self.product_selection in ("manual", "one", "lot") and not self.product_ids:
             raise UserError(
                 self.env._("Select at least one product before beginning this adjustment.")
@@ -473,6 +475,8 @@ class InventoryAdjustmentsGroup(models.Model):
 
     def action_state_to_done(self):
         self.ensure_one()
+        if not self.env.context.get("skip_inventory_operation_queue"):
+            return self._queue_inventory_operation("apply")
         started_at = perf_counter()
         _logger.info(
             "Inventory adjustment apply id=%s name=%s phase=start",
@@ -682,7 +686,7 @@ class InventoryAdjustmentsGroup(models.Model):
                 )
             )
             if pending_counted_quants:
-                self.action_state_to_done()
+                self.with_context(skip_inventory_operation_queue=True).action_state_to_done()
             elif self.state == "approved" and self.count_stock_moves:
                 self.state = "done"
                 self.stock_quant_ids.filtered(
