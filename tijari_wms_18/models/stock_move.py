@@ -14,6 +14,34 @@ _logger = logging.getLogger(__name__)
 class StockMove(models.Model):
     _inherit = 'stock.move'
 
+    @api.depends(
+        'move_line_ids.quantity',
+        'move_line_ids.product_uom_id',
+        'move_line_ids.picker_status',
+        'picking_id.picking_type_id.name',
+    )
+    def _compute_quantity(self):
+        receipt_moves = self.filtered(
+            lambda move: move.picking_id.picking_type_id.name == 'Receipts'
+        )
+        other_moves = self - receipt_moves
+
+        if other_moves:
+            super(StockMove, other_moves)._compute_quantity()
+
+        for move in receipt_moves:
+            finished_lines = move.move_line_ids.filtered(
+                lambda line: line.picker_status == 'finished'
+            )
+            move.quantity = sum(
+                line.product_uom_id._compute_quantity(
+                    line.quantity,
+                    move.product_uom,
+                    round=False,
+                )
+                for line in finished_lines
+            )
+
     operation_scan_code = fields.Char(string='Scan Handheld')
 
     @api.onchange('operation_scan_code')

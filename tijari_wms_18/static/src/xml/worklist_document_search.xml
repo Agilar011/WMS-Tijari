@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-inherit="web.KanbanView" t-inherit-mode="extension">
+        <xpath expr="//t[@t-set-slot='control-panel-additional-actions']/CogMenu" position="before">
+            <div t-if="props.context.tijari_my_worklist" class="o_wms_document_search_field">
+                <input type="text"
+                    class="form-control"
+                    aria-label="Search Document"
+                    placeholder="Scan document barcode..."
+                    autofocus="autofocus"
+                    autocomplete="off"
+                    t-on-keydown="onWorklistDocumentKeydown"/>
+            </div>
+        </xpath>
+    </t>
+
+    <t t-inherit="web.ListView" t-inherit-mode="extension">
+        <xpath expr="//t[@t-set-slot='control-panel-additional-actions']/CogMenu[1]" position="before">
+            <div t-if="props.context.tijari_my_worklist" class="o_wms_document_search_field">
+                <input type="text"
+                    class="form-control"
+                    aria-label="Search Document"
+                    placeholder="Scan document barcode..."
+                    autofocus="autofocus"
+                    autocomplete="off"
+                    t-on-keydown="onWorklistDocumentKeydown"/>
+            </div>
+        </xpath>
+    </t>
+
+    <t t-name="tijari.DocumentSearchDialog" owl="1">
+        <Dialog title="props.title || 'Search Document'" size="'sm'">
+            <div class="o_wms_document_search_dialog">
+                <label for="o_wms_document_search_input" class="form-label">Document number</label>
+                <input id="o_wms_document_search_input"
+                    t-ref="documentInput"
+                    type="text"
+                    class="form-control"
+                    placeholder="Scan or enter document number..."
+                    autocomplete="off"
+                    t-on-keydown="onKeydown"/>
+                <div class="form-text">Scan with the handheld scanner and press Enter.</div>
+            </div>
+            <t t-set-slot="footer">
+                <button type="button" class="btn btn-secondary" t-on-click="props.close">Close</button>
+            </t>
+        </Dialog>
+    </t>
+</templates>

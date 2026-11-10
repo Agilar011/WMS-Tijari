@@ -256,6 +256,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'non_stock_item',
         'uom',
         'vendor',
+        'inventory_stock',
     ]
 
     TRANSACTION_TYPES = [
