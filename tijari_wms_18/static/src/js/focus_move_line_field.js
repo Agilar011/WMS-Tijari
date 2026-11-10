@@ -5,6 +5,7 @@ import { useService } from "@web/core/utils/hooks";
 import { CharField } from "@web/views/fields/char/char_field";
 import { Component, useEffect } from "@odoo/owl";
 import { standardFieldProps } from "@web/views/fields/standard_field_props";
+import { DocumentSearchDialog } from "./worklist_document_search";
 
 const ZXING_BROWSER_CDN_URLS = [
     "/tijari_wms_18/static/src/lib/zxing-browser.min.js",
@@ -777,28 +778,9 @@ async function scanQrToPickingPackage(env, action) {
 
 async function scanQrToPickingOrigin(env, action) {
     const params = action.params || {};
-
-    try {
-        let scannedCode;
-        while (!scannedCode) {
-            try {
-                scannedCode = await scanQrFromCamera(params.title || "Search Document");
-            } catch (error) {
-                if (!isScannerCancelledError(error)) {
-                    throw error;
-                }
-            }
-        }
-
-        const result = await env.services.orm.call(
-            "stock.picking",
-            "action_open_by_scanned_origin",
-            [scannedCode]
-        );
-        await env.services.action.doAction(result);
-    } catch (error) {
-        notifyScannerError(env, error);
-    }
+    env.services.dialog.add(DocumentSearchDialog, {
+        title: params.title || "Search Document",
+    });
 }
 
 class MoveLineScanButton extends Component {
