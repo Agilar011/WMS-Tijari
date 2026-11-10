@@ -2542,7 +2542,7 @@ class StockPicking(models.Model):
 
         pickings = self.search([('origin', '=', origin)], order='id desc', limit=1)
         if not pickings:
-            raise ValidationError(_("Stock Picking tidak ditemukan untuk nomor dokumen: %s") % origin)
+            raise ValidationError(_("Tidak ditemukan Dokumen dengan Nomor: %s") % origin)
 
         action = {
             'type': 'ir.actions.act_window',

@@ -1554,77 +1554,7 @@
                     mode="list,kanban"
                     groups="tijari_wms_18.group_operator"
                     invisible="'Receipts' not in (picking_type_name or '')">
-                    <!-- <kanban class="o_wms_move_pick_kanban" delete="0" can_open="1" default_order="picker_status desc, id">
-                        <field name="product_id"/>
-                        <field name="location_id"/>
-                        <field name="lot_id"/>
-                        <field name="available_lot_ids" />
-                        <field name="quantity"/>
-                        <field name="confirmation_quantity"/>
-                        <field name="product_uom_id"/>
-                        <field name="picking_type_name"/>
-                        <field name="state"/>
-                        <field name="picker_status"/>
-                        <field name="putaway_status" invisible="1"/>
-                        <field name="matching"/>
-                        <templates>
-                            <t t-name="card">
-                                <div class="o_wms_operation_card">
-                                    <div class="o_wms_operation_product">
-                                        <field name="product_id" class="fs-3"/>
-                                    </div>
-                                    <div class="text-muted" invisible="not lot_id">
-                                        <strong>Lot/Serial Number: </strong>
-                                        <field name="lot_id" domain="[('id', 'in', available_lot_ids)]"/>
-                                    </div>
-                                    <div class="o_wms_move_pick_quantities">
-                                        <div>
-                                            <strong>Qty In Pack: </strong>
-                                            <field name="quantity"/>
-                                            <field name="product_uom_id" class="ms-1"/>
-                                        </div>
-                                        <div invisible="'Pick' not in (picking_type_name or '')">
-                                            <strong>Qty Diambil: </strong>
-                                            <field name="confirmation_quantity"/>
-                                            <field name="product_uom_id" class="ms-1"/>
-                                        </div>
-                                    </div>
-                                    <div class="o_wms_operation_actions">
-                                        <button name="action_open_picker_details"
-                                            type="object"
-                                            class="btn btn-primary btn-sm"
-                                            string="Pick Details">
-                                        </button>
-                                        <button name="action_mark_picker_unfinished"
-                                            type="object"
-                                            class="btn btn-danger btn-sm o_wms_auto_save_before_action"
-                                            string="Rollback"
-                                            invisible="picker_status == 'unfinished' or parent.state == 'done'">
-                                        </button>
-                                        <button name="action_delete_picker_line"
-                                            type="object"
-                                            class="btn btn-link btn-lg p-0"
-                                            icon="fa-trash" title="Hapus Line"
-                                            confirm="Apakah Anda yakin ingin menghapus data penerimaan ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Putaway"
-                                            invisible="state in ['done', 'cancel'] or putaway_status == 'finished' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']">
-                                        </button>
-                                        <button name="action_delete_picker_line"
-                                            type="object"
-                                            class="btn btn-link btn-lg p-0"
-                                            icon="fa-trash" title="Hapus Line"
-                                            invisible="state in ['done', 'cancel'] or putaway_status != 'finished' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']">
-                                        </button>
-                                        <field name="picker_status"
-                                            decoration-success="picker_status == 'finished'"
-                                            decoration-danger="picker_status == 'unfinished'"
-                                            widget="badge"/>
-                                    </div>
-                                </div>
-                            </t>
-                        </templates>
-                    </kanban>
- -->
-                    <list editable="bottom" create="0" delete="0" default_order="picker_status desc, id">
+                    <list editable="bottom" create="1" delete="0" default_order="picker_status desc, id" no_open="1">
                         <field name="company_id" column_invisible="1" force_save="1"/>
                         <field name="picking_id" column_invisible="1" force_save="1"/>
                         <field name="move_id" column_invisible="1" force_save="1"/>
@@ -1635,7 +1565,7 @@
                         <field name="putaway_status" column_invisible="1"/>
                         <field name="available_lot_ids" column_invisible="1"/>
 
-                        <field name="lot_id" string="Lot/Serial Number" readonly="0" force_save="1" domain="[('id', 'in', available_lot_ids)]"/>
+                        <field name="lot_id" string="Lot/Serial Number" readonly="1" force_save="1" domain="[('id', 'in', available_lot_ids)]"/>
                         <field name="quantity" string="Qty Diterima" readonly="picker_status == 'finished'" force_save="1"/>
                         <field name="product_uom_id" string="UoM" readonly="1"/>
                         <field name="picker_status" string="Status"
@@ -1660,11 +1590,6 @@
                                 icon="fa-trash" title="Hapus Line"
                                 confirm="Apakah Anda yakin ingin menghapus data penerimaan ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Putaway"
                                 invisible="state in ['done', 'cancel'] or putaway_status == 'finished' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
-                        <button name="action_delete_picker_line"
-                                type="object"
-                                class="btn btn-link btn-lg p-0"
-                                icon="fa-trash" title="Hapus Line"
-                                invisible="state in ['done', 'cancel'] or putaway_status != 'finished' or parent.picking_type_name not in ['Receipts', 'Receipt Internal']"/>
                     </list>
                     <kanban class="o_kanban_mobile" create="1" delete="0" can_open="1" default_order="picker_status desc, id asc">
                         <field name="company_id" invisible="1" force_save="1"/>
@@ -1713,29 +1638,6 @@
                                         </div>
                                     </div>
                                 </div>
-                                <!-- <div invisible="picking_type_name in ('Receipts', 'Receipt Internal')">
-                                    <div class="d-flex justify-content-between align-items-start mb-1">
-                                        <field name="product_id" readonly="1" force_save="1" class="fw-bold fs-6"/>
-                                        <field name="picker_status" widget="badge"
-                                            decoration-success="picker_status == 'finished'"
-                                            decoration-danger="picker_status == 'unfinished'"/>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-1">
-                                        <strong>Qty Total: </strong>
-                                        <field name="product_uom_qty"/>
-                                        <field name="product_uom_id"/>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-1">
-                                        <strong>Qty Diterima: </strong>
-                                        <field name="quantity"/>
-                                        <field name="product_uom_id"/>
-                                    </div>
-                                    <div class="d-flex align-items-center gap-1">
-                                        <strong>Qty Disimpan: </strong>
-                                        <field name="confirmation_quantity"/>
-                                        <field name="product_uom_id"/>
-                                    </div>
-                                </div> -->
                             </t>
                         </templates>
                     </kanban>

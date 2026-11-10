@@ -97,6 +97,7 @@
             'tijari_wms_18/static/src/js/list_table_auto_layout.js',
             'tijari_wms_18/static/src/lib/zxing-browser.min.js',
             'tijari_wms_18/static/src/js/focus_move_line_field.js',
+            'tijari_wms_18/static/src/js/worklist_document_search.js',
             'tijari_wms_18/static/src/js/picker_sort_boolean_field.js',
             'tijari_wms_18/static/src/js/stock_move_line_owner_quant_domain.js',
             'tijari_wms_18/static/src/js/auto_save_view_button.js',
@@ -106,10 +107,12 @@
             'tijari_wms_18/static/src/xml/auto_input_code.xml',
             'tijari_wms_18/static/src/xml/action_generate_selected_lot.xml',
             'tijari_wms_18/static/src/xml/move_line_scan_button.xml',
+            'tijari_wms_18/static/src/xml/worklist_document_search.xml',
             'tijari_wms_18/static/src/views/fields/location_short_many2one/location_short_many2one.js',
             'tijari_wms_18/static/src/views/fields/location_short_many2one/location_short_many2one.xml',
             'tijari_wms_18/static/src/scss/scan_button_align_center.scss',
             'tijari_wms_18/static/src/scss/scan_move_delivery.scss',
+            'tijari_wms_18/static/src/scss/worklist_document_search.scss',
         ]
     },
     
