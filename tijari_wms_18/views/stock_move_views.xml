@@ -39,11 +39,11 @@
                 <attribute name="string">Qty Total</attribute>
             </xpath>
 
-            <xpath expr="//form/group/group/div[@class='o_row']/span/field[@name='product_uom']" position="attributes">
+            <xpath expr="//form/group/group/div[hasclass('o_row')]/span/field[@name='product_uom']" position="attributes">
                 <attribute name="invisible">1</attribute>
             </xpath>
 
-            <xpath expr="//form/group/group/div[@class='o_row']" position="after">
+            <xpath expr="//form/group/group/div[hasclass('o_row')]" position="after">
                 <label for="quantity" string="Qty Disimpan" invisible="'Receipt' not in (picking_type_name or '')"/>
                 <div class="o_row" invisible="'Receipt' not in (picking_type_name or '')">
                     <field name="quantity" readonly="1" nolabel="1"/>

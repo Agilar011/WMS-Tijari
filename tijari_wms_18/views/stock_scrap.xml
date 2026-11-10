@@ -49,7 +49,7 @@
             <xpath expr="//group//field[@name='origin']" position="replace">
                 <field name="name" readonly="1" string="Seri Dokumen"/>
             </xpath>
-            <xpath expr="//div[contains(@class, 'oe_title')]//field[@name='name']" position="replace">
+            <xpath expr="//div[hasclass('oe_title')]//field[@name='name']" position="replace">
                 <field name="origin" placeholder="No. Dokumen" invisible="not id"/>
             </xpath>
             
