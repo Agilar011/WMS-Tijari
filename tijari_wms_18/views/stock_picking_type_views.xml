@@ -28,7 +28,7 @@
         <field name="arch" type="xml">
             <xpath expr="//sheet" position="before">
                 <div class="mb-2">
-                    <button name="action_print_lot_number" string="Print Lot" type="object" class="btn btn-primary btn-sm"/>
+                    <button name="action_print_lot_number" type="object" string="Lot Number" icon="fa-print" title="Lot Number" class="btn btn-primary btn-sm"/>
                 </div>
             </xpath>
         </field>
@@ -40,7 +40,7 @@
     <field name="arch" type="xml">
         <field name="name" position="before">
             <header>
-                    <button name="action_print_lot_number" string="Print Lot" type="object" class="btn-warning"/>
+                    <button name="action_print_lot_number" type="object" string="Lot Number" icon="fa-print" title="Lot Number" class="btn-warning"/>
             </header>
         </field>
     </field>

@@ -416,23 +416,46 @@ class InventoryAdjustmentsGroup(models.Model):
 
         adjustment_date = fields.Datetime.to_datetime(self.date).strftime("%m%d%y")
 
-        for quant in stock_quant_ids:
-            if (
-                quant.product_id.tracking == "lot"
-                and not quant.lot_id
-            ):
-                
-                lot_name = "{}-{}-{}".format(
-                    quant.product_id.default_code,
-                    adjustment_date,
-                    self.acumatica_ref_doc,
-                )
+        # Build lot names up front and fetch any matching lots in one query.
+        # Quants for the same product/company (including different locations)
+        # must share one lot during this adjustment.
+        lotless_quants = stock_quant_ids.filtered(lambda quant: not quant.lot_id)
+        lot_name_by_quant_id = {
+            quant.id: "{}-{}-{}".format(
+                quant.product_id.default_code,
+                adjustment_date,
+                self.acumatica_ref_doc,
+            )
+            for quant in lotless_quants
+        }
+        lots_by_key = {}
+        inventory_company_id = self.company_id.id
+        if lotless_quants:
+            existing_lots = self.env["stock.lot"].search(
+                [
+                    ("product_id", "in", lotless_quants.product_id.ids),
+                    ("name", "in", list(set(lot_name_by_quant_id.values()))),
+                    ("company_id", "in", [inventory_company_id, False]),
+                ],
+                order="company_id desc, id",
+            )
+            for lot in existing_lots:
+                key = (lot.product_id.id, lot.name, lot.company_id.id)
+                lots_by_key.setdefault(key, lot)
 
-                lot = self.env["stock.lot"].create({
-                    "name": lot_name,
-                    "product_id": quant.product_id.id,
-                    "company_id": quant.company_id.id,
-                })
+        for quant in stock_quant_ids:
+            if quant.id in lot_name_by_quant_id:
+                lot_name = lot_name_by_quant_id[quant.id]
+                lot_key = (quant.product_id.id, lot_name, inventory_company_id)
+                shared_lot_key = (quant.product_id.id, lot_name, False)
+                lot = lots_by_key.get(lot_key) or lots_by_key.get(shared_lot_key)
+                if not lot:
+                    lot = self.env["stock.lot"].create({
+                        "name": lot_name,
+                        "product_id": quant.product_id.id,
+                        "company_id": inventory_company_id,
+                    })
+                    lots_by_key[lot_key] = lot
 
                 quant.write({
                     "lot_id": lot.id,
@@ -576,6 +599,7 @@ class InventoryAdjustmentsGroup(models.Model):
         context.update({
             "search_default_to_do": 1,
             "inventory_id": self.id,
+            "inventory_company_id": self.company_id.id,
             "inventory_location_ids": allowed_locations.ids,
             "default_to_do": True,
             "default_current_inventory_id": self.id,

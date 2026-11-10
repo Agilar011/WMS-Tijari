@@ -1,6 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
+    <record id="stock_quant_card_list_view" model="ir.ui.view">
+        <field name="name">stock.quant.card.list</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <list string="Kartu Stok" create="0" edit="0" delete="0" import="0" duplicate="0">
+                <field name="location_id" 
+                    context="{'show_location_short_name': True}" 
+                    widget="location_short_many2one"/>
+                <field name="product_default_code" string="SKU"/>
+                <field name="product_name" string="Description"/>
+                <field name="lot_id" groups="stock.group_production_lot"/>
+                <field name="owner_id" groups="stock.group_tracking_owner"/>
+                <field name="quantity" string="On Hand" sum="Total On Hand"/>
+                <field name="reserved_quantity" string="Reserved" optional="show" sum="Total Reserved"/>
+                <field name="available_quantity" string="Available" optional="show" sum="Total Available"/>
+                <field name="product_uom_id" string="Unit" groups="uom.group_uom"/>
+                <field name="company_id" groups="base.group_multi_company" optional="hide"/>
+                <button name="action_view_stock_moves" string="History" type="object" class="btn-link" icon="fa-history"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_stock_quant_card" model="ir.actions.act_window">
+        <field name="name">Kartu Stok</field>
+        <field name="res_model">stock.quant</field>
+        <field name="view_mode">list</field>
+        <field name="search_view_id" ref="stock.quant_search_view"/>
+        <field name="groups_id" eval="[(6, 0, [
+            ref('tijari_wms_18.group_warehouse_manager'),
+            ref('tijari_wms_18.group_warehouse_head'),
+            ref('tijari_wms_18.group_warehouse_admin'),
+            ref('tijari_wms_18.group_it_staff'),
+            ref('tijari_wms_18.group_accounting_stock'),
+            ref('stock.group_stock_manager'), ref('base.group_system')
+        ])]"/>
+    </record>
+
+    <record id="action_stock_quant_card_list_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="1"/>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="stock_quant_card_list_view"/>
+        <field name="act_window_id" ref="action_stock_quant_card"/>
+    </record>
+
+    <menuitem id="menu_stock_quant_card"
+        name="Kartu Stok"
+        parent="stock.menu_warehouse_report"
+        action="action_stock_quant_card"
+        sequence="140"
+        groups="tijari_wms_18.group_warehouse_manager,tijari_wms_18.group_warehouse_head,tijari_wms_18.group_warehouse_admin,tijari_wms_18.group_it_staff,tijari_wms_18.group_accounting_stock,stock.group_stock_manager,base.group_system"/>
+
     <menuitem id="menu_inherit_stock_report_velocity"
             name="Report Stock Velocity"
             parent="stock.menu_warehouse_report"

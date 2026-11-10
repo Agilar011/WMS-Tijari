@@ -146,6 +146,13 @@
         <field name="inherit_id" ref="stock.view_picking_form"/>
         <field name="arch" type="xml">
 
+            <!-- (Action ID 210). -->
+            <xpath expr="//button[@name='%(stock.action_report_delivery)d']" position="replace"/>
+
+            <xpath expr="//button[@name='do_print_picking']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
             <xpath expr="//field[@name='state']" position="after">
                 <field name="wms_state"
                     widget="statusbar"
@@ -202,6 +209,14 @@
                     class="btn-primary"
                     invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
 
+                <button name="action_print_warehouse_transfer"
+                    string="BA Internal Transfer"
+                    type="object"
+                    icon="fa-print"
+                    title="BA Internal Transfer"
+                    class="btn-primary"
+                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state in ('draft', 'waiting', 'confirmed', 'assigned', 'done', 'cancel', 'return_shipment')"/>
+
                 <button name="action_complete_transfer_shipment"
                     string="Complete Shipment"
                     type="object"
@@ -240,9 +255,19 @@
                     class="btn-primary"
                     invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state != 'return_shipment'"/>
 
-                <button name="action_print_warehouse_receipt"
-                    string="Print Receipt"
+                <button name="action_print_warehouse_transfer"
+                    string="BA Internal Transfer"
                     type="object"
+                    icon="fa-print"
+                    title="BA Internal Transfer"
+                    class="btn-primary"
+                    invisible="picking_type_name not in ['Delivery Orders'] or adt_type not in ['Sales Order Shipment'] or wms_state != 'return_shipment'"/>
+
+                <button name="action_print_warehouse_receipt"
+                    type="object"
+                    string="BA Receipt"
+                    icon="fa-print"
+                    title="BA Receipt"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Receipts', 'Receipt Internal']"/>
 
@@ -876,6 +901,19 @@
                     <field name="user_ids" widget="many2many_avatar_user" optional="show"/>
                     <field name="batch_id" string="Batch" optional="hide"/>
                 </list>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="stock_picking_tree_mo_delivery" model="ir.ui.view">
+        <field name="name">stock.picking.list.mo.delivery</field>
+        <field name="model">stock.picking</field>
+        <field name="inherit_id" ref="stock_picking_tree_transaction_columns"/>
+        <field name="mode">primary</field>
+        <field name="priority" eval="1210"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list/field[@name='adt_type']" position="before">
+                <field name="picking_type_name" string="Operation Type"/>
             </xpath>
         </field>
     </record>
@@ -1900,26 +1938,34 @@
                         data-hotkey="q"/>
 
                 <button name="action_print_warehouse_pack"
-                    string="Print Pack"
+                    string="BA Pack"
                     type="object"
+                    icon="fa-print"
+                    title="BA Pack"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
                     
                 <button name="delivery_slip_pack"
-                    string="Print Delivery Slip"
+                    string="BA Delivery Slip"
                     type="object"
+                    icon="fa-print"
+                    title="BA Delivery Slip"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
 
                 <button name="action_print_warehouse_pick"
-                    string="Print Pick"
+                    string="BA Pick"
                     type="object"
+                    icon="fa-print"
+                    title="BA Pick"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pick', 'Pick Internal']"/>
                 
                 <button name="action_print_warehouse_transfer"
-                    string="Print Transfer"
+                    string="BA Internal Transfer"
                     type="object"
+                    icon="fa-print"
+                    title="BA Internal Transfer"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Transfer', 'Transfer Internal']"/>
 
@@ -2086,8 +2132,8 @@
         <field name="arch" type="xml">
 
             <xpath expr="//button[@name='unpack']" position="after">
-                <button name="action_print_packing_list" type="object" class="btn-primary" icon="fa-print" title="Print Package List"/>
-                <button name="action_print_packing_package" string="Print Package" type="object" class="btn-primary"/>
+                <button name="action_print_packing_list" string="Package List" type="object" class="btn-primary" icon="fa-print" title="Package List"/>
+                <button name="action_print_packing_package" string="Package" type="object" icon="fa-print" title="Package" class="btn-primary"/>
             </xpath>
             <xpath expr="//field[@name='package_type_id']" position="before">
                 <field name="package_cat" />
@@ -2167,7 +2213,7 @@
                     name="action_print_packing_list"
                     type="object"
                     icon="fa-print"
-                    string="Print"/>
+                    title="Package List"/>
             </xpath>
 
         </field>

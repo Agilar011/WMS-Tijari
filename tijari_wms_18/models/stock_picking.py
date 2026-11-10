@@ -3903,16 +3903,35 @@ class StockPicking(models.Model):
                 and (rec.backorder_id or rec.backorder_ids)
             ):
                 # Raw material moves belong to the MO and may not have a
-                # picking_id. Detect the backorder from this picking, then
-                # create a separate working line on each affected MO move.
-                component_moves = rec.move_ids.move_dest_ids.filtered(
+                # picking_id. Keep the related moves to recover lot data from
+                # completed MO moves, but only add lines to active backorder
+                # moves. A zero-quantity line on a done move would make Odoo
+                # try to apply a zero quant update.
+                related_component_moves = rec.move_ids.move_dest_ids.filtered(
                     lambda move: bool(move.raw_material_production_id)
+                )
+                component_moves = related_component_moves.filtered(
+                    lambda move: (
+                        move.raw_material_production_id.state not in ('done', 'cancel')
+                        and move.state not in ('done', 'cancel')
+                    )
                 )
                 for move in component_moves:
                     finished_lines = move.move_line_ids.filtered(
                         lambda line: line.mo_status == 'finished'
                     )
-                    if not finished_lines:
+                    related_finished_lines = finished_lines | related_component_moves.filtered(
+                        lambda related_move: (
+                            related_move != move
+                            and related_move.product_id == move.product_id
+                            and move.raw_material_production_id.procurement_group_id
+                            and related_move.raw_material_production_id.procurement_group_id
+                            == move.raw_material_production_id.procurement_group_id
+                        )
+                    ).move_line_ids.filtered(
+                        lambda line: line.mo_status == 'finished'
+                    )
+                    if not related_finished_lines:
                         continue
 
                     working_lines = move.move_line_ids.filtered(
@@ -3929,15 +3948,20 @@ class StockPicking(models.Model):
                     for source_line in source_moves.move_line_ids:
                         lot_id = source_line.lot_id.id or False
                         lot_name = source_line.lot_id.name or source_line.lot_name or False
-                        lot_values[(lot_id, lot_name)] = True
+                        if lot_id or lot_name:
+                            lot_values[(lot_id, lot_name)] = True
 
-                    # If the transfer line has no lot, preserve the lot from
-                    # the finished MO line so the new line remains traceable.
+                    # If the transfer line has no lot, preserve it from a
+                    # finished line on this move or its related completed MO
+                    # move, keeping the new line traceable.
                     if not lot_values:
-                        for finished_line in finished_lines:
+                        for finished_line in related_finished_lines:
                             lot_id = finished_line.lot_id.id or False
                             lot_name = finished_line.lot_id.name or finished_line.lot_name or False
                             lot_values[(lot_id, lot_name)] = True
+
+                    if not lot_values:
+                        lot_values[(False, False)] = True
 
                     for lot_id, lot_name in lot_values:
                         matching_working_line = working_lines.filtered(
