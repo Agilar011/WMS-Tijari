@@ -35,7 +35,8 @@ class AcumaticaInventoryStockQuant(models.Model):
             raise UserError(_("There are no Inventory Stock Comparison rows to create an opname."))
 
         rows = records.read([
-            'inventory_id', 'description', 'api_on_hand', 'location_id',
+            'inventory_id', 'description', 'api_on_hand', 'warehouse_code',
+            'location_id', 'location_mapping_id',
         ])
         inventory_codes = list({row['inventory_id'] for row in rows if row['inventory_id']})
         descriptions = list({row['description'] for row in rows if row['description']})
@@ -52,15 +53,20 @@ class AcumaticaInventoryStockQuant(models.Model):
         product_by_name = {product.name: product for product in products_by_name}
 
         opname_rows = []
-        missing_location = 0
+        missing_location_warehouses = set()
         for row in rows:
             code = row['inventory_id']
             product = code_by_default.get(code) or code_by_barcode.get(code)
             if not product and row['description']:
                 product = product_by_name.get(row['description'])
             location = row['location_id']
-            if not location:
-                missing_location += 1
+            location_mapping = row['location_mapping_id']
+            if not location_mapping or not location:
+                missing_location_warehouses.update(
+                    warehouse_code.strip()
+                    for warehouse_code in (row['warehouse_code'] or '').split(',')
+                    if warehouse_code.strip()
+                )
             if product and location:
                 opname_rows.append({
                     'product_id': product.id,
@@ -68,12 +74,12 @@ class AcumaticaInventoryStockQuant(models.Model):
                     'api_on_hand': row['api_on_hand'] or 0.0,
                 })
 
-        if missing_location:
+        if missing_location_warehouses:
             raise UserError(_(
-                "Cannot create the opname because the current filter contains "
-                "%(location_count)s row(s) without a mapped location. Resolve these "
-                "comparison rows first.",
-                location_count=missing_location,
+                "Cannot create the opname because these warehouse codes do not have a "
+                "valid Odoo location mapping: %(warehouse_codes)s. Resolve the location "
+                "mapping first.",
+                warehouse_codes=', '.join(sorted(missing_location_warehouses)),
             ))
 
         if not opname_rows:
@@ -136,10 +142,8 @@ class AcumaticaInventoryStockQuant(models.Model):
                     SELECT DISTINCT ON (mapping.code)
                         mapping.code AS warehouse_code,
                         mapping.id AS location_mapping_id,
-                        COALESCE(mapping.odoo_location_id, warehouse.lot_stock_id) AS location_id
+                        mapping.odoo_location_id AS location_id
                     FROM stock_location_acumatica mapping
-                    LEFT JOIN stock_warehouse warehouse
-                        ON warehouse.id = mapping.odoo_building_id
                     WHERE mapping.active IS TRUE
                       AND mapping.code IS NOT NULL
                     ORDER BY mapping.code, mapping.id
