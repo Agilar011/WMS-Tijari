@@ -41,9 +41,12 @@ class StockQuant(models.Model):
             "current_inventory_id"
         ).mapped("current_inventory_id")
         res = super()._apply_inventory()
-        for quant in self.filtered("current_inventory_id"):
-            quant.to_do = False
-            quant.current_inventory_id = False
+        quants_to_reset = self.filtered("current_inventory_id")
+        if quants_to_reset:
+            quants_to_reset.write({
+                "to_do": False,
+                "current_inventory_id": False,
+            })
 
         if (
             adjustments_to_process
