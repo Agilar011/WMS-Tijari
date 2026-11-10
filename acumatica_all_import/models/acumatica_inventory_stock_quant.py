@@ -184,74 +184,248 @@ class AcumaticaInventoryStockQuant(models.Model):
             )
         """)
 
-    def _get_product(self):
-        self.ensure_one()
-        Product = self.env['product.product']
-        product = Product.search([
-            '|',
-            ('default_code', '=', self.inventory_id),
-            ('barcode', '=', self.inventory_id),
-        ], limit=1)
-        if not product and self.description:
-            product = Product.search([('name', '=', self.description)], limit=1)
-        return product
+    @api.model
+    def _snapshot_product_order(self):
+        # Keep the same winner as Product.search(..., limit=1), whose default
+        # order is defined by product.product.
+        return self.env['product.product']._order
 
-    def _search_snapshot_value(self, field_name, operator, value):
-        records = self.search([])
-        if operator in ('=', '=='):
-            records = records.filtered(lambda record: record[field_name].id == value)
-        elif operator == '!=':
-            records = records.filtered(lambda record: record[field_name].id != value)
-        else:
-            records = records.filtered(lambda record: str(record[field_name].id) == str(value))
-        return [('id', 'in', records.ids)]
+    @api.model
+    def _resolve_products(self, inventory_ids, descriptions):
+        """Resolve line identities in batches, preserving code-before-name priority."""
+        Product = self.env['product.product']
+        # Keep False/empty values too: the original exact search also queried
+        # default_code=False/barcode=False when a line had no inventory code.
+        descriptions = {name for name in descriptions if name}
+        code_products = Product.browse()
+        if inventory_ids:
+            code_products = Product.search([
+                '|', ('default_code', 'in', list(inventory_ids)),
+                ('barcode', 'in', list(inventory_ids)),
+            ], order=self._snapshot_product_order())
+        by_code = {}
+        for product in code_products:
+            by_code.setdefault(product.default_code or False, product)
+            by_code.setdefault(product.barcode or False, product)
+
+        code_matches = {code: by_code.get(code) for code in inventory_ids}
+        missing_codes = {code for code, product in code_matches.items() if not product}
+        name_products = Product.browse()
+        if missing_codes and descriptions:
+            name_products = Product.search(
+                [('name', 'in', list(descriptions))],
+                order=self._snapshot_product_order(),
+            )
+        by_name = {}
+        for product in name_products:
+            by_name.setdefault(product.name, product)
+        return code_matches, by_name
+
+    @api.model
+    def _resolved_product_for(self, inventory_id, description, code_matches, by_name):
+        return code_matches.get(inventory_id) or by_name.get(description)
 
     def _search_product_id(self, operator, value):
-        return self._search_snapshot_value('product_id', operator, value)
+        """Search candidate SQL-view rows using batched ORM product matching."""
+        # Preserve the old fallback for operators other than '='/'=='/'!='.
+        if operator in ('=', '==', '!='):
+            target_id = int(value) if value not in (False, None, '') else False
+        else:
+            try:
+                target_id = int(str(value))
+            except (TypeError, ValueError):
+                target_id = -1
+
+        Product = self.env['product.product']
+        target = Product.browse(target_id).exists() if target_id else Product.browse()
+        if target_id and not target:
+            return [('id', 'not in', [])] if operator == '!=' else [('id', 'in', [])]
+        if not target_id or not target:
+            # Null searches are uncommon; still resolve them with ORM so
+            # active_test, access rules, and translated names remain intact.
+            self.env.cr.execute(
+                f'SELECT id, inventory_id, description FROM {self._table}'
+            )
+            candidates = self.env.cr.fetchall()
+        else:
+            candidate_codes = [code for code in (target.default_code, target.barcode) if code]
+            candidate_names = [target.name] if target.name else []
+            clauses = []
+            params = []
+            if candidate_codes:
+                clauses.append('inventory_id = ANY(%s)')
+                params.append(candidate_codes)
+            if not target.default_code or not target.barcode:
+                clauses.append("(inventory_id IS NULL OR inventory_id = '')")
+            if candidate_names:
+                clauses.append('description = ANY(%s)')
+                params.append(candidate_names)
+            if not clauses:
+                return [('id', 'in', [])] if operator != '!=' else [('id', 'not in', [])]
+            self.env.cr.execute(
+                f"SELECT id, inventory_id, description FROM {self._table} WHERE {' OR '.join(clauses)}",
+                params,
+            )
+            candidates = self.env.cr.fetchall()
+
+        if not candidates:
+            matching_ids = []
+        else:
+            code_matches, by_name = self._resolve_products(
+                {row[1] for row in candidates}, {row[2] for row in candidates}
+            )
+            matching_ids = []
+            for row_id, inventory_id, description in candidates:
+                product = self._resolved_product_for(
+                    inventory_id, description, code_matches, by_name
+                )
+                if (product.id if product else False) == target_id:
+                    matching_ids.append(row_id)
+        return [
+            ('id', 'not in' if operator == '!=' else 'in', matching_ids)
+        ]
 
     def _search_match_status(self, operator, value):
-        records = self.search([])
-        if operator in ('=', '=='):
-            records = records.filtered(lambda record: record.match_status == value)
-        elif operator == '!=':
-            records = records.filtered(lambda record: record.match_status != value)
+        # Status is dynamic, so calculate it from one batch of view rows and
+        # one batch of matching quants. Do not instantiate every view row as an
+        # ORM record and trigger per-row lookups while evaluating this domain.
+        self.env.cr.execute(f"""
+            SELECT id, inventory_id, description, location_id, api_on_hand
+              FROM {self._table}
+        """)
+        rows = self.env.cr.fetchall()
+        values = self._compute_snapshot_values(rows)
+        if operator == '!=':
+            matched_ids = [
+                record_id for record_id, snapshot in values.items()
+                if snapshot['match_status'] != value
+            ]
         else:
-            records = records.filtered(lambda record: record.match_status == value)
-        return [('id', 'in', records.ids)]
+            # Preserve the current behavior for all non-equality operators.
+            matched_ids = [
+                record_id for record_id, snapshot in values.items()
+                if snapshot['match_status'] == value
+            ]
+        return [('id', 'in', matched_ids)]
+
+    @api.model
+    def _compute_snapshot_values(self, rows):
+        """Calculate snapshot values for tuples (id, code, name, location, API qty)."""
+        if not rows:
+            return {}
+        inventory_ids = {row[1] for row in rows}
+        descriptions = {row[2] for row in rows if row[2]}
+        code_matches, by_name = self._resolve_products(inventory_ids, descriptions)
+        values = {}
+        products_by_record = {}
+        for record_id, inventory_id, description, location_id, api_on_hand in rows:
+            api_on_hand = api_on_hand or 0.0
+            product = self._resolved_product_for(
+                inventory_id, description, code_matches, by_name
+            )
+            products_by_record[record_id] = product
+            values[record_id] = {
+                'product_id': product.id if product else False,
+                'odoo_quantity': 0.0,
+                'odoo_reserved_quantity': 0.0,
+                'odoo_available_quantity': 0.0,
+                'difference': api_on_hand,
+                'match_status': 'missing_product' if not product else 'missing_location',
+            }
+
+        scopes = {}
+        for record_id, _inventory_id, _description, location_id, _api_on_hand in rows:
+            product = products_by_record[record_id]
+            if product and location_id:
+                scopes.setdefault((product.id, location_id), []).append(record_id)
+        if not scopes:
+            return values
+
+        products = {
+            product.id: product
+            for product in self.env['product.product'].browse(
+                sorted({product_id for product_id, _location_id in scopes})
+            )
+        }
+        locations = self.env['stock.location'].browse(
+            sorted({location_id for _product_id, location_id in scopes})
+        )
+        location_paths = {location.id: location.parent_path for location in locations}
+
+        Quant = self.env['stock.quant'].sudo()
+        quants = Quant.search([
+            ('product_id', 'in', list(products)),
+            ('location_id', 'child_of', list(location_paths)),
+        ])
+
+        # Distribute each quant once to each requested ancestor scope. Keep
+        # availability buckets by lot because Odoo clamps tracked lot buckets
+        # independently, while it clamps an untracked product's total once.
+        expiration_cutoff = self.env.context.get('with_expiration')
+        if expiration_cutoff:
+            expiration_cutoff = fields.Datetime.to_datetime(expiration_cutoff)
+        totals = {}
+        for quant in quants:
+            ancestor_ids = quant.location_id.parent_path.rstrip('/').split('/')
+            for ancestor_text in ancestor_ids:
+                if not ancestor_text.isdigit():
+                    continue
+                key = (quant.product_id.id, int(ancestor_text))
+                if key not in scopes:
+                    continue
+                bucket = totals.setdefault(key, {'reserved': 0.0, 'lots': {}})
+                bucket['reserved'] += quant.reserved_quantity
+                if expiration_cutoff and quant.expiration_date and quant.expiration_date < expiration_cutoff:
+                    continue
+                lot_id = quant.lot_id.id or False
+                bucket['lots'][lot_id] = bucket['lots'].get(lot_id, 0.0) + quant.quantity - quant.reserved_quantity
+
+        api_quantity_by_record = {row[0]: (row[4] or 0.0) for row in rows}
+        for (product_id, location_id), records in scopes.items():
+            product = products[product_id]
+            totals_for_scope = totals.get((product_id, location_id), {'reserved': 0.0, 'lots': {}})
+            precision = product.uom_id.rounding if product.uom_id else 0.01
+            lot_quantities = list(totals_for_scope['lots'].values())
+            if product.tracking == 'none':
+                odoo_quantity = sum(lot_quantities)
+                if float_compare(odoo_quantity, 0.0, precision_rounding=precision) < 0:
+                    odoo_quantity = 0.0
+            else:
+                odoo_quantity = sum(
+                    quantity for quantity in lot_quantities
+                    if float_compare(quantity, 0.0, precision_rounding=precision) > 0
+                )
+
+            for record_id in records:
+                api_on_hand = api_quantity_by_record[record_id]
+                values[record_id].update({
+                    'odoo_quantity': odoo_quantity,
+                    'odoo_reserved_quantity': totals_for_scope['reserved'],
+                    'odoo_available_quantity': odoo_quantity - totals_for_scope['reserved'],
+                    'difference': api_on_hand - odoo_quantity,
+                    'match_status': (
+                        'match'
+                        if float_compare(api_on_hand, odoo_quantity, precision_rounding=precision) == 0
+                        else 'not_match'
+                    ),
+                })
+        return values
 
     @api.depends('inventory_id', 'warehouse_code', 'description', 'api_on_hand', 'location_id')
     def _compute_snapshot(self):
-        Quant = self.env['stock.quant'].sudo()
+        rows = [
+            (record.id, record.inventory_id, record.description, record.location_id.id, record.api_on_hand)
+            for record in self
+        ]
+        values = self._compute_snapshot_values(rows)
         for record in self:
-            product = record._get_product()
-            location = record.location_id
-            record.product_id = product
-            record.odoo_quantity = 0.0
-            record.odoo_reserved_quantity = 0.0
-            record.odoo_available_quantity = 0.0
-            record.difference = record.api_on_hand
-
-            if not product:
-                record.match_status = 'missing_product'
-                continue
-            if not location:
-                record.match_status = 'missing_location'
-                continue
-
-            record.odoo_quantity = Quant._get_available_quantity(product, location, strict=False)
-            quants = Quant.search([
-                ('product_id', '=', product.id),
-                ('location_id', 'child_of', location.id),
-            ])
-            record.odoo_reserved_quantity = sum(quants.mapped('reserved_quantity'))
-            record.odoo_available_quantity = record.odoo_quantity - record.odoo_reserved_quantity
-            record.difference = record.api_on_hand - record.odoo_quantity
-            precision = product.uom_id.rounding if product.uom_id else 0.01
-            record.match_status = (
-                'match'
-                if float_compare(record.api_on_hand, record.odoo_quantity, precision_rounding=precision) == 0
-                else 'not_match'
-            )
+            snapshot = values[record.id]
+            record.product_id = snapshot['product_id']
+            record.odoo_quantity = snapshot['odoo_quantity']
+            record.odoo_reserved_quantity = snapshot['odoo_reserved_quantity']
+            record.odoo_available_quantity = snapshot['odoo_available_quantity']
+            record.difference = snapshot['difference']
+            record.match_status = snapshot['match_status']
 
 
 class StockInventory(models.Model):
