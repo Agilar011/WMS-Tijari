@@ -1,11 +1,22 @@
 # -*- coding: utf-8 -*-
 from ast import literal_eval
 
-from odoo import models
+from odoo import fields, models
 
 
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
+
+    product_default_code = fields.Char(
+        string='SKU',
+        related='product_id.default_code',
+        readonly=True,
+    )
+    product_name = fields.Char(
+        string='Description',
+        related='product_id.name',
+        readonly=True,
+    )
 
     def action_view_stock_moves(self):
         self.ensure_one()

@@ -72,5 +72,11 @@
         <field name="res_model">acumatica.inventory.stock.generate.job</field>
         <field name="view_mode">list,form</field>
     </record>
+
+    <menuitem id="menu_inventory_stock_generate_job"
+              name="Inventory Stock Generate Jobs"
+              parent="tijari_wms_18.menu_operations_others"
+              action="action_inventory_stock_generate_job"
+              sequence="5"/>
 </odoo>
 

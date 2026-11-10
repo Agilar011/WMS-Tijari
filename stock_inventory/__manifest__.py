@@ -14,6 +14,7 @@
         "security/security.xml",
         "data/approval_model_data.xml",
         "views/stock_inventory.xml",
+        "views/stock_inventory_product_selection_wizard.xml",
         "views/stock_quant.xml",
         "views/stock_move_line.xml",
         "views/res_config_settings_view.xml",
