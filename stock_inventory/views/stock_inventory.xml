@@ -63,6 +63,15 @@
                     <div class="oe_button_box" name="button_box">
                         <button
                             type="object"
+                            name="action_open_product_selection"
+                            class="oe_stat_button"
+                            icon="fa-cubes"
+                            invisible="product_selection not in ('manual', 'lot', 'one')"
+                        >
+                            <field name="product_count" widget="statinfo" readonly="1" />
+                        </button>
+                        <button
+                            type="object"
                             name="action_view_inventory_adjustment"
                             class="oe_stat_button"
                             icon="fa-pencil-square-o"
@@ -121,21 +130,7 @@
                             <field name="company_id" readonly="state != 'draft'" />
                             <field name="responsible_id" readonly="state != 'draft'" />
                             <field name="owner_id" readonly="state != 'draft'" />
-                            <field
-                                name="product_ids"
-                                widget="many2many_tags"
-                                readonly="state != 'draft'"
-                                required="product_selection in ['manual', 'lot']"
-                                invisible="product_selection in ['all', 'category', 'one']"
-                            />
-                            <field
-                                name="product_ids"
-                                widget="many2many_tags"
-                                options="{'limit': 10}"
-                                required="product_selection == 'one'"
-                                invisible="product_selection != 'one'"
-                                readonly="state != 'draft'"
-                            />
+                            <field name="product_ids" invisible="1" />
                             <field
                                 name="category_id"
                                 required="product_selection == 'category'"
