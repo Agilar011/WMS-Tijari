@@ -226,6 +226,7 @@
                         <field name="company_id" column_invisible="1" force_save="1"/>
                         <field name="picking_id" column_invisible="1" force_save="1"/>
                         <field name="move_id" column_invisible="1" force_save="1"/>
+                        <field name="package_id" column_invisible="1"/>
                         <field name="location_id" 
                                 string="Pick From" 
                                 widget="location_short_many2one" 
@@ -343,6 +344,7 @@
                         <field name="company_id" invisible="1" force_save="1"/>
                         <field name="picking_id" invisible="1" force_save="1"/>
                         <field name="move_id" invisible="1" force_save="1"/>
+                        <field name="package_id" invisible="1"/>
                         <field name="adt_dest_location_id" invisible="1"/>
                         <field name="allowed_matching_lot_ids" invisible="1"/>
                         <field name="product_uom_category_id" invisible="1"/>
@@ -1184,6 +1186,7 @@
                         <field name="company_id" column_invisible="1" force_save="1"/>
                         <field name="picking_id" column_invisible="1" force_save="1"/>
                         <field name="move_id" column_invisible="1" force_save="1"/>
+                        <field name="package_id" column_invisible="1"/>
                         <field name="handheld_scan_code"
                                 widget="adt_handheld_scan_code"
                                 string="Scan Handheld"
@@ -1236,7 +1239,7 @@
                             readonly="1" force_save="1"
                             string="Packages"
                             optional="show"
-                            column_invisible="'Pick' in (parent.picking_type_name or '') or parent.picking_type_name in ['Receipts', 'Receipt Internal']"/>
+                            column_invisible="'Pack' in (parent.picking_type_name or '') or 'Pick' in (parent.picking_type_name or '') or parent.picking_type_name in ['Receipts', 'Receipt Internal']"/>
                         <field name="location_putaway_id"
                             string="Store To"
                             widget="location_short_many2one"
@@ -1353,6 +1356,7 @@
                         <field name="company_id" invisible="1" force_save="1"/>
                         <field name="picking_id" invisible="1" force_save="1"/>
                         <field name="move_id" invisible="1" force_save="1"/>
+                        <field name="package_id" invisible="1"/>
                         <field name="adt_dest_location_id" invisible="1"/>
                         <field name="allowed_matching_lot_ids" invisible="1"/>
                         <field name="product_uom_category_id" invisible="1"/>
