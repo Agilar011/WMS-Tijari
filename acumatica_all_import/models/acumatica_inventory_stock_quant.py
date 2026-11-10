@@ -1,6 +1,11 @@
+import logging
+from time import perf_counter
+
 from odoo import _, api, fields, models, tools
 from odoo.exceptions import UserError
 from odoo.tools import float_compare
+
+_logger = logging.getLogger(__name__)
 
 
 class AcumaticaInventoryStockQuant(models.Model):
@@ -255,12 +260,47 @@ class StockInventory(models.Model):
     acumatica_stock_comparison_data = fields.Json(copy=False)
 
     def action_state_to_in_progress(self):
+        if not self.env.context.get("skip_inventory_operation_queue"):
+            self.ensure_one()
+            return self._queue_inventory_operation("begin")
+        started_at = perf_counter()
         inventories = self.filtered('acumatica_stock_comparison_data')
+        _logger.info("Inventory adjustment begin inventories=%s comparison_count=%s", self.ids, len(inventories))
         for inventory in inventories:
-            inventory._ensure_acumatica_stock_comparison_quants()
+            phase_started = perf_counter()
+            rows = inventory.acumatica_stock_comparison_data or []
+            created_count = inventory._ensure_acumatica_stock_comparison_quants()
+            _logger.info(
+                "Inventory adjustment id=%s phase=ensure_comparison_quants "
+                "rows=%s created=%s elapsed=%.3fs",
+                inventory.id,
+                len(rows),
+                created_count,
+                perf_counter() - phase_started,
+            )
+
+        phase_started = perf_counter()
         result = super().action_state_to_in_progress()
+        _logger.info(
+            "Inventory adjustment phase=base_begin elapsed=%.3fs",
+            perf_counter() - phase_started,
+        )
         for inventory in inventories:
+            phase_started = perf_counter()
+            rows = inventory.acumatica_stock_comparison_data or []
             inventory._apply_acumatica_stock_comparison_counts()
+            _logger.info(
+                "Inventory adjustment id=%s phase=apply_comparison_counts "
+                "rows=%s elapsed=%.3fs",
+                inventory.id,
+                len(rows),
+                perf_counter() - phase_started,
+            )
+        _logger.info(
+            "Inventory adjustment phase=complete inventories=%s total=%.3fs",
+            self.ids,
+            perf_counter() - started_at,
+        )
         return result
 
     def _ensure_acumatica_stock_comparison_quants(self):
@@ -269,24 +309,71 @@ class StockInventory(models.Model):
         Quant = self.env['stock.quant'].sudo()
         Product = self.env['product.product'].sudo()
         Location = self.env['stock.location'].sudo()
-        for row in self.acumatica_stock_comparison_data:
-            api_on_hand = row.get('api_on_hand') or 0.0
-            if not api_on_hand:
-                continue
+        rows = self.acumatica_stock_comparison_data or []
+        product_ids = {row.get('product_id') for row in rows if row.get('product_id')}
+        location_ids = {row.get('location_id') for row in rows if row.get('location_id')}
+        products = {product.id: product for product in Product.browse(list(product_ids)).exists()}
+        locations = {location.id: location for location in Location.browse(list(location_ids)).exists()}
 
-            product = Product.browse(row.get('product_id')).exists()
-            location = Location.browse(row.get('location_id')).exists()
-            if not product or not location:
-                continue
+        valid_rows = [
+            (row, products.get(row.get('product_id')), locations.get(row.get('location_id')))
+            for row in rows
+            if row.get('api_on_hand')
+            and products.get(row.get('product_id'))
+            and locations.get(row.get('location_id'))
+        ]
+        if not valid_rows:
+            return 0
 
-            quant_domain = self._acumatica_stock_comparison_quant_domain(product, location)
-            quants = Quant.search(quant_domain)
-            if not quants:
-                Quant.create({
-                    'product_id': product.id,
-                    'location_id': location.id,
-                    'quantity': 0.0,
-                })
+        scope_product_ids = sorted({product.id for _, product, _ in valid_rows})
+        scope_location_ids = sorted({location.id for _, _, location in valid_rows})
+        if self.exclude_sublocation:
+            location_domain = [('location_id', 'in', scope_location_ids)]
+        else:
+            location_domain = [('location_id', 'child_of', scope_location_ids)]
+        existing_quants = Quant.search([
+            ('product_id', 'in', scope_product_ids),
+            *location_domain,
+        ])
+        quants_by_product = {}
+        for quant in existing_quants:
+            quants_by_product.setdefault(quant.product_id.id, []).append(quant)
+
+        # Keep row order: when parent and child scopes overlap, an earlier row
+        # creates the quant that makes a later row's search non-empty.
+        planned_locations = {}
+        create_vals = []
+        for _row, product, location in valid_rows:
+            product_quants = quants_by_product.get(product.id, ())
+            product_planned_locations = planned_locations.get(product.id, ())
+            if self.exclude_sublocation:
+                has_quant = any(quant.location_id.id == location.id for quant in product_quants)
+                has_planned_quant = any(
+                    planned_location.id == location.id
+                    for planned_location in product_planned_locations
+                )
+            else:
+                location_path = location.parent_path
+                has_quant = any(
+                    quant.location_id.parent_path.startswith(location_path)
+                    for quant in product_quants
+                )
+                has_planned_quant = any(
+                    planned_location.parent_path.startswith(location_path)
+                    for planned_location in product_planned_locations
+                )
+            if has_quant or has_planned_quant:
+                continue
+            create_vals.append({
+                'product_id': product.id,
+                'location_id': location.id,
+                'quantity': 0.0,
+            })
+            planned_locations.setdefault(product.id, []).append(location)
+
+        if create_vals:
+            Quant.create(create_vals)
+        return len(create_vals)
 
     def _acumatica_stock_comparison_quant_domain(self, product, location):
         """Match the quant scope used by this inventory adjustment."""
@@ -299,17 +386,51 @@ class StockInventory(models.Model):
 
     def _apply_acumatica_stock_comparison_counts(self):
         self.ensure_one()
+        started_at = perf_counter()
+        rows = self.acumatica_stock_comparison_data or []
+        lookup_started_at = perf_counter()
         # A comparison row for a parent location covers its internal child
         # locations too. Resolve the broadest scopes first so a parent total
         # cannot be added on top of a child total for the same stock.
         candidates = []
-        for row in self.acumatica_stock_comparison_data:
-            product = self.env['product.product'].browse(row['product_id'])
-            location = self.env['stock.location'].browse(row['location_id'])
-            if not product.exists() or not location.exists():
-                continue
-            quant_domain = self._acumatica_stock_comparison_quant_domain(product, location)
-            quants = self.stock_quant_ids.filtered_domain(quant_domain)
+        product_ids = {row['product_id'] for row in rows if row.get('product_id')}
+        location_ids = {row['location_id'] for row in rows if row.get('location_id')}
+        products = {
+            product.id: product
+            for product in self.env['product.product'].browse(list(product_ids)).exists()
+        }
+        locations = {
+            location.id: location
+            for location in self.env['stock.location'].browse(list(location_ids)).exists()
+        }
+        valid_rows = [
+            (row, products.get(row.get('product_id')), locations.get(row.get('location_id')))
+            for row in rows
+            if products.get(row.get('product_id')) and locations.get(row.get('location_id'))
+        ]
+        scoped_quants = self.stock_quant_ids if valid_rows else self.env['stock.quant']
+        quants_by_product = {}
+        for quant in scoped_quants:
+            quants_by_product.setdefault(quant.product_id.id, []).append(quant)
+        scope_cache = {}
+
+        for row, product, location in valid_rows:
+            cache_key = (product.id, location.id)
+            quants = scope_cache.get(cache_key)
+            if quants is None:
+                product_quants = quants_by_product.get(product.id, ())
+                if self.exclude_sublocation:
+                    quants = self.env['stock.quant'].browse([
+                        quant.id for quant in product_quants
+                        if quant.location_id.id == location.id
+                    ])
+                else:
+                    location_path = location.parent_path
+                    quants = self.env['stock.quant'].browse([
+                        quant.id for quant in product_quants
+                        if quant.location_id.parent_path.startswith(location_path)
+                    ])
+                scope_cache[cache_key] = quants
             if not quants:
                 if row['api_on_hand']:
                     raise UserError(_(
@@ -327,6 +448,18 @@ class StockInventory(models.Model):
                 'api_on_hand': row['api_on_hand'] or 0.0,
             })
 
+        _logger.info(
+            "Inventory adjustment id=%s phase=index_comparison_quants rows=%s "
+            "products=%s locations=%s quants=%s candidates=%s elapsed=%.3fs",
+            self.id,
+            len(rows),
+            len(products),
+            len(locations),
+            len(scoped_quants),
+            len(candidates),
+            perf_counter() - lookup_started_at,
+        )
+
         candidates.sort(key=lambda item: (
             item['location'].parent_path.count('/'),
             -len(item['quants']),
@@ -334,11 +467,14 @@ class StockInventory(models.Model):
             item['product'].id,
         ))
         assigned_quant_ids = set()
+        applied_count = 0
+        skipped_overlap_count = 0
         for item in candidates:
             # If this row overlaps a broader row already applied, skip the
             # entire row: its API total may include the same stock, so applying
             # only the remaining quants would still double-count that total.
             if assigned_quant_ids.intersection(item['quants'].ids):
+                skipped_overlap_count += 1
                 continue
             quants = item['quants']
             assigned_quant_ids.update(quants.ids)
@@ -347,3 +483,14 @@ class StockInventory(models.Model):
             quants = quants.sorted(key=lambda quant: (-quant.quantity, quant.id))
             quants.write({'inventory_quantity': 0.0})
             quants[:1].inventory_quantity = item['api_on_hand']
+            applied_count += 1
+        _logger.info(
+            "Inventory adjustment id=%s phase=write_comparison_counts rows=%s "
+            "candidates=%s applied=%s skipped_overlap=%s total=%.3fs",
+            self.id,
+            len(rows),
+            len(candidates),
+            applied_count,
+            skipped_overlap_count,
+            perf_counter() - started_at,
+        )
