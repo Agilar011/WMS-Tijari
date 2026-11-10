@@ -147,16 +147,16 @@ class StockInventory(models.Model):
         if cron:
             cron._trigger()
         return {
-            "type": "ir.actions.act_window",
-            "name": _("Inventory Adjustment Job"),
-            "res_model": "stock.inventory.operation.job",
-            "view_mode": "form",
-            "views": [(
-                self.env.ref(
-                    "stock_inventory.view_stock_inventory_operation_job_form"
-                ).id,
-                "form",
-            )],
-            "res_id": job.id,
-            "target": "current",
+            "type": "ir.actions.client",
+            "tag": "display_notification",
+            "params": {
+                "title": _("Inventory Adjustment"),
+                "message": (
+                    _("Begin Adjustment has been queued.")
+                    if operation == "begin"
+                    else _("Update Stock has been queued.")
+                ),
+                "type": "info",
+                "sticky": False,
+            },
         }
