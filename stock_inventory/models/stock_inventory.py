@@ -3,6 +3,8 @@ from odoo.exceptions import UserError, ValidationError
 from odoo.osv import expression
 
 import logging
+from time import perf_counter
+
 _logger = logging.getLogger(__name__)
 
 
@@ -83,6 +85,11 @@ class InventoryAdjustmentsGroup(models.Model):
         string="Products",
         domain="['|', ('company_id', '=', company_id), ('company_id', '=', False)]",
         readonly=True,
+    )
+
+    product_count = fields.Integer(
+        string="Products",
+        compute="_compute_product_count",
     )
 
     stock_quant_ids = fields.Many2many(
@@ -299,11 +306,52 @@ class InventoryAdjustmentsGroup(models.Model):
         for rec in self:
             rec.stock_quant_ids = rec._get_quants(rec.location_ids)
 
+    @api.depends("product_ids")
+    def _compute_product_count(self):
+        for rec in self:
+            rec.product_count = len(rec.product_ids)
+
+    def action_open_product_selection(self):
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": self.env._("Products"),
+            "res_model": "stock.inventory.product.selection.wizard",
+            "view_mode": "form",
+            "views": [(
+                self.env.ref(
+                    "stock_inventory.view_inventory_product_selection_wizard_form"
+                ).id,
+                "form",
+            )],
+            "target": "new",
+            "context": {
+                "default_inventory_id": self.id,
+                "default_product_ids": [(6, 0, self.product_ids.ids)],
+            },
+        }
+
     def _get_quant_joined_names(self, quants, field):
         return ", ".join(quants.mapped(f"{field}.display_name"))
 
     def action_state_to_in_progress(self):
         self.ensure_one()
+        if self.product_selection in ("manual", "one", "lot") and not self.product_ids:
+            raise UserError(
+                self.env._("Select at least one product before beginning this adjustment.")
+            )
+        started_at = perf_counter()
+        _logger.info(
+            "Inventory adjustment begin id=%s name=%s phase=start "
+            "locations=%s product_selection=%s product_count=%s exclude_sublocation=%s",
+            self.id,
+            self.name,
+            len(self.location_ids),
+            self.product_selection,
+            len(self.product_ids),
+            self.exclude_sublocation,
+        )
+        phase_started = perf_counter()
         search_filter = [
             (
                 "location_id",
@@ -329,17 +377,28 @@ class InventoryAdjustmentsGroup(models.Model):
             )
 
         quants = self.env["stock.quant"].search(search_filter)
+        blocking_count = 0
         if quants:
             inventory_ids = self.env["stock.inventory"].search(
                 [("stock_quant_ids", "in", quants.ids), ("state", "=", "in_progress")]
             )
+            blocking_count = len(inventory_ids)
             if inventory_ids:
                 blocking_names = ", ".join(inventory_ids.mapped("name"))
                 names = self._get_quant_joined_names(quants, error_field)
                 raise ValidationError(
                     error_message % {"names": names, "blocking_names": blocking_names}
                 )
+        _logger.info(
+            "Inventory adjustment begin id=%s phase=check_conflicts elapsed=%.3fs "
+            "quant_count=%s blocking_adjustments=%s",
+            self.id,
+            perf_counter() - phase_started,
+            len(quants),
+            blocking_count,
+        )
 
+        phase_started = perf_counter()
         quants = self._get_quants(self.location_ids)
         self.write(
             {
@@ -360,8 +419,30 @@ class InventoryAdjustmentsGroup(models.Model):
                 "current_inventory_id": self.id,
             }
         )
+        _logger.info(
+            "Inventory adjustment begin id=%s phase=load_and_assign_quants "
+            "elapsed=%.3fs quant_count=%s",
+            self.id,
+            perf_counter() - phase_started,
+            len(quants),
+        )
+
+        phase_started = perf_counter()
         self.action_submit_approval()
         self.state = "in_progress"
+        _logger.info(
+            "Inventory adjustment begin id=%s name=%s phase=approval_and_state "
+            "elapsed=%.3fs",
+            self.id,
+            self.name,
+            perf_counter() - phase_started,
+        )
+        _logger.info(
+            "Inventory adjustment begin id=%s name=%s phase=complete total=%.3fs",
+            self.id,
+            self.name,
+            perf_counter() - started_at,
+        )
         return {
             "type": "ir.actions.client",
             "tag": "reload",
