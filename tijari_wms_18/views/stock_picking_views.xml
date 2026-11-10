@@ -268,9 +268,9 @@
 
                 <button name="action_print_warehouse_receipt"
                     type="object"
-                    string="Receipt"
+                    string="BA Receipt"
                     icon="fa-print"
-                    title="Receipt"
+                    title="BA Receipt"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Receipts', 'Receipt Internal']"/>
 
@@ -1520,34 +1520,34 @@
                         data-hotkey="q"/>
 
                 <button name="action_print_warehouse_pack"
-                    string="Pack"
+                    string="BA Pack"
                     type="object"
                     icon="fa-print"
-                    title="Pack"
+                    title="BA Pack"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
                     
                 <button name="delivery_slip_pack"
-                    string="Delivery Slip"
+                    string="BA Delivery Slip"
                     type="object"
                     icon="fa-print"
-                    title="Delivery Slip"
+                    title="BA Delivery Slip"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pack', 'Pack Internal']"/>
 
                 <button name="action_print_warehouse_pick"
-                    string="Pick"
+                    string="BA Pick"
                     type="object"
                     icon="fa-print"
-                    title="Pick"
+                    title="BA Pick"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Pick', 'Pick Internal']"/>
                 
                 <button name="action_print_warehouse_transfer"
-                    string="Internal Transfer"
+                    string="BA Internal Transfer"
                     type="object"
                     icon="fa-print"
-                    title="Internal Transfer"
+                    title="BA Internal Transfer"
                     class="btn-primary"
                     invisible="state != 'done' or picking_type_name not in ['Transfer', 'Transfer Internal']"/>
 
