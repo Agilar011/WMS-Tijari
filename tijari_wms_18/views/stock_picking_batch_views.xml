@@ -7,6 +7,10 @@
         <field name="inherit_id" ref="stock_picking_batch.stock_picking_batch_form"/>
         <field name="arch" type="xml">
 
+            <xpath expr="//header/button[@name='action_print']" position="replace"/>
+
+            <xpath expr="//header/button[@name='action_open_label_layout']" position="replace"/>
+
             <xpath expr="//field[@name='picking_type_code']" position="after">
                 <field name="picking_type_name" invisible="1"/>
                 <field name="show_picker_page" invisible="1"/>
