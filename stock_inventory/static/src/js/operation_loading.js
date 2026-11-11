@@ -4,6 +4,23 @@ import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 import { Component, onMounted, onWillUnmount, useState } from "@odoo/owl";
 
+function getRpcErrorMessage(error) {
+    const argumentsMessage = Array.isArray(error?.data?.arguments)
+        ? error.data.arguments[0]
+        : null;
+    const candidates = [argumentsMessage, error?.data?.message, error?.message];
+    const specificMessage = candidates.find(
+        (message) =>
+            typeof message === "string" &&
+            message.trim() &&
+            message.trim() !== "Odoo Server Error"
+    );
+    return (
+        specificMessage?.trim() ||
+        "Gagal membaca status proses. Periksa koneksi lalu coba lagi."
+    );
+}
+
 /**
  * Reusable full-screen feedback for background operations.
  * Any queued operation can use this action by passing a job model, status
@@ -98,8 +115,7 @@ export class OperationLoadingAction extends Component {
             this.schedulePoll();
         } catch (error) {
             this.state.phase = "failed";
-            this.state.errorMessage =
-                error.message || "Gagal membaca status proses. Periksa koneksi lalu coba lagi.";
+            this.state.errorMessage = getRpcErrorMessage(error);
             this.stopTimers();
         }
     }
