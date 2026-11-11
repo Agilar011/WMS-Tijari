@@ -27,3 +27,4 @@ from . import import_credit_memo_consignment_wizard
 from . import import_shipment_transfer_completed_wizard
 from . import import_inventory_adjustment_wizard
 from . import generate_inventory_stock_wizard
+from . import inventory_stock_location_confirmation

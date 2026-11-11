@@ -30,7 +30,6 @@ class AcumaticaInventoryStockGenerateWizard(models.TransientModel):
         if not mappings:
             raise UserError(_("Mapping yang dipilih belum memiliki Warehouse Code."))
 
-        ungrouped = []
         for mapping in mappings:
             location = mapping.odoo_location_id
             has_group = bool(location and (location.location_group_id or location.is_location_mapping))
@@ -38,13 +37,6 @@ class AcumaticaInventoryStockGenerateWizard(models.TransientModel):
             while parent and not has_group:
                 has_group = parent.is_location_mapping
                 parent = parent.location_id
-            if not has_group:
-                ungrouped.append(mapping.display_name)
-        if ungrouped:
-            raise UserError(_(
-                "Lokasi berikut belum memiliki group: %(locations)s",
-                locations=", ".join(ungrouped),
-            ))
 
         Job = self.env["acumatica.inventory.stock.generate.job"].sudo()
         queued = Job.browse()
