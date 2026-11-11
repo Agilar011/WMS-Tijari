@@ -150,4 +150,15 @@
         <field name="name">Scrap Monitoring</field><field name="card_type">scrap_monitoring</field>
         <field name="dashboard_scope">inventory</field><field name="sequence">307</field>
     </record>
+
+    <record id="ir_cron_refresh_inventory_dashboard_metrics" model="ir.cron">
+        <field name="name">Refresh Inventory Dashboard Metrics</field>
+        <field name="model_id" ref="model_api_data_hub_dashboard_card"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_refresh_inventory_metrics_cache()</field>
+        <field name="user_id" ref="base.user_root"/>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
 </odoo>

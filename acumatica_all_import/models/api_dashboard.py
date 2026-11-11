@@ -1,7 +1,12 @@
+import json
+import logging
 from datetime import datetime, time, timedelta
+from time import time as unix_time
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 
 class ApiDataHubDashboardCard(models.Model):
@@ -95,6 +100,7 @@ class ApiDataHubDashboardCard(models.Model):
         'acumatica.uom.line', 'acumatica.warehouse.line',
         'acumatica.stock.item.line', 'acumatica.non.stock.item.line',
     )
+    _INVENTORY_METRICS_CACHE_TTL = 300
 
     @api.depends('card_type', 'data_model')
     def _compute_metrics(self):
@@ -103,6 +109,7 @@ class ApiDataHubDashboardCard(models.Model):
         yesterday_start = today_start - timedelta(days=1)
         week_start = today_start - timedelta(days=6)
         import_metrics_by_model = {}
+        inventory_metrics = None
         for card in self:
             values = {field: 0 for field in (
                 'total', 'staged', 'created', 'updated', 'rejected', 'errors',
@@ -118,7 +125,9 @@ class ApiDataHubDashboardCard(models.Model):
                 'scrap_done', 'scrap_qty', 'scrap_reason_count',
             )}
             if card.dashboard_scope == 'inventory':
-                card._compute_inventory_metrics(values, now, today_start)
+                if inventory_metrics is None:
+                    inventory_metrics = card._get_inventory_metrics(now, today_start)
+                card._apply_inventory_metrics(values, inventory_metrics)
             elif card.card_type in ('transactions', 'master'):
                 default_models = self._TRANSACTION_MODELS if card.card_type == 'transactions' else self._MASTER_MODELS
                 models_to_read = (card.data_model,) if card.data_model else default_models
@@ -182,127 +191,261 @@ class ApiDataHubDashboardCard(models.Model):
             for field, value in values.items():
                 setattr(card, field, value)
 
-    def _compute_inventory_metrics(self, values, now, today_start):
-        self.ensure_one()
+    @api.model
+    def _get_inventory_metrics(self, now, today_start):
+        """Return a short-lived, user/company-scoped inventory snapshot."""
+        cache_key = self._inventory_metrics_cache_key()
+        Parameters = self.env['ir.config_parameter'].sudo()
+        cached_value = Parameters.get_param(cache_key)
+        if cached_value:
+            try:
+                payload = json.loads(cached_value)
+                cache_age = unix_time() - float(payload.get('computed_at', 0))
+                if (
+                    cache_age >= 0
+                    and isinstance(payload.get('metrics'), dict)
+                ):
+                    # Never make a returning dashboard request wait for a cold
+                    # full-history scan. A cron refreshes expired entries.
+                    return payload['metrics']
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+
+        metrics = self._compute_inventory_metrics_snapshot(now, today_start)
+        self._store_inventory_metrics_snapshot(metrics, today_start)
+        return metrics
+
+    @api.model
+    def _store_inventory_metrics_snapshot(self, metrics, today_start):
+        self.env['ir.config_parameter'].sudo().set_param(
+            self._inventory_metrics_cache_key(),
+            json.dumps({
+                'computed_at': unix_time(),
+                'snapshot_date': today_start.date().isoformat(),
+                'metrics': metrics,
+            }),
+        )
+
+    @api.model
+    def _inventory_metrics_cache_key(self):
+        companies = ','.join(str(company_id) for company_id in sorted(self.env.companies.ids))
+        return f'acumatica_all_import.inventory_metrics.{self.env.uid}.{companies or "none"}'
+
+    @api.model
+    def _compute_inventory_metrics_snapshot(self, now, today_start):
+        """Aggregate stock data once when the cache is missing or refreshed."""
         Picking = self.env['stock.picking']
-        pickings = Picking.search([])
+        pickings_by_state = Picking._read_group([], ['state'], ['__count'])
+        state_counts = {state: count for state, count in pickings_by_state}
+        pickings_by_wms_state = Picking._read_group([], ['wms_state'], ['__count'])
+        wms_state_counts = {state: count for state, count in pickings_by_wms_state}
+        total_pickings = sum(state_counts.values())
         today_end = today_start + timedelta(days=1)
-        active_pickings = pickings.filtered(lambda p: p.state not in ('done', 'cancel'))
+        assigned = state_counts.get('assigned', 0)
+        active_domain = [('state', 'not in', ('done', 'cancel'))]
+        nonzero_move_domain = [('move_ids.quantity', '!=', 0)]
+        in_progress = Picking.search_count(active_domain + nonzero_move_domain)
+        assigned_with_quantity = Picking.search_count(
+            [('state', '=', 'assigned')] + nonzero_move_domain
+        )
+        overdue = Picking.search_count(
+            active_domain + [('scheduled_date', '<', now)]
+        )
+        scheduled_today = Picking.search_count([
+            ('scheduled_date', '>=', today_start), ('scheduled_date', '<', today_end),
+        ])
+        upcoming = Picking.search_count([('scheduled_date', '>=', today_end)])
+        partial_count = Picking.search_count([('shipment_information', '=', 'partial')])
 
-        def scheduled_before(picking, boundary):
-            return picking.scheduled_date and picking.scheduled_date < boundary
+        Move = self.env['stock.move']
+        move_totals = Move._read_group(
+            [('picking_id', '!=', False)], [],
+            ['product_uom_qty:sum', 'quantity:sum', 'confirmation_quantity:sum'],
+        )
+        demand_qty, processed_qty, sent_qty = move_totals[0] if move_totals else (0.0, 0.0, 0.0)
 
-        values['total'] = len(pickings)
-        values['waiting'] = len(pickings.filtered(
-            lambda p: p.wms_state in ('draft', 'waiting', 'confirmed', 'waiting_response')
-        ))
-        values['ready'] = len(pickings.filtered(
-            lambda p: p.state == 'assigned' and not any(
-                getattr(move, 'quantity', 0) for move in p.move_ids
+        metrics = {
+            'total': total_pickings,
+            'waiting': sum(
+                wms_state_counts.get(state, 0)
+                for state in ('draft', 'waiting', 'confirmed', 'waiting_response')
+            ),
+            'ready': max(assigned - assigned_with_quantity, 0),
+            'in_progress': in_progress,
+            'done_count': state_counts.get('done', 0),
+            'cancelled': state_counts.get('cancel', 0),
+            'overdue': overdue,
+            'scheduled_today': scheduled_today,
+            'upcoming': upcoming,
+            'demand_qty': demand_qty or 0.0,
+            'processed_qty': processed_qty or 0.0,
+            'sent_qty': sent_qty or 0.0,
+            'partial_count': partial_count,
+            'adjustment_count': 0,
+            'adjustment_variance': 0.0,
+            'scrap_draft': 0,
+            'scrap_ready': 0,
+            'scrap_done': 0,
+            'scrap_total': 0,
+            'scrap_qty': 0.0,
+            'scrap_reason_count': 0,
+        }
+
+        Inventory = self.env.get('stock.inventory')
+        if Inventory is not None:
+            adjustments = Inventory.search([])
+            metrics['adjustment_count'] = len(adjustments)
+            metrics['adjustment_variance'] = sum(
+                abs(getattr(quant, 'inventory_diff_quantity', 0.0) or 0.0)
+                for quant in adjustments.mapped('stock_quant_ids')
             )
-        ))
-        values['done_count'] = len(pickings.filtered(lambda p: p.state == 'done'))
-        values['cancelled'] = len(pickings.filtered(lambda p: p.state == 'cancel'))
-        values['in_progress'] = len(active_pickings.filtered(
-            lambda p: any(getattr(move, 'quantity', 0) for move in p.move_ids)
-        ))
-        values['overdue'] = len(active_pickings.filtered(lambda p: scheduled_before(p, now)))
-        values['scheduled_today'] = len(pickings.filtered(
-            lambda p: p.scheduled_date and today_start <= p.scheduled_date < today_end
-        ))
-        values['upcoming'] = len(pickings.filtered(
-            lambda p: p.scheduled_date and p.scheduled_date >= today_end
-        ))
 
-        if self.card_type == 'operation_status':
-            values['staged'] = values['waiting']
-            values['created'] = values['ready']
-            values['updated'] = values['in_progress']
-            values['errors'] = values['done_count']
-            values['rejected'] = values['cancelled']
-        elif self.card_type == 'delayed_operation':
-            values['total'] = values['overdue']
-        elif self.card_type == 'operation_schedule':
-            values['total'] = values['overdue'] + values['scheduled_today'] + values['upcoming']
-            values['yesterday'] = values['overdue']
-            values['today'] = values['scheduled_today']
-            values['last_7_days'] = values['upcoming']
-        elif self.card_type == 'operation_progress':
-            for picking in pickings:
-                for move in picking.move_ids:
-                    values['demand_qty'] += move.product_uom_qty or 0.0
-                    values['processed_qty'] += getattr(move, 'quantity', 0.0) or 0.0
-            values['remaining_qty'] = max(values['demand_qty'] - values['processed_qty'], 0.0)
-            if values['demand_qty']:
-                values['completion_percent'] = values['processed_qty'] / values['demand_qty'] * 100
-            values['total'] = len(pickings)
-        elif self.card_type == 'partial_discrepancy':
-            partials = pickings.filtered(lambda p: p.shipment_information == 'partial')
-            values['partial_count'] = len(partials)
-            for picking in pickings:
-                for move in picking.move_ids:
-                    values['expected_qty'] += move.product_uom_qty or 0.0
-                    values['received_qty'] += getattr(move, 'quantity', 0.0) or 0.0
-                    values['sent_qty'] += getattr(move, 'confirmation_quantity', 0.0) or 0.0
-            values['counted_qty'] = values['received_qty']
-            values['discrepancy_qty'] = max(values['expected_qty'] - values['received_qty'], 0.0)
-            values['total'] = values['partial_count']
-        elif self.card_type == 'inventory_adjustment':
-            Inventory = self.env.get('stock.inventory')
-            if Inventory is not None:
-                adjustments = Inventory.search([])
-                values['adjustment_count'] = len(adjustments)
-                values['total'] = len(adjustments)
-                for adjustment in adjustments:
-                    values['adjustment_variance'] += sum(
-                        abs(getattr(quant, 'inventory_diff_quantity', 0.0) or 0.0)
-                        for quant in adjustment.stock_quant_ids
-                    )
-        elif self.card_type == 'scrap_monitoring':
-            Scrap = self.env['stock.scrap']
+        Scrap = self.env.get('stock.scrap')
+        if Scrap is not None:
             scraps = Scrap.search([])
-            values['total'] = len(scraps)
-            values['scrap_draft'] = len(scraps.filtered(lambda s: s.state == 'draft'))
-            values['scrap_ready'] = len(scraps.filtered(lambda s: s.state == 'ready'))
-            values['scrap_done'] = len(scraps.filtered(lambda s: s.state == 'done'))
-            values['scrap_qty'] = sum(
-                sum((line.demand_qty or 0.0) for line in scrap.scrap_line_ids)
+            metrics['scrap_total'] = len(scraps)
+            metrics['scrap_draft'] = sum(scrap.state == 'draft' for scrap in scraps)
+            metrics['scrap_ready'] = sum(scrap.state == 'ready' for scrap in scraps)
+            metrics['scrap_done'] = sum(scrap.state == 'done' for scrap in scraps)
+            metrics['scrap_qty'] = sum(
+                sum(line.demand_qty or 0.0 for line in scrap.scrap_line_ids)
                 or (getattr(scrap, 'scrap_qty', 0.0) or 0.0)
                 for scrap in scraps
             )
-            values['scrap_reason_count'] = len(scraps.filtered(lambda s: bool(s.name)))
+            metrics['scrap_reason_count'] = sum(bool(scrap.name) for scrap in scraps)
+        return metrics
 
-        if self.card_type == 'operation_progress':
+    @api.model
+    def _cron_refresh_inventory_metrics_cache(self):
+        """Refresh expired snapshots for users who have opened Inventory Dashboard."""
+        prefix = 'acumatica_all_import.inventory_metrics.'
+        Parameters = self.env['ir.config_parameter'].sudo()
+        cached_parameters = Parameters.search([('key', 'like', prefix + '%')])
+        Users = self.env['res.users'].sudo()
+        dashboard_group_ids = {
+            self.env.ref('stock.group_stock_manager').id,
+            self.env.ref('base.group_system').id,
+        }
+
+        for parameter in cached_parameters:
+            try:
+                user_part, company_part = parameter.key[len(prefix):].split('.', 1)
+                user_id = int(user_part)
+                company_ids = [int(company_id) for company_id in company_part.split(',') if company_id]
+                payload = json.loads(parameter.value or '{}')
+                cache_age = unix_time() - float(payload.get('computed_at', 0))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+
+            user = Users.browse(user_id).exists()
+            if not user or not user.active:
+                parameter.unlink()
+                continue
+            if not dashboard_group_ids.intersection(user.groups_id.ids):
+                continue
+            if not set(company_ids).issubset(set(user.company_ids.ids)):
+                continue
+            dashboard_model = self.with_user(user)
+            if company_ids:
+                dashboard_model = dashboard_model.with_context(allowed_company_ids=company_ids)
+            now = fields.Datetime.now()
+            today_start = datetime.combine(fields.Date.context_today(dashboard_model), time.min)
+            if (
+                0 <= cache_age < self._INVENTORY_METRICS_CACHE_TTL
+                and payload.get('snapshot_date') == today_start.date().isoformat()
+                and isinstance(payload.get('metrics'), dict)
+            ):
+                continue
+            try:
+                metrics = dashboard_model._compute_inventory_metrics_snapshot(now, today_start)
+                dashboard_model._store_inventory_metrics_snapshot(metrics, today_start)
+            except Exception:
+                _logger.exception(
+                    'Failed to refresh Inventory Dashboard metrics for user_id=%s companies=%s',
+                    user_id,
+                    company_ids,
+                )
+
+    def _apply_inventory_metrics(self, values, metrics):
+        self.ensure_one()
+        if self.card_type == 'operation_status':
+            values['total'] = metrics['total']
+            values['waiting'] = metrics['waiting']
+            values['ready'] = metrics['ready']
+            values['in_progress'] = metrics['in_progress']
+            values['done_count'] = metrics['done_count']
+            values['cancelled'] = metrics['cancelled']
+            values['staged'] = metrics['waiting']
+            values['created'] = metrics['ready']
+            values['updated'] = metrics['in_progress']
+            values['errors'] = metrics['done_count']
+            values['rejected'] = metrics['cancelled']
+        elif self.card_type == 'delayed_operation':
+            values['overdue'] = metrics['overdue']
+            values['total'] = metrics['overdue']
+            values['errors'] = metrics['overdue']
+        elif self.card_type == 'operation_schedule':
+            values['overdue'] = metrics['overdue']
+            values['scheduled_today'] = metrics['scheduled_today']
+            values['upcoming'] = metrics['upcoming']
+            values['total'] = metrics['overdue'] + metrics['scheduled_today'] + metrics['upcoming']
+            values['yesterday'] = metrics['overdue']
+            values['today'] = metrics['scheduled_today']
+            values['last_7_days'] = metrics['upcoming']
+        elif self.card_type == 'operation_progress':
+            values['total'] = metrics['total']
+            values['demand_qty'] = metrics['demand_qty']
+            values['processed_qty'] = metrics['processed_qty']
+            values['remaining_qty'] = max(metrics['demand_qty'] - metrics['processed_qty'], 0.0)
+            if metrics['demand_qty']:
+                values['completion_percent'] = metrics['processed_qty'] / metrics['demand_qty'] * 100
             values['staged'] = values['demand_qty']
             values['created'] = values['processed_qty']
             values['updated'] = values['remaining_qty']
             values['errors'] = values['completion_percent']
         elif self.card_type == 'partial_discrepancy':
+            values['partial_count'] = metrics['partial_count']
+            values['expected_qty'] = metrics['demand_qty']
+            values['received_qty'] = metrics['processed_qty']
+            values['sent_qty'] = metrics['sent_qty']
+            values['counted_qty'] = metrics['processed_qty']
+            values['discrepancy_qty'] = max(metrics['demand_qty'] - metrics['processed_qty'], 0.0)
+            values['total'] = metrics['partial_count']
             values['staged'] = values['expected_qty']
             values['created'] = values['sent_qty']
             values['updated'] = values['received_qty']
             values['errors'] = values['discrepancy_qty']
         elif self.card_type == 'inventory_adjustment':
-            values['staged'] = values['adjustment_count']
-            values['errors'] = values['adjustment_variance']
+            values['adjustment_count'] = metrics['adjustment_count']
+            values['adjustment_variance'] = metrics['adjustment_variance']
+            values['total'] = metrics['adjustment_count']
+            values['staged'] = metrics['adjustment_count']
+            values['errors'] = metrics['adjustment_variance']
         elif self.card_type == 'scrap_monitoring':
-            values['staged'] = values['scrap_draft']
-            values['created'] = values['scrap_ready']
-            values['errors'] = values['scrap_done']
-            values['updated'] = values['scrap_qty']
-        elif self.card_type == 'delayed_operation':
-            values['errors'] = values['overdue']
+            values['total'] = metrics['scrap_total']
+            values['scrap_draft'] = metrics['scrap_draft']
+            values['scrap_ready'] = metrics['scrap_ready']
+            values['scrap_done'] = metrics['scrap_done']
+            values['scrap_qty'] = metrics['scrap_qty']
+            values['scrap_reason_count'] = metrics['scrap_reason_count']
+            values['staged'] = metrics['scrap_draft']
+            values['created'] = metrics['scrap_ready']
+            values['errors'] = metrics['scrap_done']
+            values['updated'] = metrics['scrap_qty']
 
-        status_max = max(values['staged'], values['created'], values['updated'], values['errors'], 1)
-        values['staged_bar'] = max(8, round(values['staged'] / status_max * 120))
-        values['created_bar'] = max(8, round(values['created'] / status_max * 120))
-        values['updated_bar'] = max(8, round(values['updated'] / status_max * 120))
-        values['errors_bar'] = max(8, round(values['errors'] / status_max * 120))
-        values['cancelled_bar'] = max(8, round(values['cancelled'] / max(
-            values['waiting'], values['ready'], values['in_progress'], values['done_count'], values['cancelled'], 1
-        ) * 120))
+        if self.card_type == 'operation_status':
+            status_max = max(
+                values['waiting'], values['ready'], values['in_progress'],
+                values['done_count'], values['cancelled'], 1,
+            )
+            values['cancelled_bar'] = max(8, round(values['cancelled'] / status_max * 120))
 
     def action_refresh(self):
+        if any(card.dashboard_scope == 'inventory' for card in self):
+            now = fields.Datetime.now()
+            today_start = datetime.combine(fields.Date.context_today(self), time.min)
+            metrics = self._compute_inventory_metrics_snapshot(now, today_start)
+            self._store_inventory_metrics_snapshot(metrics, today_start)
         return {'type': 'ir.actions.client', 'tag': 'reload'}
 
     def action_open_metric(self):

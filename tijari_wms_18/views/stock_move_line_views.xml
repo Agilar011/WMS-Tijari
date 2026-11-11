@@ -194,7 +194,7 @@
                         type="object"
                         string="Generate Lot"
                         class="btn-warning"
-                        invisible="context.get('picking_type_name') != 'Receipts'"/>
+                        invisible="context.get('picking_type_name') not in ['Receipts', 'Direct Receipt']"/>
                 </header>
             </xpath>
 

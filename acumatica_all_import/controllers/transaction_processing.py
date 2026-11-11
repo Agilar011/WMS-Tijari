@@ -580,10 +580,19 @@ class TransactionProcessingMixin:
                     "import_state": "staged",
                     "import_message": False,
                 }
+                # RefNbr + row number identifies a detail without collapsing
+                # multiple detail lines belonging to the same adjustment.
                 record = Staging.search([
-                    ("acumatica_id", "=", external_id),
+                    ("ref_nbr", "=", reference or False),
+                    ("row_number", "=", row_number),
                     ("config_id", "=", config_record.id),
-                ], limit=1)
+                ], limit=1) if reference else Staging.browse()
+                # Keep updating records staged before RefNbr became the lookup key.
+                if not record:
+                    record = Staging.search([
+                        ("acumatica_id", "=", external_id),
+                        ("config_id", "=", config_record.id),
+                    ], limit=1)
                 # Reuse the old header record for the first detail on refetch.
                 if not record and detail_index == 1 and parent_id:
                     record = Staging.search([
