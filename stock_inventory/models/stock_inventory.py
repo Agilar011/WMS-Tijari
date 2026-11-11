@@ -87,6 +87,14 @@ class InventoryAdjustmentsGroup(models.Model):
         readonly=True,
     )
 
+    product_id = fields.Many2one(
+        "product.product",
+        string="Product",
+        compute="_compute_product_id",
+        inverse="_inverse_product_id",
+        domain="['|', ('company_id', '=', company_id), ('company_id', '=', False)]",
+    )
+
     product_count = fields.Integer(
         string="Products",
         compute="_compute_product_count",
@@ -311,6 +319,15 @@ class InventoryAdjustmentsGroup(models.Model):
         for rec in self:
             rec.product_count = len(rec.product_ids)
 
+    @api.depends("product_ids")
+    def _compute_product_id(self):
+        for rec in self:
+            rec.product_id = rec.product_ids[:1] if len(rec.product_ids) == 1 else False
+
+    def _inverse_product_id(self):
+        for rec in self:
+            rec.product_ids = [(6, 0, rec.product_id.ids)]
+
     def action_open_product_selection(self):
         self.ensure_one()
         return {
@@ -328,6 +345,7 @@ class InventoryAdjustmentsGroup(models.Model):
             "context": {
                 "default_inventory_id": self.id,
                 "default_product_ids": [(6, 0, self.product_ids.ids)],
+                "default_product_id": self.product_ids[:1].id,
             },
         }
 

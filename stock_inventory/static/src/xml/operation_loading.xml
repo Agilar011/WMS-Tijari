@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="stock_inventory.OperationLoadingAction">
+        <main class="o_stock_inventory_operation_overlay" aria-live="polite">
+            <section class="o_stock_inventory_operation_card" role="status">
+                <t t-if="state.phase === 'failed'">
+                    <div class="o_stock_inventory_operation_error_icon" aria-hidden="true">
+                        <i class="fa fa-exclamation-triangle"/>
+                    </div>
+                    <h1>Proses tidak berhasil</h1>
+                    <p class="o_stock_inventory_operation_name" t-esc="operationLabel"/>
+                    <div class="o_stock_inventory_operation_error_message" role="alert">
+                        <t t-esc="state.errorMessage"/>
+                    </div>
+                    <button class="btn btn-primary" t-on-click="returnToRecord">
+                        Kembali ke Adjustment
+                    </button>
+                </t>
+                <t t-else="">
+                    <div class="o_stock_inventory_operation_spinner" aria-hidden="true"/>
+                    <h1 t-if="state.phase === 'retrying'">Mencoba kembali</h1>
+                    <h1 t-else="">Sedang memproses</h1>
+                    <p class="o_stock_inventory_operation_name" t-esc="operationLabel"/>
+                    <p class="o_stock_inventory_operation_hint">
+                        Mohon tunggu dan jangan tutup halaman ini.
+                    </p>
+                    <div t-if="state.phase === 'retrying'"
+                        class="o_stock_inventory_operation_retry_message" role="alert">
+                        <strong>Terjadi kendala. Sistem akan mencoba kembali.</strong>
+                        <div t-esc="state.errorMessage"/>
+                    </div>
+                    <p class="o_stock_inventory_operation_elapsed">
+                        Waktu berjalan: <t t-esc="elapsedLabel"/>
+                    </p>
+                </t>
+            </section>
+        </main>
+    </t>
+</templates>
