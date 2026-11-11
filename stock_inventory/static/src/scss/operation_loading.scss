@@ -1,0 +1,122 @@
+.o_stock_inventory_operation_overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(17, 31, 46, 0.64);
+    cursor: wait;
+
+    .o_stock_inventory_operation_card {
+        width: 34rem;
+        max-width: 100%;
+        padding: 2.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.8);
+        border-radius: 1rem;
+        background: #fff;
+        box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.22);
+        color: #344054;
+        cursor: default;
+        text-align: center;
+    }
+
+    h1 {
+        margin: 1.25rem 0 0.4rem;
+        color: #172b4d;
+        font-size: 1.6rem;
+        font-weight: 600;
+    }
+
+    .o_stock_inventory_operation_name {
+        margin: 0;
+        color: #087e8b;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .o_stock_inventory_operation_hint,
+    .o_stock_inventory_operation_elapsed {
+        margin: 0.8rem 0 0;
+        color: #667085;
+    }
+
+    .o_stock_inventory_operation_elapsed {
+        font-size: 0.9rem;
+    }
+
+    .o_stock_inventory_operation_spinner {
+        width: 3.25rem;
+        height: 3.25rem;
+        margin: 0 auto;
+        border: 0.35rem solid #d7edf0;
+        border-top-color: #087e8b;
+        border-radius: 50%;
+        animation: stock-inventory-operation-spin 0.85s linear infinite;
+    }
+
+    .o_stock_inventory_operation_retry_message,
+    .o_stock_inventory_operation_error_message {
+        margin: 1.25rem 0;
+        padding: 0.9rem 1rem;
+        border-radius: 0.65rem;
+        text-align: left;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .o_stock_inventory_operation_retry_message {
+        border: 1px solid #f3d28a;
+        background: #fff7e6;
+        color: #755400;
+    }
+
+    .o_stock_inventory_operation_retry_message div {
+        margin-top: 0.35rem;
+    }
+
+    .o_stock_inventory_operation_error_icon {
+        color: #c0393b;
+        font-size: 2.5rem;
+    }
+
+    .o_stock_inventory_operation_error_message {
+        border: 1px solid #f2b8b5;
+        background: #fff1f0;
+        color: #842029;
+    }
+}
+
+// The loading client action runs in an Odoo dialog so it does not enter the
+// breadcrumb/action history. Expand that dialog to the viewport and hide its
+// standard chrome; the overlay itself supplies the loading presentation.
+.o_dialog:has(.o_stock_inventory_operation_overlay) {
+    .modal-dialog {
+        width: 100vw;
+        max-width: none;
+        height: 100vh;
+        margin: 0;
+    }
+
+    .modal-content {
+        height: 100vh;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+    }
+
+    .modal-header {
+        display: none;
+    }
+
+    .modal-body {
+        height: 100vh;
+        padding: 0 !important;
+        overflow: visible;
+    }
+}
+
+@keyframes stock-inventory-operation-spin {
+    to { transform: rotate(360deg); }
+}
