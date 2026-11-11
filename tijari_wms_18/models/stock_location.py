@@ -1,7 +1,7 @@
 import base64
 import hashlib
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
 import logging
@@ -25,6 +25,42 @@ class StockLocation(models.Model):
     is_consignment = fields.Boolean(string="Consignment Location")
     is_document_only = fields.Boolean(string="Document Only Location")
     location_owner = fields.Char(string="Location Owner")
+
+    @api.constrains('name')
+    def _check_unique_location_name(self):
+        named_locations = self.filtered('name')
+        names = named_locations.mapped('name')
+        seen_names = set()
+        duplicate_names = set()
+        for name in names:
+            if name in seen_names:
+                duplicate_names.add(name)
+            seen_names.add(name)
+        if duplicate_names:
+            raise ValidationError(_(
+                "Stock location names must be unique. Duplicate name: %(name)s",
+                name=', '.join(sorted(duplicate_names)),
+            ))
+
+        if not names:
+            return
+        # Serialize simultaneous creates/renames of the same name so both
+        # transactions cannot pass the ORM duplicate search at once.
+        for name in sorted(set(names)):
+            self.env.cr.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                [name],
+            )
+        existing = self.sudo().search([
+            ('name', 'in', list(set(names))),
+            ('id', 'not in', self.ids),
+        ], limit=1)
+        if existing:
+            raise ValidationError(_(
+                "Stock location names must be unique. The name '%(name)s' is already used by %(location)s.",
+                name=existing.name,
+                location=existing.display_name,
+            ))
 
     @api.depends(
         'name',

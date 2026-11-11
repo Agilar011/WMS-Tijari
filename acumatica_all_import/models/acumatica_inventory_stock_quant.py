@@ -27,17 +27,130 @@ class AcumaticaInventoryStockQuant(models.Model):
             'target': 'new',
         }
 
-    def action_create_opname(self):
-        """Create a draft opname from the current comparison search results."""
-        domain = self.env.context.get('active_domain') or []
-        records = self.search(domain, order='id')
+    def _get_selected_comparison_records(self):
+        records = self.exists()
         if not records:
-            raise UserError(_("There are no Inventory Stock Comparison rows to create an opname."))
+            records = self.browse(self.env.context.get('active_ids') or []).exists()
+        if not records:
+            raise UserError(_("Select at least one Inventory Stock Comparison row first."))
+        return records
+
+    def _get_consignment_location_context(self, rows):
+        """Resolve existing consignment locations and batch-load their source lines."""
+        mapping_ids = {
+            row['location_mapping_id'][0]
+            for row in rows
+            if row.get('location_mapping_id')
+        }
+        mappings = {
+            mapping.id: mapping
+            for mapping in self.env['stock.location.acumatica'].browse(list(mapping_ids))
+        }
+        codes_by_row = {}
+        candidate_names = set()
+        for row in rows:
+            mapping_tuple = row.get('location_mapping_id')
+            mapping = mappings.get(mapping_tuple[0]) if mapping_tuple else False
+            if mapping and mapping.code and mapping.odoo_location_id and row.get('location_id'):
+                continue
+            raw_code = (row.get('warehouse_code') or '').split(',', 1)[0].strip().upper()
+            if not raw_code:
+                continue
+            consignment_code = raw_code.split('-', 1)[1].strip() if '-' in raw_code else raw_code
+            codes_by_row[row['id']] = (raw_code, consignment_code)
+            candidate_names.update((raw_code, consignment_code))
+
+        locations = self.env['stock.location'].search([
+            ('is_consignment', '=', True),
+            ('usage', '=', 'internal'),
+            ('name', 'in', list(candidate_names)),
+        ]) if candidate_names else self.env['stock.location'].browse()
+        locations_by_name = {}
+        for location in locations:
+            locations_by_name.setdefault(location.name, []).append(location)
+
+        source_codes = {raw_code for raw_code, _suffix in codes_by_row.values()}
+        source_lines = self.env['acumatica.warehouse.line'].sudo().search([
+            ('warehouse_id', 'in', list(source_codes)),
+            ('receiving_location_id', '=ilike', 'CONS'),
+        ], order='id desc') if source_codes else self.env['acumatica.warehouse.line'].browse()
+        source_line_by_code = {}
+        for source_line in source_lines:
+            source_line_by_code.setdefault(source_line.warehouse_id.strip().upper(), source_line)
+
+        locations_by_row = {}
+        missing_codes = set()
+        missing_source_codes = set()
+        ambiguous_codes = set()
+        for row_id, (raw_code, suffix) in codes_by_row.items():
+            destination = False
+            ambiguous = False
+            for name in dict.fromkeys((raw_code, suffix)):
+                candidates = locations_by_name.get(name, [])
+                if len(candidates) == 1:
+                    destination = candidates[0]
+                    break
+                if len(candidates) > 1:
+                    ambiguous = True
+                    break
+            if destination:
+                locations_by_row[row_id] = destination
+            elif ambiguous:
+                ambiguous_codes.add(raw_code)
+            elif raw_code in source_line_by_code:
+                missing_codes.add(raw_code)
+            else:
+                missing_source_codes.add(raw_code)
+
+        return {
+            'mappings': mappings,
+            'locations_by_row': locations_by_row,
+            'source_line_by_code': source_line_by_code,
+            'missing_codes': sorted(missing_codes),
+            'missing_source_codes': sorted(missing_source_codes),
+            'ambiguous_codes': sorted(ambiguous_codes),
+        }
+
+    def _open_missing_consignment_location_wizard(self, records, operation, codes):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Generate Location'),
+            'res_model': 'acumatica.inventory.stock.location.confirmation',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_operation': operation,
+                'default_comparison_ids': [(6, 0, records.ids)],
+                'default_confirmation_message': _(
+                    'Lokasi %(codes)s Tidak ditemukan di WMS, jalankan generate location melalui sistem?',
+                    codes=', '.join(codes),
+                ),
+            },
+        }
+
+    def action_create_opname(self):
+        """Create an opname from the selected comparison rows only."""
+        records = self._get_selected_comparison_records()
 
         rows = records.read([
             'inventory_id', 'description', 'api_on_hand', 'warehouse_code',
             'location_id', 'location_mapping_id',
         ])
+        location_context = self._get_consignment_location_context(rows)
+        if location_context['ambiguous_codes']:
+            raise UserError(_(
+                "More than one consignment location matches these codes: %(warehouse_codes)s. Make the location code unique before creating the opname.",
+                warehouse_codes=', '.join(location_context['ambiguous_codes']),
+            ))
+        if location_context['missing_source_codes']:
+            raise UserError(_(
+                "These locations are not in WMS and have no Consignment source row for automatic generation: %(warehouse_codes)s.",
+                warehouse_codes=', '.join(location_context['missing_source_codes']),
+            ))
+        if location_context['missing_codes']:
+            return self._open_missing_consignment_location_wizard(
+                records, 'opname', location_context['missing_codes']
+            )
         inventory_codes = list({row['inventory_id'] for row in rows if row['inventory_id']})
         descriptions = list({row['description'] for row in rows if row['description']})
         Product = self.env['product.product']
@@ -61,16 +174,25 @@ class AcumaticaInventoryStockQuant(models.Model):
                 product = product_by_name.get(row['description'])
             location = row['location_id']
             location_mapping = row['location_mapping_id']
-            if not location_mapping or not location:
+            mapping = (
+                location_context['mappings'].get(location_mapping[0])
+                if location_mapping else False
+            )
+            if mapping and mapping.code and mapping.odoo_location_id and location:
+                target_location_id = location[0]
+            else:
+                consignment_location = location_context['locations_by_row'].get(row['id'])
+                target_location_id = consignment_location.id if consignment_location else False
+            if not target_location_id:
                 missing_location_warehouses.update(
                     warehouse_code.strip()
                     for warehouse_code in (row['warehouse_code'] or '').split(',')
                     if warehouse_code.strip()
                 )
-            if product and location:
+            if product and target_location_id:
                 opname_rows.append({
                     'product_id': product.id,
-                    'location_id': location[0],
+                    'location_id': target_location_id,
                     'api_on_hand': row['api_on_hand'] or 0.0,
                 })
 
@@ -106,6 +228,181 @@ class AcumaticaInventoryStockQuant(models.Model):
             'view_mode': 'form',
             'views': [(self.env.ref('stock_inventory.view_inventory_group_form').id, 'form')],
             'res_id': inventory.id,
+            'target': 'current',
+        }
+
+    def action_create_inventory(self):
+        """Create Direct Receipts from the selected comparison rows only."""
+        records = self._get_selected_comparison_records()
+        rows = records.read([
+            'inventory_id', 'description', 'api_on_hand', 'warehouse_code',
+            'location_id', 'location_mapping_id',
+        ])
+        location_context = self._get_consignment_location_context(rows)
+        if location_context['ambiguous_codes']:
+            raise UserError(_(
+                "More than one consignment location matches these codes: %(warehouse_codes)s. Make the location code unique before creating receipts.",
+                warehouse_codes=', '.join(location_context['ambiguous_codes']),
+            ))
+        if location_context['missing_source_codes']:
+            raise UserError(_(
+                "These locations are not in WMS and have no Consignment source row for automatic generation: %(warehouse_codes)s.",
+                warehouse_codes=', '.join(location_context['missing_source_codes']),
+            ))
+        if location_context['missing_codes']:
+            return self._open_missing_consignment_location_wizard(
+                records, 'receipt', location_context['missing_codes']
+            )
+
+        inventory_codes = list({row['inventory_id'] for row in rows if row['inventory_id']})
+        descriptions = list({row['description'] for row in rows if row['description']})
+        Product = self.env['product.product']
+        products_by_code = Product.search([
+            '|', ('default_code', 'in', inventory_codes),
+            ('barcode', 'in', inventory_codes),
+        ], order='id') if inventory_codes else Product.browse()
+        products_by_name = Product.search(
+            [('name', 'in', descriptions)], order='id'
+        ) if descriptions else Product.browse()
+        code_by_default = {product.default_code: product for product in products_by_code if product.default_code}
+        code_by_barcode = {product.barcode: product for product in products_by_code if product.barcode}
+        product_by_name = {product.name: product for product in products_by_name}
+
+        missing_location_warehouses = set()
+        missing_consignment_warehouses = set()
+        missing_products = set()
+        receipt_lines = []
+        for row in rows:
+            code = row['inventory_id']
+            product = code_by_default.get(code) or code_by_barcode.get(code)
+            if not product and row['description']:
+                product = product_by_name.get(row['description'])
+
+            quantity = row['api_on_hand'] or 0.0
+            if not product:
+                if quantity > 0.0:
+                    missing_products.add(code or row['description'] or _('Unknown product'))
+                continue
+            if float_compare(quantity, 0.0, precision_rounding=product.uom_id.rounding) <= 0:
+                continue
+
+            mapping_tuple = row['location_mapping_id']
+            mapping = location_context['mappings'].get(mapping_tuple[0]) if mapping_tuple else False
+            location_tuple = row['location_id']
+            if mapping and mapping.code and mapping.odoo_location_id and location_tuple:
+                destination = mapping.odoo_location_id
+                operation_warehouse_code = mapping.code
+            else:
+                raw_code = (row['warehouse_code'] or '').split(',', 1)[0].strip().upper()
+                destination = location_context['locations_by_row'].get(row['id'])
+                if not destination:
+                    missing_location_warehouses.add(raw_code or row['warehouse_code'] or '')
+                    continue
+
+                location_warehouse = destination.warehouse_id
+                operation_warehouse_code = (
+                    location_warehouse.code
+                    or (raw_code.split('-', 1)[0].strip() if '-' in raw_code else False)
+                )
+                if not operation_warehouse_code:
+                    missing_consignment_warehouses.add(raw_code or destination.display_name)
+                    continue
+
+            receipt_lines.append({
+                'product': product,
+                'quantity': quantity,
+                'location': destination,
+                'operation_warehouse_code': operation_warehouse_code,
+            })
+
+        if missing_location_warehouses:
+            raise UserError(_(
+                "Cannot resolve these warehouse codes to either a mapped Odoo location or an existing consignment location: %(warehouse_codes)s.",
+                warehouse_codes=', '.join(sorted(missing_location_warehouses)),
+            ))
+        if missing_consignment_warehouses:
+            raise UserError(_(
+                "Cannot determine the owning warehouse for these consignment locations: %(warehouse_codes)s. Ensure the location code includes the warehouse prefix, for example WH09-C0342.",
+                warehouse_codes=', '.join(sorted(missing_consignment_warehouses)),
+            ))
+        if missing_products:
+            raise UserError(_(
+                "Cannot create inventory receipts because these products could not be matched to Odoo products: %(products)s.",
+                products=', '.join(sorted(missing_products)),
+            ))
+        if not receipt_lines:
+            raise UserError(_(
+                "No receipts were created. The current filter has no positive API on-hand quantities."
+            ))
+
+        PickingType = self.env['stock.picking.type']
+        picking_type_by_code = {}
+        for warehouse_code in {line['operation_warehouse_code'] for line in receipt_lines}:
+            picking_type_by_code[warehouse_code] = PickingType.resolve_document_only_picking_type(
+                target_operation_type='direct_receipt',
+                document_only=True,
+                warehouse_code=warehouse_code,
+                required=True,
+            )
+
+        grouped_lines = {}
+        for line in receipt_lines:
+            picking_type = picking_type_by_code[line['operation_warehouse_code']]
+            grouped_lines.setdefault(picking_type.id, {
+                'picking_type': picking_type,
+                'lines': [],
+            })['lines'].append(line)
+
+        supplier_location = self.env.ref('stock.stock_location_suppliers', raise_if_not_found=False)
+        picking_groups = list(grouped_lines.values())
+        picking_vals_list = []
+        for group in picking_groups:
+            picking_type = group['picking_type']
+            source_location = picking_type.default_location_src_id or supplier_location
+            header_destination = picking_type.default_location_dest_id
+            if not source_location or not header_destination:
+                raise UserError(_(
+                    "The Direct Receipt operation type %(operation_type)s must have source and header destination locations configured.",
+                    operation_type=picking_type.display_name,
+                ))
+            group['source_location'] = source_location
+            company = picking_type.company_id or self.env.company
+            picking_vals_list.append({
+                'picking_type_id': picking_type.id,
+                'location_id': source_location.id,
+                'location_dest_id': header_destination.id,
+                'partner_id': company.partner_id.id,
+                'adt_type': 'Beginning Balance',
+                'origin': 'Beginning Balance',
+            })
+
+        # Batch-create headers, then batch-create every move across all receipts.
+        pickings = self.env['stock.picking'].create(picking_vals_list)
+        move_date = fields.Datetime.now()
+        move_vals_list = []
+        for group, picking in zip(picking_groups, pickings):
+            source_location = group['source_location']
+            for line in group['lines']:
+                product = line['product']
+                destination = line['location']
+                move_vals_list.append({
+                    'name': product.display_name,
+                    'product_id': product.id,
+                    'product_uom': product.uom_id.id,
+                    'product_uom_qty': line['quantity'],
+                    'location_id': source_location.id,
+                    'location_dest_id': destination.id,
+                    'adt_dest_location_id': destination.id,
+                    'picking_id': picking.id,
+                    'date': move_date,
+                })
+        self.env['stock.move'].create(move_vals_list)
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Created Direct Receipts'),
+            'res_model': 'stock.picking',
+            'view_mode': 'list,form',
+            'domain': [('id', 'in', pickings.ids)],
             'target': 'current',
         }
 
@@ -353,10 +650,10 @@ class AcumaticaInventoryStockQuant(models.Model):
         location_paths = {location.id: location.parent_path for location in locations}
 
         Quant = self.env['stock.quant'].sudo()
-        quants = Quant.search([
+        quant_domain = [
             ('product_id', 'in', list(products)),
             ('location_id', 'child_of', list(location_paths)),
-        ])
+        ]
 
         # Distribute each quant once to each requested ancestor scope. Keep
         # availability buckets by lot because Odoo clamps tracked lot buckets
@@ -365,20 +662,33 @@ class AcumaticaInventoryStockQuant(models.Model):
         if expiration_cutoff:
             expiration_cutoff = fields.Datetime.to_datetime(expiration_cutoff)
         totals = {}
-        for quant in quants:
-            ancestor_ids = quant.location_id.parent_path.rstrip('/').split('/')
+        quant_groupby = ['product_id', 'location_id', 'lot_id']
+        if expiration_cutoff:
+            quant_groupby.append('expiration_date')
+        quant_groups = Quant._read_group(
+            quant_domain,
+            quant_groupby,
+            ['quantity:sum', 'reserved_quantity:sum'],
+        )
+        for quant_group in quant_groups:
+            product, location, lot = quant_group[:3]
+            if expiration_cutoff:
+                expiration_date, quantity, reserved_quantity = quant_group[3:]
+            else:
+                quantity, reserved_quantity = quant_group[3:]
+            ancestor_ids = location.parent_path.rstrip('/').split('/')
             for ancestor_text in ancestor_ids:
                 if not ancestor_text.isdigit():
                     continue
-                key = (quant.product_id.id, int(ancestor_text))
+                key = (product.id, int(ancestor_text))
                 if key not in scopes:
                     continue
                 bucket = totals.setdefault(key, {'reserved': 0.0, 'lots': {}})
-                bucket['reserved'] += quant.reserved_quantity
-                if expiration_cutoff and quant.expiration_date and quant.expiration_date < expiration_cutoff:
+                bucket['reserved'] += reserved_quantity or 0.0
+                if expiration_cutoff and expiration_date and expiration_date < expiration_cutoff:
                     continue
-                lot_id = quant.lot_id.id or False
-                bucket['lots'][lot_id] = bucket['lots'].get(lot_id, 0.0) + quant.quantity - quant.reserved_quantity
+                lot_id = lot.id or False
+                bucket['lots'][lot_id] = bucket['lots'].get(lot_id, 0.0) + (quantity or 0.0) - (reserved_quantity or 0.0)
 
         api_quantity_by_record = {row[0]: (row[4] or 0.0) for row in rows}
         for (product_id, location_id), records in scopes.items():
