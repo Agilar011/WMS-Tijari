@@ -3847,10 +3847,19 @@ class StockPicking(models.Model):
                     move_lines_to_pack=move_lines_to_pack
                 )
 
+        pick_components = self.filtered(
+            lambda picking: picking.picking_type_id.name == 'Pick Components'
+        )
+        existing_pick_components_backorders = {
+            picking.id: set(picking.backorder_ids.ids)
+            for picking in pick_components
+        }
+
         if document_only_pickings:
             res = super(StockPicking, self.with_context(skip_sanity_check=True)).button_validate()
         else:
             res = super().button_validate()
+
         document_only_pickings._adt_preserve_document_only_destination()
 
         for rec in self:
@@ -3902,6 +3911,20 @@ class StockPicking(models.Model):
                 and rec.state == 'done'
                 and (rec.backorder_id or rec.backorder_ids)
             ):
+                # Odoo copies picking fields when creating a backorder. Clear
+                # Qty Dipenuhi only on new Pick Components backorders.
+                if rec.id in existing_pick_components_backorders:
+                    backorders = self.env['stock.picking'].search([
+                        ('backorder_id', '=', rec.id),
+                    ])
+                    new_backorders = backorders.filtered(
+                        lambda backorder: backorder.id not in
+                        existing_pick_components_backorders[rec.id]
+                        and backorder.picking_type_id.name == 'Pick Components'
+                    )
+                    if new_backorders:
+                        new_backorders.write({'adt_actual_qty': 0.0})
+
                 # Raw material moves belong to the MO and may not have a
                 # picking_id. Keep the related moves to recover lot data from
                 # completed MO moves, but only add lines to active backorder
