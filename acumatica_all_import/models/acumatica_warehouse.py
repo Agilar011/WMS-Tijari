@@ -522,22 +522,46 @@ class AcumaticaWarehouseLine(models.Model):
                             raise UserError(
                                 'Parent location untuk lokasi consignment belum tersedia.'
                             )
+
+                        # Keep the Acumatica mapping record as well as the
+                        # canonical Odoo consignment location so imports can
+                        # resolve this code through stock.location.acumatica.
+                        mapping_vals = dict(vals, **{
+                            'odoo_location_id': cons_location.id,
+                            'odoo_building_id': warehouse_odoo.id if warehouse_odoo else False,
+                            'odoo_building_location_id': (
+                                virtual_building.id if virtual_building else False
+                            ),
+                            'is_error': False,
+                            'error_message': False,
+                        })
+                        mapping = existing or self.env['stock.location.acumatica'].create(mapping_vals)
+                        if existing:
+                            mapping.write(mapping_vals)
+
                         line.write({
-                            'import_state': 'created',
+                            'import_state': 'updated' if existing else 'created',
                             'import_message': (
                                 'Location consignment siap: %s'
                                 % cons_location.complete_name
                             ),
+                            'odoo_warehouse_id': warehouse_odoo.id if warehouse_odoo else False,
+                            'odoo_building_location_id': (
+                                virtual_building.id if virtual_building else False
+                            ),
                         })
                         line._handle_acumatica_error()
                         line._log_import_result(
-                            'created',
-                            'Location consignment %s berhasil disiapkan.'
+                            'updated' if existing else 'created',
+                            'Location consignment %s berhasil disiapkan dengan mapping Acumatica.'
                             % cons_location.display_name,
-                            cons_location,
+                            mapping,
                             False,
                         )
-                        created += 1
+                        if existing:
+                            updated += 1
+                        else:
+                            created += 1
                         continue
                         
                     new_location = self.env['stock.location.acumatica'].create(vals)
