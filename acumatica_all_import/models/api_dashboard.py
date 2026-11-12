@@ -83,23 +83,6 @@ class ApiDataHubDashboardCard(models.Model):
     scrap_qty = fields.Float(compute='_compute_metrics')
     scrap_reason_count = fields.Integer(compute='_compute_metrics')
 
-    _TRANSACTION_MODELS = (
-        'acumatica.receipt.line', 'acumatica.transfer.line',
-        'acumatica.inventory.recieved.line', 'acumatica.shipment.line',
-        'acumatica.shipment.gi.staging', 'acumatica.transfer.shipment.line',
-        'acumatica.inventory.issue.line', 'acumatica.issue.po.return.line',
-        'acumatica.issue.line', 'acumatica.direct.transfer.staging',
-        'acumatica.vendor.return.direct.transfer.staging',
-        'acumatica.transfer.one.step.line', 'acumatica.transfer.two.step.line',
-        'acumatica.shipment.completed.staging', 'acumatica.kit.assembly',
-        'acumatica.invoice.consignment.staging',
-        'acumatica.credit.memo.consignment.staging',
-    )
-    _MASTER_MODELS = (
-        'acumatica.customer.line', 'acumatica.vendor.line',
-        'acumatica.uom.line', 'acumatica.warehouse.line',
-        'acumatica.stock.item.line', 'acumatica.non.stock.item.line',
-    )
     _INVENTORY_METRICS_CACHE_TTL = 300
 
     @api.depends('card_type', 'data_model')
@@ -110,6 +93,19 @@ class ApiDataHubDashboardCard(models.Model):
         week_start = today_start - timedelta(days=6)
         import_metrics_by_model = {}
         inventory_metrics = None
+        import_registry = self.env['acumatica.unified.import.wizard']
+        default_models_by_type = {
+            'transactions': tuple(
+                import_registry.IMPORT_MAP[key]['line_model']
+                for key in import_registry.TRANSACTION_TYPES
+                if key in import_registry.IMPORT_MAP
+            ),
+            'master': tuple(
+                import_registry.IMPORT_MAP[key]['line_model']
+                for key in import_registry.MASTER_DATA_TYPES
+                if key in import_registry.IMPORT_MAP
+            ),
+        }
         for card in self:
             values = {field: 0 for field in (
                 'total', 'staged', 'created', 'updated', 'rejected', 'errors',
@@ -129,7 +125,7 @@ class ApiDataHubDashboardCard(models.Model):
                     inventory_metrics = card._get_inventory_metrics(now, today_start)
                 card._apply_inventory_metrics(values, inventory_metrics)
             elif card.card_type in ('transactions', 'master'):
-                default_models = self._TRANSACTION_MODELS if card.card_type == 'transactions' else self._MASTER_MODELS
+                default_models = default_models_by_type[card.card_type]
                 models_to_read = (card.data_model,) if card.data_model else default_models
                 for model_name in models_to_read:
                     Model = self.env.get(model_name)
