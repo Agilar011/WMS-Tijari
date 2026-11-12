@@ -51,13 +51,6 @@ class StockQuantPackage(models.Model):
             'view_mode': 'form',
             'target': 'new',
         }
-    
-    # def action_print_packing_list(self):
-    #     action = {}
-    #     action['type'] = 'ir.actions.act_url'
-    #     action['url'] = '/print/packing_list?id=' + str(self.id)
-    #     action['target'] = 'new'
-    #     return action
 
     def action_print_packing_package(self):
         self.ensure_one()
@@ -81,7 +74,7 @@ class StockQuantPackage(models.Model):
             'url': '/print/packing_package?id=%s' % self.id,
             'target': 'new',
         }
-        
+
     def action_print_packing_list(self):
         self.ensure_one()
 

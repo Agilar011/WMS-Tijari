@@ -33,25 +33,13 @@ class WMSStockPackageLevel(models.Model):
     def action_mark_unfinished(self):
         for line in self.move_line_ids:
             line.so_confirmation_quantity = 0.0
-            
+
         self.write({'status': 'unfinished'})
         if self.env.context.get('wms_refresh_packed_sequence'):
             return {'type': 'ir.actions.client', 'tag': 'soft_reload'}
         return True
 
-    # def action_show_package_details(self):
-    #     self.ensure_one()
-    #     view = self.env.ref('tijari_wms_18.tijari_stock_package_level_view_form_inherit')
 
-    #     return {
-    #         'name': _('Package Content'),
-    #         'type': 'ir.actions.act_window',
-    #         'view_mode': 'form',
-    #         'res_model': 'stock.package_level',
-    #         'views': [(view.id, 'form')],
-    #         'target': 'new',
-    #         'res_id': self.id,
-    #     }
 
     def action_show_package_details(self):
         self.ensure_one()

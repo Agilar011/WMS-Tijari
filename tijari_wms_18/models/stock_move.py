@@ -169,13 +169,12 @@ class StockMove(models.Model):
         ('internal', 'Internal'),
     ], string='Type transaksi', readonly=True)
 
-    
+
     adt_dest_location = fields.Char(
         string="Mapped Location",
         readonly=True,
     )
 
-    # temp_float = fields.Float(string="Confirmation Quantity")
     so_confirmation_quantity = fields.Float(
         compute='_compute_so_confirmation_quantity',
         store=True,
@@ -185,14 +184,14 @@ class StockMove(models.Model):
         compute='_compute_so_confirmation_quantity',
         store=True,
     )
-    
+
     mo_confirmation_quantity = fields.Float(
             string='Qty Digunakan',
             compute='_compute_mo_confirmation_quantity',
             store=True,
         )
     quantity_shadow = fields.Float('Qty')
-    
+
     remaining_package_qty = fields.Float(
         compute="_compute_remaining_package_qty",
         store=True,
@@ -444,23 +443,6 @@ class StockMove(models.Model):
     def action_mark_check_finished(self):
         self._validate_before_mark_finished()
 
-        # if comparison < 0:
-        #     diff = self.remaining_package_qty - self.so_confirmation_quantity
-        #     move_line = self.move_line_ids.filtered(
-        #         lambda x: not x.result_package_id and x.quantity == self.remaining_package_qty
-        #     )
-
-        #     rounding = self.product_uom.rounding if self.product_uom else 0.01
-        #     for line in move_line:
-        #         comparison = float_compare(
-        #             line.quantity,
-        #             diff,
-        #             precision_rounding=rounding,
-        #         )
-        #         if comparison > 0:
-        #             line.quantity -= diff
-        #             break
-
         self.write({'status_check': 'finished'})
         return True
 
@@ -489,7 +471,7 @@ class StockMove(models.Model):
             raise UserError("Qty Dikirim tidak boleh melebihi Qty Unpack")
 
         return comparison
-            
+
     def _update_reserved_quantity_vals(
         self,
         need,
@@ -637,7 +619,7 @@ class StockMove(models.Model):
                     )
 
         return move_line_vals, taken_quantity
-    
+
     @api.depends(
         'product_uom_qty', 
         'quantity', 
@@ -711,7 +693,7 @@ class StockMove(models.Model):
         for move in self:
             total_confirmation_quantity = sum(move.move_line_ids.mapped('confirmation_quantity'))
             move.confirmation_quantity = total_confirmation_quantity if total_confirmation_quantity > 0 else 0.0
-    
+
     @api.depends('move_line_ids.mo_confirmation_quantity')
     def _compute_mo_confirmation_quantity(self):
         for move in self:
@@ -772,7 +754,6 @@ class StockMove(models.Model):
                 for ml in move.move_line_ids
                 if ml.package_id
             )
-            # qty = move.quantity_shadow if move.quantity_shadow != 0.0 else move.quantity
             move.remaining_package_qty = move.product_uom_qty - packaged_qty
 
     @api.depends('move_line_ids.quantity', 'move_line_ids.result_package_id')
@@ -788,7 +769,7 @@ class StockMove(models.Model):
                 for line in move.move_line_ids
                 if not line.result_package_id
             )
-            
+
     @api.depends('move_line_ids.lot_id', 'move_line_ids.quantity')
     def _compute_lot_ids(self):
         for move in self:
@@ -799,7 +780,7 @@ class StockMove(models.Model):
             picking_type = move.picking_id.picking_type_id
             for line in move.move_line_ids:
                 line._compute_auto_input_code()
-                
+
     def action_validate_lot(self):
         pass  # debug print removed for performance
 
@@ -844,7 +825,6 @@ class StockMove(models.Model):
             for item in move.move_line_ids:
                 if move.unfiltered_dest:
                     item.parent_location_id = item.adt_dest_location_id.id
-                    # item.source_location_id = False
                     item.unfiltered_dest = value
 
                     _logger.info("parent_location_id: %s", item.parent_location_id.name)
@@ -853,7 +833,6 @@ class StockMove(models.Model):
 
                 else:
                     item.parent_location_id = move.picking_id.picking_type_id.default_location_src_id.id
-                    # item.source_location_id = False
                     item.unfiltered_dest = value
 
                     _logger.info("parent_location_id: %s", item.parent_location_id.name)
@@ -865,7 +844,6 @@ class StockMove(models.Model):
         self.ensure_one()
 
         # New chained transfers display the origin of their predecessor
-        # picking (see _get_new_picking_values), so use the same origin when
         # searching for a picking to reuse.
         origin_picking = self.move_orig_ids.mapped('picking_id').filtered(
             lambda picking: picking.origin
@@ -909,7 +887,6 @@ class StockMove(models.Model):
         # Carry pick/pack/do responsible + user_ids forward from the
         # predecessor transfer(s) onto this brand-new transfer, so users
         # don't have to re-enter them once the next transfer is created
-        # (mirrors what StockPicking._propagate_responsible_to_next_transfers
         # does for transfers that already exist).
         predecessor_pickings = self.move_orig_ids.picking_id
         if predecessor_pickings:
@@ -941,7 +918,7 @@ class StockMove(models.Model):
 
         return vals
 
-    
+
     def action_print_lot_number_line(self):
         self.ensure_one()
 
@@ -1044,7 +1021,7 @@ class StockMove(models.Model):
                 'batch_picker_readonly': bool(self.picking_id.batch_id),
             },
         }
-    
+
     def action_open_move_mo(self):
         self.ensure_one()
 
@@ -1201,7 +1178,7 @@ class StockMove(models.Model):
     )
 
     custom_css_js_stored = fields.Html(string="Custom CSS JS (Stored)", sanitize=False, compute='_get_custom_css_js_stored', stored=True)
-    
+
     @api.depends('move_line_ids')
     @api.onchange('move_line_ids')
     def _get_custom_css_js_stored(self):
@@ -1350,7 +1327,7 @@ class StockMove(models.Model):
             move.putaway_sequence = 0 if (
                 not putaway_statuses or 'unfinished' in putaway_statuses
             ) else 1
-            
+
 
     @api.onchange('putaway_product_id')
     def _onchange_putaway_product_id(self):
