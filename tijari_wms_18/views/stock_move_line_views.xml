@@ -41,11 +41,11 @@
             <!-- First row of detailed stock_move_line outbound - pick -->
             <xpath expr="//field[@name='quant_id']" position="before">
                 <field name="picking_type_name" column_invisible="1" />
-                <!-- <field name="id" string="Line ID" column_invisible="picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/> -->
-                <!-- <field name="id" string="Line ID" optional="hide"/> -->
-                <!-- <field name="adt_owner_id" string="Owner" column_invisible="0"/> -->
-                <!-- <field name="adt_dest_location" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/> -->
-                <!-- <field name="product_lot_id" string="Lot" column_invisible="parent.picking_type_name not in ['Pack', 'Pick', 'Pick Internal', 'Pick Components']" force_save='1'/> -->
+
+
+
+
+
                 <field name="adt_dest_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
                 <field 
                     name="lot_id" 
@@ -53,9 +53,9 @@
                     domain="[('id', 'in', available_lot_ids)]" 
                     column_invisible="parent.picking_type_name not in ['Pack', 'Pack Internal', 'Pick', 'Pick Internal', 'Pick Components', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal', 'Manufacturing']"
                     force_save='1'/>
-                <!-- <field name="parent_location_id" readonly="1" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/> -->
-                <!-- <field name="quant_id" optional="hide"/> -->
-                <!-- <field name="source_location_id" context="{'show_location_short_name': True}" string="Pick From" column_invisible="parent.picking_type_name not in ['Pack','Pick', 'Pick Internal', 'Pick Components']" force_save="1"/> -->
+
+
+
                 <field 
                     name="location_id" 
                     domain="[('id', 'in', available_location_ids)]" 
@@ -66,7 +66,7 @@
                     force_save="1"/>
                 <field name="temp_quant_ids" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
                 <field name="temp_lot_ids" optional="hide" column_invisible="1"/>
-                <!-- <field name="product_lot_id" string="Lot" column_invisible="parent.picking_type_name not in ['Pack', 'Pick', 'Pick Internal', 'Pick Components']"/> -->
+
                 <field name="selected_quant_id" optional="hide" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Pick Components']"/>
                 <field name="available_lot_ids" column_invisible='1' />
                 <field name="available_location_ids" column_invisible='1' />
@@ -90,7 +90,7 @@
                 </attribute>
                 <attribute name="column_invisible">parent.picking_type_name != "Pack"</attribute>
             </xpath>
-            
+
            <xpath expr="//field[last()]" position="after">
 
                 <field name="picking_id" optional="hide" />
@@ -130,18 +130,15 @@
                         readonly="1"
                         invisible="matching == 'match'"
                         column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal', 'Internal Transfers', 'Internal Transfer', 'Transfer Internal']"/>
-                <!-- <field name="second_matching" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" /> -->
-                <!-- <field name="third_matching" column_invisible="parent.picking_type_name not in ['Pick', 'Pick Internal']" /> -->
+
+
             </xpath>
 
 <!-- ============================================================================================================ -->
 <!-- please dont use view below, its better to adjust view above -->
 
             <!-- Lock lot fields -->
-            <!-- <xpath expr="//field[@name='lot_id']" position="attributes">
-                <attribute name="readonly">1</attribute>
-                <attribute name="force_save">1</attribute>
-            </xpath> -->
+
 
             <xpath expr="//field[@name='lot_name']" position="attributes">
                 <attribute name="readonly">1</attribute>
@@ -157,12 +154,9 @@
             <xpath expr="//field[@name='location_dest_id'][@groups='stock.group_stock_multi_locations']"
                             position="after">
 
-                <!-- <field name="location_dest_id"
-                    domain="[('id', 'child_of', adt_dest_location_id)]" 
-                    context="{'show_location_short_name': True}"
-                /> -->
-                <!-- <field name="allocation_storage" column_invisible="parent.picking_code != 'incoming'" domain="[('id', 'child_of', adt_dest_location_id)]" /> -->
-                <!-- <field name="adt_location_id" optional="show" column_invisible="parent.name != 'Pick'" /> -->
+
+
+
                 <field name="allowed_matching_lot_ids" column_invisible="1"/>
                 <field name="matching_lot_id" column_invisible="1" force_save="1" domain="[('id', 'in', allowed_matching_lot_ids)]"/>
                 <field name="matching_loc_dest_id" column_invisible="1" force_save="1" domain="[('id', 'child_of', adt_dest_location_id)]"/>
@@ -464,7 +458,7 @@
                     <!-- Handheld Scan - Manufacturing -->
                     <!-- ===================================================== -->
 
-                    <!-- <group invisible="not is_manufacturing"> -->
+
                     <group invisible="1">
 
                         <label for="handheld_scan_code"
@@ -503,7 +497,7 @@
                     <!-- Confirm LOT - Manufacturing -->
                     <!-- ===================================================== -->
 
-                    <!-- <group invisible="not is_manufacturing"> -->
+
                     <group invisible="1">
 
                         <label for="matching_lot_id"
@@ -569,19 +563,7 @@
                     <!-- Manufacturing Pick From -->
                     <!-- ===================================================== -->
 
-                    <!-- <group invisible="not is_manufacturing">
 
-                        <label for="location_id" string="Pick From"/>
-
-                        <field name="location_id"
-                            widget="location_short_many2one"
-                            readonly="1"
-                            force_save="1"
-                            nolabel="1"
-                            context="{'show_location_short_name': True}"
-                            class="fw-bold fs-6"/>
-
-                    </group> -->
 
 
                     <!-- ===================================================== -->
@@ -693,11 +675,11 @@
                         <label for="quantity"
                             string="Qty Unpack"
                             invisible="'Pack' not in (picking_type_name or '') or result_package_id"/>
-                        
+
                         <label for="quantity"
                             string="Qty Pack"
                             invisible="'Pack' not in (picking_type_name or '') or not result_package_id"/>
-                        
+
 
                         <label for="quantity"
                             string="Qty Diterima"
@@ -711,7 +693,7 @@
                                 force_save="1"
                                 class="fw-bold fs-6"
                                 invisible="'Pick' not in (picking_type_name or '') or state == 'done'"/>
-                            
+
                             <field name="quantity_shadow"
                                 nolabel="1"
                                 readonly="1"
@@ -758,7 +740,7 @@
                                 nolabel="1"
                                 class="fw-bold fs-6"
                                 readonly="pick_status == 'finished' or state in ('done', 'cancel')"/>
-                            
+
                             <field name="product_uom_id"
                                 readonly="1"
                                 force_save="1"
@@ -770,7 +752,7 @@
 
                     </group>
 
-                    
+
                     <!-- ===================================================== -->
                     <!-- Qty Dikirim dan Unpack - Normal -->
                     <!-- ===================================================== -->
@@ -779,23 +761,7 @@
                         'Delivery Orders' not in (picking_type_name or '')
                     )">
 
-                        <!-- <label for="so_confirmation_quantity"
-                            string="Qty Dikirim"/>
 
-                        <div class="o_row">
-
-                            <field name="so_confirmation_quantity"
-                                nolabel="1"
-                                class="fw-bold fs-6"/>
-
-                            <field name="product_uom_id"
-                                readonly="1"
-                                force_save="1"
-                                nolabel="1"
-                                options="{'no_create': True}"
-                                groups="uom.group_uom"/>
-
-                        </div> -->
 
                     </group>
 
@@ -804,29 +770,7 @@
                     <!-- MANUFACTURING -->
                     <!-- ===================================================== -->
 
-                    <!-- <group invisible="not is_manufacturing">
 
-                        <label for="product_uom_qty"
-                            string="To Consume"/>
-
-                        <div class="o_row">
-
-                            <field name="product_uom_qty"
-                                readonly="1"
-                                force_save="1"
-                                nolabel="1"
-                                class="fw-bold fs-6"/>
-
-                            <field name="product_uom_id"
-                                readonly="1"
-                                force_save="1"
-                                nolabel="1"
-                                options="{'no_create': True}"
-                                groups="uom.group_uom"/>
-
-                        </div>
-
-                    </group> -->
 
 
                     <group invisible="not is_manufacturing">
@@ -943,27 +887,8 @@
                         string="Discard"
                         class="btn-secondary"/>
 
-                    <!-- <button name="action_save_picker_details"
-                        type="object"
-                        string="Save"
-                        class="btn-primary"
-                        invisible="picking_type_name != 'Receipts' or  picker_status == 'finished'"/>
-                    <button name="action_save_picker_details"
-                        type="object"
-                        string="Save"
-                        class="btn-primary"
-                        invisible="picking_type_name == 'Receipts' or mo_status == 'finished' or (picker_status == 'finished' and not is_manufacturing)"/>
-                    <button name="action_rollback_details"
-                        type="object"
-                        string="Rollback"
-                        class="btn-danger"
-                        invisible="picking_type_name != 'Receipts' or picker_status == 'unfinished'"/>
-                    <button name="action_rollback_details"
-                        type="object"
-                        string="Rollback"
-                        class="btn-danger"
-                        invisible="picking_type_name == 'Receipts' or mo_status == 'unfinished' or (picker_status == 'unfinished' and not is_manufacturing)"/> -->
-                    
+
+
                     <button name="action_delete_picker_line"
                         confirm="Apakah Anda yakin ingin menghapus data pick ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Picker"
                         type="object"
@@ -976,7 +901,7 @@
                         type="object"
                         string="Delete"
                         invisible="picking_type_name != 'Receipts' or state in ['done', 'cancel']"/>
-                    
+
                     <button name="action_delete_packer_line"
                         confirm="Apakah Anda yakin ingin menghapus data ini? Pastikan penghapusan telah dikonfirmasi terlebih dahulu kepada user Packer"
                         type="object"
@@ -984,9 +909,7 @@
                         class="btn-danger"
                         invisible="picking_type_name != 'Pack' or state in ['done', 'cancel']"/>
 
-                    <!-- <button special="cancel"
-                        string="Discard"
-                        class="btn-secondary"/> -->
+
                 </footer>
             </xpath>
         </field>
