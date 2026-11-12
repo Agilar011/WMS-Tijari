@@ -21,6 +21,13 @@
         "views/stock_move_line.xml",
         "views/res_config_settings_view.xml",
     ],
+    "assets": {
+        "web.assets_backend": [
+            "stock_inventory/static/src/js/operation_loading.js",
+            "stock_inventory/static/src/xml/operation_loading.xml",
+            "stock_inventory/static/src/scss/operation_loading.scss",
+        ],
+    },
     "installable": True,
     "application": False,
 }

@@ -54,9 +54,7 @@
                 <attribute name="invisible">state != 'done'</attribute>
             </xpath>
 
-            <!-- <xpath expr="//button[@name='316']" position="attributes">
-                <attribute name="invisible">state != 'done'</attribute>
-            </xpath> -->
+
 
             <xpath expr="//div/h1/field[@name='name']" position="replace">
                 <field name="origin" placeholder="No. Dokumen" invisible="not id"/>
@@ -130,7 +128,7 @@
                             domain="[('id', 'in', raw_material_lot_ids)]"/>
                     </group>
                     <field name="filtered_raw_material_move_ids"
-                        
+
                         mode="list,kanban"
                         readonly="state == 'cancel' or (state == 'done' and is_locked)"
                         context="{
@@ -390,13 +388,13 @@
                 <field name="mo_confirmation_quantity" column_invisible="1"/>
                 <field name="difference_quantity" string="Perbedaan Qty" decoration-danger="difference_quantity &gt; 0"/>
             </xpath>
-            
+
             <xpath expr="//field[@name='move_raw_ids']/list/field[@name='group_id']" position="after">
                 <field name="status_mo_check"
                     decoration-success="status_mo_check == 'finished'"
                     decoration-danger="status_mo_check == 'unfinished'" widget="badge" 
                     force_save="1"/>
-                
+
                 <button
                     name="action_open_manufacturing_note_wizard"
                     type="object"

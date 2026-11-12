@@ -298,10 +298,6 @@ async function focusMoveLineField(env, action) {
 
     await delay(100);
 
-    // let activeRow = document.querySelector(
-    //     "tr.o_selected_row, tr.table-active, tr:focus-within"
-    // );
-
     const activeRow = action.activeRow || findRowById(moveLineId) || findActiveRow();
 
 
@@ -1228,4 +1224,3 @@ registry.category("fields").add("adt_scan_picker_product_by_lot_button", {
 registry.category("fields").add("adt_scan_package_button", {
     component: PackageScanButton,
 });
-// registry.category("actions").add("adt_scan_qr_to_move_line_field", focusMoveLineField);
