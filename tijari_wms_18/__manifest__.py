@@ -91,6 +91,7 @@
         'web.assets_frontend': [
         ],
         'web.assets_backend': [
+            'tijari_wms_18/static/src/xml/hide_stock_picking_print.xml',
             'tijari_wms_18/static/src/scss/list_table_auto_layout.scss',
             'tijari_wms_18/static/src/scss/package_level_detail_wizard.scss',
             'tijari_wms_18/static/src/scss/stock_picking_scan_filters.scss',
