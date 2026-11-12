@@ -21,6 +21,24 @@ import psycopg2
 import qrcode
 import io
 import base64
+import re
+from urllib.parse import quote
+
+
+def _inline_pdf_content_disposition(print_name, document_name):
+    """Build a safe inline PDF filename with report name and document number."""
+    def clean(value):
+        value = re.sub(r'[\\/:*?"<>|\r\n]+', '-', str(value or '').strip())
+        return value.strip(' .-_')
+
+    print_name = clean(print_name) or 'Document'
+    document_name = clean(document_name)
+    filename = '{} - {}.pdf'.format(print_name, document_name) if document_name else '{}.pdf'.format(print_name)
+    fallback = filename.encode('ascii', 'ignore').decode('ascii').replace('"', '')
+    return 'inline; filename="{}"; filename*=UTF-8\'\'{}'.format(
+        fallback,
+        quote(filename, safe=''),
+    )
 
 def _wms_http_post(*args, **kwargs):
     import requests
@@ -644,8 +662,8 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "warehouse_receipt.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            disposition = _inline_pdf_content_disposition('Receipt', receipt.origin)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()
@@ -700,7 +718,7 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "warehouse_receipt.pdf"
+            filename = "Lot Number.pdf"
             return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
         except:
             import traceback
@@ -773,8 +791,9 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "warehouse_receipt.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            document_name = move[:1].picking_id.origin or ', '.join(move.lot_ids.mapped('name'))
+            disposition = _inline_pdf_content_disposition('Lot Number', document_name)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()
@@ -847,8 +866,8 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "PACKING_LIST.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            disposition = _inline_pdf_content_disposition('Packing List', stok.name)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()
@@ -901,8 +920,8 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "PACKING_LIST.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            disposition = _inline_pdf_content_disposition('Package', stok.name)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()
@@ -992,8 +1011,8 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "Stok Opname.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            disposition = _inline_pdf_content_disposition('Stock Opname', stock.name)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()
@@ -1064,8 +1083,8 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "stok_scrab.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            disposition = _inline_pdf_content_disposition('Scrap', stock.origin)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()
@@ -1164,8 +1183,8 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "berita_acara_hasil_manufacturing.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            disposition = _inline_pdf_content_disposition('Hasil Manufacturing', mrp.origin)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except Exception:
             import traceback
             msg = traceback.format_exc()
@@ -1253,8 +1272,9 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "warehouse_receipt.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            print_name = 'Delivery' if receipt.picking_type_id.group_view == 'delivery' else 'Pick'
+            disposition = _inline_pdf_content_disposition(print_name, receipt.origin)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()
@@ -1342,8 +1362,8 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "warehouse_pack.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            disposition = _inline_pdf_content_disposition('Pack', receipt.origin)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()
@@ -1431,8 +1451,8 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "warehouse_transfer.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            disposition = _inline_pdf_content_disposition('Internal Transfer', receipt.origin)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()
@@ -1534,8 +1554,8 @@ class WmsApiController(http.Controller):
             request_id = xml.find('.//requestId').text
             export_id = xml.find('.//export//id').text
             result = _wms_http_get('http://35.194.200.100:8080/jasperserver/rest_v2/reportExecutions/' + request_id + '/exports/' + export_id + '/outputResource', cookies=execution.cookies, verify=False)
-            filename = "Delivery_Slip_Pack.pdf"
-            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', 'inline; filename=%s;' % filename)])
+            disposition = _inline_pdf_content_disposition('Delivery Slip', receipt.origin)
+            return request.make_response(result.content, [('Content-Type', result.headers['content-type']), ('Content-Disposition', disposition)])
         except:
             import traceback
             msg = traceback.format_exc()

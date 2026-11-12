@@ -65,7 +65,7 @@ class WMSStockScrap(models.Model):
     product_id = fields.Many2one(
         'product.product', 'Product', domain="[('type', '=', 'consu')]",
         check_company=True)
-    
+
     product_uom_id = fields.Many2one(
         'uom.uom', 'Unit of Measure',
         compute="_compute_product_uom_id", store=True, readonly=False, precompute=True,
@@ -219,7 +219,7 @@ class WMSStockScrap(models.Model):
             values = scrap._get_picker_scan_values(scrap.filter_scan_code)
             scrap.update(values['values'])
             scrap.filter_scan_code = False
-    
+
     def _get_picker_scan_values(self, scanned_code):
         self.ensure_one()
         scanned_code = (scanned_code or '').strip()
@@ -285,7 +285,7 @@ class WMSStockScrap(models.Model):
             return product, _('SKU')
 
         return Product.browse(), False
-    
+
     def _find_scrap_product_by_lot_scan_code(self, scan_code):
         self.ensure_one()
         lots = self.scrap_line_ids.mapped('lot_ids').filtered(
@@ -353,13 +353,11 @@ class WMSStockScrap(models.Model):
         if not self.scrap_line_ids:
             raise UserError(_("No scrap lines found."))
 
-        # if self.availability_state != "available":
-        #     raise UserError(_("Some products do not have sufficient stock."))
 
         self._check_all_lot_match()
 
         for line in self.scrap_line_ids:
-        
+
             move = self.env["stock.move"].create(
                 self._prepare_scrap_move_values(line)
             )
@@ -372,7 +370,7 @@ class WMSStockScrap(models.Model):
                         "No stock allocation found for product %s."
                     ) % line.product_id.display_name
                 )
-                
+
             for move_line in scrap_move_line:
 
                 available = self.env["stock.quant"]._get_available_quantity(
@@ -380,7 +378,7 @@ class WMSStockScrap(models.Model):
                     move_line.location_id,
                     lot_id = move_line.lot_id,
                 )
-        
+
                 if float_compare(
                     available,
                     move_line.scrapped_qty,
@@ -402,7 +400,6 @@ class WMSStockScrap(models.Model):
                     "location_dest_id": self.scrap_location_id.id,
                     "product_uom_id": move_line.product_uom_id.id,
                     "quantity": move_line.scrapped_qty,
-                    # "quantity": move_line.quantity,
                 })
 
             move.with_context(
@@ -412,7 +409,6 @@ class WMSStockScrap(models.Model):
 
             line.write({
                 "move_id": move.id,
-                # "availability_state": "available",
             })
 
         self.write({
@@ -459,10 +455,6 @@ class WMSStockScrap(models.Model):
 
         self.last_availability_check = fields.Datetime.now()
 
-        # if self.availability_state == "available":
-        #     self.state = "ready"
-        # else:
-        #     self.state = "draft"
 
         return True
 
@@ -514,7 +506,7 @@ class WMSStockScrap(models.Model):
             line.availability_state = "available"
         else:
             line.availability_state = "insufficient"
-        
+
         self._generate_wms_scrap_move_lines(line)
 
     def _create_scrap_moves(self):
@@ -539,14 +531,6 @@ class WMSStockScrap(models.Model):
                         "product_uom_id": move_line.product_uom_id.id,
                         "quantity": move_line.quantity,
                     })
-            # else:
-            #     self.env["wms.scrap.move.line"].create({
-            #         "move_id": scrap_move.id,
-            #         "location_id": line.location_id.id,
-            #         "quantity": line.demand_qty,
-            #         "product_uom_id": line.product_uom_id.id,
-            #     })
-
     def _generate_wms_scrap_move_lines(self, scrap_line):
         self.ensure_one()
 
@@ -623,7 +607,6 @@ class WMSStockScrap(models.Model):
             order="in_date asc, id asc",
         )
 
-        # remaining_qty = scrap_line.demand_qty
 
         # =========================================================
         # 7. Allocate sebanyak yang tersedia
@@ -677,7 +660,7 @@ class WMSStockScrap(models.Model):
             raise UserError(_(
                 f"All scrap Lots must be matched before validation.\n\n{text}"
             ))
-        
+
         unfinished_line = self.scrap_line_ids.filtered(
             lambda m: m.status != 'finished'
         )
@@ -689,7 +672,7 @@ class WMSStockScrap(models.Model):
             raise UserError(_(
                 f"All products must be in Finished status.\n\n{text}"
         ))
-    
+
     def _get_scrap_locations(self, location):
         return self.env["stock.location"].search([
             ("id", "child_of", location.id),
@@ -788,10 +771,6 @@ class StockScrapLine(models.Model):
         readonly=True,
     )  
 
-    # move_line_ids = fields.One2many(
-    #     related="move_id.move_line_ids",
-    #     readonly=True,
-    # )
 
     move_state = fields.Selection(
         related="move_id.state",
@@ -916,7 +895,7 @@ class WMSScrapMoveLine(models.Model):
         "stock.lot",
         string="Lot",
     )
-    
+
     location_id = fields.Many2one(
         "stock.location",
         string="Pick From",
@@ -1004,7 +983,7 @@ class WMSScrapMoveLine(models.Model):
                 'matching_lot_id': lot.id,
             }
         return values
-    
+
     def _find_lot_by_scan_code(self, lot_code):
         Lot = self.env['stock.lot']
         lot_code = (lot_code or '').strip()
@@ -1015,7 +994,6 @@ class WMSScrapMoveLine(models.Model):
 
     def action_mark_check_finished(self):
         self._validate_before_mark_finished()
-        # match_status = self._get_matching_status_mo()   
         if self.match_status == 'not_match':
             raise ValidationError(f"Confirmation Lot {self.lot_id.name} belum match")
 
@@ -1084,9 +1062,7 @@ class ScrapStockPicking(models.Model):
 
         if self.state != "done":
             raise UserError(_("Only completed receipts can generate Scrap."))
-        
-        # if self.scrap_ids:
-        #     raise UserError(_("Scrap has already been generated."))
+
 
         moves = self.move_ids.filtered(
             lambda m: m.state == "done"

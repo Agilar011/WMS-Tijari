@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="tijari_wms_18.HideStockPickingPrint"
+       t-inherit="web.FormCogMenu"
+       t-inherit-mode="extension">
+        <xpath expr="//t[@t-if='state.printItems.length']" position="attributes">
+            <attribute name="t-if">state.printItems.length &amp;&amp; !['stock.picking', 'mrp.production'].includes(props.resModel)</attribute>
+        </xpath>
+    </t>
+</templates>

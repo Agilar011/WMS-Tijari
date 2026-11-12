@@ -6,11 +6,11 @@
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
-            
+
             <xpath expr="//sheet/notebook" position="inside">
                 <page string="Acumatica" invisible="partner_type == 'shipvia'">
                     <group>
-                        
+
                         <!-- Customer Fields -->
                         <field name="adt_customer_class" invisible="partner_type != 'customer' and type != 'other'"/>
                         <field name="adt_location_name" invisible="partner_type != 'customer' and type != 'other'"/>
@@ -45,13 +45,7 @@
                         <field name="adt_tax_exemption_number" invisible="partner_type != 'customer_location'"/>
                         <field name="adt_tax_registration_id" invisible="partner_type != 'customer_location'"/>
 
-                        <!-- <field name="adt_currency_id"/>
-                        <field name="adt_warehouse_id"/>
-                        <field name="adt_shipping_zone_id"/>
-                        <field name="adt_created_datetime"/>
-                        <field name="adt_acumatica_write_date"/>
-                        <field name="adt_note_id"/>
-                        <field name="adt_note"/> -->
+
                     </group>
                 </page>
                 <page name="vendor_id_history" string="Vendor ID History" invisible="partner_type != 'vendor'">
@@ -115,27 +109,6 @@
         </field>
     </record>
 
-    <!-- <record id="view_partner_form_inherit_acumatica_vendor" model="ir.ui.view">
-        <field name="name">res.partner.form.acumatica.vendor</field>
-        <field name="model">res.partner</field>
-        <field name="inherit_id" ref="base.view_partner_form"/>
-        <field name="arch" type="xml">
-            <xpath expr="//sheet/notebook" position="inside">
-                <page string="Acumatica">
-                    <group>
-                        <group string="Identitas">
-                            <field name="adt_external_id"/>
-                            <field name="adt_class"/>
-                            <field name="adt_vendor_state"/>
-                        </group>
-                        <group string="Logistik">
-                            <field name="adt_fob_point"/>
-                            <field name="adt_acumatica_write_date"/>
-                        </group>
-                    </group>
-                </page>
-            </xpath>
-        </field>
-    </record> -->
+
 
 </odoo>

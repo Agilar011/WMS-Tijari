@@ -2599,7 +2599,6 @@ class StockPicking(models.Model):
                 internal_transfer_pickings_to_reassign |= picking
         if internal_transfer_pickings_to_reassign:
             internal_transfer_pickings_to_reassign.action_assign()
-        # internal_transfer_pickings.action_assign()
         internal_transfer_pickings._set_receipt_done_quantities()
 
         missing_lot_lines = internal_transfer_pickings.move_line_ids.filtered(

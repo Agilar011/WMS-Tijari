@@ -35,6 +35,30 @@ class StockInventoryOperationJob(models.Model):
     attempt_count = fields.Integer(readonly=True)
     next_attempt_at = fields.Datetime(readonly=True, index=True)
     error_message = fields.Text(readonly=True)
+    user_error_message = fields.Text(readonly=True)
+
+    def get_client_status(self):
+        self.ensure_one()
+        job = self.sudo()
+        # The overlay polls this method as the logged-in user. Allow it to read
+        # status only when that user can read the inventory document.
+        job.inventory_id.with_user(self.env.user).check_access("read")
+        retry_in_seconds = 0
+        if job.next_attempt_at:
+            retry_at = fields.Datetime.to_datetime(job.next_attempt_at)
+            retry_in_seconds = max(
+                (retry_at - fields.Datetime.now()).total_seconds(), 0
+            )
+        return {
+            "state": job.state,
+            "retrying": bool(
+                job.state == "queued"
+                and job.next_attempt_at
+                and job.user_error_message
+            ),
+            "retry_in_seconds": retry_in_seconds,
+            "error_message": job.user_error_message or False,
+        }
 
     @api.model
     def _cron_process_next(self):
@@ -68,6 +92,7 @@ class StockInventoryOperationJob(models.Model):
             "started_at": fields.Datetime.now(),
             "finished_at": False,
             "error_message": False,
+            "user_error_message": False,
             "attempt_count": job.attempt_count + 1,
         })
         try:
@@ -93,6 +118,9 @@ class StockInventoryOperationJob(models.Model):
                 "state": "queued" if retry else "failed",
                 "finished_at": fields.Datetime.now(),
                 "error_message": "%s\n%s" % (exc, traceback.format_exc(limit=8)),
+                "user_error_message": str(exc).strip() or _(
+                    "Unexpected error while processing the inventory adjustment."
+                ),
                 "next_attempt_at": (
                     fields.Datetime.now() + relativedelta(minutes=2 * job.attempt_count)
                     if retry else False
@@ -148,15 +176,29 @@ class StockInventory(models.Model):
             cron._trigger()
         return {
             "type": "ir.actions.client",
-            "tag": "display_notification",
+            "tag": "stock_inventory.operation_loading",
+            # Keep the current action stack intact. The loading screen is an
+            # overlay dialog and will restore the existing controller on finish.
+            "target": "new",
+            "context": {"dialog_size": "extra-large"},
             "params": {
-                "title": _("Inventory Adjustment"),
-                "message": (
-                    _("Begin Adjustment has been queued.")
+                "job_id": job.id,
+                "job_model": "stock.inventory.operation.job",
+                "status_method": "get_client_status",
+                "poll_interval_ms": 2000,
+                "operation_label": (
+                    _("Begin Adjustment")
                     if operation == "begin"
-                    else _("Update Stock has been queued.")
+                    else _("Update Stock")
                 ),
-                "type": "info",
-                "sticky": False,
+                "return_action": {
+                    "type": "ir.actions.act_window",
+                    "name": self.display_name,
+                    "res_model": self._name,
+                    "res_id": self.id,
+                    "view_mode": "form",
+                    "views": [[False, "form"]],
+                    "target": "current",
+                },
             },
         }

@@ -61,60 +61,36 @@ class WMSReserveParentLocationLine(models.TransientModel):
 
     @api.model
     def default_get(self, fields_list):
-
         res = super().default_get(fields_list)
-
         picking = self.env["stock.picking"].browse(
             self.env.context.get("default_picking_id")
         )
-
         res["picking_id"] = picking.id
-
-        lines = []
-
         moves = picking.move_ids.filtered(
-            lambda m:
-                m.product_id.type == "product"
-                and m.state in (
-                    "confirmed",
-                    "waiting",
-                    "partially_available",
-                )
-                and m.reserved_availability < m.product_uom_qty
+            lambda move: (
+                move.product_id.type == "product"
+                and move.state in ("confirmed", "waiting", "partially_available")
+                and move.reserved_availability < move.product_uom_qty
+            )
         )
 
+        lines = []
         for move in moves:
-
-            quants = move._wms_find_parent_quants()
-
-            for quant in quants:
-
-                available = (
-                    quant.quantity
-                    - quant.reserved_quantity
-                )
-
+            for quant in move._wms_find_parent_quants():
+                available = quant.quantity - quant.reserved_quantity
                 if available <= 0:
                     continue
 
                 lines.append((0, 0, {
-
                     "move_id": move.id,
-
                     "product_id": move.product_id.id,
-
                     "lot_id": quant.lot_id.id,
-
                     "current_location_id": move.location_id.id,
-
                     "suggested_location_id": quant.location_id.id,
-
                     "available_qty": available,
-
                 }))
 
         res["line_ids"] = lines
-
         return res
 
     def action_cancel(self):
@@ -150,5 +126,3 @@ class WMSReserveParentLocationLine(models.TransientModel):
         return {
             "type": "ir.actions.act_window_close"
         }
-    
-        

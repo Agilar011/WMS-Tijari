@@ -94,11 +94,15 @@ class StockLocation(models.Model):
         )
 
     def generate_unique_code(self):
+        """Assign a stable unique code to locations that do not have one yet."""
         for location in self:
-            if not location.unique_code:
-                raw = f"{location.id}-{location.create_date}".encode("utf-8")
-                hash_str = base64.b32encode(hashlib.sha256(raw).digest())[:8].decode()
-                location.unique_code = f"LOC-{hash_str}"
+            if location.unique_code:
+                continue
+
+            location_identifier = f"{location.id}-{location.create_date}".encode("utf-8")
+            digest = hashlib.sha256(location_identifier).digest()
+            code_suffix = base64.b32encode(digest)[:8].decode()
+            location.unique_code = f"LOC-{code_suffix}"
 
 
 class StockLocationAcumatica(models.Model):

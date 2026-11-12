@@ -8,11 +8,6 @@
       action="server_action_open_stock_location_acumatica"
       sequence="3"/>
 
-    <!-- <menuitem
-      id="menu_stock_location_acumatica_error"
-      name="Location Acumatica Error"
-      parent="stock.menu_warehouse_config"
-      action="action_stock_location_acumatica_error"
-      sequence="11"/> -->
+
 
 </odoo>
