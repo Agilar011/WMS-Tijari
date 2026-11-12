@@ -1,0 +1,548 @@
+from odoo import fields, models
+from odoo.exceptions import UserError
+from datetime import datetime, time, timezone
+
+
+import logging
+from ...utils import acumatica_data as _data
+
+_logger = logging.getLogger(__name__)
+
+
+class ImportInventoryRecievedWizard(models.TransientModel):
+    _name = 'import.inventory.recieved.wizard'
+    _description = 'Wizard Import Inventory Receipt dari Acumatica'
+
+    config_id = fields.Many2one('acumatica.config', string='Konfigurasi API', required=True, domain=[('active', '=', True)])
+    fetch_limit = fields.Integer(string='Maks Data Ditarik', default=50)
+    reference_nbr = fields.Char(string='Filter Reference Number')
+    last_modified_from = fields.Char(string='Filter Last Modified From', help='Contoh: 2026-02-12T00:00:00+07:00')
+    odata_filter = fields.Char(string='Custom OData Filter' , help='Filter tambahan untuk query OData. Contoh: TransDate ge 2026-01-01T00:00:00Z')
+    state = fields.Selection([
+        ('draft', 'Siap'),
+        ('fetched', 'Data Sudah Ditarik'),
+        ('done', 'Selesai'),
+    ], default='draft')
+
+    total_fetched = fields.Integer(string='Total Line Ditarik', readonly=True)
+    total_new = fields.Integer(string='Data Baru', readonly=True)
+    total_existing = fields.Integer(string='Sudah Ada (akan ditambah)', readonly=True)
+    fetch_skip = fields.Integer(string='Skip Data Teratas', default=0, help='Jumlah data teratas yang akan dilewati saat fetch. Berguna untuk melewati data yang sudah pernah diimport sebelumnya.')
+    batch_size = fields.Integer(string='Batch Size untuk Import', default=20)
+    wh33_filter = fields.Boolean(string='Filter WH33', default=True, help='Aktifkan untuk menambahkan filter WH33 pada query OData. Berfungsi untuk menfilter data receipt yang transaksi data ke WH33.')
+    start_date = fields.Date(string='Filter Tanggal Mulai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-01')
+    end_date = fields.Date(string='Filter Tanggal Selesai', help='Digunakan untuk filter data berdasarkan tanggal. Contoh: 2026-01-31')
+
+    def action_fetch_data(self):
+        self.ensure_one()
+
+        import math
+
+        raw_list = 0
+        loop_count = math.ceil(self.fetch_limit / self.batch_size)
+        params = []
+        if self.start_date and self.end_date:
+            start_date_datetime_str = datetime.combine(
+                fields.Date.to_date(self.start_date),
+                time.min,
+                tzinfo=timezone.utc,
+            ).isoformat().replace("+00:00", "Z")
+            end_date_datetime_str = datetime.combine(
+                fields.Date.to_date(self.end_date),
+                time.min,
+                tzinfo=timezone.utc,
+            ).isoformat().replace("+00:00", "Z")
+            params.append(f"Date ge datetimeoffset'{start_date_datetime_str}' and Date le datetimeoffset'{end_date_datetime_str}'")
+
+            # params.append(f"Date ge date'{self.start_date}' and Date le date'{self.end_date}'")
+        if self.odata_filter:
+            params.append(self.odata_filter)
+
+        # for i in range(loop_count):
+        #     offset = self.fetch_skip + (i * self.batch_size)
+        #     batch_data = self.fetch_inventory_recieved_data()
+
+        #     if not batch_data:
+        #         break
+
+        #     raw_list += batch_data
+        batch_data = self.fetch_inventory_recieved_data()
+        self.total_fetched = batch_data
+        if not batch_data:
+            raise UserError('Tidak ada data yang diterima dari API Acumatica.')
+
+
+
+
+
+
+    def _search_picking_type(self, header, picking_type_cache):
+        PickingType = self.env['stock.picking.type']
+        Location = self.env['stock.location.acumatica']
+
+        cache_key = (
+            header.get('transfer_type'),
+            header.get('document_only'),
+            header.get('warehouse_dest_code'),
+        )
+
+        if cache_key in picking_type_cache:
+            return picking_type_cache[cache_key]
+
+        mapped_type = self.config_id._resolve_inventory_receive_picking_type(
+            transfer_type=header.get('transfer_type'),
+            document_only=header.get('document_only'),
+            warehouse_code=header.get('warehouse_dest_code'),
+        )
+
+        if mapped_type:
+            picking_type_cache[cache_key] = mapped_type
+            return mapped_type
+
+        location = Location.search(
+            [('code', '=', header['warehouse_dest_code'])],
+            limit=1,
+        )
+
+        picking_type = False
+
+        if location:
+            picking_type = PickingType.search(
+                [
+                    (
+                        'warehouse_id',
+                        '=',
+                        location.odoo_building_id.id
+                        if location.odoo_building_id
+                        else False,
+                    ),
+                    ('code', '=', 'incoming'),
+                    ('is_default_api', '=', True),
+                ],
+                limit=1,
+            )
+
+        result = picking_type or False
+
+        picking_type_cache[cache_key] = result
+
+        return result        
+
+    def _coalesce_val(self, item, *keys):
+        for key in keys:
+            value = _data.acumatica_value(item, key)
+            if value not in (False, None, ''):
+                return value
+        return ''
+
+    def _extract_details(self, item, detail_key):
+        details = item.get(detail_key) or item.get('Details') or []
+        if isinstance(details, dict):
+            details = details.get('value', []) or []
+        return details if isinstance(details, list) else []
+
+    def _header_match_keys(self, vals):
+        return {
+            value
+            for value in (
+                vals.get('external_id'),
+                vals.get('reference_nbr'),
+            )
+            if value
+        }
+
+    def _is_transfer_in_type(self, value):
+        return str(value or '').strip().lower().replace('-', '_').replace(' ', '_') in (
+            'transfer_in',
+            'transfer_receipt',
+        )
+
+    def _build_inventory_receipt_header(
+        self,
+        row_number,
+        item,
+        header_id,
+        warehouse_code,
+        warehouse_dest_code=False,
+        picking_type_cache=None,
+    ):
+        transfer_type = _data.acumatica_value(item, 'TransType')
+        header = {
+            'external_id': _data.acumatica_value(item, 'id'),
+            'row_number': item.get('rowNumber') or row_number,
+            'note': _data.acumatica_value(item, 'NoteHeader'),
+            'note_header_id': _data.acumatica_value(item, 'NoteHeaderID'),
+            'branch_warehouse': _data.acumatica_value(item, 'Branch'),
+            'building_code': _data.acumatica_value(item, 'BuildingID'),
+            'change_item_ref_nbr': _data.acumatica_value(item, 'ChangeItemRefNbr'),
+            'actual_qty': _data.acumatica_value(item, 'ControlQty'),
+            'customer_code': _data.acumatica_value(item, 'CustomerID'),
+            'scheduled_date': _data.acumatica_value(item, 'Date'),
+            'description': _data.acumatica_value(item, 'Description'),
+            'doc_type': _data.acumatica_value(item, 'DocType'),
+            'document_only': _data.acumatica_bool(item, 'DocumentOnly'),
+            'stock_lebih': (
+                _data.acumatica_bool(item, 'WMSRelated')
+                or _data.acumatica_bool(item, 'wms_related')
+                or _data.acumatica_bool(item, 'StockLebih')
+                or _data.acumatica_bool(item, 'stock_lebih')
+            ),
+            'external_ref': _data.acumatica_value(item, 'ExternalRef'),
+            'acumatica_write_date': _data.acumatica_value(item, 'LastModifiedDateTime'),
+            'customer_location_id': _data.acumatica_value(item, 'CustomerLocationID'),
+            'customer_location_name': _data.acumatica_value(item, 'CustomerLocationName'),
+            'customer_name': _data.acumatica_value(item, 'CustomerName'),
+            'location_code': str(_data.acumatica_value(item, 'Location')),
+            'post_period': str(_data.acumatica_value(item, 'PostPeriod')),
+            'reference_nbr': _data.acumatica_value(item, 'ReferenceNbr'),
+            'shipment_nbr': _data.acumatica_value(item, 'ShipmentNbr'),
+            'status': _data.acumatica_value(item, 'Status'),
+            'total_qty': str(_data.acumatica_value(item, 'TotalQty')),
+            'transfer_nbr': _data.acumatica_value(item, 'TransferNbr'),
+            'transfer_type': transfer_type,
+            'vendor_code': _data.acumatica_value(item, 'VendorID'),
+            'vendor_name': _data.acumatica_value(item, 'VendorName'),
+            'warehouse_code': warehouse_code,
+            'warehouse_dest_code': warehouse_dest_code or warehouse_code,
+        }
+
+        if picking_type_cache is None:
+            picking_type_cache = {}
+
+        picking_type = self._search_picking_type(
+            header,
+            picking_type_cache,
+        )
+
+        header['picking_type_id'] = picking_type.id if picking_type else None
+        return header
+
+    def _build_inventory_receipt_detail(self, header_id, detail, warehouse_code):
+        return {
+            'header_external_id': header_id,
+            'line_external_id': detail.get('id', '') or '',
+            'line_nbr': str(_data.acumatica_value(detail, 'LineNumber') or _data.acumatica_value(detail, 'LineNbr')),
+            'line_note': _data.acumatica_value(detail, 'LineNote'),
+            'line_note_id': _data.acumatica_value(detail, 'LineNoteID'),
+            'branch_warehouse': _data.acumatica_value(detail, 'LineBranch'),
+            'line_description': _data.acumatica_value(detail, 'LineInventoryName'),
+            'inventory_id': _data.acumatica_value(detail, 'LineInventoryID'),
+            'location_code': _data.acumatica_value(detail, 'LineLocation'),
+            'line_location_name': _data.acumatica_value(detail, 'LineLocationName'),
+            'product_uom_qty': str(_data.acumatica_value(detail, 'LineQuantity')),
+            'uom_code': _data.acumatica_value(detail, 'LineUOM'),
+            'warehouse_dest_code': warehouse_code,
+            'line_warehouse_name': _data.acumatica_value(detail, 'LineWarehouseName'),
+        }
+
+    def fetch_inventory_recieved_data(self):
+        self.ensure_one()
+        session = self.config_id._do_login()
+
+        AcumaticaErrorService = self.env["acumatica.webhook.error.service"]
+        try:
+            endpoint = f"{self.config_id.api_url}/{self.config_id.endpoint_name}"
+            params = {}
+            if self.config_id.odata_expand:
+                params['$expand'] = self.config_id.odata_expand
+
+            response = session.put(endpoint, params=params, json={"TransType": {"value": ""}}, timeout=300)
+            if response.status_code != 200:
+
+                last_error = (
+                    f'Gagal fetch data Inventory Receipt '
+                    f'(HTTP {response.status_code}): '
+                    f'{response.text}'
+                )
+
+                AcumaticaErrorService.send_error(
+                    webhook_type="fetch",
+                    webhook_name="inventory receipt",
+                    error=f"Gagal fetch Inventory Receipt dari Acumatica (HTTP {response.status_code}).",
+                    error_type="http",
+                )
+                
+                raise UserError(last_error)
+
+            raw_data = response.json()
+            result = []
+            detail_result = []
+            headers_seen = set()
+            picking_type_cache = {}
+
+            data = _data.acumatica_rows(raw_data)
+            if not data and isinstance(raw_data, dict):
+                data = _data.acumatica_rows(raw_data.get("InventoryReceiptGIDetails", []))
+            for row_number, item in enumerate(data, start=1):
+                ref = _data.acumatica_value(item, 'ReferenceNbr')
+                details = self._extract_details(item, self.config_id.odata_expand or 'InventoryReceiptGIDetails')
+                if not details:
+                    details = [item]
+
+                transfer_type = _data.acumatica_value(item, 'TransType')
+                line_warehouse = _data.acumatica_value(item, 'WarehouseID') or _data.acumatica_value(item, 'LineWarehouseID')
+                line_to_warehouse = _data.acumatica_value(item, 'ToWarehouseID') or _data.acumatica_value(item, 'LineToWarehouseID')
+                if self._is_transfer_in_type(transfer_type):
+                    warehouse_code = (
+                        _data.acumatica_value(item, 'FromWarehouseID')
+                        or _data.acumatica_value(item, 'WarehouseID')
+                        or line_warehouse
+                    )
+                    warehouse_dest_code = (
+                        _data.acumatica_value(item, 'ToWarehouseID')
+                        or _data.acumatica_value(item, 'Warehouse')
+                        or _data.acumatica_value(item, 'LineWarehouseID')
+                        or line_warehouse
+                    )
+                else:
+                    warehouse_code = line_warehouse
+                    warehouse_dest_code = line_to_warehouse
+                header_id = ref or item.get('id', '')
+
+                if header_id not in headers_seen:
+                    result.append(
+                        self._build_inventory_receipt_header(
+                            row_number,
+                            item,
+                            header_id,
+                            warehouse_code,
+                            warehouse_dest_code,
+                            picking_type_cache=picking_type_cache,
+                        )
+                    )
+                    headers_seen.add(header_id)
+
+                for detail in details:
+                    detail_result.append(self._build_inventory_receipt_detail(header_id, detail, warehouse_dest_code))
+
+            self.config_id.last_sync = fields.Datetime.now()
+            _logger.info("Berhasil ambil %s rows Inventory Receipt dari Acumatica", len(result))
+            self._validate_staging_against_picking(result, detail_result)
+            return len(result)
+
+        finally:
+            self.config_id._do_logout(session)
+
+    def _validate_staging_against_picking(self, header_list, line_list):
+        Picking = self.env['stock.picking']
+        sync_data = fields.Datetime.now()
+        existing_receipts = {
+            receipt.reference_nbr: receipt
+            for receipt in self.env['acumatica.inventory.recieved.line'].search([
+                ('reference_nbr', 'in', [item.get('reference_nbr') for item in header_list]),
+                ('config_id', '=', self.config_id.id),
+            ])
+        }
+        ProductLine = self.env['acumatica.inventory.recieved.product.line']
+
+        for item in header_list:
+            reference_nbr = item.get('reference_nbr')
+            picking = Picking.search([('origin', '=', reference_nbr)], limit=1)
+            values = {
+                **item,
+                'odoo_picking_id': picking.id if picking else False,
+                'config_id': self.config_id.id,
+                'import_state': 'staged',
+                'import_message': f'{reference_nbr}: Sudah ada → akan diupdate' if picking else '',
+                'selected': True,
+                'sync_date': sync_data,
+            }
+            receipt = existing_receipts.get(reference_nbr)
+            if receipt:
+                if (
+                    not values.get('acumatica_write_date')
+                    or receipt.acumatica_write_date == values['acumatica_write_date']
+                ):
+                    continue
+                receipt.write(values)
+            else:
+                receipt = self.env['acumatica.inventory.recieved.line'].create(values)
+
+            receipt.product_line_ids.unlink()
+            product_values = [
+                {**line, 'inventory_line_id': receipt.id}
+                for line in line_list
+                if line.get('header_external_id') in (receipt.external_id, receipt.reference_nbr)
+            ]
+            if product_values:
+                ProductLine.create(product_values)
+
+    def _search_inventory_lines(self, data):
+        if not data:
+            return [], [], []
+
+        reference_nbrs = [
+            d['reference_nbr']
+            for d in data
+            if d.get('reference_nbr')
+        ]
+        existing_lines = self.env['acumatica.inventory.recieved.line'].search([
+            ('reference_nbr', 'in', reference_nbrs)
+        ])
+
+        existing_map = {
+            line.reference_nbr: line
+            for line in existing_lines
+        }
+
+        unchanged = []
+        to_update = []
+        to_create = []
+        
+        for vals in data:
+            existing = existing_map.get(vals['reference_nbr'])
+
+            if not existing:
+                to_create.append(vals)
+                continue
+
+            if (
+                not vals.get('acumatica_write_date')
+                or existing.acumatica_write_date == vals['acumatica_write_date']
+            ):
+                unchanged.append(existing)
+                continue
+
+
+            to_update.append({
+                'record': existing,
+                'vals': vals,
+            })
+
+        return unchanged, to_update, to_create
+
+    def _update_inventory_lines(self, data):
+        if not data:
+            return False
+
+        for item in data:
+            record = item['record']
+            vals = item['vals']
+
+
+            record.write(vals)
+
+    def _create_inventory_lines(self, data):
+        if not data:
+            return False
+
+        return self.env['acumatica.inventory.recieved.line'].create(data)
+
+    def filter_product_line(self, data, update, create):
+        update_ids = {
+            match_key
+            for item in update
+            for match_key in self._header_match_keys(item.get('vals', {}))
+        }
+
+        update_final = [
+            line 
+            for line in data 
+            if line['header_external_id'] in update_ids
+        ]
+
+        create_ids = {
+            match_key
+            for crt in create
+            for match_key in self._header_match_keys(crt)
+        }
+
+        create_final = [line for line in data if line['header_external_id'] in create_ids]
+
+        return update_final, create_final
+        
+    def filter_by_inventory_lines(self, data, inventory):
+        """
+        Filter data berdasarkan header_external_id yang ada di inventory.
+        
+        :param data: list of dict (to_create atau to_update)
+        :param inventory: recordset inventory
+        :return: list of dict yang header_external_id-nya ada di inventory
+        """
+        inventory_ids = {rec['external_id'] for rec in inventory}
+
+        filtered_data = [
+            vals for vals in data
+            if vals.get('header_external_id') in inventory_ids
+        ]
+
+        return filtered_data
+
+    def _create_inventory_lines_product(self, data, inventory):
+        inventory_map = {
+            match_key: rec.id
+            for rec in inventory
+            for match_key in self._header_match_keys({
+                'external_id': rec.external_id,
+                'reference_nbr': rec.reference_nbr,
+            })
+        }
+
+        vals_list = []
+        for vals in data:
+            vals = dict(vals)
+            vals['inventory_line_id'] = inventory_map.get(
+                vals['header_external_id']
+            )
+            if vals['inventory_line_id']:
+                vals_list.append(vals)
+
+        if vals_list:
+            self.env['acumatica.inventory.recieved.product.line'].create(vals_list)
+
+    def _update_inventory_lines_product(self, data, inventory):
+        inventory_map = {
+            match_key: item['record'].id
+            for item in inventory
+            if item.get('vals') and item.get('record')
+            for match_key in self._header_match_keys(item['vals'])
+        }
+
+        vals_list = []
+        inventory_line_ids = set()
+
+        for vals in data:
+            vals = dict(vals)
+            ext_id = vals.get('header_external_id')
+            vals['inventory_line_id'] = inventory_map.get(ext_id)
+            if vals['inventory_line_id']:
+                inventory_line_ids.add(vals['inventory_line_id'])
+                vals_list.append(vals)
+
+        if vals_list:
+            product_line = self.env['acumatica.inventory.recieved.product.line']
+            product_line.search([
+                ('inventory_line_id', 'in', list(inventory_line_ids)),
+            ]).unlink()
+            product_line.create(vals_list)
+
+
+    def action_view_staging(self):
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Data Inventory Receipt dari Acumatica',
+            'res_model': 'acumatica.inventory.recieved.line',
+            'view_mode': 'list,form',
+            'domain': [('config_id', '=', self.config_id.id)],
+            'context': {'default_config_id': self.config_id.id},
+        }
+
+    def action_import_all_pending(self):
+        self.ensure_one()
+        lines = self.env['acumatica.inventory.recieved.line'].search([
+            ('config_id', '=', self.config_id.id),
+            ('import_state', '=', 'staged'),
+            ('selected', '=', True),
+        ])
+        if not lines:
+            raise UserError('Tidak ada data pending yang dipilih untuk diimport.')
+        lines._do_import()
+        self.state = 'done'
+        return {
+            'type': 'ir.actions.act_window',
+            'name': 'Hasil Import Inventory Receipt',
+            'res_model': 'acumatica.inventory.recieved.line',
+            'view_mode': 'list,form',
+            'domain': [('config_id', '=', self.config_id.id)],
+        }

@@ -125,15 +125,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'staging_name': 'Data Inventory Adjustment dari Acumatica',
             'extra_fields': [],
         },
-        'issue_change_item': {
-            'label': 'Issue : Change Item',
-            'wizard_model': 'import.issue.wizard',
-            'config_field': 'issue_config_id',
-            'line_model': 'acumatica.issue.line',
-            'result_name': 'Hasil Import Issue : Change Item',
-            'staging_name': 'Data Issue : Change Item dari Acumatica',
-            'extra_fields': ['reference_nbr', 'last_modified_from', 'odata_filter'],
-        },
         'shipment_so': {
             'label': 'SO Return',
             'wizard_model': 'import.shipment.wizard',
@@ -276,7 +267,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         'shipment_completed',
         'shipment_transfer_completed',
         'kit_assembly',
-        # 'issue_change_item',
         'vendor_return_direct_transfer',
         'vendor_return_document_direct_transfer',
     ]
@@ -293,7 +283,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             for key in self.MASTER_DATA_TYPES
             if key in self.IMPORT_MAP
         ]
-        print(selection)
         return selection
 
     def _get_import_type_selection_transaction(self):
@@ -304,7 +293,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             if key in self.IMPORT_MAP
         ]
 
-        print(selection)
         return selection
 
     def _get_import_type_selection_master(self):
@@ -375,7 +363,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     fetch_limit = fields.Integer(string='Maximum Records', default=5000, required=True)
     batch_size = fields.Integer(string='Import Batch Size', default=50, required=True)
     fetch_skip = fields.Integer(string='Records to Skip', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai fetch.')
-    skip_size = fields.Integer(string='Skip Size ', default=0, required=True, help='Jumlah data yang dilewati sebelum memulai import.')
     auto_commit_batch = fields.Boolean(
         string='Commit setiap batch',
         default=False,
@@ -469,11 +456,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
                 vals[field_name] = self[field_name]
         return vals
 
-    def _get_pending_lines(self, info, config):
-        return self.env[info['line_model']].search(
-            self._get_pending_domain(config), order='id',
-        )
-    
     def _get_pending_domain(self, config):
         return [
             ('config_id', '=', config.id),
@@ -493,11 +475,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         )
 
     def action_fetch_data(self):
-        
         self.ensure_one()
-
-        print(f"Fetch limit: {self.fetch_limit}")
-        message = False
 
         if self.fetch_limit <= 0:
             raise UserError(_('Maximum Records must be greater than 0.'))
@@ -513,16 +491,10 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
 
         else:
             info = self._get_import_info()
-            print(f"Import info: {info}")
-
             config = self._get_selected_config(info)
-            print(f"Config: {config}")
-
             source_wizard = self.env[info['wizard_model']].create(self._prepare_source_wizard_vals(info, config))
-            print(f"Source wizard created: {source_wizard}")
 
             source_wizard.action_fetch_data()
-            print("Fetch data action called on source wizard")
 
             Line = self.env[info['line_model']]
             pending_count = Line.search_count(self._get_pending_domain(config))
@@ -543,9 +515,7 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
     def action_view_staging(self):
         self.ensure_one()
         info = self._get_import_info()
-        print(f"Info: {info}")
         config = self._get_selected_config(info)
-        print(f"Config: {config}")
         return {
             'type': 'ir.actions.act_window',
             'name': info['staging_name'],
@@ -563,16 +533,22 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
         config = self._get_selected_config(info)
 
         Line = self.env[info['line_model']]
-        print(Line)
         pending_domain = self._get_pending_domain(config)
 
-        total_pending_before = Line.search_count(pending_domain)
+        collect_scheduler_summary = self.env.context.get('api_scheduler_collect_import_summary')
+        scheduler_pending_count = self.env.context.get('api_scheduler_pending_count')
+        if collect_scheduler_summary and scheduler_pending_count is not None:
+            total_pending_before = scheduler_pending_count
+        else:
+            total_pending_before = Line.search_count(pending_domain)
         if not total_pending_before:
             raise UserError(_('Tidak ada perubahan data pada API ERP Acumatica, sehingga tidak dapat melakukan generate data'))
 
         processed = 0
         batch_count = 0
         last_id = 0
+        scheduler_counts = [0, 0, 0, 0]
+        scheduler_max_id = self.env.context.get('api_scheduler_pending_max_id')
 
         while True:
             batch = self._get_pending_lines_batch(
@@ -588,10 +564,23 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             last_id = batch[-1].id
             batch_count += 1
 
-            # with self.env.cr.savepoint():
+            # Scheduler counters use only the rows staged when this run began.
+            batch_ids = batch.ids if collect_scheduler_summary else []
             batch._do_import()
 
             processed += len(batch)
+
+            if collect_scheduler_summary:
+                if scheduler_max_id is not None:
+                    batch_ids = [line_id for line_id in batch_ids if line_id <= scheduler_max_id]
+                if batch_ids:
+                    counts = config._get_import_counts(
+                        info['line_model'], batch_ids, skipped_states=['rejected'],
+                    )
+                    scheduler_counts = [
+                        current + value
+                        for current, value in zip(scheduler_counts, counts)
+                    ]
 
             if self.auto_commit_batch:
                 self.env.cr.commit()
@@ -609,6 +598,17 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             ) % (processed, batch_count, remaining_count),
         })
 
+        if collect_scheduler_summary:
+            return {
+                'data_retrieved': total_pending_before,
+                'records_created': scheduler_counts[0] + scheduler_counts[1],
+                'records_errors': scheduler_counts[2],
+                'records_skipped': scheduler_counts[3],
+                'total_processed': processed,
+                'batch_count': batch_count,
+                'remaining_count': remaining_count,
+            }
+
         return {
             'type': 'ir.actions.act_window',
             'name': info['result_name'],
@@ -616,33 +616,6 @@ class AcumaticaUnifiedImportWizard(models.TransientModel):
             'view_mode': 'list,form',
             'domain': [('config_id', '=', config.id)],
         }
-
-    def action_fetch_and_import_batch(self):
-        self.ensure_one()
-
-        
-        self.ensure_one()
-        if self.fetch_limit <= 0:
-            raise UserError(_('Maks Data Ditarik harus lebih besar dari 0.'))
-        info = self._get_import_info()
-        config = self._get_selected_config(info)
-        source_wizard = self.env[info['wizard_model']].create(self._prepare_source_wizard_vals(info, config))
-        source_wizard.action_fetch_data_import_batch()
-        pending_lines = self._get_pending_lines(info, config)
-        total_fetched = len(self.env[info['line_model']].search([('config_id', '=', config.id)]))
-        self.write({
-            'state': 'fetched',
-            'total_fetched': total_fetched,
-            'total_pending': len(pending_lines),
-            'total_imported': 0,
-            'batch_count': 0,
-            'last_message': _('Fetch selesai. %s line staging dibuat, %s line staged siap digenerate.') % (total_fetched, len(pending_lines)),
-        })
-
-
-
-        # self.action_fetch_data()
-        # return self.action_import_pending_batch()
 
     def action_reset(self):
         self.write({
