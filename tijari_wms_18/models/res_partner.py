@@ -107,10 +107,6 @@ class ResPartner(models.Model):
         'partner_id',
         string='Vendor ID History',
     )
-    # customer_rank = fields.Integer(
-    #     string='Customer Rank',
-    #     help='Used to prioritize customers during import (lower is higher priority)',
-    # )
     partner_type = fields.Selection([
         ('customer', 'Customer'),
         ('vendor', 'Vendor'),

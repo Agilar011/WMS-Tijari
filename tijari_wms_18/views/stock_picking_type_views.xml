@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    
+
     <record id="view_picking_type_form_wms_category_v18" model="ir.ui.view">
         <field name="name">stock.picking.type.form.wms.operation.category</field>
         <field name="model">stock.picking.type</field>
@@ -46,22 +46,6 @@
     </field>
 </record>
 
-    <!-- <record id="stock_picking_type_kanban_add_draft_button" model="ir.ui.view">
-        <field name="name">stock.picking.type.kanban.add.draft.button</field>
-        <field name="model">stock.picking.type</field>
-        <field name="inherit_id" ref="stock.stock_picking_type_kanban"/>
-        <field name="arch" type="xml">
-            <xpath expr="//button[@name='get_action_picking_tree_ready']" position="replace">
-                <button name="get_action_picking_tree_draft" type="object" class="btn btn-primary" string="Draft">
-                    <span t-if="record.count_picking_draft.raw_value > 0">
-                        <field name="count_picking_draft"/>
-                        <t> To Receive</t>
-                    </span>
-                    <span t-else="">Open</span>
-                </button>
 
-            </xpath>
-        </field>
-    </record> -->
 
 </odoo>

@@ -246,7 +246,7 @@ class WMSMRPProduction(models.Model):
                     "Raw Materials berikut belum memiliki status 'Finished':\n"
                     f"{details}"
                 )
-            
+
             for move in production.move_raw_ids:
                 confirmed_qty = move.quantity
 
@@ -273,12 +273,7 @@ class WMSMRPProduction(models.Model):
             ):
                 production.action_generate_serial()
 
-            # for move in production.move_raw_ids:
-            #     for line in move.move_line_ids:
-            #         confirmation_quantity = line.mo_confirmation_quantity
 
-            #         line.quantity_shadow = line.quantity
-            #         line.quantity = confirmation_quantity
 
         # Odoo splits product_qty and raw move demand when a backorder is
         # created. Keep the original values on the completed MO, while leaving
@@ -318,7 +313,7 @@ class WMSMRPProduction(models.Model):
             ).filtered(lambda move: move.raw_material_production_id == production)
             for move in original_raw_moves:
                 move.product_uom_qty = restore_values['raw_move_values'][move.id]
-        
+
         return res
 
     def action_print_hasil_manufacturing(self):

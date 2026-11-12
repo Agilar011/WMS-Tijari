@@ -444,21 +444,3 @@ class StockPickingType(models.Model):
             target_operation_type=target_operation_type,
             required=required,
         )
-
-    # def get_action_picking_tree_draft(self):
-    #     self.ensure_one()
-
-    #     action = self._get_action("stock.stock_picking_action_picking_type")
-
-    #     ctx = action.get("context", {})
-    #     if isinstance(ctx, str):
-    #         from odoo.tools.safe_eval import safe_eval
-    #         ctx = safe_eval(ctx)
-
-    #     ctx.update({
-    #         "search_default_draft": 1,
-    #     })
-
-    #     action["context"] = ctx
-
-    #     return action
