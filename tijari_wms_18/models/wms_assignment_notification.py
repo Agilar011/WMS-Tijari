@@ -157,5 +157,9 @@ class DiscussChannelWMSPushTarget(models.Model):
                 'model': target['model'],
                 'res_id': target['res_id'],
             })
+            payload['options'].update({
+                'requireInteraction': True,
+                'vibrate': [200, 100, 200],
+            })
         return payload
 
