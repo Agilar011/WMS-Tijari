@@ -24,7 +24,38 @@ class StockLocation(models.Model):
     )
     is_consignment = fields.Boolean(string="Consignment Location")
     is_document_only = fields.Boolean(string="Document Only Location")
+    # Keep the legacy text column for the Acumatica warehouse importer, and
+    # expose the resolved contact as the actual owner relation in WMS.
     location_owner = fields.Char(string="Location Owner")
+    location_owner_partner_id = fields.Many2one(
+        'res.partner',
+        string="Location Owner",
+        compute='_compute_location_owner_partner_id',
+        inverse='_inverse_location_owner_partner_id',
+        store=True,
+    )
+
+    @api.depends('location_owner')
+    def _compute_location_owner_partner_id(self):
+        Partner = self.env['res.partner']
+        for location in self:
+            owner_name = (location.location_owner or '').strip()
+            matches = Partner.search([('name', '=', owner_name)], limit=2) if owner_name else Partner
+            # Do not silently choose the wrong contact when names are shared.
+            location.location_owner_partner_id = matches if len(matches) == 1 else False
+
+    def _inverse_location_owner_partner_id(self):
+        for location in self:
+            location.location_owner = location.location_owner_partner_id.name or False
+
+    @api.constrains('is_consignment', 'location_owner')
+    def _check_consignment_location_owner(self):
+        for location in self:
+            if location.is_consignment and not location.location_owner_partner_id:
+                raise ValidationError(_(
+                    "Location Owner must be set for consignment location '%(location)s'.",
+                    location=location.display_name,
+                ))
 
     @api.constrains('name')
     def _check_unique_location_name(self):

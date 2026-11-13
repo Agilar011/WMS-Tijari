@@ -1573,6 +1573,24 @@ class StockMove(models.Model):
             if not isinstance(move_vals, dict):
                 prepared_vals.append(move_vals)
                 continue
+            # Beginning Balance receipts into a consignment location must keep
+            # the location's registered owner on the move and its move lines.
+            if not move_vals.get('owner_id') and move_vals.get('location_dest_id') and move_vals.get('picking_id'):
+                picking = self.env['stock.picking'].browse(move_vals['picking_id']).exists()
+                if picking and picking.adt_type == 'Beginning Balance':
+                    destination = self.env['stock.location'].browse(
+                        move_vals['location_dest_id']
+                    ).exists()
+                    if destination and destination.is_consignment:
+                        if not destination.location_owner_partner_id:
+                            raise ValidationError(_(
+                                "Location Owner must be set for consignment location '%(location)s'.",
+                                location=destination.display_name,
+                            ))
+                        move_vals = dict(
+                            move_vals,
+                            owner_id=destination.location_owner_partner_id.id,
+                        )
             # Lines entered on an ITO are not yet attached to a picking. Keep
             # their locations aligned with the ITO header even if the web
             # client did not send the one2many context defaults.
@@ -1628,6 +1646,26 @@ class StockMove(models.Model):
         res.mapped('picking_id')._sync_adt_quantities_from_moves()
 
         return res
+
+    def _prepare_move_line_vals(self, quantity=None, reserved_quant=None):
+        vals = super()._prepare_move_line_vals(
+            quantity=quantity,
+            reserved_quant=reserved_quant,
+        )
+        self.ensure_one()
+        destination = self.location_dest_id
+        if (
+            self.picking_id.adt_type == 'Beginning Balance'
+            and destination.is_consignment
+        ):
+            owner = self.owner_id or destination.location_owner_partner_id
+            if not owner:
+                raise ValidationError(_(
+                    "Location Owner must be set for consignment location '%(location)s'.",
+                    location=destination.display_name,
+                ))
+            vals['owner_id'] = owner.id
+        return vals
 
     def write(self, vals):
         pickings = self.mapped('picking_id')
