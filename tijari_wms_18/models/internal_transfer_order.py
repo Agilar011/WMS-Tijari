@@ -1235,20 +1235,6 @@ class InternalTransferOrder(models.Model):
         if picking.adt_dest_location_id:
             vals['adt_dest_location_id'] = picking.adt_dest_location_id.id
         picking_move = self.env['stock.move'].create(vals)
-        selected_lots = source_move.internal_transfer_scan_lot_ids.filtered(
-            lambda lot: lot.product_id == picking_move.product_id
-        )
-        if selected_lots:
-            picking_move.internal_transfer_scan_lot_ids = selected_lots
-            if picking_move.product_id.tracking == 'serial':
-                picking_move.lot_ids = picking_move.lot_ids | selected_lots
-            else:
-                move_line_vals = []
-                for lot in selected_lots:
-                    line_vals = picking_move._prepare_move_line_vals(quantity=0)
-                    line_vals.update({'lot_id': lot.id, 'lot_name': lot.name})
-                    move_line_vals.append(line_vals)
-                self.env['stock.move.line'].create(move_line_vals)
         return picking_move
 
     def _get_move_match_key(self, move):
@@ -2070,20 +2056,6 @@ class StockMove(models.Model):
         store=False,
         help='Scan barcode or internal reference to select the operation product.',
     )
-    internal_transfer_scan_lot_ids = fields.Many2many(
-        comodel_name='stock.lot',
-        relation='stock_move_internal_transfer_scan_lot_rel',
-        column1='move_id',
-        column2='lot_id',
-        string='Scanned Lot/Serial Numbers',
-        copy=False,
-    )
-    internal_transfer_available_lot_ids = fields.Many2many(
-        comodel_name='stock.lot',
-        string='Available ITO Lots',
-        compute='_compute_internal_transfer_available_lot_ids',
-    )
-
     internal_transfer_order_id = fields.Many2one(
         comodel_name='internal.transfer.order',
         string='Internal Transfer Order',
@@ -2102,37 +2074,6 @@ class StockMove(models.Model):
         related='internal_transfer_order_id.intra_transfer_type',
     )
 
-    @api.depends('product_id', 'location_id', 'company_id')
-    def _compute_internal_transfer_available_lot_ids(self):
-        Quant = self.env['stock.quant']
-        for move in self:
-            move.internal_transfer_available_lot_ids = False
-            if not move.product_id or not move.location_id:
-                continue
-
-            domain = [
-                ('product_id', '=', move.product_id.id),
-                ('location_id', 'child_of', move.location_id.id),
-                ('lot_id', '!=', False),
-                ('quantity', '>', 0),
-            ]
-            if move.company_id:
-                domain.append(('company_id', '=', move.company_id.id))
-
-            quants = Quant.search(domain)
-            available_by_lot = {}
-            for quant in quants:
-                available_by_lot[quant.lot_id.id] = (
-                    available_by_lot.get(quant.lot_id.id, 0.0)
-                    + quant.available_quantity
-                )
-            rounding = move.product_id.uom_id.rounding
-            available_lot_ids = [
-                lot_id for lot_id, quantity in available_by_lot.items()
-                if float_compare(quantity, 0.0, precision_rounding=rounding) > 0
-            ]
-            move.internal_transfer_available_lot_ids = [(6, 0, available_lot_ids)]
-
     @api.onchange('product_id', 'internal_transfer_order_id', 'location_id')
     def _onchange_internal_transfer_order_locations(self):
         for move in self.filtered(
@@ -2142,10 +2083,6 @@ class StockMove(models.Model):
             move.location_id = order.intra_location_id or order.location_id
             move.location_dest_id = (
                 order.intra_location_dest_id or order.location_dest_id
-            )
-            allowed_lots = move.internal_transfer_available_lot_ids
-            move.internal_transfer_scan_lot_ids = (
-                move.internal_transfer_scan_lot_ids & allowed_lots
             )
 
     @api.onchange('internal_transfer_product_scan_code')
@@ -2160,8 +2097,14 @@ class StockMove(models.Model):
             product = Product.search([
                 '|', ('barcode', '=', code), ('default_code', '=', code),
             ], limit=1)
+            if not product:
+                # Handheld keyboard layouts can change letter case. Retry with
+                # case-insensitive exact matching without preferring a
+                # differently-cased code over a literal exact match.
+                product = Product.search([
+                    '|', ('barcode', '=ilike', code), ('default_code', '=ilike', code),
+                ], limit=1)
             order = move.internal_transfer_order_id
-            scanned_lot = Lot.browse()
             if not product and order:
                 source_location = (
                     (order.intra_location_id or order.location_id)
@@ -2180,6 +2123,10 @@ class StockMove(models.Model):
                         'company_id', 'in', [False, source_company.id]
                     ))
                 candidate_lots = Lot.search(lot_domain)
+                if not candidate_lots:
+                    lot_domain[0] = ('name', '=ilike', code)
+                    candidate_lots = Lot.search(lot_domain)
+
                 if candidate_lots and source_location:
                     source_quants = Quant.search([
                         ('lot_id', 'in', candidate_lots.ids),
@@ -2208,6 +2155,7 @@ class StockMove(models.Model):
                             'location': source_location.display_name,
                         })
                     candidate_lots = available_lots
+
                 if (
                     order.transaction_type == 'intra_warehouse'
                     and order.intra_transfer_type == 'intra_group_transfer'
@@ -2216,17 +2164,18 @@ class StockMove(models.Model):
                     candidate_lots = candidate_lots.filtered(
                         lambda lot: lot.product_id in available_products
                     )
-                if len(candidate_lots) > 1:
+
+                candidate_products = candidate_lots.mapped('product_id')
+                if len(candidate_products) > 1:
                     raise ValidationError(
-                        _('Kode lot %s cocok dengan lebih dari satu lot yang tersedia.') % code
+                        _('Kode lot %s cocok dengan lebih dari satu produk yang tersedia.') % code
                     )
-                if candidate_lots:
-                    scanned_lot = candidate_lots
-                    product = scanned_lot.product_id
+                if candidate_products:
+                    product = candidate_products
 
             if not product:
                 raise ValidationError(
-                    _('Kode %s tidak ditemukan sebagai barcode, SKU, atau lot/serial.') % code
+                    _('Kode %s tidak ditemukan sebagai barcode, SKU, atau lot.') % code
                 )
 
             if order and (
@@ -2240,13 +2189,7 @@ class StockMove(models.Model):
                         _('Product hasil scan tidak tersedia di Source Location.')
                     )
 
-            if move.product_id and move.product_id != product:
-                move.internal_transfer_scan_lot_ids = move.internal_transfer_scan_lot_ids.filtered(
-                    lambda lot: lot.product_id == product
-                )
             move.product_id = product
-            if scanned_lot:
-                move.internal_transfer_scan_lot_ids |= scanned_lot
             move.internal_transfer_product_scan_code = False
 
 

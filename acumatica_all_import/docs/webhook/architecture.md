@@ -64,7 +64,7 @@ Defines `AcumaticaWebhookController` and the single HTTP route. `_resolve_webhoo
 
 `TransactionProcessingMixin` owns transaction processing behavior: flattening header/detail payloads, grouping records by document number, creating/updating headers and product lines, running specialized transaction processors, and invoking staging imports.
 
-### `models/acumatica_webhook_log.py`
+### `models/webhook/acumatica_webhook_log.py`
 
 `action_process_to_staging()` replays the saved payload through the unified controller. The stored `webhook_type` remains `master` or `transaction`, and `webhook_name` remains the normalized mapping key, so the log's processing and reporting continue to distinguish the two domains.
 
