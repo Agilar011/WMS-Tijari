@@ -192,6 +192,13 @@ class StockPicking(models.Model):
                         f"({invisible}) or ({receipt_picker_restriction})"
                         if invisible else receipt_picker_restriction,
                     )
+                elif button.get('name') in {
+                    'action_print_warehouse_pack',
+                    'delivery_slip_pack',
+                }:
+                    # Operators can print the BA documents on completed Pack
+                    # transfers; retain each button's own state/type visibility.
+                    continue
                 else:
                     button.set('invisible', '1')
             result['arch'] = etree.tostring(arch, encoding='unicode')

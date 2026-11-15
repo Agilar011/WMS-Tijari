@@ -196,6 +196,21 @@
                 <field name="adt_dest_location_id" optional="hide" />
             </xpath>
 
+            <xpath expr="//field[@name='location_id']" position="attributes">
+                <attribute name="string">Store From</attribute>
+                <attribute name="column_invisible">False</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='location_dest_id']" position="attributes">
+                <attribute name="string">Store To</attribute>
+            </xpath>
+
+            <xpath expr="//field[@name='owner_id']" position="attributes">
+                <attribute name="string">From Owner</attribute>
+                <attribute name="column_invisible">False</attribute>
+                <attribute name="optional">hide</attribute>
+            </xpath>
+
             <xpath expr="//field[@name='quantity']" position="replace">
                 <field name="confirmation_quantity"
                     string="Quantity"
