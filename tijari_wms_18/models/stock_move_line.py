@@ -330,11 +330,25 @@ class StockMoveLine(models.Model):
                 | line.move_id.move_line_ids.mapped("lot_id")
             )
 
+    def _uses_exact_ito_pick_source_location(self):
+        self.ensure_one()
+        picking = self.move_id.picking_id
+        order = picking.internal_transfer_order_id
+        return bool(
+            order
+            and order.transaction_type == 'intra_warehouse'
+            and order.transfer_type == 'intra_group_transfer'
+            and picking.internal_transfer_leg == 'pick'
+        )
+
     def _get_owner_quant_domain(self):
         self.ensure_one()
+        source_location_operator = (
+            '=' if self._uses_exact_ito_pick_source_location() else 'child_of'
+        )
         domain = [
             ("product_id", "=", self.product_id.id),
-            ("location_id", "child_of", self.source_location_id.id),
+            ("location_id", source_location_operator, self.source_location_id.id),
             ("quantity", ">", 0),
             ("lot_id", "!=", False),
         ]
@@ -885,7 +899,11 @@ class StockMoveLine(models.Model):
             # Ambil quants dengan lot yang punya stok available > 0 di lokasi sumber (FIFO)
             domain = [
                 ('product_id', '=', line.product_id.id),
-                ('location_id', 'child_of', line.location_id.id),
+                (
+                    'location_id',
+                    '=' if line._uses_exact_ito_pick_source_location() else 'child_of',
+                    line.location_id.id,
+                ),
                 ('lot_id', '!=', False),
                 ('quantity', '>', 0),
             ]

@@ -2,10 +2,42 @@
 from ast import literal_eval
 
 from odoo import fields, models
+from odoo.osv import expression
 
 
 class StockQuant(models.Model):
     _inherit = 'stock.quant'
+
+    def _get_gather_domain(
+        self,
+        product_id,
+        location_id,
+        lot_id=None,
+        package_id=None,
+        owner_id=None,
+        strict=False,
+    ):
+        domain = super()._get_gather_domain(
+            product_id,
+            location_id,
+            lot_id=lot_id,
+            package_id=package_id,
+            owner_id=owner_id,
+            strict=strict,
+        )
+        exact_source_location_id = self.env.context.get(
+            'tijari_ito_exact_source_location_id'
+        )
+        if (
+            exact_source_location_id
+            and not strict
+            and location_id.id == exact_source_location_id
+        ):
+            domain = expression.AND([
+                domain,
+                [('location_id', '=', exact_source_location_id)],
+            ])
+        return domain
 
     product_default_code = fields.Char(
         string='SKU',

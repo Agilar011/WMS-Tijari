@@ -33,7 +33,7 @@ class ProductProduct(models.Model):
                 for product, available_qty in Quant._read_group(
                     [
                         ('product_id', 'in', [product_id for product_id, _ in candidates]),
-                        ('location_id', 'child_of', location_id),
+                        ('location_id', '=', location_id),
                     ],
                     ['product_id'],
                     ['available_quantity:sum'],
