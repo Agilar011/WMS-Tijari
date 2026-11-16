@@ -77,7 +77,6 @@
                                 readonly="state == 'ready'"
                                 options="{'no_create': True}"/>
                             <field name="external_ref" invisible="1"/>
-                            <field name="available_source_product_ids" invisible="1"/>
                             <field name="external_ref" string="Source Document"/>
                             <field name="external_ref_in" invisible="1"/>
                             <field name="external_ref_out" invisible="1"/>
@@ -142,8 +141,11 @@
                                         string="Scan Handheld"
                                         placeholder="Scan barcode / SKU / lot"/>
                                     <field name="product_id"
-                                        context="{'tijari_stock_picking_product_code_only': True}"
-                                        domain="[('id', 'in', parent.available_source_product_ids)] if parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer' else []"
+                                        context="{
+                                            'tijari_stock_picking_product_code_only': True,
+                                            'tijari_ito_filter_source_stock': parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer',
+                                            'tijari_ito_source_location_id': parent.intra_location_id
+                                        }"
                                         required="1"/>
                                     <field name="product_uom_qty" string="Demand"/>
                                     <field name="product_uom" string="UoM"
@@ -152,8 +154,11 @@
                                 </list>
                                 <kanban>
                                     <field name="product_id"
-                                        context="{'tijari_stock_picking_product_code_only': True}"
-                                        domain="[('id', 'in', parent.available_source_product_ids)] if parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer' else []"/>
+                                        context="{
+                                            'tijari_stock_picking_product_code_only': True,
+                                            'tijari_ito_filter_source_stock': parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer',
+                                            'tijari_ito_source_location_id': parent.intra_location_id
+                                        }"/>
                                     <field name="description_picking"/>
                                     <field name="internal_transfer_product_scan_code"/>
                                     <field name="product_uom_qty"/>
@@ -163,8 +168,11 @@
                                             <div class="oe_kanban_global_click">
                                                 <div class="fw-bold fs-5">
                                                     <field name="product_id"
-                                                        context="{'tijari_stock_picking_product_code_only': True}"
-                                                        domain="[('id', 'in', parent.available_source_product_ids)] if parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer' else []"/>
+                                                        context="{
+                                                            'tijari_stock_picking_product_code_only': True,
+                                                            'tijari_ito_filter_source_stock': parent.transaction_type == 'intra_warehouse' and parent.intra_transfer_type == 'intra_group_transfer',
+                                                            'tijari_ito_source_location_id': parent.intra_location_id
+                                                        }"/>
                                                 </div>
                                                 <div class="text-muted">
                                                     <field name="description_picking"/>
@@ -215,7 +223,7 @@
                     <field name="location_dest_id" invisible="1"/>
                     <field name="product_uom_category_id" invisible="1"/>
                     <field name="internal_transfer_order_id" invisible="1"/>
-                    <field name="internal_transfer_available_source_product_ids" invisible="1"/>
+                    <field name="internal_transfer_source_location_id" invisible="1"/>
                     <field name="internal_transfer_transaction_type" invisible="1"/>
                     <field name="internal_transfer_intra_transfer_type" invisible="1"/>
                     <group>
@@ -224,8 +232,11 @@
                             string="Scan Handheld"
                             placeholder="Scan barcode / SKU / lot"/>
                         <field name="product_id"
-                            context="{'tijari_stock_picking_product_code_only': True}"
-                            domain="[('id', 'in', internal_transfer_available_source_product_ids)] if internal_transfer_transaction_type == 'intra_warehouse' and internal_transfer_intra_transfer_type == 'intra_group_transfer' else []"
+                            context="{
+                                'tijari_stock_picking_product_code_only': True,
+                                'tijari_ito_filter_source_stock': internal_transfer_transaction_type == 'intra_warehouse' and internal_transfer_intra_transfer_type == 'intra_group_transfer',
+                                'tijari_ito_source_location_id': internal_transfer_source_location_id
+                            }"
                             required="1"/>
                         <field name="description_picking" string="Description" readonly="1"/>
                         <label for="product_uom_qty" string="Demand"/>

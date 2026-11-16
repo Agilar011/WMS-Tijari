@@ -4,6 +4,56 @@ class ProductProduct(models.Model):
     """ Extend of Product_product"""
     _inherit = 'product.product'
 
+    @api.model
+    def name_search(self, name='', args=None, operator='ilike', limit=100):
+        location_id = self.env.context.get('tijari_ito_source_location_id')
+        if (
+            not location_id
+            or not self.env.context.get('tijari_ito_filter_source_stock')
+        ):
+            return super().name_search(name, args, operator, limit)
+
+        requested_limit = limit or 100
+        candidate_limit = max(requested_limit * 4, 40)
+        maximum_candidate_limit = max(candidate_limit, 1000)
+        Quant = self.env['stock.quant']
+
+        while True:
+            candidates = super().name_search(
+                name,
+                args,
+                operator,
+                candidate_limit,
+            )
+            if not candidates:
+                return []
+
+            available_ids = {
+                product.id
+                for product, available_qty in Quant._read_group(
+                    [
+                        ('product_id', 'in', [product_id for product_id, _ in candidates]),
+                        ('location_id', 'child_of', location_id),
+                    ],
+                    ['product_id'],
+                    ['available_quantity:sum'],
+                )
+                if available_qty > 0
+            }
+            available_candidates = [
+                candidate
+                for candidate in candidates
+                if candidate[0] in available_ids
+            ]
+            if (
+                len(available_candidates) >= requested_limit
+                or len(candidates) < candidate_limit
+                or candidate_limit >= maximum_candidate_limit
+            ):
+                return available_candidates[:requested_limit]
+
+            candidate_limit = min(candidate_limit * 2, maximum_candidate_limit)
+
     @api.constrains('barcode')
     def _check_barcode_uniqueness(self):
         """Allow the same barcode to be assigned to multiple products."""
