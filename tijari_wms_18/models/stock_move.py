@@ -504,7 +504,20 @@ class StockMove(models.Model):
             owner_id = self.picking_id.owner_id
         # ======================================================
 
-        quants = self.env["stock.quant"]._get_reserve_quantity(
+        Quant = self.env["stock.quant"]
+        picking = self.picking_id
+        order = picking.internal_transfer_order_id
+        if (
+            order
+            and order.transaction_type == "intra_warehouse"
+            and order.transfer_type == "intra_group_transfer"
+            and picking.internal_transfer_leg == "pick"
+        ):
+            Quant = Quant.with_context(
+                tijari_ito_exact_source_location_id=location_id.id
+            )
+
+        quants = Quant._get_reserve_quantity(
             self.product_id,
             location_id,
             need,
