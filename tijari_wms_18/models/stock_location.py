@@ -38,11 +38,25 @@ class StockLocation(models.Model):
     @api.depends('location_owner')
     def _compute_location_owner_partner_id(self):
         Partner = self.env['res.partner']
+        owner_names = {
+            owner_name
+            for owner_name in (name.strip() for name in self.mapped('location_owner'))
+            if owner_name
+        }
+        partners_by_name = {}
+        if owner_names:
+            partners = Partner.search([('name', 'in', list(owner_names))])
+            for partner in partners:
+                # Keep the ambiguity check: a shared partner name must not
+                # silently resolve to whichever matching contact was found first.
+                if partner.name in partners_by_name:
+                    partners_by_name[partner.name] = False
+                else:
+                    partners_by_name[partner.name] = partner
+
         for location in self:
             owner_name = (location.location_owner or '').strip()
-            matches = Partner.search([('name', '=', owner_name)], limit=2) if owner_name else Partner
-            # Do not silently choose the wrong contact when names are shared.
-            location.location_owner_partner_id = matches if len(matches) == 1 else False
+            location.location_owner_partner_id = partners_by_name.get(owner_name, False)
 
     def _inverse_location_owner_partner_id(self):
         for location in self:
