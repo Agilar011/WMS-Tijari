@@ -23,10 +23,20 @@
         </field>
     </record>
 
+    <record id="stock_quant_card_pivot_view" model="ir.ui.view">
+        <field name="name">stock.quant.card.pivot</field>
+        <field name="model">stock.quant</field>
+        <field name="arch" type="xml">
+            <pivot string="Kartu Stok">
+                <field name="quantity" type="measure" string="On Hand"/>
+            </pivot>
+        </field>
+    </record>
+
     <record id="action_stock_quant_card" model="ir.actions.act_window">
         <field name="name">Kartu Stok</field>
         <field name="res_model">stock.quant</field>
-        <field name="view_mode">list</field>
+        <field name="view_mode">list,pivot</field>
         <field name="search_view_id" ref="stock.quant_search_view"/>
         <field name="groups_id" eval="[(6, 0, [
             ref('tijari_wms_18.group_warehouse_manager'),
@@ -42,6 +52,13 @@
         <field name="sequence" eval="1"/>
         <field name="view_mode">list</field>
         <field name="view_id" ref="stock_quant_card_list_view"/>
+        <field name="act_window_id" ref="action_stock_quant_card"/>
+    </record>
+
+    <record id="action_stock_quant_card_pivot_view" model="ir.actions.act_window.view">
+        <field name="sequence" eval="2"/>
+        <field name="view_mode">pivot</field>
+        <field name="view_id" ref="stock_quant_card_pivot_view"/>
         <field name="act_window_id" ref="action_stock_quant_card"/>
     </record>
 
