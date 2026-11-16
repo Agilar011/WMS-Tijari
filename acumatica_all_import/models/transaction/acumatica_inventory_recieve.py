@@ -4,7 +4,6 @@ from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
-import requests
 from ...utils import acumatica_data as _data
 from ...utils.numeric import parse_float
 
@@ -244,6 +243,28 @@ class AcumaticaInventoryRecievedLine(models.Model):
         user_messages = []
         technical_errors = []
         error_line_payloads = []
+        receive_lines = receive.product_line_ids
+        products_by_code = self._acumatica_search_first_by(
+            'product.product', 'default_code', receive_lines.mapped('inventory_id')
+        )
+        products_by_barcode = self._acumatica_search_first_by(
+            'product.product', 'barcode', receive_lines.mapped('inventory_id')
+        )
+        uoms_by_name = self._acumatica_search_first_by(
+            'uom.uom', 'name', receive_lines.mapped('uom_code')
+        )
+        line_location_codes = [
+            code for line in receive_lines
+            for code in (line.warehouse_dest_code, line.location_code)
+        ]
+        line_locations_by_code = self._acumatica_search_first_by(
+            'stock.location.acumatica', 'code', line_location_codes,
+            domain=[('active', '=', True)],
+        )
+        line_locations_by_name = self._acumatica_search_first_by(
+            'stock.location.acumatica', 'name', line_location_codes,
+            domain=[('active', '=', True)],
+        )
 
         source_code = receive.warehouse_code
         destination_code = receive.warehouse_dest_code or receive.warehouse_code
@@ -348,7 +369,10 @@ class AcumaticaInventoryRecievedLine(models.Model):
             move_vals = {}
             line_payload = receive_line.read()[0] if receive_line.exists() else {}
             try:
-                product = receive._find_product(receive_line)
+                product = (
+                    products_by_code.get(receive_line.inventory_id)
+                    or products_by_barcode.get(receive_line.inventory_id)
+                )
                 if not product:
                     error_messages.append(
                         f'Product with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
@@ -363,7 +387,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     })
                     continue
 
-                uom = receive._find_uom(receive_line, product)
+                uom = uoms_by_name.get(receive_line.uom_code) or product.uom_id
                 if product and not uom:
                     error_messages.append(
                         f'UOM with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER UOM.'
@@ -379,7 +403,17 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     continue
 
                 qty = receive._parse_float(receive_line.product_uom_qty)
-                line_destination = receive._find_line_location_dest(receive_line) or destination_location
+                line_destination = self.env['stock.location']
+                for location_code in (receive_line.warehouse_dest_code, receive_line.location_code):
+                    if not location_code:
+                        continue
+                    mapping = line_locations_by_code.get(location_code)
+                    if not mapping:
+                        mapping = line_locations_by_name.get(location_code)
+                    if mapping and mapping.odoo_location_id:
+                        line_destination = mapping.odoo_location_id
+                        break
+                line_destination = line_destination or destination_location
                 if not line_destination:
                     error_messages.append(
                         f'Destination location untuk line {receive_line.line_nbr or "-"} '
@@ -498,6 +532,23 @@ class AcumaticaInventoryRecievedLine(models.Model):
         user_messages = []
         technical_errors = []
         error_line_payloads = []
+        receive_lines = receive.product_line_ids
+        products_by_code = self._acumatica_search_first_by(
+            'product.product', 'default_code', receive_lines.mapped('inventory_id')
+        )
+        products_by_barcode = self._acumatica_search_first_by(
+            'product.product', 'barcode', receive_lines.mapped('inventory_id')
+        )
+        uoms_by_name = self._acumatica_search_first_by(
+            'uom.uom', 'name', receive_lines.mapped('uom_code')
+        )
+        line_location_codes = [
+            receive.warehouse_dest_code,
+            *[line.warehouse_dest_code for line in receive_lines],
+        ]
+        line_locations_by_code = self._acumatica_search_first_by(
+            'stock.location.acumatica', 'code', line_location_codes
+        )
         picking = receive.odoo_picking_id
         action_state = 'staged'
 
@@ -508,7 +559,8 @@ class AcumaticaInventoryRecievedLine(models.Model):
             )
             user_messages.append(f"Warehouse tujuan dengan kode {receive.warehouse_dest_code or receive.warehouse_code or '-'} belum ditemukan atau tidak aktif. Periksa mapping warehouse di WMS.")
 
-        dest_location = receive._find_location_dest(receive)
+        dest_mapping = line_locations_by_code.get(receive.warehouse_dest_code)
+        dest_location = dest_mapping.odoo_location_id if dest_mapping else False
         if not dest_location:
             error_messages.append(
                 f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
@@ -642,7 +694,10 @@ class AcumaticaInventoryRecievedLine(models.Model):
         for receive_line in receive.product_line_ids:
             move_vals = {}
             try:
-                product = receive._find_product(receive_line)
+                product = (
+                    products_by_code.get(receive_line.inventory_id)
+                    or products_by_barcode.get(receive_line.inventory_id)
+                )
                 if not product:
                     error_messages.append(
                         f'Product with InventoryID {receive_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
@@ -657,9 +712,11 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     })
                     continue
 
-                uom = receive._find_uom(receive_line, product)
-                dest_location = receive._find_location_dest(receive_line, fallback_code=receive.warehouse_dest_code)
-                if not dest_location:
+                uom = uoms_by_name.get(receive_line.uom_code) or product.uom_id
+                destination_code = receive_line.warehouse_dest_code or receive.warehouse_dest_code
+                dest_mapping = line_locations_by_code.get(destination_code)
+                line_dest_location = dest_mapping.odoo_location_id if dest_mapping else False
+                if not line_dest_location:
                     error_messages.append(
                         f'Location with code {receive.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
                     )
@@ -695,7 +752,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     'adt_line_nbr': receive_line.line_nbr or False,
                     'adt_uom_code': receive_line.uom_code or False,
                     'adt_warehouse_dest_code': receive_line.warehouse_dest_code or receive.warehouse_dest_code or False,
-                    'adt_dest_location_id': dest_location.id if dest_location else picking.adt_dest_location_id.id if picking else False,
+                    'adt_dest_location_id': line_dest_location.id if line_dest_location else picking.adt_dest_location_id.id if picking else False,
                 }
 
                 move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
@@ -835,7 +892,7 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     )
 
                 receive.write({
-                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                    'import_state': self._acumatica_import_error_state(error_message),
                     'import_message': error_message[:1000],
                 })
                 error += 1
@@ -849,7 +906,6 @@ class AcumaticaInventoryRecievedLine(models.Model):
                     )
                 continue
 
-        msg = f'Import done: {created} receive created, {updated} receive updated, {error} receive error.'
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',

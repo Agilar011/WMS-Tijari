@@ -1,6 +1,4 @@
-from datetime import datetime
-from odoo import models, fields, api
-from odoo.fields import Datetime
+from odoo import models, fields
 from odoo.exceptions import UserError
 
 import logging
@@ -1014,7 +1012,7 @@ class AcumaticaKitAssemblyLine(models.Model):
                         'payload': line.read()[0] if line.exists() else {},
                     } for line in (component_lines if component_lines else records)],
                 )
-                result_state = 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error'
+                result_state = header_reference._acumatica_import_error_state(str(e))
                 records.write({
                     'import_state': result_state,
                     'import_message': str(e)[:200],

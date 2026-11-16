@@ -819,32 +819,45 @@ class StockInventory(models.Model):
             ('product_id', 'in', scope_product_ids),
             *location_domain,
         ])
-        quants_by_product = {}
+        ancestor_location_ids_by_location = {}
+
+        def get_ancestor_location_ids(location):
+            if location.id not in ancestor_location_ids_by_location:
+                ancestor_location_ids_by_location[location.id] = {
+                    int(location_id)
+                    for location_id in (location.parent_path or '').strip('/').split('/')
+                    if location_id.isdigit()
+                }
+            return ancestor_location_ids_by_location[location.id]
+
+        exact_location_ids_by_product = {}
+        descendant_location_ids_by_product = {}
         for quant in existing_quants:
-            quants_by_product.setdefault(quant.product_id.id, []).append(quant)
+            product_id = quant.product_id.id
+            location = quant.location_id
+            exact_location_ids_by_product.setdefault(product_id, set()).add(location.id)
+            if not self.exclude_sublocation:
+                descendant_location_ids_by_product.setdefault(product_id, set()).update(
+                    get_ancestor_location_ids(location)
+                )
 
         # Keep row order: when parent and child scopes overlap, an earlier row
         # creates the quant that makes a later row's search non-empty.
-        planned_locations = {}
+        planned_exact_location_ids_by_product = {}
+        planned_descendant_location_ids_by_product = {}
         create_vals = []
         for _row, product, location in valid_rows:
-            product_quants = quants_by_product.get(product.id, ())
-            product_planned_locations = planned_locations.get(product.id, ())
             if self.exclude_sublocation:
-                has_quant = any(quant.location_id.id == location.id for quant in product_quants)
-                has_planned_quant = any(
-                    planned_location.id == location.id
-                    for planned_location in product_planned_locations
+                has_quant = location.id in exact_location_ids_by_product.get(product.id, set())
+                has_planned_quant = location.id in planned_exact_location_ids_by_product.get(
+                    product.id, set()
                 )
             else:
-                location_path = location.parent_path
-                has_quant = any(
-                    quant.location_id.parent_path.startswith(location_path)
-                    for quant in product_quants
+                has_quant = location.id in descendant_location_ids_by_product.get(
+                    product.id, set()
                 )
-                has_planned_quant = any(
-                    planned_location.parent_path.startswith(location_path)
-                    for planned_location in product_planned_locations
+                has_planned_quant = location.id in planned_descendant_location_ids_by_product.get(
+                    product.id, set()
                 )
             if has_quant or has_planned_quant:
                 continue
@@ -853,7 +866,11 @@ class StockInventory(models.Model):
                 'location_id': location.id,
                 'quantity': 0.0,
             })
-            planned_locations.setdefault(product.id, []).append(location)
+            planned_exact_location_ids_by_product.setdefault(product.id, set()).add(location.id)
+            if not self.exclude_sublocation:
+                planned_descendant_location_ids_by_product.setdefault(
+                    product.id, set()
+                ).update(get_ancestor_location_ids(location))
 
         if create_vals:
             Quant.create(create_vals)

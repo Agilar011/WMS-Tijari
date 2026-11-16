@@ -1,7 +1,7 @@
 import logging
 
 from odoo import models, fields, api
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 from ...utils import acumatica_data as _data
 from ...utils.numeric import parse_float
 
@@ -319,10 +319,17 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                     # ---------------------------------------------------------
                     moves_to_create = []
                     update_line_snapshots = []
+                    products_by_code = self._acumatica_search_first_by(
+                        'product.product',
+                        'default_code',
+                        to_create_move_lines.mapped('adt_InventoryID'),
+                        domain=[('active', '=', True)],
+                    )
+                    consignment_locations = {warehouse_code: source_location}
 
                     for line in to_create_move_lines:
                         # Cari data produk Odoo berdasarkan InventoryID Acumatica
-                        product = self._find_product_by_code(line.adt_InventoryID, )
+                        product = products_by_code.get(line.adt_InventoryID)
                         if not product:
                             raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.adt_InventoryID or '-'}")
 
@@ -331,7 +338,11 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         qty = self._parse_float(line.adt_Qty)
 
                         # Tentukan lokasi detail per baris barang secara spesifik (jika ada)
-                        line_loc_src = self._find_consignment_location(line.adt_Warehouse)
+                        if line.adt_Warehouse not in consignment_locations:
+                            consignment_locations[line.adt_Warehouse] = (
+                                self._find_consignment_location(line.adt_Warehouse)
+                            )
+                        line_loc_src = consignment_locations[line.adt_Warehouse]
                         if not line_loc_src:
                             raise UserError(
                                 f'Lokasi CONS tidak ditemukan untuk warehouse '
@@ -474,7 +485,7 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                 )
                 # Tulis pesan kegagalan ke UI Odoo agar user tahu detail masalahnya
                 first.write({
-                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                    'import_state': self._acumatica_import_error_state(error_message),
                     'import_message': error_message,
                     'odoo_picking_id': False,
                 })
@@ -489,7 +500,6 @@ class AcumaticaVendorReturnDirectTransferStaging(models.Model):
                         error=str(e), error_type='unexpected',
                     )
 
-        msg = f'Generate done: {created} credit memo consignment created, {updated} credit memo consignment updated, {error} credit memo consignment error.'
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',
