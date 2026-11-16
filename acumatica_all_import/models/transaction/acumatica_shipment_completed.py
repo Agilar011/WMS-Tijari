@@ -1,9 +1,7 @@
 import logging
-import time
-import requests
 
 from odoo import fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -231,6 +229,40 @@ class AcumaticaShipmentCompletedStaging(models.Model):
 
         return True
 
+    def _apply_shipment_completed_quantities(self, picking, staging_lines):
+        """Copy shipped quantities from staging and determine full/partial status."""
+        staging_qty_by_inventory = {}
+        for line in staging_lines:
+            inventory_id = line.line_inventory_id
+            staging_qty_by_inventory[inventory_id] = (
+                staging_qty_by_inventory.get(inventory_id, 0.0)
+                + line.line_quantity
+            )
+
+        all_match = True
+        for move in picking.move_ids:
+            inventory_id = move.product_id.default_code
+            if inventory_id in staging_qty_by_inventory:
+                staging_qty = staging_qty_by_inventory[inventory_id]
+                if not staging_qty:
+                    all_match = False
+            else:
+                staging_qty = 0.0
+                all_match = False
+
+            if staging_qty < move.quantity:
+                all_match = False
+            elif staging_qty > move.quantity:
+                raise ValidationError(
+                    f"Quantity {move.product_id.display_name} "
+                    f"melebihi quantity DO. "
+                    f"DO={move.quantity}, staging={staging_qty}"
+                )
+
+            move.shipped_qty = staging_qty
+
+        return all_match
+
     def _action_update_stock_picking(self):
         """
         Process a single shipment completed staging record.
@@ -275,54 +307,10 @@ class AcumaticaShipmentCompletedStaging(models.Model):
             # Get staging lines
             # ---------------------------------------------------------
             staging_lines = self.line_ids
-
-            all_match = True
-
-            # ---------------------------------------------------------
-            # Compare staging quantity with DO quantity
-            # ---------------------------------------------------------
-            for move in picking.move_ids:
-
-                staging_lines_for_product = staging_lines.filtered(
-                    lambda line:
-                        line.line_inventory_id
-                        == move.product_id.default_code
-                )
-
-                if not staging_lines_for_product:
-                    staging_qty = 0.0
-                    all_match = False
-
-                else:
-                    staging_qty = sum(
-                        staging_lines_for_product.mapped(
-                            'line_quantity'
-                        )
-                    )
-
-                    if not staging_qty:
-                        all_match = False
-
-                # -----------------------------------------------------
-                # Staging quantity less than DO quantity
-                # -----------------------------------------------------
-                if staging_qty < move.quantity:
-                    all_match = False
-
-                # -----------------------------------------------------
-                # Staging quantity exceeds DO quantity
-                # -----------------------------------------------------
-                elif staging_qty > move.quantity:
-                    raise ValidationError(
-                        f"Quantity {move.product_id.display_name} "
-                        f"melebihi quantity DO. "
-                        f"DO={move.quantity}, staging={staging_qty}"
-                    )
-
-                # -----------------------------------------------------
-                # Update shipped quantity
-                # -----------------------------------------------------
-                move.shipped_qty = staging_qty
+            all_match = self._apply_shipment_completed_quantities(
+                picking,
+                staging_lines,
+            )
 
             # ---------------------------------------------------------
             # Determine shipment type

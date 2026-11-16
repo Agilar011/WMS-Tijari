@@ -1,6 +1,5 @@
 import logging
 from collections import defaultdict
-import requests
 
 from odoo import _, fields, models, api
 from odoo.exceptions import UserError
@@ -214,6 +213,163 @@ class AcumaticaInventoryIssueLine(models.Model):
         if not uom and product:
             uom = product.uom_id
         return uom
+
+    def _process_inventory_issue_product_line(
+        self, line, first, picking, source_location, dest_location,
+        action_state, products_by_key, uom_by_name, location_by_code,
+        previous_moves, update_messages,
+    ):
+        """Create or update the stock move for one Acumatica detail line."""
+        Move = self.env['stock.move']
+
+        customer = self._find_customer(line.customer_id) if line.customer_id else False
+        if (first.trans_type or '').strip().casefold() == 'toko pegang do' and not customer:
+            raise UserError(
+                f'Customer dengan CustomerID {line.customer_id or "-"} '
+                'tidak ditemukan untuk baris Disposal.'
+            )
+        owner_id = customer.id if customer else False
+
+        product_key = (
+            ('inventory', line.inventory_id)
+            if line.inventory_id else
+            ('description', line.line_description)
+        )
+        if product_key not in products_by_key:
+            products_by_key[product_key] = self._find_product(line)
+        product = products_by_key[product_key]
+        if not product:
+            raise UserError(
+                f'Product tidak ditemukan untuk InventoryID: '
+                f'{line.inventory_id or "-"}'
+            )
+
+        uom = uom_by_name.get(line.uom_code) or product.uom_id
+        qty = self._parse_int(line.product_uom_qty)
+        location_mapping = location_by_code.get(line.warehouse_code)
+        line_dest_location = (
+            location_mapping.odoo_location_id if location_mapping else False
+        )
+        adt_dest_location = line_dest_location or picking.adt_dest_location_id
+        if not line_dest_location:
+            location_error = (
+                f'Location with code {line.warehouse_code or "-"} was not found '
+                'or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
+            )
+        else:
+            location_error = False
+
+        move_domain = [
+            ('picking_id', '=', picking.id),
+            ('product_id', '=', product.id),
+        ]
+        if owner_id:
+            move_domain.append(('owner_id', '=', owner_id))
+        existing_move = Move.search(move_domain, limit=1)
+
+        if existing_move:
+            self._update_existing_issue_move(
+                existing_move, line, product, uom, qty, owner_id,
+                adt_dest_location, action_state, update_messages,
+            )
+        else:
+            created_move = Move.create({
+                'name': line.line_description or product.display_name,
+                'picking_id': picking.id,
+                'product_id': product.id,
+                'product_uom_qty': qty,
+                'product_uom': uom.id if uom else product.uom_id.id,
+                'location_id': source_location.id,
+                'location_dest_id': dest_location.id,
+                'adt_dest_location_id': adt_dest_location.id if adt_dest_location else False,
+                'transaction_type': 'outbound',
+                'adt_type': first.trans_type or False,
+                'owner_id': owner_id,
+            })
+            if action_state == 'updated':
+                self._append_issue_move_update_message(
+                    line, product, uom, qty, owner_id, created_move,
+                    previous_moves, update_messages,
+                )
+
+        return location_error
+
+    def _update_existing_issue_move(
+        self, existing_move, line, product, uom, qty, owner_id,
+        adt_dest_location, action_state, update_messages,
+    ):
+        if action_state == 'updated':
+            new_values = {
+                'Jumlah': f'{qty:g}',
+                'Deskripsi': line.line_description or product.display_name,
+                'Lokasi tujuan': adt_dest_location.display_name if adt_dest_location else '—',
+            }
+            old_values = {
+                'Jumlah': f'{existing_move.product_uom_qty:g}',
+                'Deskripsi': existing_move.name or '—',
+                'Lokasi tujuan': (
+                    existing_move.adt_dest_location_id.display_name
+                    if existing_move.adt_dest_location_id
+                    else existing_move.location_dest_id.display_name
+                ),
+            }
+            changes = [
+                f'{label}: {old_values[label]} → {value}'
+                for label, value in new_values.items()
+                if old_values[label] != value
+            ]
+            if changes:
+                label = line.line_nbr or line.inventory_id or product.display_name
+                update_messages.append(f'• Baris {label}: ' + '; '.join(changes))
+
+        existing_move.write({
+            'product_uom_qty': qty,
+            'name': line.line_description or product.display_name,
+            'owner_id': owner_id,
+            'adt_dest_location_id': adt_dest_location.id if adt_dest_location else False,
+        })
+
+    def _append_issue_move_update_message(
+        self, line, product, uom, qty, owner_id, created_move,
+        previous_moves, update_messages,
+    ):
+        move_key = str(product.id) + ':' + str(owner_id or 0)
+        old_group = previous_moves.get(move_key) or []
+        old = old_group.pop(0) if old_group else False
+        if not old_group:
+            previous_moves.pop(move_key, None)
+
+        label = line.line_nbr or line.inventory_id or product.display_name
+        if not old:
+            update_messages.append(
+                f'• Baris {label}: {product.display_name}, jumlah {qty:g} '
+                f'{uom.display_name if uom else ""} ditambahkan'
+            )
+            return
+
+        new_values = {
+            'Jumlah': f'{qty:g}',
+            'Satuan': uom.display_name if uom else product.uom_id.display_name,
+            'Deskripsi': created_move.name or '—',
+            'Lokasi tujuan': (
+                created_move.adt_dest_location_id.display_name
+                if created_move.adt_dest_location_id
+                else created_move.location_dest_id.display_name
+            ),
+        }
+        old_values = {
+            'Jumlah': f"{old['qty']:g}",
+            'Satuan': old['uom'],
+            'Deskripsi': old['name'],
+            'Lokasi tujuan': old['destination'],
+        }
+        changes = [
+            f'{field}: {old_values[field]} → {value}'
+            for field, value in new_values.items()
+            if old_values[field] != value
+        ]
+        if changes:
+            update_messages.append(f'• Baris {label}: ' + '; '.join(changes))
     
     def action_import_this(self):
         """Memicu proses impor khusus untuk 1 record aktif"""
@@ -224,7 +380,6 @@ class AcumaticaInventoryIssueLine(models.Model):
 
     def _do_import(self):
         Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
         
         created = updated = error = 0
         
@@ -252,8 +407,9 @@ class AcumaticaInventoryIssueLine(models.Model):
                 
             first = issue_lines[0]
             update_messages = []
-            # print(f"value :{first}")
-            
+            current_line = False
+            dest_location = False
+
             try:
                 # === PENTING: Buat Savepoint sebelum memproses satu issue_key ===
                 # Jika terjadi error di dalam try ini, kita hanya me-rollback data untuk issue_key ini saja.
@@ -463,119 +619,61 @@ class AcumaticaInventoryIssueLine(models.Model):
                     issue_product_lines_by_header.get(first.id, []),
                 )
                 products_by_key = {}
-                location_errors = []
-                    
+                inventory_codes = to_create_move.mapped('inventory_id')
+                product_by_code = self._acumatica_search_first_by(
+                    'product.product', 'default_code', inventory_codes,
+                )
+                product_by_barcode = self._acumatica_search_first_by(
+                    'product.product', 'barcode', inventory_codes,
+                )
+                product_by_name = self._acumatica_search_first_by(
+                    'product.product',
+                    'name',
+                    to_create_move.mapped('line_description'),
+                )
+                uom_by_name = self._acumatica_search_first_by(
+                    'uom.uom', 'name', to_create_move.mapped('uom_code'),
+                )
+                location_by_code = self._acumatica_search_first_by(
+                    'stock.location.acumatica',
+                    'code',
+                    to_create_move.mapped('warehouse_code'),
+                )
                 for line in to_create_move:
-
-                    customer = False
-                    if line.customer_id:
-                        customer = self._find_customer(line.customer_id)
-
-                    owner_id = False
-
-                    if (first.trans_type or "").strip().casefold() == "toko pegang do":
-                        if not customer:
-                            raise UserError(
-                                f"Customer dengan CustomerID {line.customer_id or '-'} "
-                                f"tidak ditemukan untuk baris Disposal."
-                            )
-                        owner_id = customer.id
-                    else:
-                        owner_id = customer.id if customer else False
-
                     product_key = (
                         ('inventory', line.inventory_id)
                         if line.inventory_id else
                         ('description', line.line_description)
                     )
-                    if product_key not in products_by_key:
-                        products_by_key[product_key] = self._find_product(line)
-                    product = products_by_key[product_key]
-                    if not product:
-                        raise UserError(
-                            f'Product tidak ditemukan untuk InventoryID: '
-                            f'{line.inventory_id or "-"}'
-                        )
-                    uom = self._find_uom(line, product)
-                    qty = self._parse_int(line.product_uom_qty)
-                    line_dest_location = first._find_location_dest(line.warehouse_code)
-                    if not line_dest_location:
-                        location_errors.append(
-                            f'Location with code {line.warehouse_code or "-"} was not found '
-                            'or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
-                        )
-                    adt_dest_location = (
-                        line_dest_location or picking.adt_dest_location_id
+                    product = (
+                        product_by_code.get(line.inventory_id)
+                        or product_by_barcode.get(line.inventory_id)
+                        or product_by_name.get(line.line_description)
                     )
-                    
-                    move_domain = [
-                        ('picking_id', '=', picking.id),
-                        ('product_id', '=', product.id),
-                    ]
-                    if owner_id:
-                        move_domain.append(('owner_id', '=', owner_id))
-                    existing_move = Move.search(move_domain, limit=1)
-                    
-                    if existing_move:
-                        old = {'qty': existing_move.product_uom_qty, 'uom': existing_move.product_uom.display_name, 'destination': existing_move.adt_dest_location_id.display_name if existing_move.adt_dest_location_id else existing_move.location_dest_id.display_name, 'name': existing_move.name or '—'}
-                        if action_state == 'updated':
-                            changes = []
-                            new_values = {'Jumlah': f'{qty:g}', 'Deskripsi': line.line_description or product.display_name, 'Lokasi tujuan': adt_dest_location.display_name if adt_dest_location else '—'}
-                            old_values = {'Jumlah': f"{old['qty']:g}", 'Deskripsi': old['name'], 'Lokasi tujuan': old['destination']}
-                            changes = [f'{label}: {old_values[label]} → {value}' for label, value in new_values.items() if old_values[label] != value]
-                            if changes:
-                                update_messages.append(f"• Baris {line.line_nbr or line.inventory_id or product.display_name}: " + '; '.join(changes))
-                        existing_move.write({
-                            'product_uom_qty': qty,
-                            'name': line.line_description or product.display_name,
-                            'owner_id': owner_id,
-                            'adt_dest_location_id': adt_dest_location.id if adt_dest_location else False,
-                        })
-                        first.write({
-                            'import_state': action_state,
-                            'import_message': 'success',
-                            'odoo_picking_id': picking.id,
-                            'odoo_internal_transfer_order_id': False,
-                        })
-                    else:
-                        created_move = Move.create({
-                            'name': line.line_description or product.display_name,
-                            'picking_id': picking.id,
-                            'product_id': product.id,
-                            'product_uom_qty': qty,
-                            'product_uom': uom.id if uom else product.uom_id.id,
-                            'location_id': source_location.id,
-                            'location_dest_id': dest_location.id,
-                            'adt_dest_location_id': adt_dest_location.id if adt_dest_location else False,
-                            # 'description_picking': product.name or False,
-                            'transaction_type' : 'outbound',
-                            'adt_type': first.trans_type or False,
-                            'owner_id': owner_id,
-                        })
-                        if action_state == 'updated':
-                            move_key = str(product.id) + ':' + str(owner_id or 0)
-                            old_group = previous_moves.get(move_key) or []
-                            old = old_group.pop(0) if old_group else False
-                            if not old_group:
-                                previous_moves.pop(move_key, None)
-                            label = line.line_nbr or line.inventory_id or product.display_name
-                            if old:
-                                new_values = {'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else product.uom_id.display_name, 'Deskripsi': created_move.name or '—', 'Lokasi tujuan': created_move.adt_dest_location_id.display_name if created_move.adt_dest_location_id else created_move.location_dest_id.display_name}
-                                old_values = {'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Deskripsi': old['name'], 'Lokasi tujuan': old['destination']}
-                                changes = [f'{field}: {old_values[field]} → {value}' for field, value in new_values.items() if old_values[field] != value]
-                                if changes:
-                                    update_messages.append(f"• Baris {label}: " + '; '.join(changes))
-                            else:
-                                update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
-                        first.write({
-                            'import_state': action_state,
-                            'import_message': 'success',
-                            'odoo_picking_id': picking.id,
-                            'odoo_internal_transfer_order_id': False,
-                        })
+                    products_by_key.setdefault(product_key, product)
+                location_errors = []
+
+                for line in to_create_move:
+                    current_line = line
+                    location_error = self._process_inventory_issue_product_line(
+                        line, first, picking, source_location, dest_location,
+                        action_state, products_by_key, uom_by_name,
+                        location_by_code, previous_moves,
+                        update_messages,
+                    )
+                    if location_error:
+                        location_errors.append(location_error)
 
                 if location_errors:
                     raise UserError('\n'.join(location_errors))
+
+                if to_create_move:
+                    first.write({
+                        'import_state': action_state,
+                        'import_message': 'success',
+                        'odoo_picking_id': picking.id,
+                        'odoo_internal_transfer_order_id': False,
+                    })
 
                 if action_state == 'updated':
                     for old_group in previous_moves.values():
@@ -613,9 +711,10 @@ class AcumaticaInventoryIssueLine(models.Model):
                 elif 'location' in error_text and ('not found' in error_text or 'tidak ditemukan' in error_text):
                     user_message = f"Lokasi tujuan untuk Inventory Issue {issue_key} belum ditemukan atau tidak aktif. Periksa mapping lokasi di WMS."
                 elif 'product' in error_text and ('tidak ditemukan' in error_text or 'not found' in error_text):
-                    user_message = f"Produk dengan kode {getattr(locals().get('line'), 'inventory_id', False) or '-'} pada Inventory Issue {issue_key} belum terdaftar. Periksa master produk di WMS."
+                    user_message = f"Produk dengan kode {current_line.inventory_id if current_line else '-'} pada Inventory Issue {issue_key} belum terdaftar. Periksa master produk di WMS."
                 elif 'customer' in error_text and ('tidak ditemukan' in error_text or 'not found' in error_text):
-                    user_message = f"Customer dengan kode {getattr(locals().get('line'), 'customer_id', False) or first.customer_id or '-'} belum terdaftar. Periksa master customer di WMS."
+                    customer_code = current_line.customer_id if current_line else first.customer_id
+                    user_message = f"Customer dengan kode {customer_code or '-'} belum terdaftar. Periksa master customer di WMS."
                 elif 'state' in error_text and ('tidak bisa diupdate' in error_text or 'already processed' in error_text):
                     user_message = f"Inventory Issue {issue_key} tidak dapat diperbarui karena dokumen di WMS sudah diproses. Hubungi admin jika perubahan diperlukan."
                 elif 'tidak ada product' in error_text or 'no product' in error_text:
@@ -642,20 +741,24 @@ class AcumaticaInventoryIssueLine(models.Model):
                     origin=first.reference_nbr or issue_key,
                     partner=first.customer_id or False,
                     location=first.warehouse_code or False,
-                    location_dest=dest_location.display_name if 'dest_location' in locals() and dest_location else False,
+                    location_dest=dest_location.display_name if dest_location else False,
                     scheduled_date=first.scheduled_date,
                     total_qty=first.total_qty,
                     actual_qty=first.actual_qty,
                     payload={'header': first.read()[0] if first.exists() else {}},
                     line_payloads=line_payloads,
                 )
-                issue_lines.write({
-                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
-                    'import_message': str(e)[:200],
-                    'odoo_picking_id': False,
-                    'odoo_internal_transfer_order_id': False,
-                    'odoo_scrap_id': False,
-                })
+                self._acumatica_write_import_result_once(
+                    issue_lines,
+                    first,
+                    {
+                        'import_state': self._acumatica_import_error_state(str(e)),
+                        'import_message': str(e)[:200],
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': False,
+                        'odoo_scrap_id': False,
+                    },
+                )
                 self.env.cr.commit() 
                 
                 error += len(issue_lines)
@@ -725,8 +828,25 @@ class AcumaticaInventoryIssueLine(models.Model):
         scrap = Scrap.search([('origin', '=', first.reference_nbr)])
 
         scrap_lines = []
+        inventory_codes = components.mapped('inventory_id')
+        product_by_code = self._acumatica_search_first_by(
+            'product.product', 'default_code', inventory_codes,
+        )
+        product_by_barcode = self._acumatica_search_first_by(
+            'product.product', 'barcode', inventory_codes,
+        )
+        product_by_name = self._acumatica_search_first_by(
+            'product.product', 'name', components.mapped('line_description'),
+        )
+        uom_by_name = self._acumatica_search_first_by(
+            'uom.uom', 'name', components.mapped('uom_code'),
+        )
         for line in components:
-            product = self._find_product(line)
+            product = (
+                product_by_code.get(line.inventory_id)
+                or product_by_barcode.get(line.inventory_id)
+                or product_by_name.get(line.line_description)
+            )
 
             if not product:
                 raise UserError(
@@ -734,7 +854,7 @@ class AcumaticaInventoryIssueLine(models.Model):
                     f"{line.inventory_id or '-'}"
                 )
 
-            uom = self._find_uom(line, product)
+            uom = uom_by_name.get(line.uom_code) or product.uom_id
             qty = self._parse_int(line.product_uom_qty)
 
             scrap_lines.append({

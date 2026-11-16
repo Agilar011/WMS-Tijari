@@ -1,12 +1,7 @@
 import logging
-import time
-from docutils.nodes import note
-import requests
-import ast
-import json
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError, ValidationError
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -194,7 +189,7 @@ class AcumaticaShipmentGIStaging(models.Model):
                 } for line in lines],
             )
             staging_rec.write({
-                'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                'import_state': self._acumatica_import_error_state(message),
                 'import_message': message,
                 'odoo_picking_id': False,
                 'odoo_internal_transfer_order_id': False,
@@ -459,7 +454,7 @@ class AcumaticaShipmentGIStaging(models.Model):
 
                     # Odoo memperbolehkan modifikasi record saat ini di dalam savepoint yang gagal
                     shipment.write({
-                        'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                        'import_state': self._acumatica_import_error_state(str(e)),
                         'import_message': f'!!! ERROR DETECTED ON IMPORT PROCESS: {str(e)}',
                         'odoo_picking_id': False,
                         'odoo_internal_transfer_order_id': False,
@@ -747,13 +742,21 @@ class AcumaticaShipmentGIStaging(models.Model):
         #     )
 
         move_count = 0
+        products_by_code = self._acumatica_search_first_by(
+            'product.product',
+            'default_code',
+            move_items.mapped('adt_LineInventoryID'),
+        )
+        uoms_by_name = self._acumatica_search_first_by(
+            'uom.uom', 'name', move_items.mapped('adt_LineUOM'),
+        )
         for item in move_items:
             move_count += 1
-            product = Product.search([('default_code', '=', item.adt_LineInventoryID)], limit=1)
+            product = products_by_code.get(item.adt_LineInventoryID)
             if not product:
                 raise UserError(f"Produk dengan SKU {item.adt_LineInventoryID} tidak ditemukan di Odoo.")
 
-            uom = self._find_uom(item, product)
+            uom = uoms_by_name.get(item.adt_LineUOM) or product.uom_id
             qty = float(item.adt_LineQuantity or 0.0)
             move_vals = {
                 'name': item.adt_LineDescription or product.display_name,

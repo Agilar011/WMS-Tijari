@@ -1,6 +1,5 @@
 
 import logging
-import requests
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
@@ -197,7 +196,6 @@ class AcumaticaIssueLine(models.Model):
     def _do_import(self):
         Picking = self.env['stock.picking']
         Move = self.env['stock.move']
-        PickingType = self.env['stock.picking.type']
 
         imported = updated = error = 0
         keys = [k for k in self.mapped('reference_nbr') if k]
@@ -208,6 +206,7 @@ class AcumaticaIssueLine(models.Model):
                 continue
             first = issue_lines[0]
             update_messages = []
+            dest_location = False
             try:
                 self.env.cr.execute('SAVEPOINT import_issue_change_item_doc')
                 warehouse = self._find_warehouse(first)
@@ -280,11 +279,42 @@ class AcumaticaIssueLine(models.Model):
                     picking.move_ids.unlink()
                     imported += 1
 
+                products_by_code = self._acumatica_search_first_by(
+                    'product.product', 'default_code', issue_lines.mapped('inventory_id')
+                )
+                products_by_barcode = self._acumatica_search_first_by(
+                    'product.product', 'barcode', issue_lines.mapped('inventory_id')
+                )
+                products_by_name = self._acumatica_search_first_by(
+                    'product.product', 'name', issue_lines.mapped('line_description')
+                )
+                uoms_by_name = self._acumatica_search_first_by(
+                    'uom.uom', 'name', issue_lines.mapped('uom_code')
+                )
+
                 for line in issue_lines:
-                    product = self._find_product(line)
+                    product = (
+                        products_by_code.get(line.inventory_id)
+                        or products_by_barcode.get(line.inventory_id)
+                        or products_by_name.get(line.line_description)
+                    )
+                    if not product and line.inventory_id:
+                        product = self.env['product.product'].search(
+                            [('default_code', '=', line.inventory_id)], limit=1
+                        )
+                    if not product:
+                        product = self.env['product.product'].create({
+                            'name': line.line_description or line.inventory_id or 'Unknown Product',
+                            'default_code': line.inventory_id or False,
+                            'type': 'consu',
+                        })
+                        if line.inventory_id:
+                            products_by_code[line.inventory_id] = product
+                        if line.line_description:
+                            products_by_name.setdefault(line.line_description, product)
                     if not product:
                         raise UserError(f"Product tidak ditemukan untuk InventoryID: {line.inventory_id or '-'}")
-                    uom = self._find_uom(line, product)
+                    uom = uoms_by_name.get(line.uom_code) or product.uom_id
                     qty = self._parse_int(line.product_uom_qty)
 
                     created_move = Move.create({
@@ -318,12 +348,15 @@ class AcumaticaIssueLine(models.Model):
                                 update_messages.append(f"• Baris {label}: " + '; '.join(changes))
                         else:
                             update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
-                    line.write({
+                self._acumatica_write_import_result_once(
+                    issue_lines,
+                    first,
+                    {
                         'import_state': action_state,
                         'import_message': f'{action_state.title()}: {picking.name}',
                         'odoo_picking_id': picking.id,
-                    })
-
+                    },
+                )
                 if issue_lines.filtered('document_only'):
                     if not issue_lines.mapped('product_line_ids'):
                         raise UserError(f'Issue {issue_key} tidak memiliki detail produk.')
@@ -363,7 +396,7 @@ class AcumaticaIssueLine(models.Model):
                     operation_type='pick',
                     origin=issue_key,
                     location=first.warehouse_code or False,
-                    location_dest=dest_location.display_name if 'dest_location' in locals() and dest_location else False,
+                    location_dest=dest_location.display_name if dest_location else False,
                     scheduled_date=first.scheduled_date,
                     total_qty=first.total_qty,
                     actual_qty=first.actual_qty,
@@ -376,11 +409,15 @@ class AcumaticaIssueLine(models.Model):
                         'payload': line.read()[0] if line.exists() else {},
                     } for line in issue_lines],
                 )
-                issue_lines.write({
-                    'import_state': 'error',
-                    'import_message': str(e)[:200],
-                    'odoo_picking_id': False,
-                })
+                self._acumatica_write_import_result_once(
+                    issue_lines,
+                    first,
+                    {
+                        'import_state': 'error',
+                        'import_message': str(e)[:200],
+                        'odoo_picking_id': False,
+                    },
+                )
                 error += len(issue_lines)
                 if user_message:
                     self.env['acumatica.webhook.error.service'].send_user_error(
