@@ -1,5 +1,4 @@
 import logging
-import requests
 
 from odoo import models, fields, api
 from odoo.exceptions import UserError
@@ -219,6 +218,128 @@ class AcumaticaTransferOneStepLine(models.Model):
             uom = product.uom_id
         return uom
 
+    def _create_one_step_transfer_moves(
+        self, transfer_lines, order, first, origin, source_location,
+        destination_location, action_state, previous_moves, update_messages,
+    ):
+        """Create Odoo stock moves from the detail lines of one transfer."""
+        Move = self.env['stock.move']
+        product_codes = transfer_lines.mapped('inventory_id')
+        products_by_code = self._acumatica_search_first_by(
+            'product.product', 'default_code', product_codes
+        )
+        products_by_barcode = self._acumatica_search_first_by(
+            'product.product', 'barcode', product_codes
+        )
+        products_by_name = self._acumatica_search_first_by(
+            'product.product', 'name', transfer_lines.mapped('line_description')
+        )
+        uoms_by_name = self._acumatica_search_first_by(
+            'uom.uom', 'name', transfer_lines.mapped('uom_code')
+        )
+
+        for line in transfer_lines:
+            try:
+                product = (
+                    products_by_code.get(line.inventory_id)
+                    or products_by_barcode.get(line.inventory_id)
+                    or products_by_name.get(line.line_description)
+                )
+                if not product:
+                    if line.inventory_id:
+                        product = self.env['product.product'].search(
+                            [('default_code', '=', line.inventory_id)], limit=1
+                        )
+                if not product:
+                    product = self.env['product.product'].create({
+                        'name': line.line_description or line.inventory_id or 'Unknown Product',
+                        'default_code': line.inventory_id or False,
+                        'type': 'consu',
+                    })
+                    if line.inventory_id:
+                        products_by_code[line.inventory_id] = product
+                    if line.line_description:
+                        products_by_name.setdefault(line.line_description, product)
+                if not product:
+                    raise UserError(
+                        f'Product tidak ditemukan untuk InventoryID: '
+                        f'{line.inventory_id or "-"}'
+                    )
+
+                uom = uoms_by_name.get(line.uom_code) or product.uom_id
+                qty = self._parse_float(line.quantity)
+                move_vals = {
+                    'name': line.line_description or product.display_name,
+                    'product_id': product.id,
+                    'product_uom_qty': qty,
+                    'product_uom': uom.id if uom else product.uom_id.id,
+                    'location_id': source_location.id,
+                    'location_dest_id': destination_location.id,
+                    'internal_transfer_order_id': order.id,
+                    'adt_line_nbr': line.line_nbr or False,
+                    'adt_line_note': line.line_note or False,
+                    'adt_inventory_id': line.inventory_id or False,
+                    'adt_uom_code': line.uom_code or False,
+                    'adt_line_description': line.line_description or False,
+                    'adt_to_location_code': line.to_location_code or False,
+                    'adt_from_location_code': line.from_location_code or False,
+                    'adt_transfer_order_number': origin,
+                    'adt_transfer_order_line_number': line.line_nbr or False,
+                    'adt_transfer_order_type': first.transfer_type or False,
+                    'adt_quantity': qty,
+                    'adt_type': first.transfer_type or 'Transfer One Step',
+                }
+                move_vals = {
+                    key: value
+                    for key, value in move_vals.items()
+                    if key in Move._fields
+                }
+                created_move = Move.create(move_vals)
+
+                if action_state == 'updated':
+                    self._append_one_step_transfer_update_message(
+                        line, created_move, product, uom, qty,
+                        previous_moves, update_messages,
+                    )
+            except Exception as line_error:
+                _logger.exception('Error import transfer one step line %s', line.id)
+                raise UserError(str(line_error))
+
+    def _append_one_step_transfer_update_message(
+        self, line, created_move, product, uom, qty,
+        previous_moves, update_messages,
+    ):
+        line_key = str(line.line_nbr or line.inventory_id or created_move.id)
+        old = previous_moves.pop(line_key, None)
+        label = line.line_nbr or line.inventory_id or '?'
+        current = {
+            'Produk': product.display_name or '—',
+            'Jumlah': f'{qty:g}',
+            'Satuan': uom.display_name if uom else '—',
+            'Lokasi tujuan': created_move.location_dest_id.display_name or '—',
+            'Deskripsi': created_move.name or '—',
+        }
+        if old:
+            previous = {
+                'Produk': old['product'],
+                'Jumlah': f"{old['qty']:g}",
+                'Satuan': old['uom'],
+                'Lokasi tujuan': old['destination'],
+                'Deskripsi': old['name'],
+            }
+            changes = [
+                f'{name}: {previous[name]} → {value}'
+                for name, value in current.items()
+                if previous[name] != value
+            ]
+            if changes:
+                update_messages.append(f'• Baris {label}: ' + '; '.join(changes))
+        else:
+            update_messages.append(
+                f'• Baris {label}: {product.display_name}, jumlah {qty:g} '
+                f'{uom.display_name if uom else ""} ditambahkan'
+            )
+
     def action_import_selected(self):
         lines = self.filtered(
             lambda l: (
@@ -245,7 +366,6 @@ class AcumaticaTransferOneStepLine(models.Model):
     
     def _do_import(self):
         InternalTransferOrder = self.env['internal.transfer.order']
-        Move = self.env['stock.move']
 
         created = 0
         skipped = 0
@@ -384,58 +504,11 @@ class AcumaticaTransferOneStepLine(models.Model):
                     ('header_id', '=', first.id),
                 ])
 
-                for line in transfer_lines:
-                    try:
-                        product = self._find_product(line)
-                        if not product:
-                            raise UserError(
-                                f'Product tidak ditemukan untuk InventoryID: '
-                                f'{line.inventory_id or "-"}'
-                            )
-
-                        uom = self._find_uom(line, product)
-                        qty = self._parse_float(line.quantity)
-
-                        move_vals = {
-                            'name': line.line_description or product.display_name,
-                            'product_id': product.id,
-                            'product_uom_qty': qty,
-                            'product_uom': uom.id if uom else product.uom_id.id,
-                            'location_id': source_location.id,
-                            'location_dest_id': destination_location.id,
-                            'internal_transfer_order_id': order.id,
-                            # 'description_picking': product.name or False,
-                            'adt_line_nbr': line.line_nbr or False,
-                            'adt_line_note': line.line_note or False,
-                            'adt_inventory_id': line.inventory_id or False,
-                            'adt_uom_code': line.uom_code or False,
-                            'adt_line_description': line.line_description or False,
-                            'adt_to_location_code': line.to_location_code or False,
-                            'adt_from_location_code': line.from_location_code or False,
-                            'adt_transfer_order_number': origin,
-                            'adt_transfer_order_line_number': line.line_nbr or False,
-                            'adt_transfer_order_type': first.transfer_type or False,
-                            'adt_quantity': qty,
-                            'adt_type': first.transfer_type or 'Transfer One Step',
-                        }
-                        move_vals = {k: v for k, v in move_vals.items() if k in Move._fields}
-                        created_move = Move.create(move_vals)
-                        if action_state == 'updated':
-                            line_key = str(line.line_nbr or line.inventory_id or created_move.id)
-                            old = previous_moves.pop(line_key, None)
-                            label = line.line_nbr or line.inventory_id or '?'
-                            current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
-                            if old:
-                                previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
-                                changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
-                                if changes:
-                                    update_messages.append(f"• Baris {label}: " + '; '.join(changes))
-                            else:
-                                update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
-
-                    except Exception as line_e:
-                        _logger.exception('Error import transfer one step line %s', line.id)
-                        raise UserError(str(line_e))
+                self._create_one_step_transfer_moves(
+                    transfer_lines, order, first, origin, source_location,
+                    destination_location, action_state, previous_moves,
+                    update_messages,
+                )
 
                 if same_odoo_location:
                     # Keep both direct operation documents at the mapped location.
@@ -446,12 +519,16 @@ class AcumaticaTransferOneStepLine(models.Model):
                     order._auto_validate_pickings_by_leg(('delivery', 'receipt'))
                 else:
                     transfer_service.set_order_ready(order)
-                receipt_lines.write({
-                    'import_state': action_state,
-                    'import_message': 'success',
-                    'odoo_picking_id': False,
-                    'odoo_internal_transfer_order_id': order.id,
-                })
+                self._acumatica_write_import_result_once(
+                    receipt_lines,
+                    first,
+                    {
+                        'import_state': action_state,
+                        'import_message': 'success',
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': order.id,
+                    },
+                )
                 self.env['acumatica.error.transaction']._handle_acumatica_error(origin, 'transfer_one_step')
                 if action_state == 'updated':
                     update_messages.extend(f"• Baris {old['label']}: {old['product']} dihapus" for old in previous_moves.values())
@@ -501,12 +578,16 @@ class AcumaticaTransferOneStepLine(models.Model):
                         'payload': line.read()[0] if line.exists() else {},
                     } for line in tracked_lines],
                 )
-                receipt_lines.write({
-                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
-                    'import_message': str(e)[:200],
-                    'odoo_picking_id': False,
-                    'odoo_internal_transfer_order_id': False,
-                })
+                self._acumatica_write_import_result_once(
+                    receipt_lines,
+                    first,
+                    {
+                        'import_state': self._acumatica_import_error_state(str(e)),
+                        'import_message': str(e)[:200],
+                        'odoo_picking_id': False,
+                        'odoo_internal_transfer_order_id': False,
+                    },
+                )
                 error += len(receipt_lines)
                 if user_message:
                     self.env['acumatica.webhook.error.service'].send_user_error(

@@ -2,7 +2,6 @@ import logging
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
-import requests
 from ...utils import acumatica_data as _data
 from ...utils.numeric import parse_float
 
@@ -420,10 +419,29 @@ class AcumaticaTransferLine(models.Model):
             raise
         order.write({'validation_policy': 'validate_all'})
 
-        for receipt_line in receipt.product_line_ids:
+        receipt_lines = receipt.product_line_ids
+        inventory_codes = receipt_lines.mapped('inventory_id')
+        products_by_code = self._acumatica_search_first_by(
+            'product.product', 'default_code', inventory_codes
+        )
+        products_by_barcode = self._acumatica_search_first_by(
+            'product.product', 'barcode', inventory_codes
+        )
+        products_by_name = self._acumatica_search_first_by(
+            'product.product', 'name', receipt_lines.mapped('transaction_description')
+        )
+        uoms_by_name = self._acumatica_search_first_by(
+            'uom.uom', 'name', receipt_lines.mapped('uom_code')
+        )
+
+        for receipt_line in receipt_lines:
             move_vals = {}
             try:
-                product = receipt._find_product(receipt_line)
+                product = (
+                    products_by_code.get(receipt_line.inventory_id)
+                    or products_by_barcode.get(receipt_line.inventory_id)
+                    or products_by_name.get(receipt_line.transaction_description)
+                )
                 if not product:
                     error_messages.append(
                         f'Product with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
@@ -441,7 +459,7 @@ class AcumaticaTransferLine(models.Model):
                     })
                     continue
 
-                uom = receipt._find_uom(receipt_line, product)
+                uom = uoms_by_name.get(receipt_line.uom_code) or product.uom_id
                 if product and not uom:
                     error_messages.append(
                         f'UOM with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER UOM.'
@@ -593,207 +611,6 @@ class AcumaticaTransferLine(models.Model):
         receipt.ensure_one()
         return receipt._import_single_receipt_as_transfer_in(receipt)
 
-        Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
-        PickingType = self.env['stock.picking.type']
-
-        origin = receipt.receipt_nbr or False
-        header_payload = receipt.read()[0] if receipt.exists() else {}
-        error_messages = []
-        error_line_payloads = []
-        picking = receipt.odoo_picking_id
-        action_state = 'staged'
-
-        # vendor = receipt._find_vendor(receipt)
-        # if not vendor:
-        #     error_messages.append(
-        #         f'Vendor with VendorID {receipt.vendor_code} was not found in the WMS | WMS Dependency : MASTER VENDOR.'
-        #     )
-
-        warehouse = receipt._find_warehouse(receipt)
-        if not warehouse:
-            error_messages.append(
-                f'Warehouse with location code {receipt.warehouse_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
-            )
-
-        dest_location = receipt._find_location_dest(receipt)
-        if not dest_location:
-            error_messages.append(
-                f'Location with code {receipt.warehouse_dest_code} was not found or inactive in the WMS | WMS Dependency : MAPPING WAREHOUSE.'
-            )
-
-        # picking_type = PickingType.search([
-        #     ('warehouse_id', '=', warehouse.id if warehouse else False),
-        #     ('operation_category', '=', 'internal'),
-        #     ('code', '=', 'internal'),
-        # ], limit=1)
-        # if not picking_type:
-        #     warehouse_txt = f"Warehouse code {warehouse.code if warehouse else '-'}"
-        #     location_txt = f'Location code {receipt.warehouse_code}'
-        #     error_messages.append(
-        #         f'Operation Type for code internal with {warehouse_txt if warehouse else location_txt} was not found in the WMS | WMS Depedency : MASTER OPERATION TYPE.'
-        #     )
-
-        picking_type_id = False
-        if receipt.picking_type_id:
-            picking_type_id = receipt.picking_type_id.id
-
-        if not picking_type_id:
-            raise UserError('Picking_type not found')
-
-        if error_messages:
-            raise ReceiptImportError(
-                '\n'.join(error_messages),
-                payload={'header': header_payload},
-            )
-
-        picking_vals = {
-            # 'partner_id': vendor.id if vendor else False,
-            'picking_type_id': picking_type_id,
-            'location_dest_id': dest_location.id if dest_location else False,
-            'adt_dest_location_id': dest_location.id if dest_location else False,
-            'scheduled_date': _data.acumatica_datetime(receipt.scheduled_date),
-            'origin': origin,
-            'note': receipt.note or False,
-            'adt_receipt_nbr': receipt.receipt_nbr or False,
-            'adt_vendor_code': receipt.vendor_code or False,
-            'adt_partner_ref': receipt.partner_ref or False,
-            'adt_branch_warehouse': receipt.branch_warehouse or False,
-            'adt_actual_qty': receipt._parse_float(receipt.actual_qty),
-            'adt_is_hold': str(receipt.is_hold or '').lower() in ('true', '1', 'yes'),
-            'adt_inventory_ref': receipt.inventory_ref or False,
-            'adt_acumatica_write_date': _data.acumatica_datetime(receipt.acumatica_write_date),
-            'adt_header_location_code': receipt.header_location_code or False,
-            'adt_post_period': receipt.post_period or False,
-            'adt_status': receipt.status or False,
-            'adt_total_qty': receipt._parse_float(receipt.total_qty),
-            'adt_type': receipt.receipt_type or False,
-            'adt_warehouse_code': receipt.warehouse_code or False,
-            'adt_external_id': receipt.external_id or False,
-        }
-        picking_vals = {key: value for key, value in picking_vals.items() if key in Picking._fields}
-
-        if picking:
-            if picking.state != 'draft':
-                raise ReceiptImportError(
-                    f'Receipt {origin} sudah ada di Odoo dengan state {picking.state}, tidak bisa diupdate.',
-                    payload={'header': header_payload, 'picking_vals': picking_vals},
-            )
-            picking.write(picking_vals)
-            action_state = 'updated'
-            self.env['acumatica.error.transaction']._handle_acumatica_update(receipt, origin=origin)
-        else:
-            picking = Picking.sudo().create(picking_vals)
-            action_state = 'created'
-
-        if action_state == 'updated':
-            picking.move_ids.unlink()
-
-        for receipt_line in receipt.product_line_ids:
-            move_vals = {}
-            try:
-                product = receipt._find_product(receipt_line)
-                if not product:
-                    error_messages.append(
-                        f'Product with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
-                    )
-                    error_line_payloads.append({
-                        'inventory_id': receipt_line.inventory_id or False,
-                        'product_name': receipt_line.description or False,
-                        'qty': receipt._parse_float(receipt_line.product_uom_qty),
-                        'uom': receipt_line.uom_code or False,
-                        'payload': receipt_line.read()[0] if receipt_line.exists() else {},
-                    })
-                    continue
-
-                uom = receipt._find_uom(receipt_line, product)
-                if product and not uom:
-                    error_messages.append(
-                        f'UOM with InventoryID {receipt_line.inventory_id} was not found in the WMS | MASTER UOM.'
-                    )
-                    error_line_payloads.append({
-                        'inventory_id': receipt_line.inventory_id or False,
-                        'product_name': receipt_line.description or False,
-                        'qty': receipt._parse_float(receipt_line.product_uom_qty),
-                        'uom': receipt_line.uom_code or False,
-                        'payload': receipt_line.read()[0] if receipt_line.exists() else {},
-                    })
-                    continue
-
-                qty = receipt._parse_float(receipt_line.product_uom_qty)
-                location_id = picking.location_id.id if picking else False
-                location_dest_id = picking.location_dest_id.id if picking else False
-                move_vals = {
-                    'name': receipt_line.transaction_description or receipt_line.description or product.display_name,
-                    'picking_id': picking.id if picking else False,
-                    'product_id': product.id,
-                    'product_uom_qty': qty,
-                    'product_uom': uom.id if uom else product.uom_id.id,
-                    'location_id': location_id,
-                    'location_dest_id': location_dest_id,
-                    'warehouse_id': warehouse.id if warehouse else False,
-                    # 'description_picking': product.name or False,
-                    'adt_line_external_id': receipt_line.line_external_id or False,
-                    'adt_inventory_id': receipt_line.inventory_id or False,
-                    'adt_line_nbr': receipt_line.line_nbr or False,
-                    'adt_line_type': receipt_line.line_type or False,
-                    'adt_open_qty': receipt._parse_float(receipt_line.open_qty),
-                    'adt_order_qty': receipt._parse_float(receipt_line.order_qty),
-                    'adt_po_line_number': receipt_line.po_line_number or False,
-                    'adt_po_number': receipt_line.po_number or False,
-                    'adt_po_type': receipt_line.po_type or False,
-                    'adt_po_receipt_line_number': receipt_line.po_receipt_line_number or False,
-                    'adt_po_receipt_number': receipt_line.po_receipt_number or False,
-                    'adt_transfer_order_line_number': receipt_line.transfer_order_line_number or False,
-                    'adt_transfer_order_number': receipt_line.transfer_order_number or False,
-                    'adt_transfer_order_type': receipt_line.transfer_order_type or False,
-                    'adt_transfer_shipment_number': receipt_line.transfer_shipment_number or False,
-                    'adt_uom_code': receipt_line.uom_code or False,
-                    'adt_warehouse_dest_code': receipt_line.warehouse_dest_code or False,
-                    'adt_location_dest_code': receipt_line.location_dest_code or False,
-                    'product_note': receipt_line.line_note or False,
-                }
-
-                move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
-                Move.create(move_vals)
-                # picking.action_confirm()
-
-            except ReceiptImportError:
-                raise
-
-            except Exception as line_error:
-                _logger.exception("Error import line %s", receipt.id)
-                error_messages.append(str(line_error))
-                error_line_payloads.append({
-                    'inventory_id': receipt_line.inventory_id or False,
-                    'product_name': receipt_line.description or False,
-                    'qty': receipt._parse_float(receipt_line.product_uom_qty),
-                    'uom': receipt_line.uom_code or False,
-                    'payload': move_vals if move_vals else (receipt_line.read()[0] if receipt_line.exists() else {}),
-                })
-
-        if error_messages:
-            raise ReceiptImportError(
-                '\n'.join(error_messages),
-                payload={
-                    'header': header_payload,
-                    'picking_vals': picking_vals,
-                    'picking_id': picking.id if picking else False,
-                },
-                line_payloads=error_line_payloads,
-            )
-
-        if receipt.document_only:
-            picking.action_validate_document_only_import(force=True)
-
-        receipt.write({
-            'import_state': action_state,
-            'import_message': 'success',
-            'odoo_picking_id': picking.id if picking else False,
-        })
-        self._handle_acumatica_error(receipt)
-        return action_state
-
     def _do_import(self):
         created = 0
         updated = 0
@@ -865,7 +682,7 @@ class AcumaticaTransferLine(models.Model):
                     )
 
                 receipt.write({
-                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                    'import_state': self._acumatica_import_error_state(error_message),
                     'import_message': error_message[:1000],
                 })
                 error += 1
@@ -879,7 +696,6 @@ class AcumaticaTransferLine(models.Model):
                     )
                 continue
 
-        msg = f'Import done: {created} receipt created, {updated} receipt updated, {error} receipt error.'
         # return {
         #     'type': 'ir.actions.client',
         #     'tag': 'display_notification',

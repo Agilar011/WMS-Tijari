@@ -4,10 +4,8 @@ from docutils.nodes import note
 from odoo import api, fields, models
 from odoo.exceptions import UserError
 
-import logging
 _logger = logging.getLogger(__name__)
 
-import requests
 from ...utils import acumatica_data as _data
 from ...utils.numeric import parse_float
 
@@ -236,12 +234,132 @@ class AcumaticaShipmentLine(models.Model):
             line_payloads=line_payloads,
         )
 
+    def _create_shipment_product_moves(
+        self, shipment, shipment_lines, picking, warehouse, action_state,
+        previous_moves, update_messages, error_messages, user_messages,
+        technical_errors, all_line_payloads,
+    ):
+        """Create stock moves and collect per-line errors for one shipment."""
+        Move = self.env['stock.move']
+        products_by_code = self._acumatica_search_first_by(
+            'product.product', 'default_code', shipment_lines.mapped('inventory_id')
+        )
+        uoms_by_name = self._acumatica_search_first_by(
+            'uom.uom', 'name', shipment_lines.mapped('uom_code')
+        )
+
+        for shipment_line in shipment_lines:
+            move_vals = {}
+            try:
+                product = products_by_code.get(shipment_line.inventory_id)
+                if not product:
+                    error_messages.append(
+                        f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
+                    )
+                    user_messages.append(
+                        f"Produk dengan kode {shipment_line.inventory_id or '-'} "
+                        f"pada baris {shipment_line.line_nbr or '-'} belum terdaftar. "
+                        'Periksa master produk di WMS.'
+                    )
+                    continue
+
+                uom = uoms_by_name.get(shipment_line.uom_code) or product.uom_id
+                if product and not uom:
+                    error_messages.append(
+                        f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
+                    )
+                    user_messages.append(
+                        f"Satuan untuk produk {shipment_line.inventory_id or '-'} "
+                        'belum tersedia. Periksa satuan produk di master WMS.'
+                    )
+                    continue
+
+                qty = shipment._parse_float(shipment_line.order_qty)
+                move_vals = {
+                    'name': shipment_line.description or product.display_name,
+                    'picking_id': picking.id if picking else False,
+                    'product_id': product.id,
+                    'product_uom_qty': qty,
+                    'product_uom': uom.id if uom else product.uom_id.id,
+                    'location_id': picking.location_id.id if picking else False,
+                    'location_dest_id': picking.location_dest_id.id if picking else False,
+                    'warehouse_id': warehouse.id if warehouse else False,
+                    'product_note': shipment_line.note or False,
+                    'adt_dest_location_id': picking.adt_dest_location_id.id if picking else False,
+                }
+
+                created_move = Move.create(move_vals)
+                if action_state == 'updated':
+                    self._append_shipment_update_message(
+                        shipment_line, created_move, product, uom, qty,
+                        previous_moves, update_messages,
+                    )
+
+            except ShipmentImportError:
+                raise
+
+            except Exception as line_error:
+                _logger.exception("Error import line %s", shipment.id)
+                error_messages.append(str(line_error))
+                technical_errors.append(str(line_error))
+                all_line_payloads.append({
+                    'inventory_id': shipment_line.inventory_id or False,
+                    'product_name': shipment_line.description or False,
+                    'qty': shipment._parse_float(shipment_line.order_qty),
+                    'uom': shipment_line.uom_code or False,
+                    'payload': move_vals if move_vals else (
+                        shipment_line.read()[0] if shipment_line.exists() else {}
+                    ),
+                })
+
+    def _append_shipment_update_message(
+        self, shipment_line, created_move, product, uom, qty,
+        previous_moves, update_messages,
+    ):
+        line_key = str(
+            getattr(shipment_line, 'line_external_id', False)
+            or getattr(shipment_line, 'line_nbr', False)
+            or shipment_line.inventory_id
+            or created_move.id
+        )
+        old = previous_moves.pop(line_key, None)
+        label = (
+            getattr(shipment_line, 'line_nbr', False)
+            or shipment_line.inventory_id
+            or '?'
+        )
+        current = {
+            'Produk': product.display_name or '—',
+            'Jumlah': f'{qty:g}',
+            'Satuan': uom.display_name if uom else '—',
+            'Lokasi tujuan': created_move.location_dest_id.display_name or '—',
+            'Deskripsi': created_move.name or '—',
+        }
+        if old:
+            previous = {
+                'Produk': old['product'],
+                'Jumlah': f"{old['qty']:g}",
+                'Satuan': old['uom'],
+                'Lokasi tujuan': old['destination'],
+                'Deskripsi': old['name'],
+            }
+            changes = [
+                f'{name}: {previous[name]} → {value}'
+                for name, value in current.items()
+                if previous[name] != value
+            ]
+            if changes:
+                update_messages.append(f'• Baris {label}: ' + '; '.join(changes))
+        else:
+            update_messages.append(
+                f'• Baris {label}: {product.display_name}, jumlah {qty:g} '
+                f'{uom.display_name if uom else ""} ditambahkan'
+            )
+
     def _import_single_shipment(self, shipment):
         shipment.ensure_one()
 
         Picking = self.env['stock.picking']
-        Move = self.env['stock.move']
-        PickingType = self.env['stock.picking.type']
 
         origin = shipment.shipment_nbr or False
         header_payload = shipment.read()[0] if shipment.exists() else {}
@@ -357,83 +475,19 @@ class AcumaticaShipmentLine(models.Model):
         if action_state == 'updated':
             picking.move_ids.unlink()
 
-        for shipment_line in shipment.product_line_ids:
-            move_vals = {}
-            try:
-                product = shipment._find_product(shipment_line)
-                if not product:
-                    error_messages.append(
-                        f'Product with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER PRODUCT.'
-                    )
-                    user_messages.append(f"Produk dengan kode {shipment_line.inventory_id or '-'} pada baris {shipment_line.line_nbr or '-'} belum terdaftar. Periksa master produk di WMS.")
-                    # error_line_payloads.append({
-                    #     'inventory_id': shipment_line.inventory_id or False,
-                    #     'product_name': shipment_line.description or False,
-                    #     'qty': shipment._parse_float(shipment_line.shipped_qty),
-                    #     'uom': shipment_line.uom_code or False,
-                    #     'payload': shipment_line.read()[0] if shipment_line.exists() else {},
-                    # })
-                    continue
-
-                uom = shipment._find_uom(shipment_line, product)
-                if product and not uom:
-                    error_messages.append(
-                        f'UOM with InventoryID {shipment_line.inventory_id} was not found in the WMS | MASTER UOM.'
-                    )
-                    user_messages.append(f"Satuan untuk produk {shipment_line.inventory_id or '-'} belum tersedia. Periksa satuan produk di master WMS.")
-                    # error_line_payloads.append({
-                    #     'inventory_id': shipment_line.inventory_id or False,
-                    #     'product_name': shipment_line.description or False,
-                    #     'qty': shipment._parse_float(shipment_line.shipped_qty),
-                    #     'uom': shipment_line.uom_code or False,
-                    #     'payload': shipment_line.read()[0] if shipment_line.exists() else {},
-                    # })
-                    continue
-
-                qty = shipment._parse_float(shipment_line.order_qty)
-                move_vals = {
-                    'name': shipment_line.description or product.display_name,
-                    'picking_id': picking.id if picking else False,
-                    'product_id': product.id,
-                    'product_uom_qty': qty,
-                    'product_uom': uom.id if uom else product.uom_id.id,
-                    'location_id': picking.location_id.id if picking else False,
-                    'location_dest_id': picking.location_dest_id.id if picking else False,
-                    'warehouse_id': warehouse.id if warehouse else False,
-                    # 'description_picking': product.name or False,
-                    'product_note': shipment_line.note or False,
-                    'adt_dest_location_id': picking.adt_dest_location_id.id if picking else False
-                }
-
-                # move_vals = {key: value for key, value in move_vals.items() if key in Move._fields}
-                created_move = Move.create(move_vals)
-                if action_state == 'updated':
-                    line_key = str(getattr(shipment_line, 'line_external_id', False) or getattr(shipment_line, 'line_nbr', False) or shipment_line.inventory_id or created_move.id)
-                    old = previous_moves.pop(line_key, None)
-                    label = getattr(shipment_line, 'line_nbr', False) or shipment_line.inventory_id or '?'
-                    current = {'Produk': product.display_name or '—', 'Jumlah': f'{qty:g}', 'Satuan': uom.display_name if uom else '—', 'Lokasi tujuan': created_move.location_dest_id.display_name or '—', 'Deskripsi': created_move.name or '—'}
-                    if old:
-                        previous = {'Produk': old['product'], 'Jumlah': f"{old['qty']:g}", 'Satuan': old['uom'], 'Lokasi tujuan': old['destination'], 'Deskripsi': old['name']}
-                        changes = [f'{name}: {previous[name]} → {value}' for name, value in current.items() if previous[name] != value]
-                        if changes:
-                            update_messages.append(f"• Baris {label}: " + '; '.join(changes))
-                    else:
-                        update_messages.append(f"• Baris {label}: {product.display_name}, jumlah {qty:g} {uom.display_name if uom else ''} ditambahkan")
-
-            except ShipmentImportError:
-                raise
-
-            except Exception as line_error:
-                _logger.exception("Error import line %s", shipment.id)
-                error_messages.append(str(line_error))
-                technical_errors.append(str(line_error))
-                all_line_payloads.append({
-                    'inventory_id': shipment_line.inventory_id or False,
-                    'product_name': shipment_line.description or False,
-                    'qty': shipment._parse_float(shipment_line.order_qty),
-                    'uom': shipment_line.uom_code or False,
-                    'payload': move_vals if move_vals else (shipment_line.read()[0] if shipment_line.exists() else {}),
-                })
+        self._create_shipment_product_moves(
+            shipment,
+            shipment.product_line_ids,
+            picking,
+            warehouse,
+            action_state,
+            previous_moves,
+            update_messages,
+            error_messages,
+            user_messages,
+            technical_errors,
+            all_line_payloads,
+        )
 
         if error_messages:
             raise ShipmentImportError(
@@ -531,7 +585,7 @@ class AcumaticaShipmentLine(models.Model):
                     )
 
                 shipment.write({
-                    'import_state': 'rejected' if any(term in (locals().get('error_message') or str(locals().get('e') or locals().get('line_e') or '')).lower() for term in ('tidak bisa diupdate', 'update digagalkan', 'sudah divalidasi', 'already processed', 'state ready', 'state done', 'state processed')) else 'error',
+                    'import_state': self._acumatica_import_error_state(error_message),
                     'import_message': error_message[:1000],
                 })
                 error += 1
@@ -543,7 +597,6 @@ class AcumaticaShipmentLine(models.Model):
                     )
                 continue
 
-        msg = f'Generate done: {created} shipment created, {updated} shipment updated, {error} shipment error.'
         # Notifikasi dimatikan agar form staging tidak freeze/tidak realtime.
         # return {
         #     'type': 'ir.actions.client',
