@@ -372,7 +372,7 @@ class InternalTransferOrder(models.Model):
         ):
             return self.env['product.product']
 
-        domain = [('location_id', 'child_of', location.id)]
+        domain = [('location_id', '=', location.id)]
         if product_ids:
             domain.append(('product_id', 'in', product_ids))
         available_by_product = self.env['stock.quant']._read_group(
@@ -1958,12 +1958,17 @@ class InternalTransferOrder(models.Model):
         if not products:
             return True
 
+        source_location_domain = (
+            ('location_id', '=', self.location_id.id)
+            if self.transfer_type == 'intra_group_transfer'
+            else ('location_id', 'child_of', self.location_id.id)
+        )
         available_by_product = {
             product.id: available_qty
             for product, available_qty in self.env['stock.quant']._read_group(
                 [
                     ('product_id', 'in', products.ids),
-                    ('location_id', 'child_of', self.location_id.id),
+                    source_location_domain,
                 ],
                 ['product_id'],
                 ['available_quantity:sum'],
@@ -2116,7 +2121,7 @@ class StockMove(models.Model):
                 if candidate_lots and source_location:
                     source_quants = Quant.search([
                         ('lot_id', 'in', candidate_lots.ids),
-                        ('location_id', 'child_of', source_location.id),
+                        ('location_id', '=', source_location.id),
                         ('quantity', '>', 0),
                     ])
                     available_by_lot = {}
