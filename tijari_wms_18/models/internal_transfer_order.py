@@ -131,12 +131,6 @@ class InternalTransferOrder(models.Model):
         store=False,
         help='Scan barcode, unique code, atau nama Destination Location.',
     )
-    available_source_product_ids = fields.Many2many(
-        comodel_name='product.product',
-        string='Products Available at Source Location',
-        compute='_compute_available_source_product_ids',
-        store=True,
-    )
     intra_location_id = fields.Many2one(
         comodel_name='stock.location',
         string='Source Location',
@@ -283,6 +277,7 @@ class InternalTransferOrder(models.Model):
         for field_name in ('barcode', 'unique_code', 'complete_name', 'name'):
             matches = Location.search(
                 base_domain + [(field_name, '=', code)],
+                limit=2,
             )
             if len(matches) > 1:
                 raise ValidationError(_(
@@ -367,21 +362,7 @@ class InternalTransferOrder(models.Model):
             ('partner_type', '=', 'warehouse'),
         ], limit=1)
 
-    @api.depends(
-        'intra_location_id',
-    )
-    def _compute_available_source_product_ids(self):
-        for order in self:
-            source_location = (
-                order.intra_location_id
-                if order.transaction_type == 'intra_warehouse'
-                else order.location_id
-            )
-            order.available_source_product_ids = order._get_available_source_products(
-                source_location
-            )
-
-    def _get_available_source_products(self, location):
+    def _get_available_source_products(self, location, product_ids=None):
         self.ensure_one()
         selected_transfer_type = self.intra_transfer_type or self.transfer_type
         if (
@@ -391,8 +372,11 @@ class InternalTransferOrder(models.Model):
         ):
             return self.env['product.product']
 
+        domain = [('location_id', 'child_of', location.id)]
+        if product_ids:
+            domain.append(('product_id', 'in', product_ids))
         available_by_product = self.env['stock.quant']._read_group(
-            [('location_id', 'child_of', location.id)],
+            domain,
             ['product_id'],
             ['available_quantity:sum'],
         )
@@ -1974,16 +1958,17 @@ class InternalTransferOrder(models.Model):
         if not products:
             return True
 
-        quants = self.env['stock.quant'].search([
-            ('product_id', 'in', products.ids),
-            ('location_id', 'child_of', self.location_id.id),
-        ])
-        available_by_product = {}
-        for quant in quants:
-            available_by_product[quant.product_id.id] = (
-                available_by_product.get(quant.product_id.id, 0.0)
-                + quant.available_quantity
+        available_by_product = {
+            product.id: available_qty
+            for product, available_qty in self.env['stock.quant']._read_group(
+                [
+                    ('product_id', 'in', products.ids),
+                    ('location_id', 'child_of', self.location_id.id),
+                ],
+                ['product_id'],
+                ['available_quantity:sum'],
             )
+        }
 
         unavailable_products = products.filtered(
             lambda product: float_compare(
@@ -2063,9 +2048,9 @@ class StockMove(models.Model):
         index=True,
         copy=False,
     )
-    internal_transfer_available_source_product_ids = fields.Many2many(
-        related='internal_transfer_order_id.available_source_product_ids',
-        string='ITO Available Source Products',
+    internal_transfer_source_location_id = fields.Many2one(
+        related='internal_transfer_order_id.intra_location_id',
+        string='ITO Source Location',
     )
     internal_transfer_transaction_type = fields.Selection(
         related='internal_transfer_order_id.transaction_type',
@@ -2091,6 +2076,7 @@ class StockMove(models.Model):
         Lot = self.env['stock.lot']
         Quant = self.env['stock.quant']
         for move in self:
+            lot_stock_checked = False
             code = (move.internal_transfer_product_scan_code or '').strip()
             if not code:
                 continue
@@ -2155,15 +2141,7 @@ class StockMove(models.Model):
                             'location': source_location.display_name,
                         })
                     candidate_lots = available_lots
-
-                if (
-                    order.transaction_type == 'intra_warehouse'
-                    and order.intra_transfer_type == 'intra_group_transfer'
-                ):
-                    available_products = order._get_available_source_products(source_location)
-                    candidate_lots = candidate_lots.filtered(
-                        lambda lot: lot.product_id in available_products
-                    )
+                    lot_stock_checked = True
 
                 candidate_products = candidate_lots.mapped('product_id')
                 if len(candidate_products) > 1:
@@ -2181,9 +2159,13 @@ class StockMove(models.Model):
             if order and (
                 order.transaction_type == 'intra_warehouse'
                 and order.intra_transfer_type == 'intra_group_transfer'
+                and not lot_stock_checked
             ):
                 source_location = order.intra_location_id or order.location_id
-                available_products = order._get_available_source_products(source_location)
+                available_products = order._get_available_source_products(
+                    source_location,
+                    product_ids=product.ids,
+                )
                 if product not in available_products:
                     raise ValidationError(
                         _('Product hasil scan tidak tersedia di Source Location.')
